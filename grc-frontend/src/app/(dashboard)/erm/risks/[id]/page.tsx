@@ -50,34 +50,34 @@ interface RiskDetailData {
 }
 
 const RISK_CATEGORIES: Record<string, { label: string; color: string }> = {
-  strategic: { label: 'Strategic', color: 'bg-purple-100 text-purple-800 border-purple-200' },
-  operational: { label: 'Operational', color: 'bg-blue-100 text-blue-800 border-blue-200' },
-  financial: { label: 'Financial', color: 'bg-green-100 text-green-800 border-green-200' },
-  compliance: { label: 'Compliance', color: 'bg-amber-100 text-amber-800 border-amber-200' },
-  technology: { label: 'Technology', color: 'bg-cyan-100 text-cyan-800 border-cyan-200' },
-  third_party: { label: 'Third-Party', color: 'bg-orange-100 text-orange-800 border-orange-200' },
+  strategic: { label: 'Strategic', color: 'bg-primary-50 text-primary-700 border-primary-200' },
+  operational: { label: 'Operational', color: 'bg-primary-50 text-primary-700 border-primary-200' },
+  financial: { label: 'Financial', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  compliance: { label: 'Compliance', color: 'bg-amber-50 text-amber-700 border-amber-200' },
+  technology: { label: 'Technology', color: 'bg-primary-50 text-primary-700 border-primary-200' },
+  third_party: { label: 'Third-Party', color: 'bg-orange-50 text-orange-700 border-orange-200' },
 };
 
 const RISK_STATUSES: Record<string, { label: string; color: string }> = {
-  open: { label: 'Open', color: 'bg-red-100 text-red-800 border-red-200' },
-  in_treatment: { label: 'In Treatment', color: 'bg-amber-100 text-amber-800 border-amber-200' },
-  mitigating: { label: 'Mitigating', color: 'bg-amber-100 text-amber-800 border-amber-200' },
-  mitigated: { label: 'Mitigated', color: 'bg-green-100 text-green-800 border-green-200' },
-  accepted: { label: 'Accepted', color: 'bg-blue-100 text-blue-800 border-blue-200' },
+  open: { label: 'Open', color: 'bg-rose-50 text-rose-700 border-rose-200' },
+  in_treatment: { label: 'In Treatment', color: 'bg-amber-50 text-amber-700 border-amber-200' },
+  mitigating: { label: 'Mitigating', color: 'bg-amber-50 text-amber-700 border-amber-200' },
+  mitigated: { label: 'Mitigated', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  accepted: { label: 'Accepted', color: 'bg-primary-50 text-primary-700 border-primary-200' },
   closed: { label: 'Closed', color: 'bg-slate-100 text-slate-700 border-slate-200' },
 };
 
 const MITIGATION_EFFECTIVENESS = [
-  { value: 'full', label: 'Full', color: 'text-green-700' },
+  { value: 'full', label: 'Full', color: 'text-emerald-700' },
   { value: 'partial', label: 'Partial', color: 'text-amber-700' },
   { value: 'minimal', label: 'Minimal', color: 'text-orange-700' },
-  { value: 'none', label: 'None', color: 'text-red-700' },
+  { value: 'none', label: 'None', color: 'text-rose-700' },
 ];
 
 const IMPACT_LEVELS = [
-  { value: 'high', label: 'High', color: 'text-red-700' },
+  { value: 'high', label: 'High', color: 'text-rose-700' },
   { value: 'medium', label: 'Medium', color: 'text-amber-700' },
-  { value: 'low', label: 'Low', color: 'text-green-700' },
+  { value: 'low', label: 'Low', color: 'text-emerald-700' },
 ];
 
 type TabType = 'details' | 'treatment' | 'controls' | 'assets' | 'evidence' | 'governance';
@@ -312,18 +312,18 @@ export default function RiskDetailPage() {
 
   const getScoreColor = (score: number | null | undefined) => {
     if (!score) return 'text-slate-600';
-    if (score >= 20) return 'text-red-700';
+    if (score >= 20) return 'text-rose-700';
     if (score >= 12) return 'text-orange-700';
     if (score >= 6) return 'text-amber-700';
-    return 'text-green-700';
+    return 'text-emerald-700';
   };
 
   const getScoreBgColor = (score: number | null | undefined) => {
     if (!score) return 'bg-slate-100';
-    if (score >= 20) return 'bg-red-500';
+    if (score >= 20) return 'bg-rose-500';
     if (score >= 12) return 'bg-orange-500';
-    if (score >= 6) return 'bg-yellow-500';
-    return 'bg-green-500';
+    if (score >= 6) return 'bg-amber-500';
+    return 'bg-emerald-500';
   };
 
   const formatDate = (dateString?: string) => {
@@ -352,12 +352,12 @@ export default function RiskDetailPage() {
   const getTreatmentStatus = () => {
     if (!risk) return { label: 'Not Set', color: 'text-slate-600' };
     if (risk.treatment_plan && risk.status === 'mitigated') {
-      return { label: 'Completed', color: 'text-green-700' };
+      return { label: 'Completed', color: 'text-emerald-700' };
     }
     if (risk.treatment_plan) {
       return { label: 'In Progress', color: 'text-amber-700' };
     }
-    return { label: 'Not Started', color: 'text-red-700' };
+    return { label: 'Not Started', color: 'text-rose-700' };
   };
 
   if (isLoading) {
@@ -368,10 +368,10 @@ export default function RiskDetailPage() {
 
   if (error || !risk) {
     return (
-      <div className="flex h-64 flex-col items-center justify-center text-red-400">
+      <div className="flex h-64 flex-col items-center justify-center text-rose-600">
         <AlertCircle className="mb-2 h-8 w-8" />
         <p>Failed to load risk details</p>
-        <Link href="/erm/risks" className="mt-4 text-primary-400 hover:underline">
+        <Link href="/erm/risks" className="mt-4 text-primary-600 hover:underline">
           Back to Risks
         </Link>
       </div>
@@ -407,7 +407,7 @@ export default function RiskDetailPage() {
           )}>{risk.title}</h1>
           <button
             onClick={() => setShowTitle(!showtitle)}
-            className="text-sm text-primary-400 hover:underline"
+            className="text-sm text-primary-600 hover:underline"
           >
             {showtitle ? 'Show Less' : 'Show More'}
           </button>
@@ -438,7 +438,7 @@ export default function RiskDetailPage() {
               setActiveTab('treatment');
               setIsEditingTreatment(true);
             }}
-            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700"
+            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-[#0a0a0a] hover:bg-primary-700"
           >
             <Activity className="h-4 w-4" />
             Update Treatment
@@ -447,7 +447,7 @@ export default function RiskDetailPage() {
           {canDelete && (
           <button
             onClick={() => setShowDeleteConfirm(true)}
-            className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-red-700 hover:bg-red-100"
+            className="flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-rose-700 hover:bg-rose-100"
           >
             <Trash2 className="h-4 w-4" />
             Delete
@@ -545,9 +545,9 @@ export default function RiskDetailPage() {
         </div>
         {riskReduction !== null && (
           <div className="mt-3 flex items-center justify-center gap-2 rounded-lg bg-white p-2">
-            <BarChart3 className="h-4 w-4 text-green-700" />
+            <BarChart3 className="h-4 w-4 text-emerald-700" />
             <span className="text-xs text-slate-700">Risk Reduction:</span>
-            <span className="text-sm font-bold text-green-700">{riskReduction}%</span>
+            <span className="text-sm font-bold text-emerald-700">{riskReduction}%</span>
           </div>
         )}
       </div>
@@ -562,7 +562,7 @@ export default function RiskDetailPage() {
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex items-center gap-2 border-b-2 px-3 sm:px-4 py-2.5 text-sm font-medium transition-colors whitespace-nowrap ${
                   activeTab === tab.id
-                    ? 'border-blue-600 text-blue-600'
+                    ? 'border-primary-600 text-primary-600'
                     : 'border-transparent text-slate-600 hover:text-slate-900'
                 }`}
               >
@@ -691,9 +691,9 @@ function DetailsTab({ risk, formatDate }: { risk: RiskDetailData; formatDate: (d
   return (
     <div className="space-y-4">
       {isNca && ncaFields.length > 0 && (
-        <div className="rounded-xl border border-blue-200 bg-blue-50/40 p-4">
+        <div className="rounded-xl border border-primary-200 bg-primary-50/40 p-4">
           <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900 mb-3">
-            <ClipboardCheck className="h-4 w-4 text-blue-600" />
+            <ClipboardCheck className="h-4 w-4 text-primary-600" strokeWidth={1.75} />
             NCA Template Fields
           </h3>
           <p className="text-xs text-slate-500 mb-3">All fields from the NCA Saudi cybersecurity risk register template. Owner and asset linking are managed via the platform pickers in the other tabs.</p>
@@ -929,7 +929,7 @@ function ControlsTab({
                   <button
                     onClick={() => onUnlinkSessionInternalControl(Number(control.id))}
                     disabled={isUnlinking}
-                    className="rounded-lg p-2 text-red-600 hover:bg-red-50 disabled:opacity-50"
+                    className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 disabled:opacity-50"
                     title="Remove from this view (link persists in database)"
                   >
                     <Trash2 className="h-4 w-4" />
@@ -950,7 +950,7 @@ function ControlsTab({
                 <button
                   onClick={() => onUnlinkControl(control.id)}
                   disabled={isUnlinking}
-                  className="rounded-lg p-2 text-red-600 hover:bg-red-50 disabled:opacity-50"
+                  className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 disabled:opacity-50"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
@@ -968,9 +968,9 @@ function ControlsTab({
             {risk.linked_framework_controls.map((control) => (
               <div key={control.id} className="flex items-center justify-between rounded-lg bg-white p-3">
                 <div className="flex items-center gap-3">
-                  <Shield className="h-4 w-4 text-blue-400" />
+                  <Shield className="h-4 w-4 text-slate-500" />
                   <div>
-                    <span className="text-xs font-medium text-blue-400">{control.code}</span>
+                    <span className="text-xs font-medium text-slate-500">{control.code}</span>
                     <p className="text-sm text-slate-900">{control.name}</p>
                     {control.mitigation_effectiveness && (
                       <span className={`text-xs ${getMitigationColor(control.mitigation_effectiveness)}`}>
@@ -983,7 +983,7 @@ function ControlsTab({
                 <button
                   onClick={() => onUnlinkFrameworkControl(control.id)}
                   disabled={isUnlinking}
-                  className="rounded-lg p-2 text-red-600 hover:bg-red-50 disabled:opacity-50"
+                  className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 disabled:opacity-50"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
@@ -1055,7 +1055,7 @@ function AssetsTab({
           {risk.linked_assets.map((asset) => (
             <div key={asset.id} className="flex items-center justify-between rounded-lg bg-white p-3">
               <div className="flex items-center gap-3">
-                <Building2 className="h-4 w-4 text-cyan-400" />
+                <Building2 className="h-4 w-4 text-primary-500" />
                 <div>
                   <p className="text-sm text-slate-900">{asset.name}</p>
                   <span className="text-xs text-slate-600">{asset.asset_type}</span>
@@ -1065,7 +1065,7 @@ function AssetsTab({
               <button
                 onClick={() => onUnlinkAsset(asset.id)}
                 disabled={isUnlinking}
-                className="rounded-lg p-2 text-red-600 hover:bg-red-50 disabled:opacity-50"
+                className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 disabled:opacity-50"
               >
                 <Trash2 className="h-4 w-4" />
               </button>
@@ -1103,9 +1103,9 @@ function EvidenceTab({
 }) {
   const getStatusColor = (status?: string) => {
     switch (status) {
-      case 'approved': return 'text-green-700 bg-green-100';
+      case 'approved': return 'text-emerald-700 bg-emerald-100';
       case 'pending': return 'text-amber-700 bg-amber-100';
-      case 'rejected': return 'text-red-700 bg-red-100';
+      case 'rejected': return 'text-rose-700 bg-rose-100';
       default: return 'text-slate-600 bg-slate-100';
     }
   };
@@ -1143,7 +1143,7 @@ function EvidenceTab({
           {risk.linked_evidence.map((evidence) => (
             <div key={evidence.id} className="flex items-center justify-between rounded-lg bg-white p-3">
               <div className="flex items-center gap-3">
-                <FileText className="h-4 w-4 text-purple-400" />
+                <FileText className="h-4 w-4 text-primary-400" />
                 <div>
                   <p className="text-sm text-slate-900">{evidence.name}</p>
                   <span className={`rounded px-2 py-0.5 text-xs ${getStatusColor(evidence.status)}`}>
@@ -1155,7 +1155,7 @@ function EvidenceTab({
               <button
                 onClick={() => onUnlinkEvidence(evidence.id)}
                 disabled={isUnlinking}
-                className="rounded-lg p-2 text-red-600 hover:bg-red-50 disabled:opacity-50"
+                className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 disabled:opacity-50"
               >
                 <Trash2 className="h-4 w-4" />
               </button>
@@ -1255,7 +1255,7 @@ function GovernanceTab({
           {(linkedDocuments || []).map((doc: any) => (
             <div key={`d-${doc.link_id || doc.id}`} className="flex items-center justify-between rounded-lg bg-white p-3">
               <div className="flex items-center gap-3">
-                <FileText className="h-4 w-4 text-blue-500" />
+                <FileText className="h-4 w-4 text-primary-500" />
                 <div>
                   <p className="text-sm text-slate-900">{doc.title || doc.document_title || doc.name || `Document #${doc.document_id || doc.id}`}</p>
                   <span className="text-xs text-slate-500">
@@ -1267,7 +1267,7 @@ function GovernanceTab({
                 <button
                   onClick={() => onUnlinkDocument(doc.link_id || doc.id)}
                   disabled={isUnlinking}
-                  className="rounded-lg p-2 text-red-600 hover:bg-red-50 disabled:opacity-50"
+                  className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 disabled:opacity-50"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
@@ -1277,7 +1277,7 @@ function GovernanceTab({
           {(risk.linked_governance || []).map((objective) => (
             <div key={`o-${objective.id}`} className="flex items-center justify-between rounded-lg bg-white p-3">
               <div className="flex items-center gap-3">
-                <Target className="h-4 w-4 text-yellow-400" />
+                <Target className="h-4 w-4 text-amber-500" />
                 <div>
                   <p className="text-sm text-slate-900">{objective.name}</p>
                   <span className={`text-xs ${getImpactColor(objective.impact_level)}`}>
@@ -1289,7 +1289,7 @@ function GovernanceTab({
                 <button
                   onClick={() => onUnlinkGovernance(objective.id)}
                   disabled={isUnlinking}
-                  className="rounded-lg p-2 text-red-600 hover:bg-red-50 disabled:opacity-50"
+                  className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 disabled:opacity-50"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
@@ -1337,7 +1337,7 @@ function DeleteConfirmModal({
           <button
             onClick={onConfirm}
             disabled={isDeleting}
-            className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-white hover:bg-red-700 disabled:opacity-50"
+            className="flex items-center gap-2 rounded-lg bg-rose-600 px-4 py-2 text-white hover:bg-rose-700 disabled:opacity-50"
           >
             {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
             Delete
@@ -1406,12 +1406,12 @@ function LinkFrameworkControlModal({
                 onClick={() => setSelectedControlId(Number(control.id))}
                 className={`flex w-full items-center justify-between rounded-lg p-3 text-left ${
                   selectedControlId === Number(control.id)
-                    ? 'bg-primary-600/30 border border-primary-500'
+                    ? 'bg-primary-50 border border-primary-500'
                     : 'bg-white hover:bg-slate-100'
                 }`}
               >
                 <div>
-                  <span className="text-sm font-medium text-blue-400">{control.reference_code}</span>
+                  <span className="text-sm font-medium text-primary-600">{control.reference_code}</span>
                   <p className="text-slate-900">{control.name}</p>
                 </div>
               </button>
@@ -1524,7 +1524,7 @@ function LinkGovernanceModal({
                 onClick={() => setSelectedObjectiveId(Number(objective.id))}
                 className={`flex w-full items-center justify-between rounded-lg p-3 text-left ${
                   selectedObjectiveId === Number(objective.id)
-                    ? 'bg-primary-600/30 border border-primary-500'
+                    ? 'bg-primary-50 border border-primary-500'
                     : 'bg-white hover:bg-slate-100'
                 }`}
               >

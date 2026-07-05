@@ -69,39 +69,39 @@ interface ControlLite { id: number; name?: string; control_id?: string; descript
 const LIFECYCLE_STATUSES = [
   { value: 'open',         label: 'Open',         color: 'bg-rose-100 text-rose-700' },
   { value: 'in_progress',  label: 'In Treatment', color: 'bg-amber-100 text-amber-700' },
-  { value: 'mitigated',    label: 'Mitigated',    color: 'bg-green-100 text-green-700' },
-  { value: 'accepted',     label: 'Accepted',     color: 'bg-blue-100 text-blue-700' },
-  { value: 'closed',       label: 'Closed',       color: 'bg-gray-100 text-gray-600' },
+  { value: 'mitigated',    label: 'Mitigated',    color: 'bg-emerald-100 text-emerald-700' },
+  { value: 'accepted',     label: 'Accepted',     color: 'bg-primary-100 text-primary-700' },
+  { value: 'closed',       label: 'Closed',       color: 'bg-slate-100 text-slate-600' },
 ];
 
 const ACTION_STATUSES = [
   { value: 'open',         label: 'Open',         color: 'bg-rose-50 text-rose-700' },
-  { value: 'in_progress',  label: 'In Progress',  color: 'bg-blue-50 text-blue-700' },
+  { value: 'in_progress',  label: 'In Progress',  color: 'bg-primary-50 text-primary-700' },
   { value: 'on_hold',      label: 'On Hold',      color: 'bg-amber-50 text-amber-700' },
-  { value: 'completed',    label: 'Completed',    color: 'bg-green-50 text-green-700' },
+  { value: 'completed',    label: 'Completed',    color: 'bg-emerald-50 text-emerald-700' },
 ];
 
 const RATING_STYLES: Record<string, string> = {
   Critical:   'bg-rose-100 text-rose-700',
   High:       'bg-orange-100 text-orange-700',
   Medium:     'bg-amber-100 text-amber-700',
-  Low:        'bg-green-100 text-green-700',
-  'Very Low': 'bg-gray-100 text-gray-600',
+  Low:        'bg-emerald-100 text-emerald-700',
+  'Very Low': 'bg-slate-100 text-slate-600',
 };
 
 function StatusPill({ value }: { value: string }) {
   const found = LIFECYCLE_STATUSES.find(s => s.value === value);
   return (
-    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${found?.color || 'bg-gray-100 text-gray-600'}`}>
+    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${found?.color || 'bg-slate-100 text-slate-600'}`}>
       {found?.label || value}
     </span>
   );
 }
 
 function RatingBadge({ rating }: { rating: string | null }) {
-  if (!rating) return <span className="text-xs text-gray-400">—</span>;
+  if (!rating) return <span className="text-xs text-slate-400">—</span>;
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${RATING_STYLES[rating] || 'bg-gray-100 text-gray-600'}`}>
+    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${RATING_STYLES[rating] || 'bg-slate-100 text-slate-600'}`}>
       {rating}
     </span>
   );
@@ -117,34 +117,34 @@ function AIPanel({ json, generatedAt }: { json: string; generatedAt: string | nu
   let data: any = {};
   try { data = JSON.parse(json); } catch { data = { summary: json }; }
   return (
-    <div className="rounded-lg border border-purple-200 bg-purple-50/40 p-4 space-y-3">
+    <div className="rounded-lg border border-primary-200 bg-primary-50/40 p-4 space-y-3">
       <div className="flex items-center gap-2">
-        <Sparkles className="h-4 w-4 text-purple-600" />
-        <span className="text-sm font-semibold text-purple-700">AI Recommendation</span>
-        {generatedAt && <span className="text-xs text-gray-500">{new Date(generatedAt).toLocaleString()}</span>}
+        <Sparkles className="h-4 w-4 text-primary-600" strokeWidth={1.75} />
+        <span className="text-sm font-semibold text-primary-700">AI Recommendation</span>
+        {generatedAt && <span className="text-xs text-slate-500">{new Date(generatedAt).toLocaleString()}</span>}
       </div>
-      {data.summary && <p className="text-sm text-gray-700">{data.summary}</p>}
+      {data.summary && <p className="text-sm text-slate-700">{data.summary}</p>}
       {Array.isArray(data.treatment_strategy) && data.treatment_strategy.length > 0 && (
         <div>
-          <p className="text-xs font-semibold text-gray-600 mb-1">Treatment Strategy</p>
+          <p className="text-xs font-semibold text-slate-600 mb-1">Treatment Strategy</p>
           <ul className="list-disc list-inside space-y-0.5">
-            {data.treatment_strategy.map((s: string, i: number) => <li key={i} className="text-xs text-gray-700">{s}</li>)}
+            {data.treatment_strategy.map((s: string, i: number) => <li key={i} className="text-xs text-slate-700">{s}</li>)}
           </ul>
         </div>
       )}
       {Array.isArray(data.residual_mitigation) && data.residual_mitigation.length > 0 && (
         <div>
-          <p className="text-xs font-semibold text-gray-600 mb-1">Residual Mitigation</p>
+          <p className="text-xs font-semibold text-slate-600 mb-1">Residual Mitigation</p>
           <ul className="list-disc list-inside space-y-0.5">
-            {data.residual_mitigation.map((s: string, i: number) => <li key={i} className="text-xs text-gray-700">{s}</li>)}
+            {data.residual_mitigation.map((s: string, i: number) => <li key={i} className="text-xs text-slate-700">{s}</li>)}
           </ul>
         </div>
       )}
       {Array.isArray(data.monitoring) && data.monitoring.length > 0 && (
         <div>
-          <p className="text-xs font-semibold text-gray-600 mb-1">Monitoring</p>
+          <p className="text-xs font-semibold text-slate-600 mb-1">Monitoring</p>
           <ul className="list-disc list-inside space-y-0.5">
-            {data.monitoring.map((s: string, i: number) => <li key={i} className="text-xs text-gray-700">{s}</li>)}
+            {data.monitoring.map((s: string, i: number) => <li key={i} className="text-xs text-slate-700">{s}</li>)}
           </ul>
         </div>
       )}
@@ -164,7 +164,7 @@ function ActionRow({
 }) {
   const [editing, setEditing] = useState(action.id.startsWith('act-new-'));
   const [draft, setDraft] = useState<MitigationAction>(action);
-  const statusStyle = ACTION_STATUSES.find(s => s.value === draft.status)?.color || 'bg-gray-100 text-gray-600';
+  const statusStyle = ACTION_STATUSES.find(s => s.value === draft.status)?.color || 'bg-slate-100 text-slate-600';
 
   const setOwner = (userId: string) => {
     const id = userId ? parseInt(userId) : null;
@@ -174,25 +174,25 @@ function ActionRow({
 
   if (!editing) {
     return (
-      <div className="border border-gray-200 rounded-lg p-3 flex items-start gap-3 hover:bg-gray-50">
+      <div className="border border-slate-200 rounded-lg p-3 flex items-start gap-3 hover:bg-slate-50">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <span className={`text-xs font-medium px-2 py-0.5 rounded ${statusStyle}`}>
               {ACTION_STATUSES.find(s => s.value === draft.status)?.label || draft.status}
             </span>
-            <p className="text-sm font-medium text-gray-900 truncate">{draft.title || '(untitled)'}</p>
+            <p className="text-sm font-medium text-slate-900 truncate">{draft.title || '(untitled)'}</p>
           </div>
-          <div className="flex items-center gap-3 text-xs text-gray-500 flex-wrap">
+          <div className="flex items-center gap-3 text-xs text-slate-500 flex-wrap">
             {draft.owner && <span className="flex items-center gap-1"><User className="h-3 w-3" />{draft.owner}</span>}
             {draft.due_date && <span className="flex items-center gap-1"><Calendar className="h-3 w-3" />{draft.due_date}</span>}
           </div>
-          {draft.notes && <p className="text-xs text-gray-600 mt-1.5">{draft.notes}</p>}
+          {draft.notes && <p className="text-xs text-slate-600 mt-1.5">{draft.notes}</p>}
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
-          <button onClick={() => setEditing(true)} className="p-1.5 rounded text-gray-500 hover:text-blue-600 hover:bg-blue-50" title="Edit">
+          <button onClick={() => setEditing(true)} className="p-1.5 rounded text-slate-500 hover:text-primary-600 hover:bg-primary-50" title="Edit">
             <Edit2 className="h-3.5 w-3.5" />
           </button>
-          <button onClick={onDelete} className="p-1.5 rounded text-gray-500 hover:text-rose-600 hover:bg-rose-50" title="Delete">
+          <button onClick={onDelete} className="p-1.5 rounded text-slate-500 hover:text-rose-600 hover:bg-rose-50" title="Delete">
             <Trash2 className="h-3.5 w-3.5" />
           </button>
         </div>
@@ -201,19 +201,19 @@ function ActionRow({
   }
 
   return (
-    <div className="border border-blue-300 bg-blue-50/30 rounded-lg p-3 space-y-2">
+    <div className="border border-primary-300 bg-primary-50/30 rounded-lg p-3 space-y-2">
       <input
         type="text"
         value={draft.title}
         onChange={e => setDraft(d => ({ ...d, title: e.target.value }))}
         placeholder="Action title…"
-        className="w-full text-sm rounded-lg border border-gray-300 px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="w-full text-sm rounded-lg border border-slate-300 px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary-500"
       />
       <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
         <select
           value={draft.owner_user_id?.toString() || ''}
           onChange={e => setOwner(e.target.value)}
-          className="text-xs rounded-lg border border-gray-300 px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="text-xs rounded-lg border border-slate-300 px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary-500"
         >
           <option value="">— Owner —</option>
           {tenantUsers.map(u => <option key={u.id} value={u.id}>{u.display_name || u.email}</option>)}
@@ -222,12 +222,12 @@ function ActionRow({
           type="date"
           value={draft.due_date || ''}
           onChange={e => setDraft(d => ({ ...d, due_date: e.target.value || null }))}
-          className="text-xs rounded-lg border border-gray-300 px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="text-xs rounded-lg border border-slate-300 px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary-500"
         />
         <select
           value={draft.status}
           onChange={e => setDraft(d => ({ ...d, status: e.target.value as any }))}
-          className="text-xs rounded-lg border border-gray-300 px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="text-xs rounded-lg border border-slate-300 px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary-500"
         >
           {ACTION_STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
         </select>
@@ -237,16 +237,16 @@ function ActionRow({
         onChange={e => setDraft(d => ({ ...d, notes: e.target.value }))}
         placeholder="Notes (optional)"
         rows={2}
-        className="w-full text-xs rounded-lg border border-gray-300 px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+        className="w-full text-xs rounded-lg border border-slate-300 px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
       />
       <div className="flex justify-end gap-2">
-        <button onClick={() => { setDraft(action); setEditing(false); }} className="text-xs px-3 py-1.5 rounded-lg border border-gray-300 hover:bg-gray-50">
+        <button onClick={() => { setDraft(action); setEditing(false); }} className="text-xs px-3 py-1.5 rounded-lg border border-slate-300 hover:bg-slate-50">
           Cancel
         </button>
         <button
           onClick={() => { onSave({ ...draft, updated_at: new Date().toISOString() }); setEditing(false); }}
           disabled={!draft.title.trim()}
-          className="text-xs px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+          className="text-xs px-3 py-1.5 rounded-lg bg-primary-600 text-[#0a0a0a] hover:bg-primary-700 disabled:opacity-50"
         >
           Save
         </button>
@@ -282,14 +282,14 @@ function LinkPicker<T extends { id: number }>({
   };
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
-      <div className="p-4 border-b border-gray-100 flex items-center justify-between">
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
+      <div className="p-4 border-b border-slate-100 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Icon className="h-4 w-4 text-blue-600" />
-          <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
-          <span className="text-xs text-gray-500">({selected.length})</span>
+          <Icon className="h-4 w-4 text-primary-600" />
+          <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
+          <span className="text-xs text-slate-500">({selected.length})</span>
         </div>
-        <button onClick={() => setExpanded(e => !e)} className="text-xs text-blue-600 hover:underline flex items-center gap-1">
+        <button onClick={() => setExpanded(e => !e)} className="text-xs text-primary-600 hover:underline flex items-center gap-1">
           {expanded ? 'Done' : 'Manage'}
           {expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
         </button>
@@ -297,13 +297,13 @@ function LinkPicker<T extends { id: number }>({
 
       <div className="p-4">
         {selected.length === 0 && !expanded ? (
-          <p className="text-xs text-gray-400 italic">{emptyMessage}</p>
+          <p className="text-xs text-slate-400 italic">{emptyMessage}</p>
         ) : (
           <div className="flex flex-wrap gap-2">
             {selected.map(s => (
-              <span key={s.id} className="inline-flex items-center gap-1.5 bg-blue-50 border border-blue-200 text-blue-700 text-xs rounded-full pl-2.5 pr-1 py-1">
+              <span key={s.id} className="inline-flex items-center gap-1.5 bg-primary-50 border border-primary-200 text-primary-700 text-xs rounded-full pl-2.5 pr-1 py-1">
                 {getLabel(s)}
-                <button onClick={() => toggle(s.id)} className="hover:bg-blue-100 rounded-full p-0.5">
+                <button onClick={() => toggle(s.id)} className="hover:bg-primary-100 rounded-full p-0.5">
                   <X className="h-3 w-3" />
                 </button>
               </span>
@@ -312,19 +312,19 @@ function LinkPicker<T extends { id: number }>({
         )}
 
         {expanded && (
-          <div className="mt-3 border border-gray-200 rounded-lg">
+          <div className="mt-3 border border-slate-200 rounded-lg">
             <input
               type="text"
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Search…"
-              className="w-full text-xs px-3 py-2 border-b border-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="w-full text-xs px-3 py-2 border-b border-slate-200 focus:outline-none focus:ring-1 focus:ring-primary-500"
             />
             <div className="max-h-56 overflow-y-auto">
               {filtered.length === 0 ? (
-                <p className="text-xs text-gray-400 italic p-3 text-center">{items.length === 0 ? emptyMessage : 'No matches'}</p>
+                <p className="text-xs text-slate-400 italic p-3 text-center">{items.length === 0 ? emptyMessage : 'No matches'}</p>
               ) : filtered.map(item => (
-                <label key={item.id} className="flex items-start gap-2 px-3 py-1.5 hover:bg-gray-50 cursor-pointer text-xs">
+                <label key={item.id} className="flex items-start gap-2 px-3 py-1.5 hover:bg-slate-50 cursor-pointer text-xs">
                   <input
                     type="checkbox"
                     checked={selectedIds.includes(item.id)}
@@ -332,8 +332,8 @@ function LinkPicker<T extends { id: number }>({
                     className="mt-0.5"
                   />
                   <span className="flex-1">
-                    <span className="text-gray-800">{getLabel(item)}</span>
-                    {getSubtitle && <span className="text-gray-400 ml-1">— {getSubtitle(item)}</span>}
+                    <span className="text-slate-800">{getLabel(item)}</span>
+                    {getSubtitle && <span className="text-slate-400 ml-1">— {getSubtitle(item)}</span>}
                   </span>
                 </label>
               ))}
@@ -399,7 +399,7 @@ export default function NcaRiskDetailPage() {
   });
 
   if (isLoading) {
-    return <div className="flex items-center justify-center h-96"><Loader2 className="h-7 w-7 animate-spin text-blue-500" /></div>;
+    return <div className="flex items-center justify-center h-96"><Loader2 className="h-7 w-7 animate-spin text-primary-500" /></div>;
   }
   if (error || !entry) {
     return (
@@ -449,41 +449,41 @@ export default function NcaRiskDetailPage() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <button
           onClick={() => router.push('/erm/risks?view=nca')}
-          className="text-sm text-gray-600 hover:text-blue-600 flex items-center gap-1"
+          className="text-sm text-slate-600 hover:text-primary-600 flex items-center gap-1"
         >
           <ArrowLeft className="h-4 w-4" /> Back to NCA Risk Register
         </button>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-3 mb-2 flex-wrap">
-              <span className="text-xs font-mono text-gray-500">{entry.risk_identifier}</span>
+              <span className="text-xs font-mono text-slate-500">{entry.risk_identifier}</span>
               <select
                 value={entry.lifecycle_status}
                 onChange={e => updateMut.mutate({ lifecycle_status: e.target.value })}
-                className="text-xs rounded-full border-0 px-2.5 py-1 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer bg-gray-100"
+                className="text-xs rounded-full border-0 px-2.5 py-1 font-medium focus:outline-none focus:ring-2 focus:ring-primary-500 cursor-pointer bg-slate-100"
               >
                 {LIFECYCLE_STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
               </select>
               <StatusPill value={entry.lifecycle_status} />
             </div>
-            <h1 className="text-lg font-semibold text-gray-900">{entry.description || '(no description)'}</h1>
-            <p className="text-sm text-gray-500 mt-1">{entry.risk_area || 'No risk area set'} · Threat: {entry.threat || '—'}</p>
+            <h1 className="text-lg font-semibold text-slate-900">{entry.description || '(no description)'}</h1>
+            <p className="text-sm text-slate-500 mt-1">{entry.risk_area || 'No risk area set'} · Threat: {entry.threat || '—'}</p>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             <button
               onClick={() => aiMut.mutate()}
               disabled={aiMut.isPending}
-              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-purple-700 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 disabled:opacity-50"
+              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-primary-700 bg-primary-50 border border-primary-200 rounded-lg hover:bg-primary-100 disabled:opacity-50"
             >
               {aiMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
               {entry.ai_recommendation ? 'Regenerate AI' : 'Generate AI'}
             </button>
             <button
               onClick={() => router.push('/erm/risks?view=nca&edit=' + entry.id)}
-              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-[#0a0a0a] bg-primary-600 rounded-lg hover:bg-primary-700"
             >
               <Edit2 className="h-4 w-4" /> Edit Fields
             </button>
@@ -491,21 +491,21 @@ export default function NcaRiskDetailPage() {
         </div>
 
         {/* Risk score grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-5 pt-5 border-t border-gray-100">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-5 pt-5 border-t border-slate-100">
           <div>
-            <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Inherent L × I</p>
-            <p className="text-sm text-gray-800">{entry.inherent_likelihood ?? '—'} × {entry.inherent_impact ?? '—'}</p>
+            <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Inherent L × I</p>
+            <p className="text-sm text-slate-800">{entry.inherent_likelihood ?? '—'} × {entry.inherent_impact ?? '—'}</p>
           </div>
           <div>
-            <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Inherent Rating</p>
+            <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Inherent Rating</p>
             <RatingBadge rating={entry.inherent_rating_override || entry.inherent_rating} />
           </div>
           <div>
-            <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Residual L × I</p>
-            <p className="text-sm text-gray-800">{entry.residual_likelihood ?? '—'} × {entry.residual_impact ?? '—'}</p>
+            <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Residual L × I</p>
+            <p className="text-sm text-slate-800">{entry.residual_likelihood ?? '—'} × {entry.residual_impact ?? '—'}</p>
           </div>
           <div>
-            <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Residual Rating</p>
+            <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Residual Rating</p>
             <RatingBadge rating={entry.residual_rating} />
           </div>
         </div>
@@ -517,10 +517,10 @@ export default function NcaRiskDetailPage() {
       )}
 
       {/* NCA fields read-only display */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
-        <div className="p-4 border-b border-gray-100">
-          <h3 className="text-sm font-semibold text-gray-900">NCA Template Fields</h3>
-          <p className="text-xs text-gray-500 mt-0.5">Use the Edit Fields button above to modify any of these.</p>
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
+        <div className="p-4 border-b border-slate-100">
+          <h3 className="text-sm font-semibold text-slate-900">NCA Template Fields</h3>
+          <p className="text-xs text-slate-500 mt-0.5">Use the Edit Fields button above to modify any of these.</p>
         </div>
         <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
           {[
@@ -542,31 +542,31 @@ export default function NcaRiskDetailPage() {
             ['Comment', entry.comment],
           ].map(([label, value]) => (
             <div key={label as string}>
-              <p className="text-xs text-gray-500 uppercase tracking-wider mb-0.5">{label}</p>
-              <p className="text-sm text-gray-800 whitespace-pre-wrap">{value || <span className="text-gray-400 italic">—</span>}</p>
+              <p className="text-xs text-slate-500 uppercase tracking-wider mb-0.5">{label}</p>
+              <p className="text-sm text-slate-800 whitespace-pre-wrap">{value || <span className="text-slate-400 italic">—</span>}</p>
             </div>
           ))}
         </div>
       </div>
 
       {/* Mitigation Actions */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
-        <div className="p-4 border-b border-gray-100 flex items-center justify-between">
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
+        <div className="p-4 border-b border-slate-100 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <ListTodo className="h-4 w-4 text-blue-600" />
-            <h3 className="text-sm font-semibold text-gray-900">Mitigation Actions</h3>
-            <span className="text-xs text-gray-500">({entry.mitigation_actions?.length || 0})</span>
+            <ListTodo className="h-4 w-4 text-primary-600" />
+            <h3 className="text-sm font-semibold text-slate-900">Mitigation Actions</h3>
+            <span className="text-xs text-slate-500">({entry.mitigation_actions?.length || 0})</span>
           </div>
           <button
             onClick={addNewAction}
-            className="text-xs px-2.5 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 flex items-center gap-1"
+            className="text-xs px-2.5 py-1.5 rounded-lg bg-primary-600 text-[#0a0a0a] hover:bg-primary-700 flex items-center gap-1"
           >
             <Plus className="h-3.5 w-3.5" /> Add Action
           </button>
         </div>
         <div className="p-4 space-y-2">
           {(entry.mitigation_actions || []).length === 0 ? (
-            <p className="text-xs text-gray-400 italic text-center py-6">No mitigation actions yet. Add one to track remediation work.</p>
+            <p className="text-xs text-slate-400 italic text-center py-6">No mitigation actions yet. Add one to track remediation work.</p>
           ) : (
             (entry.mitigation_actions || []).map(action => (
               <ActionRow
@@ -606,12 +606,12 @@ export default function NcaRiskDetailPage() {
       />
 
       {updateMut.isPending && (
-        <div className="fixed bottom-4 right-4 bg-white border border-gray-200 rounded-lg px-3 py-2 shadow-lg flex items-center gap-2 text-xs text-gray-600">
+        <div className="fixed bottom-4 right-4 bg-white border border-slate-200 rounded-lg px-3 py-2 shadow-lg flex items-center gap-2 text-xs text-slate-600">
           <Loader2 className="h-3.5 w-3.5 animate-spin" /> Saving…
         </div>
       )}
       {updateMut.isSuccess && !updateMut.isPending && (
-        <div className="fixed bottom-4 right-4 bg-green-50 border border-green-200 text-green-700 rounded-lg px-3 py-2 shadow-lg flex items-center gap-2 text-xs">
+        <div className="fixed bottom-4 right-4 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-lg px-3 py-2 shadow-lg flex items-center gap-2 text-xs">
           <CheckCircle className="h-3.5 w-3.5" /> Saved
         </div>
       )}

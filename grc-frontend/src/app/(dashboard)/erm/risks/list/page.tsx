@@ -83,12 +83,12 @@ const SOURCE_LABELS: Record<string, string> = {
 };
 const SOURCE_STYLES: Record<string, SourceStyle> = {
   manual:          { label: 'Manual',          iconKey: 'pencil',      badgeBg: 'bg-slate-100',  badgeText: 'text-slate-700',  badgeRing: 'ring-slate-200' },
-  register_import: { label: 'Register import', iconKey: 'upload',      badgeBg: 'bg-blue-100',   badgeText: 'text-blue-700',   badgeRing: 'ring-blue-200' },
+  register_import: { label: 'Register import', iconKey: 'upload',      badgeBg: 'bg-primary-100', badgeText: 'text-primary-700', badgeRing: 'ring-primary-200' },
   assessment:      { label: 'Assessment',      iconKey: 'clipboard',   badgeBg: 'bg-emerald-100',badgeText: 'text-emerald-700',badgeRing: 'ring-emerald-200' },
   incident:        { label: 'Incident',        iconKey: 'alert',       badgeBg: 'bg-rose-100',   badgeText: 'text-rose-700',   badgeRing: 'ring-rose-200' },
   rcsa:            { label: 'RCSA',            iconKey: 'check',       badgeBg: 'bg-amber-100',  badgeText: 'text-amber-800',  badgeRing: 'ring-amber-200' },
-  framework_gap:   { label: 'Framework gap',   iconKey: 'shield',      badgeBg: 'bg-purple-100', badgeText: 'text-purple-700', badgeRing: 'ring-purple-200' },
-  ubl_import:      { label: 'UBL register',    iconKey: 'spreadsheet', badgeBg: 'bg-indigo-100', badgeText: 'text-indigo-700', badgeRing: 'ring-indigo-200' },
+  framework_gap:   { label: 'Framework gap',   iconKey: 'shield',      badgeBg: 'bg-slate-100',  badgeText: 'text-slate-700',  badgeRing: 'ring-slate-200' },
+  ubl_import:      { label: 'UBL register',    iconKey: 'spreadsheet', badgeBg: 'bg-primary-100', badgeText: 'text-primary-700', badgeRing: 'ring-primary-200' },
   nca_import:      { label: 'NCA register',    iconKey: 'building',    badgeBg: 'bg-teal-100',   badgeText: 'text-teal-700',   badgeRing: 'ring-teal-200' },
 };
 const formatSourceLabel = (raw?: string | null): string => {
@@ -143,7 +143,7 @@ function SourceBadge({
       {renderSourceIcon(style.iconKey)}
       <span>{style.label}</span>
       {display && (
-        <span className={`ml-1 rounded-full bg-white/70 px-1.5 text-[10px] text-gray-700 ${sourceLabel ? 'font-medium' : 'font-mono'}`}>
+        <span className={`ml-1 rounded-full bg-white/70 px-1.5 text-[10px] text-slate-700 ${sourceLabel ? 'font-medium' : 'font-mono'}`}>
           {display}
         </span>
       )}
@@ -152,19 +152,19 @@ function SourceBadge({
 }
 
 const STANDARD_RISK_CATEGORIES: { value: RiskCategory; label: string; color: string; bgColor: string }[] = [
-  { value: 'strategic', label: 'Strategic', color: 'text-purple-400', bgColor: 'bg-purple-500/20' },
-  { value: 'operational', label: 'Operational', color: 'text-blue-400', bgColor: 'bg-blue-500/20' },
-  { value: 'financial', label: 'Financial', color: 'text-green-400', bgColor: 'bg-green-500/20' },
-  { value: 'compliance', label: 'Compliance', color: 'text-yellow-400', bgColor: 'bg-yellow-500/20' },
-  { value: 'technology', label: 'Technology', color: 'text-cyan-400', bgColor: 'bg-cyan-500/20' },
-  { value: 'third_party', label: 'Third Party', color: 'text-orange-400', bgColor: 'bg-orange-500/20' },
-  { value: 'project_change', label: 'Project/Change', color: 'text-pink-400', bgColor: 'bg-pink-500/20' },
-  { value: 'internal', label: 'Internal', color: 'text-slate-700', bgColor: 'bg-slate-500/20' },
+  { value: 'strategic', label: 'Strategic', color: 'text-primary-700', bgColor: 'bg-primary-50' },
+  { value: 'operational', label: 'Operational', color: 'text-primary-700', bgColor: 'bg-primary-50' },
+  { value: 'financial', label: 'Financial', color: 'text-emerald-700', bgColor: 'bg-emerald-50' },
+  { value: 'compliance', label: 'Compliance', color: 'text-amber-700', bgColor: 'bg-amber-50' },
+  { value: 'technology', label: 'Technology', color: 'text-primary-700', bgColor: 'bg-primary-50' },
+  { value: 'third_party', label: 'Third Party', color: 'text-orange-700', bgColor: 'bg-orange-50' },
+  { value: 'project_change', label: 'Project/Change', color: 'text-slate-700', bgColor: 'bg-slate-100' },
+  { value: 'internal', label: 'Internal', color: 'text-slate-700', bgColor: 'bg-slate-100' },
 ];
 
 const UBL_RISK_CATEGORIES: { value: RiskCategory; label: string; color: string; bgColor: string }[] = [
   { value: 'isms', label: 'ISMS', color: 'text-emerald-700', bgColor: 'bg-emerald-100' },
-  { value: 'process', label: 'Process', color: 'text-indigo-700', bgColor: 'bg-indigo-100' },
+  { value: 'process', label: 'Process', color: 'text-primary-700', bgColor: 'bg-primary-100' },
   { value: 'other', label: 'Other', color: 'text-slate-700', bgColor: 'bg-slate-100' },
 ];
 
@@ -653,11 +653,11 @@ const DEPARTMENTS = [
 ];
 
 const RISK_STATUSES: { value: RiskStatus; label: string; color: string; bgColor: string }[] = [
-  { value: 'open', label: 'Open', color: 'text-red-400', bgColor: 'bg-red-500/20' },
-  { value: 'in_treatment', label: 'In Treatment', color: 'text-yellow-400', bgColor: 'bg-yellow-500/20' },
-  { value: 'mitigated', label: 'Mitigated', color: 'text-green-400', bgColor: 'bg-green-500/20' },
-  { value: 'accepted', label: 'Accepted', color: 'text-blue-400', bgColor: 'bg-blue-500/20' },
-  { value: 'closed', label: 'Closed', color: 'text-slate-600', bgColor: 'bg-slate-500/20' },
+  { value: 'open', label: 'Open', color: 'text-rose-700', bgColor: 'bg-rose-50' },
+  { value: 'in_treatment', label: 'In Treatment', color: 'text-amber-700', bgColor: 'bg-amber-50' },
+  { value: 'mitigated', label: 'Mitigated', color: 'text-emerald-700', bgColor: 'bg-emerald-50' },
+  { value: 'accepted', label: 'Accepted', color: 'text-primary-700', bgColor: 'bg-primary-50' },
+  { value: 'closed', label: 'Closed', color: 'text-slate-700', bgColor: 'bg-slate-100' },
 ];
 
 const getCategoryStyle = (category: string | null | undefined) => {
@@ -684,21 +684,21 @@ const getStatusStyle = (status: RiskStatus) => {
 };
 
 const getScoreColor = (score: number | undefined) => {
-  if (!score) return { text: 'text-slate-600', bg: 'bg-slate-500/20' };
-  if (score >= 20) return { text: 'text-red-400', bg: 'bg-red-500/20' };
-  if (score >= 12) return { text: 'text-orange-400', bg: 'bg-orange-500/20' };
-  if (score >= 6) return { text: 'text-yellow-400', bg: 'bg-yellow-500/20' };
-  return { text: 'text-green-400', bg: 'bg-green-500/20' };
+  if (!score) return { text: 'text-slate-600', bg: 'bg-slate-100' };
+  if (score >= 20) return { text: 'text-rose-700', bg: 'bg-rose-50' };
+  if (score >= 12) return { text: 'text-orange-700', bg: 'bg-orange-50' };
+  if (score >= 6) return { text: 'text-amber-700', bg: 'bg-amber-50' };
+  return { text: 'text-emerald-700', bg: 'bg-emerald-50' };
 };
 
 const getHeatmapCellColor = (likelihood: number, impact: number) => {
   const score = likelihood * impact;
-  if (score >= 20) return 'bg-red-500 hover:bg-red-600';
-  if (score >= 15) return 'bg-red-400 hover:bg-red-500';
+  if (score >= 20) return 'bg-rose-500 hover:bg-rose-600';
+  if (score >= 15) return 'bg-rose-400 hover:bg-rose-500';
   if (score >= 12) return 'bg-orange-400 hover:bg-orange-500';
-  if (score >= 8) return 'bg-yellow-400 hover:bg-yellow-500';
-  if (score >= 4) return 'bg-lime-400 hover:bg-lime-500';
-  return 'bg-green-500 hover:bg-green-600';
+  if (score >= 8) return 'bg-amber-400 hover:bg-amber-500';
+  if (score >= 4) return 'bg-emerald-400 hover:bg-emerald-500';
+  return 'bg-emerald-500 hover:bg-emerald-600';
 };
 
 export default function ERMRisksPage() {
@@ -1205,7 +1205,7 @@ export default function ERMRisksPage() {
 
   if (error) {
     return (
-      <div className="flex h-64 flex-col items-center justify-center text-red-400">
+      <div className="flex h-64 flex-col items-center justify-center text-rose-600">
         <AlertCircle className="mb-2 h-8 w-8" />
         <p>Failed to load risks</p>
       </div>
@@ -1228,21 +1228,21 @@ export default function ERMRisksPage() {
       </div>
 
       {uploadResult && (
-        <div className={`rounded-xl border p-4 ${uploadResult.errors.length > 0 ? 'border-red-500/50 bg-white' : 'border-green-500/50 bg-white'}`}>
+        <div className={`rounded-xl border p-4 ${uploadResult.errors.length > 0 ? 'border-rose-300 bg-white' : 'border-emerald-300 bg-white'}`}>
           <div className="flex items-start justify-between">
             <div className="flex items-start gap-3">
               {uploadResult.errors.length > 0 ? (
-                <AlertCircle className="h-5 w-5 text-red-700 mt-0.5" />
+                <AlertCircle className="h-5 w-5 text-rose-700 mt-0.5" />
               ) : (
-                <CheckCircle className="h-5 w-5 text-green-700 mt-0.5" />
+                <CheckCircle className="h-5 w-5 text-emerald-700 mt-0.5" />
               )}
               <div>
                 <p className="font-medium text-slate-900">{uploadResult.message}</p>
                 <div className="mt-1 flex gap-4 text-sm">
-                  <span className="text-green-700">Created: {uploadResult.created}</span>
+                  <span className="text-emerald-700">Created: {uploadResult.created}</span>
                   <span className="text-amber-700">Skipped: {uploadResult.skipped}</span>
                   {uploadResult.errors.length > 0 && (
-                    <span className="text-red-700">Errors: {uploadResult.errors.length}</span>
+                    <span className="text-rose-700">Errors: {uploadResult.errors.length}</span>
                   )}
                 </div>
               </div>
@@ -1268,7 +1268,7 @@ export default function ERMRisksPage() {
                 }}
                 className={`rounded px-2 py-1 text-xs font-medium transition-colors ${
                   heatmapType === 'inherent'
-                    ? 'bg-primary-600 text-white'
+                    ? 'bg-primary-600 text-[#0a0a0a]'
                     : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                 }`}
               >
@@ -1281,7 +1281,7 @@ export default function ERMRisksPage() {
                 }}
                 className={`rounded px-2 py-1 text-xs font-medium transition-colors ${
                   heatmapType === 'residual'
-                    ? 'bg-primary-600 text-white'
+                    ? 'bg-primary-600 text-[#0a0a0a]'
                     : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                 }`}
               >
@@ -1402,7 +1402,7 @@ export default function ERMRisksPage() {
           <button
             onClick={() => setIsUploadModalOpen(true)}
             disabled={isUploading}
-            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 sm:px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 sm:px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50"
           >
             {isUploading ? (
               <Loader2 size={16} className="animate-spin" />
@@ -1413,7 +1413,7 @@ export default function ERMRisksPage() {
           </button>
           <button
             onClick={handleDownloadTemplate}
-            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 sm:px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 sm:px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
           >
             <Download size={16} />
             Template
@@ -1496,9 +1496,9 @@ export default function ERMRisksPage() {
                         case 'Critical':  return 'bg-rose-100 text-rose-700';
                         case 'High':      return 'bg-orange-100 text-orange-700';
                         case 'Medium':    return 'bg-amber-100 text-amber-700';
-                        case 'Low':       return 'bg-green-100 text-green-700';
-                        case 'Very Low':  return 'bg-gray-100 text-gray-600';
-                        default:          return 'bg-gray-100 text-gray-500';
+                        case 'Low':       return 'bg-emerald-100 text-emerald-700';
+                        case 'Very Low':  return 'bg-slate-100 text-slate-600';
+                        default:          return 'bg-slate-100 text-slate-500';
                       }
                     };
                     const fmtDate = (d: any) => (d ? new Date(d).toLocaleDateString() : '—');
@@ -1581,7 +1581,7 @@ export default function ERMRisksPage() {
                                     setNcaEditBridgedId(risk.id);
                                     setIsNcaAddOpen(true);
                                   }}
-                                  className="inline-flex items-center justify-center rounded p-1.5 text-slate-500 hover:bg-blue-50 hover:text-blue-600"
+                                  className="inline-flex items-center justify-center rounded p-1.5 text-slate-500 hover:bg-primary-50 hover:text-primary-600"
                                   title="Edit"
                                   aria-label="Edit"
                                 >
@@ -1607,11 +1607,11 @@ export default function ERMRisksPage() {
                           </td>
                         </tr>
                         {expanded && (
-                          <tr className="bg-blue-50/30">
+                          <tr className="bg-primary-50/30">
                             <td></td>
                             <td colSpan={9} className="px-4 py-3">
-                              <div className="rounded-lg border border-blue-100 bg-white p-3">
-                                <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-2">NCA Template Fields</p>
+                              <div className="rounded-lg border border-primary-100 bg-white p-3">
+                                <p className="text-xs font-semibold text-primary-700 uppercase tracking-wider mb-2">NCA Template Fields</p>
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-2">
                                   {detailFields.filter(([, v]) => v !== null && v !== undefined && v !== '' && v !== '—').map(([label, value]) => (
                                     <div key={label}>
@@ -1692,7 +1692,7 @@ export default function ERMRisksPage() {
                             />
                           )}
                           {(risk.mitigation_actions?.length || 0) > 0 && (
-                            <span className="flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium bg-indigo-500/20 text-indigo-400">
+                            <span className="flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium bg-primary-50 text-primary-700">
                               <ListTodo size={10} />
                               {risk.mitigation_actions?.length} Actions
                             </span>
@@ -1832,7 +1832,7 @@ export default function ERMRisksPage() {
                                   deleteMutation.mutate(risk.id);
                                 }
                               }}
-                              className="rounded p-1 text-slate-600 hover:bg-red-50 hover:text-red-600"
+                              className="rounded p-1 text-slate-600 hover:bg-rose-50 hover:text-rose-600"
                             >
                               <Trash2 className="h-4 w-4" />
                             </button>
@@ -1905,7 +1905,7 @@ export default function ERMRisksPage() {
       >
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-800 mb-1">
+            <label className="block text-sm font-medium text-slate-800 mb-1">
               Risk Register Type (Optional)
             </label>
             <MultiSelectDropdown
@@ -1926,7 +1926,7 @@ export default function ERMRisksPage() {
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={isUploading}
-            className="w-full flex items-center justify-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
+            className="w-full flex items-center justify-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-medium text-[#0a0a0a] hover:bg-primary-700 disabled:opacity-50"
           >
             {isUploading ? (
               <>
@@ -2389,7 +2389,7 @@ function RiskModal({
           <button
             type="button"
             onClick={onClose}
-            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
           >
             Cancel
           </button>
@@ -2413,13 +2413,13 @@ function RiskModal({
     >
       <form id="risk-modal-form" onSubmit={handleSubmit} className="space-y-3">
           <div>
-            <label className="block text-sm font-medium text-gray-800 mb-1">Title *</label>
+            <label className="block text-sm font-medium text-slate-800 mb-1">Title *</label>
             <div className="flex gap-2">
               <input
                 type="text"
                 value={formData.title}
                 onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                className="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className="flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 required
                 placeholder="Enter risk title..."
               />
@@ -2427,7 +2427,7 @@ function RiskModal({
                 type="button"
                 onClick={handleGetAISuggestions}
                 disabled={isLoadingAI || formData.title.trim().length < 3}
-                className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-purple-600 to-blue-600 px-4 py-2 text-sm font-medium text-slate-900 hover:from-purple-500 hover:to-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-[#0a0a0a] hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
               >
                 {isLoadingAI ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -2438,12 +2438,12 @@ function RiskModal({
               </button>
             </div>
             {aiError && (
-              <p className="mt-1 text-xs text-red-400">{aiError}</p>
+              <p className="mt-1 text-xs text-rose-600">{aiError}</p>
             )}
           </div>
 
           {aiSuggestions && (
-            <div className="rounded-xl border-2 border-transparent bg-gradient-to-r from-purple-500/20 to-blue-500/20 p-[2px]">
+            <div className="rounded-xl border border-slate-200 bg-primary-50 p-[2px]">
               <div className="rounded-[10px] bg-white p-4">
                 <button
                   type="button"
@@ -2451,7 +2451,7 @@ function RiskModal({
                   className="flex w-full items-center justify-between text-left"
                 >
                   <div className="flex items-center gap-2">
-                    <Zap className="h-4 w-4 text-purple-400" />
+                    <Zap className="h-4 w-4 text-primary-600" />
                     <span className="text-sm font-medium text-slate-900">AI Suggestions</span>
                   </div>
                   {showSuggestions ? (
@@ -2509,7 +2509,7 @@ function RiskModal({
                               type="button"
                               onClick={() => appendCauseToDescription(cause)}
                               title="Append to description"
-                              className="rounded-full bg-red-100 px-2.5 py-1 text-xs text-red-700 hover:bg-red-200 transition-colors border border-red-200"
+                              className="rounded-full bg-rose-100 px-2.5 py-1 text-xs text-rose-700 hover:bg-rose-200 transition-colors border border-rose-200"
                             >
                               + {cause}
                             </button>
@@ -2571,7 +2571,7 @@ function RiskModal({
                       <div className="mt-2 flex items-center gap-4">
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-slate-600">Likelihood:</span>
-                          <span className="rounded bg-blue-100 px-2 py-0.5 text-sm font-medium text-blue-700">
+                          <span className="rounded bg-primary-100 px-2 py-0.5 text-sm font-medium text-primary-700">
                             {aiSuggestions.suggested_likelihood}/5
                           </span>
                         </div>
@@ -2599,7 +2599,7 @@ function RiskModal({
                               key={control.control_id}
                               className="flex items-start gap-3 rounded-lg bg-slate-100/50 p-3"
                             >
-                              <Shield className="h-4 w-4 text-green-400 mt-0.5 flex-shrink-0" />
+                              <Shield className="h-4 w-4 text-emerald-500 mt-0.5 flex-shrink-0" />
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2">
                                   <span className="text-sm font-medium text-slate-900 truncate">
@@ -2613,17 +2613,17 @@ function RiskModal({
                                   {control.control_source && (
                                     <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
                                       control.control_source === 'internal'
-                                        ? 'bg-indigo-100 text-indigo-700'
-                                        : 'bg-sky-100 text-sky-700'
+                                        ? 'bg-primary-100 text-primary-700'
+                                        : 'bg-slate-100 text-slate-700'
                                     }`}>
                                       {control.control_source === 'internal' ? 'Internal' : 'Framework'}
                                     </span>
                                   )}
                                   <span className={`rounded px-1.5 py-0.5 text-xs ${
                                     control.relevance === 'high'
-                                      ? 'bg-green-100 text-green-700'
+                                      ? 'bg-emerald-100 text-emerald-700'
                                       : control.relevance === 'medium'
-                                      ? 'bg-yellow-100 text-yellow-700'
+                                      ? 'bg-amber-100 text-amber-700'
                                       : 'bg-slate-100 text-slate-600'
                                   }`}>
                                     {control.relevance}
@@ -2657,18 +2657,18 @@ function RiskModal({
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-800 mb-1">Description</label>
+            <label className="block text-sm font-medium text-slate-800 mb-1">Description</label>
             <textarea
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               rows={3}
               placeholder="Describe the risk..."
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-800 mb-1">Register Type</label>
+            <label className="block text-sm font-medium text-slate-800 mb-1">Register Type</label>
             <MultiSelectDropdown
               title="Register Type"
               items={REGISTER_TYPES.filter(t => t.value).map(t => ({ value: t.value, label: t.label }))}
@@ -2724,7 +2724,7 @@ function RiskModal({
                             type="text"
                             value={ublFields[key] || ''}
                             onChange={(e) => handleUBLFieldChange(key, e.target.value)}
-                            className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                            className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                           />
                         </div>
                       ))}
@@ -2737,7 +2737,7 @@ function RiskModal({
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-800 mb-1">
+              <label className="block text-sm font-medium text-slate-800 mb-1">
                 {isUBLTemplateSelected ? 'Category (Risk Category)' : 'Category'}
               </label>
               <MultiSelectDropdown
@@ -2752,7 +2752,7 @@ function RiskModal({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-800 mb-1">
+              <label className="block text-sm font-medium text-slate-800 mb-1">
                 {isUBLTemplateSelected ? 'Sub-Category (Sub-Source / Activity)' : 'Sub-Category'}
               </label>
               {isUBLTemplateSelected ? (
@@ -2762,7 +2762,7 @@ function RiskModal({
                     list="ubl-sub-source-options"
                     value={formData.risk_sub_category}
                     onChange={(e) => setFormData({ ...formData, risk_sub_category: e.target.value.slice(0, 100) })}
-                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                     placeholder="Enter sub-source / activity..."
                   />
                   <datalist id="ubl-sub-source-options">
@@ -2788,7 +2788,7 @@ function RiskModal({
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-800 mb-1">Status</label>
+              <label className="block text-sm font-medium text-slate-800 mb-1">Status</label>
               <MultiSelectDropdown
                 title="Status"
                 items={RISK_STATUSES.map((s) => ({ value: s.value, label: s.label }))}
@@ -2801,7 +2801,7 @@ function RiskModal({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-800 mb-1">Business Owner</label>
+              <label className="block text-sm font-medium text-slate-800 mb-1">Business Owner</label>
               <MultiSelectDropdown
                 title="Business Owner"
                 items={(users || []).map((user) => ({
@@ -2828,9 +2828,9 @@ function RiskModal({
               dashboard's BU-progress panel are keyed on, so a risk
               assigned here lands in the right team's scope automatically. */}
           <div>
-            <label className="block text-sm font-medium text-gray-800 mb-1">
+            <label className="block text-sm font-medium text-slate-800 mb-1">
               Assigned Team / Department
-              <span className="ml-1 text-xs font-normal text-gray-500">(defines who owns and reviews this risk)</span>
+              <span className="ml-1 text-xs font-normal text-slate-500">(defines who owns and reviews this risk)</span>
             </label>
             <MultiSelectDropdown
               title="Assigned Team"
@@ -2850,8 +2850,8 @@ function RiskModal({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-800 mb-1">Linked Assets (Optional)</label>
-            <div className="rounded-lg border border-gray-300 bg-white p-2">
+            <label className="block text-sm font-medium text-slate-800 mb-1">Linked Assets (Optional)</label>
+            <div className="rounded-lg border border-slate-300 bg-white p-2">
               <SearchInput
                 value={assetSearch}
                 onChange={setAssetSearch}
@@ -2890,7 +2890,7 @@ function RiskModal({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-800 mb-1">Affected Departments</label>
+            <label className="block text-sm font-medium text-slate-800 mb-1">Affected Departments</label>
             {/* Previously a hardcoded list (IT/Finance/Operations/...) that
                 tenants couldn't edit. Now sourced from admin/teams so the
                 same definitions flow through the risk register, RCSA
@@ -2911,7 +2911,7 @@ function RiskModal({
                   onClick={() => handleDepartmentToggle(dept.id)}
                   className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
                     formData.affected_department_ids.includes(dept.id)
-                      ? 'bg-primary-600 text-white'
+                      ? 'bg-primary-600 text-[#0a0a0a]'
                       : 'bg-slate-200 text-slate-700 hover:bg-slate-500'
                   }`}
                 >
@@ -2923,57 +2923,57 @@ function RiskModal({
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-800 mb-1">Inherent Likelihood (1-5)</label>
+              <label className="block text-sm font-medium text-slate-800 mb-1">Inherent Likelihood (1-5)</label>
               <input
                 type="number"
                 min="1"
                 max="5"
                 value={formData.inherent_likelihood}
                 onChange={(e) => setFormData({ ...formData, inherent_likelihood: Number(e.target.value) })}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-800 mb-1">Inherent Impact (1-5)</label>
+              <label className="block text-sm font-medium text-slate-800 mb-1">Inherent Impact (1-5)</label>
               <input
                 type="number"
                 min="1"
                 max="5"
                 value={formData.inherent_impact}
                 onChange={(e) => setFormData({ ...formData, inherent_impact: Number(e.target.value) })}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-800 mb-1">Residual Likelihood (1-5)</label>
+              <label className="block text-sm font-medium text-slate-800 mb-1">Residual Likelihood (1-5)</label>
               <input
                 type="number"
                 min="1"
                 max="5"
                 value={formData.residual_likelihood}
                 onChange={(e) => setFormData({ ...formData, residual_likelihood: Number(e.target.value) })}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-800 mb-1">Residual Impact (1-5)</label>
+              <label className="block text-sm font-medium text-slate-800 mb-1">Residual Impact (1-5)</label>
               <input
                 type="number"
                 min="1"
                 max="5"
                 value={formData.residual_impact}
                 onChange={(e) => setFormData({ ...formData, residual_impact: Number(e.target.value) })}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               />
             </div>
           </div>
 
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label className="block text-sm font-medium text-gray-800">Treatment Plan</label>
+              <label className="block text-sm font-medium text-slate-800">Treatment Plan</label>
               {risk && (
                 <button
                   type="button"
@@ -2989,7 +2989,7 @@ function RiskModal({
                     }
                   }}
                   disabled={isGeneratingTreatment}
-                  className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-purple-600 to-blue-600 px-4 py-2 text-sm font-medium text-slate-900 hover:from-purple-500 hover:to-blue-500 disabled:opacity-50 transition-all"
+                  className="flex items-center gap-1.5 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-[#0a0a0a] hover:bg-primary-700 disabled:opacity-50 transition-all"
                 >
                   {isGeneratingTreatment ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -3003,7 +3003,7 @@ function RiskModal({
             <textarea
               value={formData.treatment_plan}
               onChange={(e) => setFormData({ ...formData, treatment_plan: e.target.value })}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               rows={formData.treatment_plan.length > 200 ? 8 : 2}
             />
           </div>
@@ -3011,21 +3011,21 @@ function RiskModal({
           {/* Root Cause + Recommendations — reviewable AI-assist fields, also
               free-text editable. "Save to field" in the AI panel fills these. */}
           <div>
-            <label className="block text-sm font-medium text-gray-800 mb-1">Root Cause</label>
+            <label className="block text-sm font-medium text-slate-800 mb-1">Root Cause</label>
             <textarea
               value={formData.root_cause}
               onChange={(e) => setFormData({ ...formData, root_cause: e.target.value })}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               rows={formData.root_cause.length > 200 ? 6 : 2}
               placeholder="Why this risk exists (use AI Assist → Root Causes → Save to field, or write your own)…"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-800 mb-1">Recommendations</label>
+            <label className="block text-sm font-medium text-slate-800 mb-1">Recommendations</label>
             <textarea
               value={formData.recommendations}
               onChange={(e) => setFormData({ ...formData, recommendations: e.target.value })}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               rows={formData.recommendations.length > 200 ? 6 : 2}
               placeholder="Recommended actions to reduce this risk (AI Assist → Recommendations → Save to field, or write your own)…"
             />
