@@ -44,19 +44,19 @@ interface ReportSummary {
 }
 
 const PRIORITY_COLORS: Record<string, string> = {
-  Critical: 'bg-red-500',
+  Critical: 'bg-rose-500',
   High: 'bg-orange-500',
   Medium: 'bg-amber-500',
   Low: 'bg-emerald-500',
 };
 
 const STATUS_BAR_COLORS: Record<string, string> = {
-  Open: 'bg-blue-500',
+  Open: 'bg-slate-400',
   'In Progress': 'bg-amber-500',
-  'Under Review': 'bg-purple-500',
+  'Under Review': 'bg-primary-500',
   Completed: 'bg-emerald-500',
-  Verified: 'bg-green-500',
-  Reopened: 'bg-red-500',
+  Verified: 'bg-emerald-500',
+  Reopened: 'bg-rose-500',
 };
 
 export default function TaskReportsPage() {
@@ -97,7 +97,7 @@ export default function TaskReportsPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Loader2 className="animate-spin text-blue-600" size={32} />
+        <Loader2 className="animate-spin text-primary-600" size={32} />
       </div>
     );
   }
@@ -117,7 +117,7 @@ export default function TaskReportsPage() {
     <div className="space-y-4 sm:space-y-6 text-[var(--color-text)]">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="min-w-0">
-          <h1 className="text-lg sm:text-xl font-semibold text-black tracking-tight">Task Reports</h1>
+          <h1 className="text-lg sm:text-xl font-semibold text-slate-900 tracking-tight">Task Reports</h1>
           <p className="mt-1 text-sm text-slate-600">
             Analytics and insights for critical task management
           </p>
@@ -126,7 +126,7 @@ export default function TaskReportsPage() {
           <button
             onClick={handlePredictEscalations}
             disabled={aiLoading === 'escalations'}
-            className="flex items-center gap-2 rounded-lg border border-purple-200 bg-purple-50 px-3 py-2 text-sm font-medium text-purple-700 hover:bg-purple-100 transition-colors disabled:opacity-50"
+            className="flex items-center gap-2 rounded-lg border border-primary-200 bg-primary-50 px-3 py-2 text-sm font-medium text-primary-700 hover:bg-primary-100 transition-colors disabled:opacity-50"
           >
             {aiLoading === 'escalations' ? <Loader2 className="animate-spin" size={14} /> : <Sparkles size={14} />}
             Predict Escalations
@@ -134,7 +134,7 @@ export default function TaskReportsPage() {
           <button
             onClick={handleBalanceWorkload}
             disabled={aiLoading === 'workload'}
-            className="flex items-center gap-2 rounded-lg border border-purple-200 bg-purple-50 px-3 py-2 text-sm font-medium text-purple-700 hover:bg-purple-100 transition-colors disabled:opacity-50"
+            className="flex items-center gap-2 rounded-lg border border-primary-200 bg-primary-50 px-3 py-2 text-sm font-medium text-primary-700 hover:bg-primary-100 transition-colors disabled:opacity-50"
           >
             {aiLoading === 'workload' ? <Loader2 className="animate-spin" size={14} /> : <Scale size={14} />}
             Balance Workload
@@ -150,12 +150,12 @@ export default function TaskReportsPage() {
           </div>
           <div className="text-2xl font-semibold text-[var(--color-text)]">{report.total}</div>
         </div>
-        <div className="cw-card p-4 border-red-200 bg-red-50">
-          <div className="flex items-center gap-2 text-red-600 mb-2">
+        <div className="cw-card p-4 border-rose-200 bg-rose-50">
+          <div className="flex items-center gap-2 text-rose-600 mb-2">
             <AlertTriangle size={16} />
             <span className="text-xs font-medium uppercase tracking-wider">Overdue</span>
           </div>
-          <div className="text-2xl font-semibold text-red-600">{report.overdue}</div>
+          <div className="text-2xl font-semibold text-rose-600">{report.overdue}</div>
         </div>
         <div className="cw-card p-4 border-emerald-200 bg-emerald-50">
           <div className="flex items-center gap-2 text-emerald-600 mb-2">
@@ -164,12 +164,12 @@ export default function TaskReportsPage() {
           </div>
           <div className="text-2xl font-semibold text-emerald-600">{report.completion_rate}%</div>
         </div>
-        <div className="cw-card p-4 border-blue-200 bg-blue-50">
-          <div className="flex items-center gap-2 text-blue-600 mb-2">
+        <div className="cw-card p-4 border-primary-200 bg-primary-50">
+          <div className="flex items-center gap-2 text-primary-700 mb-2">
             <Clock size={16} />
             <span className="text-xs font-medium uppercase tracking-wider">SLA Compliance</span>
           </div>
-          <div className="text-2xl font-semibold text-blue-600">{report.sla_compliance}%</div>
+          <div className="text-2xl font-semibold text-primary-700">{report.sla_compliance}%</div>
         </div>
         <div className="cw-card p-4 border-amber-200 bg-amber-50">
           <div className="flex items-center gap-2 text-amber-600 mb-2">
@@ -236,7 +236,7 @@ export default function TaskReportsPage() {
                     <span className="text-[var(--color-muted)]">{data.completed}/{data.total} ({data.rate}%)</span>
                   </div>
                   <div className="h-2 rounded-full bg-[var(--color-subtle)] overflow-hidden">
-                    <div className="h-full rounded-full bg-blue-500" style={{ width: `${data.rate}%` }} />
+                    <div className="h-full rounded-full bg-primary-500" style={{ width: `${data.rate}%` }} />
                   </div>
                 </div>
               ))}
@@ -248,8 +248,8 @@ export default function TaskReportsPage() {
           <h2 className="text-sm font-semibold text-[var(--color-text)] mb-4">Overdue Aging Analysis</h2>
           {report.overdue === 0 ? (
             <div className="text-center py-4">
-              <CheckCircle2 size={24} className="mx-auto text-emerald-400 mb-2" />
-              <p className="text-sm text-emerald-400">No overdue tasks</p>
+              <CheckCircle2 size={24} className="mx-auto text-emerald-600 mb-2" />
+              <p className="text-sm text-emerald-600">No overdue tasks</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -261,7 +261,7 @@ export default function TaskReportsPage() {
                   </div>
                   <div className="h-2 rounded-full bg-[var(--color-subtle)] overflow-hidden">
                     <div
-                      className="h-full rounded-full bg-red-500"
+                      className="h-full rounded-full bg-rose-500"
                       style={{ width: `${report.overdue > 0 ? (count / report.overdue * 100) : 0}%` }}
                     />
                   </div>
@@ -282,7 +282,7 @@ export default function TaskReportsPage() {
               <div key={i} className="flex-1 flex flex-col items-center gap-1">
                 <div className="w-full flex gap-0.5 items-end justify-center" style={{ height: '120px' }}>
                   <div
-                    className="w-2 bg-blue-500 rounded-t"
+                    className="w-2 bg-primary-500 rounded-t"
                     style={{ height: `${maxTrend > 0 ? (t.created / maxTrend * 100) : 0}%`, minHeight: t.created > 0 ? '4px' : '0' }}
                     title={`Created: ${t.created}`}
                   />
@@ -298,7 +298,7 @@ export default function TaskReportsPage() {
           </div>
         )}
         <div className="flex items-center justify-center gap-6 mt-3 text-xs text-[var(--color-muted)]">
-          <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-sm bg-blue-500" /> Created</div>
+          <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-sm bg-primary-500" /> Created</div>
           <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-sm bg-emerald-500" /> Completed</div>
         </div>
       </div>
@@ -322,7 +322,7 @@ export default function TaskReportsPage() {
                       <span className="text-[var(--color-muted)]">{count} active task{count !== 1 ? 's' : ''}</span>
                     </div>
                     <div className="h-2 rounded-full bg-[var(--color-subtle)] overflow-hidden">
-                      <div className="h-full rounded-full bg-purple-500" style={{ width: `${max > 0 ? (count / max * 100) : 0}%` }} />
+                      <div className="h-full rounded-full bg-primary-500" style={{ width: `${max > 0 ? (count / max * 100) : 0}%` }} />
                     </div>
                   </div>
                 );
@@ -348,9 +348,9 @@ export default function TaskReportsPage() {
       </div>
 
       {escalationPredictions && (
-        <div className="rounded-xl border border-purple-200 bg-purple-50 p-6">
+        <div className="rounded-xl border border-primary-200 bg-primary-50 p-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-semibold text-purple-700 flex items-center gap-2">
+            <h2 className="text-sm font-semibold text-primary-700 flex items-center gap-2">
               <Sparkles size={16} /> AI Escalation Predictions
             </h2>
             <button onClick={() => setEscalationPredictions(null)} className="text-[var(--color-muted)] hover:text-[var(--color-text)]"><X size={16} /></button>
@@ -365,15 +365,15 @@ export default function TaskReportsPage() {
                     <span className="text-sm font-medium text-[var(--color-text)]">{p.title as string}</span>
                     <div className="flex items-center gap-2">
                       <span className={`text-xs px-2 py-0.5 rounded-full ${
-                        (p.risk_score as number) >= 80 ? 'bg-red-500/20 text-red-600' :
-                        (p.risk_score as number) >= 50 ? 'bg-amber-500/20 text-amber-600' :
-                        'bg-emerald-500/20 text-emerald-600'
+                        (p.risk_score as number) >= 80 ? 'bg-rose-50 text-rose-700' :
+                        (p.risk_score as number) >= 50 ? 'bg-amber-50 text-amber-700' :
+                        'bg-emerald-50 text-emerald-700'
                       }`}>Risk: {p.risk_score as number}%</span>
                       <span className="text-xs text-[var(--color-muted)]">{p.confidence as number}% confidence</span>
                     </div>
                   </div>
                   {(p.predicted_breach_date as string) && (
-                    <p className="text-xs text-red-600 mb-2">Predicted breach: {new Date(p.predicted_breach_date as string).toLocaleDateString()}</p>
+                    <p className="text-xs text-rose-600 mb-2">Predicted breach: {new Date(p.predicted_breach_date as string).toLocaleDateString()}</p>
                   )}
                   {(p.risk_factors as string[])?.length > 0 && (
                     <div className="mb-2">
@@ -397,9 +397,9 @@ export default function TaskReportsPage() {
       )}
 
       {workloadSuggestions && (
-        <div className="rounded-xl border border-purple-200 bg-purple-50 p-6">
+        <div className="rounded-xl border border-primary-200 bg-primary-50 p-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-semibold text-purple-700 flex items-center gap-2">
+            <h2 className="text-sm font-semibold text-primary-700 flex items-center gap-2">
               <Scale size={16} /> AI Workload Rebalancing
             </h2>
             <button onClick={() => setWorkloadSuggestions(null)} className="text-[var(--color-muted)] hover:text-[var(--color-text)]"><X size={16} /></button>
@@ -431,7 +431,7 @@ export default function TaskReportsPage() {
                 <div key={i} className="rounded-lg border border-[var(--color-border)] bg-white p-3 flex items-center gap-3">
                   <span className="text-xs text-[var(--color-muted)] shrink-0">#{s.task_id as number}</span>
                   <span className="text-sm text-[var(--color-text)] flex-1">{s.task_title as string}</span>
-                  <span className="text-xs text-red-600">{s.current_owner as string}</span>
+                  <span className="text-xs text-rose-600">{s.current_owner as string}</span>
                   <span className="text-[var(--color-muted)]">→</span>
                   <span className="text-xs text-emerald-600">{s.suggested_owner as string}</span>
                   <span className="text-xs text-[var(--color-muted)] max-w-[200px] truncate">{s.reason as string}</span>
@@ -458,7 +458,7 @@ export default function TaskReportsPage() {
                   }
                   setWorkloadSuggestions(null);
                 }}
-                className="rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700 transition-colors"
+                className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-[#0a0a0a] hover:bg-primary-700 transition-colors"
               >
                 Apply Reassignments
               </button>
