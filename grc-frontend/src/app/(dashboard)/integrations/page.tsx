@@ -91,7 +91,7 @@ export default function IntegrationsDashboardPage() {
   });
 
   const batchRecalc = useMutation({
-    mutationFn: () => integrationsApi.batchRecalculate({ connection_id: connectionFilter }),
+    mutationFn: () => integrationsApi.batchRecalculateScores({ connection_id: connectionFilter }),
   });
 
   const assignSLA = useMutation({
