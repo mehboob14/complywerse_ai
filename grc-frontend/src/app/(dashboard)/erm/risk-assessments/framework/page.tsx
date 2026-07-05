@@ -42,7 +42,7 @@ interface AssignedQuestion {
 const QUESTION_COUNT_OPTIONS = [10, 15, 20, 25, 30, 40, 50];
 
 const STATUS_BADGES: Record<string, string> = {
-  in_progress: 'bg-blue-600 text-white border-blue-700',
+  in_progress: 'bg-primary-600 text-[#0a0a0a] border-primary-700',
   completed: 'bg-emerald-600 text-white border-emerald-700',
   archived: 'bg-slate-700 text-white border-slate-800',
   not_started: 'bg-slate-500 text-white border-slate-600',
@@ -153,7 +153,7 @@ export default function FrameworkRiskAssessmentsPage() {
             className="mt-0.5 inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors"
             title="Back to Risk Assessments"
           >
-            <ArrowLeft className="h-4 w-4" />
+            <ArrowLeft className="h-4 w-4" strokeWidth={1.75} />
           </Link>
           <div>
             <h1 className="text-lg sm:text-xl font-semibold text-[var(--color-text)]">Framework Risk Assessments</h1>
@@ -164,7 +164,7 @@ export default function FrameworkRiskAssessmentsPage() {
 
       <div className="cw-card p-6 space-y-5">
         <div className="flex items-center gap-2 text-sm font-medium text-[var(--color-text)]">
-          <Sparkles size={16} /> New Framework Assessment
+          <Sparkles size={16} strokeWidth={1.75} /> New Framework Assessment
         </div>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <div>
@@ -259,7 +259,7 @@ export default function FrameworkRiskAssessmentsPage() {
             onClick={() => setActiveTab('assessments')}
             className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors -mb-px ${
               activeTab === 'assessments'
-                ? 'border-blue-600 text-blue-600'
+                ? 'border-primary-600 text-primary-700'
                 : 'border-transparent text-slate-600 hover:text-slate-900'
             }`}
           >
@@ -269,7 +269,7 @@ export default function FrameworkRiskAssessmentsPage() {
             onClick={() => setActiveTab('assigned')}
             className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors -mb-px ${
               activeTab === 'assigned'
-                ? 'border-blue-600 text-blue-600'
+                ? 'border-primary-600 text-primary-700'
                 : 'border-transparent text-slate-600 hover:text-slate-900'
             }`}
           >
@@ -316,7 +316,7 @@ export default function FrameworkRiskAssessmentsPage() {
                           >
                             <Trash2 size={13} /> Delete
                           </button>}
-                          <span className={`rounded-full border px-2 py-0.5 text-xs ${STATUS_BADGES[assessment.status] || 'bg-gray-50 text-gray-600 border-gray-200'}`}>
+                          <span className={`rounded-full border px-2 py-0.5 text-xs ${STATUS_BADGES[assessment.status] || 'bg-slate-50 text-slate-600 border-slate-200'}`}>
                             {assessment.status.replace(/_/g, ' ')}
                           </span>
                           <div className="text-right text-xs text-[var(--color-muted)]">
@@ -353,7 +353,7 @@ export default function FrameworkRiskAssessmentsPage() {
                         <div className="text-xs text-[var(--color-muted)]">
                           {question.framework_name || 'Framework'} · {question.assessment_name || 'Assessment'}
                         </div>
-                        <span className={`rounded-full border px-2 py-0.5 text-xs ${STATUS_BADGES[question.status] || 'bg-gray-50 text-gray-600 border-gray-200'}`}>
+                        <span className={`rounded-full border px-2 py-0.5 text-xs ${STATUS_BADGES[question.status] || 'bg-slate-50 text-slate-600 border-slate-200'}`}>
                           {question.status.replace(/_/g, ' ')}
                         </span>
                       </div>
@@ -392,7 +392,7 @@ function MethodologyPreview({
     return (
       <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
         <div className="flex items-center gap-1.5 font-semibold">
-          <Sparkles size={13} /> AI-generated questions
+          <Sparkles size={13} strokeWidth={1.75} /> AI-generated questions
         </div>
         <div className="mt-1 text-amber-700">
           No mapped methodology for this framework — questions will be AI-generated using the framework&apos;s parsed controls as context.
@@ -401,16 +401,16 @@ function MethodologyPreview({
     );
   }
   return (
-    <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-xs text-blue-900">
+    <div className="rounded-lg border border-primary-200 bg-primary-50 px-4 py-3 text-xs text-primary-900">
       <div className="flex items-center gap-1.5 font-semibold">
-        <ShieldCheck size={13} /> {methodology.display_name}
+        <ShieldCheck size={13} strokeWidth={1.75} /> {methodology.display_name}
       </div>
-      <div className="mt-1 text-blue-800">{methodology.short_description}</div>
+      <div className="mt-1 text-primary-800">{methodology.short_description}</div>
       <div className="mt-2 flex flex-wrap gap-1">
         {methodology.phases.map((p) => (
           <span
             key={p.code}
-            className="inline-flex items-center gap-1 rounded-full bg-white/70 px-2 py-0.5 text-[10px] font-medium text-blue-700"
+            className="inline-flex items-center gap-1 rounded-full bg-white/70 px-2 py-0.5 text-[10px] font-medium text-primary-700"
             title={p.description}
           >
             <BookOpen size={9} />
@@ -418,7 +418,7 @@ function MethodologyPreview({
           </span>
         ))}
       </div>
-      <div className="mt-2 text-[11px] text-blue-700">
+      <div className="mt-2 text-[11px] text-primary-700">
         Reference: {methodology.reference_standard}
       </div>
     </div>

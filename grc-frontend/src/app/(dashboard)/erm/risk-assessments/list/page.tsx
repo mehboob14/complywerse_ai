@@ -31,15 +31,15 @@ type Methodology = 'qualitative' | 'quantitative' | 'semi_quantitative';
 
 const STATUS_CONFIG: Record<AssessmentStatus, { label: string; color: string; bgColor: string }> = {
   draft: { label: 'Draft', color: 'text-white', bgColor: 'bg-slate-500' },
-  in_progress: { label: 'In Progress', color: 'text-white', bgColor: 'bg-blue-600' },
+  in_progress: { label: 'In Progress', color: 'text-[#0a0a0a]', bgColor: 'bg-primary-600' },
   under_review: { label: 'Under Review', color: 'text-white', bgColor: 'bg-amber-600' },
   approved: { label: 'Approved', color: 'text-white', bgColor: 'bg-emerald-600' },
-  closed: { label: 'Closed', color: 'text-white', bgColor: 'bg-purple-600' },
+  closed: { label: 'Closed', color: 'text-white', bgColor: 'bg-slate-600' },
 };
 
 const TYPE_CONFIG: Record<AssessmentType, { label: string; color: string; bgColor: string }> = {
-  periodic: { label: 'Periodic', color: 'text-white', bgColor: 'bg-cyan-600' },
-  annual: { label: 'Annual', color: 'text-white', bgColor: 'bg-indigo-600' },
+  periodic: { label: 'Periodic', color: 'text-[#0a0a0a]', bgColor: 'bg-primary-600' },
+  annual: { label: 'Annual', color: 'text-white', bgColor: 'bg-slate-600' },
   ad_hoc: { label: 'Ad Hoc', color: 'text-white', bgColor: 'bg-orange-600' },
   triggered: { label: 'Triggered', color: 'text-white', bgColor: 'bg-rose-600' },
 };
@@ -93,7 +93,7 @@ type CombinedAssessment =
   | (FrameworkAssessment & { source: 'framework' });
 
 const FRAMEWORK_STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: string }> = {
-  in_progress: { label: 'In Progress', color: 'text-white', bgColor: 'bg-blue-600' },
+  in_progress: { label: 'In Progress', color: 'text-[#0a0a0a]', bgColor: 'bg-primary-600' },
   completed: { label: 'Completed', color: 'text-white', bgColor: 'bg-emerald-600' },
   archived: { label: 'Archived', color: 'text-white', bgColor: 'bg-slate-700' },
   not_started: { label: 'Not Started', color: 'text-white', bgColor: 'bg-slate-500' },
@@ -319,8 +319,8 @@ export default function RiskAssessmentsPage() {
 
   if (error) {
     return (
-      <div className="flex h-64 flex-col items-center justify-center text-red-400">
-        <AlertTriangle className="mb-2 h-8 w-8" />
+      <div className="flex h-64 flex-col items-center justify-center text-rose-600">
+        <AlertTriangle className="mb-2 h-8 w-8" strokeWidth={1.75} />
         <p>Failed to load risk assessments</p>
       </div>
     );
@@ -335,7 +335,7 @@ export default function RiskAssessmentsPage() {
             className="mt-0.5 inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors"
             title="Back to Risk Assessments dashboard"
           >
-            <ArrowLeft className="h-4 w-4" />
+            <ArrowLeft className="h-4 w-4" strokeWidth={1.75} />
           </Link>
           <div>
             <h2 className="text-lg sm:text-xl font-semibold text-slate-900">Risk Assessments</h2>
@@ -356,9 +356,9 @@ export default function RiskAssessmentsPage() {
               resetUploadForm();
               setIsUploadModalOpen(true);
             }}
-            className="flex items-center gap-2 rounded-lg border border-blue-300 bg-white px-3 sm:px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50"
+            className="flex items-center gap-2 rounded-lg border border-primary-300 bg-white px-3 sm:px-4 py-2 text-sm font-medium text-primary-700 hover:bg-primary-50"
           >
-            <Upload size={16} />
+            <Upload size={16} strokeWidth={1.75} />
             Upload Risk Assessment
           </button>
           )}
@@ -368,9 +368,9 @@ export default function RiskAssessmentsPage() {
               resetForm();
               setIsModalOpen(true);
             }}
-            className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 sm:px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+            className="flex items-center gap-2 rounded-lg bg-primary-600 px-3 sm:px-4 py-2 text-sm font-medium text-[#0a0a0a] hover:bg-primary-700"
           >
-            <Plus size={16} />
+            <Plus size={16} strokeWidth={1.75} />
             New Assessment
           </button>
           )}
@@ -384,7 +384,7 @@ export default function RiskAssessmentsPage() {
             onClick={() => setStatusFilter(tab.value)}
             className={`border-b-2 px-4 py-2 text-sm font-medium transition-colors -mb-px ${
               statusFilter === tab.value
-                ? 'border-blue-600 text-blue-600'
+                ? 'border-primary-600 text-primary-700'
                 : 'border-transparent text-slate-600 hover:text-slate-900'
             }`}
           >
@@ -414,9 +414,9 @@ export default function RiskAssessmentsPage() {
                 resetForm();
                 setIsModalOpen(true);
               }}
-              className="mt-4 flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700"
+              className="mt-4 flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-[#0a0a0a] hover:bg-primary-700"
             >
-              <Plus size={16} />
+              <Plus size={16} strokeWidth={1.75} />
               Create Assessment
             </button>
           )}
@@ -429,7 +429,7 @@ export default function RiskAssessmentsPage() {
               ? (FRAMEWORK_STATUS_CONFIG[assessment.status] || FRAMEWORK_STATUS_CONFIG.in_progress)
               : (STATUS_CONFIG[assessment.status] || STATUS_CONFIG.draft);
             const typeStyle = isFrameworkAssessment
-              ? { label: 'Framework', color: 'text-violet-400', bgColor: 'bg-violet-500/20' }
+              ? { label: 'Framework', color: 'text-primary-700', bgColor: 'bg-primary-50' }
               : (TYPE_CONFIG[assessment.assessment_type] || TYPE_CONFIG.periodic);
             const destination = isFrameworkAssessment
               ? `/erm/risk-assessments/framework/${assessment.id}`
@@ -454,7 +454,7 @@ export default function RiskAssessmentsPage() {
                   </div>
                   <button
                       onClick={(e) => handleDelete(e, assessment)}
-                      className="ml-2 rounded p-1 text-slate-500 opacity-0 transition-opacity hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
+                      className="ml-2 rounded p-1 text-slate-500 opacity-0 transition-opacity hover:bg-rose-50 hover:text-rose-600 group-hover:opacity-100"
                       title="Delete assessment"
                     >
                       <Trash2 size={16} />
@@ -525,8 +525,8 @@ export default function RiskAssessmentsPage() {
         onClose={() => setIsUploadModalOpen(false)}
         title={
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-100">
-              <FileSpreadsheet size={18} className="text-blue-600" />
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-100">
+              <FileSpreadsheet size={18} className="text-primary-600" strokeWidth={1.75} />
             </div>
             <span>Upload Risk Assessment</span>
           </div>
@@ -535,19 +535,19 @@ export default function RiskAssessmentsPage() {
             <div className="space-y-4">
               {uploadResult ? (
                 <div className="space-y-4">
-                  <div className="flex flex-col items-center gap-3 rounded-lg border border-green-300 bg-green-50 p-6">
-                    <CheckCircle2 size={40} className="text-green-600" />
+                  <div className="flex flex-col items-center gap-3 rounded-lg border border-emerald-300 bg-emerald-50 p-6">
+                    <CheckCircle2 size={40} className="text-emerald-600" strokeWidth={1.75} />
                     <h3 className="text-lg font-semibold text-slate-900">Import Successful</h3>
                     <p className="text-center text-sm text-slate-700">
                       Created assessment &quot;{uploadResult.assessment_name}&quot; with {uploadResult.risks_created} risks imported.
                     </p>
                     <div className="flex gap-4 text-sm">
-                      <span className="text-green-600">{uploadResult.risks_created} created</span>
+                      <span className="text-emerald-600">{uploadResult.risks_created} created</span>
                       {uploadResult.rows_skipped > 0 && (
                         <span className="text-amber-600">{uploadResult.rows_skipped} skipped</span>
                       )}
                       {uploadResult.rows_errored > 0 && (
-                        <span className="text-red-600">{uploadResult.rows_errored} errors</span>
+                        <span className="text-rose-600">{uploadResult.rows_errored} errors</span>
                       )}
                     </div>
                   </div>
@@ -568,7 +568,7 @@ export default function RiskAssessmentsPage() {
                         setIsUploadModalOpen(false);
                         router.push(`/erm/risk-assessments/${uploadResult.assessment_id}`);
                       }}
-                      className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700"
+                      className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-[#0a0a0a] hover:bg-primary-700"
                     >
                       View Assessment
                     </button>
@@ -578,18 +578,18 @@ export default function RiskAssessmentsPage() {
                 <>
                   <div>
                     <label className="mb-1 block text-sm font-medium text-slate-700">
-                      Excel File <span className="text-red-500">*</span>
+                      Excel File <span className="text-rose-500">*</span>
                     </label>
                     <div
                       className={`relative flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-6 transition-colors ${
                         uploadFile
-                          ? 'border-blue-300 bg-blue-50'
+                          ? 'border-primary-300 bg-primary-50'
                           : 'border-slate-300 bg-slate-50 hover:border-slate-400'
                       }`}
                     >
                       {uploadFile ? (
                         <div className="flex items-center gap-3">
-                          <FileSpreadsheet size={24} className="text-blue-600" />
+                          <FileSpreadsheet size={24} className="text-primary-600" strokeWidth={1.75} />
                           <div>
                             <p className="text-sm font-medium text-slate-900">{uploadFile.name}</p>
                             <p className="text-xs text-slate-600">{(uploadFile.size / 1024).toFixed(1)} KB</p>
@@ -679,7 +679,7 @@ export default function RiskAssessmentsPage() {
                   </div>
 
                   {uploadMutation.isError && (
-                    <div className="rounded-lg border border-red-300 bg-red-50 px-4 py-2 text-sm text-red-600">
+                    <div className="rounded-lg border border-rose-300 bg-rose-50 px-4 py-2 text-sm text-rose-600">
                       {(uploadMutation.error as Error & { response?: { data?: { detail?: string } } })?.response?.data?.detail || 'Failed to upload file. Please check the format and try again.'}
                     </div>
                   )}
@@ -696,7 +696,7 @@ export default function RiskAssessmentsPage() {
                       type="button"
                       onClick={handleUpload}
                       disabled={!uploadFile || uploadMutation.isPending}
-                      className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                      className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-[#0a0a0a] hover:bg-primary-700 disabled:opacity-50"
                     >
                       {uploadMutation.isPending ? (
                         <>
@@ -724,7 +724,7 @@ export default function RiskAssessmentsPage() {
             <form onSubmit={handleCreate} className="space-y-4">
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700">
-                  Name <span className="text-red-400">*</span>
+                  Name <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -821,7 +821,7 @@ export default function RiskAssessmentsPage() {
               </div>
 
               {createMutation.isError && (
-                <div className="rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-2 text-sm text-red-400">
+                <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-700">
                   Failed to create assessment. Please try again.
                 </div>
               )}
@@ -837,7 +837,7 @@ export default function RiskAssessmentsPage() {
                 <button
                   type="submit"
                   disabled={createMutation.isPending || !formData.name.trim()}
-                  className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
+                  className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-[#0a0a0a] hover:bg-primary-700 disabled:opacity-50"
                 >
                   {createMutation.isPending && <Loader2 size={16} className="animate-spin" />}
                   Create Assessment
