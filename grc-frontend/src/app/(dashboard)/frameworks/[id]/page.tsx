@@ -1490,6 +1490,12 @@ export default function CertificationJourneyPage() {
     () => (assignmentTenantUsers || []).map((u: any) => ({ id: u.id, name: u.display_name || u.email || String(u.id) })),
     [assignmentTenantUsers]
   );
+  const templateFrameworkControls = useMemo(
+    () => ((controls as any[]) || [])
+      .map((c: any) => ({ code: c.control_code || c.original_reference || '', title: c.control_name || c.title || '' }))
+      .filter((c: any) => c.code),
+    [controls]
+  );
 
   // "Phased" frameworks (NDMO) carry P1/P2/P3 priorities — show the 3-year
   // roadmap compliance dashboard in the header instead of the generic KPI cards.
@@ -4382,7 +4388,7 @@ export default function CertificationJourneyPage() {
       case 'internal-audit':
         return <FrameworkRegisterTab registerType="internal_audit" journeyId={journeyId} frameworkId={appFwId} frameworkName={(journey as any)?.framework_name || 'ISO 27001'} tenantUsers={templateTenantUsers} />;
       case 'risk-treatment':
-        return <FrameworkRegisterTab registerType="risk_treatment" journeyId={journeyId} frameworkId={appFwId} frameworkName={(journey as any)?.framework_name || 'ISO 27001'} tenantUsers={templateTenantUsers} />;
+        return <FrameworkRegisterTab registerType="risk_treatment" journeyId={journeyId} frameworkId={appFwId} frameworkName={(journey as any)?.framework_name || 'ISO 27001'} tenantUsers={templateTenantUsers} frameworkControls={templateFrameworkControls} />;
       case 'scope-statement':
         return <FrameworkDocumentTab docType="isms_scope_statement" journeyId={journeyId} frameworkId={appFwId} frameworkName={(journey as any)?.framework_name || 'ISO 27001'} tenantUsers={templateTenantUsers} />;
       case 'audit-procedure':

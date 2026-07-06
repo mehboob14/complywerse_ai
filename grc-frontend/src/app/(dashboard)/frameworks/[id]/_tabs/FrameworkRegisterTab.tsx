@@ -21,6 +21,7 @@ interface Props {
   frameworkId: number | null;
   frameworkName: string;
   tenantUsers: TenantUserOption[];
+  frameworkControls?: Array<{ code: string; title: string }>;
 }
 
 type Draft = Partial<RegisterEntry>;
@@ -34,7 +35,7 @@ interface FrameworkRisk {
   register_type?: string | null;
 }
 
-export default function FrameworkRegisterTab({ registerType, journeyId, frameworkId, frameworkName, tenantUsers }: Props) {
+export default function FrameworkRegisterTab({ registerType, journeyId, frameworkId, frameworkName, tenantUsers, frameworkControls = [] }: Props) {
   const config = REGISTER_CONFIGS[registerType];
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -189,6 +190,35 @@ export default function FrameworkRegisterTab({ registerType, journeyId, framewor
             <p className="mt-1 text-[11px] text-slate-400">No framework risks yet. Move risks over from Gap Analysis or Internal Audit (or add them to the ERM register under this framework), then they’ll appear here.</p>
           )}
         </div>
+      );
+    }
+    if (col.picker === 'framework_controls') {
+      const opts = frameworkControls.map((c) => (c.title ? `${c.code} — ${c.title}` : c.code));
+      const cur = (val as string) || '';
+      const has = opts.includes(cur);
+      return (
+        <div>
+          <select value={cur} onChange={(e) => set(e.target.value)} className={cls}>
+            <option value="">Select an Annex A control…</option>
+            {cur && !has && <option value={cur}>{cur}</option>}
+            {opts.map((o) => <option key={o} value={o}>{o}</option>)}
+          </select>
+          {frameworkControls.length === 0 && (
+            <p className="mt-1 text-[11px] text-slate-400">Controls load from this framework’s Requirements tab.</p>
+          )}
+        </div>
+      );
+    }
+    if (col.picker === 'users') {
+      const opts = tenantUsers.map((u) => u.name);
+      const cur = (val as string) || '';
+      const has = opts.includes(cur);
+      return (
+        <select value={cur} onChange={(e) => set(e.target.value)} className={cls}>
+          <option value="">Unassigned</option>
+          {cur && !has && <option value={cur}>{cur}</option>}
+          {opts.map((o) => <option key={o} value={o}>{o}</option>)}
+        </select>
       );
     }
     if (col.type === 'select') {

@@ -62,7 +62,7 @@ export interface RegisterColumn {
   minWidth?: string;
   grow?: boolean;
   /** When set, the edit-form field for this column is a picker instead of a plain input. */
-  picker?: 'framework_risks';
+  picker?: 'framework_risks' | 'framework_controls' | 'users';
 }
 
 export interface RegisterConfig {
@@ -165,13 +165,13 @@ export const REGISTER_CONFIGS: Record<string, RegisterConfig> = {
       { key: 'reference', label: 'Risk', type: 'text', minWidth: '120px', picker: 'framework_risks' },
       { key: 'title', label: 'Risk description', type: 'textarea', grow: true },
       { key: 'treatment_option', label: 'Treatment', type: 'select', options: TREATMENT, minWidth: '130px' },
-      { key: 'linked_control', label: 'Annex A / control', type: 'text', minWidth: '130px' },
+      { key: 'linked_control', label: 'Annex A / control', type: 'text', minWidth: '160px', picker: 'framework_controls' },
       { key: 'action', label: 'Action plan', type: 'textarea', grow: true },
       { key: 'owner_id', label: 'Owner', type: 'owner', minWidth: '150px' },
       { key: 'target_date', label: 'Target date', type: 'date', minWidth: '150px' },
       { key: 'status', label: 'Status', type: 'select', options: RT_STATUS, minWidth: '130px' },
       { key: 'residual_risk', label: 'Residual', type: 'select', options: RESIDUAL, minWidth: '120px' },
-      { key: 'approved_by', label: 'Approved by', type: 'text', minWidth: '130px' },
+      { key: 'approved_by', label: 'Approved by', type: 'text', minWidth: '150px', picker: 'users' },
     ],
   },
 };
