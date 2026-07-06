@@ -575,6 +575,30 @@ def test_legacy_lifecycle_write_endpoints_require_permission(db):
     assert e2.value.status_code == 403
 
 
+# ── Wave 2: tier-driven auto-routing (right-sized path) ──────────────────────
+
+def test_low_tier_auto_skips_diligence_and_advance_steps_over(db):
+    from grc.modules.vendor_risk.tpra.engine_tiering import FACTOR_KEYS
+    v = _vendor(db, tier="low")
+    a = service.ensure_active_assessment(db, v, actor_id=1)
+    a.current_stage = "tiering"
+    db.commit()
+    # Deterministically produce a LOW tier (all factors 0).
+    service.run_tiering(db, v, a, actor_id=1, factors={k: 0 for k in FACTOR_KEYS})
+    db.commit()
+    assert a.inherent_tier == "low"
+    stages = {s.stage_key: s.status for s in service.get_stage_instances(db, a.id)}
+    for sk in ("dd_planning", "questionnaire", "scoring", "findings"):
+        assert stages[sk] == "skipped"  # right-sized away by tier
+    # Advancing from tiering steps OVER the skipped stages onto the next actionable one.
+    adv = service.advance_stage(db, v, a, actor_id=1)
+    db.commit()
+    assert adv["advanced"] is True
+    assert a.current_stage == "contracting"
+    stages2 = {s.stage_key: s.status for s in service.get_stage_instances(db, a.id)}
+    assert stages2["contracting"] == "in_progress"
+
+
 def test_portfolio_snapshot_aggregates_active_vendors(db):
     v1 = _vendor(db, name="V1")
     v1.inherent_risk_score, v1.residual_risk_score = 80.0, 40.0

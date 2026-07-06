@@ -23,6 +23,7 @@ from ....models import (
 from .stages import (
     TPRA_STAGES, STAGE_BY_KEY, STAGE_ORDER, STAGE_KEYS, is_gate,
     stages_at_or_after, can_skip, cadence_days_for, required_reviewers_for,
+    TIER_SKIPPABLE_STAGES,
 )
 from .engine_tiering import compute_inherent_tier, derive_factors_from_profile
 from .engine_scoring import score_assessment
@@ -339,10 +340,21 @@ def advance_stage(
         cur.exit_criteria_result = {"passed": True, "blockers": []}
         cur.row_version = (cur.row_version or 1) + 1
 
+    # Advance to the next ACTIONABLE stage, stepping over any that were skipped
+    # (e.g. right-sized away by tier) or already complete, so the current pointer
+    # never lands on a terminal (skipped/complete) stage.
     order = STAGE_ORDER.get(current_key, 1)
-    nxt_key = STAGE_KEYS[order] if order < len(STAGE_KEYS) else None
+    nxt_key = None
+    nxt = None
+    while order < len(STAGE_KEYS):
+        candidate = STAGE_KEYS[order]
+        row = _stage_row(db, assessment.id, candidate)
+        if row and row.status in ("skipped", "complete"):
+            order += 1
+            continue
+        nxt_key, nxt = candidate, row
+        break
     if nxt_key:
-        nxt = _stage_row(db, assessment.id, nxt_key)
         if nxt and nxt.status == "not_started":
             nxt.status = "in_progress"
             nxt.started_at = datetime.utcnow()
@@ -468,6 +480,19 @@ def run_tiering(
     vendor.tier = result["tier"]
     vendor.risk_rating = vendor.risk_rating or result["tier"]
     assessment.row_version = (assessment.row_version or 1) + 1
+    # Right-size the path by tier: auto-skip the stages this tier is allowed to skip
+    # (a Low vendor bypasses deep diligence) so the path visibly collapses instead of
+    # relying on an analyst to remember to skip each one. advance_stage steps over
+    # these skipped stages.
+    for _sk in TIER_SKIPPABLE_STAGES.get((result["tier"] or "medium").lower(), []):
+        _st = _stage_row(db, assessment.id, _sk)
+        if _st and _st.status == "not_started":
+            _st.status = "skipped"
+            _st.row_version = (_st.row_version or 1) + 1
+            write_audit(db, assessment.tenant_id, entity="stage", action="skip",
+                        vendor_id=vendor.id, assessment_id=assessment.id, entity_id=_st.id,
+                        actor_id=actor_id, to_value=_sk,
+                        reason="Auto-skipped — right-sized by inherent tier")
     write_audit(db, assessment.tenant_id, entity="tiering", action="update",
                 vendor_id=vendor.id, assessment_id=assessment.id, actor_id=actor_id,
                 to_value=result["tier"], extra={"score": result["score"]})
