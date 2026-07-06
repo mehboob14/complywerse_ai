@@ -107,19 +107,23 @@ def count_open_critical(db: Session, assessment_id: int) -> int:
         )
         .all()
     )
+    now = datetime.utcnow()
     open_count = 0
     for f in crit:
         if f.status in ("accepted", "closed"):
             continue
-        has_acceptance = (
-            db.query(TPRARiskAcceptance.id)
+        acc = (
+            db.query(TPRARiskAcceptance)
             .filter(
                 TPRARiskAcceptance.finding_id == f.id,
                 TPRARiskAcceptance.deleted_at.is_(None),
                 TPRARiskAcceptance.status == "active",
             ).first()
         )
-        if has_acceptance:
+        # An active acceptance mitigates ONLY while it has not lapsed. A past-expiry
+        # acceptance must re-surface the critical for re-review (it is no longer a
+        # standing mitigation), so it does not clear the approval gate.
+        if acc and (acc.expiry is None or acc.expiry >= now):
             continue
         has_done_remediation = (
             db.query(TPRARemediation.id)

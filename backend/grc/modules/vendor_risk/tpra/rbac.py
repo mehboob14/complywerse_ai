@@ -57,12 +57,20 @@ def user_has_any_permission(db: Session, user: GRCUser, names: Iterable[str]) ->
     )
 
 
-def require_write(db: Session, user: GRCUser, resource: str, action: str = "edit") -> None:
-    """Raise 403 unless the user may perform `action` on a TPRA `resource`."""
-    acceptable: Set[str] = {
-        f"vendor_risk:{resource}:{action}",
-        _FALLBACK_WRITE,
-    }
+def require_write(
+    db: Session, user: GRCUser, resource: str, action: str = "edit",
+    allow_fallback: bool = True,
+) -> None:
+    """Raise 403 unless the user may perform `action` on a TPRA `resource`.
+
+    `allow_fallback=False` drops the broad `erm:risks:edit` acceptance so that
+    high-sensitivity actions (approvals:approve, findings:accept_risk) require the
+    dedicated `vendor_risk:*` permission and cannot be exercised via a generic
+    enterprise-risk edit grant — preserving least-privilege / segregation of duties.
+    """
+    acceptable: Set[str] = {f"vendor_risk:{resource}:{action}"}
+    if allow_fallback:
+        acceptable.add(_FALLBACK_WRITE)
     if not user_has_any_permission(db, user, acceptable):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

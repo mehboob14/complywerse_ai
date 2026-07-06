@@ -6,7 +6,10 @@ send-back invalidation, versioned reassessment (no history loss), RBAC deny, and
 audit logging. Uses an in-memory SQLite DB with only the tables the service
 touches (FKs to uncreated tables are inert on SQLite).
 """
+from datetime import datetime, timedelta
+
 import pytest
+from fastapi import HTTPException
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -362,6 +365,109 @@ def test_scoring_rolls_up_to_risk_register(db):
     service.run_scoring(db, v, a, actor_id=1)
     db.commit()
     assert db.query(Risk).filter(Risk.source_reference.like(f"vendor:{v.id}%")).count() == 1
+
+
+# ── Wave 2: finding / acceptance governance ──────────────────────────────────
+
+def _admin(db, uid, email):
+    """A user with the Administrator role (bypasses RBAC; SoD still applies)."""
+    role = db.query(Role).filter(Role.name == "Administrator").first()
+    if not role:
+        role = Role(id=1, name="Administrator")
+        db.add(role)
+        db.flush()
+    u = GRCUser(id=uid, username=f"admin{uid}", email=email)
+    db.add(u)
+    db.add(UserRole(user_id=uid, role_id=role.id, tenant_id=1))
+    db.commit()
+    return u
+
+
+def _critical_finding(db, v, a, created_by):
+    f = TPRAFinding(tenant_id=1, vendor_id=v.id, assessment_id=a.id, domain="cybersecurity",
+                    severity="critical", title="MFA missing", status="open",
+                    is_critical_control_fail=True, created_by=created_by)
+    db.add(f)
+    db.commit()
+    return f
+
+
+def test_finding_cannot_be_flipped_to_accepted_directly(db):
+    from grc.modules.vendor_risk.tpra import api
+    u = _admin(db, 60, "a60@acme.test")
+    v = _vendor(db)
+    a = service.ensure_active_assessment(db, v, actor_id=60)
+    db.commit()
+    f = _critical_finding(db, v, a, created_by=60)
+    with pytest.raises(HTTPException) as ei:
+        api.update_finding(f.id, api.FindingUpdate(status="accepted"), db=db, user=u)
+    assert ei.value.status_code == 400
+
+
+def test_finding_cannot_be_closed_without_completed_remediation(db):
+    from grc.modules.vendor_risk.tpra import api
+    u = _admin(db, 61, "a61@acme.test")
+    v = _vendor(db)
+    a = service.ensure_active_assessment(db, v, actor_id=61)
+    db.commit()
+    f = _critical_finding(db, v, a, created_by=61)
+    with pytest.raises(HTTPException) as ei:
+        api.update_finding(f.id, api.FindingUpdate(status="closed"), db=db, user=u)
+    assert ei.value.status_code == 400
+    # After a completed remediation (evidence of fix), closing is allowed.
+    db.add(TPRARemediation(tenant_id=1, finding_id=f.id, title="Rolled out MFA", status="completed"))
+    db.commit()
+    res = api.update_finding(f.id, api.FindingUpdate(status="closed"), db=db, user=u)
+    assert res["status"] == "closed"
+
+
+def test_acceptance_sod_author_cannot_self_accept_critical(db):
+    from grc.modules.vendor_risk.tpra import api
+    author = _admin(db, 62, "a62@acme.test")
+    other = _admin(db, 63, "a63@acme.test")
+    v = _vendor(db)
+    a = service.ensure_active_assessment(db, v, actor_id=62)
+    db.commit()
+    f = _critical_finding(db, v, a, created_by=62)
+    exp = datetime.utcnow() + timedelta(days=90)
+    # The author accepting their own critical → segregation-of-duties 403.
+    with pytest.raises(HTTPException) as ei:
+        api.create_acceptance(f.id, api.AcceptanceIn(rationale="ok", expiry=exp), db=db, user=author)
+    assert ei.value.status_code == 403
+    # An independent accountable owner may accept.
+    res = api.create_acceptance(f.id, api.AcceptanceIn(rationale="ok", expiry=exp), db=db, user=other)
+    assert res is not None
+    db.refresh(f)
+    assert f.status == "accepted"
+
+
+def test_critical_acceptance_requires_expiry(db):
+    from grc.modules.vendor_risk.tpra import api
+    other = _admin(db, 64, "a64@acme.test")
+    v = _vendor(db)
+    a = service.ensure_active_assessment(db, v, actor_id=1)
+    db.commit()
+    f = _critical_finding(db, v, a, created_by=999)  # raised by someone else
+    with pytest.raises(HTTPException) as ei:
+        api.create_acceptance(f.id, api.AcceptanceIn(rationale="ok", expiry=None), db=db, user=other)
+    assert ei.value.status_code == 400
+
+
+def test_expired_acceptance_no_longer_mitigates_critical(db):
+    v = _vendor(db)
+    a = service.ensure_active_assessment(db, v, actor_id=1)
+    db.commit()
+    f = _critical_finding(db, v, a, created_by=1)
+    # An already-expired active acceptance must NOT mitigate the critical.
+    db.add(TPRARiskAcceptance(tenant_id=1, finding_id=f.id, rationale="old", status="active",
+                              expiry=datetime.utcnow() - timedelta(days=1)))
+    db.commit()
+    assert service.count_open_critical(db, a.id) == 1
+    # A future-dated acceptance DOES mitigate.
+    db.query(TPRARiskAcceptance).filter(TPRARiskAcceptance.finding_id == f.id).update(
+        {"expiry": datetime.utcnow() + timedelta(days=30)})
+    db.commit()
+    assert service.count_open_critical(db, a.id) == 0
 
 
 def test_portfolio_snapshot_aggregates_active_vendors(db):

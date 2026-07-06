@@ -8,7 +8,7 @@ and append an audit row. History-bearing records soft-delete + restore.
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File, Form
 from pydantic import BaseModel
@@ -197,19 +197,24 @@ class ReassessIn(BaseModel):
     reason: str
     assessment_type: Optional[str] = "reassessment"
 
+# Controlled vocabularies (no free-text severity/status that a typo can slip past
+# the gate/suspension logic, which string-matches on these exact values).
+_SEVERITY = Literal["critical", "high", "medium", "low"]
+_FINDING_STATUS = Literal["open", "in_remediation", "accepted", "closed"]
+
 class FindingIn(BaseModel):
     domain: str = "cybersecurity"
-    severity: str = "medium"
+    severity: _SEVERITY = "medium"
     title: Optional[str] = None
     description: Optional[str] = None
-    status: Optional[str] = "open"
+    status: _FINDING_STATUS = "open"
 
 class FindingUpdate(BaseModel):
     domain: Optional[str] = None
-    severity: Optional[str] = None
+    severity: Optional[_SEVERITY] = None
     title: Optional[str] = None
     description: Optional[str] = None
-    status: Optional[str] = None
+    status: Optional[_FINDING_STATUS] = None
     row_version: Optional[int] = None
 
 class RemediationIn(BaseModel):
@@ -594,6 +599,32 @@ def update_finding(finding_id: int, body: FindingUpdate, db: Session = Depends(g
     rbac.require_write(db, user, "findings", "edit")
     _check_concurrency(f, body.row_version)
     prev_status = f.status
+    # State-machine guard — 'accepted' and 'closed' are NOT free status flips:
+    #  • 'accepted' must go through the acceptance workflow (POST .../acceptances)
+    #    so an accountable owner signs off and a TPRARiskAcceptance record exists;
+    #  • 'closed' requires evidence of fix — at least one completed remediation.
+    # Without this, a critical finding could clear the approval gate and auto-
+    # reactivate a suspended vendor simply by picking a status from a dropdown.
+    if body.status and body.status != prev_status:
+        if body.status == "accepted":
+            raise HTTPException(
+                status_code=400,
+                detail="Use 'Accept risk' to record an accountable sign-off — a finding cannot be set to 'accepted' directly.",
+            )
+        if body.status == "closed":
+            _completed_rem = (
+                db.query(TPRARemediation.id)
+                .filter(
+                    TPRARemediation.finding_id == f.id,
+                    TPRARemediation.deleted_at.is_(None),
+                    TPRARemediation.status == "completed",
+                ).first()
+            )
+            if not _completed_rem:
+                raise HTTPException(
+                    status_code=400,
+                    detail="A finding can only be closed after a remediation is completed (evidence of fix) — or record a risk acceptance instead.",
+                )
     for field in ("domain", "severity", "title", "description", "status"):
         val = getattr(body, field)
         if val is not None:
@@ -858,7 +889,23 @@ def delete_remediation(rem_id: int, db: Session = Depends(get_db), user: GRCUser
 def create_acceptance(finding_id: int, body: AcceptanceIn, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
     tids = _tids(user, db)
     f = _get(db, TPRAFinding, finding_id, tids)
-    rbac.require_write(db, user, "findings", "accept_risk")
+    # accept_risk is high-sensitivity: require the dedicated permission (no broad
+    # erm:risks:edit backdoor) so it can be held by an accountable approver role.
+    rbac.require_write(db, user, "findings", "accept_risk", allow_fallback=False)
+    # Segregation of duties — the person who raised a critical/high finding cannot
+    # sign off its own acceptance; an independent accountable owner must.
+    if f.severity in ("critical", "high") and f.created_by and f.created_by == user.id:
+        raise HTTPException(
+            status_code=403,
+            detail="Segregation of duties: the finding's author cannot accept its own critical/high risk — a different accountable owner must sign off.",
+        )
+    # Critical/high acceptances must be time-boxed so they are re-reviewed on a date
+    # rather than standing perpetually (an expired acceptance re-surfaces the risk).
+    if f.severity in ("critical", "high") and body.expiry is None:
+        raise HTTPException(
+            status_code=400,
+            detail="An expiry date is required to accept a critical/high risk (acceptances must be time-boxed for re-review).",
+        )
     a = TPRARiskAcceptance(
         tenant_id=f.tenant_id, finding_id=f.id, rationale=body.rationale,
         accepted_by=user.id, accepted_at=datetime.utcnow(), expiry=body.expiry, status="active",
