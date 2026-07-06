@@ -96,6 +96,18 @@ def cadence_days_for(tier: str, override: Optional[dict] = None) -> int:
     return int(table.get((tier or "medium").lower(), DEFAULT_CADENCE_DAYS["medium"]))
 
 
+# Per-severity remediation SLA (days) — how long a finding of each severity may
+# stay open before its remediation is overdue. Config-overridable, like cadence.
+DEFAULT_REMEDIATION_SLA_DAYS: Dict[str, int] = {
+    "critical": 7, "high": 30, "medium": 90, "low": 180,
+}
+
+
+def remediation_sla_days_for(severity: str, override: Optional[dict] = None) -> int:
+    table = {**DEFAULT_REMEDIATION_SLA_DAYS, **(override or {})}
+    return int(table.get((severity or "medium").lower(), DEFAULT_REMEDIATION_SLA_DAYS["medium"]))
+
+
 def required_reviewers_for(tier: str) -> List[str]:
     return TIER_REQUIRED_REVIEWERS.get((tier or "medium").lower(), [])
 

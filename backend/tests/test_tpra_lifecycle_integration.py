@@ -636,6 +636,22 @@ def test_auto_trigger_dedups_when_reassessment_in_flight(db):
     assert service.get_active_assessment(db, v).version_no == 2  # not superseded again
 
 
+# ── Wave 3: per-severity remediation SLA ─────────────────────────────────────
+
+def test_remediation_auto_populates_due_date_from_severity_sla(db):
+    from grc.modules.vendor_risk.tpra import api
+    u = _admin(db, 92, "a92@acme.test")
+    v = _vendor(db)
+    a = service.ensure_active_assessment(db, v, actor_id=92)
+    db.commit()
+    f = _critical_finding(db, v, a, created_by=92)  # critical -> 7-day SLA
+    api.create_remediation(f.id, api.RemediationIn(title="Roll out MFA"), db=db, user=u)
+    rem = db.query(TPRARemediation).filter(TPRARemediation.finding_id == f.id).first()
+    assert rem.due_date is not None  # no manual date supplied, yet a clock exists
+    delta_days = (rem.due_date - datetime.utcnow()).days
+    assert 5 <= delta_days <= 8  # ~7-day critical SLA
+
+
 def test_portfolio_snapshot_aggregates_active_vendors(db):
     v1 = _vendor(db, name="V1")
     v1.inherent_risk_score, v1.residual_risk_score = 80.0, 40.0

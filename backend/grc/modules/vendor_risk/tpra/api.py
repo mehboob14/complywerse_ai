@@ -834,10 +834,15 @@ def create_remediation(finding_id: int, body: RemediationIn, db: Session = Depen
     tids = _tids(user, db)
     f = _get(db, TPRAFinding, finding_id, tids)
     rbac.require_write(db, user, "findings", "edit")
+    # Auto-populate a due date from the finding's severity SLA when the analyst
+    # didn't set one, so every remediation carries an aging clock (a critical must
+    # be fixed in days, not "whenever") and can actually surface as overdue.
+    from .stages import remediation_sla_days_for
+    _due = body.due_date or (datetime.utcnow() + timedelta(days=remediation_sla_days_for(f.severity)))
     r = TPRARemediation(
         tenant_id=f.tenant_id, finding_id=f.id, title=body.title, plan=body.plan,
         treatment_type=body.treatment_type or "remediate", owner_id=body.owner_id,
-        due_date=body.due_date, status=body.status or "open",
+        due_date=_due, status=body.status or "open",
     )
     if f.status == "open":
         f.status = "in_remediation"
