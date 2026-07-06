@@ -65,6 +65,11 @@ export interface RegisterColumn {
   picker?: 'framework_risks' | 'framework_controls' | 'users';
 }
 
+export interface FormSection {
+  title: string;
+  keys: Array<keyof RegisterEntry>;
+}
+
 export interface RegisterConfig {
   registerType: 'gap_analysis' | 'internal_audit' | 'risk_treatment';
   label: string;
@@ -72,6 +77,8 @@ export interface RegisterConfig {
   columns: RegisterColumn[];
   coverage?: boolean;
   moveToRisk?: boolean;
+  /** Grouped sections for the Add/Edit form. Falls back to a flat grid if unset. */
+  formSections?: FormSection[];
 }
 
 export const TONE_CLASSES: Record<Tone, string> = {
@@ -140,6 +147,11 @@ export const REGISTER_CONFIGS: Record<string, RegisterConfig> = {
       { key: 'owner_id', label: 'Owner', type: 'owner', minWidth: '150px' },
       { key: 'target_date', label: 'Target date', type: 'date', minWidth: '150px' },
     ],
+    formSections: [
+      { title: 'Requirement', keys: ['reference', 'title'] },
+      { title: 'Assessment', keys: ['status', 'action'] },
+      { title: 'Ownership', keys: ['owner_id', 'target_date'] },
+    ],
   },
   internal_audit: {
     registerType: 'internal_audit',
@@ -154,6 +166,11 @@ export const REGISTER_CONFIGS: Record<string, RegisterConfig> = {
       { key: 'finding_type', label: 'Finding type', type: 'select', options: FINDING_TYPE, minWidth: '150px' },
       { key: 'notes', label: 'Notes / action', type: 'textarea', grow: true },
       { key: 'owner_id', label: 'Owner', type: 'owner', minWidth: '150px' },
+    ],
+    formSections: [
+      { title: 'Audit item', keys: ['reference', 'title'] },
+      { title: 'Result', keys: ['evidence_reviewed', 'result', 'finding_type', 'notes'] },
+      { title: 'Ownership', keys: ['owner_id'] },
     ],
   },
   risk_treatment: {
@@ -172,6 +189,12 @@ export const REGISTER_CONFIGS: Record<string, RegisterConfig> = {
       { key: 'status', label: 'Status', type: 'select', options: RT_STATUS, minWidth: '130px' },
       { key: 'residual_risk', label: 'Residual', type: 'select', options: RESIDUAL, minWidth: '120px' },
       { key: 'approved_by', label: 'Approved by', type: 'text', minWidth: '150px', picker: 'users' },
+    ],
+    formSections: [
+      { title: 'Risk', keys: ['reference', 'title'] },
+      { title: 'Treatment', keys: ['treatment_option', 'linked_control', 'action'] },
+      { title: 'Ownership & timeline', keys: ['owner_id', 'target_date', 'approved_by'] },
+      { title: 'Residual & status', keys: ['status', 'residual_risk'] },
     ],
   },
 };

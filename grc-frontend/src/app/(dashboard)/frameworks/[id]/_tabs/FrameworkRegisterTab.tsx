@@ -377,7 +377,7 @@ export default function FrameworkRegisterTab({ registerType, journeyId, framewor
         onClose={() => setEditing(null)}
         title={editing?.mode === 'add' ? `Add ${config.label} row` : `Edit ${config.label} row`}
         subtitle={frameworkName}
-        width="560px"
+        width="620px"
         footer={
           <div className="flex justify-end gap-2">
             <button type="button" onClick={() => setEditing(null)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50">Cancel</button>
@@ -389,11 +389,22 @@ export default function FrameworkRegisterTab({ registerType, journeyId, framewor
         }
       >
         {editing && (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {config.columns.map((col) => (
-              <div key={String(col.key)} className={col.grow || col.type === 'textarea' ? 'sm:col-span-2' : ''}>
-                <label className="mb-1 block text-xs font-medium text-slate-600">{col.label}</label>
-                {formField(col)}
+          <div className="space-y-6">
+            {(config.formSections || [{ title: '', keys: config.columns.map((c) => c.key) }]).map((section) => (
+              <div key={section.title || 'all'}>
+                {section.title && <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500">{section.title}</h3>}
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  {section.keys.map((key) => {
+                    const col = config.columns.find((c) => c.key === key);
+                    if (!col) return null;
+                    return (
+                      <div key={String(key)} className={col.grow || col.type === 'textarea' ? 'sm:col-span-2' : ''}>
+                        <label className="mb-1 block text-xs font-medium text-slate-600">{col.label}</label>
+                        {formField(col)}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             ))}
           </div>
