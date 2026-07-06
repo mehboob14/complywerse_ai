@@ -157,11 +157,21 @@ export interface Obligation {
   row_version: number;
 }
 
+export interface ApprovalCondition {
+  id: string;
+  text: string;
+  status: 'open' | 'closed';
+  owner_id?: number | null;
+  due_date?: string | null;
+  resolved_at?: string | null;
+}
 export interface Approval {
   id: number;
   assessment_id: number;
   decision: string;
-  conditions: string[];
+  conditions: Array<string | ApprovalCondition>;  // legacy rows may still be plain strings
+  open_conditions?: number;
+  overdue_conditions?: number;
   recommendation: string | null;
   rationale: string | null;
   approver_id: number | null;

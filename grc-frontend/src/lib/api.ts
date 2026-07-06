@@ -2115,6 +2115,8 @@ export const tpraApi = {
   listApprovals: (assessmentId: number) => apiClient.get(`/vendor-risk/tpra/assessments/${assessmentId}/approvals`),
   createApproval: (assessmentId: number, data: { decision: string; conditions?: string[]; rationale?: string }) =>
     apiClient.post(`/vendor-risk/tpra/assessments/${assessmentId}/approvals`, data),
+  resolveCondition: (approvalId: number, conditionId: string, data: { status?: 'open' | 'closed'; owner_id?: number; due_date?: string }) =>
+    apiClient.patch(`/vendor-risk/tpra/approvals/${approvalId}/conditions/${conditionId}`, data),
 
   // Per-stage task checklist + DD-planning
   saveChecklist: (
