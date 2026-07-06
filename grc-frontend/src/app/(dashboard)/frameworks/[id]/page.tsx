@@ -5,14 +5,14 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { certificationsApi, governanceApi, assetsApi } from '@/lib/api';
+import { certificationsApi, governanceApi, assetsApi, evidenceApi } from '@/lib/api';
 import apiClient from '@/lib/api';
 import { FrameworkChartsOverview } from '../_components/FrameworkChartsOverview';
 import { usePermissions } from '@/hooks/usePermissions';
 import { CertificationJourney, ControlImplementation, ProgressSummary, CertificationControl, SubControlWithEvidence, ControlEvidence, ITAsset } from '@/types';
 import ControlImplementationModal from '@/components/ControlImplementationModal';
 import EvidenceViewer from '@/components/evidence/EvidenceViewer';
-import { SearchInput, MultiSelectDropdown, PageLoader } from '@/components/ui';
+import { SearchInput, MultiSelectDropdown, PageLoader, InlineLinkPicker } from '@/components/ui';
 import { InlineIssueBadge } from '@/components/issue-management/InlineIssueBadge';
 import {
   Loader2,
@@ -68,6 +68,8 @@ import ArtifactsTab, {
   type TenantArtifact as TenantArtifactT,
   type TenantUser as ArtifactTenantUserT,
 } from '@/components/compliance/ArtifactsTab';
+import FrameworkRegisterTab from './_tabs/FrameworkRegisterTab';
+import FrameworkDocumentTab from './_tabs/FrameworkDocumentTab';
 
 // Evidence-type markers are categorical labels, not statuses — so they render
 // as neutral slate pills. Only the handful of types that carry genuine status
@@ -1141,6 +1143,20 @@ export default function CertificationJourneyPage() {
     },
   });
 
+  // Statement-of-Applicability template metadata (owner / implementation status /
+  // linked evidence) — inline edits on existing applicability rows.
+  const updateApplicabilityDetailsMut = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: { owner_id?: number | null; implementation_status?: string | null; linked_evidence_id?: number | null } }) =>
+      governanceApi.updateApplicabilityDetails(id, data),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['applicability'] }); },
+  });
+  const { data: soaEvidenceLib } = useQuery({
+    queryKey: ['evidence-all'],
+    queryFn: async () => (await evidenceApi.getAll()).data as unknown as Array<{ id: number; name?: string; title?: string; file_name?: string; evidence_type?: string }>,
+    enabled: activeTab === 'applicability',
+    staleTime: 60_000,
+  });
+
   const reviewApplicabilityMutation = useMutation({
     mutationFn: async ({ id, data }: { id: number; data: { status: string; review_comment?: string } }) => {
       return governanceApi.reviewApplicability(id, data);
@@ -1464,6 +1480,15 @@ export default function CertificationJourneyPage() {
     ''
   ).toLowerCase().includes('pci');
 
+  // ISO 27001 template tabs (Gap Analysis, Internal Audit, Risk Treatment,
+  // Scope Statement, Audit Procedure) are gated to the ISO 27001 framework.
+  const _fwNameLower = (((journey as any)?.framework_name || journey?.framework?.name || '') as string).toLowerCase();
+  const isIso27001Framework = _fwNameLower.includes('iso 27001') || _fwNameLower.replace(/\s+/g, '').includes('iso27001');
+  const templateTenantUsers = useMemo(
+    () => (assignmentTenantUsers || []).map((u: any) => ({ id: u.id, name: u.display_name || u.email || String(u.id) })),
+    [assignmentTenantUsers]
+  );
+
   // "Phased" frameworks (NDMO) carry P1/P2/P3 priorities — show the 3-year
   // roadmap compliance dashboard in the header instead of the generic KPI cards.
   const isPhasedFramework = (controls || []).some(
@@ -1483,6 +1508,13 @@ export default function CertificationJourneyPage() {
     { id: 'controls', label: 'Requirements' },
     { id: 'assigned-to-me' as TabType, label: 'Assigned to Me' },
     { id: 'applicability', label: 'Applicability' },
+    ...(isIso27001Framework ? [
+      { id: 'gap-analysis' as TabType, label: 'Gap Analysis' },
+      { id: 'internal-audit' as TabType, label: 'Internal Audit' },
+      { id: 'risk-treatment' as TabType, label: 'Risk Treatment' },
+      { id: 'scope-statement' as TabType, label: 'Scope Statement' },
+      { id: 'audit-procedure' as TabType, label: 'Audit Procedure' },
+    ] : []),
     { id: 'artifacts' as TabType, label: 'Artifacts' },
     { id: 'history' as TabType, label: 'History' },
   ];
@@ -4139,6 +4171,9 @@ export default function CertificationJourneyPage() {
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase text-slate-600">Justification</th>
                   <th className="px-4 py-3 text-center text-xs font-medium uppercase text-slate-600">Status</th>
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase text-slate-600">Requested By</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-slate-600">Owner</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-slate-600">Impl. Status</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-slate-600">Evidence</th>
                   <th className="px-4 py-3 text-center text-xs font-medium uppercase text-slate-600">Actions</th>
                 </tr>
               </thead>
@@ -4206,6 +4241,55 @@ export default function CertificationJourneyPage() {
                           {record?.requested_by_name || '-'}
                         </span>
                       </td>
+                      <td className="px-4 py-3">
+                        {record ? (
+                          <select
+                            value={record.owner_id ?? ''}
+                            onChange={(e) => updateApplicabilityDetailsMut.mutate({ id: record.id, data: { owner_id: e.target.value ? Number(e.target.value) : null } })}
+                            className="w-full max-w-[150px] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500/30"
+                          >
+                            <option value="">{record.owner_name || 'Unassigned'}</option>
+                            {templateTenantUsers.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+                          </select>
+                        ) : <span className="text-xs text-slate-400">—</span>}
+                      </td>
+                      <td className="px-4 py-3">
+                        {record ? (
+                          <select
+                            value={record.implementation_status ?? ''}
+                            onChange={(e) => updateApplicabilityDetailsMut.mutate({ id: record.id, data: { implementation_status: e.target.value || null } })}
+                            className="w-full max-w-[150px] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500/30"
+                          >
+                            <option value="">—</option>
+                            <option value="not_started">Not started</option>
+                            <option value="in_progress">In progress</option>
+                            <option value="implemented">Implemented</option>
+                            <option value="verified">Verified</option>
+                            <option value="not_applicable">N/A</option>
+                          </select>
+                        ) : <span className="text-xs text-slate-400">—</span>}
+                      </td>
+                      <td className="px-4 py-3">
+                        {record ? (
+                          record.linked_evidence_id ? (
+                            <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-700">
+                              {(soaEvidenceLib || []).find((x) => x.id === record.linked_evidence_id)?.name
+                                || (soaEvidenceLib || []).find((x) => x.id === record.linked_evidence_id)?.title
+                                || `Evidence #${record.linked_evidence_id}`}
+                              <button type="button" onClick={() => updateApplicabilityDetailsMut.mutate({ id: record.id, data: { linked_evidence_id: null } })} className="text-emerald-600 hover:text-rose-600" aria-label="Unlink evidence">×</button>
+                            </span>
+                          ) : (
+                            <InlineLinkPicker
+                              triggerLabel="Link"
+                              items={(soaEvidenceLib || []).map((ev) => ({ value: String(ev.id), label: ev.name || ev.title || ev.file_name || `Evidence #${ev.id}`, subLabel: ev.evidence_type }))}
+                              emptyText="No evidence in library"
+                              searchPlaceholder="Search evidence"
+                              popoverWidth={280}
+                              onSelect={(v) => updateApplicabilityDetailsMut.mutate({ id: record.id, data: { linked_evidence_id: Number(v) } })}
+                            />
+                          )
+                        ) : <span className="text-xs text-slate-400">—</span>}
+                      </td>
                       <td className="px-4 py-3 text-center">
                         <div className="flex items-center justify-center gap-1">
                           {canEdit && record?.status === 'pending' ? (
@@ -4225,7 +4309,7 @@ export default function CertificationJourneyPage() {
                 })}
                 {filteredApplicabilityControls.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="px-4 py-12 text-center text-slate-500">
+                    <td colSpan={10} className="px-4 py-12 text-center text-slate-500">
                       No {entityLabelPlural.toLowerCase()} found matching the selected filter.
                     </td>
                   </tr>
@@ -4291,6 +4375,16 @@ export default function CertificationJourneyPage() {
         return renderCDEScopeTab();
       case 'applicability':
         return renderApplicabilityTab();
+      case 'gap-analysis':
+        return <FrameworkRegisterTab registerType="gap_analysis" journeyId={journeyId} frameworkId={appFwId} frameworkName={(journey as any)?.framework_name || 'ISO 27001'} tenantUsers={templateTenantUsers} />;
+      case 'internal-audit':
+        return <FrameworkRegisterTab registerType="internal_audit" journeyId={journeyId} frameworkId={appFwId} frameworkName={(journey as any)?.framework_name || 'ISO 27001'} tenantUsers={templateTenantUsers} />;
+      case 'risk-treatment':
+        return <FrameworkRegisterTab registerType="risk_treatment" journeyId={journeyId} frameworkId={appFwId} frameworkName={(journey as any)?.framework_name || 'ISO 27001'} tenantUsers={templateTenantUsers} />;
+      case 'scope-statement':
+        return <FrameworkDocumentTab docType="isms_scope_statement" journeyId={journeyId} frameworkId={appFwId} tenantUsers={templateTenantUsers} />;
+      case 'audit-procedure':
+        return <FrameworkDocumentTab docType="internal_audit_procedure" journeyId={journeyId} frameworkId={appFwId} tenantUsers={templateTenantUsers} />;
       case 'history':
         return renderHistoryTab();
       case 'artifacts':

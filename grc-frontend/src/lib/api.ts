@@ -467,10 +467,12 @@ export const governanceApi = {
     apiClient.get(`/governance/applicability/framework/${frameworkId}`),
   getApplicabilityAuditLog: (frameworkId: number) =>
     apiClient.get(`/governance/applicability/audit-log/${frameworkId}`),
-  setClauseApplicability: (data: { control_id: number; uploaded_framework_id: number; is_applicable: boolean; justification: string }) =>
+  setClauseApplicability: (data: { control_id: number; uploaded_framework_id: number; is_applicable: boolean; justification: string; owner_id?: number | null; owner_name?: string | null; implementation_status?: string | null; linked_evidence_id?: number | null }) =>
     apiClient.post('/governance/applicability', data),
   reviewApplicability: (applicabilityId: number, data: { status: string; review_comment?: string }) =>
     apiClient.put(`/governance/applicability/${applicabilityId}/review`, data),
+  updateApplicabilityDetails: (applicabilityId: number, data: { owner_id?: number | null; owner_name?: string | null; implementation_status?: string | null; linked_evidence_id?: number | null }) =>
+    apiClient.put(`/governance/applicability/${applicabilityId}/details`, data),
   linkControl: (data: { document_id: number; internal_control_id: number; link_type?: string; notes?: string; force_relink?: boolean }) =>
     apiClient.post('/governance/mappings/control', data),
   unlinkControl: (linkId: number) =>
@@ -4449,6 +4451,32 @@ export const onboardingApi = {
     port?: number;
     hosts: Array<{ ip: string; hostname?: string | null; asset_name?: string | null }>;
   }) => apiClient.post('/onboarding/import', data),
+};
+
+// ── Framework template registers + documents (ISO 27001 template tabs) ───────
+export const frameworkTemplatesApi = {
+  registers: {
+    list: (registerType: string, params: { journey_id: number; framework_id?: number | null }) =>
+      apiClient.get(`/framework-templates/registers/${registerType}`, { params }),
+    create: (registerType: string, params: { journey_id: number; framework_id?: number | null }, payload: Record<string, unknown>) =>
+      apiClient.post(`/framework-templates/registers/${registerType}`, payload, { params }),
+    update: (entryId: number, payload: Record<string, unknown>) =>
+      apiClient.put(`/framework-templates/registers/entries/${entryId}`, payload),
+    remove: (entryId: number) =>
+      apiClient.delete(`/framework-templates/registers/entries/${entryId}`),
+    moveToRisk: (entryId: number, body: { title?: string; description?: string; category?: string; framework_name?: string }) =>
+      apiClient.post(`/framework-templates/registers/entries/${entryId}/move-to-risk`, body),
+    reset: (registerType: string, params: { journey_id: number; framework_id?: number | null }) =>
+      apiClient.post(`/framework-templates/registers/${registerType}/reset`, {}, { params }),
+  },
+  documents: {
+    get: (docType: string, params: { journey_id: number; framework_id?: number | null }) =>
+      apiClient.get(`/framework-templates/documents/${docType}`, { params }),
+    update: (docId: number, payload: Record<string, unknown>) =>
+      apiClient.put(`/framework-templates/documents/${docId}`, payload),
+    reset: (docType: string, params: { journey_id: number }) =>
+      apiClient.post(`/framework-templates/documents/${docType}/reset`, {}, { params }),
+  },
 };
 
 export default apiClient;
