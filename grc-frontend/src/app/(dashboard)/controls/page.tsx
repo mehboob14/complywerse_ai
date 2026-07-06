@@ -23,7 +23,8 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { controlsApi, ermApi, adminApi, aiRecommendationsApi, evidenceApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
-import { SearchInput, MultiSelectDropdown, PageLoader, RightSlidePanel, AnimatedModal } from '@/components/ui';
+import { SearchInput, MultiSelectDropdown, PageLoader, RightSlidePanel, AnimatedModal, InlineLinkPicker } from '@/components/ui';
+import type { EvidenceOption } from './_shared/components';
 import { useToast } from '@/components/ui/ToastProvider';
 import {
   FrameworkControlEvidenceLinkSection,
@@ -202,13 +203,19 @@ export default function ControlsPage() {
   // ── Promote an AI "risk if not implemented" into the real ERM Risk Register ──
   const { toast } = useToast();
 
-  // Evidence library for linking to test procedures (lazy — only when a control is open).
-  const { data: evidenceLib } = useQuery({
-    queryKey: ['evidence-library-for-controls'],
-    queryFn: async () => (await evidenceApi.getAll()).data,
+  // Evidence library for linking to test procedures. Shares the ['evidence-all']
+  // cache with the controls evidence picker; lazy — only when a control is open.
+  const { data: evidenceLib, isLoading: evidenceLibLoading } = useQuery({
+    queryKey: ['evidence-all'],
+    queryFn: async () => {
+      const res = await evidenceApi.getAll();
+      return res.data as unknown as EvidenceOption[];
+    },
     enabled: selectedControlId != null,
     staleTime: 60_000,
   });
+  // Evidence rows expose name/title/file_name depending on source — resolve one label.
+  const evidenceLabel = (ev: EvidenceOption) => ev.name || ev.title || ev.file_name || `Evidence #${ev.id}`;
 
   // Per-procedure completion is persisted by re-saving the recommendation output.
   const persistRecs = (controlId: number, recs: AIRecommendations) => {
@@ -224,19 +231,19 @@ export default function ControlsPage() {
     const test_procedures = recs.test_procedures.map((p, i) => (i === idx ? { ...p, done: !p.done } : p));
     persistRecs(controlId, { ...recs, test_procedures });
   };
-  const setProcedureEvidence = (controlId: number, idx: number, ev: { id: string; title: string } | null) => {
+  const setProcedureEvidence = (controlId: number, idx: number, ev: { id: number; name: string } | null) => {
     const recs = aiRecommendations[controlId];
     if (!recs) return;
     const test_procedures = recs.test_procedures.map((p, i) => (i === idx
-      ? { ...p, evidence_id: ev ? Number(ev.id) : null, evidence_name: ev ? ev.title : null, done: ev ? true : p.done }
+      ? { ...p, evidence_id: ev ? ev.id : null, evidence_name: ev ? ev.name : null, done: ev ? true : p.done }
       : p));
     persistRecs(controlId, { ...recs, test_procedures });
-    if (ev && Number.isFinite(Number(ev.id))) {
-      // Best-effort: also create a real control↔evidence link so evidence_count updates.
-      controlsApi.linkFrameworkControlEvidence(controlId, { evidence_id: Number(ev.id) })
+    if (ev) {
+      // Also create a real control↔evidence link so evidence_count updates.
+      controlsApi.linkFrameworkControlEvidence(controlId, { evidence_id: ev.id })
         .then(() => queryClient.invalidateQueries({ queryKey: ['framework-controls'] }))
         .catch(() => {});
-      toast({ type: 'success', title: 'Evidence linked', message: ev.title });
+      toast({ type: 'success', title: 'Evidence linked', message: ev.name });
     }
   };
 
@@ -1189,7 +1196,7 @@ export default function ControlsPage() {
                                     </div>
                                     <p className={`text-sm ${proc.done ? 'text-slate-400 line-through' : 'text-slate-600'}`}>{proc.description}</p>
                                     <div className="mt-2">
-                                      {proc.evidence_id ? (
+                                      {proc.evidence_id != null ? (
                                         <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-700">
                                           <Paperclip className="h-3 w-3" strokeWidth={1.75} /> {proc.evidence_name || 'Evidence linked'}
                                           <button
@@ -1200,20 +1207,20 @@ export default function ControlsPage() {
                                           ><X className="h-3 w-3" strokeWidth={2} /></button>
                                         </span>
                                       ) : (
-                                        <select
-                                          value=""
-                                          aria-label={`Link evidence to test procedure ${idx + 1}`}
-                                          onChange={(e) => {
-                                            const ev = (evidenceLib || []).find((x) => String(x.id) === e.target.value);
-                                            if (ev) setProcedureEvidence(control.id, idx, { id: String(ev.id), title: ev.title });
+                                        <InlineLinkPicker
+                                          triggerLabel="Link evidence to mark done"
+                                          triggerIcon={<Paperclip className="h-3 w-3" strokeWidth={1.75} />}
+                                          triggerClassName="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-600 hover:border-primary-300 hover:bg-slate-50 transition-colors"
+                                          items={(evidenceLib || []).map((ev) => ({ value: String(ev.id), label: evidenceLabel(ev), subLabel: ev.evidence_type }))}
+                                          isLoading={evidenceLibLoading}
+                                          emptyText="No evidence in the library yet"
+                                          searchPlaceholder="Search evidence…"
+                                          popoverWidth={300}
+                                          onSelect={(value) => {
+                                            const ev = (evidenceLib || []).find((x) => String(x.id) === value);
+                                            if (ev) setProcedureEvidence(control.id, idx, { id: ev.id, name: evidenceLabel(ev) });
                                           }}
-                                          className="rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] text-slate-600 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                                        >
-                                          <option value="">Link evidence to mark done…</option>
-                                          {(evidenceLib || []).map((ev) => (
-                                            <option key={ev.id} value={String(ev.id)}>{ev.title}</option>
-                                          ))}
-                                        </select>
+                                        />
                                       )}
                                     </div>
                                   </div>
