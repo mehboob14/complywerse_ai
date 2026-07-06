@@ -183,13 +183,13 @@ Be specific and actionable in your findings and recommendations. Base scores on 
 
         result = json.loads(content)
 
-        # Update assessment with AI scores
-        assessment.inherent_score = result.get("inherent_risk_score")
-        assessment.residual_score = result.get("residual_risk_score")
-        assessment.risk_rating = result.get("risk_rating")
+        # AI output is ADVISORY ONLY — never let an unclamped model number become the
+        # score of record. The governed inherent/residual/rating come from tiering +
+        # engine_scoring (which clamp residual <= inherent and apply the critical
+        # floor); here we persist just the AI narrative for an analyst to weigh and
+        # leave the governed scores + status untouched.
         assessment.findings = result.get("findings", [])
         assessment.recommendations = result.get("recommendations", [])
-        assessment.status = "reviewed"
         assessment.updated_at = datetime.utcnow()
         db.commit()
 
@@ -462,9 +462,9 @@ def ai_gap_analysis(
     try:
         if isinstance(result.get("gap_analysis"), list):
             assessment.gap_analysis = result["gap_analysis"]
-        rs = result.get("residual_score")
-        if isinstance(rs, (int, float)):
-            assessment.residual_score = float(rs)
+        # The AI residual is ADVISORY — surfaced in the response for an analyst, but
+        # never written to the governed residual_score (engine_scoring is the single
+        # source of truth; an unclamped model number must not overwrite it).
         assessment.updated_at = datetime.utcnow()
         db.commit()
     except Exception:
