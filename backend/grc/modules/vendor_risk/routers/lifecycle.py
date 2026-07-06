@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from ....models import Vendor, GRCUser, get_db
 from ....routers.auth_router import require_auth, get_user_tenants
+from ..tpra import rbac
 from ..lifecycle import (
     LIFECYCLE_STAGES, TIER_CADENCE_DAYS, DEFAULT_OFFBOARDING_CHECKLIST,
     is_valid_stage, next_stage, record_transition,
@@ -46,6 +47,7 @@ def advance_stage(
     if not tenant_ids:
         raise HTTPException(status_code=403, detail="User not associated with any tenant")
     vendor = get_vendor_or_404(vendor_id, tenant_ids, db)
+    rbac.require_write(db, current_user, "lifecycle", "advance")
 
     current = vendor.lifecycle_stage or "intake"
     target = (payload.target_stage or "").strip() or next_stage(current)
@@ -123,6 +125,7 @@ def add_remediation(
 ):
     tenant_ids = get_user_tenants(current_user, db)
     vendor = get_vendor_or_404(vendor_id, tenant_ids, db)
+    rbac.require_write(db, current_user, "findings", "edit")
     actions = list(vendor.remediation_actions or [])
     item = {
         "id": uuid.uuid4().hex[:12],
@@ -156,6 +159,7 @@ def update_remediation(
 ):
     tenant_ids = get_user_tenants(current_user, db)
     vendor = get_vendor_or_404(vendor_id, tenant_ids, db)
+    rbac.require_write(db, current_user, "findings", "edit")
     actions = list(vendor.remediation_actions or [])
     found = None
     for a in actions:
@@ -188,6 +192,7 @@ def delete_remediation(
 ):
     tenant_ids = get_user_tenants(current_user, db)
     vendor = get_vendor_or_404(vendor_id, tenant_ids, db)
+    rbac.require_write(db, current_user, "findings", "delete")
     actions = [a for a in (vendor.remediation_actions or []) if str(a.get("id")) != str(action_id)]
     vendor.remediation_actions = actions
     vendor.updated_at = datetime.utcnow()
@@ -211,6 +216,7 @@ def schedule_reassessment(
 ):
     tenant_ids = get_user_tenants(current_user, db)
     vendor = get_vendor_or_404(vendor_id, tenant_ids, db)
+    rbac.require_write(db, current_user, "vendors", "edit")
     cadence = payload.cadence_days or TIER_CADENCE_DAYS.get((vendor.tier or "medium").lower(), 730)
     vendor.reassessment_cadence_days = cadence
     vendor.next_reassessment_date = payload.next_date or (datetime.utcnow() + timedelta(days=cadence))
@@ -251,6 +257,7 @@ def update_offboarding(
 ):
     tenant_ids = get_user_tenants(current_user, db)
     vendor = get_vendor_or_404(vendor_id, tenant_ids, db)
+    rbac.require_write(db, current_user, "vendors", "edit")
     now = datetime.utcnow().isoformat()
     normalized = []
     for raw in (payload.items or []):

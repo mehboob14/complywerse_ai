@@ -543,6 +543,38 @@ def test_reassessment_resets_the_cadence_clock(db):
     assert v.reassessment_cadence_days and v.reassessment_cadence_days > 0
 
 
+# ── Wave 2: RBAC on the legacy lifecycle router ──────────────────────────────
+
+def _viewer(db, uid, email):
+    """A tenant member with a non-privileged role and no TPRA write permission."""
+    role = db.query(Role).filter(Role.name == "Viewer").first()
+    if not role:
+        role = Role(id=99, name="Viewer")
+        db.add(role)
+        db.flush()
+    u = GRCUser(id=uid, username=f"viewer{uid}", email=email)
+    db.add(u)
+    db.add(UserRole(user_id=uid, role_id=role.id, tenant_id=1))
+    db.commit()
+    return u
+
+
+def test_legacy_lifecycle_write_endpoints_require_permission(db):
+    from grc.modules.vendor_risk.routers import lifecycle as legacy
+    v = _vendor(db)
+    viewer = _viewer(db, 80, "v80@acme.test")  # tenant member, no write permission
+    # advance-stage was previously auth-only (any tenant user could set the stage).
+    with pytest.raises(HTTPException) as e1:
+        legacy.advance_stage(v.id, legacy.AdvanceStageRequest(target_stage="tiering"),
+                             db=db, current_user=viewer)
+    assert e1.value.status_code == 403
+    # offboarding attestation was previously auth-only too.
+    with pytest.raises(HTTPException) as e2:
+        legacy.update_offboarding(v.id, legacy.OffboardingUpdate(items=[]),
+                                  db=db, current_user=viewer)
+    assert e2.value.status_code == 403
+
+
 def test_portfolio_snapshot_aggregates_active_vendors(db):
     v1 = _vendor(db, name="V1")
     v1.inherent_risk_score, v1.residual_risk_score = 80.0, 40.0
