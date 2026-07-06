@@ -60,6 +60,18 @@ class MoveToRiskRequest(BaseModel):
     framework_name: Optional[str] = "ISO 27001"
 
 
+class ApplyAIItem(BaseModel):
+    id: int
+    fields: Dict[str, Any]
+
+
+# Only assessment fields may be set by an AI apply — never reference/title/owner.
+_AI_APPLIABLE = {
+    "status", "result", "finding_type", "treatment_option", "linked_control",
+    "action", "evidence_reviewed", "notes", "justification", "residual_risk", "approved_by",
+}
+
+
 # ── Helpers ──────────────────────────────────────────────────────────────────
 def _tenant_id(user: GRCUser, db: Session) -> int:
     tenants = get_user_tenants(user, db)
@@ -327,6 +339,41 @@ def reset_register(
         _seed(db, tid, journey_id, framework_id, register_type, user.id)
     entries = _query(db, tid, journey_id, register_type).all()
     return {
+        "register_type": register_type,
+        "entries": [_serialize(e) for e in entries],
+        "summary": _summary(entries, register_type),
+    }
+
+
+@router.post("/{register_type}/apply-ai")
+def apply_ai(
+    register_type: str,
+    items: List[ApplyAIItem],
+    journey_id: int = Query(...),
+    db: Session = Depends(get_db),
+    user: GRCUser = Depends(require_auth),
+):
+    """Apply AI-suggested assessment fields to existing rows (batch, one round-trip)."""
+    _validate_type(register_type)
+    tid = _tenant_id(user, db)
+    updated = 0
+    for it in items:
+        e = db.query(FrameworkRegisterEntry).filter(
+            FrameworkRegisterEntry.id == it.id,
+            FrameworkRegisterEntry.tenant_id == tid,
+            FrameworkRegisterEntry.journey_id == journey_id,
+            FrameworkRegisterEntry.register_type == register_type,
+        ).first()
+        if not e:
+            continue
+        for k, v in (it.fields or {}).items():
+            if k in _AI_APPLIABLE and v is not None and str(v) != "":
+                setattr(e, k, v)
+        updated += 1
+    db.commit()
+    entries = _query(db, tid, journey_id, register_type).all()
+    return {
+        "updated": updated,
         "register_type": register_type,
         "entries": [_serialize(e) for e in entries],
         "summary": _summary(entries, register_type),

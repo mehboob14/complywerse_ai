@@ -4468,6 +4468,14 @@ export const frameworkTemplatesApi = {
       apiClient.post(`/framework-templates/registers/entries/${entryId}/move-to-risk`, body),
     reset: (registerType: string, params: { journey_id: number; framework_id?: number | null }) =>
       apiClient.post(`/framework-templates/registers/${registerType}/reset`, {}, { params }),
+    applyAI: (registerType: string, params: { journey_id: number }, items: Array<{ id: number; fields: Record<string, unknown> }>) =>
+      apiClient.post(`/framework-templates/registers/${registerType}/apply-ai`, items, { params }),
+  },
+  ai: {
+    register: (body: { register_type: string; framework_name?: string; rows: Array<Record<string, unknown>> }) =>
+      apiClient.post('/framework-templates/ai/register', body, { timeout: 120000 }),
+    document: (body: { doc_type: string; framework_name?: string; title?: string; organization?: string | null; sections: Array<Record<string, unknown>> }) =>
+      apiClient.post('/framework-templates/ai/document', body, { timeout: 120000 }),
   },
   documents: {
     get: (docType: string, params: { journey_id: number; framework_id?: number | null }) =>

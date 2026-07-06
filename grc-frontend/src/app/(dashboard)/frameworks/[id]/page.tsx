@@ -4384,9 +4384,9 @@ export default function CertificationJourneyPage() {
       case 'risk-treatment':
         return <FrameworkRegisterTab registerType="risk_treatment" journeyId={journeyId} frameworkId={appFwId} frameworkName={(journey as any)?.framework_name || 'ISO 27001'} tenantUsers={templateTenantUsers} />;
       case 'scope-statement':
-        return <FrameworkDocumentTab docType="isms_scope_statement" journeyId={journeyId} frameworkId={appFwId} tenantUsers={templateTenantUsers} />;
+        return <FrameworkDocumentTab docType="isms_scope_statement" journeyId={journeyId} frameworkId={appFwId} frameworkName={(journey as any)?.framework_name || 'ISO 27001'} tenantUsers={templateTenantUsers} />;
       case 'audit-procedure':
-        return <FrameworkDocumentTab docType="internal_audit_procedure" journeyId={journeyId} frameworkId={appFwId} tenantUsers={templateTenantUsers} />;
+        return <FrameworkDocumentTab docType="internal_audit_procedure" journeyId={journeyId} frameworkId={appFwId} frameworkName={(journey as any)?.framework_name || 'ISO 27001'} tenantUsers={templateTenantUsers} />;
       case 'history':
         return renderHistoryTab();
       case 'artifacts':

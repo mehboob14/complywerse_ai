@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Trash2, RotateCcw, Save, Loader2, GripVertical } from 'lucide-react';
+import { Plus, Trash2, RotateCcw, Save, Loader2, GripVertical, Sparkles, X } from 'lucide-react';
 import { frameworkTemplatesApi } from '@/lib/api';
 import { useToast } from '@/components/ui/ToastProvider';
 import type { TenantUserOption } from './templateConfigs';
@@ -31,6 +31,7 @@ interface Props {
   docType: 'isms_scope_statement' | 'internal_audit_procedure';
   journeyId: number;
   frameworkId: number | null;
+  frameworkName: string;
   tenantUsers: TenantUserOption[];
 }
 
@@ -38,7 +39,7 @@ const CLASSIFICATIONS = ['public', 'internal', 'confidential', 'restricted'];
 const inputCls = 'w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500/30';
 const labelCls = 'mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500';
 
-export default function FrameworkDocumentTab({ docType, journeyId, frameworkId, tenantUsers }: Props) {
+export default function FrameworkDocumentTab({ docType, journeyId, frameworkId, frameworkName, tenantUsers }: Props) {
   const qc = useQueryClient();
   const { toast } = useToast();
   const queryKey = ['ft-document', docType, journeyId];
@@ -66,6 +67,26 @@ export default function FrameworkDocumentTab({ docType, journeyId, frameworkId, 
   const resetMut = useMutation({
     mutationFn: () => frameworkTemplatesApi.documents.reset(docType, { journey_id: journeyId }),
     onSuccess: () => qc.invalidateQueries({ queryKey }),
+  });
+  const [aiSummary, setAiSummary] = useState<string | null>(null);
+  const aiMut = useMutation({
+    mutationFn: async () => {
+      if (!doc) return { sections: [] as Array<{ heading: string; body: string }>, summary: '' };
+      const res = await frameworkTemplatesApi.ai.document({
+        doc_type: docType, framework_name: frameworkName, title: doc.title || undefined,
+        organization: doc.organization, sections: doc.sections as unknown as Array<Record<string, unknown>>,
+      });
+      return res.data as { sections: Array<{ heading: string; body: string }>; summary: string };
+    },
+    onSuccess: (out) => {
+      const drafted = new Map((out.sections || []).map((s) => [s.heading, s.body]));
+      setDoc((prev) => prev ? { ...prev, sections: prev.sections.map((s) => (!s.table && drafted.has(s.heading)) ? { ...s, body: drafted.get(s.heading) || s.body } : s) } : prev);
+      setDirty(true);
+      setAiSummary(out.summary || 'AI draft applied — review the sections and Save.');
+      toast({ type: 'success', title: 'AI draft ready', message: 'Review the drafted sections, then Save.' });
+    },
+    onError: (e: { response?: { data?: { detail?: string } } }) =>
+      toast({ type: 'error', title: 'AI draft failed', message: e?.response?.data?.detail || 'Try again.' }),
   });
 
   const set = <K extends keyof FrameworkDoc>(key: K, value: FrameworkDoc[K]) => {
@@ -122,6 +143,10 @@ export default function FrameworkDocumentTab({ docType, journeyId, frameworkId, 
           {doc.control_ref && <p className="mt-0.5 text-xs text-slate-500">ISO 27001 · {doc.control_ref}</p>}
         </div>
         <div className="flex items-center gap-2">
+          <button type="button" onClick={() => aiMut.mutate()} disabled={aiMut.isPending}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-700 hover:bg-purple-100 disabled:opacity-50">
+            {aiMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" strokeWidth={1.75} />} AI draft
+          </button>
           <button type="button" onClick={() => resetMut.mutate()} disabled={resetMut.isPending}
             className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50">
             <RotateCcw className="h-3.5 w-3.5" strokeWidth={1.75} /> Reset sections
@@ -133,6 +158,15 @@ export default function FrameworkDocumentTab({ docType, journeyId, frameworkId, 
           </button>
         </div>
       </div>
+
+      {/* AI draft summary */}
+      {aiSummary && (
+        <div className="flex items-start gap-2 rounded-xl border border-purple-200 bg-purple-50 p-3">
+          <Sparkles className="mt-0.5 h-4 w-4 flex-shrink-0 text-purple-600" strokeWidth={1.75} />
+          <p className="flex-1 text-sm text-purple-900">{aiSummary}</p>
+          <button type="button" onClick={() => setAiSummary(null)} className="text-purple-400 hover:text-purple-700" aria-label="Dismiss"><X className="h-4 w-4" /></button>
+        </div>
+      )}
 
       {/* Metadata / control box */}
       <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
