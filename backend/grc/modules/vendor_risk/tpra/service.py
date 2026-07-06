@@ -15,10 +15,10 @@ logger = logging.getLogger(__name__)
 from sqlalchemy.orm import Session
 
 from ....models import (
-    Vendor, VendorAssessment,
+    Vendor, VendorAssessment, VendorQuestionnaireTemplate, VendorQuestionnaireResponse,
     TPRAStageInstance, TPRAQuestion, TPRAQuestionResponse, TPRAFinding,
     TPRARemediation, TPRARiskAcceptance, TPRAContract, TPRAApproval,
-    TPRAMonitoringSignal, TPRAAuditLog,
+    TPRAMonitoringSignal, TPRAAuditLog, TPRAEvidenceLink,
 )
 from .stages import (
     TPRA_STAGES, STAGE_BY_KEY, STAGE_ORDER, STAGE_KEYS, is_gate,
@@ -26,7 +26,7 @@ from .stages import (
     TIER_SKIPPABLE_STAGES,
 )
 from .engine_tiering import compute_inherent_tier, derive_factors_from_profile
-from .engine_scoring import score_assessment
+from .engine_scoring import score_assessment, build_responses_from_answers, normalize_answer
 from .engine_gates import evaluate_stage_exit, recommend_decision
 from .engine_snapshots import write_vendor_snapshot
 from .bootstrap import get_tiering_config
@@ -272,16 +272,16 @@ def build_stage_context(db: Session, vendor: Vendor, assessment: VendorAssessmen
         ctx["required_reviewers"] = len(required_reviewers_for(tier))
         ctx["reviewers_assigned"] = 1 if assessment.reviewed_by else 0
     elif stage_key == "questionnaire":
-        total = db.query(TPRAQuestionResponse).filter(
-            TPRAQuestionResponse.assessment_id == assessment.id,
-            TPRAQuestionResponse.deleted_at.is_(None),
-        ).count()
-        answered = db.query(TPRAQuestionResponse).filter(
-            TPRAQuestionResponse.assessment_id == assessment.id,
-            TPRAQuestionResponse.deleted_at.is_(None),
-            TPRAQuestionResponse.answer.isnot(None),
-        ).count()
-        ctx.update(responses_total=total, responses_answered=answered, required_evidence_missing=0)
+        # Compute completeness from the REAL responses (normalized rows if present,
+        # else the vendor-submitted questionnaire blob) — not the empty normalized
+        # table — and enforce required evidence instead of hardcoding it to 0.
+        resp = collect_responses_for_scoring(db, assessment.id)
+        total = len(resp)
+        answered = sum(1 for r in resp if normalize_answer(r.get("answer")) is not None)
+        ctx.update(
+            responses_total=total, responses_answered=answered,
+            required_evidence_missing=_count_required_evidence_missing(db, assessment),
+        )
     elif stage_key == "scoring":
         ctx["residual_computed"] = assessment.residual_score is not None
     elif stage_key == "findings":
@@ -499,6 +499,72 @@ def run_tiering(
     return result
 
 
+def _latest_submitted_questionnaire(db: Session, assessment_id: int):
+    return (
+        db.query(VendorQuestionnaireResponse)
+        .filter(
+            VendorQuestionnaireResponse.assessment_id == assessment_id,
+            VendorQuestionnaireResponse.status == "submitted",
+        )
+        .order_by(VendorQuestionnaireResponse.id.desc())
+        .first()
+    )
+
+
+def _collect_from_questionnaire(db: Session, assessment: VendorAssessment) -> List[dict]:
+    """Build scoring responses from the vendor-submitted questionnaire blob joined to
+    the template's question defs (domain/weight/critical_control). This is what the
+    external portal actually writes; string answers are coerced by the engine."""
+    if not assessment or not assessment.template_id:
+        return []
+    qr = _latest_submitted_questionnaire(db, assessment.id)
+    if not qr:
+        return []
+    template = (
+        db.query(VendorQuestionnaireTemplate)
+        .filter(VendorQuestionnaireTemplate.id == assessment.template_id)
+        .first()
+    )
+    questions = (template.questions or []) if template else []
+    return build_responses_from_answers(questions, qr.responses or {})
+
+
+def _count_required_evidence_missing(db: Session, assessment: VendorAssessment) -> int:
+    """How many evidence-required, affirmatively-answered questions lack ANY attached
+    evidence. Approximate (evidence isn't matched per-question in the blob) but makes
+    'evidence-required answers with no evidence at all' a real gate blocker instead of
+    the previous hardcoded 0."""
+    if not assessment or not assessment.template_id:
+        return 0
+    template = (
+        db.query(VendorQuestionnaireTemplate)
+        .filter(VendorQuestionnaireTemplate.id == assessment.template_id)
+        .first()
+    )
+    questions = (template.questions or []) if template else []
+    qr = _latest_submitted_questionnaire(db, assessment.id)
+    answers = (qr.responses or {}) if qr else {}
+    need = 0
+    for q in questions:
+        if q.get("evidence_required") or q.get("evidence"):
+            a = answers.get(str(q.get("id")))
+            if a is None:
+                a = answers.get(q.get("id"))
+            if normalize_answer(a) in ("yes", "partial"):
+                need += 1
+    if need == 0:
+        return 0
+    attached = (
+        db.query(TPRAEvidenceLink.id)
+        .filter(
+            TPRAEvidenceLink.assessment_id == assessment.id,
+            TPRAEvidenceLink.deleted_at.is_(None),
+        )
+        .count()
+    )
+    return max(0, need - attached)
+
+
 def collect_responses_for_scoring(db: Session, assessment_id: int) -> List[dict]:
     """Join normalized responses to their questions to feed the scoring engine."""
     rows = (
@@ -521,7 +587,13 @@ def collect_responses_for_scoring(db: Session, assessment_id: int) -> List[dict]
             "question_id": resp.question_id,
             "title": q.text if q else None,
         })
-    return out
+    if out:
+        return out
+    # No normalized responses — the vendor portal writes the legacy questionnaire
+    # blob, which the normalized TPRAQuestionResponse table never receives. Score the
+    # REAL submitted answers instead of scoring nothing (which yields residual==inherent).
+    assessment = db.query(VendorAssessment).filter(VendorAssessment.id == assessment_id).first()
+    return _collect_from_questionnaire(db, assessment) if assessment else []
 
 
 def run_scoring(

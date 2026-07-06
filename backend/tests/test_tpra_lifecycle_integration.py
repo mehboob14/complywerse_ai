@@ -16,10 +16,10 @@ from sqlalchemy.pool import StaticPool
 
 from grc.models import (
     Base, Tenant, GRCUser, Role, Permission, RolePermission, UserRole, Risk,
-    Vendor, VendorAssessment,
+    Vendor, VendorAssessment, VendorQuestionnaireTemplate, VendorQuestionnaireResponse,
     TPRAStageInstance, TPRAQuestion, TPRAQuestionResponse, TPRAFinding,
     TPRARemediation, TPRARiskAcceptance, TPRAContract, TPRAControlObligation,
-    TPRAApproval, TPRAMonitoringSignal, TPRAAuditLog, TPRATieringConfig, TPRARiskDomain,
+    TPRAApproval, TPRAMonitoringSignal, TPRAAuditLog, TPRATieringConfig, TPRARiskDomain, TPRAEvidenceLink,
     TPRARiskSnapshot,
 )
 from grc.modules.vendor_risk.tpra import service, rbac
@@ -27,10 +27,10 @@ from grc.modules.vendor_risk.tpra.engine_snapshots import write_portfolio_snapsh
 
 _TABLES = [
     Tenant, GRCUser, Role, Permission, RolePermission, UserRole, Risk,
-    Vendor, VendorAssessment,
+    Vendor, VendorAssessment, VendorQuestionnaireTemplate, VendorQuestionnaireResponse,
     TPRAStageInstance, TPRAQuestion, TPRAQuestionResponse, TPRAFinding,
     TPRARemediation, TPRARiskAcceptance, TPRAContract, TPRAControlObligation,
-    TPRAApproval, TPRAMonitoringSignal, TPRAAuditLog, TPRATieringConfig, TPRARiskDomain,
+    TPRAApproval, TPRAMonitoringSignal, TPRAAuditLog, TPRATieringConfig, TPRARiskDomain, TPRAEvidenceLink,
     TPRARiskSnapshot,
 ]
 
@@ -692,6 +692,47 @@ def test_overdue_condition_is_flagged(db):
     )
     assert res["open_conditions"] == 1
     assert res["overdue_conditions"] == 1
+
+
+# ── Wave 3: two-response-model unification (score the REAL vendor answers) ────
+
+def test_run_scoring_scores_the_real_questionnaire_blob(db):
+    # The normalized TPRAQuestionResponse table has no write path in prod; the vendor
+    # portal writes VendorQuestionnaireResponse.responses. run_scoring must score THAT.
+    v = _vendor(db)
+    a = service.ensure_active_assessment(db, v, actor_id=1)
+    service.run_tiering(db, v, a, actor_id=1)
+    tpl = VendorQuestionnaireTemplate(tenant_id=1, name="SIG-Lite", questions=[
+        {"id": "mfa", "text": "MFA enforced?", "domain": "cybersecurity", "weight": 2.0, "critical_control": True},
+        {"id": "patch", "text": "Patching?", "domain": "cybersecurity", "weight": 1.0, "critical_control": False},
+    ])
+    db.add(tpl)
+    db.flush()
+    a.template_id = tpl.id
+    db.add(VendorQuestionnaireResponse(
+        tenant_id=1, vendor_id=v.id, assessment_id=a.id, template_id=tpl.id,
+        status="submitted", token="tok-real-blob-1", responses={"mfa": "no", "patch": "yes"},
+    ))
+    db.commit()
+    result = service.run_scoring(db, v, a, actor_id=1)
+    db.commit()
+    # It scored the REAL answers: the failed critical control raised a blocking finding
+    # (previously run_scoring read the empty normalized table and found nothing).
+    assert result["findings_created"] == 1
+    assert service.count_open_critical(db, a.id) == 1
+    assert a.residual_score is not None
+
+
+def test_run_scoring_endpoint_blocks_when_no_answers(db):
+    from grc.modules.vendor_risk.tpra import api
+    u = _admin(db, 95, "a95@acme.test")
+    v = _vendor(db)
+    a = service.ensure_active_assessment(db, v, actor_id=95)
+    db.commit()
+    # No questionnaire submitted → the raw endpoint refuses to score empty input.
+    with pytest.raises(HTTPException) as ei:
+        api.run_scoring(a.id, db=db, user=u)
+    assert ei.value.status_code == 400
 
 
 def test_portfolio_snapshot_aggregates_active_vendors(db):

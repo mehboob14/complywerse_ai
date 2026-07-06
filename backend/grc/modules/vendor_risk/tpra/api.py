@@ -535,6 +535,17 @@ def run_scoring(assessment_id: int, db: Session = Depends(get_db), user: GRCUser
     a = _assessment(db, assessment_id, tids)
     v = _vendor(db, a.vendor_id, tids)
     rbac.require_write(db, user, "assessments", "edit")
+    # Completeness precondition — don't score out of band against no/empty answers
+    # (a residual computed from nothing collapses to inherent and can silently drive
+    # a go decision). The lifecycle stage gate enforces all-answered; this guards the
+    # raw endpoint when called directly.
+    from .engine_scoring import normalize_answer as _norm
+    _resp = service.collect_responses_for_scoring(db, a.id)
+    if not _resp or not any(_norm(r.get("answer")) is not None for r in _resp):
+        raise HTTPException(
+            status_code=400,
+            detail="No answered questionnaire responses to score — issue and collect the questionnaire first.",
+        )
     result = service.run_scoring(db, v, a, actor_id=user.id)
     db.commit()
     return result
