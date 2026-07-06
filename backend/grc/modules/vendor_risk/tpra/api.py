@@ -19,10 +19,10 @@ from ....models import (
     get_db, GRCUser, Vendor, VendorAssessment,
     TPRAStageInstance, TPRAFinding, TPRARemediation, TPRARiskAcceptance,
     TPRAContract, TPRAControlObligation, TPRAApproval, TPRAMonitoringSignal,
-    TPRAEvidenceLink, Evidence, TPRATieringConfig, TPRAAuditLog,
+    TPRAEvidenceLink, Evidence, TPRATieringConfig, TPRAAuditLog, TPRASharedAssessment,
 )
 from ....routers.auth_router import require_auth, get_user_tenants
-from . import service, rbac
+from . import service, rbac, exchange
 from .stages import stages_payload, is_valid_stage
 from .engine_monitoring import should_trigger_reassessment
 from .schema_migrations import ensure_tpra_columns
@@ -296,6 +296,13 @@ class ConditionUpdate(BaseModel):
     status: Optional[Literal["open", "closed"]] = None
     owner_id: Optional[int] = None
     due_date: Optional[datetime] = None
+
+class PublishShareIn(BaseModel):
+    expires_days: Optional[int] = 180
+
+class ImportShareIn(BaseModel):
+    share_token: Optional[str] = None
+    package: Optional[dict] = None
 
 class SignalIn(BaseModel):
     signal_type: str
@@ -1215,6 +1222,118 @@ def update_condition(approval_id: int, condition_id: str, body: ConditionUpdate,
                         actor_id=user.id, extra={"condition": condition_id, "status": body.status})
     db.commit()
     return s_approval(ap)
+
+
+# ── Vendor exchange — shared / reusable assessments ──────────────────────────
+
+def s_shared(x: TPRASharedAssessment) -> dict:
+    return {
+        "id": x.id, "vendor_id": x.vendor_id, "vendor_name": x.vendor_name,
+        "source_assessment_id": x.source_assessment_id, "template_name": x.template_name,
+        "residual_rating": x.residual_rating, "residual_score": x.residual_score,
+        "inherent_tier": x.inherent_tier, "evidence_count": x.evidence_count,
+        "response_count": len(x.responses or {}), "share_token": x.share_token,
+        "status": x.status, "validated_at": x.validated_at, "expires_at": x.expires_at,
+        "created_at": x.created_at,
+    }
+
+
+@router.post("/assessments/{assessment_id}/publish-shared", status_code=status.HTTP_201_CREATED)
+def publish_shared(assessment_id: int, body: PublishShareIn = PublishShareIn(),
+                   db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    tids = _tids(user, db)
+    a = _assessment(db, assessment_id, tids)
+    v = _vendor(db, a.vendor_id, tids)
+    rbac.require_write(db, user, "assessments", "edit")
+    ensure_tpra_columns(db)
+    try:
+        shared = exchange.publish_shared_assessment(db, v, a, actor_id=user.id,
+                                                    expires_days=body.expires_days or 180)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    db.commit()
+    return {"shared": s_shared(shared), "package": exchange.to_package(shared)}
+
+
+@router.get("/shared-assessments")
+def list_shared(db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    tids = _tids(user, db)
+    rows = (
+        db.query(TPRASharedAssessment)
+        .filter(TPRASharedAssessment.tenant_id.in_(tids))
+        .order_by(TPRASharedAssessment.created_at.desc())
+        .all()
+    )
+    return {"items": [s_shared(x) for x in rows], "total": len(rows)}
+
+
+@router.get("/shared-assessments/{share_token}/package")
+def shared_package(share_token: str, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    tids = _tids(user, db)
+    x = (
+        db.query(TPRASharedAssessment)
+        .filter(TPRASharedAssessment.share_token == share_token, TPRASharedAssessment.tenant_id.in_(tids))
+        .first()
+    )
+    if not x:
+        raise HTTPException(status_code=404, detail="Shared assessment not found")
+    return exchange.to_package(x)
+
+
+@router.delete("/shared-assessments/{shared_id}")
+def revoke_shared(shared_id: int, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    tids = _tids(user, db)
+    x = _get(db, TPRASharedAssessment, shared_id, tids)
+    rbac.require_write(db, user, "assessments", "edit")
+    x.status = "revoked"
+    service.write_audit(db, x.tenant_id, entity="shared_assessment", action="delete",
+                        vendor_id=x.vendor_id, entity_id=x.id, actor_id=user.id)
+    db.commit()
+    return {"revoked": True, "id": x.id}
+
+
+@router.post("/assessments/{assessment_id}/import-shared")
+def import_shared(assessment_id: int, body: ImportShareIn,
+                  db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    tids = _tids(user, db)
+    a = _assessment(db, assessment_id, tids)
+    v = _vendor(db, a.vendor_id, tids)
+    rbac.require_write(db, user, "assessments", "edit")
+    if body.package:
+        pkg = body.package
+        if pkg.get("format") != exchange.PACKAGE_FORMAT:
+            raise HTTPException(status_code=400, detail="Unrecognized shared-assessment package format.")
+        responses = pkg.get("responses") or {}
+        template_id, template_name = pkg.get("template_id"), pkg.get("template_name")
+        source_label = f"package:{pkg.get('vendor_name') or '?'}"
+    elif body.share_token:
+        shared = (
+            db.query(TPRASharedAssessment)
+            .filter(
+                TPRASharedAssessment.share_token == body.share_token,
+                TPRASharedAssessment.tenant_id.in_(tids),
+                TPRASharedAssessment.status == "active",
+            ).first()
+        )
+        if not shared:
+            raise HTTPException(status_code=404, detail="Shared assessment not found or not active.")
+        responses = shared.responses or {}
+        template_id, template_name = shared.template_id, shared.template_name
+        source_label = f"shared:{shared.vendor_name or '?'}"
+    else:
+        raise HTTPException(status_code=400, detail="Provide a share_token or a package to import.")
+    try:
+        qr = exchange.import_into_assessment(
+            db, v, a, responses=responses, template_id=template_id,
+            template_name=template_name, source_label=source_label, actor_id=user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    db.commit()
+    return {
+        "imported": True, "responses": len(qr.responses or {}), "source": source_label,
+        "note": "Answers pre-filled — run scoring to compute your own residual.",
+    }
 
 
 # ── Monitoring signals ───────────────────────────────────────────────────────

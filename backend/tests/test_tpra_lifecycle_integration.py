@@ -20,7 +20,7 @@ from grc.models import (
     TPRAStageInstance, TPRAQuestion, TPRAQuestionResponse, TPRAFinding,
     TPRARemediation, TPRARiskAcceptance, TPRAContract, TPRAControlObligation,
     TPRAApproval, TPRAMonitoringSignal, TPRAAuditLog, TPRATieringConfig, TPRARiskDomain, TPRAEvidenceLink,
-    TPRARiskSnapshot,
+    TPRARiskSnapshot, TPRASharedAssessment,
 )
 from grc.modules.vendor_risk.tpra import service, rbac
 from grc.modules.vendor_risk.tpra.engine_snapshots import write_portfolio_snapshot
@@ -31,7 +31,7 @@ _TABLES = [
     TPRAStageInstance, TPRAQuestion, TPRAQuestionResponse, TPRAFinding,
     TPRARemediation, TPRARiskAcceptance, TPRAContract, TPRAControlObligation,
     TPRAApproval, TPRAMonitoringSignal, TPRAAuditLog, TPRATieringConfig, TPRARiskDomain, TPRAEvidenceLink,
-    TPRARiskSnapshot,
+    TPRARiskSnapshot, TPRASharedAssessment,
 ]
 
 
@@ -732,6 +732,73 @@ def test_run_scoring_endpoint_blocks_when_no_answers(db):
     # No questionnaire submitted → the raw endpoint refuses to score empty input.
     with pytest.raises(HTTPException) as ei:
         api.run_scoring(a.id, db=db, user=u)
+    assert ei.value.status_code == 400
+
+
+# ── Vendor exchange — publish / package / import / re-score ──────────────────
+
+def _completed_questionnaire_assessment(db, u, vendor_name, answers):
+    v = _vendor(db, name=vendor_name)
+    a = service.ensure_active_assessment(db, v, actor_id=u.id)
+    service.run_tiering(db, v, a, actor_id=u.id)
+    tpl = VendorQuestionnaireTemplate(tenant_id=1, name="SIG-Lite", questions=[
+        {"id": "mfa", "text": "MFA?", "domain": "cybersecurity", "weight": 2.0, "critical_control": True},
+        {"id": "patch", "text": "Patch?", "domain": "cybersecurity", "weight": 1.0},
+    ])
+    db.add(tpl)
+    db.flush()
+    a.template_id = tpl.id
+    db.add(VendorQuestionnaireResponse(
+        tenant_id=1, vendor_id=v.id, assessment_id=a.id, template_id=tpl.id,
+        status="submitted", token=f"tok-{vendor_name}"[:60], responses=answers,
+    ))
+    db.commit()
+    return v, a
+
+
+def test_vendor_exchange_publish_import_and_rescore(db):
+    from grc.modules.vendor_risk.tpra import api, exchange
+    u = _admin(db, 96, "a96@acme.test")
+    pv, pa = _completed_questionnaire_assessment(db, u, "PublisherCo", {"mfa": "yes", "patch": "yes"})
+
+    # Publish → a reusable shared assessment + a portable package.
+    res = api.publish_shared(pa.id, api.PublishShareIn(), db=db, user=u)
+    token = res["shared"]["share_token"]
+    package = res["package"]
+    assert package["format"] == exchange.PACKAGE_FORMAT
+    assert package["responses"] == {"mfa": "yes", "patch": "yes"}
+
+    # A new assessment imports the shared answers BY TOKEN (intra-tenant reuse).
+    bv = _vendor(db, name="BuyerCopy")
+    ba = service.ensure_active_assessment(db, bv, actor_id=96)
+    db.commit()
+    imp = api.import_shared(ba.id, api.ImportShareIn(share_token=token), db=db, user=u)
+    assert imp["imported"] is True and imp["responses"] == 2
+    # Pre-filled → the BUYER scores it with their own governed engine (unification).
+    qr = service._latest_submitted_questionnaire(db, ba.id)
+    assert qr is not None and qr.responses == {"mfa": "yes", "patch": "yes"}
+    service.run_tiering(db, bv, ba, actor_id=96)
+    result = service.run_scoring(db, bv, ba, actor_id=96)
+    db.commit()
+    assert result is not None and ba.residual_score is not None
+
+    # Import via PACKAGE (cross-tenant transport) also works.
+    bv2 = _vendor(db, name="BuyerViaPackage")
+    ba2 = service.ensure_active_assessment(db, bv2, actor_id=96)
+    db.commit()
+    imp2 = api.import_shared(ba2.id, api.ImportShareIn(package=package), db=db, user=u)
+    assert imp2["imported"] is True
+
+
+def test_publish_shared_requires_answers(db):
+    from grc.modules.vendor_risk.tpra import api
+    u = _admin(db, 97, "a97@acme.test")
+    v = _vendor(db, name="NoAnswers")
+    a = service.ensure_active_assessment(db, v, actor_id=97)
+    db.commit()
+    # Nothing to share (no submitted questionnaire) → 400.
+    with pytest.raises(HTTPException) as ei:
+        api.publish_shared(a.id, api.PublishShareIn(), db=db, user=u)
     assert ei.value.status_code == 400
 
 

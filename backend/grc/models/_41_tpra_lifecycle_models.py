@@ -474,3 +474,39 @@ class TPRAEvidenceLink(Base):
         Index("ix_tpra_evlink_assessment", "assessment_id"),
         Index("ix_tpra_evlink_finding", "finding_id"),
     )
+
+
+class TPRASharedAssessment(Base):
+    """A published, reusable snapshot of a completed vendor assessment — the vendor-
+    exchange 'complete once, reuse across buyers' unit. Reused intra-tenant by
+    share_token (pre-fills a new assessment) or exported as a portable package for
+    cross-tenant transfer. The validation snapshot travels with it for audit."""
+    __tablename__ = "grc_tpra_shared_assessments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    vendor_id = Column(Integer, ForeignKey("grc_vendors.id"), nullable=True, index=True)
+    source_assessment_id = Column(Integer, nullable=True, index=True)
+    vendor_name = Column(String(255), nullable=True)
+    template_id = Column(Integer, nullable=True)
+    template_name = Column(String(255), nullable=True)
+    # The vendor's answers ({question_id: answer}) — what a buyer pre-fills from.
+    responses = Column(JSON, default=dict)
+    # Publisher's scoring snapshot — advisory context only; the buyer re-scores.
+    inherent_tier = Column(String(20), nullable=True)
+    residual_score = Column(Float, nullable=True)
+    residual_rating = Column(String(20), nullable=True)
+    domain_scores = Column(JSON, default=dict)
+    evidence_count = Column(Integer, default=0)
+    # Validation provenance that travels with the shared assessment.
+    validated_by = Column(Integer, nullable=True)
+    validated_at = Column(DateTime, nullable=True)
+    share_token = Column(String(64), nullable=False, unique=True, index=True)
+    status = Column(String(20), default="active")   # active | revoked | expired
+    expires_at = Column(DateTime, nullable=True)
+    created_by = Column(Integer, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index("ix_tpra_shared_tenant_vendor", "tenant_id", "vendor_id"),
+    )
