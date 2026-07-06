@@ -2117,6 +2117,14 @@ export const tpraApi = {
     apiClient.post(`/vendor-risk/tpra/assessments/${assessmentId}/approvals`, data),
   resolveCondition: (approvalId: number, conditionId: string, data: { status?: 'open' | 'closed'; owner_id?: number; due_date?: string }) =>
     apiClient.patch(`/vendor-risk/tpra/approvals/${approvalId}/conditions/${conditionId}`, data),
+  // Vendor exchange — publish / reuse / portable shared assessments.
+  publishShared: (assessmentId: number, data?: { expires_days?: number }) =>
+    apiClient.post(`/vendor-risk/tpra/assessments/${assessmentId}/publish-shared`, data || {}),
+  listShared: () => apiClient.get(`/vendor-risk/tpra/shared-assessments`),
+  sharedPackage: (shareToken: string) => apiClient.get(`/vendor-risk/tpra/shared-assessments/${shareToken}/package`),
+  revokeShared: (sharedId: number) => apiClient.delete(`/vendor-risk/tpra/shared-assessments/${sharedId}`),
+  importShared: (assessmentId: number, data: { share_token?: string; package?: Record<string, unknown> }) =>
+    apiClient.post(`/vendor-risk/tpra/assessments/${assessmentId}/import-shared`, data),
 
   // Per-stage task checklist + DD-planning
   saveChecklist: (

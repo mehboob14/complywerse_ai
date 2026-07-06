@@ -3,7 +3,7 @@
 import { useRef } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, Building2, ClipboardList, AlertTriangle, Radio, FileQuestion, Shield, Settings } from 'lucide-react';
+import { LayoutDashboard, Building2, ClipboardList, AlertTriangle, Radio, FileQuestion, Shield, Share2, Settings } from 'lucide-react';
 import { clsx } from 'clsx';
 
 // Primary working set — the tabs a TPRM analyst lives in day to day.
@@ -15,6 +15,7 @@ const vendorRiskNavigation = [
   { name: 'Monitoring', href: '/vendor-risk/monitoring', icon: Radio },
   { name: 'Questionnaires', href: '/vendor-risk/questionnaires', icon: FileQuestion },
   { name: 'Risk 360°', href: '/vendor-risk/risk-360', icon: Shield },
+  { name: 'Exchange', href: '/vendor-risk/exchange', icon: Share2 },
 ];
 
 // Settings is demoted out of the primary set — see the trailing gear.
