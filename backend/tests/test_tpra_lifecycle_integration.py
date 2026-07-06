@@ -652,6 +652,48 @@ def test_remediation_auto_populates_due_date_from_severity_sla(db):
     assert 5 <= delta_days <= 8  # ~7-day critical SLA
 
 
+# ── Wave 3: approval condition tracking ──────────────────────────────────────
+
+def test_approval_conditions_are_tracked_and_resolvable(db):
+    from grc.modules.vendor_risk.tpra import api
+    approver = _admin(db, 93, "a93@acme.test")
+    v = _vendor(db)
+    a = service.ensure_active_assessment(db, v, actor_id=1)
+    a.residual_score = 20.0
+    a.residual_rating = "low"
+    db.commit()
+    res = api.create_approval(
+        a.id,
+        api.ApprovalIn(decision="approve_with_conditions",
+                       conditions=["Provide MFA evidence within 30 days", "Complete pen test"]),
+        db=db, user=approver,
+    )
+    assert res["open_conditions"] == 2
+    assert all(c["status"] == "open" and c["text"] for c in res["conditions"])
+    cid = res["conditions"][0]["id"]
+    # Resolving a condition closes it and drops the open count.
+    res2 = api.update_condition(res["id"], cid, api.ConditionUpdate(status="closed"), db=db, user=approver)
+    assert res2["open_conditions"] == 1
+
+
+def test_overdue_condition_is_flagged(db):
+    from grc.modules.vendor_risk.tpra import api
+    approver = _admin(db, 94, "a94@acme.test")
+    v = _vendor(db)
+    a = service.ensure_active_assessment(db, v, actor_id=1)
+    a.residual_score = 20.0
+    db.commit()
+    past = (datetime.utcnow() - timedelta(days=5)).isoformat()
+    res = api.create_approval(
+        a.id,
+        api.ApprovalIn(decision="approve_with_conditions",
+                       conditions=[{"text": "Deliver SOC 2", "due_date": past}]),
+        db=db, user=approver,
+    )
+    assert res["open_conditions"] == 1
+    assert res["overdue_conditions"] == 1
+
+
 def test_portfolio_snapshot_aggregates_active_vendors(db):
     v1 = _vendor(db, name="V1")
     v1.inherent_risk_score, v1.residual_risk_score = 80.0, 40.0

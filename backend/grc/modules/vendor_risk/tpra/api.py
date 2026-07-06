@@ -139,10 +139,34 @@ def s_obligation(o: TPRAControlObligation) -> dict:
     }
 
 
+def _condition_stats(conditions) -> tuple:
+    """(open, overdue) counts over an approval's tracked conditions. A legacy plain
+    -string condition counts as open/untracked."""
+    now = datetime.utcnow()
+    open_ct = overdue_ct = 0
+    for c in (conditions or []):
+        if not isinstance(c, dict):
+            open_ct += 1
+            continue
+        if c.get("status") == "closed":
+            continue
+        open_ct += 1
+        due = c.get("due_date")
+        if due:
+            try:
+                if datetime.fromisoformat(str(due).replace("Z", "")) < now:
+                    overdue_ct += 1
+            except (ValueError, TypeError):
+                pass
+    return open_ct, overdue_ct
+
+
 def s_approval(a: TPRAApproval) -> dict:
+    _open, _overdue = _condition_stats(a.conditions)
     return {
         "id": a.id, "assessment_id": a.assessment_id, "decision": a.decision,
         "conditions": a.conditions or [], "recommendation": a.recommendation,
+        "open_conditions": _open, "overdue_conditions": _overdue,
         "rationale": a.rationale, "approver_id": a.approver_id,
         "residual_rating": a.residual_rating, "created_at": a.created_at,
     }
@@ -267,6 +291,11 @@ class ApprovalIn(BaseModel):
     decision: Literal["approve", "approve_with_conditions", "defer", "reject"]
     conditions: Optional[list] = None
     rationale: Optional[str] = None
+
+class ConditionUpdate(BaseModel):
+    status: Optional[Literal["open", "closed"]] = None
+    owner_id: Optional[int] = None
+    due_date: Optional[datetime] = None
 
 class SignalIn(BaseModel):
     signal_type: str
@@ -1110,9 +1139,29 @@ def create_approval(assessment_id: int, body: ApprovalIn, db: Session = Depends(
                 detail=f"Cannot approve while {_open_crit} unmitigated critical finding(s) remain — remediate or formally accept them first.",
             )
     rec = service.recommend_decision(a.residual_rating or "medium", service.count_open_critical(db, a.id))
+    # Conditions are TRACKED items chased to closure, not write-once text: each
+    # carries a stable id + status + owner + due date, so open/overdue conditions
+    # can be surfaced instead of captured-and-forgotten. Accepts plain strings
+    # (legacy UI) or structured dicts.
+    _conditions = []
+    for i, c in enumerate(body.conditions or []):
+        if isinstance(c, dict):
+            _text = str(c.get("text") or c.get("condition") or "").strip()
+            if not _text:
+                continue
+            _conditions.append({
+                "id": str(c.get("id") or f"c{i}"), "text": _text,
+                "status": c.get("status") or "open", "owner_id": c.get("owner_id"),
+                "due_date": c.get("due_date"), "resolved_at": c.get("resolved_at"),
+            })
+        elif str(c).strip():
+            _conditions.append({
+                "id": f"c{i}", "text": str(c).strip(), "status": "open",
+                "owner_id": None, "due_date": None, "resolved_at": None,
+            })
     ap = TPRAApproval(
         tenant_id=a.tenant_id, vendor_id=a.vendor_id, assessment_id=a.id,
-        decision=body.decision, conditions=body.conditions or [], recommendation=rec,
+        decision=body.decision, conditions=_conditions, recommendation=rec,
         rationale=body.rationale, approver_id=user.id, residual_rating=a.residual_rating,
     )
     db.add(ap)
@@ -1120,6 +1169,39 @@ def create_approval(assessment_id: int, body: ApprovalIn, db: Session = Depends(
     service.write_audit(db, a.tenant_id, entity="approval", action="create",
                         vendor_id=a.vendor_id, assessment_id=a.id, entity_id=ap.id, actor_id=user.id,
                         to_value=body.decision, reason=body.rationale)
+    db.commit()
+    return s_approval(ap)
+
+
+@router.patch("/approvals/{approval_id}/conditions/{condition_id}")
+def update_condition(approval_id: int, condition_id: str, body: ConditionUpdate,
+                     db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    """Track an approval condition to closure — resolve it, or assign an owner/due
+    date. The append-only decision itself is never changed; only the condition's
+    state moves, so 'approve with conditions' is chased rather than forgotten."""
+    tids = _tids(user, db)
+    ap = _get(db, TPRAApproval, approval_id, tids)
+    rbac.require_write(db, user, "approvals", "edit")
+    new_conditions = []
+    found = False
+    for c in (ap.conditions or []):
+        c = dict(c) if isinstance(c, dict) else {"id": None, "text": str(c), "status": "open"}
+        if str(c.get("id")) == str(condition_id):
+            if body.status is not None:
+                c["status"] = body.status
+                c["resolved_at"] = datetime.utcnow().isoformat() if body.status == "closed" else None
+            if body.owner_id is not None:
+                c["owner_id"] = body.owner_id
+            if body.due_date is not None:
+                c["due_date"] = body.due_date.isoformat()
+            found = True
+        new_conditions.append(c)
+    if not found:
+        raise HTTPException(status_code=404, detail="Condition not found")
+    ap.conditions = new_conditions  # new list + copied dicts flags the JSON column dirty
+    service.write_audit(db, ap.tenant_id, entity="approval", action="update",
+                        vendor_id=ap.vendor_id, assessment_id=ap.assessment_id, entity_id=ap.id,
+                        actor_id=user.id, extra={"condition": condition_id, "status": body.status})
     db.commit()
     return s_approval(ap)
 
