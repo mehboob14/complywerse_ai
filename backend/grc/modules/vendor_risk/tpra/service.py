@@ -721,6 +721,15 @@ def create_reassessment_version(
     db.flush()
     vendor.active_assessment_id = new.id
     vendor.lifecycle_stage = "dd_planning"
+    # Reset the review clock — opening a reassessment schedules the NEXT one from the
+    # tier cadence (single source of truth = stages.cadence_days_for, honouring the
+    # tenant's admin-configured cadence), so a just-reassessed vendor no longer shows
+    # overdue against a stale target date.
+    _cfg = get_tiering_config(db, vendor.tenant_id)
+    _cad_override = _cfg.get("cadence_days") if isinstance(_cfg.get("cadence_days"), dict) else None
+    _cadence = cadence_days_for(new.inherent_tier or vendor.tier, _cad_override)
+    vendor.reassessment_cadence_days = _cadence
+    vendor.next_reassessment_date = datetime.utcnow() + timedelta(days=_cadence)
 
     # New stage instances; mark tiering complete (carried over), planning active.
     ensure_stage_instances(db, new)

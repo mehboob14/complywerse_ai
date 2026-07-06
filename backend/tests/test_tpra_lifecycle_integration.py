@@ -525,6 +525,24 @@ def test_approval_decision_must_be_a_valid_enum(db):
         api.ApprovalIn(decision="yolo")
 
 
+# ── Wave 2: reassessment cadence reset ───────────────────────────────────────
+
+def test_reassessment_resets_the_cadence_clock(db):
+    v = _vendor(db, tier="high")
+    a1 = service.ensure_active_assessment(db, v, actor_id=1)
+    service.run_tiering(db, v, a1, actor_id=1)
+    db.commit()
+    # Simulate an overdue next-review date on the prior cycle.
+    v.next_reassessment_date = datetime.utcnow() - timedelta(days=10)
+    db.commit()
+    service.create_reassessment_version(db, v, actor_id=1, reason="annual review")
+    db.commit()
+    # Completing/opening the reassessment advanced the clock to a future date and
+    # recorded the cadence (no longer overdue against a stale target).
+    assert v.next_reassessment_date > datetime.utcnow()
+    assert v.reassessment_cadence_days and v.reassessment_cadence_days > 0
+
+
 def test_portfolio_snapshot_aggregates_active_vendors(db):
     v1 = _vendor(db, name="V1")
     v1.inherent_risk_score, v1.residual_risk_score = 80.0, 40.0
