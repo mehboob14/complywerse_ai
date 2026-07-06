@@ -108,7 +108,7 @@ export default function FindingsRegisterPage() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {items.map((f) => (
-                  <tr key={f.id} onClick={() => router.push(`/vendor-risk/vendors/${f.vendor_id}`)}
+                  <tr key={f.id} onClick={() => router.push(`/vendor-risk/vendors/${f.vendor_id}?stage=findings&finding=${f.id}`)}
                     className="cursor-pointer hover:bg-gray-50">
                     <td className="px-4 py-2.5">
                       <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${sevBadgeCls(f.severity)}`}>{titleCase(f.severity)}</span>

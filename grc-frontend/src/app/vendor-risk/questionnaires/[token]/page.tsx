@@ -79,6 +79,19 @@ export default function ExternalQuestionnairePage() {
     return data.questions.filter((question) => question.required && !(responses[question.id] || '').toString().trim());
   }, [data, responses]);
 
+  // Completeness across REQUIRED questions — drives the sidebar progress meter
+  // and the submit-gate messaging. (Client-side enforcement is preserved below;
+  // this only surfaces progress, it does not weaken the required-answer check.)
+  const requiredTotal = useMemo(
+    () => (data?.questions || []).filter((q) => q.required).length,
+    [data],
+  );
+  const requiredAnswered = Math.max(0, requiredTotal - unansweredRequired.length);
+  const requiredComplete = requiredTotal === 0 || unansweredRequired.length === 0;
+  const requiredPct = requiredTotal === 0 ? 100 : Math.round((requiredAnswered / requiredTotal) * 100);
+
+  const isAnswered = (question: Question) => !!(responses[question.id] || '').toString().trim();
+
   const updateResponse = (questionId: string, value: string) => {
     setResponses((prev) => ({ ...prev, [questionId]: value }));
   };
@@ -114,7 +127,7 @@ export default function ExternalQuestionnairePage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center px-6">
         <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-6 py-4 shadow-sm">
-          <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
+          <Loader2 className="h-5 w-5 animate-spin text-primary-600" />
           <span className="text-sm text-gray-700">Loading questionnaire...</span>
         </div>
       </div>
@@ -141,8 +154,8 @@ export default function ExternalQuestionnairePage() {
         <div className="mb-6 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">
-                <Shield className="h-3.5 w-3.5" />
+              <div className="inline-flex items-center gap-2 rounded-full border border-primary-200 bg-primary-50 px-3 py-1 text-xs font-medium text-primary-700">
+                <Shield className="h-3.5 w-3.5" strokeWidth={1.75} />
                 Vendor Questionnaire
               </div>
               <h1 className="mt-4 text-3xl font-semibold tracking-tight text-gray-900">
@@ -188,7 +201,7 @@ export default function ExternalQuestionnairePage() {
           <div className="space-y-6">
             <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
               <div className="mb-5 flex items-center gap-2 text-gray-900">
-                <FileText className="h-5 w-5 text-blue-600" />
+                <FileText className="h-5 w-5 text-primary-600" strokeWidth={1.75} />
                 <h2 className="text-lg font-semibold">Response Details</h2>
               </div>
               <div className="grid gap-4 md:grid-cols-2">
@@ -198,7 +211,7 @@ export default function ExternalQuestionnairePage() {
                     type="text"
                     value={respondentName}
                     onChange={(e) => setRespondentName(e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
                     placeholder="Your name"
                   />
                 </label>
@@ -208,7 +221,7 @@ export default function ExternalQuestionnairePage() {
                     type="email"
                     value={respondentEmail}
                     onChange={(e) => setRespondentEmail(e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
                     placeholder="you@company.com"
                   />
                 </label>
@@ -216,25 +229,42 @@ export default function ExternalQuestionnairePage() {
             </section>
 
             <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-              <div className="mb-5 flex items-center gap-2 text-gray-900">
-                <FileText className="h-5 w-5 text-blue-600" />
-                <h2 className="text-lg font-semibold">Questionnaire</h2>
+              <div className="mb-5 flex items-center justify-between gap-2 text-gray-900">
+                <div className="flex items-center gap-2">
+                  <FileText className="h-5 w-5 text-primary-600" strokeWidth={1.75} />
+                  <h2 className="text-lg font-semibold">Questionnaire</h2>
+                </div>
+                {requiredTotal > 0 && (
+                  <span
+                    className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${
+                      requiredComplete ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                    }`}
+                  >
+                    {requiredComplete ? <CheckCircle className="h-3.5 w-3.5" strokeWidth={1.75} /> : <AlertCircle className="h-3.5 w-3.5" strokeWidth={1.75} />}
+                    {requiredAnswered}/{requiredTotal} required answered
+                  </span>
+                )}
               </div>
 
               <div className="space-y-5">
                 {(data?.questions || []).map((question, index) => {
                   const currentValue = responses[question.id] || '';
+                  const answered = isAnswered(question);
+                  const needsAnswer = question.required && !answered;
                   return (
-                    <div key={question.id} className="rounded-xl border border-gray-200 bg-gray-50 p-5">
+                    <div
+                      key={question.id}
+                      className={`rounded-xl border bg-gray-50 p-5 ${needsAnswer ? 'border-amber-300 ring-1 ring-amber-100' : 'border-gray-200'}`}
+                    >
                       <div className="mb-3 flex items-start justify-between gap-4">
                         <div>
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-medium text-blue-700">
+                            <span className="rounded-full bg-primary-100 px-2.5 py-1 text-xs font-medium text-primary-700">
                               Q{index + 1}
                             </span>
                             {question.required && (
-                              <span className="rounded-full bg-rose-100 px-2.5 py-1 text-xs font-medium text-rose-700">
-                                Required
+                              <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-1 text-xs font-medium text-rose-700">
+                                <span aria-hidden="true">*</span> Required
                               </span>
                             )}
                             {question.evidence_required && (
@@ -242,8 +272,21 @@ export default function ExternalQuestionnairePage() {
                                 Evidence requested
                               </span>
                             )}
+                            {needsAnswer && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-700">
+                                <AlertCircle className="h-3 w-3" strokeWidth={1.75} /> Needs an answer
+                              </span>
+                            )}
+                            {question.required && answered && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-700">
+                                <CheckCircle className="h-3 w-3" strokeWidth={1.75} /> Answered
+                              </span>
+                            )}
                           </div>
-                          <p className="mt-3 text-sm leading-6 text-gray-900">{question.text}</p>
+                          <p className="mt-3 text-sm leading-6 text-gray-900">
+                            {question.text}
+                            {question.required && <span className="ml-1 text-rose-600" aria-hidden="true">*</span>}
+                          </p>
                         </div>
                       </div>
 
@@ -251,7 +294,7 @@ export default function ExternalQuestionnairePage() {
                         <textarea
                           value={currentValue}
                           onChange={(e) => updateResponse(question.id, e.target.value)}
-                          className="min-h-[120px] w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                          className="min-h-[120px] w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
                           placeholder="Enter your answer"
                         />
                       )}
@@ -260,7 +303,7 @@ export default function ExternalQuestionnairePage() {
                         <select
                           value={currentValue}
                           onChange={(e) => updateResponse(question.id, e.target.value)}
-                          className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                          className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
                         >
                           <option value="">Select an answer</option>
                           <option value="yes">Yes</option>
@@ -272,7 +315,7 @@ export default function ExternalQuestionnairePage() {
                         <select
                           value={currentValue}
                           onChange={(e) => updateResponse(question.id, e.target.value)}
-                          className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                          className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
                         >
                           <option value="">Select an option</option>
                           {(question.options || []).map((option) => (
@@ -287,7 +330,7 @@ export default function ExternalQuestionnairePage() {
                         <select
                           value={currentValue}
                           onChange={(e) => updateResponse(question.id, e.target.value)}
-                          className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                          className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
                         >
                           <option value="">Select a rating</option>
                           {[1, 2, 3, 4, 5].map((rating) => (
@@ -307,6 +350,32 @@ export default function ExternalQuestionnairePage() {
           <aside className="space-y-6">
             <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm sticky top-6">
               <h2 className="text-lg font-semibold text-gray-900">Summary</h2>
+
+              {/* Completeness meter for required questions. */}
+              {requiredTotal > 0 && (
+                <div className="mt-4">
+                  <div className="mb-1 flex items-center justify-between text-xs font-medium">
+                    <span className="text-gray-600">Required complete</span>
+                    <span className={requiredComplete ? 'text-emerald-600' : 'text-amber-600'}>
+                      {requiredAnswered}/{requiredTotal}
+                    </span>
+                  </div>
+                  <div
+                    className="h-2 overflow-hidden rounded-full bg-gray-100"
+                    role="progressbar"
+                    aria-valuemin={0}
+                    aria-valuemax={requiredTotal}
+                    aria-valuenow={requiredAnswered}
+                    aria-label="Required questions completed"
+                  >
+                    <div
+                      className={`h-full rounded-full transition-all ${requiredComplete ? 'bg-emerald-500' : 'bg-amber-500'}`}
+                      style={{ width: `${requiredPct}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
               <div className="mt-4 space-y-3 text-sm text-gray-600">
                 <div className="flex items-center justify-between">
                   <span>Questions</span>
@@ -314,14 +383,16 @@ export default function ExternalQuestionnairePage() {
                 </div>
                 <div className="flex items-center justify-between">
                   <span>Required</span>
-                  <span className="font-medium text-gray-900">{data?.questions.filter((q) => q.required).length || 0}</span>
+                  <span className="font-medium text-gray-900">{requiredTotal}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span>Evidence items</span>
                   <span className="font-medium text-gray-900">{data?.questions.filter((q) => q.evidence_required).length || 0}</span>
                 </div>
                 <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-xs leading-5 text-gray-600">
-                  Responses can be saved as drafts before final submission.
+                  Responses can be saved as drafts before final submission. All questions marked
+                  <span className="mx-1 font-medium text-rose-600">Required</span>
+                  must be answered before you can submit.
                 </div>
               </div>
 
@@ -337,11 +408,20 @@ export default function ExternalQuestionnairePage() {
                 <button
                   onClick={() => submitQuestionnaire(true)}
                   disabled={submitting}
-                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="cw-btn-primary flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" strokeWidth={1.75} />}
                   Submit Questionnaire
                 </button>
+                {/* Client-side gate is enforced in submitQuestionnaire(true); this
+                    just tells the vendor what's still outstanding. */}
+                {!requiredComplete && (
+                  <p className="flex items-start gap-1.5 text-xs text-amber-700">
+                    <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
+                    {unansweredRequired.length} required question{unansweredRequired.length === 1 ? '' : 's'} still need
+                    {unansweredRequired.length === 1 ? 's' : ''} an answer before you can submit.
+                  </p>
+                )}
               </div>
             </section>
           </aside>

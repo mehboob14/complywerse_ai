@@ -44,7 +44,9 @@ export default function VendorAssessmentsPage() {
   const [search, setSearch] = useState('');
   const [tierFilter, setTierFilter] = useState('all');
   const [stageFilter, setStageFilter] = useState('all');
-  const [hideNotStarted, setHideNotStarted] = useState(false);
+  // Default ON: Assessments reads as the in-flight / overdue work queue, so
+  // vendors awaiting onboarding are hidden until the analyst opts to see them.
+  const [hideNotStarted, setHideNotStarted] = useState(true);
   const [showStart, setShowStart] = useState(false);
   const [startVendorId, setStartVendorId] = useState('');
 
