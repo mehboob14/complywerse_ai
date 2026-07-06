@@ -4470,6 +4470,8 @@ export const frameworkTemplatesApi = {
       apiClient.post(`/framework-templates/registers/${registerType}/reset`, {}, { params }),
     applyAI: (registerType: string, params: { journey_id: number }, items: Array<{ id: number; fields: Record<string, unknown> }>) =>
       apiClient.post(`/framework-templates/registers/${registerType}/apply-ai`, items, { params }),
+    frameworkRisks: (params: { journey_id: number; framework_name?: string }) =>
+      apiClient.get('/framework-templates/registers/framework-risks', { params }),
   },
   ai: {
     register: (body: { register_type: string; framework_name?: string; rows: Array<Record<string, unknown>> }) =>

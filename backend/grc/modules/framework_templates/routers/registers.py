@@ -9,7 +9,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, Query, HTTPException, status
 from sqlalchemy.orm import Session
-from sqlalchemy import asc
+from sqlalchemy import asc, or_
 from pydantic import BaseModel
 
 from ....models import (
@@ -50,6 +50,7 @@ class RegisterEntryPayload(BaseModel):
     owner_name: Optional[str] = None
     target_date: Optional[datetime] = None
     evidence_id: Optional[int] = None
+    risk_register_id: Optional[int] = None
     data: Optional[Dict[str, Any]] = None
 
 
@@ -169,6 +170,55 @@ def _summary(entries: List[FrameworkRegisterEntry], register_type: str) -> Dict[
 
 
 # ── Endpoints ────────────────────────────────────────────────────────────────
+# NOTE: literal routes must be declared before the "/{register_type}" catch-all
+# so "/framework-risks" isn't parsed as a register_type.
+@router.get("/framework-risks")
+def framework_risks(
+    journey_id: int = Query(...),
+    framework_name: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    user: GRCUser = Depends(require_auth),
+):
+    """Risks created or moved from this framework — for the Risk Treatment picker.
+
+    Includes risks linked from any of this journey's register entries (moved-to-risk)
+    plus risks tagged under this framework in the ERM register.
+    """
+    tid = _tenant_id(user, db)
+    linked_ids = [
+        row[0] for row in db.query(FrameworkRegisterEntry.risk_register_id).filter(
+            FrameworkRegisterEntry.tenant_id == tid,
+            FrameworkRegisterEntry.journey_id == journey_id,
+            FrameworkRegisterEntry.risk_register_id.isnot(None),
+        ).all() if row[0] is not None
+    ]
+
+    conds = []
+    if linked_ids:
+        conds.append(Risk.id.in_(linked_ids))
+    fw = (framework_name or "").strip()
+    if fw:
+        conds.append(Risk.register_type == fw)
+        conds.append(Risk.source_reference.ilike(f"{fw}%"))
+
+    q = db.query(Risk).filter(Risk.tenant_id == tid)
+    q = q.filter(or_(*conds)) if conds else q.filter(Risk.id.in_(linked_ids or [-1]))
+    risks = q.order_by(Risk.created_at.desc()).limit(300).all()
+    return {
+        "risks": [{
+            "id": r.id,
+            "title": r.title,
+            "description": r.description,
+            "category": r.category,
+            "status": r.status,
+            "register_type": r.register_type,
+            "source_reference": r.source_reference,
+            "inherent_score": r.inherent_score,
+            "residual_score": r.residual_score,
+        } for r in risks]
+    }
+
+
 @router.get("/{register_type}")
 def list_entries(
     register_type: str,

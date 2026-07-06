@@ -61,6 +61,8 @@ export interface RegisterColumn {
   options?: SelectOption[];
   minWidth?: string;
   grow?: boolean;
+  /** When set, the edit-form field for this column is a picker instead of a plain input. */
+  picker?: 'framework_risks';
 }
 
 export interface RegisterConfig {
@@ -160,7 +162,7 @@ export const REGISTER_CONFIGS: Record<string, RegisterConfig> = {
     description: 'Link each risk to a treatment option and an Annex A control, assign an owner and track residual risk. Bring risks over from the register or add them here.',
     moveToRisk: true,
     columns: [
-      { key: 'reference', label: 'Risk ID', type: 'text', minWidth: '100px' },
+      { key: 'reference', label: 'Risk', type: 'text', minWidth: '120px', picker: 'framework_risks' },
       { key: 'title', label: 'Risk description', type: 'textarea', grow: true },
       { key: 'treatment_option', label: 'Treatment', type: 'select', options: TREATMENT, minWidth: '130px' },
       { key: 'linked_control', label: 'Annex A / control', type: 'text', minWidth: '130px' },

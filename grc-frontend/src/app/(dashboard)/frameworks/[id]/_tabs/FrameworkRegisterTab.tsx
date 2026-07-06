@@ -25,6 +25,15 @@ interface Props {
 
 type Draft = Partial<RegisterEntry>;
 
+interface FrameworkRisk {
+  id: number;
+  title: string;
+  description?: string | null;
+  category?: string | null;
+  status?: string | null;
+  register_type?: string | null;
+}
+
 export default function FrameworkRegisterTab({ registerType, journeyId, frameworkId, frameworkName, tenantUsers }: Props) {
   const config = REGISTER_CONFIGS[registerType];
   const qc = useQueryClient();
@@ -37,6 +46,14 @@ export default function FrameworkRegisterTab({ registerType, journeyId, framewor
     enabled: !!journeyId,
   });
   const rows = useMemo(() => data?.entries || [], [data]);
+
+  // Risk Treatment: risks created or moved from this framework, for the picker.
+  const { data: frameworkRisksData } = useQuery({
+    queryKey: ['ft-framework-risks', journeyId, frameworkName],
+    queryFn: async () => (await frameworkTemplatesApi.registers.frameworkRisks({ journey_id: journeyId, framework_name: frameworkName })).data as { risks: FrameworkRisk[] },
+    enabled: !!journeyId && registerType === 'risk_treatment',
+  });
+  const frameworkRisks = frameworkRisksData?.risks || [];
 
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState<{ mode: 'add' | 'edit'; draft: Draft } | null>(null);
@@ -147,6 +164,33 @@ export default function FrameworkRegisterTab({ registerType, journeyId, framewor
     const val = editing?.draft[col.key];
     const set = (v: unknown) => setEditing((prev) => (prev ? { ...prev, draft: { ...prev.draft, [col.key]: v } } : prev));
     const cls = 'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500/30';
+    if (col.picker === 'framework_risks') {
+      const selectedId = (editing?.draft.risk_register_id as number | null) ?? null;
+      return (
+        <div>
+          <select
+            value={selectedId ?? ''}
+            onChange={(e) => {
+              const rid = e.target.value ? Number(e.target.value) : null;
+              const risk = frameworkRisks.find((r) => r.id === rid);
+              setEditing((prev) => prev ? { ...prev, draft: {
+                ...prev.draft,
+                risk_register_id: rid,
+                reference: risk ? `#${risk.id}` : prev.draft.reference,
+                title: risk ? (risk.title || prev.draft.title || '') : prev.draft.title,
+              } } : prev);
+            }}
+            className={cls}
+          >
+            <option value="">Select a risk from this framework…</option>
+            {frameworkRisks.map((r) => <option key={r.id} value={r.id}>#{r.id} — {r.title}</option>)}
+          </select>
+          {frameworkRisks.length === 0 && (
+            <p className="mt-1 text-[11px] text-slate-400">No framework risks yet. Move risks over from Gap Analysis or Internal Audit (or add them to the ERM register under this framework), then they’ll appear here.</p>
+          )}
+        </div>
+      );
+    }
     if (col.type === 'select') {
       return (
         <select value={(val as string) ?? ''} onChange={(e) => set(e.target.value)} className={cls}>
@@ -179,6 +223,8 @@ export default function FrameworkRegisterTab({ registerType, journeyId, framewor
     const d = editing.draft;
     const body: Record<string, unknown> = {};
     for (const col of config.columns) body[col.key as string] = d[col.key] ?? null;
+    // Persist the risk link chosen in the Risk-Treatment picker.
+    if (d.risk_register_id !== undefined) body.risk_register_id = d.risk_register_id ?? null;
     saveMut.mutate(editing.mode === 'add' ? { mode: 'add', body } : { mode: 'edit', id: d.id as number, body });
   };
 
