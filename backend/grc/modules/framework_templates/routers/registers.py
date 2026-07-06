@@ -350,7 +350,16 @@ def move_entry_to_risk(
 
     label = REGISTER_LABELS.get(e.register_type, e.register_type)
     fw_name = (body.framework_name or "ISO 27001").strip()
-    title = (body.title or e.title or e.reference or f"{label} finding").strip()[:255]
+    data = e.data or {}
+    # For generated-framework rows the content lives in data — derive a title/desc,
+    # preferring a meaningful (non-short, non-numeric) value over a ref/id column.
+    def _is_meaningful(v):
+        s = str(v).strip()
+        return len(s) > 3 and not s.replace(".", "").replace(",", "").isdigit()
+    data_title = next((str(v).strip() for v in data.values() if v and _is_meaningful(v)), "")
+    if not data_title:
+        data_title = next((str(v).strip() for v in data.values() if v and str(v).strip()), "")
+    title = (body.title or e.title or e.reference or data_title or f"{label} finding").strip()[:255]
     # Compose a useful description from the entry's fields.
     parts = []
     if e.reference:
@@ -363,6 +372,10 @@ def move_entry_to_risk(
                      ("Notes", e.notes), ("Evidence reviewed", e.evidence_reviewed)):
         if val:
             parts.append(f"{lbl}: {val}")
+    if not e.title and not e.reference and data:
+        for k, v in list(data.items())[:10]:
+            if v and str(v).strip():
+                parts.append(f"{k}: {str(v).strip()}")
     description = "\n".join(parts) if parts else None
 
     risk = Risk(
@@ -424,6 +437,12 @@ def apply_ai(
     """Apply AI-suggested assessment fields to existing rows (batch, one round-trip)."""
     _validate_type(register_type)
     tid = _tenant_id(user, db)
+    # ISO registers apply to fixed columns; generated registers apply into data[key].
+    is_iso = register_type in REGISTER_SEEDS
+    valid_data_keys = set()
+    if not is_iso:
+        rd = D.register_def(register_type)
+        valid_data_keys = {c.get("key") for c in (rd or {}).get("columns", [])}
     updated = 0
     for it in items:
         e = db.query(FrameworkRegisterEntry).filter(
@@ -435,8 +454,13 @@ def apply_ai(
         if not e:
             continue
         for k, v in (it.fields or {}).items():
-            if k in _AI_APPLIABLE and v is not None and str(v) != "":
-                setattr(e, k, v)
+            if v is None or str(v) == "":
+                continue
+            if is_iso:
+                if k in _AI_APPLIABLE:
+                    setattr(e, k, v)
+            elif k in valid_data_keys:
+                e.data = {**(e.data or {}), k: v}
         updated += 1
     db.commit()
     entries = _query(db, tid, journey_id, register_type).all()

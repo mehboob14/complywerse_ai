@@ -19,6 +19,13 @@ from ....models import GRCUser, get_db
 from ....routers.auth_router import require_auth, get_user_tenants
 from ....config import get_openai_api_key, get_openai_model
 from ..seed_data import REGISTER_TYPES, REGISTER_LABELS, DOC_TYPES
+from .. import definitions as D
+
+# Which dynamic-framework columns the AI should propose values for.
+_DYN_ASSESS = re.compile(
+    r"status|result|rating|level|priority|severity|gap|action|note|remediat|response|"
+    r"finding|comment|treatment|recommend|conform|complian|maturity|implement|disposition|"
+    r"outcome|applicab|decision|\brisk\b", re.I)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/ai", tags=["Framework Template AI"])
@@ -99,35 +106,71 @@ class RegisterAIRequest(BaseModel):
 
 @router.post("/register")
 def register_ai(body: RegisterAIRequest, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
-    if body.register_type not in REGISTER_TYPES:
+    if body.register_type not in REGISTER_TYPES and body.register_type not in D.all_register_types():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unknown register_type")
     if not get_user_tenants(user, db):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tenant context")
 
-    label = REGISTER_LABELS.get(body.register_type, body.register_type)
-    fields = _REGISTER_FIELDS[body.register_type]
-    rows = [{
-        "id": r.get("id"),
-        "reference": r.get("reference"),
-        "title": r.get("title"),
-        "status": r.get("status"),
-        "result": r.get("result"),
-        "action": r.get("action"),
-        "notes": r.get("notes"),
-    } for r in body.rows][:60]
+    # ── ISO 27001 hand-tuned registers ──
+    if body.register_type in _REGISTER_FIELDS:
+        label = REGISTER_LABELS.get(body.register_type, body.register_type)
+        fields = _REGISTER_FIELDS[body.register_type]
+        rows = [{
+            "id": r.get("id"), "reference": r.get("reference"), "title": r.get("title"),
+            "status": r.get("status"), "result": r.get("result"),
+            "action": r.get("action"), "notes": r.get("notes"),
+        } for r in body.rows][:60]
+        system = "You are a senior ISO 27001:2022 lead auditor and ISMS consultant. Respond with valid JSON only."
+        user_prompt = (
+            f"Framework: {body.framework_name}. Register: {label}.\n"
+            f"For EACH row below, propose values for these fields: {fields}.\n"
+            "Base each assessment on typical ISO 27001:2022 expectations for that clause/control. "
+            "Keep any action/notes text specific and concise (max ~220 chars). Do not change the reference or title.\n\n"
+            f"Rows (JSON): {json.dumps(rows, ensure_ascii=False)}\n\n"
+            'Return JSON of the form: {"suggestions":[{"id":<the row id>, <the fields above>, '
+            '"rationale":"<one short sentence>"}], "summary":"<2-3 sentence overall summary>"}'
+        )
+        out = _chat(system, user_prompt, max_tokens=3800)
+        return {"suggestions": out.get("suggestions", []) or [], "summary": out.get("summary", "") or "", "keys": []}
 
-    system = "You are a senior ISO 27001:2022 lead auditor and ISMS consultant. Respond with valid JSON only."
+    # ── Generated framework registers (columns from the definition) ──
+    rd = D.register_def(body.register_type)
+    if not rd:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unknown register_type")
+    cols = rd.get("columns", [])
+    assessable = [c for c in cols if c.get("type") == "select"
+                  or (c.get("type") in ("textarea", "text") and not c.get("picker") and _DYN_ASSESS.search(c.get("label", "")))]
+    if not assessable:
+        assessable = [c for c in cols if c.get("type") == "select"]
+    keys = [c["key"] for c in assessable]
+    if not keys:
+        return {"suggestions": [], "summary": "This register has no assessable fields for AI.", "keys": []}
+
+    field_desc = []
+    for c in assessable:
+        if c.get("type") == "select" and c.get("options"):
+            opts = "/".join(o["value"] for o in c["options"] if o.get("value"))
+            field_desc.append(f'"{c["key"]}" (one of: {opts})')
+        else:
+            field_desc.append(f'"{c["key"]}" (concise text)')
+    ident = [c for c in cols if c["key"] not in keys]
+    rows = []
+    for r in body.rows[:60]:
+        ctx = {c["key"]: r.get(c["key"]) for c in ident if r.get(c["key"])}
+        ctx["id"] = r.get("id")
+        rows.append(ctx)
+
+    system = f"You are a senior GRC compliance auditor and consultant for {body.framework_name}. Respond with valid JSON only."
     user_prompt = (
-        f"Framework: {body.framework_name}. Register: {label}.\n"
-        f"For EACH row below, propose values for these fields: {fields}.\n"
-        "Base each assessment on typical ISO 27001:2022 expectations for that clause/control. "
-        "Keep any action/notes text specific and concise (max ~220 chars). Do not change the reference or title.\n\n"
+        f"Register: {rd.get('label', body.register_type)}.\n"
+        f"For EACH row below, propose values for these fields: {', '.join(field_desc)}.\n"
+        f"Base each assessment on typical {body.framework_name} expectations for that row's subject. "
+        "Keep free text concise (max ~200 chars). Use only the allowed values for choice fields.\n\n"
         f"Rows (JSON): {json.dumps(rows, ensure_ascii=False)}\n\n"
-        'Return JSON of the form: {"suggestions":[{"id":<the row id>, <the fields above>, '
-        '"rationale":"<one short sentence>"}], "summary":"<2-3 sentence overall summary>"}'
+        'Return JSON: {"suggestions":[{"id":<the row id>, <the fields above>}], "summary":"<2-3 sentence overall summary>"}'
     )
     out = _chat(system, user_prompt, max_tokens=3800)
-    return {"suggestions": out.get("suggestions", []) or [], "summary": out.get("summary", "") or ""}
+    return {"suggestions": out.get("suggestions", []) or [], "summary": out.get("summary", "") or "", "keys": keys}
 
 
 class DocumentAIRequest(BaseModel):

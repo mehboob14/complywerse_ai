@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Trash2, RotateCcw, Loader2, Pencil, Search } from 'lucide-react';
+import Link from 'next/link';
+import { Plus, Trash2, RotateCcw, Loader2, Pencil, Search, Sparkles, ShieldAlert, ExternalLink, X } from 'lucide-react';
 import { frameworkTemplatesApi, evidenceApi } from '@/lib/api';
 import { AnimatedModal, RightSlidePanel, MultiSelectDropdown } from '@/components/ui';
 import { useToast } from '@/components/ui/ToastProvider';
@@ -28,6 +29,7 @@ interface DynEntry {
   seq: number;
   is_seed: boolean;
   data: Record<string, unknown>;
+  risk_register_id?: number | null;
 }
 interface Props {
   config: DynRegisterConfig;
@@ -85,6 +87,9 @@ export default function FrameworkDynamicRegisterTab({ config, journeyId, framewo
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState<{ mode: 'add' | 'edit'; id?: number; draft: Record<string, unknown> } | null>(null);
   const [deleteRow, setDeleteRow] = useState<DynEntry | null>(null);
+  const [moveCtx, setMoveCtx] = useState<{ entry: DynEntry; title: string; description: string } | null>(null);
+  const [aiSummary, setAiSummary] = useState<string | null>(null);
+  const [busyRowId, setBusyRowId] = useState<number | null>(null);
 
   const invalidate = () => qc.invalidateQueries({ queryKey });
   const userName = (v: unknown) => String(v ?? '');
@@ -105,6 +110,63 @@ export default function FrameworkDynamicRegisterTab({ config, journeyId, framewo
     mutationFn: () => frameworkTemplatesApi.registers.reset(config.type, { journey_id: journeyId, framework_id: frameworkId }),
     onSuccess: invalidate,
   });
+  const aiMut = useMutation({
+    mutationFn: async (subset: DynEntry[]) => {
+      const res = await frameworkTemplatesApi.ai.register({
+        register_type: config.type, framework_name: frameworkName,
+        rows: subset.map((r) => ({ id: r.id, ...(r.data || {}) })),
+      });
+      const out = res.data as { suggestions: Array<Record<string, unknown>>; summary: string; keys: string[] };
+      const keys = out.keys || [];
+      const items = (out.suggestions || [])
+        .filter((s) => s && s.id != null)
+        .map((s) => {
+          const fields: Record<string, unknown> = {};
+          keys.forEach((k) => { if (s[k] != null && s[k] !== '') fields[k] = s[k]; });
+          return { id: Number(s.id), fields };
+        })
+        .filter((it) => Object.keys(it.fields).length > 0);
+      if (items.length) await frameworkTemplatesApi.registers.applyAI(config.type, { journey_id: journeyId }, items);
+      return { summary: out.summary || '', count: items.length };
+    },
+    onSuccess: (r) => {
+      setBusyRowId(null); invalidate(); setAiSummary(r.summary || 'AI assessment applied.');
+      toast({ type: 'success', title: 'AI assessment applied', message: `${r.count} row${r.count === 1 ? '' : 's'} updated.` });
+    },
+    onError: (e: { response?: { data?: { detail?: string } } }) => {
+      setBusyRowId(null);
+      toast({ type: 'error', title: 'AI assist failed', message: e?.response?.data?.detail || 'Try again.' });
+    },
+  });
+  const moveMut = useMutation({
+    mutationFn: ({ id, title, description }: { id: number; title: string; description: string }) =>
+      frameworkTemplatesApi.registers.moveToRisk(id, { title, description, framework_name: frameworkName }),
+    onSuccess: (res) => {
+      setMoveCtx(null); invalidate();
+      const riskId = (res.data as { risk_id?: number })?.risk_id;
+      toast({ type: 'success', title: 'Moved to risk register', message: riskId ? `Created Risk #${riskId}` : 'Risk created' });
+    },
+    onError: () => toast({ type: 'error', title: 'Could not create risk', message: 'Please try again.' }),
+  });
+
+  // Most meaningful value in a row — used as the default risk title.
+  const rowTitle = (row: DynEntry) => {
+    const data = row.data || {};
+    for (const c of config.columns) {
+      if (c.type === 'textarea' && !c.picker) {
+        const s = String(data[c.key] ?? '').trim();
+        if (s.length > 2) return s;
+      }
+    }
+    for (const c of config.columns) {
+      if (c.type === 'text' && !c.picker) {
+        const s = String(data[c.key] ?? '').trim();
+        if (s.length > 3 && !/^\d+([.,]\d+)?$/.test(s)) return s;
+      }
+    }
+    const vals = Object.values(data).map((x) => String(x ?? '').trim());
+    return vals.find((s) => s.length > 3 && !/^\d+$/.test(s)) || vals.find(Boolean) || '';
+  };
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -176,6 +238,11 @@ export default function FrameworkDynamicRegisterTab({ config, journeyId, framewo
           {config.description && <p className="mt-1 text-sm text-slate-500">{config.description}</p>}
         </div>
         <div className="flex flex-shrink-0 items-center gap-2">
+          <button type="button" onClick={() => aiMut.mutate(rows)} disabled={aiMut.isPending || rows.length === 0}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-700 hover:bg-purple-100 disabled:opacity-50">
+            {aiMut.isPending && busyRowId === null ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" strokeWidth={1.75} />}
+            AI assess all
+          </button>
           <button type="button" onClick={() => resetMut.mutate()} disabled={resetMut.isPending}
             className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50">
             <RotateCcw className="h-3.5 w-3.5" strokeWidth={1.75} /> Reset
@@ -186,6 +253,14 @@ export default function FrameworkDynamicRegisterTab({ config, journeyId, framewo
           </button>
         </div>
       </div>
+
+      {aiSummary && (
+        <div className="flex items-start gap-2 rounded-xl border border-purple-200 bg-purple-50 p-3">
+          <Sparkles className="mt-0.5 h-4 w-4 flex-shrink-0 text-purple-600" strokeWidth={1.75} />
+          <p className="flex-1 text-sm text-purple-900">{aiSummary}</p>
+          <button type="button" onClick={() => setAiSummary(null)} className="text-purple-400 hover:text-purple-700" aria-label="Dismiss"><X className="h-4 w-4" /></button>
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative">
@@ -212,6 +287,20 @@ export default function FrameworkDynamicRegisterTab({ config, journeyId, framewo
                 {config.columns.map((c) => <td key={c.key} className="px-3 py-2.5">{displayCell(row, c)}</td>)}
                 <td className="px-3 py-2.5">
                   <div className="flex items-center justify-end gap-1">
+                    <button type="button" onClick={() => { setBusyRowId(row.id); aiMut.mutate([row]); }} disabled={aiMut.isPending}
+                      className="rounded-md p-1.5 text-slate-400 hover:bg-purple-50 hover:text-purple-600 disabled:opacity-40" title="AI assess this row" aria-label="AI assess row">
+                      {busyRowId === row.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" strokeWidth={1.75} />}
+                    </button>
+                    {row.risk_register_id ? (
+                      <Link href={`/erm/risks/${row.risk_register_id}`} className="inline-flex items-center gap-1 rounded-md bg-rose-50 px-2 py-1 text-[11px] font-medium text-rose-700 hover:bg-rose-100" title="Open linked risk">
+                        Risk #{row.risk_register_id} <ExternalLink className="h-3 w-3" />
+                      </Link>
+                    ) : (
+                      <button type="button" onClick={() => setMoveCtx({ entry: row, title: rowTitle(row).slice(0, 200), description: '' })}
+                        className="rounded-md p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600" title="Move to risk register" aria-label="Move to risk">
+                        <ShieldAlert className="h-3.5 w-3.5" strokeWidth={1.75} />
+                      </button>
+                    )}
                     <button type="button" onClick={() => openEdit(row)} className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700" title="Edit" aria-label="Edit row"><Pencil className="h-3.5 w-3.5" strokeWidth={1.75} /></button>
                     <button type="button" onClick={() => setDeleteRow(row)} className="rounded-md p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600" title="Delete" aria-label="Delete row"><Trash2 className="h-3.5 w-3.5" strokeWidth={1.75} /></button>
                   </div>
@@ -273,6 +362,33 @@ export default function FrameworkDynamicRegisterTab({ config, journeyId, framewo
               <button type="button" onClick={() => deleteMut.mutate(deleteRow.id)} disabled={deleteMut.isPending}
                 className="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-50">
                 {deleteMut.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Delete
+              </button>
+            </div>
+          </div>
+        )}
+      </AnimatedModal>
+
+      <AnimatedModal isOpen={!!moveCtx} onClose={() => setMoveCtx(null)} title="Move to risk register" subtitle={frameworkName} size="md">
+        {moveCtx && (
+          <div className="space-y-4 p-5">
+            <p className="text-sm text-slate-500">Create a risk in the ERM register from this {config.label.toLowerCase()} entry. It will be linked back here and tagged under {frameworkName}.</p>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">Risk title</label>
+              <input value={moveCtx.title} onChange={(e) => setMoveCtx({ ...moveCtx, title: e.target.value })}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30" />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">Description (optional)</label>
+              <textarea rows={3} value={moveCtx.description} onChange={(e) => setMoveCtx({ ...moveCtx, description: e.target.value })}
+                placeholder="Additional context for the risk owner…"
+                className="w-full resize-y rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30" />
+            </div>
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setMoveCtx(null)} className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50">Cancel</button>
+              <button type="button" disabled={!moveCtx.title.trim() || moveMut.isPending}
+                onClick={() => moveMut.mutate({ id: moveCtx.entry.id, title: moveCtx.title.trim(), description: moveCtx.description.trim() })}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-primary-500 px-3 py-1.5 text-sm font-semibold text-[#0a0a0a] hover:bg-primary-600 disabled:opacity-50">
+                {moveMut.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Create risk
               </button>
             </div>
           </div>
