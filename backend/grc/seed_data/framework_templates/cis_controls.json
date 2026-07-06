@@ -113,69 +113,95 @@
    "description": "CIS Controls v8 — Software Inventory (from the template).",
    "columns": [
     {
-     "key": "2",
-     "label": "2",
+     "key": "ref",
+     "label": "Ref",
      "type": "text"
     },
     {
-     "key": "legacy_app",
-     "label": "Legacy app",
+     "key": "software",
+     "label": "Software",
      "type": "text"
     },
     {
-     "key": "vendor",
-     "label": "Vendor",
+     "key": "publisher",
+     "label": "Publisher",
      "type": "text"
     },
     {
-     "key": "old",
-     "label": "Old",
+     "key": "version",
+     "label": "Version",
      "type": "text"
     },
     {
-     "key": "finance",
-     "label": "Finance",
+     "key": "business_use",
+     "label": "Business use",
      "type": "text"
     },
     {
-     "key": "review",
-     "label": "Review",
-     "type": "date"
-    },
-    {
-     "key": "no",
-     "label": "No",
+     "key": "authorised",
+     "label": "Authorised?",
      "type": "text"
     },
     {
-     "key": "finance_2",
-     "label": "Finance",
+     "key": "supported",
+     "label": "Supported?",
      "type": "text"
+    },
+    {
+     "key": "owner",
+     "label": "Owner",
+     "type": "text",
+     "picker": "users"
     }
    ],
-   "seed": [],
+   "seed": [
+    {
+     "data": {
+      "ref": "1",
+      "software": "Office suite",
+      "publisher": "Vendor",
+      "version": "Current",
+      "business_use": "Productivity",
+      "authorised": "Yes",
+      "supported": "Yes",
+      "owner": "IT"
+     }
+    },
+    {
+     "data": {
+      "ref": "2",
+      "software": "Legacy app",
+      "publisher": "Vendor",
+      "version": "Old",
+      "business_use": "Finance",
+      "authorised": "Review",
+      "supported": "No",
+      "owner": "Finance"
+     }
+    }
+   ],
    "formSections": [
     {
      "title": "Item",
      "keys": [
-      "2",
-      "legacy_app"
+      "ref",
+      "software"
      ]
     },
     {
      "title": "Assessment",
      "keys": [
-      "vendor",
-      "old",
-      "finance",
-      "no",
-      "finance_2"
+      "publisher",
+      "version",
+      "business_use",
+      "authorised",
+      "supported"
      ]
     },
     {
      "title": "Ownership & dates",
      "keys": [
-      "review"
+      "owner"
      ]
     }
    ]

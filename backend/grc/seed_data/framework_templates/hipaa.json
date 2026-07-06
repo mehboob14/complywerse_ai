@@ -11,64 +11,121 @@
    "description": "HIPAA — Compliance Roadmap (from the template).",
    "columns": [
     {
-     "key": "3",
-     "label": "3",
+     "key": "ref",
+     "label": "Ref",
      "type": "text"
     },
     {
-     "key": "baas",
-     "label": "BAAs",
+     "key": "workstream",
+     "label": "Workstream",
      "type": "text"
     },
     {
-     "key": "put_business_associate_agreements_in_place",
-     "label": "Put business associate agreements in place",
+     "key": "action",
+     "label": "Action",
+     "type": "textarea"
+    },
+    {
+     "key": "cfr",
+     "label": "CFR",
      "type": "text"
     },
     {
-     "key": "164_308_b",
-     "label": "164.308(b)",
-     "type": "text"
+     "key": "priority",
+     "label": "Priority",
+     "type": "select",
+     "options": [
+      {
+       "value": "High",
+       "label": "High",
+       "tone": "rose"
+      }
+     ]
     },
     {
-     "key": "high",
-     "label": "High",
-     "type": "text"
+     "key": "owner",
+     "label": "Owner",
+     "type": "text",
+     "picker": "users"
     },
     {
-     "key": "legal",
-     "label": "Legal",
-     "type": "text"
+     "key": "target_date",
+     "label": "Target date",
+     "type": "date"
     },
     {
-     "key": "2026_10_01",
-     "label": "2026-10-01",
-     "type": "text"
-    },
-    {
-     "key": "not_started",
-     "label": "Not started",
-     "type": "text"
+     "key": "status",
+     "label": "Status",
+     "type": "select",
+     "options": [
+      {
+       "value": "Not started",
+       "label": "Not started",
+       "tone": "slate"
+      }
+     ]
     }
    ],
-   "seed": [],
+   "seed": [
+    {
+     "data": {
+      "ref": "1",
+      "workstream": "Risk analysis",
+      "action": "Complete the HIPAA risk analysis and risk management plan",
+      "cfr": "164.308(a)(1)",
+      "priority": "High",
+      "owner": "Security Official",
+      "target_date": "2026-09-01",
+      "status": "Not started"
+     }
+    },
+    {
+     "data": {
+      "ref": "2",
+      "workstream": "Policies",
+      "action": "Adopt the Security and Privacy Rule policies",
+      "cfr": "164.316",
+      "priority": "High",
+      "owner": "Compliance",
+      "target_date": "2026-09-15",
+      "status": "Not started"
+     }
+    },
+    {
+     "data": {
+      "ref": "3",
+      "workstream": "BAAs",
+      "action": "Put business associate agreements in place",
+      "cfr": "164.308(b)",
+      "priority": "High",
+      "owner": "Legal",
+      "target_date": "2026-10-01",
+      "status": "Not started"
+     }
+    }
+   ],
    "formSections": [
     {
      "title": "Item",
      "keys": [
-      "3",
-      "baas"
+      "ref",
+      "workstream"
      ]
     },
     {
      "title": "Assessment",
      "keys": [
-      "put_business_associate_agreements_in_place",
-      "164_308_b",
-      "high",
-      "legal",
-      "2026_10_01",
-      "not_started"
+      "action",
+      "cfr",
+      "priority",
+      "status"
+     ]
+    },
+    {
+     "title": "Ownership & dates",
+     "keys": [
+      "owner",
+      "target_date"
      ]
     }
    ]
@@ -79,70 +136,103 @@
    "description": "HIPAA — Ephi Inventory (from the template).",
    "columns": [
     {
-     "key": "2",
-     "label": "2",
+     "key": "ref",
+     "label": "Ref",
      "type": "text"
     },
     {
-     "key": "billing_platform",
-     "label": "Billing platform",
+     "key": "system_application",
+     "label": "System / application",
      "type": "text"
     },
     {
-     "key": "claims_demographics",
-     "label": "Claims, demographics",
+     "key": "ephi_stored_or_processed",
+     "label": "ePHI stored or processed",
      "type": "text"
     },
     {
-     "key": "cloud_vendor",
-     "label": "Cloud (vendor)",
+     "key": "location",
+     "label": "Location",
      "type": "text"
     },
     {
-     "key": "yes",
-     "label": "Yes",
+     "key": "encrypted",
+     "label": "Encrypted?",
      "type": "text"
     },
     {
-     "key": "role_based",
-     "label": "Role-based",
+     "key": "access_controls",
+     "label": "Access controls",
      "type": "text"
     },
     {
-     "key": "yes_vendor",
-     "label": "Yes (vendor)",
+     "key": "business_associate",
+     "label": "Business associate?",
      "type": "text"
     },
     {
-     "key": "finance",
-     "label": "Finance",
-     "type": "text"
+     "key": "owner",
+     "label": "Owner",
+     "type": "text",
+     "picker": "users"
     },
     {
-     "key": "baa_on_file",
-     "label": "BAA on file",
-     "type": "text"
+     "key": "notes",
+     "label": "Notes",
+     "type": "textarea"
     }
    ],
-   "seed": [],
+   "seed": [
+    {
+     "data": {
+      "ref": "1",
+      "system_application": "EHR system",
+      "ephi_stored_or_processed": "Patient records",
+      "location": "Cloud (vendor)",
+      "encrypted": "Yes",
+      "access_controls": "Role-based, MFA",
+      "business_associate": "Yes (vendor)",
+      "owner": "IT",
+      "notes": "BAA on file"
+     }
+    },
+    {
+     "data": {
+      "ref": "2",
+      "system_application": "Billing platform",
+      "ephi_stored_or_processed": "Claims, demographics",
+      "location": "Cloud (vendor)",
+      "encrypted": "Yes",
+      "access_controls": "Role-based",
+      "business_associate": "Yes (vendor)",
+      "owner": "Finance",
+      "notes": "BAA on file"
+     }
+    }
+   ],
    "formSections": [
     {
      "title": "Item",
      "keys": [
-      "2",
-      "billing_platform"
+      "ref",
+      "system_application"
      ]
     },
     {
      "title": "Assessment",
      "keys": [
-      "claims_demographics",
-      "cloud_vendor",
-      "yes",
-      "role_based",
-      "yes_vendor",
-      "finance",
-      "baa_on_file"
+      "ephi_stored_or_processed",
+      "location",
+      "encrypted",
+      "access_controls",
+      "business_associate",
+      "notes"
+     ]
+    },
+    {
+     "title": "Ownership & dates",
+     "keys": [
+      "owner"
      ]
     }
    ]

@@ -11,58 +11,87 @@
    "description": "PCI DSS — Cardholder Data Inventory (from the template).",
    "columns": [
     {
-     "key": "2",
-     "label": "2",
+     "key": "ref",
+     "label": "Ref",
      "type": "text"
     },
     {
-     "key": "support_tooling",
-     "label": "Support tooling",
+     "key": "system_process",
+     "label": "System / process",
      "type": "text"
     },
     {
-     "key": "should_hold_none",
-     "label": "Should hold none",
+     "key": "cardholder_data_stored_processed_transmitted",
+     "label": "Cardholder data stored/processed/transmitted",
      "type": "text"
     },
     {
-     "key": "no",
-     "label": "No",
+     "key": "in_cde",
+     "label": "In CDE?",
      "type": "text"
     },
     {
-     "key": "n_a",
-     "label": "n/a",
+     "key": "encrypted",
+     "label": "Encrypted?",
      "type": "text"
     },
     {
-     "key": "n_a_2",
-     "label": "n/a",
+     "key": "retention",
+     "label": "Retention",
      "type": "text"
     },
     {
-     "key": "support",
-     "label": "Support",
-     "type": "text"
+     "key": "owner",
+     "label": "Owner",
+     "type": "text",
+     "picker": "users"
     }
    ],
-   "seed": [],
+   "seed": [
+    {
+     "data": {
+      "ref": "1",
+      "system_process": "Payment page (hosted)",
+      "cardholder_data_stored_processed_transmitted": "PAN (via processor, not stored)",
+      "in_cde": "Connected-to",
+      "encrypted": "Yes (processor)",
+      "retention": "Not stored",
+      "owner": "Eng"
+     }
+    },
+    {
+     "data": {
+      "ref": "2",
+      "system_process": "Support tooling",
+      "cardholder_data_stored_processed_transmitted": "Should hold none",
+      "in_cde": "No",
+      "encrypted": "n/a",
+      "retention": "n/a",
+      "owner": "Support"
+     }
+    }
+   ],
    "formSections": [
     {
      "title": "Item",
      "keys": [
-      "2",
-      "support_tooling"
+      "ref",
+      "system_process"
      ]
     },
     {
      "title": "Assessment",
      "keys": [
-      "should_hold_none",
-      "no",
-      "n_a",
-      "n_a_2",
-      "support"
+      "cardholder_data_stored_processed_transmitted",
+      "in_cde",
+      "encrypted",
+      "retention"
+     ]
+    },
+    {
+     "title": "Ownership & dates",
+     "keys": [
+      "owner"
      ]
     }
    ]

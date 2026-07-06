@@ -137,64 +137,126 @@
    "description": "NIST CSF 2.0 — 2 0 Improvement Roadmap (from the template).",
    "columns": [
     {
-     "key": "3",
-     "label": "3",
+     "key": "ref",
+     "label": "Ref",
      "type": "text"
     },
     {
-     "key": "detect_respond",
-     "label": "Detect/Respond",
+     "key": "workstream",
+     "label": "Workstream",
      "type": "text"
     },
     {
-     "key": "stand_up_monitoring_and_incident_response",
-     "label": "Stand up monitoring and incident response",
+     "key": "action",
+     "label": "Action",
      "type": "textarea"
     },
     {
-     "key": "de_rs",
-     "label": "DE/RS",
+     "key": "ref_2",
+     "label": "Ref",
      "type": "text"
     },
     {
-     "key": "medium",
-     "label": "Medium",
-     "type": "text"
+     "key": "priority",
+     "label": "Priority",
+     "type": "select",
+     "options": [
+      {
+       "value": "High",
+       "label": "High",
+       "tone": "rose"
+      },
+      {
+       "value": "Medium",
+       "label": "Medium",
+       "tone": "amber"
+      }
+     ]
     },
     {
-     "key": "secops",
-     "label": "SecOps",
-     "type": "text"
+     "key": "owner",
+     "label": "Owner",
+     "type": "text",
+     "picker": "users"
     },
     {
-     "key": "2026_12_01",
-     "label": "2026-12-01",
-     "type": "text"
+     "key": "target_date",
+     "label": "Target date",
+     "type": "date"
     },
     {
-     "key": "not_started",
-     "label": "Not started",
-     "type": "text"
+     "key": "status",
+     "label": "Status",
+     "type": "select",
+     "options": [
+      {
+       "value": "Not started",
+       "label": "Not started",
+       "tone": "slate"
+      }
+     ]
     }
    ],
-   "seed": [],
+   "seed": [
+    {
+     "data": {
+      "ref": "1",
+      "workstream": "Govern",
+      "action": "Establish the cybersecurity risk strategy and roles",
+      "ref_2": "GV",
+      "priority": "High",
+      "owner": "CISO",
+      "target_date": "2026-09-01",
+      "status": "Not started"
+     }
+    },
+    {
+     "data": {
+      "ref": "2",
+      "workstream": "Protect",
+      "action": "Close priority Protect gaps (identity, data, platform)",
+      "ref_2": "PR",
+      "priority": "High",
+      "owner": "IT",
+      "target_date": "2026-11-01",
+      "status": "Not started"
+     }
+    },
+    {
+     "data": {
+      "ref": "3",
+      "workstream": "Detect/Respond",
+      "action": "Stand up monitoring and incident response",
+      "ref_2": "DE/RS",
+      "priority": "Medium",
+      "owner": "SecOps",
+      "target_date": "2026-12-01",
+      "status": "Not started"
+     }
+    }
+   ],
    "formSections": [
     {
      "title": "Item",
      "keys": [
-      "3",
-      "detect_respond"
+      "ref",
+      "workstream"
      ]
     },
     {
      "title": "Assessment",
      "keys": [
-      "stand_up_monitoring_and_incident_response",
-      "de_rs",
-      "medium",
-      "secops",
-      "2026_12_01",
-      "not_started"
+      "action",
+      "ref_2",
+      "priority",
+      "status"
+     ]
+    },
+    {
+     "title": "Ownership & dates",
+     "keys": [
+      "owner",
+      "target_date"
      ]
     }
    ]

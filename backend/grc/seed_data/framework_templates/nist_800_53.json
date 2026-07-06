@@ -13,529 +13,465 @@
    "description": "NIST 800-53 / 800-171 — Risk Assessment (from the template).",
    "columns": [
     {
-     "key": "1",
-     "label": "1",
+     "key": "threat_event",
+     "label": "Threat Event",
      "type": "text"
     },
     {
-     "key": "2",
-     "label": "2",
+     "key": "threat_sources",
+     "label": "Threat Sources",
      "type": "text"
     },
     {
-     "key": "3",
-     "label": "3",
+     "key": "range_of_effects",
+     "label": "Range of Effects",
      "type": "text"
     },
     {
-     "key": "4",
-     "label": "4",
+     "key": "relevance",
+     "label": "Relevance",
      "type": "text"
     },
     {
-     "key": "5",
-     "label": "5",
+     "key": "likelihood_of_event_occurring",
+     "label": "Likelihood of Event Occurring",
      "type": "text"
     },
     {
-     "key": "6",
-     "label": "6",
+     "key": "vulnerabilities_and_predisposing_conditions",
+     "label": "Vulnerabilities and Predisposing Conditions",
      "type": "text"
     },
     {
-     "key": "7",
-     "label": "7",
+     "key": "severity_and_pervasiveness",
+     "label": "Severity and Pervasiveness",
      "type": "text"
     },
     {
-     "key": "8",
-     "label": "8",
+     "key": "likelihood_event_results_in_adverse_impact",
+     "label": "Likelihood Event Results in Adverse Impact",
      "type": "text"
     },
     {
-     "key": "9",
-     "label": "9",
+     "key": "overall_likelihood",
+     "label": "Overall Likelihood",
      "type": "text"
     },
     {
-     "key": "10",
-     "label": "10",
+     "key": "level_of_impact",
+     "label": "Level of Impact",
      "type": "text"
     },
     {
-     "key": "11",
-     "label": "11",
+     "key": "risk",
+     "label": "Risk",
      "type": "text"
     },
     {
-     "key": "12",
-     "label": "12",
-     "type": "text"
-    },
-    {
-     "key": "13",
-     "label": "13",
+     "key": "risk_key",
+     "label": "risk key",
      "type": "text"
     }
    ],
    "seed": [
     {
      "data": {
-      "1": "",
-      "2": "",
-      "3": "Threat Source Characteristics",
-      "4": "",
-      "5": "",
-      "6": "",
-      "7": "",
-      "8": "",
-      "9": "",
-      "10": "",
-      "11": "",
-      "12": "",
-      "13": ""
+      "threat_event": "",
+      "threat_sources": "",
+      "range_of_effects": "",
+      "relevance": "",
+      "likelihood_of_event_occurring": "",
+      "vulnerabilities_and_predisposing_conditions": "",
+      "severity_and_pervasiveness": "",
+      "likelihood_event_results_in_adverse_impact": "",
+      "overall_likelihood": "",
+      "level_of_impact": "",
+      "risk": "",
+      "risk_key": "-"
      }
     },
     {
      "data": {
-      "1": "Threat Event",
-      "2": "Threat Source",
-      "3": "Capability",
-      "4": "Intent",
-      "5": "targeting",
-      "6": "Relevance",
-      "7": "Likelihood of Attack Initiation",
-      "8": "Vulnerabilities\nand\nPredisposing\nConditions",
-      "9": "Severity and\nPervasiveness",
-      "10": "Likelihood Initiated\nAttack Succeeds",
-      "11": "Overall Likelihood",
-      "12": "Level of Impact",
-      "13": "Risk"
+      "threat_event": "",
+      "threat_sources": "",
+      "range_of_effects": "",
+      "relevance": "",
+      "likelihood_of_event_occurring": "",
+      "vulnerabilities_and_predisposing_conditions": "",
+      "severity_and_pervasiveness": "",
+      "likelihood_event_results_in_adverse_impact": "",
+      "overall_likelihood": "",
+      "level_of_impact": "",
+      "risk": "",
+      "risk_key": "-"
      }
     },
     {
      "data": {
-      "1": "",
-      "2": "",
-      "3": "",
-      "4": "",
-      "5": "",
-      "6": "",
-      "7": "",
-      "8": "",
-      "9": "",
-      "10": "",
-      "11": "",
-      "12": "",
-      "13": ""
+      "threat_event": "",
+      "threat_sources": "",
+      "range_of_effects": "",
+      "relevance": "",
+      "likelihood_of_event_occurring": "",
+      "vulnerabilities_and_predisposing_conditions": "",
+      "severity_and_pervasiveness": "",
+      "likelihood_event_results_in_adverse_impact": "",
+      "overall_likelihood": "",
+      "level_of_impact": "",
+      "risk": "",
+      "risk_key": "-"
      }
     },
     {
      "data": {
-      "1": "",
-      "2": "",
-      "3": "",
-      "4": "",
-      "5": "",
-      "6": "",
-      "7": "",
-      "8": "",
-      "9": "",
-      "10": "",
-      "11": "",
-      "12": "",
-      "13": ""
+      "threat_event": "",
+      "threat_sources": "",
+      "range_of_effects": "",
+      "relevance": "",
+      "likelihood_of_event_occurring": "",
+      "vulnerabilities_and_predisposing_conditions": "",
+      "severity_and_pervasiveness": "",
+      "likelihood_event_results_in_adverse_impact": "",
+      "overall_likelihood": "",
+      "level_of_impact": "",
+      "risk": "",
+      "risk_key": "-"
      }
     },
     {
      "data": {
-      "1": "",
-      "2": "",
-      "3": "",
-      "4": "",
-      "5": "",
-      "6": "",
-      "7": "",
-      "8": "",
-      "9": "",
-      "10": "",
-      "11": "",
-      "12": "",
-      "13": ""
+      "threat_event": "",
+      "threat_sources": "",
+      "range_of_effects": "",
+      "relevance": "",
+      "likelihood_of_event_occurring": "",
+      "vulnerabilities_and_predisposing_conditions": "",
+      "severity_and_pervasiveness": "",
+      "likelihood_event_results_in_adverse_impact": "",
+      "overall_likelihood": "",
+      "level_of_impact": "",
+      "risk": "",
+      "risk_key": "-"
      }
     },
     {
      "data": {
-      "1": "",
-      "2": "",
-      "3": "",
-      "4": "",
-      "5": "",
-      "6": "",
-      "7": "",
-      "8": "",
-      "9": "",
-      "10": "",
-      "11": "",
-      "12": "",
-      "13": ""
+      "threat_event": "",
+      "threat_sources": "",
+      "range_of_effects": "",
+      "relevance": "",
+      "likelihood_of_event_occurring": "",
+      "vulnerabilities_and_predisposing_conditions": "",
+      "severity_and_pervasiveness": "",
+      "likelihood_event_results_in_adverse_impact": "",
+      "overall_likelihood": "",
+      "level_of_impact": "",
+      "risk": "",
+      "risk_key": "-"
      }
     },
     {
      "data": {
-      "1": "",
-      "2": "",
-      "3": "",
-      "4": "",
-      "5": "",
-      "6": "",
-      "7": "",
-      "8": "",
-      "9": "",
-      "10": "",
-      "11": "",
-      "12": "",
-      "13": ""
+      "threat_event": "",
+      "threat_sources": "",
+      "range_of_effects": "",
+      "relevance": "",
+      "likelihood_of_event_occurring": "",
+      "vulnerabilities_and_predisposing_conditions": "",
+      "severity_and_pervasiveness": "",
+      "likelihood_event_results_in_adverse_impact": "",
+      "overall_likelihood": "",
+      "level_of_impact": "",
+      "risk": "",
+      "risk_key": "-"
      }
     },
     {
      "data": {
-      "1": "",
-      "2": "",
-      "3": "",
-      "4": "",
-      "5": "",
-      "6": "",
-      "7": "",
-      "8": "",
-      "9": "",
-      "10": "",
-      "11": "",
-      "12": "",
-      "13": ""
+      "threat_event": "",
+      "threat_sources": "",
+      "range_of_effects": "",
+      "relevance": "",
+      "likelihood_of_event_occurring": "",
+      "vulnerabilities_and_predisposing_conditions": "",
+      "severity_and_pervasiveness": "",
+      "likelihood_event_results_in_adverse_impact": "",
+      "overall_likelihood": "",
+      "level_of_impact": "",
+      "risk": "",
+      "risk_key": "-"
      }
     },
     {
      "data": {
-      "1": "",
-      "2": "",
-      "3": "",
-      "4": "",
-      "5": "",
-      "6": "",
-      "7": "",
-      "8": "",
-      "9": "",
-      "10": "",
-      "11": "",
-      "12": "",
-      "13": ""
+      "threat_event": "",
+      "threat_sources": "",
+      "range_of_effects": "",
+      "relevance": "",
+      "likelihood_of_event_occurring": "",
+      "vulnerabilities_and_predisposing_conditions": "",
+      "severity_and_pervasiveness": "",
+      "likelihood_event_results_in_adverse_impact": "",
+      "overall_likelihood": "",
+      "level_of_impact": "",
+      "risk": "",
+      "risk_key": "-"
      }
     },
     {
      "data": {
-      "1": "",
-      "2": "",
-      "3": "",
-      "4": "",
-      "5": "",
-      "6": "",
-      "7": "",
-      "8": "",
-      "9": "",
-      "10": "",
-      "11": "",
-      "12": "",
-      "13": ""
+      "threat_event": "",
+      "threat_sources": "",
+      "range_of_effects": "",
+      "relevance": "",
+      "likelihood_of_event_occurring": "",
+      "vulnerabilities_and_predisposing_conditions": "",
+      "severity_and_pervasiveness": "",
+      "likelihood_event_results_in_adverse_impact": "",
+      "overall_likelihood": "",
+      "level_of_impact": "",
+      "risk": "",
+      "risk_key": "-"
      }
     },
     {
      "data": {
-      "1": "",
-      "2": "",
-      "3": "",
-      "4": "",
-      "5": "",
-      "6": "",
-      "7": "",
-      "8": "",
-      "9": "",
-      "10": "",
-      "11": "",
-      "12": "",
-      "13": ""
+      "threat_event": "",
+      "threat_sources": "",
+      "range_of_effects": "",
+      "relevance": "",
+      "likelihood_of_event_occurring": "",
+      "vulnerabilities_and_predisposing_conditions": "",
+      "severity_and_pervasiveness": "",
+      "likelihood_event_results_in_adverse_impact": "",
+      "overall_likelihood": "",
+      "level_of_impact": "",
+      "risk": "",
+      "risk_key": "-"
      }
     },
     {
      "data": {
-      "1": "",
-      "2": "",
-      "3": "",
-      "4": "",
-      "5": "",
-      "6": "",
-      "7": "",
-      "8": "",
-      "9": "",
-      "10": "",
-      "11": "",
-      "12": "",
-      "13": ""
+      "threat_event": "",
+      "threat_sources": "",
+      "range_of_effects": "",
+      "relevance": "",
+      "likelihood_of_event_occurring": "",
+      "vulnerabilities_and_predisposing_conditions": "",
+      "severity_and_pervasiveness": "",
+      "likelihood_event_results_in_adverse_impact": "",
+      "overall_likelihood": "",
+      "level_of_impact": "",
+      "risk": "",
+      "risk_key": "-"
      }
     },
     {
      "data": {
-      "1": "",
-      "2": "",
-      "3": "",
-      "4": "",
-      "5": "",
-      "6": "",
-      "7": "",
-      "8": "",
-      "9": "",
-      "10": "",
-      "11": "",
-      "12": "",
-      "13": ""
+      "threat_event": "",
+      "threat_sources": "",
+      "range_of_effects": "",
+      "relevance": "",
+      "likelihood_of_event_occurring": "",
+      "vulnerabilities_and_predisposing_conditions": "",
+      "severity_and_pervasiveness": "",
+      "likelihood_event_results_in_adverse_impact": "",
+      "overall_likelihood": "",
+      "level_of_impact": "",
+      "risk": "",
+      "risk_key": "-"
      }
     },
     {
      "data": {
-      "1": "",
-      "2": "",
-      "3": "",
-      "4": "",
-      "5": "",
-      "6": "",
-      "7": "",
-      "8": "",
-      "9": "",
-      "10": "",
-      "11": "",
-      "12": "",
-      "13": ""
+      "threat_event": "",
+      "threat_sources": "",
+      "range_of_effects": "",
+      "relevance": "",
+      "likelihood_of_event_occurring": "",
+      "vulnerabilities_and_predisposing_conditions": "",
+      "severity_and_pervasiveness": "",
+      "likelihood_event_results_in_adverse_impact": "",
+      "overall_likelihood": "",
+      "level_of_impact": "",
+      "risk": "",
+      "risk_key": "-"
      }
     },
     {
      "data": {
-      "1": "",
-      "2": "",
-      "3": "",
-      "4": "",
-      "5": "",
-      "6": "",
-      "7": "",
-      "8": "",
-      "9": "",
-      "10": "",
-      "11": "",
-      "12": "",
-      "13": ""
+      "threat_event": "",
+      "threat_sources": "",
+      "range_of_effects": "",
+      "relevance": "",
+      "likelihood_of_event_occurring": "",
+      "vulnerabilities_and_predisposing_conditions": "",
+      "severity_and_pervasiveness": "",
+      "likelihood_event_results_in_adverse_impact": "",
+      "overall_likelihood": "",
+      "level_of_impact": "",
+      "risk": "",
+      "risk_key": "-"
      }
     },
     {
      "data": {
-      "1": "",
-      "2": "",
-      "3": "",
-      "4": "",
-      "5": "",
-      "6": "",
-      "7": "",
-      "8": "",
-      "9": "",
-      "10": "",
-      "11": "",
-      "12": "",
-      "13": ""
+      "threat_event": "",
+      "threat_sources": "",
+      "range_of_effects": "",
+      "relevance": "",
+      "likelihood_of_event_occurring": "",
+      "vulnerabilities_and_predisposing_conditions": "",
+      "severity_and_pervasiveness": "",
+      "likelihood_event_results_in_adverse_impact": "",
+      "overall_likelihood": "",
+      "level_of_impact": "",
+      "risk": "",
+      "risk_key": "-"
      }
     },
     {
      "data": {
-      "1": "",
-      "2": "",
-      "3": "",
-      "4": "",
-      "5": "",
-      "6": "",
-      "7": "",
-      "8": "",
-      "9": "",
-      "10": "",
-      "11": "",
-      "12": "",
-      "13": ""
+      "threat_event": "",
+      "threat_sources": "",
+      "range_of_effects": "",
+      "relevance": "",
+      "likelihood_of_event_occurring": "",
+      "vulnerabilities_and_predisposing_conditions": "",
+      "severity_and_pervasiveness": "",
+      "likelihood_event_results_in_adverse_impact": "",
+      "overall_likelihood": "",
+      "level_of_impact": "",
+      "risk": "",
+      "risk_key": "-"
      }
     },
     {
      "data": {
-      "1": "",
-      "2": "",
-      "3": "",
-      "4": "",
-      "5": "",
-      "6": "",
-      "7": "",
-      "8": "",
-      "9": "",
-      "10": "",
-      "11": "",
-      "12": "",
-      "13": ""
+      "threat_event": "",
+      "threat_sources": "",
+      "range_of_effects": "",
+      "relevance": "",
+      "likelihood_of_event_occurring": "",
+      "vulnerabilities_and_predisposing_conditions": "",
+      "severity_and_pervasiveness": "",
+      "likelihood_event_results_in_adverse_impact": "",
+      "overall_likelihood": "",
+      "level_of_impact": "",
+      "risk": "",
+      "risk_key": "-"
      }
     },
     {
      "data": {
-      "1": "",
-      "2": "",
-      "3": "",
-      "4": "",
-      "5": "",
-      "6": "",
-      "7": "",
-      "8": "",
-      "9": "",
-      "10": "",
-      "11": "",
-      "12": "",
-      "13": ""
+      "threat_event": "",
+      "threat_sources": "",
+      "range_of_effects": "",
+      "relevance": "",
+      "likelihood_of_event_occurring": "",
+      "vulnerabilities_and_predisposing_conditions": "",
+      "severity_and_pervasiveness": "",
+      "likelihood_event_results_in_adverse_impact": "",
+      "overall_likelihood": "",
+      "level_of_impact": "",
+      "risk": "",
+      "risk_key": "-"
      }
     },
     {
      "data": {
-      "1": "",
-      "2": "",
-      "3": "",
-      "4": "",
-      "5": "",
-      "6": "",
-      "7": "",
-      "8": "",
-      "9": "",
-      "10": "",
-      "11": "",
-      "12": "",
-      "13": ""
+      "threat_event": "",
+      "threat_sources": "",
+      "range_of_effects": "",
+      "relevance": "",
+      "likelihood_of_event_occurring": "",
+      "vulnerabilities_and_predisposing_conditions": "",
+      "severity_and_pervasiveness": "",
+      "likelihood_event_results_in_adverse_impact": "",
+      "overall_likelihood": "",
+      "level_of_impact": "",
+      "risk": "",
+      "risk_key": "-"
      }
     },
     {
      "data": {
-      "1": "",
-      "2": "",
-      "3": "",
-      "4": "",
-      "5": "",
-      "6": "",
-      "7": "",
-      "8": "",
-      "9": "",
-      "10": "",
-      "11": "",
-      "12": "",
-      "13": ""
+      "threat_event": "",
+      "threat_sources": "",
+      "range_of_effects": "",
+      "relevance": "",
+      "likelihood_of_event_occurring": "",
+      "vulnerabilities_and_predisposing_conditions": "",
+      "severity_and_pervasiveness": "",
+      "likelihood_event_results_in_adverse_impact": "",
+      "overall_likelihood": "",
+      "level_of_impact": "",
+      "risk": "",
+      "risk_key": "-"
      }
     },
     {
      "data": {
-      "1": "",
-      "2": "",
-      "3": "",
-      "4": "",
-      "5": "",
-      "6": "",
-      "7": "",
-      "8": "",
-      "9": "",
-      "10": "",
-      "11": "",
-      "12": "",
-      "13": ""
+      "threat_event": "",
+      "threat_sources": "",
+      "range_of_effects": "",
+      "relevance": "",
+      "likelihood_of_event_occurring": "",
+      "vulnerabilities_and_predisposing_conditions": "",
+      "severity_and_pervasiveness": "",
+      "likelihood_event_results_in_adverse_impact": "",
+      "overall_likelihood": "",
+      "level_of_impact": "",
+      "risk": "",
+      "risk_key": "-"
      }
     },
     {
      "data": {
-      "1": "",
-      "2": "",
-      "3": "",
-      "4": "",
-      "5": "",
-      "6": "",
-      "7": "",
-      "8": "",
-      "9": "",
-      "10": "",
-      "11": "",
-      "12": "",
-      "13": ""
+      "threat_event": "",
+      "threat_sources": "",
+      "range_of_effects": "",
+      "relevance": "",
+      "likelihood_of_event_occurring": "",
+      "vulnerabilities_and_predisposing_conditions": "",
+      "severity_and_pervasiveness": "",
+      "likelihood_event_results_in_adverse_impact": "",
+      "overall_likelihood": "",
+      "level_of_impact": "",
+      "risk": "",
+      "risk_key": "-"
      }
     },
     {
      "data": {
-      "1": "",
-      "2": "",
-      "3": "",
-      "4": "",
-      "5": "",
-      "6": "",
-      "7": "",
-      "8": "",
-      "9": "",
-      "10": "",
-      "11": "",
-      "12": "",
-      "13": ""
+      "threat_event": "",
+      "threat_sources": "",
+      "range_of_effects": "",
+      "relevance": "",
+      "likelihood_of_event_occurring": "",
+      "vulnerabilities_and_predisposing_conditions": "",
+      "severity_and_pervasiveness": "",
+      "likelihood_event_results_in_adverse_impact": "",
+      "overall_likelihood": "",
+      "level_of_impact": "",
+      "risk": "",
+      "risk_key": "-"
      }
     },
     {
      "data": {
-      "1": "",
-      "2": "",
-      "3": "",
-      "4": "",
-      "5": "",
-      "6": "",
-      "7": "",
-      "8": "",
-      "9": "",
-      "10": "",
-      "11": "",
-      "12": "",
-      "13": ""
-     }
-    },
-    {
-     "data": {
-      "1": "",
-      "2": "",
-      "3": "",
-      "4": "",
-      "5": "",
-      "6": "",
-      "7": "",
-      "8": "",
-      "9": "",
-      "10": "",
-      "11": "",
-      "12": "",
-      "13": ""
-     }
-    },
-    {
-     "data": {
-      "1": "",
-      "2": "",
-      "3": "",
-      "4": "",
-      "5": "",
-      "6": "",
-      "7": "",
-      "8": "",
-      "9": "",
-      "10": "",
-      "11": "",
-      "12": "",
-      "13": ""
+      "threat_event": "",
+      "threat_sources": "",
+      "range_of_effects": "",
+      "relevance": "",
+      "likelihood_of_event_occurring": "",
+      "vulnerabilities_and_predisposing_conditions": "",
+      "severity_and_pervasiveness": "",
+      "likelihood_event_results_in_adverse_impact": "",
+      "overall_likelihood": "",
+      "level_of_impact": "",
+      "risk": "",
+      "risk_key": "-"
      }
     }
    ],
@@ -543,24 +479,23 @@
     {
      "title": "Item",
      "keys": [
-      "1",
-      "2"
+      "threat_event",
+      "threat_sources"
      ]
     },
     {
      "title": "Assessment",
      "keys": [
-      "3",
-      "4",
-      "5",
-      "6",
-      "7",
-      "8",
-      "9",
-      "10",
-      "11",
-      "12",
-      "13"
+      "range_of_effects",
+      "relevance",
+      "likelihood_of_event_occurring",
+      "vulnerabilities_and_predisposing_conditions",
+      "severity_and_pervasiveness",
+      "likelihood_event_results_in_adverse_impact",
+      "overall_likelihood",
+      "level_of_impact",
+      "risk",
+      "risk_key"
      ]
     }
    ]
@@ -1039,6 +974,738 @@
       "requirement_id": "03.04.12",
       "family": "03.04 Configuration Management",
       "security_requirement": "System and Component Configuration for High-Risk Areas",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.05.01",
+      "family": "03.05 Identification and Authentication",
+      "security_requirement": "User Identification and Authentication",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.05.02",
+      "family": "03.05 Identification and Authentication",
+      "security_requirement": "Device Identification and Authentication",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.05.03",
+      "family": "03.05 Identification and Authentication",
+      "security_requirement": "Multi-Factor Authentication",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.05.04",
+      "family": "03.05 Identification and Authentication",
+      "security_requirement": "Replay-Resistant Authentication",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.05.05",
+      "family": "03.05 Identification and Authentication",
+      "security_requirement": "Identifier Management",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.05.07",
+      "family": "03.05 Identification and Authentication",
+      "security_requirement": "Password Management",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.05.11",
+      "family": "03.05 Identification and Authentication",
+      "security_requirement": "Authentication Feedback",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.05.12",
+      "family": "03.05 Identification and Authentication",
+      "security_requirement": "Authenticator Management",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.06.01",
+      "family": "03.06 Incident Response",
+      "security_requirement": "Incident Handling",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.06.02",
+      "family": "03.06 Incident Response",
+      "security_requirement": "Incident Monitoring, Reporting, and Response Assistance",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.06.03",
+      "family": "03.06 Incident Response",
+      "security_requirement": "Incident Response Testing",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.06.04",
+      "family": "03.06 Incident Response",
+      "security_requirement": "Incident Response Training",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.06.05",
+      "family": "03.06 Incident Response",
+      "security_requirement": "Incident Response Plan",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.07.04",
+      "family": "03.07 Maintenance",
+      "security_requirement": "Maintenance Tools",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.07.05",
+      "family": "03.07 Maintenance",
+      "security_requirement": "Nonlocal Maintenance",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.07.06",
+      "family": "03.07 Maintenance",
+      "security_requirement": "Maintenance Personnel",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.08.01",
+      "family": "03.08 Media Protection",
+      "security_requirement": "Media Storage",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.08.02",
+      "family": "03.08 Media Protection",
+      "security_requirement": "Media Access",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.08.03",
+      "family": "03.08 Media Protection",
+      "security_requirement": "Media Sanitization",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.08.04",
+      "family": "03.08 Media Protection",
+      "security_requirement": "Media Marking",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.08.05",
+      "family": "03.08 Media Protection",
+      "security_requirement": "Media Transport",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.08.07",
+      "family": "03.08 Media Protection",
+      "security_requirement": "Media Use",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.08.09",
+      "family": "03.08 Media Protection",
+      "security_requirement": "System Backup - Cryptographic Protection",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.09.01",
+      "family": "03.09 Personnel Security",
+      "security_requirement": "Personnel Screening",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.09.02",
+      "family": "03.09 Personnel Security",
+      "security_requirement": "Personnel Termination and Transfer",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.10.01",
+      "family": "03.10 Physical Protection",
+      "security_requirement": "Physical Access Authorizations",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.10.02",
+      "family": "03.10 Physical Protection",
+      "security_requirement": "Monitoring Physical Access",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.10.06",
+      "family": "03.10 Physical Protection",
+      "security_requirement": "Alternate Work Site",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.10.07",
+      "family": "03.10 Physical Protection",
+      "security_requirement": "Physical Access Control",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.10.08",
+      "family": "03.10 Physical Protection",
+      "security_requirement": "Access Control for Transmission",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.11.01",
+      "family": "03.11 Risk Assessment",
+      "security_requirement": "Risk Assessment",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.11.02",
+      "family": "03.11 Risk Assessment",
+      "security_requirement": "Vulnerability Monitoring and Scanning",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.11.04",
+      "family": "03.11 Risk Assessment",
+      "security_requirement": "Risk Response",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.12.01",
+      "family": "03.12 Security Assessment and Monitoring",
+      "security_requirement": "Security Assessment",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.12.02",
+      "family": "03.12 Security Assessment and Monitoring",
+      "security_requirement": "Plan of Action and Milestones",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.12.03",
+      "family": "03.12 Security Assessment and Monitoring",
+      "security_requirement": "Continuous Monitoring",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.12.05",
+      "family": "03.12 Security Assessment and Monitoring",
+      "security_requirement": "Information Exchange",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.13.01",
+      "family": "03.13 System and Communications Protection",
+      "security_requirement": "Boundary Protection",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.13.04",
+      "family": "03.13 System and Communications Protection",
+      "security_requirement": "Information in Shared System Resources",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.13.06",
+      "family": "03.13 System and Communications Protection",
+      "security_requirement": "Network Communications - Deny by Default - Allow by Exception",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.13.08",
+      "family": "03.13 System and Communications Protection",
+      "security_requirement": "Transmission and Storage Confidentiality",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.13.09",
+      "family": "03.13 System and Communications Protection",
+      "security_requirement": "Network Disconnect",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.13.10",
+      "family": "03.13 System and Communications Protection",
+      "security_requirement": "Cryptographic Key Establishment and Management",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.13.11",
+      "family": "03.13 System and Communications Protection",
+      "security_requirement": "Cryptographic Protection",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.13.12",
+      "family": "03.13 System and Communications Protection",
+      "security_requirement": "Collaborative Computing Devices and Applications",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.13.13",
+      "family": "03.13 System and Communications Protection",
+      "security_requirement": "Mobile Code",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.13.15",
+      "family": "03.13 System and Communications Protection",
+      "security_requirement": "Session Authenticity",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.14.01",
+      "family": "03.14 System and Information Integrity",
+      "security_requirement": "Flaw Remediation",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.14.02",
+      "family": "03.14 System and Information Integrity",
+      "security_requirement": "Malicious Code Protection",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.14.03",
+      "family": "03.14 System and Information Integrity",
+      "security_requirement": "Security Alerts, Advisories, and Directives",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.14.06",
+      "family": "03.14 System and Information Integrity",
+      "security_requirement": "System Monitoring",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.14.08",
+      "family": "03.14 System and Information Integrity",
+      "security_requirement": "Information Management and Retention",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.15.01",
+      "family": "03.15 Planning",
+      "security_requirement": "Policy and Procedures",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.15.02",
+      "family": "03.15 Planning",
+      "security_requirement": "System Security Plan",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.15.03",
+      "family": "03.15 Planning",
+      "security_requirement": "Rules of Behavior",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.16.01",
+      "family": "03.16 System and Services Acquisition",
+      "security_requirement": "Security Engineering Principles",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.16.02",
+      "family": "03.16 System and Services Acquisition",
+      "security_requirement": "Unsupported System Components",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.16.03",
+      "family": "03.16 System and Services Acquisition",
+      "security_requirement": "External System Services",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.17.01",
+      "family": "03.17 Supply Chain Risk Management",
+      "security_requirement": "Supply Chain Risk Management Plan",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.17.02",
+      "family": "03.17 Supply Chain Risk Management",
+      "security_requirement": "Acquisition Strategies, Tools, and Methods",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.17.03",
+      "family": "03.17 Supply Chain Risk Management",
+      "security_requirement": "Supply Chain Requirements and Processes",
       "implementation_status": "",
       "evidence_notes": "",
       "poa_m_item": "",
@@ -1697,336 +2364,376 @@
    "description": "NIST 800-53 / 800-171 — Secure Baseline Hardening Register (from the template).",
    "columns": [
     {
-     "key": "3",
-     "label": "3",
+     "key": "ref",
+     "label": "Ref",
      "type": "text"
     },
     {
-     "key": "aws_account_baseline",
-     "label": "AWS account baseline",
+     "key": "system_platform",
+     "label": "System / platform",
      "type": "text"
     },
     {
-     "key": "cis_aws_foundations",
-     "label": "CIS AWS Foundations",
+     "key": "baseline_or_benchmark",
+     "label": "Baseline or benchmark",
      "type": "text"
     },
     {
-     "key": "cis",
-     "label": "CIS",
+     "key": "source",
+     "label": "Source",
      "type": "text"
     },
     {
-     "key": "v3_0",
-     "label": "v3.0",
+     "key": "version",
+     "label": "Version",
      "type": "text"
     },
     {
-     "key": "yes",
-     "label": "Yes",
+     "key": "applied",
+     "label": "Applied?",
      "type": "text"
     },
     {
-     "key": "no",
-     "label": "No",
+     "key": "deviations_documented",
+     "label": "Deviations documented?",
      "type": "text"
     },
     {
-     "key": "cloud",
-     "label": "Cloud",
-     "type": "text"
+     "key": "owner",
+     "label": "Owner",
+     "type": "text",
+     "picker": "users"
     },
     {
-     "key": "2026_06_01",
-     "label": "2026-06-01",
+     "key": "last_reviewed",
+     "label": "Last reviewed",
      "type": "text"
     }
    ],
    "seed": [
     {
      "data": {
-      "3": "4",
-      "aws_account_baseline": "",
-      "cis_aws_foundations": "",
-      "cis": "",
-      "v3_0": "",
-      "yes": "",
-      "no": "",
-      "cloud": "",
-      "2026_06_01": ""
+      "ref": "1",
+      "system_platform": "Windows 11 workstations",
+      "baseline_or_benchmark": "CIS Benchmark Level 1",
+      "source": "CIS",
+      "version": "v3.0",
+      "applied": "Yes",
+      "deviations_documented": "Yes",
+      "owner": "IT",
+      "last_reviewed": "2026-06-01"
      }
     },
     {
      "data": {
-      "3": "5",
-      "aws_account_baseline": "",
-      "cis_aws_foundations": "",
-      "cis": "",
-      "v3_0": "",
-      "yes": "",
-      "no": "",
-      "cloud": "",
-      "2026_06_01": ""
+      "ref": "2",
+      "system_platform": "Ubuntu 22.04 servers",
+      "baseline_or_benchmark": "DISA STIG",
+      "source": "DISA (via NCP)",
+      "version": "v1",
+      "applied": "Partial",
+      "deviations_documented": "Yes",
+      "owner": "Platform",
+      "last_reviewed": "2026-06-01"
      }
     },
     {
      "data": {
-      "3": "6",
-      "aws_account_baseline": "",
-      "cis_aws_foundations": "",
-      "cis": "",
-      "v3_0": "",
-      "yes": "",
-      "no": "",
-      "cloud": "",
-      "2026_06_01": ""
+      "ref": "3",
+      "system_platform": "AWS account baseline",
+      "baseline_or_benchmark": "CIS AWS Foundations",
+      "source": "CIS",
+      "version": "v3.0",
+      "applied": "Yes",
+      "deviations_documented": "No",
+      "owner": "Cloud",
+      "last_reviewed": "2026-06-01"
      }
     },
     {
      "data": {
-      "3": "7",
-      "aws_account_baseline": "",
-      "cis_aws_foundations": "",
-      "cis": "",
-      "v3_0": "",
-      "yes": "",
-      "no": "",
-      "cloud": "",
-      "2026_06_01": ""
+      "ref": "4",
+      "system_platform": "",
+      "baseline_or_benchmark": "",
+      "source": "",
+      "version": "",
+      "applied": "",
+      "deviations_documented": "",
+      "owner": "",
+      "last_reviewed": ""
      }
     },
     {
      "data": {
-      "3": "8",
-      "aws_account_baseline": "",
-      "cis_aws_foundations": "",
-      "cis": "",
-      "v3_0": "",
-      "yes": "",
-      "no": "",
-      "cloud": "",
-      "2026_06_01": ""
+      "ref": "5",
+      "system_platform": "",
+      "baseline_or_benchmark": "",
+      "source": "",
+      "version": "",
+      "applied": "",
+      "deviations_documented": "",
+      "owner": "",
+      "last_reviewed": ""
      }
     },
     {
      "data": {
-      "3": "9",
-      "aws_account_baseline": "",
-      "cis_aws_foundations": "",
-      "cis": "",
-      "v3_0": "",
-      "yes": "",
-      "no": "",
-      "cloud": "",
-      "2026_06_01": ""
+      "ref": "6",
+      "system_platform": "",
+      "baseline_or_benchmark": "",
+      "source": "",
+      "version": "",
+      "applied": "",
+      "deviations_documented": "",
+      "owner": "",
+      "last_reviewed": ""
      }
     },
     {
      "data": {
-      "3": "10",
-      "aws_account_baseline": "",
-      "cis_aws_foundations": "",
-      "cis": "",
-      "v3_0": "",
-      "yes": "",
-      "no": "",
-      "cloud": "",
-      "2026_06_01": ""
+      "ref": "7",
+      "system_platform": "",
+      "baseline_or_benchmark": "",
+      "source": "",
+      "version": "",
+      "applied": "",
+      "deviations_documented": "",
+      "owner": "",
+      "last_reviewed": ""
      }
     },
     {
      "data": {
-      "3": "11",
-      "aws_account_baseline": "",
-      "cis_aws_foundations": "",
-      "cis": "",
-      "v3_0": "",
-      "yes": "",
-      "no": "",
-      "cloud": "",
-      "2026_06_01": ""
+      "ref": "8",
+      "system_platform": "",
+      "baseline_or_benchmark": "",
+      "source": "",
+      "version": "",
+      "applied": "",
+      "deviations_documented": "",
+      "owner": "",
+      "last_reviewed": ""
      }
     },
     {
      "data": {
-      "3": "12",
-      "aws_account_baseline": "",
-      "cis_aws_foundations": "",
-      "cis": "",
-      "v3_0": "",
-      "yes": "",
-      "no": "",
-      "cloud": "",
-      "2026_06_01": ""
+      "ref": "9",
+      "system_platform": "",
+      "baseline_or_benchmark": "",
+      "source": "",
+      "version": "",
+      "applied": "",
+      "deviations_documented": "",
+      "owner": "",
+      "last_reviewed": ""
      }
     },
     {
      "data": {
-      "3": "13",
-      "aws_account_baseline": "",
-      "cis_aws_foundations": "",
-      "cis": "",
-      "v3_0": "",
-      "yes": "",
-      "no": "",
-      "cloud": "",
-      "2026_06_01": ""
+      "ref": "10",
+      "system_platform": "",
+      "baseline_or_benchmark": "",
+      "source": "",
+      "version": "",
+      "applied": "",
+      "deviations_documented": "",
+      "owner": "",
+      "last_reviewed": ""
      }
     },
     {
      "data": {
-      "3": "14",
-      "aws_account_baseline": "",
-      "cis_aws_foundations": "",
-      "cis": "",
-      "v3_0": "",
-      "yes": "",
-      "no": "",
-      "cloud": "",
-      "2026_06_01": ""
+      "ref": "11",
+      "system_platform": "",
+      "baseline_or_benchmark": "",
+      "source": "",
+      "version": "",
+      "applied": "",
+      "deviations_documented": "",
+      "owner": "",
+      "last_reviewed": ""
      }
     },
     {
      "data": {
-      "3": "15",
-      "aws_account_baseline": "",
-      "cis_aws_foundations": "",
-      "cis": "",
-      "v3_0": "",
-      "yes": "",
-      "no": "",
-      "cloud": "",
-      "2026_06_01": ""
+      "ref": "12",
+      "system_platform": "",
+      "baseline_or_benchmark": "",
+      "source": "",
+      "version": "",
+      "applied": "",
+      "deviations_documented": "",
+      "owner": "",
+      "last_reviewed": ""
      }
     },
     {
      "data": {
-      "3": "16",
-      "aws_account_baseline": "",
-      "cis_aws_foundations": "",
-      "cis": "",
-      "v3_0": "",
-      "yes": "",
-      "no": "",
-      "cloud": "",
-      "2026_06_01": ""
+      "ref": "13",
+      "system_platform": "",
+      "baseline_or_benchmark": "",
+      "source": "",
+      "version": "",
+      "applied": "",
+      "deviations_documented": "",
+      "owner": "",
+      "last_reviewed": ""
      }
     },
     {
      "data": {
-      "3": "17",
-      "aws_account_baseline": "",
-      "cis_aws_foundations": "",
-      "cis": "",
-      "v3_0": "",
-      "yes": "",
-      "no": "",
-      "cloud": "",
-      "2026_06_01": ""
+      "ref": "14",
+      "system_platform": "",
+      "baseline_or_benchmark": "",
+      "source": "",
+      "version": "",
+      "applied": "",
+      "deviations_documented": "",
+      "owner": "",
+      "last_reviewed": ""
      }
     },
     {
      "data": {
-      "3": "18",
-      "aws_account_baseline": "",
-      "cis_aws_foundations": "",
-      "cis": "",
-      "v3_0": "",
-      "yes": "",
-      "no": "",
-      "cloud": "",
-      "2026_06_01": ""
+      "ref": "15",
+      "system_platform": "",
+      "baseline_or_benchmark": "",
+      "source": "",
+      "version": "",
+      "applied": "",
+      "deviations_documented": "",
+      "owner": "",
+      "last_reviewed": ""
      }
     },
     {
      "data": {
-      "3": "19",
-      "aws_account_baseline": "",
-      "cis_aws_foundations": "",
-      "cis": "",
-      "v3_0": "",
-      "yes": "",
-      "no": "",
-      "cloud": "",
-      "2026_06_01": ""
+      "ref": "16",
+      "system_platform": "",
+      "baseline_or_benchmark": "",
+      "source": "",
+      "version": "",
+      "applied": "",
+      "deviations_documented": "",
+      "owner": "",
+      "last_reviewed": ""
      }
     },
     {
      "data": {
-      "3": "20",
-      "aws_account_baseline": "",
-      "cis_aws_foundations": "",
-      "cis": "",
-      "v3_0": "",
-      "yes": "",
-      "no": "",
-      "cloud": "",
-      "2026_06_01": ""
+      "ref": "17",
+      "system_platform": "",
+      "baseline_or_benchmark": "",
+      "source": "",
+      "version": "",
+      "applied": "",
+      "deviations_documented": "",
+      "owner": "",
+      "last_reviewed": ""
      }
     },
     {
      "data": {
-      "3": "21",
-      "aws_account_baseline": "",
-      "cis_aws_foundations": "",
-      "cis": "",
-      "v3_0": "",
-      "yes": "",
-      "no": "",
-      "cloud": "",
-      "2026_06_01": ""
+      "ref": "18",
+      "system_platform": "",
+      "baseline_or_benchmark": "",
+      "source": "",
+      "version": "",
+      "applied": "",
+      "deviations_documented": "",
+      "owner": "",
+      "last_reviewed": ""
      }
     },
     {
      "data": {
-      "3": "22",
-      "aws_account_baseline": "",
-      "cis_aws_foundations": "",
-      "cis": "",
-      "v3_0": "",
-      "yes": "",
-      "no": "",
-      "cloud": "",
-      "2026_06_01": ""
+      "ref": "19",
+      "system_platform": "",
+      "baseline_or_benchmark": "",
+      "source": "",
+      "version": "",
+      "applied": "",
+      "deviations_documented": "",
+      "owner": "",
+      "last_reviewed": ""
      }
     },
     {
      "data": {
-      "3": "23",
-      "aws_account_baseline": "",
-      "cis_aws_foundations": "",
-      "cis": "",
-      "v3_0": "",
-      "yes": "",
-      "no": "",
-      "cloud": "",
-      "2026_06_01": ""
+      "ref": "20",
+      "system_platform": "",
+      "baseline_or_benchmark": "",
+      "source": "",
+      "version": "",
+      "applied": "",
+      "deviations_documented": "",
+      "owner": "",
+      "last_reviewed": ""
      }
     },
     {
      "data": {
-      "3": "24",
-      "aws_account_baseline": "",
-      "cis_aws_foundations": "",
-      "cis": "",
-      "v3_0": "",
-      "yes": "",
-      "no": "",
-      "cloud": "",
-      "2026_06_01": ""
+      "ref": "21",
+      "system_platform": "",
+      "baseline_or_benchmark": "",
+      "source": "",
+      "version": "",
+      "applied": "",
+      "deviations_documented": "",
+      "owner": "",
+      "last_reviewed": ""
      }
     },
     {
      "data": {
-      "3": "25",
-      "aws_account_baseline": "",
-      "cis_aws_foundations": "",
-      "cis": "",
-      "v3_0": "",
-      "yes": "",
-      "no": "",
-      "cloud": "",
-      "2026_06_01": ""
+      "ref": "22",
+      "system_platform": "",
+      "baseline_or_benchmark": "",
+      "source": "",
+      "version": "",
+      "applied": "",
+      "deviations_documented": "",
+      "owner": "",
+      "last_reviewed": ""
+     }
+    },
+    {
+     "data": {
+      "ref": "23",
+      "system_platform": "",
+      "baseline_or_benchmark": "",
+      "source": "",
+      "version": "",
+      "applied": "",
+      "deviations_documented": "",
+      "owner": "",
+      "last_reviewed": ""
+     }
+    },
+    {
+     "data": {
+      "ref": "24",
+      "system_platform": "",
+      "baseline_or_benchmark": "",
+      "source": "",
+      "version": "",
+      "applied": "",
+      "deviations_documented": "",
+      "owner": "",
+      "last_reviewed": ""
+     }
+    },
+    {
+     "data": {
+      "ref": "25",
+      "system_platform": "",
+      "baseline_or_benchmark": "",
+      "source": "",
+      "version": "",
+      "applied": "",
+      "deviations_documented": "",
+      "owner": "",
+      "last_reviewed": ""
      }
     }
    ],
@@ -2034,20 +2741,25 @@
     {
      "title": "Item",
      "keys": [
-      "3",
-      "aws_account_baseline"
+      "ref",
+      "system_platform"
      ]
     },
     {
      "title": "Assessment",
      "keys": [
-      "cis_aws_foundations",
-      "cis",
-      "v3_0",
-      "yes",
-      "no",
-      "cloud",
-      "2026_06_01"
+      "baseline_or_benchmark",
+      "source",
+      "version",
+      "applied",
+      "deviations_documented",
+      "last_reviewed"
+     ]
+    },
+    {
+     "title": "Ownership & dates",
+     "keys": [
+      "owner"
      ]
     }
    ]
@@ -2058,363 +2770,411 @@
    "description": "NIST 800-53 / 800-171 — Nist Fips 140 3 Crypto Module Inventory (from the template).",
    "columns": [
     {
-     "key": "2",
-     "label": "2",
+     "key": "ref",
+     "label": "Ref",
      "type": "text"
     },
     {
-     "key": "tls_termination",
-     "label": "TLS termination",
+     "key": "system_use",
+     "label": "System / use",
      "type": "text"
     },
     {
-     "key": "vendor_crypto_library",
-     "label": "Vendor crypto library",
+     "key": "cryptographic_module",
+     "label": "Cryptographic module",
      "type": "text"
     },
     {
-     "key": "fill_in_vendor",
-     "label": "[FILL IN: vendor]",
+     "key": "vendor",
+     "label": "Vendor",
      "type": "text"
     },
     {
-     "key": "fill_in_cert",
-     "label": "[FILL IN: cert #]",
+     "key": "cmvp_certificate",
+     "label": "CMVP certificate #",
      "type": "text"
     },
     {
-     "key": "level_1",
-     "label": "Level 1",
+     "key": "fips_140_3_level",
+     "label": "FIPS 140-3 level",
+     "type": "select",
+     "options": [
+      {
+       "value": "Level 1",
+       "label": "Level 1",
+       "tone": "slate"
+      }
+     ]
+    },
+    {
+     "key": "algorithms_cavp",
+     "label": "Algorithms (CAVP)",
      "type": "text"
     },
     {
-     "key": "aes_gcm_ecdhe_sha_2",
-     "label": "AES-GCM, ECDHE, SHA-2",
-     "type": "text"
+     "key": "validation_status",
+     "label": "Validation status",
+     "type": "select",
+     "options": [
+      {
+       "value": "Validated",
+       "label": "Validated",
+       "tone": "slate"
+      },
+      {
+       "value": "In process",
+       "label": "In process",
+       "tone": "slate"
+      }
+     ]
     },
     {
-     "key": "in_process",
-     "label": "In process",
-     "type": "text"
+     "key": "owner",
+     "label": "Owner",
+     "type": "text",
+     "picker": "users"
     },
     {
-     "key": "platform",
-     "label": "Platform",
-     "type": "text"
-    },
-    {
-     "key": "confirm_on_cmvp_module_list",
-     "label": "Confirm on CMVP module list",
-     "type": "text"
+     "key": "notes",
+     "label": "Notes",
+     "type": "textarea"
     }
    ],
    "seed": [
     {
      "data": {
-      "2": "3",
-      "tls_termination": "",
-      "vendor_crypto_library": "",
-      "fill_in_vendor": "",
-      "fill_in_cert": "",
-      "level_1": "",
-      "aes_gcm_ecdhe_sha_2": "",
-      "in_process": "",
-      "platform": "",
-      "confirm_on_cmvp_module_list": ""
+      "ref": "1",
+      "system_use": "Disk encryption (laptops)",
+      "cryptographic_module": "OpenSSL FIPS Provider",
+      "vendor": "OpenSSL",
+      "cmvp_certificate": "4282",
+      "fips_140_3_level": "Level 1",
+      "algorithms_cavp": "AES, SHA-2, RSA, ECDSA",
+      "validation_status": "Validated",
+      "owner": "IT",
+      "notes": "Host OS FIPS mode enabled"
      }
     },
     {
      "data": {
-      "2": "4",
-      "tls_termination": "",
-      "vendor_crypto_library": "",
-      "fill_in_vendor": "",
-      "fill_in_cert": "",
-      "level_1": "",
-      "aes_gcm_ecdhe_sha_2": "",
-      "in_process": "",
-      "platform": "",
-      "confirm_on_cmvp_module_list": ""
+      "ref": "2",
+      "system_use": "TLS termination",
+      "cryptographic_module": "Vendor crypto library",
+      "vendor": "[FILL IN: vendor]",
+      "cmvp_certificate": "[FILL IN: cert #]",
+      "fips_140_3_level": "Level 1",
+      "algorithms_cavp": "AES-GCM, ECDHE, SHA-2",
+      "validation_status": "In process",
+      "owner": "Platform",
+      "notes": "Confirm on CMVP module list"
      }
     },
     {
      "data": {
-      "2": "5",
-      "tls_termination": "",
-      "vendor_crypto_library": "",
-      "fill_in_vendor": "",
-      "fill_in_cert": "",
-      "level_1": "",
-      "aes_gcm_ecdhe_sha_2": "",
-      "in_process": "",
-      "platform": "",
-      "confirm_on_cmvp_module_list": ""
+      "ref": "3",
+      "system_use": "",
+      "cryptographic_module": "",
+      "vendor": "",
+      "cmvp_certificate": "",
+      "fips_140_3_level": "",
+      "algorithms_cavp": "",
+      "validation_status": "",
+      "owner": "",
+      "notes": ""
      }
     },
     {
      "data": {
-      "2": "6",
-      "tls_termination": "",
-      "vendor_crypto_library": "",
-      "fill_in_vendor": "",
-      "fill_in_cert": "",
-      "level_1": "",
-      "aes_gcm_ecdhe_sha_2": "",
-      "in_process": "",
-      "platform": "",
-      "confirm_on_cmvp_module_list": ""
+      "ref": "4",
+      "system_use": "",
+      "cryptographic_module": "",
+      "vendor": "",
+      "cmvp_certificate": "",
+      "fips_140_3_level": "",
+      "algorithms_cavp": "",
+      "validation_status": "",
+      "owner": "",
+      "notes": ""
      }
     },
     {
      "data": {
-      "2": "7",
-      "tls_termination": "",
-      "vendor_crypto_library": "",
-      "fill_in_vendor": "",
-      "fill_in_cert": "",
-      "level_1": "",
-      "aes_gcm_ecdhe_sha_2": "",
-      "in_process": "",
-      "platform": "",
-      "confirm_on_cmvp_module_list": ""
+      "ref": "5",
+      "system_use": "",
+      "cryptographic_module": "",
+      "vendor": "",
+      "cmvp_certificate": "",
+      "fips_140_3_level": "",
+      "algorithms_cavp": "",
+      "validation_status": "",
+      "owner": "",
+      "notes": ""
      }
     },
     {
      "data": {
-      "2": "8",
-      "tls_termination": "",
-      "vendor_crypto_library": "",
-      "fill_in_vendor": "",
-      "fill_in_cert": "",
-      "level_1": "",
-      "aes_gcm_ecdhe_sha_2": "",
-      "in_process": "",
-      "platform": "",
-      "confirm_on_cmvp_module_list": ""
+      "ref": "6",
+      "system_use": "",
+      "cryptographic_module": "",
+      "vendor": "",
+      "cmvp_certificate": "",
+      "fips_140_3_level": "",
+      "algorithms_cavp": "",
+      "validation_status": "",
+      "owner": "",
+      "notes": ""
      }
     },
     {
      "data": {
-      "2": "9",
-      "tls_termination": "",
-      "vendor_crypto_library": "",
-      "fill_in_vendor": "",
-      "fill_in_cert": "",
-      "level_1": "",
-      "aes_gcm_ecdhe_sha_2": "",
-      "in_process": "",
-      "platform": "",
-      "confirm_on_cmvp_module_list": ""
+      "ref": "7",
+      "system_use": "",
+      "cryptographic_module": "",
+      "vendor": "",
+      "cmvp_certificate": "",
+      "fips_140_3_level": "",
+      "algorithms_cavp": "",
+      "validation_status": "",
+      "owner": "",
+      "notes": ""
      }
     },
     {
      "data": {
-      "2": "10",
-      "tls_termination": "",
-      "vendor_crypto_library": "",
-      "fill_in_vendor": "",
-      "fill_in_cert": "",
-      "level_1": "",
-      "aes_gcm_ecdhe_sha_2": "",
-      "in_process": "",
-      "platform": "",
-      "confirm_on_cmvp_module_list": ""
+      "ref": "8",
+      "system_use": "",
+      "cryptographic_module": "",
+      "vendor": "",
+      "cmvp_certificate": "",
+      "fips_140_3_level": "",
+      "algorithms_cavp": "",
+      "validation_status": "",
+      "owner": "",
+      "notes": ""
      }
     },
     {
      "data": {
-      "2": "11",
-      "tls_termination": "",
-      "vendor_crypto_library": "",
-      "fill_in_vendor": "",
-      "fill_in_cert": "",
-      "level_1": "",
-      "aes_gcm_ecdhe_sha_2": "",
-      "in_process": "",
-      "platform": "",
-      "confirm_on_cmvp_module_list": ""
+      "ref": "9",
+      "system_use": "",
+      "cryptographic_module": "",
+      "vendor": "",
+      "cmvp_certificate": "",
+      "fips_140_3_level": "",
+      "algorithms_cavp": "",
+      "validation_status": "",
+      "owner": "",
+      "notes": ""
      }
     },
     {
      "data": {
-      "2": "12",
-      "tls_termination": "",
-      "vendor_crypto_library": "",
-      "fill_in_vendor": "",
-      "fill_in_cert": "",
-      "level_1": "",
-      "aes_gcm_ecdhe_sha_2": "",
-      "in_process": "",
-      "platform": "",
-      "confirm_on_cmvp_module_list": ""
+      "ref": "10",
+      "system_use": "",
+      "cryptographic_module": "",
+      "vendor": "",
+      "cmvp_certificate": "",
+      "fips_140_3_level": "",
+      "algorithms_cavp": "",
+      "validation_status": "",
+      "owner": "",
+      "notes": ""
      }
     },
     {
      "data": {
-      "2": "13",
-      "tls_termination": "",
-      "vendor_crypto_library": "",
-      "fill_in_vendor": "",
-      "fill_in_cert": "",
-      "level_1": "",
-      "aes_gcm_ecdhe_sha_2": "",
-      "in_process": "",
-      "platform": "",
-      "confirm_on_cmvp_module_list": ""
+      "ref": "11",
+      "system_use": "",
+      "cryptographic_module": "",
+      "vendor": "",
+      "cmvp_certificate": "",
+      "fips_140_3_level": "",
+      "algorithms_cavp": "",
+      "validation_status": "",
+      "owner": "",
+      "notes": ""
      }
     },
     {
      "data": {
-      "2": "14",
-      "tls_termination": "",
-      "vendor_crypto_library": "",
-      "fill_in_vendor": "",
-      "fill_in_cert": "",
-      "level_1": "",
-      "aes_gcm_ecdhe_sha_2": "",
-      "in_process": "",
-      "platform": "",
-      "confirm_on_cmvp_module_list": ""
+      "ref": "12",
+      "system_use": "",
+      "cryptographic_module": "",
+      "vendor": "",
+      "cmvp_certificate": "",
+      "fips_140_3_level": "",
+      "algorithms_cavp": "",
+      "validation_status": "",
+      "owner": "",
+      "notes": ""
      }
     },
     {
      "data": {
-      "2": "15",
-      "tls_termination": "",
-      "vendor_crypto_library": "",
-      "fill_in_vendor": "",
-      "fill_in_cert": "",
-      "level_1": "",
-      "aes_gcm_ecdhe_sha_2": "",
-      "in_process": "",
-      "platform": "",
-      "confirm_on_cmvp_module_list": ""
+      "ref": "13",
+      "system_use": "",
+      "cryptographic_module": "",
+      "vendor": "",
+      "cmvp_certificate": "",
+      "fips_140_3_level": "",
+      "algorithms_cavp": "",
+      "validation_status": "",
+      "owner": "",
+      "notes": ""
      }
     },
     {
      "data": {
-      "2": "16",
-      "tls_termination": "",
-      "vendor_crypto_library": "",
-      "fill_in_vendor": "",
-      "fill_in_cert": "",
-      "level_1": "",
-      "aes_gcm_ecdhe_sha_2": "",
-      "in_process": "",
-      "platform": "",
-      "confirm_on_cmvp_module_list": ""
+      "ref": "14",
+      "system_use": "",
+      "cryptographic_module": "",
+      "vendor": "",
+      "cmvp_certificate": "",
+      "fips_140_3_level": "",
+      "algorithms_cavp": "",
+      "validation_status": "",
+      "owner": "",
+      "notes": ""
      }
     },
     {
      "data": {
-      "2": "17",
-      "tls_termination": "",
-      "vendor_crypto_library": "",
-      "fill_in_vendor": "",
-      "fill_in_cert": "",
-      "level_1": "",
-      "aes_gcm_ecdhe_sha_2": "",
-      "in_process": "",
-      "platform": "",
-      "confirm_on_cmvp_module_list": ""
+      "ref": "15",
+      "system_use": "",
+      "cryptographic_module": "",
+      "vendor": "",
+      "cmvp_certificate": "",
+      "fips_140_3_level": "",
+      "algorithms_cavp": "",
+      "validation_status": "",
+      "owner": "",
+      "notes": ""
      }
     },
     {
      "data": {
-      "2": "18",
-      "tls_termination": "",
-      "vendor_crypto_library": "",
-      "fill_in_vendor": "",
-      "fill_in_cert": "",
-      "level_1": "",
-      "aes_gcm_ecdhe_sha_2": "",
-      "in_process": "",
-      "platform": "",
-      "confirm_on_cmvp_module_list": ""
+      "ref": "16",
+      "system_use": "",
+      "cryptographic_module": "",
+      "vendor": "",
+      "cmvp_certificate": "",
+      "fips_140_3_level": "",
+      "algorithms_cavp": "",
+      "validation_status": "",
+      "owner": "",
+      "notes": ""
      }
     },
     {
      "data": {
-      "2": "19",
-      "tls_termination": "",
-      "vendor_crypto_library": "",
-      "fill_in_vendor": "",
-      "fill_in_cert": "",
-      "level_1": "",
-      "aes_gcm_ecdhe_sha_2": "",
-      "in_process": "",
-      "platform": "",
-      "confirm_on_cmvp_module_list": ""
+      "ref": "17",
+      "system_use": "",
+      "cryptographic_module": "",
+      "vendor": "",
+      "cmvp_certificate": "",
+      "fips_140_3_level": "",
+      "algorithms_cavp": "",
+      "validation_status": "",
+      "owner": "",
+      "notes": ""
      }
     },
     {
      "data": {
-      "2": "20",
-      "tls_termination": "",
-      "vendor_crypto_library": "",
-      "fill_in_vendor": "",
-      "fill_in_cert": "",
-      "level_1": "",
-      "aes_gcm_ecdhe_sha_2": "",
-      "in_process": "",
-      "platform": "",
-      "confirm_on_cmvp_module_list": ""
+      "ref": "18",
+      "system_use": "",
+      "cryptographic_module": "",
+      "vendor": "",
+      "cmvp_certificate": "",
+      "fips_140_3_level": "",
+      "algorithms_cavp": "",
+      "validation_status": "",
+      "owner": "",
+      "notes": ""
      }
     },
     {
      "data": {
-      "2": "21",
-      "tls_termination": "",
-      "vendor_crypto_library": "",
-      "fill_in_vendor": "",
-      "fill_in_cert": "",
-      "level_1": "",
-      "aes_gcm_ecdhe_sha_2": "",
-      "in_process": "",
-      "platform": "",
-      "confirm_on_cmvp_module_list": ""
+      "ref": "19",
+      "system_use": "",
+      "cryptographic_module": "",
+      "vendor": "",
+      "cmvp_certificate": "",
+      "fips_140_3_level": "",
+      "algorithms_cavp": "",
+      "validation_status": "",
+      "owner": "",
+      "notes": ""
      }
     },
     {
      "data": {
-      "2": "22",
-      "tls_termination": "",
-      "vendor_crypto_library": "",
-      "fill_in_vendor": "",
-      "fill_in_cert": "",
-      "level_1": "",
-      "aes_gcm_ecdhe_sha_2": "",
-      "in_process": "",
-      "platform": "",
-      "confirm_on_cmvp_module_list": ""
+      "ref": "20",
+      "system_use": "",
+      "cryptographic_module": "",
+      "vendor": "",
+      "cmvp_certificate": "",
+      "fips_140_3_level": "",
+      "algorithms_cavp": "",
+      "validation_status": "",
+      "owner": "",
+      "notes": ""
      }
     },
     {
      "data": {
-      "2": "23",
-      "tls_termination": "",
-      "vendor_crypto_library": "",
-      "fill_in_vendor": "",
-      "fill_in_cert": "",
-      "level_1": "",
-      "aes_gcm_ecdhe_sha_2": "",
-      "in_process": "",
-      "platform": "",
-      "confirm_on_cmvp_module_list": ""
+      "ref": "21",
+      "system_use": "",
+      "cryptographic_module": "",
+      "vendor": "",
+      "cmvp_certificate": "",
+      "fips_140_3_level": "",
+      "algorithms_cavp": "",
+      "validation_status": "",
+      "owner": "",
+      "notes": ""
      }
     },
     {
      "data": {
-      "2": "24",
-      "tls_termination": "",
-      "vendor_crypto_library": "",
-      "fill_in_vendor": "",
-      "fill_in_cert": "",
-      "level_1": "",
-      "aes_gcm_ecdhe_sha_2": "",
-      "in_process": "",
-      "platform": "",
-      "confirm_on_cmvp_module_list": ""
+      "ref": "22",
+      "system_use": "",
+      "cryptographic_module": "",
+      "vendor": "",
+      "cmvp_certificate": "",
+      "fips_140_3_level": "",
+      "algorithms_cavp": "",
+      "validation_status": "",
+      "owner": "",
+      "notes": ""
+     }
+    },
+    {
+     "data": {
+      "ref": "23",
+      "system_use": "",
+      "cryptographic_module": "",
+      "vendor": "",
+      "cmvp_certificate": "",
+      "fips_140_3_level": "",
+      "algorithms_cavp": "",
+      "validation_status": "",
+      "owner": "",
+      "notes": ""
+     }
+    },
+    {
+     "data": {
+      "ref": "24",
+      "system_use": "",
+      "cryptographic_module": "",
+      "vendor": "",
+      "cmvp_certificate": "",
+      "fips_140_3_level": "",
+      "algorithms_cavp": "",
+      "validation_status": "",
+      "owner": "",
+      "notes": ""
      }
     }
    ],
@@ -2422,21 +3182,26 @@
     {
      "title": "Item",
      "keys": [
-      "2",
-      "tls_termination"
+      "ref",
+      "system_use"
      ]
     },
     {
      "title": "Assessment",
      "keys": [
-      "vendor_crypto_library",
-      "fill_in_vendor",
-      "fill_in_cert",
-      "level_1",
-      "aes_gcm_ecdhe_sha_2",
-      "in_process",
-      "platform",
-      "confirm_on_cmvp_module_list"
+      "cryptographic_module",
+      "vendor",
+      "cmvp_certificate",
+      "fips_140_3_level",
+      "algorithms_cavp",
+      "validation_status",
+      "notes"
+     ]
+    },
+    {
+     "title": "Ownership & dates",
+     "keys": [
+      "owner"
      ]
     }
    ]

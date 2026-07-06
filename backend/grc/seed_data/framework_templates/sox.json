@@ -118,64 +118,125 @@
    "description": "SOX ITGC — Itgc Matrix (from the template).",
    "columns": [
     {
-     "key": "3",
-     "label": "3",
+     "key": "ref",
+     "label": "Ref",
      "type": "text"
     },
     {
-     "key": "computer_operations",
-     "label": "Computer Operations",
+     "key": "itgc_domain",
+     "label": "ITGC domain",
      "type": "text"
     },
     {
-     "key": "batch_jobs_and_backups_are_monitored",
-     "label": "Batch jobs and backups are monitored",
-     "type": "text"
+     "key": "control",
+     "label": "Control",
+     "type": "textarea"
     },
     {
-     "key": "daily",
-     "label": "Daily",
-     "type": "text"
+     "key": "frequency",
+     "label": "Frequency",
+     "type": "select",
+     "options": [
+      {
+       "value": "Quarterly",
+       "label": "Quarterly",
+       "tone": "slate"
+      },
+      {
+       "value": "Per change",
+       "label": "Per change",
+       "tone": "slate"
+      },
+      {
+       "value": "Daily",
+       "label": "Daily",
+       "tone": "slate"
+      }
+     ]
     },
     {
-     "key": "it_ops",
-     "label": "IT Ops",
-     "type": "text"
+     "key": "owner",
+     "label": "Owner",
+     "type": "text",
+     "picker": "users"
     },
     {
-     "key": "job_logs",
-     "label": "Job logs",
-     "type": "text"
+     "key": "evidence",
+     "label": "Evidence",
+     "type": "text",
+     "picker": "evidence"
     },
     {
-     "key": "yes",
-     "label": "Yes",
-     "type": "text"
+     "key": "design_effective",
+     "label": "Design effective?",
+     "type": "date"
     },
     {
-     "key": "yes_2",
-     "label": "Yes",
-     "type": "text"
+     "key": "operating_effective",
+     "label": "Operating effective?",
+     "type": "date"
     }
    ],
-   "seed": [],
+   "seed": [
+    {
+     "data": {
+      "ref": "1",
+      "itgc_domain": "Access to Programs and Data",
+      "control": "User access is approved and reviewed quarterly",
+      "frequency": "Quarterly",
+      "owner": "IT",
+      "evidence": "Access review records",
+      "design_effective": "Yes",
+      "operating_effective": "Yes"
+     }
+    },
+    {
+     "data": {
+      "ref": "2",
+      "itgc_domain": "Program Changes",
+      "control": "Changes are tested and approved before release",
+      "frequency": "Per change",
+      "owner": "Eng",
+      "evidence": "Change tickets",
+      "design_effective": "Yes",
+      "operating_effective": "Yes"
+     }
+    },
+    {
+     "data": {
+      "ref": "3",
+      "itgc_domain": "Computer Operations",
+      "control": "Batch jobs and backups are monitored",
+      "frequency": "Daily",
+      "owner": "IT Ops",
+      "evidence": "Job logs",
+      "design_effective": "Yes",
+      "operating_effective": "Yes"
+     }
+    }
+   ],
    "formSections": [
     {
      "title": "Item",
      "keys": [
-      "3",
-      "computer_operations"
+      "ref",
+      "itgc_domain"
      ]
     },
     {
      "title": "Assessment",
      "keys": [
-      "batch_jobs_and_backups_are_monitored",
-      "daily",
-      "it_ops",
-      "job_logs",
-      "yes",
-      "yes_2"
+      "control",
+      "frequency",
+      "evidence"
+     ]
+    },
+    {
+     "title": "Ownership & dates",
+     "keys": [
+      "owner",
+      "design_effective",
+      "operating_effective"
      ]
     }
    ]

@@ -12,64 +12,121 @@
    "description": "DORA — Compliance Roadmap (from the template).",
    "columns": [
     {
-     "key": "3",
-     "label": "3",
+     "key": "ref",
+     "label": "Ref",
      "type": "text"
     },
     {
-     "key": "third_party_risk",
-     "label": "Third-party risk",
+     "key": "workstream",
+     "label": "Workstream",
      "type": "text"
     },
     {
-     "key": "compile_the_register_of_information_and_remediat",
-     "label": "Compile the register of information and remediate contract g",
+     "key": "action",
+     "label": "Action",
+     "type": "textarea"
+    },
+    {
+     "key": "dora_article",
+     "label": "DORA article",
      "type": "text"
     },
     {
-     "key": "28_30",
-     "label": "28-30",
-     "type": "text"
+     "key": "priority",
+     "label": "Priority",
+     "type": "select",
+     "options": [
+      {
+       "value": "High",
+       "label": "High",
+       "tone": "rose"
+      }
+     ]
     },
     {
-     "key": "high",
-     "label": "High",
-     "type": "text"
+     "key": "owner",
+     "label": "Owner",
+     "type": "text",
+     "picker": "users"
     },
     {
-     "key": "procurement",
-     "label": "Procurement",
-     "type": "text"
+     "key": "target_date",
+     "label": "Target date",
+     "type": "date"
     },
     {
-     "key": "2026_10_01",
-     "label": "2026-10-01",
-     "type": "text"
-    },
-    {
-     "key": "not_started",
-     "label": "Not started",
-     "type": "text"
+     "key": "status",
+     "label": "Status",
+     "type": "select",
+     "options": [
+      {
+       "value": "Not started",
+       "label": "Not started",
+       "tone": "slate"
+      }
+     ]
     }
    ],
-   "seed": [],
+   "seed": [
+    {
+     "data": {
+      "ref": "1",
+      "workstream": "ICT risk management",
+      "action": "Formalise and have the management body approve the ICT risk-management framework",
+      "dora_article": "5-6",
+      "priority": "High",
+      "owner": "Head of ICT",
+      "target_date": "2026-09-01",
+      "status": "Not started"
+     }
+    },
+    {
+     "data": {
+      "ref": "2",
+      "workstream": "Incident reporting",
+      "action": "Build the major-incident classification and reporting workflow",
+      "dora_article": "17-19",
+      "priority": "High",
+      "owner": "SecOps",
+      "target_date": "2026-09-01",
+      "status": "Not started"
+     }
+    },
+    {
+     "data": {
+      "ref": "3",
+      "workstream": "Third-party risk",
+      "action": "Compile the register of information and remediate contract gaps",
+      "dora_article": "28-30",
+      "priority": "High",
+      "owner": "Procurement",
+      "target_date": "2026-10-01",
+      "status": "Not started"
+     }
+    }
+   ],
    "formSections": [
     {
      "title": "Item",
      "keys": [
-      "3",
-      "third_party_risk"
+      "ref",
+      "workstream"
      ]
     },
     {
      "title": "Assessment",
      "keys": [
-      "compile_the_register_of_information_and_remediat",
-      "28_30",
-      "high",
-      "procurement",
-      "2026_10_01",
-      "not_started"
+      "action",
+      "dora_article",
+      "priority",
+      "status"
+     ]
+    },
+    {
+     "title": "Ownership & dates",
+     "keys": [
+      "owner",
+      "target_date"
      ]
     }
    ]
@@ -621,76 +678,111 @@
    "description": "DORA — Register Of Information (from the template).",
    "columns": [
     {
-     "key": "r2",
-     "label": "R2",
+     "key": "ref",
+     "label": "Ref",
      "type": "text"
     },
     {
-     "key": "payment_processor",
-     "label": "Payment processor",
+     "key": "ict_third_party_provider",
+     "label": "ICT third-party provider",
      "type": "text"
     },
     {
-     "key": "card_payment_processing",
-     "label": "Card payment processing",
+     "key": "service_function_supported",
+     "label": "Service / function supported",
      "type": "text"
     },
     {
-     "key": "yes",
-     "label": "Yes",
+     "key": "supports_a_critical_or_important_function",
+     "label": "Supports a critical or important function?",
      "type": "text"
     },
     {
-     "key": "msa_2026_02",
-     "label": "MSA-2026-02",
+     "key": "contract_reference",
+     "label": "Contract reference",
      "type": "text"
     },
     {
-     "key": "medium",
-     "label": "Medium",
+     "key": "concentration_risk",
+     "label": "Concentration risk",
      "type": "text"
     },
     {
-     "key": "no",
-     "label": "No",
+     "key": "subcontracting",
+     "label": "Subcontracting?",
      "type": "text"
     },
     {
-     "key": "yes_2",
-     "label": "Yes",
-     "type": "text"
+     "key": "exit_plan",
+     "label": "Exit plan?",
+     "type": "textarea"
     },
     {
-     "key": "payments",
-     "label": "Payments",
-     "type": "text"
+     "key": "owner",
+     "label": "Owner",
+     "type": "text",
+     "picker": "users"
     },
     {
-     "key": "2026_06_01",
-     "label": "2026-06-01",
+     "key": "last_reviewed",
+     "label": "Last reviewed",
      "type": "text"
     }
    ],
-   "seed": [],
+   "seed": [
+    {
+     "data": {
+      "ref": "R1",
+      "ict_third_party_provider": "Cloud infrastructure provider",
+      "service_function_supported": "Core platform hosting",
+      "supports_a_critical_or_important_function": "Yes",
+      "contract_reference": "MSA-2026-01",
+      "concentration_risk": "High",
+      "subcontracting": "Yes",
+      "exit_plan": "Yes",
+      "owner": "Head of ICT",
+      "last_reviewed": "2026-06-01"
+     }
+    },
+    {
+     "data": {
+      "ref": "R2",
+      "ict_third_party_provider": "Payment processor",
+      "service_function_supported": "Card payment processing",
+      "supports_a_critical_or_important_function": "Yes",
+      "contract_reference": "MSA-2026-02",
+      "concentration_risk": "Medium",
+      "subcontracting": "No",
+      "exit_plan": "Yes",
+      "owner": "Payments",
+      "last_reviewed": "2026-06-01"
+     }
+    }
+   ],
    "formSections": [
     {
      "title": "Item",
      "keys": [
-      "r2",
-      "payment_processor"
+      "ref",
+      "ict_third_party_provider"
      ]
     },
     {
      "title": "Assessment",
      "keys": [
-      "card_payment_processing",
-      "yes",
-      "msa_2026_02",
-      "medium",
-      "no",
-      "yes_2",
-      "payments",
-      "2026_06_01"
+      "service_function_supported",
+      "supports_a_critical_or_important_function",
+      "contract_reference",
+      "concentration_risk",
+      "subcontracting",
+      "exit_plan",
+      "last_reviewed"
+     ]
+    },
+    {
+     "title": "Ownership & dates",
+     "keys": [
+      "owner"
      ]
     }
    ]

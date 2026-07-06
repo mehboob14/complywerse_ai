@@ -11,76 +11,149 @@
    "description": "ISO 42001 — Ai Risk Register (from the template).",
    "columns": [
     {
-     "key": "2",
-     "label": "2",
+     "key": "ref",
+     "label": "Ref",
      "type": "text"
     },
     {
-     "key": "customer_llm_assistant",
-     "label": "Customer LLM assistant",
+     "key": "ai_system_use",
+     "label": "AI system / use",
      "type": "text"
     },
     {
-     "key": "inaccurate_or_harmful_output",
-     "label": "Inaccurate or harmful output",
+     "key": "risk_to_individuals_or_society",
+     "label": "Risk to individuals or society",
      "type": "text"
     },
     {
-     "key": "medium",
-     "label": "Medium",
+     "key": "likelihood",
+     "label": "Likelihood",
+     "type": "select",
+     "options": [
+      {
+       "value": "Medium",
+       "label": "Medium",
+       "tone": "amber"
+      }
+     ]
+    },
+    {
+     "key": "impact",
+     "label": "Impact",
+     "type": "select",
+     "options": [
+      {
+       "value": "High",
+       "label": "High",
+       "tone": "rose"
+      },
+      {
+       "value": "Medium",
+       "label": "Medium",
+       "tone": "amber"
+      }
+     ]
+    },
+    {
+     "key": "risk_level",
+     "label": "Risk level",
+     "type": "select",
+     "options": [
+      {
+       "value": "High",
+       "label": "High",
+       "tone": "rose"
+      },
+      {
+       "value": "Medium",
+       "label": "Medium",
+       "tone": "amber"
+      }
+     ]
+    },
+    {
+     "key": "treatment",
+     "label": "Treatment",
+     "type": "textarea"
+    },
+    {
+     "key": "residual_risk",
+     "label": "Residual risk",
      "type": "text"
     },
     {
-     "key": "medium_2",
-     "label": "Medium",
-     "type": "text"
+     "key": "owner",
+     "label": "Owner",
+     "type": "text",
+     "picker": "users"
     },
     {
-     "key": "medium_3",
-     "label": "Medium",
-     "type": "text"
-    },
-    {
-     "key": "guardrails_evaluation_disclaimers",
-     "label": "Guardrails, evaluation, disclaimers",
-     "type": "text"
-    },
-    {
-     "key": "low",
-     "label": "Low",
-     "type": "text"
-    },
-    {
-     "key": "product",
-     "label": "Product",
-     "type": "text"
-    },
-    {
-     "key": "open",
-     "label": "Open",
-     "type": "text"
+     "key": "status",
+     "label": "Status",
+     "type": "select",
+     "options": [
+      {
+       "value": "Open",
+       "label": "Open",
+       "tone": "rose"
+      }
+     ]
     }
    ],
-   "seed": [],
+   "seed": [
+    {
+     "data": {
+      "ref": "1",
+      "ai_system_use": "CV-screening model",
+      "risk_to_individuals_or_society": "Discriminatory outcomes / bias",
+      "likelihood": "Medium",
+      "impact": "High",
+      "risk_level": "High",
+      "treatment": "Bias testing, human review",
+      "residual_risk": "Medium",
+      "owner": "AI lead",
+      "status": "Open"
+     }
+    },
+    {
+     "data": {
+      "ref": "2",
+      "ai_system_use": "Customer LLM assistant",
+      "risk_to_individuals_or_society": "Inaccurate or harmful output",
+      "likelihood": "Medium",
+      "impact": "Medium",
+      "risk_level": "Medium",
+      "treatment": "Guardrails, evaluation, disclaimers",
+      "residual_risk": "Low",
+      "owner": "Product",
+      "status": "Open"
+     }
+    }
+   ],
    "formSections": [
     {
      "title": "Item",
      "keys": [
-      "2",
-      "customer_llm_assistant"
+      "ref",
+      "ai_system_use"
      ]
     },
     {
      "title": "Assessment",
      "keys": [
-      "inaccurate_or_harmful_output",
-      "medium",
-      "medium_2",
-      "medium_3",
-      "guardrails_evaluation_disclaimers",
-      "low",
-      "product",
-      "open"
+      "risk_to_individuals_or_society",
+      "likelihood",
+      "impact",
+      "risk_level",
+      "treatment",
+      "residual_risk",
+      "status"
+     ]
+    },
+    {
+     "title": "Ownership & dates",
+     "keys": [
+      "owner"
      ]
     }
    ]
@@ -305,64 +378,126 @@
    "description": "ISO 42001 — Implementation Roadmap (from the template).",
    "columns": [
     {
-     "key": "3",
-     "label": "3",
+     "key": "ref",
+     "label": "Ref",
      "type": "text"
     },
     {
-     "key": "lifecycle",
-     "label": "Lifecycle",
+     "key": "workstream",
+     "label": "Workstream",
      "type": "text"
     },
     {
-     "key": "define_ai_system_lifecycle_and_data_governance_c",
-     "label": "Define AI system lifecycle and data governance controls",
+     "key": "action",
+     "label": "Action",
+     "type": "textarea"
+    },
+    {
+     "key": "ref_2",
+     "label": "Ref",
      "type": "text"
     },
     {
-     "key": "a",
-     "label": "A",
-     "type": "text"
+     "key": "priority",
+     "label": "Priority",
+     "type": "select",
+     "options": [
+      {
+       "value": "High",
+       "label": "High",
+       "tone": "rose"
+      },
+      {
+       "value": "Medium",
+       "label": "Medium",
+       "tone": "amber"
+      }
+     ]
     },
     {
-     "key": "medium",
-     "label": "Medium",
-     "type": "text"
+     "key": "owner",
+     "label": "Owner",
+     "type": "text",
+     "picker": "users"
     },
     {
-     "key": "ml",
-     "label": "ML",
-     "type": "text"
+     "key": "target_date",
+     "label": "Target date",
+     "type": "date"
     },
     {
-     "key": "2026_11_01",
-     "label": "2026-11-01",
-     "type": "text"
-    },
-    {
-     "key": "not_started",
-     "label": "Not started",
-     "type": "text"
+     "key": "status",
+     "label": "Status",
+     "type": "select",
+     "options": [
+      {
+       "value": "Not started",
+       "label": "Not started",
+       "tone": "slate"
+      }
+     ]
     }
    ],
-   "seed": [],
+   "seed": [
+    {
+     "data": {
+      "ref": "1",
+      "workstream": "Leadership",
+      "action": "Approve the AI policy and assign AI roles",
+      "ref_2": "5",
+      "priority": "High",
+      "owner": "AI lead",
+      "target_date": "2026-09-01",
+      "status": "Not started"
+     }
+    },
+    {
+     "data": {
+      "ref": "2",
+      "workstream": "Risk & impact",
+      "action": "Run the AI risk assessment and AI impact assessments",
+      "ref_2": "6/8",
+      "priority": "High",
+      "owner": "AI lead",
+      "target_date": "2026-10-01",
+      "status": "Not started"
+     }
+    },
+    {
+     "data": {
+      "ref": "3",
+      "workstream": "Lifecycle",
+      "action": "Define AI system lifecycle and data governance controls",
+      "ref_2": "A",
+      "priority": "Medium",
+      "owner": "ML",
+      "target_date": "2026-11-01",
+      "status": "Not started"
+     }
+    }
+   ],
    "formSections": [
     {
      "title": "Item",
      "keys": [
-      "3",
-      "lifecycle"
+      "ref",
+      "workstream"
      ]
     },
     {
      "title": "Assessment",
      "keys": [
-      "define_ai_system_lifecycle_and_data_governance_c",
-      "a",
-      "medium",
-      "ml",
-      "2026_11_01",
-      "not_started"
+      "action",
+      "ref_2",
+      "priority",
+      "status"
+     ]
+    },
+    {
+     "title": "Ownership & dates",
+     "keys": [
+      "owner",
+      "target_date"
      ]
     }
    ]

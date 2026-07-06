@@ -76,23 +76,38 @@ def parse_xlsx(path):
         wb = openpyxl.load_workbook(path, data_only=True)
     except Exception as e:
         return None
-    best = None  # (ncols, sheet, header_row_idx, header_cells)
+    def _hscore(cells):
+        # header-likeness: short label-ish cells score +1, long sentences (data) -1
+        s = 0
+        for c in cells:
+            c = (c or "").strip()
+            if not c:
+                continue
+            if len(c) > 55:
+                s -= 1
+            elif re.match(r"^\d+([.,]\d+)?$", c):
+                pass  # pure number = data
+            elif re.match(r"^[A-Za-z(#].{0,54}$", c):
+                s += 1
+        return s
+
+    best = None  # (score, sheet, header_row_idx, header_cells, rows)
     for ws in wb.worksheets:
         if GUIDANCE.search(ws.title or ""):
             continue
-        # scan first 12 rows for the header (row with most non-empty cells, >=2)
-        rows = list(ws.iter_rows(min_row=1, max_row=min(ws.max_row, 40), values_only=True))
-        hdr_idx, hdr_cells, hdr_n = None, None, 1
-        for i, r in enumerate(rows[:12]):
+        rows = list(ws.iter_rows(min_row=1, max_row=min(ws.max_row, 250), values_only=True))
+        hdr_idx, hdr_cells, hdr_sc = None, None, 1
+        for i, r in enumerate(rows[:15]):
             cells = [cell_str(c) for c in r]
             n = sum(1 for c in cells if c)
-            if n >= 2 and n >= hdr_n:
-                # prefer rows that are followed by data
-                hdr_idx, hdr_cells, hdr_n = i, cells, n
+            sc = _hscore(cells)
+            has_below = any(any(cell_str(c) for c in rr) for rr in rows[i + 1:i + 4])
+            if n >= 2 and sc >= 2 and has_below and sc > hdr_sc:
+                hdr_idx, hdr_cells, hdr_sc = i, cells, sc
         if hdr_idx is None:
             continue
-        if best is None or hdr_n > best[0]:
-            best = (hdr_n, ws, hdr_idx, hdr_cells, rows)
+        if best is None or hdr_sc > best[0]:
+            best = (hdr_sc, ws, hdr_idx, hdr_cells, rows)
     if not best:
         # fall back: first non-guidance sheet, first row as header
         for ws in wb.worksheets:
@@ -115,6 +130,12 @@ def parse_xlsx(path):
             k += 1; key = f"{base}_{k}"
         seen.add(key)
         col_positions.append((pos, key, h))
+
+    # skip registers whose header row didn't parse into real column labels
+    header_like = sum(1 for _, _, h in col_positions
+                      if re.match(r"^[A-Za-z(#].{0,54}$", (h or "").strip()) and not re.match(r"^\d+$", (h or "").strip()))
+    if len(col_positions) < 2 or header_like < 2:
+        return None
 
     # collect data rows (after header), map to {key: value}
     data_rows = []

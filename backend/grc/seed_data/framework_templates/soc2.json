@@ -619,64 +619,131 @@
    "description": "SOC 2 — Readiness Roadmap (from the template).",
    "columns": [
     {
-     "key": "3",
-     "label": "3",
+     "key": "ref",
+     "label": "Ref",
      "type": "text"
     },
     {
-     "key": "monitoring",
-     "label": "Monitoring",
+     "key": "workstream",
+     "label": "Workstream",
      "type": "text"
     },
     {
-     "key": "stand_up_logging_monitoring_and_incident_respons",
-     "label": "Stand up logging, monitoring and incident response",
+     "key": "action",
+     "label": "Action",
      "type": "textarea"
     },
     {
-     "key": "cc7",
-     "label": "CC7",
+     "key": "criteria",
+     "label": "Criteria",
      "type": "text"
     },
     {
-     "key": "secops",
-     "label": "SecOps",
-     "type": "text"
+     "key": "priority",
+     "label": "Priority",
+     "type": "select",
+     "options": [
+      {
+       "value": "High",
+       "label": "High",
+       "tone": "rose"
+      },
+      {
+       "value": "IT",
+       "label": "IT",
+       "tone": "slate"
+      },
+      {
+       "value": "SecOps",
+       "label": "SecOps",
+       "tone": "slate"
+      }
+     ]
     },
     {
-     "key": "high",
-     "label": "High",
-     "type": "text"
+     "key": "owner",
+     "label": "Owner",
+     "type": "text",
+     "picker": "users"
     },
     {
-     "key": "2026_10_01",
-     "label": "2026-10-01",
-     "type": "text"
+     "key": "target_date",
+     "label": "Target date",
+     "type": "date"
     },
     {
-     "key": "not_started",
-     "label": "Not started",
-     "type": "text"
+     "key": "status",
+     "label": "Status",
+     "type": "select",
+     "options": [
+      {
+       "value": "Not started",
+       "label": "Not started",
+       "tone": "slate"
+      }
+     ]
     }
    ],
-   "seed": [],
+   "seed": [
+    {
+     "data": {
+      "ref": "1",
+      "workstream": "Policies",
+      "action": "Adopt and approve the SOC 2 policy set",
+      "criteria": "CC1-CC5",
+      "priority": "High",
+      "owner": "CISO",
+      "target_date": "2026-09-01",
+      "status": "Not started"
+     }
+    },
+    {
+     "data": {
+      "ref": "2",
+      "workstream": "Access",
+      "action": "Implement quarterly access reviews and MFA",
+      "criteria": "CC6",
+      "priority": "IT",
+      "owner": "High",
+      "target_date": "2026-09-01",
+      "status": "Not started"
+     }
+    },
+    {
+     "data": {
+      "ref": "3",
+      "workstream": "Monitoring",
+      "action": "Stand up logging, monitoring and incident response",
+      "criteria": "CC7",
+      "priority": "SecOps",
+      "owner": "High",
+      "target_date": "2026-10-01",
+      "status": "Not started"
+     }
+    }
+   ],
    "formSections": [
     {
      "title": "Item",
      "keys": [
-      "3",
-      "monitoring"
+      "ref",
+      "workstream"
      ]
     },
     {
      "title": "Assessment",
      "keys": [
-      "stand_up_logging_monitoring_and_incident_respons",
-      "cc7",
-      "secops",
-      "high",
-      "2026_10_01",
-      "not_started"
+      "action",
+      "criteria",
+      "priority",
+      "status"
+     ]
+    },
+    {
+     "title": "Ownership & dates",
+     "keys": [
+      "owner",
+      "target_date"
      ]
     }
    ]
@@ -687,76 +754,144 @@
    "description": "SOC 2 — Risk Assessment (from the template).",
    "columns": [
     {
-     "key": "2",
-     "label": "2",
+     "key": "ref",
+     "label": "Ref",
      "type": "text"
     },
     {
-     "key": "service_outage_from_a_single_point_of_failure",
-     "label": "Service outage from a single point of failure",
+     "key": "risk",
+     "label": "Risk",
      "type": "text"
     },
     {
-     "key": "availability",
-     "label": "Availability",
+     "key": "category",
+     "label": "Category",
+     "type": "select",
+     "options": [
+      {
+       "value": "Security",
+       "label": "Security",
+       "tone": "slate"
+      },
+      {
+       "value": "Availability",
+       "label": "Availability",
+       "tone": "slate"
+      }
+     ]
+    },
+    {
+     "key": "likelihood",
+     "label": "Likelihood",
+     "type": "select",
+     "options": [
+      {
+       "value": "Medium",
+       "label": "Medium",
+       "tone": "amber"
+      }
+     ]
+    },
+    {
+     "key": "impact",
+     "label": "Impact",
+     "type": "select",
+     "options": [
+      {
+       "value": "High",
+       "label": "High",
+       "tone": "rose"
+      }
+     ]
+    },
+    {
+     "key": "inherent_risk",
+     "label": "Inherent risk",
      "type": "text"
     },
     {
-     "key": "medium",
-     "label": "Medium",
-     "type": "text"
-    },
-    {
-     "key": "high",
-     "label": "High",
-     "type": "text"
-    },
-    {
-     "key": "high_2",
-     "label": "High",
-     "type": "text"
-    },
-    {
-     "key": "redundancy_backups_dr_plan",
-     "label": "Redundancy, backups, DR plan",
+     "key": "treatment",
+     "label": "Treatment",
      "type": "textarea"
     },
     {
-     "key": "medium_2",
-     "label": "Medium",
+     "key": "residual_risk",
+     "label": "Residual risk",
      "type": "text"
     },
     {
-     "key": "it",
-     "label": "IT",
-     "type": "text"
+     "key": "owner",
+     "label": "Owner",
+     "type": "text",
+     "picker": "users"
     },
     {
-     "key": "open",
-     "label": "Open",
-     "type": "text"
+     "key": "status",
+     "label": "Status",
+     "type": "select",
+     "options": [
+      {
+       "value": "Open",
+       "label": "Open",
+       "tone": "rose"
+      }
+     ]
     }
    ],
-   "seed": [],
+   "seed": [
+    {
+     "data": {
+      "ref": "1",
+      "risk": "Unauthorised access to customer data",
+      "category": "Security",
+      "likelihood": "Medium",
+      "impact": "High",
+      "inherent_risk": "High",
+      "treatment": "MFA, least privilege, monitoring",
+      "residual_risk": "Low",
+      "owner": "CISO",
+      "status": "Open"
+     }
+    },
+    {
+     "data": {
+      "ref": "2",
+      "risk": "Service outage from a single point of failure",
+      "category": "Availability",
+      "likelihood": "Medium",
+      "impact": "High",
+      "inherent_risk": "High",
+      "treatment": "Redundancy, backups, DR plan",
+      "residual_risk": "Medium",
+      "owner": "IT",
+      "status": "Open"
+     }
+    }
+   ],
    "formSections": [
     {
      "title": "Item",
      "keys": [
-      "2",
-      "service_outage_from_a_single_point_of_failure"
+      "ref",
+      "risk"
      ]
     },
     {
      "title": "Assessment",
      "keys": [
-      "availability",
-      "medium",
-      "high",
-      "high_2",
-      "redundancy_backups_dr_plan",
-      "medium_2",
-      "it",
-      "open"
+      "category",
+      "likelihood",
+      "impact",
+      "inherent_risk",
+      "treatment",
+      "residual_risk",
+      "status"
+     ]
+    },
+    {
+     "title": "Ownership & dates",
+     "keys": [
+      "owner"
      ]
     }
    ]

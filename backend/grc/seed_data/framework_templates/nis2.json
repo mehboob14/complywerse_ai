@@ -11,64 +11,126 @@
    "description": "NIS2 — Compliance Roadmap (from the template).",
    "columns": [
     {
-     "key": "3",
-     "label": "3",
+     "key": "ref",
+     "label": "Ref",
      "type": "text"
     },
     {
-     "key": "supply_chain",
-     "label": "Supply chain",
+     "key": "workstream",
+     "label": "Workstream",
      "type": "text"
     },
     {
-     "key": "assess_critical_suppliers_and_add_security_claus",
-     "label": "Assess critical suppliers and add security clauses",
+     "key": "action",
+     "label": "Action",
+     "type": "textarea"
+    },
+    {
+     "key": "nis2_article",
+     "label": "NIS2 article",
      "type": "text"
     },
     {
-     "key": "21_2_d",
-     "label": "21(2)(d)",
-     "type": "text"
+     "key": "priority",
+     "label": "Priority",
+     "type": "select",
+     "options": [
+      {
+       "value": "High",
+       "label": "High",
+       "tone": "rose"
+      },
+      {
+       "value": "Medium",
+       "label": "Medium",
+       "tone": "amber"
+      }
+     ]
     },
     {
-     "key": "medium",
-     "label": "Medium",
-     "type": "text"
+     "key": "owner",
+     "label": "Owner",
+     "type": "text",
+     "picker": "users"
     },
     {
-     "key": "procurement",
-     "label": "Procurement",
-     "type": "text"
+     "key": "target_date",
+     "label": "Target date",
+     "type": "date"
     },
     {
-     "key": "2026_10_01",
-     "label": "2026-10-01",
-     "type": "text"
-    },
-    {
-     "key": "not_started",
-     "label": "Not started",
-     "type": "text"
+     "key": "status",
+     "label": "Status",
+     "type": "select",
+     "options": [
+      {
+       "value": "Not started",
+       "label": "Not started",
+       "tone": "slate"
+      }
+     ]
     }
    ],
-   "seed": [],
+   "seed": [
+    {
+     "data": {
+      "ref": "1",
+      "workstream": "Governance",
+      "action": "Brief and train the management body; record approval of the measures",
+      "nis2_article": "20",
+      "priority": "High",
+      "owner": "CISO",
+      "target_date": "2026-09-01",
+      "status": "Not started"
+     }
+    },
+    {
+     "data": {
+      "ref": "2",
+      "workstream": "Incident reporting",
+      "action": "Stand up the 24h/72h/1-month reporting workflow to the CSIRT",
+      "nis2_article": "23",
+      "priority": "High",
+      "owner": "SecOps",
+      "target_date": "2026-09-01",
+      "status": "Not started"
+     }
+    },
+    {
+     "data": {
+      "ref": "3",
+      "workstream": "Supply chain",
+      "action": "Assess critical suppliers and add security clauses",
+      "nis2_article": "21(2)(d)",
+      "priority": "Medium",
+      "owner": "Procurement",
+      "target_date": "2026-10-01",
+      "status": "Not started"
+     }
+    }
+   ],
    "formSections": [
     {
      "title": "Item",
      "keys": [
-      "3",
-      "supply_chain"
+      "ref",
+      "workstream"
      ]
     },
     {
      "title": "Assessment",
      "keys": [
-      "assess_critical_suppliers_and_add_security_claus",
-      "21_2_d",
-      "medium",
-      "procurement",
-      "2026_10_01",
-      "not_started"
+      "action",
+      "nis2_article",
+      "priority",
+      "status"
+     ]
+    },
+    {
+     "title": "Ownership & dates",
+     "keys": [
+      "owner",
+      "target_date"
      ]
     }
    ]
@@ -530,70 +592,103 @@
    "description": "NIS2 — Supplier Security Register (from the template).",
    "columns": [
     {
-     "key": "s2",
-     "label": "S2",
+     "key": "ref",
+     "label": "Ref",
      "type": "text"
     },
     {
-     "key": "managed_soc",
-     "label": "Managed SOC",
+     "key": "supplier_provider",
+     "label": "Supplier / provider",
      "type": "text"
     },
     {
-     "key": "detection_and_response",
-     "label": "Detection and response",
+     "key": "service_provided",
+     "label": "Service provided",
+     "type": "text"
+    },
+    {
+     "key": "criticality",
+     "label": "Criticality",
+     "type": "text"
+    },
+    {
+     "key": "security_assessed",
+     "label": "Security assessed?",
+     "type": "text"
+    },
+    {
+     "key": "contract_security_clauses",
+     "label": "Contract security clauses?",
+     "type": "text"
+    },
+    {
+     "key": "last_reviewed",
+     "label": "Last reviewed",
+     "type": "text"
+    },
+    {
+     "key": "owner",
+     "label": "Owner",
+     "type": "text",
+     "picker": "users"
+    },
+    {
+     "key": "notes",
+     "label": "Notes",
      "type": "textarea"
-    },
-    {
-     "key": "high",
-     "label": "High",
-     "type": "text"
-    },
-    {
-     "key": "partial",
-     "label": "Partial",
-     "type": "text"
-    },
-    {
-     "key": "yes",
-     "label": "Yes",
-     "type": "text"
-    },
-    {
-     "key": "2026_06_01",
-     "label": "2026-06-01",
-     "type": "text"
-    },
-    {
-     "key": "ciso",
-     "label": "CISO",
-     "type": "text"
-    },
-    {
-     "key": "reassess_annually",
-     "label": "Reassess annually",
-     "type": "text"
     }
    ],
-   "seed": [],
+   "seed": [
+    {
+     "data": {
+      "ref": "S1",
+      "supplier_provider": "Cloud hosting provider",
+      "service_provided": "Production hosting",
+      "criticality": "High",
+      "security_assessed": "Yes",
+      "contract_security_clauses": "Yes",
+      "last_reviewed": "2026-06-01",
+      "owner": "IT",
+      "notes": "SOC 2 / audit reports on file"
+     }
+    },
+    {
+     "data": {
+      "ref": "S2",
+      "supplier_provider": "Managed SOC",
+      "service_provided": "Detection and response",
+      "criticality": "High",
+      "security_assessed": "Partial",
+      "contract_security_clauses": "Yes",
+      "last_reviewed": "2026-06-01",
+      "owner": "CISO",
+      "notes": "Reassess annually"
+     }
+    }
+   ],
    "formSections": [
     {
      "title": "Item",
      "keys": [
-      "s2",
-      "managed_soc"
+      "ref",
+      "supplier_provider"
      ]
     },
     {
      "title": "Assessment",
      "keys": [
-      "detection_and_response",
-      "high",
-      "partial",
-      "yes",
-      "2026_06_01",
-      "ciso",
-      "reassess_annually"
+      "service_provided",
+      "criticality",
+      "security_assessed",
+      "contract_security_clauses",
+      "last_reviewed",
+      "notes"
+     ]
+    },
+    {
+     "title": "Ownership & dates",
+     "keys": [
+      "owner"
      ]
     }
    ]
