@@ -98,7 +98,7 @@ const navigation: NavEntry[] = [
     requiredPermissions: ['dashboard:overview:*']
   },
   {
-    name: 'Governance',
+    name: 'Governance Oversight',
     icon: Landmark,
     requiredModules: ['governance'],
     items: [
@@ -116,7 +116,7 @@ const navigation: NavEntry[] = [
       { name: 'ERM Overview', href: '/erm', icon: BarChart3, requiredPermissions: ['erm:risks:*'] },
       { name: 'Risk Assessments', href: '/erm/risk-assessments', icon: ClipboardList, requiredPermissions: ['risks:risk_assessment:*', 'erm:rcsa:*'] },
       { name: 'Risk Register', href: '/erm/risks', icon: AlertTriangle, requiredPermissions: ['erm:risks:*'] },
-      { name: 'Vendor Risk', href: '/vendor-risk', icon: Shield, requiredPermissions: ['erm:risks:*'] },
+      { name: 'Third-Party Vendor Risk Management', href: '/vendor-risk', icon: Shield, requiredPermissions: ['erm:risks:*'] },
       { name: 'RCSA', href: '/erm/rcsa', icon: ClipboardList, requiredPermissions: ['erm:rcsa:*'] },
       { name: 'Internal Controls', href: '/erm/internal-controls', icon: Target, requiredPermissions: ['erm:internal_controls:*'] },
       // { name: 'KRIs', href: '/erm/kris', icon: Activity, requiredPermissions: ['erm:kris:*'] },
@@ -131,7 +131,7 @@ const navigation: NavEntry[] = [
     items: [
       { name: 'Overview', href: '/compliance', icon: LayoutDashboard, requiredPermissions: ['compliance:frameworks:*', 'controls:control_library:*', 'evidence:evidence_library:*'] },
       { name: 'Frameworks', href: '/frameworks', icon: Layers, requiredPermissions: ['compliance:frameworks:*'] },
-      { name: 'Controls Catalog', href: '/controls', icon: Shield, requiredPermissions: ['controls:control_library:*'] },
+      { name: 'Controls Catalog', href: '/controls/overview', icon: Shield, requiredPermissions: ['controls:control_library:*'] },
       // { name: 'Evidence Requirements', href: '/evidence-requirements', icon: ClipboardList, requiredPermissions: ['evidence:evidence_requirements:*'] },
       // Assessments lifted out into its own top-level section (below Compliance).
       { name: 'Evidence', href: '/evidence', icon: FileText, requiredPermissions: ['evidence:evidence_library:*', 'evidence:evidence_upload:*'] },

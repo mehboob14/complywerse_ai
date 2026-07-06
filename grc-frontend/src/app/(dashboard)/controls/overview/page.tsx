@@ -125,27 +125,24 @@ function FrameworkDashboardCard({ framework }: { framework: FrameworkSummary }) 
   const { owners, assigned, unassigned } = ownerAgg(status);
 
   return (
-    <div className="cw-card flex flex-col rounded-xl p-4">
-      {/* Header */}
+    <Link
+      href={`/controls?framework=${framework.id}`}
+      className="cw-card group flex flex-col rounded-xl p-4 transition-colors hover:border-primary-300 hover:shadow-sm"
+    >
+      {/* Header — the whole card is clickable */}
       <div className="mb-3 flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <Link
-            href={`/controls?framework=${framework.id}`}
-            className="flex items-center gap-2 text-sm font-semibold text-slate-900 hover:text-primary-700"
-          >
+          <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 group-hover:text-primary-700">
             <FileStack className="h-4 w-4 flex-shrink-0 text-slate-400" strokeWidth={1.75} />
             <span className="truncate">{framework.name}</span>
-          </Link>
+          </div>
           <p className="mt-0.5 text-[11px] text-slate-500">
             {framework.control_count} controls{framework.framework_type ? ` · ${framework.framework_type}` : ''}{framework.version ? ` · ${framework.version}` : ''}
           </p>
         </div>
-        <Link
-          href={`/controls?framework=${framework.id}`}
-          className="inline-flex flex-shrink-0 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-600 hover:bg-slate-50"
-        >
+        <span className="inline-flex flex-shrink-0 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-600 group-hover:border-primary-300 group-hover:text-primary-700">
           Open <ArrowRight className="h-3 w-3" />
-        </Link>
+        </span>
       </div>
 
       {isLoading ? (
@@ -193,7 +190,7 @@ function FrameworkDashboardCard({ framework }: { framework: FrameworkSummary }) 
           </div>
         </div>
       )}
-    </div>
+    </Link>
   );
 }
 

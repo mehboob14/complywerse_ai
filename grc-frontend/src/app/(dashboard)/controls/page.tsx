@@ -21,7 +21,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { controlsApi, ermApi, adminApi, aiRecommendationsApi } from '@/lib/api';
+import { controlsApi, ermApi, adminApi, aiRecommendationsApi, evidenceApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import { SearchInput, MultiSelectDropdown, PageLoader, RightSlidePanel, AnimatedModal } from '@/components/ui';
 import { useToast } from '@/components/ui/ToastProvider';
@@ -55,6 +55,7 @@ import {
   Target,
   Plus,
   ShieldAlert,
+  X,
   Activity,
   ListChecks,
   ChevronDown,
@@ -67,6 +68,10 @@ interface TestProcedure {
   description: string;
   frequency: string;
   sample_size: string;
+  // Per-procedure completion tracking (persisted with the saved recommendation).
+  done?: boolean;
+  evidence_id?: number | null;
+  evidence_name?: string | null;
 }
 
 interface EvidenceRequirement {
@@ -149,6 +154,7 @@ export default function ControlsPage() {
   const [selectedControlId, setSelectedControlId] = useState<number | null>(null);
   // Heavy inspector sections open in a popup so the docked record stays short.
   const [showRecEvidence, setShowRecEvidence] = useState(false);
+  const [showRisks, setShowRisks] = useState(false);
   const [page, setPage] = useState(0);
   const [quickFilter, setQuickFilter] = useState<QuickFilter>('all');
   const [aiRecommendations, setAiRecommendations] = useState<Record<number, AIRecommendations>>({});
@@ -195,6 +201,45 @@ export default function ControlsPage() {
 
   // ── Promote an AI "risk if not implemented" into the real ERM Risk Register ──
   const { toast } = useToast();
+
+  // Evidence library for linking to test procedures (lazy — only when a control is open).
+  const { data: evidenceLib } = useQuery({
+    queryKey: ['evidence-library-for-controls'],
+    queryFn: async () => (await evidenceApi.getAll()).data,
+    enabled: selectedControlId != null,
+    staleTime: 60_000,
+  });
+
+  // Per-procedure completion is persisted by re-saving the recommendation output.
+  const persistRecs = (controlId: number, recs: AIRecommendations) => {
+    setAiRecommendations((prev) => ({ ...prev, [controlId]: recs }));
+    aiRecommendationsApi.save({
+      ...AI_REC_KEY, entity_id: String(controlId), title: 'AI recommendations',
+      output: recs as unknown as Record<string, unknown>, model: 'gpt-4o',
+    }).catch(() => {});
+  };
+  const toggleProcedureDone = (controlId: number, idx: number) => {
+    const recs = aiRecommendations[controlId];
+    if (!recs) return;
+    const test_procedures = recs.test_procedures.map((p, i) => (i === idx ? { ...p, done: !p.done } : p));
+    persistRecs(controlId, { ...recs, test_procedures });
+  };
+  const setProcedureEvidence = (controlId: number, idx: number, ev: { id: string; title: string } | null) => {
+    const recs = aiRecommendations[controlId];
+    if (!recs) return;
+    const test_procedures = recs.test_procedures.map((p, i) => (i === idx
+      ? { ...p, evidence_id: ev ? Number(ev.id) : null, evidence_name: ev ? ev.title : null, done: ev ? true : p.done }
+      : p));
+    persistRecs(controlId, { ...recs, test_procedures });
+    if (ev && Number.isFinite(Number(ev.id))) {
+      // Best-effort: also create a real control↔evidence link so evidence_count updates.
+      controlsApi.linkFrameworkControlEvidence(controlId, { evidence_id: Number(ev.id) })
+        .then(() => queryClient.invalidateQueries({ queryKey: ['framework-controls'] }))
+        .catch(() => {});
+      toast({ type: 'success', title: 'Evidence linked', message: ev.title });
+    }
+  };
+
   const [promoteCtx, setPromoteCtx] = useState<{ control: FrameworkControl; risk: PotentialRisk } | null>(null);
   const [promoteForm, setPromoteForm] = useState({
     title: '', description: '', register_type: '', category: 'compliance', risk_sub_category: '',
@@ -1124,19 +1169,53 @@ export default function ControlsPage() {
                               <ClipboardList className="h-4 w-4 text-primary-600" />
                               <h5 className="text-sm font-medium text-primary-600">Test Procedures</h5>
                             </div>
-                            <div className="space-y-3">
+                            <div className="space-y-2.5">
                               {aiRecommendations[control.id].test_procedures.map((proc, idx) => (
-                                <div key={idx} className="flex gap-3">
-                                  <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-primary-50 text-xs font-medium text-primary-600">{idx + 1}</span>
-                                  <div className="flex-1">
-                                    <div className="mb-1 flex items-center gap-2">
+                                <div key={idx} className="flex gap-2.5 rounded-lg border border-slate-200 bg-white p-2.5">
+                                  <input
+                                    type="checkbox"
+                                    checked={!!proc.done}
+                                    onChange={() => toggleProcedureDone(control.id, idx)}
+                                    aria-label={`Mark test procedure ${idx + 1} done`}
+                                    className="mt-0.5 h-4 w-4 flex-shrink-0 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                                  />
+                                  <div className="min-w-0 flex-1">
+                                    <div className="mb-1 flex flex-wrap items-center gap-2">
                                       {getProcedureTypeBadge(proc.procedure_type)}
                                       <span className="text-xs text-slate-500">{proc.frequency}</span>
                                       {proc.sample_size !== 'N/A' && proc.sample_size !== 'N/A for inquiry' && (
                                         <span className="text-xs text-slate-500">| Sample: {proc.sample_size}</span>
                                       )}
                                     </div>
-                                    <p className="text-sm text-slate-600">{proc.description}</p>
+                                    <p className={`text-sm ${proc.done ? 'text-slate-400 line-through' : 'text-slate-600'}`}>{proc.description}</p>
+                                    <div className="mt-2">
+                                      {proc.evidence_id ? (
+                                        <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-700">
+                                          <Paperclip className="h-3 w-3" strokeWidth={1.75} /> {proc.evidence_name || 'Evidence linked'}
+                                          <button
+                                            type="button"
+                                            onClick={() => setProcedureEvidence(control.id, idx, null)}
+                                            aria-label="Unlink evidence"
+                                            className="ml-0.5 text-emerald-600 hover:text-rose-600"
+                                          ><X className="h-3 w-3" strokeWidth={2} /></button>
+                                        </span>
+                                      ) : (
+                                        <select
+                                          value=""
+                                          aria-label={`Link evidence to test procedure ${idx + 1}`}
+                                          onChange={(e) => {
+                                            const ev = (evidenceLib || []).find((x) => String(x.id) === e.target.value);
+                                            if (ev) setProcedureEvidence(control.id, idx, { id: String(ev.id), title: ev.title });
+                                          }}
+                                          className="rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] text-slate-600 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                                        >
+                                          <option value="">Link evidence to mark done…</option>
+                                          {(evidenceLib || []).map((ev) => (
+                                            <option key={ev.id} value={String(ev.id)}>{ev.title}</option>
+                                          ))}
+                                        </select>
+                                      )}
+                                    </div>
                                   </div>
                                 </div>
                               ))}
@@ -1157,6 +1236,37 @@ export default function ControlsPage() {
                             </ul>
                           </div>
 
+                          {(() => {
+                            const _rec = aiRecommendations[control.id];
+                            const _addr = _rec.addressed_risks.length;
+                            const _pot = _rec.risks_if_not_implemented.length;
+                            return (
+                              <button
+                                type="button"
+                                onClick={() => setShowRisks(true)}
+                                className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white px-4 py-3 text-left transition-colors hover:border-primary-300 hover:bg-slate-50"
+                              >
+                                <span className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                                  {_addr > 0
+                                    ? <AlertTriangle className="h-4 w-4 flex-shrink-0 text-amber-600" strokeWidth={1.75} />
+                                    : <ShieldAlert className="h-4 w-4 flex-shrink-0 text-rose-600" strokeWidth={1.75} />}
+                                  {_addr > 0 ? 'Risks addressed by this control' : 'Risks if this control isn’t implemented'}
+                                </span>
+                                <span className="flex items-center gap-1.5 text-xs text-slate-400">
+                                  <span className="rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-600">{_addr || _pot || 0}</span>
+                                  View <ChevronRight className="h-4 w-4" strokeWidth={1.75} />
+                                </span>
+                              </button>
+                            );
+                          })()}
+                          <AnimatedModal
+                            isOpen={showRisks}
+                            onClose={() => setShowRisks(false)}
+                            title="Control risk analysis"
+                            subtitle={control.control_id}
+                            size="lg"
+                          >
+                            <div className="space-y-2.5 p-5">
                           {aiRecommendations[control.id].addressed_risks.length > 0 ? (
                             <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
                               <div className="mb-3 flex items-center gap-2">
@@ -1236,6 +1346,8 @@ export default function ControlsPage() {
                               )}
                             </div>
                           )}
+                            </div>
+                          </AnimatedModal>
                         </div>
                       )}
                     </div>
