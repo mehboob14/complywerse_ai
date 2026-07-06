@@ -1482,8 +1482,10 @@ export default function CertificationJourneyPage() {
 
   // ISO 27001 template tabs (Gap Analysis, Internal Audit, Risk Treatment,
   // Scope Statement, Audit Procedure) are gated to the ISO 27001 framework.
-  const _fwNameLower = (((journey as any)?.framework_name || journey?.framework?.name || '') as string).toLowerCase();
-  const isIso27001Framework = _fwNameLower.includes('iso 27001') || _fwNameLower.replace(/\s+/g, '').includes('iso27001');
+  // Normalise so "ISO/IEC 27001:2022", "ISO 27001", "ISO27001" all match.
+  const _fwNameNorm = (((journey as any)?.framework_name || journey?.framework?.name || journey?.name || '') as string)
+    .toLowerCase().replace(/[^a-z0-9]/g, '');
+  const isIso27001Framework = _fwNameNorm.includes('27001') && _fwNameNorm.includes('iso');
   const templateTenantUsers = useMemo(
     () => (assignmentTenantUsers || []).map((u: any) => ({ id: u.id, name: u.display_name || u.email || String(u.id) })),
     [assignmentTenantUsers]
