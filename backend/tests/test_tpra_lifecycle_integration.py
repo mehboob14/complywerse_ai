@@ -470,6 +470,61 @@ def test_expired_acceptance_no_longer_mitigates_critical(db):
     assert service.count_open_critical(db, a.id) == 0
 
 
+# ── Wave 2: approval integrity (SoD + preconditions + decision enum) ─────────
+
+def test_approval_requires_independent_approver(db):
+    from grc.modules.vendor_risk.tpra import api
+    assessor = _admin(db, 70, "a70@acme.test")
+    approver = _admin(db, 71, "a71@acme.test")
+    v = _vendor(db)
+    a = service.ensure_active_assessment(db, v, actor_id=70)
+    a.assessed_by = 70
+    a.residual_score = 20.0
+    a.residual_rating = "low"
+    db.commit()
+    # SoD: the assessor cannot approve their own assessment.
+    with pytest.raises(HTTPException) as ei:
+        api.create_approval(a.id, api.ApprovalIn(decision="approve"), db=db, user=assessor)
+    assert ei.value.status_code == 403
+    # An independent approver can (scored, no open criticals).
+    res = api.create_approval(a.id, api.ApprovalIn(decision="approve"), db=db, user=approver)
+    assert res is not None
+
+
+def test_approval_requires_a_score(db):
+    from grc.modules.vendor_risk.tpra import api
+    approver = _admin(db, 72, "a72@acme.test")
+    v = _vendor(db)
+    a = service.ensure_active_assessment(db, v, actor_id=1)
+    a.residual_score = None
+    db.commit()
+    with pytest.raises(HTTPException) as ei:
+        api.create_approval(a.id, api.ApprovalIn(decision="approve"), db=db, user=approver)
+    assert ei.value.status_code == 400
+
+
+def test_approval_blocked_by_open_critical_but_reject_allowed(db):
+    from grc.modules.vendor_risk.tpra import api
+    approver = _admin(db, 73, "a73@acme.test")
+    v = _vendor(db)
+    a = service.ensure_active_assessment(db, v, actor_id=1)
+    a.residual_score = 30.0
+    db.commit()
+    _critical_finding(db, v, a, created_by=999)  # open, unmitigated
+    with pytest.raises(HTTPException) as ei:
+        api.create_approval(a.id, api.ApprovalIn(decision="approve"), db=db, user=approver)
+    assert ei.value.status_code == 400
+    # A reject decision is always allowed (no SoD/precondition gate on rejection).
+    res = api.create_approval(a.id, api.ApprovalIn(decision="reject"), db=db, user=approver)
+    assert res is not None
+
+
+def test_approval_decision_must_be_a_valid_enum(db):
+    from grc.modules.vendor_risk.tpra import api
+    with pytest.raises(Exception):
+        api.ApprovalIn(decision="yolo")
+
+
 def test_portfolio_snapshot_aggregates_active_vendors(db):
     v1 = _vendor(db, name="V1")
     v1.inherent_risk_score, v1.residual_risk_score = 80.0, 40.0

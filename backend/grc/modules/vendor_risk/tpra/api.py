@@ -262,7 +262,7 @@ class ObligationUpdate(BaseModel):
     row_version: Optional[int] = None
 
 class ApprovalIn(BaseModel):
-    decision: str
+    decision: Literal["approve", "approve_with_conditions", "defer", "reject"]
     conditions: Optional[list] = None
     rationale: Optional[str] = None
 
@@ -1085,7 +1085,29 @@ def list_approvals(assessment_id: int, db: Session = Depends(get_db), user: GRCU
 def create_approval(assessment_id: int, body: ApprovalIn, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
     tids = _tids(user, db)
     a = _assessment(db, assessment_id, tids)
-    rbac.require_write(db, user, "approvals", "approve")
+    # approvals:approve is high-sensitivity — no broad erm:risks:edit backdoor.
+    rbac.require_write(db, user, "approvals", "approve", allow_fallback=False)
+    if body.decision in ("approve", "approve_with_conditions"):
+        # Segregation of duties — the approver must be independent of whoever
+        # performed or reviewed the assessment.
+        if user.id is not None and user.id in (a.assessed_by, a.reviewed_by):
+            raise HTTPException(
+                status_code=403,
+                detail="Segregation of duties: the assessor/reviewer cannot approve their own assessment — an independent approver is required.",
+            )
+        # Preconditions — a positive decision requires a computed residual and no
+        # unmitigated critical findings (the gate can otherwise be pre-stamped).
+        if a.residual_score is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Score the assessment before recording an approval decision.",
+            )
+        _open_crit = service.count_open_critical(db, a.id)
+        if _open_crit > 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot approve while {_open_crit} unmitigated critical finding(s) remain — remediate or formally accept them first.",
+            )
     rec = service.recommend_decision(a.residual_rating or "medium", service.count_open_critical(db, a.id))
     ap = TPRAApproval(
         tenant_id=a.tenant_id, vendor_id=a.vendor_id, assessment_id=a.id,
