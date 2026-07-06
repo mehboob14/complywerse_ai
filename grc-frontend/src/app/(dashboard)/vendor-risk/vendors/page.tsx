@@ -12,7 +12,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import Link from 'next/link';
-import { SearchInput, MultiSelectDropdown, RightSlidePanel, PageLoader } from '@/components/ui';
+import { SearchInput, MultiSelectDropdown, RightSlidePanel, PageLoader, AnimatedModal } from '@/components/ui';
 import { StageProgress, stageNumberLabel } from '../_lib/lifecycleShared';
 
 interface Vendor {
@@ -57,18 +57,18 @@ const getTierBadge = (tier: string) => {
     medium: 'bg-yellow-50 text-yellow-700 border border-yellow-200',
     low: 'bg-green-50 text-green-700 border border-green-200',
   };
-  return styles[tier?.toLowerCase()] || 'bg-gray-50 text-gray-700 border border-gray-200';
+  return styles[tier?.toLowerCase()] || 'bg-slate-50 text-slate-700 border border-slate-200';
 };
 
 const getStatusBadge = (status: string) => {
   const styles: Record<string, string> = {
     active: 'bg-green-50 text-green-700 border border-green-200',
-    under_review: 'bg-blue-50 text-blue-700 border border-blue-200',
-    onboarding: 'bg-purple-50 text-purple-700 border border-purple-200',
-    offboarded: 'bg-gray-50 text-gray-700 border border-gray-200',
+    under_review: 'bg-slate-50 text-slate-700 border border-slate-200',
+    onboarding: 'bg-slate-50 text-slate-700 border border-slate-200',
+    offboarded: 'bg-slate-50 text-slate-500 border border-slate-200',
     suspended: 'bg-red-50 text-red-700 border border-red-200',
   };
-  return styles[status?.toLowerCase()] || 'bg-gray-50 text-gray-700 border border-gray-200';
+  return styles[status?.toLowerCase()] || 'bg-slate-50 text-slate-700 border border-slate-200';
 };
 
 const getRatingBadge = (rating: string) => {
@@ -78,8 +78,24 @@ const getRatingBadge = (rating: string) => {
     medium: 'bg-yellow-50 text-yellow-700 border border-yellow-200',
     low: 'bg-green-50 text-green-700 border border-green-200',
   };
-  return styles[rating?.toLowerCase()] || 'bg-gray-50 text-gray-700 border border-gray-200';
+  return styles[rating?.toLowerCase()] || 'bg-slate-50 text-slate-700 border border-slate-200';
 };
+
+// Shared field styling for the intake form.
+const INPUT_CLS =
+  'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500';
+const LABEL_CLS = 'block text-sm font-medium text-slate-800 mb-1';
+
+// A labelled group of intake fields — turns the flat grid into scannable sections.
+function FormSection({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <fieldset className="space-y-3">
+      <legend className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{title}</legend>
+      {hint && <p className="-mt-1 text-xs text-slate-500">{hint}</p>}
+      <div className="grid gap-4 md:grid-cols-2">{children}</div>
+    </fieldset>
+  );
+}
 
 export default function VendorListPage() {
   const queryClient = useQueryClient();
@@ -93,6 +109,7 @@ export default function VendorListPage() {
   const [tierFilter, setTierFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [deletingVendorId, setDeletingVendorId] = useState<number | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Vendor | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -227,12 +244,11 @@ export default function VendorListPage() {
     });
   }, [vendors, searchTerm, tierFilter, statusFilter]);
 
-  const handleDeleteVendor = (vendor: Vendor) => {
-    const confirmed = window.confirm(
-      `Delete vendor "${vendor.name}"? This removes related assessments, questionnaire responses, SLA records, and incidents.`
-    );
-    if (!confirmed) return;
-    deleteMutation.mutate(vendor.id);
+  const confirmDeleteVendor = () => {
+    if (!pendingDelete) return;
+    deleteMutation.mutate(pendingDelete.id, {
+      onSuccess: () => setPendingDelete(null),
+    });
   };
 
   const tierItems = TIER_OPTIONS.map((t) => ({ value: t, label: titleCase(t) }));
@@ -254,30 +270,25 @@ export default function VendorListPage() {
 
   return (
     <div className="space-y-4 sm:space-y-6 max-w-7xl mx-auto">
-      {/* Header */}
+      {/* Header — page title + the single primary CTA; module-level nav lives in the top tabs */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-lg sm:text-xl font-semibold text-slate-900">Vendors</h1>
-          <p className="text-sm text-gray-500 mt-1">Manage your third-party vendor inventory</p>
+          <p className="text-sm text-slate-500 mt-1">Manage your third-party vendor inventory</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Link
-            href="/vendor-risk/assessments"
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50"
+        {canCreate && (
+          <button
+            onClick={() => setShowModal(true)}
+            className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium"
           >
-            Assessments
-          </Link>
-          <Link
-            href="/vendor-risk/questionnaires"
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50"
-          >
-            Questionnaires
-          </Link>
-        </div>
+            <Plus className="h-4 w-4" />
+            Add Vendor
+          </button>
+        )}
       </div>
 
       {/* Filters / Search row */}
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
         <div className="flex flex-wrap items-center gap-2 flex-1">
           <div className="flex-1 min-w-[180px] sm:min-w-[260px] max-w-md">
             <SearchInput
@@ -301,49 +312,38 @@ export default function VendorListPage() {
             multiSelect={false}
           />
         </div>
-        <div className="flex items-center gap-2 ml-auto">
-          {canCreate && (
-            <button
-              onClick={() => setShowModal(true)}
-              className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium"
-            >
-              <Plus className="h-4 w-4" />
-              Add Vendor
-            </button>
-          )}
-        </div>
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden p-3 sm:p-4">
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden p-3 sm:p-4">
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+          <table className="min-w-full divide-y divide-slate-200">
+            <thead className="bg-slate-50">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tier</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Risk Rating</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Lifecycle</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Data Access</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Contract End</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Owner</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Name</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Tier</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Status</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Risk Rating</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Lifecycle</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Data Access</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Contract End</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Owner</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Actions</th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-white divide-y divide-slate-200">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-8 text-center text-sm text-gray-500">
-                    <AlertCircle className="h-8 w-8 mx-auto mb-2 text-gray-300" />
+                  <td colSpan={9} className="px-4 py-8 text-center text-sm text-slate-500">
+                    <AlertCircle className="h-8 w-8 mx-auto mb-2 text-slate-300" />
                     No vendors found
                   </td>
                 </tr>
               ) : (
                 filtered.map((vendor) => (
-                  <tr key={vendor.id} className="hover:bg-gray-50">
+                  <tr key={vendor.id} className="hover:bg-slate-50">
                     <td className="px-4 py-3">
-                      <Link href={`/vendor-risk/vendors/${vendor.id}`} className="text-sm font-medium text-blue-600 hover:text-blue-800">
+                      <Link href={`/vendor-risk/vendors/${vendor.id}`} className="text-sm font-medium text-primary-600 hover:text-primary-700">
                         {vendor.name}
                       </Link>
                     </td>
@@ -363,34 +363,40 @@ export default function VendorListPage() {
                           {vendor.risk_rating}
                         </span>
                       ) : vendor.inherent_risk_score != null ? (
-                        <span className="text-sm font-medium text-gray-900">{vendor.inherent_risk_score.toFixed(1)}</span>
+                        <span className="text-sm font-medium text-slate-900">{vendor.inherent_risk_score.toFixed(1)}</span>
                       ) : (
-                        <span className="text-sm text-gray-400">-</span>
+                        <span className="text-sm text-slate-400">-</span>
                       )}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex flex-col gap-1">
                         <StageProgress currentKey={vendor.lifecycle_stage} size="sm" />
-                        <span className="text-[11px] text-gray-500">{stageNumberLabel(vendor.lifecycle_stage)}</span>
+                        <span className="text-[11px] text-slate-500">{stageNumberLabel(vendor.lifecycle_stage)}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-600 capitalize">{vendor.data_access_level?.replace(/_/g, ' ') ?? '-'}</td>
-                    <td className="px-4 py-3 text-sm text-gray-500">
+                    <td className="px-4 py-3 text-sm text-slate-600 capitalize">{vendor.data_access_level?.replace(/_/g, ' ') ?? '-'}</td>
+                    <td className="px-4 py-3 text-sm text-slate-500">
                       {vendor.contract_end_date ? new Date(vendor.contract_end_date).toLocaleDateString() : '-'}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-600">
+                    <td className="px-4 py-3 text-sm text-slate-600">
                       {vendor.owner ? (typeof vendor.owner === 'object' ? vendor.owner.full_name : String(vendor.owner)) : '-'}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
-                        <Link href={`/vendor-risk/vendors/${vendor.id}`} className="text-blue-600 hover:text-blue-800" title="View vendor">
+                        <Link
+                          href={`/vendor-risk/vendors/${vendor.id}`}
+                          className="rounded p-1 text-primary-600 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                          aria-label={`View vendor ${vendor.name}`}
+                          title="View vendor"
+                        >
                           <Eye className="h-4 w-4" />
                         </Link>
                         {canDelete && (
                           <button
-                            onClick={() => handleDeleteVendor(vendor)}
+                            onClick={() => setPendingDelete(vendor)}
                             disabled={deleteMutation.isPending && deletingVendorId === vendor.id}
-                            className="text-red-500 hover:text-red-700 disabled:opacity-50"
+                            className="rounded p-1 text-red-500 hover:bg-red-50 hover:text-red-700 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+                            aria-label={`Delete vendor ${vendor.name}`}
                             title="Delete vendor"
                           >
                             {deleteMutation.isPending && deletingVendorId === vendor.id ? (
@@ -421,7 +427,7 @@ export default function VendorListPage() {
             <button
               type="button"
               onClick={() => setShowModal(false)}
-              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
             >
               Cancel
             </button>
@@ -446,33 +452,83 @@ export default function VendorListPage() {
         <form id="vendor-form" onSubmit={handleSubmit} className="space-y-4">
           <div className="rounded-lg border border-primary-100 bg-primary-50/60 p-3">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-primary-700">Stage 01 · Intake &amp; Scoping</p>
-            <p className="mt-1 text-xs text-gray-600">
+            <p className="mt-1 text-xs text-slate-600">
               Capture the business need and the basic facts about the third party and the service before any work is committed.
               Exit criteria: a vendor record with a named owner, a defined service &amp; data scope, and a draft data classification.
             </p>
           </div>
-          <div className="grid gap-4 md:grid-cols-2">
+          {/* Business context */}
+          <FormSection title="Business context">
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-800 mb-1">Vendor Name *</label>
+              <label className={LABEL_CLS}>Vendor Name *</label>
               <input
                 type="text"
                 required
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className={INPUT_CLS}
               />
             </div>
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-800 mb-1">Description</label>
+              <label className={LABEL_CLS}>Description</label>
               <textarea
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className={INPUT_CLS}
                 rows={2}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-800 mb-1">Tier</label>
+              <label className={LABEL_CLS}>Vendor Type</label>
+              <input
+                type="text"
+                placeholder="e.g., SaaS, Cloud, Consulting"
+                value={formData.vendor_type}
+                onChange={(e) => setFormData({ ...formData, vendor_type: e.target.value })}
+                className={INPUT_CLS}
+              />
+            </div>
+            <div>
+              <label className={LABEL_CLS}>Industry</label>
+              <input
+                type="text"
+                placeholder="e.g., Technology, Healthcare"
+                value={formData.industry}
+                onChange={(e) => setFormData({ ...formData, industry: e.target.value })}
+                className={INPUT_CLS}
+              />
+            </div>
+            <div>
+              <label className={LABEL_CLS}>Website</label>
+              <input
+                type="text"
+                placeholder="https://..."
+                value={formData.website}
+                onChange={(e) => setFormData({ ...formData, website: e.target.value })}
+                className={INPUT_CLS}
+              />
+            </div>
+            <div>
+              <label className={LABEL_CLS}>Business Owner</label>
+              <MultiSelectDropdown
+                title="Business Owner"
+                items={userItems}
+                selectedValues={formData.owner_id ? [String(formData.owner_id)] : []}
+                onApply={(v) => setFormData({ ...formData, owner_id: v[0] || '' })}
+                multiSelect={false}
+                triggerVariant="input"
+                placeholder="Select owner"
+                size="md"
+                forceSearch
+              />
+              <p className="mt-1 text-[11px] text-slate-500">Needed to pass the Intake gate.</p>
+            </div>
+          </FormSection>
+
+          {/* Data & scope */}
+          <FormSection title="Data & scope">
+            <div>
+              <label className={LABEL_CLS}>Tier</label>
               <MultiSelectDropdown
                 title="Tier"
                 items={tierItems}
@@ -485,7 +541,7 @@ export default function VendorListPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-800 mb-1">Draft data classification</label>
+              <label className={LABEL_CLS}>Draft data classification</label>
               <MultiSelectDropdown
                 title="Draft data classification"
                 items={dataAccessItems}
@@ -498,92 +554,80 @@ export default function VendorListPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-800 mb-1">Data types in scope</label>
+              <label className={LABEL_CLS}>Data types in scope</label>
               <input
                 type="text"
                 placeholder="Comma-separated, e.g., PII, PHI, Financial"
                 value={formData.data_types_accessed}
                 onChange={(e) => setFormData({ ...formData, data_types_accessed: e.target.value })}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className={INPUT_CLS}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-800 mb-1">Vendor Type</label>
+              <label className={LABEL_CLS}>Systems &amp; services in scope</label>
               <input
                 type="text"
-                placeholder="e.g., SaaS, Cloud, Consulting"
-                value={formData.vendor_type}
-                onChange={(e) => setFormData({ ...formData, vendor_type: e.target.value })}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                placeholder="Comma-separated, e.g., Cloud Hosting, CRM"
+                value={formData.services_provided}
+                onChange={(e) => setFormData({ ...formData, services_provided: e.target.value })}
+                className={INPUT_CLS}
               />
             </div>
+          </FormSection>
+
+          {/* Contacts */}
+          <FormSection title="Contacts">
             <div>
-              <label className="block text-sm font-medium text-gray-800 mb-1">Industry</label>
-              <input
-                type="text"
-                placeholder="e.g., Technology, Healthcare"
-                value={formData.industry}
-                onChange={(e) => setFormData({ ...formData, industry: e.target.value })}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-800 mb-1">Contact Name</label>
+              <label className={LABEL_CLS}>Contact Name</label>
               <input
                 type="text"
                 value={formData.primary_contact_name}
                 onChange={(e) => setFormData({ ...formData, primary_contact_name: e.target.value })}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className={INPUT_CLS}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-800 mb-1">Contact Email</label>
+              <label className={LABEL_CLS}>Contact Email</label>
               <input
                 type="email"
                 value={formData.primary_contact_email}
                 onChange={(e) => setFormData({ ...formData, primary_contact_email: e.target.value })}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className={INPUT_CLS}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-800 mb-1">Contact Phone</label>
+              <label className={LABEL_CLS}>Contact Phone</label>
               <input
                 type="text"
                 value={formData.primary_contact_phone}
                 onChange={(e) => setFormData({ ...formData, primary_contact_phone: e.target.value })}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className={INPUT_CLS}
               />
             </div>
+          </FormSection>
+
+          {/* Commercials */}
+          <FormSection title="Commercials">
             <div>
-              <label className="block text-sm font-medium text-gray-800 mb-1">Website</label>
-              <input
-                type="text"
-                placeholder="https://..."
-                value={formData.website}
-                onChange={(e) => setFormData({ ...formData, website: e.target.value })}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-800 mb-1">Contract Start</label>
+              <label className={LABEL_CLS}>Contract Start</label>
               <input
                 type="date"
                 value={formData.contract_start_date}
                 onChange={(e) => setFormData({ ...formData, contract_start_date: e.target.value })}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className={INPUT_CLS}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-800 mb-1">Contract End</label>
+              <label className={LABEL_CLS}>Contract End</label>
               <input
                 type="date"
                 value={formData.contract_end_date}
                 onChange={(e) => setFormData({ ...formData, contract_end_date: e.target.value })}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className={INPUT_CLS}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-800 mb-1">Annual spend / contract value</label>
+              <label className={LABEL_CLS}>Annual spend / contract value</label>
               <input
                 type="number"
                 min="0"
@@ -591,43 +635,19 @@ export default function VendorListPage() {
                 placeholder="Estimated annual spend"
                 value={formData.contract_value}
                 onChange={(e) => setFormData({ ...formData, contract_value: e.target.value })}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className={INPUT_CLS}
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-800 mb-1">Owner</label>
-              <MultiSelectDropdown
-                title="Owner"
-                items={userItems}
-                selectedValues={formData.owner_id ? [String(formData.owner_id)] : []}
-                onApply={(v) => setFormData({ ...formData, owner_id: v[0] || '' })}
-                multiSelect={false}
-                triggerVariant="input"
-                placeholder="Select owner"
-                size="md"
-                forceSearch
-              />
-            </div>
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-800 mb-1">Systems &amp; services in scope</label>
-              <input
-                type="text"
-                placeholder="Comma-separated, e.g., Cloud Hosting, CRM, Payment Gateway"
-                value={formData.services_provided}
-                onChange={(e) => setFormData({ ...formData, services_provided: e.target.value })}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-              />
-            </div>
-          </div>
-          <label className="flex items-start gap-2 rounded-lg border border-gray-200 bg-gray-50 p-3 cursor-pointer">
+          </FormSection>
+          <label className="flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 cursor-pointer">
             <input
               type="checkbox"
               checked={startLifecycle}
               onChange={(e) => setStartLifecycle(e.target.checked)}
-              className="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
             />
-            <span className="text-xs text-gray-600">
-              <span className="font-medium text-gray-800">Start the TPRA lifecycle now</span> — opens a versioned assessment at
+            <span className="text-xs text-slate-600">
+              <span className="font-medium text-slate-800">Start the TPRA lifecycle now</span> — opens a versioned assessment at
               Stage 01 so the vendor enters the 11-stage flow immediately. You can also start it later from the vendor page.
             </span>
           </label>
@@ -638,6 +658,50 @@ export default function VendorListPage() {
           )}
         </form>
       </RightSlidePanel>
+
+      {/* Accessible delete confirmation — replaces window.confirm */}
+      <AnimatedModal
+        isOpen={pendingDelete !== null}
+        onClose={() => { if (!deleteMutation.isPending) setPendingDelete(null); }}
+        title="Delete vendor"
+        subtitle={pendingDelete ? pendingDelete.name : undefined}
+        size="md"
+        footer={
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setPendingDelete(null)}
+              disabled={deleteMutation.isPending}
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={confirmDeleteVendor}
+              disabled={deleteMutation.isPending}
+              className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+            >
+              {deleteMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Deleting…
+                </>
+              ) : (
+                'Delete vendor'
+              )}
+            </button>
+          </div>
+        }
+      >
+        <div className="p-5">
+          <p className="text-sm text-slate-700">
+            Delete <span className="font-semibold text-slate-900">{pendingDelete?.name}</span>? This also removes
+            related assessments, questionnaire responses, SLA records, and incidents.
+          </p>
+          <p className="mt-2 text-xs text-slate-500">This action cannot be undone.</p>
+        </div>
+      </AnimatedModal>
     </div>
   );
 }
