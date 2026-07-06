@@ -154,6 +154,8 @@ def s_signal(s: TPRAMonitoringSignal) -> dict:
         "severity": s.severity, "source": s.source, "title": s.title, "detail": s.detail,
         "occurred_at": s.occurred_at, "triggered_reassessment": s.triggered_reassessment,
         "triggered_assessment_id": s.triggered_assessment_id, "acknowledged": s.acknowledged,
+        "acknowledged_by": getattr(s, "acknowledged_by", None),
+        "acknowledged_at": getattr(s, "acknowledged_at", None),
         "row_version": s.row_version,
     }
 
@@ -279,6 +281,7 @@ class SignalUpdate(BaseModel):
     title: Optional[str] = None
     detail: Optional[str] = None
     acknowledged: Optional[bool] = None
+    row_version: Optional[int] = None  # optimistic-concurrency token (was missing)
 
 class ChecklistItemIn(BaseModel):
     text: str
@@ -1150,11 +1153,27 @@ def create_signal(vendor_id: int, body: SignalIn, db: Session = Depends(get_db),
     db.flush()
     triggered = None
     if should_trigger_reassessment(sig.signal_type, sig.severity):
-        new = service.create_reassessment_version(
-            db, v, actor_id=user.id, reason=f"Auto-triggered by {sig.signal_type} signal",
-            triggered_signal=sig,
+        # Dedup / debounce — if a reassessment is already IN FLIGHT (a superseding
+        # version already open in the diligence phase), attach this signal to it
+        # rather than superseding + restarting, which would discard in-flight
+        # progress and let a burst of signals spawn a storm of reassessments.
+        active = service.get_active_assessment(db, v)
+        _in_flight = (
+            active is not None
+            and (active.version_no or 1) > 1
+            and active.lifecycle_status == "active"
+            and active.current_stage not in ("monitoring", "reassessment")
         )
-        triggered = new.id
+        if _in_flight:
+            sig.triggered_reassessment = True
+            sig.triggered_assessment_id = active.id
+            triggered = active.id
+        else:
+            new = service.create_reassessment_version(
+                db, v, actor_id=user.id, reason=f"Auto-triggered by {sig.signal_type} signal",
+                triggered_signal=sig,
+            )
+            triggered = new.id
     service.write_audit(db, v.tenant_id, entity="signal", action="create",
                         vendor_id=v.id, entity_id=sig.id, actor_id=user.id, to_value=body.signal_type,
                         extra={"triggered_assessment_id": triggered})
@@ -1167,11 +1186,17 @@ def update_signal(signal_id: int, body: SignalUpdate, db: Session = Depends(get_
     tids = _tids(user, db)
     s = _get(db, TPRAMonitoringSignal, signal_id, tids)
     rbac.require_write(db, user, "monitoring", "edit")
+    ensure_tpra_columns(db)  # acknowledged_by/at are post-provisioning columns
     _check_concurrency(s, body.row_version)
+    _was_ack = bool(s.acknowledged)
     for field in ("severity", "title", "detail", "acknowledged"):
         val = getattr(body, field)
         if val is not None:
             setattr(s, field, val)
+    # Attribute the acknowledgement (who + when) when it transitions to acknowledged.
+    if s.acknowledged and not _was_ack:
+        s.acknowledged_by = user.id
+        s.acknowledged_at = datetime.utcnow()
     _bump(s)
     service.write_audit(db, s.tenant_id, entity="signal", action="update", vendor_id=s.vendor_id, entity_id=s.id, actor_id=user.id)
     db.commit()

@@ -599,6 +599,43 @@ def test_low_tier_auto_skips_diligence_and_advance_steps_over(db):
     assert stages2["contracting"] == "in_progress"
 
 
+# ── Wave 2/3: monitoring signal acknowledgement + auto-trigger dedup ─────────
+
+def test_signal_acknowledgement_records_who_and_when(db):
+    from grc.modules.vendor_risk.tpra import api
+    u = _admin(db, 90, "a90@acme.test")
+    v = _vendor(db)
+    sig = TPRAMonitoringSignal(tenant_id=1, vendor_id=v.id, signal_type="breach",
+                               severity="high", acknowledged=False)
+    db.add(sig)
+    db.commit()
+    api.update_signal(sig.id, api.SignalUpdate(acknowledged=True), db=db, user=u)
+    db.refresh(sig)
+    assert sig.acknowledged is True
+    assert sig.acknowledged_by == 90
+    assert sig.acknowledged_at is not None
+
+
+def test_auto_trigger_dedups_when_reassessment_in_flight(db):
+    from grc.modules.vendor_risk.tpra import api
+    u = _admin(db, 91, "a91@acme.test")
+    v = _vendor(db)
+    a1 = service.ensure_active_assessment(db, v, actor_id=91)
+    service.run_tiering(db, v, a1, actor_id=91)
+    db.commit()
+    # First breach spawns a reassessment (version 2, in flight at dd_planning).
+    r1 = api.create_signal(v.id, api.SignalIn(signal_type="breach", severity="high", title="breach 1"),
+                           db=db, user=u)
+    first = r1["triggered_reassessment_id"]
+    assert first is not None
+    assert service.get_active_assessment(db, v).version_no == 2
+    # A second breach while it's in flight ATTACHES to the same reassessment (no storm).
+    r2 = api.create_signal(v.id, api.SignalIn(signal_type="breach", severity="high", title="breach 2"),
+                           db=db, user=u)
+    assert r2["triggered_reassessment_id"] == first
+    assert service.get_active_assessment(db, v).version_no == 2  # not superseded again
+
+
 def test_portfolio_snapshot_aggregates_active_vendors(db):
     v1 = _vendor(db, name="V1")
     v1.inherent_risk_score, v1.residual_risk_score = 80.0, 40.0

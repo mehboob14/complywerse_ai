@@ -333,6 +333,8 @@ class TPRAMonitoringSignal(Base):
     # Loose link to the reassessment assessment this signal spawned, if any.
     triggered_assessment_id = Column(Integer, nullable=True)
     acknowledged = Column(Boolean, default=False)
+    acknowledged_by = Column(Integer, nullable=True)      # who cleared the signal
+    acknowledged_at = Column(DateTime, nullable=True)     # when it was cleared
     row_version = Column(Integer, default=1)
     deleted_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
