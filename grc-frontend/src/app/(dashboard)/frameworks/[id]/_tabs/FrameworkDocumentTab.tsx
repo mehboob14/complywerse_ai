@@ -28,7 +28,7 @@ interface FrameworkDoc {
 }
 
 interface Props {
-  docType: 'isms_scope_statement' | 'internal_audit_procedure';
+  docType: string;
   journeyId: number;
   frameworkId: number | null;
   frameworkName: string;

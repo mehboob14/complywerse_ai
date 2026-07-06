@@ -4487,6 +4487,8 @@ export const frameworkTemplatesApi = {
     reset: (docType: string, params: { journey_id: number }) =>
       apiClient.post(`/framework-templates/documents/${docType}/reset`, {}, { params }),
   },
+  definition: (frameworkName: string) =>
+    apiClient.get('/framework-templates/definition', { params: { framework_name: frameworkName } }),
 };
 
 export default apiClient;

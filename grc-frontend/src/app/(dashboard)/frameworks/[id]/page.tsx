@@ -5,7 +5,7 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { certificationsApi, governanceApi, assetsApi, evidenceApi } from '@/lib/api';
+import { certificationsApi, governanceApi, assetsApi, evidenceApi, frameworkTemplatesApi } from '@/lib/api';
 import apiClient from '@/lib/api';
 import { FrameworkChartsOverview } from '../_components/FrameworkChartsOverview';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -70,6 +70,7 @@ import ArtifactsTab, {
 } from '@/components/compliance/ArtifactsTab';
 import FrameworkRegisterTab from './_tabs/FrameworkRegisterTab';
 import FrameworkDocumentTab from './_tabs/FrameworkDocumentTab';
+import FrameworkDynamicRegisterTab from './_tabs/FrameworkDynamicRegisterTab';
 
 // Evidence-type markers are categorical labels, not statuses — so they render
 // as neutral slate pills. Only the handful of types that carry genuine status
@@ -1496,6 +1497,17 @@ export default function CertificationJourneyPage() {
       .filter((c: any) => c.code),
     [controls]
   );
+  // Framework-driven template tabs (generated definitions) for non-ISO frameworks.
+  const templateFrameworkName = (((journey as any)?.framework_name || journey?.framework?.name || journey?.name || '') as string);
+  const { data: fwTemplateDef } = useQuery({
+    queryKey: ['ft-definition', templateFrameworkName],
+    queryFn: async () => (await frameworkTemplatesApi.definition(templateFrameworkName)).data as {
+      matched: boolean;
+      registers: Array<{ type: string; label: string; description?: string; columns: any[]; formSections?: any[] }>;
+      documents: Array<{ type: string; label: string; control_ref?: string | null }>;
+    },
+    enabled: !!templateFrameworkName && !isIso27001Framework,
+  });
 
   // "Phased" frameworks (NDMO) carry P1/P2/P3 priorities — show the 3-year
   // roadmap compliance dashboard in the header instead of the generic KPI cards.
@@ -1523,6 +1535,8 @@ export default function CertificationJourneyPage() {
       { id: 'scope-statement' as TabType, label: 'Scope Statement' },
       { id: 'audit-procedure' as TabType, label: 'Audit Procedure' },
     ] : []),
+    ...(fwTemplateDef?.registers || []).map((r) => ({ id: r.type as TabType, label: r.label })),
+    ...(fwTemplateDef?.documents || []).map((d) => ({ id: d.type as TabType, label: d.label })),
     { id: 'artifacts' as TabType, label: 'Artifacts' },
     { id: 'history' as TabType, label: 'History' },
   ];
@@ -4354,6 +4368,10 @@ export default function CertificationJourneyPage() {
   };
 
   const renderActiveTab = () => {
+    const dynReg = (fwTemplateDef?.registers || []).find((r) => r.type === activeTab);
+    if (dynReg) return <FrameworkDynamicRegisterTab config={dynReg} journeyId={journeyId} frameworkId={appFwId} frameworkName={templateFrameworkName} tenantUsers={templateTenantUsers} />;
+    const dynDoc = (fwTemplateDef?.documents || []).find((d) => d.type === activeTab);
+    if (dynDoc) return <FrameworkDocumentTab docType={dynDoc.type} journeyId={journeyId} frameworkId={appFwId} frameworkName={templateFrameworkName} tenantUsers={templateTenantUsers} />;
     switch (activeTab) {
       case 'overview':
         return renderOverviewTab();
