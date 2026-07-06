@@ -2123,8 +2123,6 @@ export const tpraApi = {
   ) => apiClient.put(`/vendor-risk/tpra/assessments/${assessmentId}/stages/${stageKey}/checklist`, { items }),
   savePlan: (assessmentId: number, data: { template_id?: number; reviewed_by?: number; due_date?: string }) =>
     apiClient.post(`/vendor-risk/tpra/assessments/${assessmentId}/plan`, data),
-  saveRoles: (assessmentId: number, stageKey: string, assigned_roles: Array<{ role: string; user_id: number }>) =>
-    apiClient.put(`/vendor-risk/tpra/assessments/${assessmentId}/stages/${stageKey}/roles`, { assigned_roles }),
   saveTeam: (assessmentId: number, roster: Record<string, number>) =>
     apiClient.put(`/vendor-risk/tpra/assessments/${assessmentId}/team`, { roster }),
   // Admin / Settings — program config (tiering weights, thresholds, cadence)

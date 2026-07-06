@@ -293,13 +293,6 @@ class ChecklistItemIn(BaseModel):
 class ChecklistIn(BaseModel):
     items: List[ChecklistItemIn]
 
-class RoleAssignmentIn(BaseModel):
-    role: str          # R | A | C | I
-    user_id: int
-
-class RolesIn(BaseModel):
-    assigned_roles: List[RoleAssignmentIn]
-
 class TeamIn(BaseModel):
     # Assessment-level RACI team roster: {role_key: user_id}. Assigned once.
     roster: dict
@@ -1249,37 +1242,11 @@ def save_stage_checklist(
     return s_stage(row)
 
 
-# ── Assign duties (RACI) — who is Responsible/Accountable/Consulted/Informed ──
-
-@router.put("/assessments/{assessment_id}/stages/{stage_key}/roles")
-def save_stage_roles(
-    assessment_id: int, stage_key: str, body: RolesIn,
-    db: Session = Depends(get_db), user: GRCUser = Depends(require_auth),
-):
-    tids = _tids(user, db)
-    a = _assessment(db, assessment_id, tids)
-    rbac.require_write(db, user, "assessments", "edit")
-    if not is_valid_stage(stage_key):
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Unknown stage")
-    row = db.query(TPRAStageInstance).filter(
-        TPRAStageInstance.assessment_id == a.id,
-        TPRAStageInstance.stage_key == stage_key,
-        TPRAStageInstance.tenant_id.in_(tids),
-    ).first()
-    if not row:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Stage not found")
-    row.assigned_roles = [
-        {"role": r.role, "user_id": r.user_id}
-        for r in body.assigned_roles if r.role in ("R", "A", "C", "I")
-    ]
-    _bump(row)
-    service.write_audit(
-        db, a.tenant_id, entity="stage", action="update", vendor_id=a.vendor_id,
-        assessment_id=a.id, entity_id=row.id, actor_id=user.id,
-        extra={"stage": stage_key, "roles": len(row.assigned_roles)},
-    )
-    db.commit()
-    return s_stage(row)
+# NOTE: the per-stage RACI write endpoint (PUT .../stages/{key}/roles) was RETIRED.
+# The canonical duty-assignment model is the assessment-level team roster
+# (PUT .../team); the orphaned per-stage RaciPanel that wrote here was deleted, so
+# this was a second, independently-writable source of truth for accountability. The
+# stage.assigned_roles column is left in place (read-only via s_stage) for back-compat.
 
 
 # ── Assessment team roster (RACI, assigned once) ─────────────────────────────
