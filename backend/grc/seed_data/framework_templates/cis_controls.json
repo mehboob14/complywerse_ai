@@ -1,0 +1,1313 @@
+{
+ "framework_key": "cis_controls",
+ "display_name": "CIS Controls v8",
+ "name_patterns": [
+  "ciscontrol",
+  "cisv8",
+  "cis8",
+  "ciscontrolsv8"
+ ],
+ "registers": [
+  {
+   "type": "cis_controls__cis_controls_enterprise_asset_inventory_template",
+   "label": "Enterprise Asset Inventory",
+   "description": "CIS Controls v8 — Enterprise Asset Inventory (from the template).",
+   "columns": [
+    {
+     "key": "ref",
+     "label": "Ref",
+     "type": "text"
+    },
+    {
+     "key": "asset",
+     "label": "Asset",
+     "type": "text"
+    },
+    {
+     "key": "type",
+     "label": "Type",
+     "type": "text"
+    },
+    {
+     "key": "owner",
+     "label": "Owner",
+     "type": "text",
+     "picker": "users"
+    },
+    {
+     "key": "location_ip",
+     "label": "Location/IP",
+     "type": "text"
+    },
+    {
+     "key": "authorised",
+     "label": "Authorised?",
+     "type": "text"
+    },
+    {
+     "key": "handles_sensitive_data",
+     "label": "Handles sensitive data?",
+     "type": "text"
+    },
+    {
+     "key": "notes",
+     "label": "Notes",
+     "type": "textarea"
+    }
+   ],
+   "seed": [
+    {
+     "data": {
+      "ref": "1",
+      "asset": "Laptop-001",
+      "type": "End-user device",
+      "owner": "IT",
+      "location_ip": "DHCP",
+      "authorised": "Yes",
+      "handles_sensitive_data": "Yes",
+      "notes": ""
+     }
+    },
+    {
+     "data": {
+      "ref": "2",
+      "asset": "web-prod-01",
+      "type": "Server",
+      "owner": "Eng",
+      "location_ip": "10.0.0.10",
+      "authorised": "Yes",
+      "handles_sensitive_data": "Yes",
+      "notes": ""
+     }
+    }
+   ],
+   "formSections": [
+    {
+     "title": "Item",
+     "keys": [
+      "ref",
+      "asset"
+     ]
+    },
+    {
+     "title": "Assessment",
+     "keys": [
+      "type",
+      "location_ip",
+      "authorised",
+      "handles_sensitive_data",
+      "notes"
+     ]
+    },
+    {
+     "title": "Ownership & dates",
+     "keys": [
+      "owner"
+     ]
+    }
+   ]
+  },
+  {
+   "type": "cis_controls__cis_controls_software_inventory_template_1",
+   "label": "Software Inventory",
+   "description": "CIS Controls v8 — Software Inventory (from the template).",
+   "columns": [
+    {
+     "key": "2",
+     "label": "2",
+     "type": "text"
+    },
+    {
+     "key": "legacy_app",
+     "label": "Legacy app",
+     "type": "text"
+    },
+    {
+     "key": "vendor",
+     "label": "Vendor",
+     "type": "text"
+    },
+    {
+     "key": "old",
+     "label": "Old",
+     "type": "text"
+    },
+    {
+     "key": "finance",
+     "label": "Finance",
+     "type": "text"
+    },
+    {
+     "key": "review",
+     "label": "Review",
+     "type": "date"
+    },
+    {
+     "key": "no",
+     "label": "No",
+     "type": "text"
+    },
+    {
+     "key": "finance_2",
+     "label": "Finance",
+     "type": "text"
+    }
+   ],
+   "seed": [],
+   "formSections": [
+    {
+     "title": "Item",
+     "keys": [
+      "2",
+      "legacy_app"
+     ]
+    },
+    {
+     "title": "Assessment",
+     "keys": [
+      "vendor",
+      "old",
+      "finance",
+      "no",
+      "finance_2"
+     ]
+    },
+    {
+     "title": "Ownership & dates",
+     "keys": [
+      "review"
+     ]
+    }
+   ]
+  },
+  {
+   "type": "cis_controls__cis_controls_v8_1_implementation_assessment_temp",
+   "label": "V8 1 Implementation Assessment",
+   "description": "CIS Controls v8 — V8 1 Implementation Assessment (from the template).",
+   "columns": [
+    {
+     "key": "control",
+     "label": "Control",
+     "type": "textarea"
+    },
+    {
+     "key": "from_ig",
+     "label": "From IG",
+     "type": "text"
+    },
+    {
+     "key": "what_to_verify",
+     "label": "What to verify",
+     "type": "text"
+    },
+    {
+     "key": "status",
+     "label": "Status",
+     "type": "text"
+    },
+    {
+     "key": "evidence_notes",
+     "label": "Evidence / notes",
+     "type": "text",
+     "picker": "evidence"
+    },
+    {
+     "key": "owner",
+     "label": "Owner",
+     "type": "text",
+     "picker": "users"
+    }
+   ],
+   "seed": [
+    {
+     "data": {
+      "control": "1 Inventory of Enterprise Assets",
+      "from_ig": "IG1+",
+      "what_to_verify": "Actively manage all enterprise assets",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "control": "2 Inventory of Software Assets",
+      "from_ig": "IG1+",
+      "what_to_verify": "Actively manage all software",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "control": "3 Data Protection",
+      "from_ig": "IG1+",
+      "what_to_verify": "Identify, classify and protect data",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "control": "4 Secure Configuration",
+      "from_ig": "IG1+",
+      "what_to_verify": "Establish and maintain secure configurations",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "control": "5 Account Management",
+      "from_ig": "IG1+",
+      "what_to_verify": "Manage accounts and credentials",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "control": "6 Access Control Management",
+      "from_ig": "IG1+",
+      "what_to_verify": "Grant and revoke access on least privilege",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "control": "7 Continuous Vulnerability Management",
+      "from_ig": "IG1+",
+      "what_to_verify": "Continuously assess and remediate vulnerabilities",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "control": "8 Audit Log Management",
+      "from_ig": "IG1+",
+      "what_to_verify": "Collect, protect and review logs",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "control": "9 Email and Web Browser Protections",
+      "from_ig": "IG1+",
+      "what_to_verify": "Reduce email and web attack surface",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "control": "10 Malware Defenses",
+      "from_ig": "IG1+",
+      "what_to_verify": "Prevent and control malicious code",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "control": "11 Data Recovery",
+      "from_ig": "IG1+",
+      "what_to_verify": "Maintain and test backups",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "control": "12 Network Infrastructure Management",
+      "from_ig": "IG1+",
+      "what_to_verify": "Securely manage network devices",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "control": "13 Network Monitoring and Defense",
+      "from_ig": "IG2+",
+      "what_to_verify": "Monitor and defend the network",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "control": "14 Security Awareness and Skills Training",
+      "from_ig": "IG1+",
+      "what_to_verify": "Train the workforce",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "control": "15 Service Provider Management",
+      "from_ig": "IG1+",
+      "what_to_verify": "Manage service providers",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "control": "16 Application Software Security",
+      "from_ig": "IG2+",
+      "what_to_verify": "Secure in-house and acquired software",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "control": "17 Incident Response Management",
+      "from_ig": "IG1+",
+      "what_to_verify": "Manage security incidents",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "control": "18 Penetration Testing",
+      "from_ig": "IG3",
+      "what_to_verify": "Test defences through penetration testing",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    }
+   ],
+   "formSections": [
+    {
+     "title": "Item",
+     "keys": [
+      "control",
+      "from_ig"
+     ]
+    },
+    {
+     "title": "Assessment",
+     "keys": [
+      "what_to_verify",
+      "status",
+      "evidence_notes"
+     ]
+    },
+    {
+     "title": "Ownership & dates",
+     "keys": [
+      "owner"
+     ]
+    }
+   ]
+  },
+  {
+   "type": "cis_controls__cis_controls_v8_checklist_template",
+   "label": "V8 Checklist",
+   "description": "CIS Controls v8 — V8 Checklist (from the template).",
+   "columns": [
+    {
+     "key": "control",
+     "label": "Control #",
+     "type": "textarea"
+    },
+    {
+     "key": "cis_control",
+     "label": "CIS Control",
+     "type": "textarea"
+    },
+    {
+     "key": "key_safeguards",
+     "label": "Key safeguards",
+     "type": "text"
+    },
+    {
+     "key": "ig",
+     "label": "IG",
+     "type": "text"
+    },
+    {
+     "key": "status",
+     "label": "Status",
+     "type": "text"
+    },
+    {
+     "key": "owner",
+     "label": "Owner",
+     "type": "text",
+     "picker": "users"
+    },
+    {
+     "key": "evidence_notes",
+     "label": "Evidence / notes",
+     "type": "text",
+     "picker": "evidence"
+    }
+   ],
+   "seed": [
+    {
+     "data": {
+      "control": "1",
+      "cis_control": "Inventory & Control of Enterprise Assets",
+      "key_safeguards": "Maintain accurate hardware inventory; address unauthorised assets",
+      "ig": "IG1",
+      "status": "",
+      "owner": "",
+      "evidence_notes": ""
+     }
+    },
+    {
+     "data": {
+      "control": "2",
+      "cis_control": "Inventory & Control of Software Assets",
+      "key_safeguards": "Authorised software inventory; block unauthorised software",
+      "ig": "IG1",
+      "status": "",
+      "owner": "",
+      "evidence_notes": ""
+     }
+    },
+    {
+     "data": {
+      "control": "3",
+      "cis_control": "Data Protection",
+      "key_safeguards": "Classify, handle, retain and dispose of data; encrypt sensitive data",
+      "ig": "IG1",
+      "status": "",
+      "owner": "",
+      "evidence_notes": ""
+     }
+    },
+    {
+     "data": {
+      "control": "4",
+      "cis_control": "Secure Configuration of Assets & Software",
+      "key_safeguards": "Harden configs; manage default accounts; secure baselines",
+      "ig": "IG1",
+      "status": "",
+      "owner": "",
+      "evidence_notes": ""
+     }
+    },
+    {
+     "data": {
+      "control": "5",
+      "cis_control": "Account Management",
+      "key_safeguards": "Inventory accounts; unique accounts; disable dormant accounts",
+      "ig": "IG1",
+      "status": "",
+      "owner": "",
+      "evidence_notes": ""
+     }
+    },
+    {
+     "data": {
+      "control": "6",
+      "cis_control": "Access Control Management",
+      "key_safeguards": "Least privilege; MFA; access grant/revoke process",
+      "ig": "IG1",
+      "status": "",
+      "owner": "",
+      "evidence_notes": ""
+     }
+    },
+    {
+     "data": {
+      "control": "7",
+      "cis_control": "Continuous Vulnerability Management",
+      "key_safeguards": "Scan and remediate vulnerabilities on a schedule",
+      "ig": "IG1",
+      "status": "",
+      "owner": "",
+      "evidence_notes": ""
+     }
+    },
+    {
+     "data": {
+      "control": "8",
+      "cis_control": "Audit Log Management",
+      "key_safeguards": "Collect, store and review audit logs",
+      "ig": "IG1",
+      "status": "",
+      "owner": "",
+      "evidence_notes": ""
+     }
+    },
+    {
+     "data": {
+      "control": "9",
+      "cis_control": "Email & Web Browser Protections",
+      "key_safeguards": "DNS/URL filtering; email security; block malicious content",
+      "ig": "IG1",
+      "status": "",
+      "owner": "",
+      "evidence_notes": ""
+     }
+    },
+    {
+     "data": {
+      "control": "10",
+      "cis_control": "Malware Defenses",
+      "key_safeguards": "Anti-malware/EDR; auto-update; disable autorun",
+      "ig": "IG1",
+      "status": "",
+      "owner": "",
+      "evidence_notes": ""
+     }
+    },
+    {
+     "data": {
+      "control": "11",
+      "cis_control": "Data Recovery",
+      "key_safeguards": "Automated backups; protect & test recovery",
+      "ig": "IG1",
+      "status": "",
+      "owner": "",
+      "evidence_notes": ""
+     }
+    },
+    {
+     "data": {
+      "control": "12",
+      "cis_control": "Network Infrastructure Management",
+      "key_safeguards": "Secure network devices; current configs; segmentation",
+      "ig": "IG2",
+      "status": "",
+      "owner": "",
+      "evidence_notes": ""
+     }
+    },
+    {
+     "data": {
+      "control": "13",
+      "cis_control": "Network Monitoring & Defense",
+      "key_safeguards": "IDS/IPS, traffic analysis, alerting",
+      "ig": "IG2",
+      "status": "",
+      "owner": "",
+      "evidence_notes": ""
+     }
+    },
+    {
+     "data": {
+      "control": "14",
+      "cis_control": "Security Awareness & Skills Training",
+      "key_safeguards": "Role-based awareness program",
+      "ig": "IG1",
+      "status": "",
+      "owner": "",
+      "evidence_notes": ""
+     }
+    },
+    {
+     "data": {
+      "control": "15",
+      "cis_control": "Service Provider Management",
+      "key_safeguards": "Inventory & assess third-party providers",
+      "ig": "IG1",
+      "status": "",
+      "owner": "",
+      "evidence_notes": ""
+     }
+    },
+    {
+     "data": {
+      "control": "16",
+      "cis_control": "Application Software Security",
+      "key_safeguards": "Secure SDLC; manage vulnerabilities in code",
+      "ig": "IG2",
+      "status": "",
+      "owner": "",
+      "evidence_notes": ""
+     }
+    },
+    {
+     "data": {
+      "control": "17",
+      "cis_control": "Incident Response Management",
+      "key_safeguards": "IR plan, roles, contacts, exercises",
+      "ig": "IG1",
+      "status": "",
+      "owner": "",
+      "evidence_notes": ""
+     }
+    },
+    {
+     "data": {
+      "control": "18",
+      "cis_control": "Penetration Testing",
+      "key_safeguards": "Regular internal/external testing",
+      "ig": "IG2",
+      "status": "",
+      "owner": "",
+      "evidence_notes": ""
+     }
+    },
+    {
+     "data": {
+      "control": "",
+      "cis_control": "Implemented:",
+      "key_safeguards": "",
+      "ig": "",
+      "status": "",
+      "owner": "",
+      "evidence_notes": ""
+     }
+    }
+   ],
+   "formSections": [
+    {
+     "title": "Item",
+     "keys": [
+      "control",
+      "cis_control"
+     ]
+    },
+    {
+     "title": "Assessment",
+     "keys": [
+      "key_safeguards",
+      "ig",
+      "status",
+      "evidence_notes"
+     ]
+    },
+    {
+     "title": "Ownership & dates",
+     "keys": [
+      "owner"
+     ]
+    }
+   ]
+  }
+ ],
+ "documents": [
+  {
+   "type": "cis_controls__cis_controls_access_control_policy_template_2",
+   "label": "Access Control Policy",
+   "control_ref": null,
+   "sections": [
+    {
+     "heading": "1. Purpose",
+     "body": "This policy implements CIS Control 6 of the CIS Critical Security Controls (v8.1). It grants, manages and revokes access rights for accounts so that each account has only the access it needs, for only as long as it needs it."
+    },
+    {
+     "heading": "2. Scope",
+     "body": "The enterprise assets (devices, servers and cloud workloads), software, accounts and data within the organisation's environment, and the people and third parties that operate or access them."
+    },
+    {
+     "heading": "3. Granting and Revoking Access",
+     "body": "A defined, recorded process governs access throughout its life. Access is granted on joining and on role change against an authorised request, and is revoked promptly on termination. The grant and revoke actions are logged so access can be traced to an approval.\n[FILL IN: your access request and approval workflow and the system that records it, e.g. ServiceNow.]"
+    },
+    {
+     "heading": "4. Multi-Factor Authentication",
+     "body": "Multi-factor authentication (MFA) is required to make stolen passwords insufficient on their own. Phishing-resistant methods are preferred where available. MFA is enforced for at least:",
+     "table": {
+      "columns": [
+       "Access scenario",
+       "Requirement"
+      ],
+      "rows": [
+       [
+        "Externally-exposed applications",
+        "MFA for all users"
+       ],
+       [
+        "Remote access to the network",
+        "MFA for all users"
+       ],
+       [
+        "Administrative access",
+        "MFA for all administrative accounts"
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "5. Least Privilege and Access Reviews",
+     "body": "Standing access is kept minimal and is checked:\n- Access follows least privilege and is assigned by role rather than to individuals where possible.\n- Access control is centralised through a directory or single sign-on where feasible (IG2).\n- Access rights are reviewed periodically and on role change, and anything no longer needed is removed.\n- [FILL IN: your access-review cadence, e.g. quarterly for privileged access and annually for all access.]"
+    },
+    {
+     "heading": "6. Implementation Groups and Verification",
+     "body": "The CIS Controls are prioritised into three Implementation Groups (IGs). The organisation implements at least the IG1 safeguards (essential cyber hygiene, the minimum standard of care for every enterprise) and adds IG2 and IG3 safeguards in line with its data sensitivity, risk profile and resources. For each safeguard in scope, an owner is named, the safeguard is operated with supporting tooling, and its operation is verified through review or testing on a defined cadence.\n[FILL IN: your target Implementation Group (IG1, IG2 or IG3) and the tooling that supports this control, e.g. IG1 enforced through Microsoft Intune and Defender.]"
+    },
+    {
+     "heading": "7. Roles & Responsibilities",
+     "body": "",
+     "table": {
+      "columns": [
+       "Role",
+       "Responsibilities"
+      ],
+      "rows": [
+       [
+        "IT / Security team",
+        "Operates and maintains the safeguards in this policy and reports on their status."
+       ],
+       [
+        "CISO / Security Lead",
+        "Owns the policy, approves exceptions, monitors compliance and reports to leadership."
+       ],
+       [
+        "Managers",
+        "Ensure their teams understand and follow the policy."
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "8. Compliance & Enforcement",
+     "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+    },
+    {
+     "heading": "9. Exceptions",
+     "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+    },
+    {
+     "heading": "10. Review",
+     "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+    }
+   ]
+  },
+  {
+   "type": "cis_controls__cis_controls_account_management_policy_template_",
+   "label": "Account Management Policy",
+   "control_ref": null,
+   "sections": [
+    {
+     "heading": "1. Purpose",
+     "body": "This policy implements CIS Control 5 of the CIS Critical Security Controls (v8.1). It manages the lifecycle of every account and the credentials that authenticate them, so that only legitimate, attributable accounts exist in the environment."
+    },
+    {
+     "heading": "2. Scope",
+     "body": "The enterprise assets (devices, servers and cloud workloads), software, accounts and data within the organisation's environment, and the people and third parties that operate or access them."
+    },
+    {
+     "heading": "3. Account Inventory",
+     "body": "All accounts are inventoried so the organisation knows what exists and who owns it:\n- User, administrator and service accounts are inventoried, kept unique, and attributable to a person or a named owner.\n- Service accounts are inventoried separately with their purpose, owner and the systems they access.\n- [FILL IN: your authoritative account inventory source, e.g. your identity provider or directory.]"
+    },
+    {
+     "heading": "4. Account Lifecycle",
+     "body": "Accounts exist only while they are needed:\n- Default accounts are removed or disabled where they are not required.\n- Dormant accounts are disabled within a defined period of inactivity.\n- Accounts are disabled promptly on termination, and access is adjusted on role change.\n- [FILL IN: your dormancy period (e.g. 45 days) and your joiner, mover and leaver process.]"
+    },
+    {
+     "heading": "5. Credentials and Privileged Accounts",
+     "body": "Credentials are strong and protected, and elevated access is tightly controlled:\n- Accounts use unique, strong credentials in line with the password policy.\n- Administrative privileges are restricted to dedicated administrator accounts, separate from the day-to-day accounts used for email and web browsing.\n- Account management is centralised through a directory or identity service where feasible (IG2)."
+    },
+    {
+     "heading": "6. Implementation Groups and Verification",
+     "body": "The CIS Controls are prioritised into three Implementation Groups (IGs). The organisation implements at least the IG1 safeguards (essential cyber hygiene, the minimum standard of care for every enterprise) and adds IG2 and IG3 safeguards in line with its data sensitivity, risk profile and resources. For each safeguard in scope, an owner is named, the safeguard is operated with supporting tooling, and its operation is verified through review or testing on a defined cadence.\n[FILL IN: your target Implementation Group (IG1, IG2 or IG3) and the tooling that supports this control, e.g. IG1 enforced through Microsoft Intune and Defender.]"
+    },
+    {
+     "heading": "7. Roles & Responsibilities",
+     "body": "",
+     "table": {
+      "columns": [
+       "Role",
+       "Responsibilities"
+      ],
+      "rows": [
+       [
+        "IT / Security team",
+        "Operates and maintains the safeguards in this policy and reports on their status."
+       ],
+       [
+        "CISO / Security Lead",
+        "Owns the policy, approves exceptions, monitors compliance and reports to leadership."
+       ],
+       [
+        "Managers",
+        "Ensure their teams understand and follow the policy."
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "8. Compliance & Enforcement",
+     "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+    },
+    {
+     "heading": "9. Exceptions",
+     "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+    },
+    {
+     "heading": "10. Review",
+     "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+    }
+   ]
+  },
+  {
+   "type": "cis_controls__cis_controls_audit_log_management_policy_templat",
+   "label": "Audit Log Management Policy",
+   "control_ref": null,
+   "sections": [
+    {
+     "heading": "1. Purpose",
+     "body": "This policy implements CIS Control 8 of the CIS Critical Security Controls (v8.1). It collects, protects and reviews audit logs so that malicious or anomalous activity can be detected, investigated, and used as evidence."
+    },
+    {
+     "heading": "2. Scope",
+     "body": "The enterprise assets (devices, servers and cloud workloads), software, accounts and data within the organisation's environment, and the people and third parties that operate or access them."
+    },
+    {
+     "heading": "3. Logging Scope",
+     "body": "A documented log management process defines what is logged, where, and for how long. Audit logging is enabled across enterprise assets, and detailed logs are captured for the events needed to detect and reconstruct activity, such as authentication, privilege use, configuration change and access to sensitive data.\n[FILL IN: your logging scope and sources, e.g. endpoints, servers, network devices, cloud and SaaS audit logs.]"
+    },
+    {
+     "heading": "4. Central Collection, Time Sync and Protection",
+     "body": "Logs are gathered and safeguarded so they are complete and trustworthy:\n- Logs are centrally collected into a log store or SIEM so they can be correlated across sources.\n- System clocks are synchronised to a consistent, reliable time source so events line up across systems.\n- Logs are protected from alteration and unauthorised access, and storage is sized to hold the required retention."
+    },
+    {
+     "heading": "5. Retention and Review",
+     "body": "Logs are kept long enough to be useful and are actually looked at:\n- Logs are retained for a defined minimum period (at least 90 days is a common baseline), and longer where regulation, contract or an active investigation requires.\n- Logs are reviewed for anomalies, using tooling and alerting where feasible, and are used during incident response and investigations.\n- [FILL IN: your retention period, review cadence and the tool that supports review, e.g. 12 months in Microsoft Sentinel with daily alert triage.]"
+    },
+    {
+     "heading": "6. Implementation Groups and Verification",
+     "body": "The CIS Controls are prioritised into three Implementation Groups (IGs). The organisation implements at least the IG1 safeguards (essential cyber hygiene, the minimum standard of care for every enterprise) and adds IG2 and IG3 safeguards in line with its data sensitivity, risk profile and resources. For each safeguard in scope, an owner is named, the safeguard is operated with supporting tooling, and its operation is verified through review or testing on a defined cadence.\n[FILL IN: your target Implementation Group (IG1, IG2 or IG3) and the tooling that supports this control, e.g. IG1 enforced through Microsoft Intune and Defender.]"
+    },
+    {
+     "heading": "7. Roles & Responsibilities",
+     "body": "",
+     "table": {
+      "columns": [
+       "Role",
+       "Responsibilities"
+      ],
+      "rows": [
+       [
+        "IT / Security team",
+        "Operates and maintains the safeguards in this policy and reports on their status."
+       ],
+       [
+        "CISO / Security Lead",
+        "Owns the policy, approves exceptions, monitors compliance and reports to leadership."
+       ],
+       [
+        "Managers",
+        "Ensure their teams understand and follow the policy."
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "8. Compliance & Enforcement",
+     "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+    },
+    {
+     "heading": "9. Exceptions",
+     "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+    },
+    {
+     "heading": "10. Review",
+     "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+    }
+   ]
+  },
+  {
+   "type": "cis_controls__cis_controls_data_protection_policy_template_2",
+   "label": "Data Protection Policy",
+   "control_ref": null,
+   "sections": [
+    {
+     "heading": "1. Purpose",
+     "body": "This policy implements CIS Control 3 of the CIS Critical Security Controls (v8.1). It protects data across its lifecycle, from creation to disposal, which is the foundation on which the other safeguards rest."
+    },
+    {
+     "heading": "2. Scope",
+     "body": "The enterprise assets (devices, servers and cloud workloads), software, accounts and data within the organisation's environment, and the people and third parties that operate or access them."
+    },
+    {
+     "heading": "3. Data Management and Inventory",
+     "body": "A data management process governs how data is identified, handled, retained and disposed of across its lifecycle. A data inventory records the organisation's sensitive data, where it is stored and transmitted, who is accountable for it, and how it is protected. The inventory is reviewed and updated at least annually and when significant new processing is introduced.\n[FILL IN: your authoritative data inventory or data map, e.g. a register maintained by the data owners in SharePoint.]"
+    },
+    {
+     "heading": "4. Classification and Handling",
+     "body": "Data is classified by sensitivity, and the classification determines the handling, access and protection it receives. The following scheme applies unless a stricter legal or contractual requirement overrides it:",
+     "table": {
+      "columns": [
+       "Classification",
+       "Examples",
+       "Handling"
+      ],
+      "rows": [
+       [
+        "Public",
+        "Published marketing material, public reports",
+        "No restriction; may be shared externally."
+       ],
+       [
+        "Internal",
+        "Internal procedures, org charts, routine email",
+        "Available to staff; not shared externally without approval."
+       ],
+       [
+        "Confidential",
+        "Customer data, contracts, financial records",
+        "Need-to-know access; encrypted in transit and at rest; access logged."
+       ],
+       [
+        "Restricted",
+        "Credentials, regulated or special-category data",
+        "Strict need-to-know; strongest controls; access logged and reviewed."
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "5. Access, Encryption and Segmentation",
+     "body": "Sensitive data is protected in proportion to its classification:\n- Access is granted on a need-to-know basis through access control lists and is removed when no longer required.\n- Sensitive data is encrypted at rest on servers, end-user devices and removable media, and in transit over networks.\n- Where feasible, data is segmented or stored separately according to its sensitivity (IG2/IG3)."
+    },
+    {
+     "heading": "6. Retention, Disposal and Monitoring",
+     "body": "Data is kept only as long as it is needed, then removed, and its movement is monitored where the risk justifies it:\n- Data is retained only as long as required for business, legal or regulatory purposes, then securely disposed of so that it cannot be recovered.\n- Access to and movement of sensitive data is logged where required, and data-loss prevention controls are applied in higher-risk environments (IG2/IG3).\n- [FILL IN: your retention periods by data type and your secure disposal method, e.g. cryptographic erase for SSDs.]"
+    },
+    {
+     "heading": "7. Implementation Groups and Verification",
+     "body": "The CIS Controls are prioritised into three Implementation Groups (IGs). The organisation implements at least the IG1 safeguards (essential cyber hygiene, the minimum standard of care for every enterprise) and adds IG2 and IG3 safeguards in line with its data sensitivity, risk profile and resources. For each safeguard in scope, an owner is named, the safeguard is operated with supporting tooling, and its operation is verified through review or testing on a defined cadence.\n[FILL IN: your target Implementation Group (IG1, IG2 or IG3) and the tooling that supports this control, e.g. IG1 enforced through Microsoft Intune and Defender.]"
+    },
+    {
+     "heading": "8. Roles & Responsibilities",
+     "body": "",
+     "table": {
+      "columns": [
+       "Role",
+       "Responsibilities"
+      ],
+      "rows": [
+       [
+        "Data owners",
+        "Classify the data they are accountable for and approve access to it."
+       ],
+       [
+        "IT / Security team",
+        "Implements encryption, access control, logging and secure disposal."
+       ],
+       [
+        "CISO / Security Lead",
+        "Owns the policy, approves exceptions, monitors compliance and reports to leadership."
+       ],
+       [
+        "Managers",
+        "Ensure their teams understand and follow the policy."
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "9. Compliance & Enforcement",
+     "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+    },
+    {
+     "heading": "10. Exceptions",
+     "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+    },
+    {
+     "heading": "11. Review",
+     "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+    }
+   ]
+  },
+  {
+   "type": "cis_controls__cis_controls_incident_response_policy_template_3",
+   "label": "Incident Response Policy",
+   "control_ref": null,
+   "sections": [
+    {
+     "heading": "1. Purpose",
+     "body": "This policy implements CIS Control 17 of the CIS Critical Security Controls (v8.1). It establishes the capability to prepare for, detect, respond to and recover from security incidents, so that their impact is limited and the lessons from them are captured."
+    },
+    {
+     "heading": "2. Scope",
+     "body": "The enterprise assets (devices, servers and cloud workloads), software, accounts and data within the organisation's environment, and the people and third parties that operate or access them."
+    },
+    {
+     "heading": "3. Roles and Responsibilities",
+     "body": "Designated personnel manage the incident response process, and the key roles are assigned in advance so the response is coordinated rather than improvised. The core roles are:\n- Incident Manager: declares incidents, coordinates the response, and owns decisions and communications.\n- Technical responders (IT and security): perform detection, analysis, containment, eradication and recovery.\n- Supporting functions: legal, HR, communications, data protection and senior management, engaged according to the incident.\n- [FILL IN: name your Incident Manager and response team, and any third-party incident response retainer and its contact details.]"
+    },
+    {
+     "heading": "4. Reporting and Contacts",
+     "body": "Any worker can report a suspected incident quickly through a known channel, and the contacts needed to report and escalate are maintained and available even when normal systems are down:\n- Workers report suspected incidents immediately through [FILL IN: e.g. security@company.com or the IT service desk]; they are not expected to investigate on their own.\n- Reporting and escalation contacts (internal teams, management, third-party responders, regulators, law enforcement and key customers) are kept current and stored so they are reachable offline."
+    },
+    {
+     "heading": "5. Incident Severity and Thresholds",
+     "body": "Incidents are classified by severity to drive the speed and seniority of the response. The thresholds below are a starting point:",
+     "table": {
+      "columns": [
+       "Severity",
+       "Description",
+       "Response"
+      ],
+      "rows": [
+       [
+        "Critical (Sev 1)",
+        "Confirmed breach of sensitive data, ransomware, or outage of a critical service",
+        "Immediate; Incident Manager and senior management engaged; consider regulator and customer notification."
+       ],
+       [
+        "High (Sev 2)",
+        "Significant compromise or malware contained to limited systems",
+        "Within hours; full response team engaged."
+       ],
+       [
+        "Medium (Sev 3)",
+        "Limited-impact event, e.g. isolated malware or a single compromised account",
+        "Within one business day."
+       ],
+       [
+        "Low (Sev 4)",
+        "Minor or suspected event with no confirmed impact",
+        "Triage and monitor; close or escalate as needed."
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "6. Response Process",
+     "body": "A documented incident response process is maintained and followed, covering the lifecycle of an incident:\n- Detection and analysis: validate the report, determine scope and impact, and assign a severity.\n- Containment: limit the spread and damage (isolate systems, disable accounts, block indicators) while preserving evidence.\n- Eradication and recovery: remove the cause, restore affected systems from trusted sources, and confirm normal, secure operation.\n- Evidence handling: preserve logs and forensic evidence in a defensible manner to support investigation and any legal or regulatory action."
+    },
+    {
+     "heading": "7. Communication and Notification",
+     "body": "Communication during an incident is coordinated, and external notification is made where it is required:\n- Internal updates follow a defined channel and cadence, using out-of-band methods if normal systems are compromised.\n- Regulators, affected individuals, customers, law enforcement and insurers are notified where required by law, contract or regulation, on their required timelines.\n- [FILL IN: your notification obligations and deadlines, e.g. authority notification within 72 hours under the GDPR.]"
+    },
+    {
+     "heading": "8. Post-Incident Review and Exercises",
+     "body": "After every significant incident, a post-incident review captures the root cause, how well the response worked and the lessons learned, and improvement actions are tracked to completion. The incident response process is exercised periodically, for example through tabletop scenarios, so the team is ready before a real incident occurs.\n[FILL IN: your post-incident review process and exercise cadence, e.g. an annual tabletop plus a review after every Sev 1 and Sev 2 incident.]"
+    },
+    {
+     "heading": "9. Implementation Groups and Verification",
+     "body": "The CIS Controls are prioritised into three Implementation Groups (IGs). The organisation implements at least the IG1 safeguards (essential cyber hygiene, the minimum standard of care for every enterprise) and adds IG2 and IG3 safeguards in line with its data sensitivity, risk profile and resources. For each safeguard in scope, an owner is named, the safeguard is operated with supporting tooling, and its operation is verified through review or testing on a defined cadence.\n[FILL IN: your target Implementation Group (IG1, IG2 or IG3) and the tooling that supports this control, e.g. IG1 enforced through Microsoft Intune and Defender.]"
+    },
+    {
+     "heading": "10. Roles & Responsibilities",
+     "body": "",
+     "table": {
+      "columns": [
+       "Role",
+       "Responsibilities"
+      ],
+      "rows": [
+       [
+        "Incident Manager",
+        "Declares and coordinates incidents, and owns decisions and communications."
+       ],
+       [
+        "IT / Security responders",
+        "Detect, analyse, contain, eradicate and recover from incidents."
+       ],
+       [
+        "CISO / Security Lead",
+        "Owns the policy, approves exceptions, monitors compliance and reports to leadership."
+       ],
+       [
+        "Legal / DPO / Communications",
+        "Advise on obligations and handle external communications and notifications."
+       ],
+       [
+        "Managers",
+        "Ensure their teams understand and follow the policy."
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "11. Compliance & Enforcement",
+     "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+    },
+    {
+     "heading": "12. Exceptions",
+     "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+    },
+    {
+     "heading": "13. Review",
+     "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+    }
+   ]
+  },
+  {
+   "type": "cis_controls__cis_controls_secure_configuration_policy_templat",
+   "label": "Secure Configuration Policy",
+   "control_ref": null,
+   "sections": [
+    {
+     "heading": "1. Purpose",
+     "body": "This policy implements CIS Control 4 of the CIS Critical Security Controls (v8.1). It hardens enterprise assets and software so they are not left in the insecure default state in which they are typically shipped."
+    },
+    {
+     "heading": "2. Scope",
+     "body": "The enterprise assets (devices, servers and cloud workloads), software, accounts and data within the organisation's environment, and the people and third parties that operate or access them."
+    },
+    {
+     "heading": "3. Secure Configuration Baselines",
+     "body": "Documented secure configuration baselines are established and maintained for the technologies in use, and assets are configured to the current baseline before they are deployed. Baselines are reviewed and updated as vendor guidance, threats and the environment change.\n- Baselines cover operating systems, applications, servers, network devices, mobile devices and cloud services.\n- [FILL IN: the source of your baselines, e.g. CIS Benchmarks, vendor hardening guides or DISA STIGs.]"
+    },
+    {
+     "heading": "4. Default Accounts and Unnecessary Components",
+     "body": "The attack surface of each asset is reduced before and during use:\n- Default accounts are removed, disabled, or have their passwords changed before an asset is put into service.\n- Unnecessary services, accounts, software, ports and protocols are removed or disabled."
+    },
+    {
+     "heading": "5. Session, Network and Mobile Protection",
+     "body": "Assets are configured to resist unauthorised use and limit exposure:\n- Automatic session locking is enforced after a defined period of inactivity on workstations and mobile devices.\n- A host-based firewall or port-filtering tool is enabled on end-user devices and servers, denying traffic by default.\n- Portable end-user devices lock after a defined number of failed authentication attempts, and lost or stolen devices can be remotely wiped (IG2).\n- [FILL IN: your inactivity lock timeout (e.g. 15 minutes) and failed-attempt lockout threshold (e.g. 10 attempts).]"
+    },
+    {
+     "heading": "6. Implementation Groups and Verification",
+     "body": "The CIS Controls are prioritised into three Implementation Groups (IGs). The organisation implements at least the IG1 safeguards (essential cyber hygiene, the minimum standard of care for every enterprise) and adds IG2 and IG3 safeguards in line with its data sensitivity, risk profile and resources. For each safeguard in scope, an owner is named, the safeguard is operated with supporting tooling, and its operation is verified through review or testing on a defined cadence.\n[FILL IN: your target Implementation Group (IG1, IG2 or IG3) and the tooling that supports this control, e.g. IG1 enforced through Microsoft Intune and Defender.]"
+    },
+    {
+     "heading": "7. Roles & Responsibilities",
+     "body": "",
+     "table": {
+      "columns": [
+       "Role",
+       "Responsibilities"
+      ],
+      "rows": [
+       [
+        "IT / Security team",
+        "Operates and maintains the safeguards in this policy and reports on their status."
+       ],
+       [
+        "CISO / Security Lead",
+        "Owns the policy, approves exceptions, monitors compliance and reports to leadership."
+       ],
+       [
+        "Managers",
+        "Ensure their teams understand and follow the policy."
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "8. Compliance & Enforcement",
+     "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+    },
+    {
+     "heading": "9. Exceptions",
+     "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+    },
+    {
+     "heading": "10. Review",
+     "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+    }
+   ]
+  },
+  {
+   "type": "cis_controls__cis_controls_vulnerability_management_policy_tem",
+   "label": "Vulnerability Management Policy",
+   "control_ref": null,
+   "sections": [
+    {
+     "heading": "1. Purpose",
+     "body": "This policy implements CIS Control 7 of the CIS Critical Security Controls (v8.1). It continuously identifies and remediates vulnerabilities in enterprise assets and software to reduce the window in which an attacker can exploit them."
+    },
+    {
+     "heading": "2. Scope",
+     "body": "The enterprise assets (devices, servers and cloud workloads), software, accounts and data within the organisation's environment, and the people and third parties that operate or access them."
+    },
+    {
+     "heading": "3. Vulnerability and Remediation Process",
+     "body": "A documented, risk-based process governs how vulnerabilities are identified, assessed, prioritised and remediated. Information is drawn from scanning, vendor advisories and threat intelligence, and findings are recorded and tracked to closure.\n[FILL IN: the owner of the process and where findings are tracked, e.g. a Jira project or the vulnerability register.]"
+    },
+    {
+     "heading": "4. Scanning and Patching",
+     "body": "Assets and software are kept current and assessed on a defined cadence:\n- Automated patch management is used for operating systems and for applications.\n- Authenticated internal scans and external scans are run on a defined cadence and after significant change.\n- Coverage includes operating systems and applications across enterprise assets.\n- [FILL IN: your scanning tool and cadence, e.g. authenticated weekly internal scans with Tenable.]"
+    },
+    {
+     "heading": "5. Risk-Based Remediation Timeframes",
+     "body": "Detected vulnerabilities are prioritised by risk (severity, exploitability and exposure) and remediated within target timeframes. The targets below are a starting point; adjust them to your risk appetite and any regulatory or contractual obligation:",
+     "table": {
+      "columns": [
+       "Severity",
+       "Internet-facing or actively exploited",
+       "Internal"
+      ],
+      "rows": [
+       [
+        "Critical",
+        "7 days",
+        "14 days"
+       ],
+       [
+        "High",
+        "14 days",
+        "30 days"
+       ],
+       [
+        "Medium",
+        "30 days",
+        "90 days"
+       ],
+       [
+        "Low",
+        "Risk-based, next maintenance cycle",
+        "Risk-based, next maintenance cycle"
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "6. Implementation Groups and Verification",
+     "body": "The CIS Controls are prioritised into three Implementation Groups (IGs). The organisation implements at least the IG1 safeguards (essential cyber hygiene, the minimum standard of care for every enterprise) and adds IG2 and IG3 safeguards in line with its data sensitivity, risk profile and resources. For each safeguard in scope, an owner is named, the safeguard is operated with supporting tooling, and its operation is verified through review or testing on a defined cadence.\n[FILL IN: your target Implementation Group (IG1, IG2 or IG3) and the tooling that supports this control, e.g. IG1 enforced through Microsoft Intune and Defender.]"
+    },
+    {
+     "heading": "7. Roles & Responsibilities",
+     "body": "",
+     "table": {
+      "columns": [
+       "Role",
+       "Responsibilities"
+      ],
+      "rows": [
+       [
+        "IT / Security team",
+        "Operates and maintains the safeguards in this policy and reports on their status."
+       ],
+       [
+        "CISO / Security Lead",
+        "Owns the policy, approves exceptions, monitors compliance and reports to leadership."
+       ],
+       [
+        "Managers",
+        "Ensure their teams understand and follow the policy."
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "8. Compliance & Enforcement",
+     "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+    },
+    {
+     "heading": "9. Exceptions",
+     "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+    },
+    {
+     "heading": "10. Review",
+     "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+    }
+   ]
+  }
+ ]
+}

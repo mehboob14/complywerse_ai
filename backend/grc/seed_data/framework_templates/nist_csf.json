@@ -1,0 +1,1296 @@
+{
+ "framework_key": "nist_csf",
+ "display_name": "NIST CSF 2.0",
+ "name_patterns": [
+  "nistcsf",
+  "cybersecurityframework",
+  "csf2"
+ ],
+ "registers": [
+  {
+   "type": "nist_csf__nist_csf_2_0_gap_assessment_template_1",
+   "label": "2 0 Gap Assessment",
+   "description": "NIST CSF 2.0 — 2 0 Gap Assessment (from the template).",
+   "columns": [
+    {
+     "key": "function",
+     "label": "Function",
+     "type": "text"
+    },
+    {
+     "key": "id",
+     "label": "ID",
+     "type": "text"
+    },
+    {
+     "key": "outcomes_to_verify",
+     "label": "Outcomes to verify",
+     "type": "textarea"
+    },
+    {
+     "key": "status",
+     "label": "Status",
+     "type": "text"
+    },
+    {
+     "key": "evidence_notes",
+     "label": "Evidence / notes",
+     "type": "text",
+     "picker": "evidence"
+    },
+    {
+     "key": "owner",
+     "label": "Owner",
+     "type": "text",
+     "picker": "users"
+    }
+   ],
+   "seed": [
+    {
+     "data": {
+      "function": "Govern (GV)",
+      "id": "GV",
+      "outcomes_to_verify": "Organisational context, risk management strategy, roles, policy and oversight are established",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "function": "Identify (ID)",
+      "id": "ID",
+      "outcomes_to_verify": "Assets, suppliers, risks and improvement opportunities are identified and understood",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "function": "Protect (PR)",
+      "id": "PR",
+      "outcomes_to_verify": "Identity, access, awareness, data security, platform security and resilience safeguards are in place",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "function": "Detect (DE)",
+      "id": "DE",
+      "outcomes_to_verify": "Adverse events are detected and analysed through continuous monitoring",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "function": "Respond (RS)",
+      "id": "RS",
+      "outcomes_to_verify": "Incidents are managed, analysed, mitigated, reported and communicated",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "function": "Recover (RC)",
+      "id": "RC",
+      "outcomes_to_verify": "Assets and operations are restored after an incident, with communications",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    }
+   ],
+   "formSections": [
+    {
+     "title": "Item",
+     "keys": [
+      "function",
+      "id"
+     ]
+    },
+    {
+     "title": "Assessment",
+     "keys": [
+      "outcomes_to_verify",
+      "status",
+      "evidence_notes"
+     ]
+    },
+    {
+     "title": "Ownership & dates",
+     "keys": [
+      "owner"
+     ]
+    }
+   ]
+  },
+  {
+   "type": "nist_csf__nist_csf_2_0_improvement_roadmap_template_1",
+   "label": "2 0 Improvement Roadmap",
+   "description": "NIST CSF 2.0 — 2 0 Improvement Roadmap (from the template).",
+   "columns": [
+    {
+     "key": "3",
+     "label": "3",
+     "type": "text"
+    },
+    {
+     "key": "detect_respond",
+     "label": "Detect/Respond",
+     "type": "text"
+    },
+    {
+     "key": "stand_up_monitoring_and_incident_response",
+     "label": "Stand up monitoring and incident response",
+     "type": "textarea"
+    },
+    {
+     "key": "de_rs",
+     "label": "DE/RS",
+     "type": "text"
+    },
+    {
+     "key": "medium",
+     "label": "Medium",
+     "type": "text"
+    },
+    {
+     "key": "secops",
+     "label": "SecOps",
+     "type": "text"
+    },
+    {
+     "key": "2026_12_01",
+     "label": "2026-12-01",
+     "type": "text"
+    },
+    {
+     "key": "not_started",
+     "label": "Not started",
+     "type": "text"
+    }
+   ],
+   "seed": [],
+   "formSections": [
+    {
+     "title": "Item",
+     "keys": [
+      "3",
+      "detect_respond"
+     ]
+    },
+    {
+     "title": "Assessment",
+     "keys": [
+      "stand_up_monitoring_and_incident_response",
+      "de_rs",
+      "medium",
+      "secops",
+      "2026_12_01",
+      "not_started"
+     ]
+    }
+   ]
+  },
+  {
+   "type": "nist_csf__nist_csf_2_assessment_template",
+   "label": "2 Assessment",
+   "description": "NIST CSF 2.0 — 2 Assessment (from the template).",
+   "columns": [
+    {
+     "key": "function",
+     "label": "Function",
+     "type": "text"
+    },
+    {
+     "key": "category",
+     "label": "Category",
+     "type": "text"
+    },
+    {
+     "key": "subcategory_outcome",
+     "label": "Subcategory / outcome",
+     "type": "text"
+    },
+    {
+     "key": "current_0_4",
+     "label": "Current (0-4)",
+     "type": "text"
+    },
+    {
+     "key": "target_0_4",
+     "label": "Target (0-4)",
+     "type": "date"
+    },
+    {
+     "key": "gap",
+     "label": "Gap",
+     "type": "textarea"
+    },
+    {
+     "key": "evidence_notes",
+     "label": "Evidence / notes",
+     "type": "text",
+     "picker": "evidence"
+    },
+    {
+     "key": "owner",
+     "label": "Owner",
+     "type": "text",
+     "picker": "users"
+    }
+   ],
+   "seed": [
+    {
+     "data": {
+      "function": "GOVERN",
+      "category": "Organizational Context (GV.OC)",
+      "subcategory_outcome": "Mission, stakeholders & requirements understood",
+      "current_0_4": "",
+      "target_0_4": "",
+      "gap": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "function": "GOVERN",
+      "category": "Risk Management Strategy (GV.RM)",
+      "subcategory_outcome": "Risk appetite and strategy established",
+      "current_0_4": "",
+      "target_0_4": "",
+      "gap": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "function": "GOVERN",
+      "category": "Roles & Responsibilities (GV.RR)",
+      "subcategory_outcome": "Cybersecurity roles, authorities & accountability set",
+      "current_0_4": "",
+      "target_0_4": "",
+      "gap": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "function": "GOVERN",
+      "category": "Policy (GV.PO)",
+      "subcategory_outcome": "Cybersecurity policy established and communicated",
+      "current_0_4": "",
+      "target_0_4": "",
+      "gap": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "function": "GOVERN",
+      "category": "Oversight (GV.OV)",
+      "subcategory_outcome": "Strategy outcomes reviewed and adjusted",
+      "current_0_4": "",
+      "target_0_4": "",
+      "gap": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "function": "GOVERN",
+      "category": "Supply Chain Risk Mgmt (GV.SC)",
+      "subcategory_outcome": "C-SCRM program established and managed",
+      "current_0_4": "",
+      "target_0_4": "",
+      "gap": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "function": "IDENTIFY",
+      "category": "Asset Management (ID.AM)",
+      "subcategory_outcome": "Assets (hw, sw, data, services) inventoried",
+      "current_0_4": "",
+      "target_0_4": "",
+      "gap": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "function": "IDENTIFY",
+      "category": "Risk Assessment (ID.RA)",
+      "subcategory_outcome": "Risks to assets identified and prioritised",
+      "current_0_4": "",
+      "target_0_4": "",
+      "gap": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "function": "IDENTIFY",
+      "category": "Improvement (ID.IM)",
+      "subcategory_outcome": "Improvements identified across functions",
+      "current_0_4": "",
+      "target_0_4": "",
+      "gap": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "function": "PROTECT",
+      "category": "Identity Mgmt & Access Control (PR.AA)",
+      "subcategory_outcome": "Access managed on least privilege + MFA",
+      "current_0_4": "",
+      "target_0_4": "",
+      "gap": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "function": "PROTECT",
+      "category": "Awareness & Training (PR.AT)",
+      "subcategory_outcome": "Personnel trained for their roles",
+      "current_0_4": "",
+      "target_0_4": "",
+      "gap": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "function": "PROTECT",
+      "category": "Data Security (PR.DS)",
+      "subcategory_outcome": "Data protected at rest/in transit per classification",
+      "current_0_4": "",
+      "target_0_4": "",
+      "gap": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "function": "PROTECT",
+      "category": "Platform Security (PR.PS)",
+      "subcategory_outcome": "Hardware/software configured securely & patched",
+      "current_0_4": "",
+      "target_0_4": "",
+      "gap": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "function": "PROTECT",
+      "category": "Technology Infrastructure Resilience (PR.IR)",
+      "subcategory_outcome": "Resilient infrastructure & backups",
+      "current_0_4": "",
+      "target_0_4": "",
+      "gap": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "function": "DETECT",
+      "category": "Continuous Monitoring (DE.CM)",
+      "subcategory_outcome": "Networks, systems & users monitored",
+      "current_0_4": "",
+      "target_0_4": "",
+      "gap": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "function": "DETECT",
+      "category": "Adverse Event Analysis (DE.AE)",
+      "subcategory_outcome": "Anomalies analysed to detect incidents",
+      "current_0_4": "",
+      "target_0_4": "",
+      "gap": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "function": "RESPOND",
+      "category": "Incident Management (RS.MA)",
+      "subcategory_outcome": "Response process executed during incidents",
+      "current_0_4": "",
+      "target_0_4": "",
+      "gap": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "function": "RESPOND",
+      "category": "Incident Analysis (RS.AN)",
+      "subcategory_outcome": "Investigations to support response & recovery",
+      "current_0_4": "",
+      "target_0_4": "",
+      "gap": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "function": "RESPOND",
+      "category": "Incident Response Reporting & Comms (RS.CO)",
+      "subcategory_outcome": "Stakeholders informed during response",
+      "current_0_4": "",
+      "target_0_4": "",
+      "gap": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "function": "RESPOND",
+      "category": "Incident Mitigation (RS.MI)",
+      "subcategory_outcome": "Incidents contained and eradicated",
+      "current_0_4": "",
+      "target_0_4": "",
+      "gap": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "function": "RECOVER",
+      "category": "Incident Recovery Plan Execution (RC.RP)",
+      "subcategory_outcome": "Recovery plans executed to restore systems",
+      "current_0_4": "",
+      "target_0_4": "",
+      "gap": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "function": "RECOVER",
+      "category": "Incident Recovery Communication (RC.CO)",
+      "subcategory_outcome": "Recovery activities communicated to stakeholders",
+      "current_0_4": "",
+      "target_0_4": "",
+      "gap": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    }
+   ],
+   "formSections": [
+    {
+     "title": "Item",
+     "keys": [
+      "function",
+      "category"
+     ]
+    },
+    {
+     "title": "Assessment",
+     "keys": [
+      "subcategory_outcome",
+      "current_0_4",
+      "gap",
+      "evidence_notes"
+     ]
+    },
+    {
+     "title": "Ownership & dates",
+     "keys": [
+      "target_0_4",
+      "owner"
+     ]
+    }
+   ]
+  }
+ ],
+ "documents": [
+  {
+   "type": "nist_csf__nist_csf_2_0_cybersecurity_program_policy_templa",
+   "label": "2 0 Cybersecurity Program Policy",
+   "control_ref": null,
+   "sections": [
+    {
+     "heading": "1. Purpose",
+     "body": "This policy establishes the organisation's cybersecurity programme, structured around the six functions of the NIST Cybersecurity Framework 2.0: Govern, Identify, Protect, Detect, Respond and Recover. The framework describes the cybersecurity outcomes the organisation pursues; this policy sets how those outcomes are owned, resourced, measured against a target profile, and improved."
+    },
+    {
+     "heading": "2. Scope",
+     "body": "The organisation's information, systems, suppliers and the people and processes that support them."
+    },
+    {
+     "heading": "3. The Six Functions",
+     "body": "The programme delivers the outcomes of each CSF function:\n- Govern (GV): establish and monitor the cybersecurity risk management strategy, expectations, roles, policy and oversight, including supply chain risk.\n- Identify (ID): understand assets, the risks to them, and improvement opportunities.\n- Protect (PR): use safeguards (identity and access, awareness, data security, platform security, resilience) to manage risk.\n- Detect (DE): find and analyse possible attacks and compromises through continuous monitoring.\n- Respond (RS): take action on a detected incident through management, analysis, mitigation and communication.\n- Recover (RC): restore assets and operations affected by an incident."
+    },
+    {
+     "heading": "4. Profiles, Tiers and Improvement",
+     "body": "The organisation expresses its posture as an organisational profile (current and target state across the functions and categories) and selects a tier (1 Partial to 4 Adaptive) reflecting the rigour of its risk governance. Gaps between current and target drive a prioritised improvement plan.\n[FILL IN: your target profile, selected tier and review cadence.]"
+    },
+    {
+     "heading": "5. Governance",
+     "body": "Cybersecurity risk is owned at leadership level, integrated with enterprise risk management, and the programme and its supporting policies are reviewed on a defined cycle and after significant change."
+    },
+    {
+     "heading": "6. Roles & Responsibilities",
+     "body": "",
+     "table": {
+      "columns": [
+       "Role",
+       "Responsibilities"
+      ],
+      "rows": [
+       [
+        "CISO",
+        "Owns the cybersecurity programme and reports to leadership."
+       ],
+       [
+        "IT / Operations",
+        "Implements and maintains the technical controls described in this document."
+       ],
+       [
+        "Managers",
+        "Ensure their teams understand and follow the policy."
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "7. Compliance & Enforcement",
+     "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+    },
+    {
+     "heading": "8. Exceptions",
+     "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+    },
+    {
+     "heading": "9. Review",
+     "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+    }
+   ]
+  },
+  {
+   "type": "nist_csf__nist_csf_2_0_detect_function_policy_template_2",
+   "label": "2 0 Detect Function Policy",
+   "control_ref": null,
+   "sections": [
+    {
+     "heading": "1. Purpose",
+     "body": "This policy delivers the outcomes of the Detect function (DE) of the NIST Cybersecurity Framework 2.0. Detect finds and analyses possible cybersecurity attacks and compromises in a timely way."
+    },
+    {
+     "heading": "2. Scope",
+     "body": "The organisation's information, systems, suppliers and the people who support them."
+    },
+    {
+     "heading": "3. Continuous Monitoring (DE.CM)",
+     "body": "Assets and activity are monitored to find anomalies, indicators of compromise and other potentially adverse events, across:\n- Networks and network services, and the physical environment.\n- Computing hardware, software, runtime environments and their utilisation.\n- Personnel activity and technology usage, and external service-provider activity.\n- [FILL IN: your monitoring and SIEM coverage and the sources feeding it.]"
+    },
+    {
+     "heading": "4. Adverse Event Analysis (DE.AE)",
+     "body": "Potentially adverse events are analysed to determine whether a cybersecurity incident has occurred:\n- Information is correlated from multiple sources to characterise the event.\n- Events are assessed against thresholds so an incident can be declared and escalated.\n- Detection content and alerting are tested and tuned over time to reduce noise and missed events."
+    },
+    {
+     "heading": "5. Implementation, Measurement and Improvement",
+     "body": "Responsibility for these outcomes is assigned to named owners, the supporting controls and tools are operated and monitored, achievement is measured against the organisation's target profile, and gaps feed the improvement plan.\n[FILL IN: your tools, owners and how you measure this function.]"
+    },
+    {
+     "heading": "6. Roles & Responsibilities",
+     "body": "",
+     "table": {
+      "columns": [
+       "Role",
+       "Responsibilities"
+      ],
+      "rows": [
+       [
+        "CISO",
+        "Owns the Detect function outcomes."
+       ],
+       [
+        "IT / Operations",
+        "Implements and maintains the technical controls described in this document."
+       ],
+       [
+        "Managers",
+        "Ensure their teams understand and follow the policy."
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "7. Compliance & Enforcement",
+     "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+    },
+    {
+     "heading": "8. Exceptions",
+     "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+    },
+    {
+     "heading": "9. Review",
+     "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+    }
+   ]
+  },
+  {
+   "type": "nist_csf__nist_csf_2_0_govern_function_policy_template_2",
+   "label": "2 0 Govern Function Policy",
+   "control_ref": null,
+   "sections": [
+    {
+     "heading": "1. Purpose",
+     "body": "This policy delivers the outcomes of the Govern function (GV) of the NIST Cybersecurity Framework 2.0. Govern establishes and monitors the organisation's cybersecurity risk management strategy, expectations and policy."
+    },
+    {
+     "heading": "2. Scope",
+     "body": "The organisation's information, systems, suppliers and the people who support them."
+    },
+    {
+     "heading": "3. Organizational Context (GV.OC)",
+     "body": "The context that shapes cybersecurity risk is understood and documented:\n- The organisational mission and the internal and external stakeholders.\n- The legal, regulatory and contractual requirements that apply.\n- The critical objectives, capabilities and dependencies that must be protected.\n- [FILL IN: your key obligations and critical dependencies.]"
+    },
+    {
+     "heading": "4. Risk Management Strategy (GV.RM)",
+     "body": "Risk appetite and risk tolerance are set, and a consistent approach to identifying, assessing, prioritising, responding to and communicating cybersecurity risk is established and integrated with enterprise risk management."
+    },
+    {
+     "heading": "5. Roles, Responsibilities and Authorities (GV.RR)",
+     "body": "Cybersecurity roles, responsibilities and authorities are assigned, resourced and held accountable, with clear leadership ownership."
+    },
+    {
+     "heading": "6. Policy and Oversight (GV.PO, GV.OV)",
+     "body": "Cybersecurity policy is established, communicated and enforced, and leadership reviews the strategy and its results and adjusts as needed."
+    },
+    {
+     "heading": "7. Cybersecurity Supply Chain Risk Management (GV.SC)",
+     "body": "A supply chain risk management programme identifies, assesses and manages the cybersecurity risks posed by suppliers and third-party products and services.\n[FILL IN: your supplier risk-management approach.]"
+    },
+    {
+     "heading": "8. Implementation, Measurement and Improvement",
+     "body": "Responsibility for these outcomes is assigned to named owners, the supporting controls and tools are operated and monitored, achievement is measured against the organisation's target profile, and gaps feed the improvement plan.\n[FILL IN: your tools, owners and how you measure this function.]"
+    },
+    {
+     "heading": "9. Roles & Responsibilities",
+     "body": "",
+     "table": {
+      "columns": [
+       "Role",
+       "Responsibilities"
+      ],
+      "rows": [
+       [
+        "CISO",
+        "Owns the Govern function outcomes."
+       ],
+       [
+        "IT / Operations",
+        "Implements and maintains the technical controls described in this document."
+       ],
+       [
+        "Managers",
+        "Ensure their teams understand and follow the policy."
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "10. Compliance & Enforcement",
+     "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+    },
+    {
+     "heading": "11. Exceptions",
+     "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+    },
+    {
+     "heading": "12. Review",
+     "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+    }
+   ]
+  },
+  {
+   "type": "nist_csf__nist_csf_2_0_identify_function_policy_template_2",
+   "label": "2 0 Identify Function Policy",
+   "control_ref": null,
+   "sections": [
+    {
+     "heading": "1. Purpose",
+     "body": "This policy delivers the outcomes of the Identify function (ID) of the NIST Cybersecurity Framework 2.0. Identify builds the understanding of assets and risks the organisation needs to manage cybersecurity risk."
+    },
+    {
+     "heading": "2. Scope",
+     "body": "The organisation's information, systems, suppliers and the people who support them."
+    },
+    {
+     "heading": "3. Asset Management (ID.AM)",
+     "body": "The organisation knows what it has to protect:\n- Hardware, software, services and data are inventoried and kept current.\n- Assets are classified by criticality and by the sensitivity of the data they hold.\n- The people, suppliers and facilities that support the assets are identified.\n- [FILL IN: your authoritative asset inventory source.]"
+    },
+    {
+     "heading": "4. Risk Assessment (ID.RA)",
+     "body": "The organisation understands the risk to those assets:\n- Vulnerabilities and threats to assets are identified, drawing on threat intelligence where available.\n- Their likelihood and potential impact are analysed to prioritise cybersecurity risk.\n- The assessment informs the organisation's risk responses and feeds the risk register."
+    },
+    {
+     "heading": "5. Improvement (ID.IM)",
+     "body": "Improvement opportunities are identified from assessments, tests, incidents and lessons learned, and are tracked to closure so the programme keeps getting better."
+    },
+    {
+     "heading": "6. Implementation, Measurement and Improvement",
+     "body": "Responsibility for these outcomes is assigned to named owners, the supporting controls and tools are operated and monitored, achievement is measured against the organisation's target profile, and gaps feed the improvement plan.\n[FILL IN: your tools, owners and how you measure this function.]"
+    },
+    {
+     "heading": "7. Roles & Responsibilities",
+     "body": "",
+     "table": {
+      "columns": [
+       "Role",
+       "Responsibilities"
+      ],
+      "rows": [
+       [
+        "CISO",
+        "Owns the Identify function outcomes."
+       ],
+       [
+        "IT / Operations",
+        "Implements and maintains the technical controls described in this document."
+       ],
+       [
+        "Managers",
+        "Ensure their teams understand and follow the policy."
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "8. Compliance & Enforcement",
+     "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+    },
+    {
+     "heading": "9. Exceptions",
+     "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+    },
+    {
+     "heading": "10. Review",
+     "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+    }
+   ]
+  },
+  {
+   "type": "nist_csf__nist_csf_2_0_organizational_profile_template_2",
+   "label": "2 0 Organizational Profile",
+   "control_ref": null,
+   "sections": [
+    {
+     "heading": "1. Purpose",
+     "body": "This guide helps you build an organisational profile under the NIST Cybersecurity Framework 2.0: a statement of your current and target cybersecurity posture across the framework's functions and categories, used to understand, prioritise and communicate cybersecurity risk."
+    },
+    {
+     "heading": "2. Scope",
+     "body": "The organisation's cybersecurity outcomes across the six CSF functions and their categories."
+    },
+    {
+     "heading": "3. Scope of the Profile",
+     "body": "The profile is anchored to a defined scope and target:\n- The scope is stated (the whole organisation, or a specific system, mission or segment).\n- The target state is informed by the mission, the threat landscape, legal and contractual requirements, and the organisation's risk appetite.\n- [FILL IN: the scope of this profile and what informs the target.]"
+    },
+    {
+     "heading": "4. Current and Target Profiles",
+     "body": "The profile captures where the organisation is and where it intends to be:\n- For each category, the current achievement of the outcomes is recorded.\n- The target the organisation is aiming for is recorded alongside it.\n- A tier (1 Partial to 4 Adaptive) is selected to reflect how rigorous and adaptive the risk governance is."
+    },
+    {
+     "heading": "5. Action Plan",
+     "body": "The gaps between the current and target profiles become a prioritised, owned action plan (see the improvement roadmap), with the most significant gaps addressed first, revisited as risk and the organisation change."
+    },
+    {
+     "heading": "6. Roles & Responsibilities",
+     "body": "",
+     "table": {
+      "columns": [
+       "Role",
+       "Responsibilities"
+      ],
+      "rows": [
+       [
+        "CISO",
+        "Owns the organisational profile."
+       ],
+       [
+        "Managers",
+        "Ensure their teams understand and follow the policy."
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "7. Compliance & Enforcement",
+     "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+    },
+    {
+     "heading": "8. Exceptions",
+     "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+    },
+    {
+     "heading": "9. Review",
+     "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+    }
+   ]
+  },
+  {
+   "type": "nist_csf__nist_csf_2_0_protect_function_policy_template_2",
+   "label": "2 0 Protect Function Policy",
+   "control_ref": null,
+   "sections": [
+    {
+     "heading": "1. Purpose",
+     "body": "This policy delivers the outcomes of the Protect function (PR) of the NIST Cybersecurity Framework 2.0. Protect applies safeguards to manage the organisation's cybersecurity risk and limit the impact of events."
+    },
+    {
+     "heading": "2. Scope",
+     "body": "The organisation's information, systems, suppliers and the people who support them."
+    },
+    {
+     "heading": "3. Identity Management, Authentication and Access Control (PR.AA)",
+     "body": "Access to assets is controlled end to end:\n- Identities are managed across their lifecycle and are attributable.\n- Access is granted on least privilege and protected with strong, phishing-resistant authentication.\n- Physical and logical access to assets is controlled and reviewed.\n- [FILL IN: your identity provider and MFA coverage.]"
+    },
+    {
+     "heading": "4. Awareness and Training (PR.AT)",
+     "body": "People are equipped to act securely: personnel are trained for their cybersecurity roles and responsibilities, and security awareness is maintained across the workforce and refreshed as risks change."
+    },
+    {
+     "heading": "5. Data Security (PR.DS)",
+     "body": "Data is protected in line with its classification, at rest, in transit and in use, throughout its lifecycle."
+    },
+    {
+     "heading": "6. Platform Security and Resilience (PR.PS, PR.IR)",
+     "body": "Platforms (hardware, software and services) are securely configured, maintained and logged, and the technology infrastructure is made resilient so it can withstand and recover from adverse events."
+    },
+    {
+     "heading": "7. Implementation, Measurement and Improvement",
+     "body": "Responsibility for these outcomes is assigned to named owners, the supporting controls and tools are operated and monitored, achievement is measured against the organisation's target profile, and gaps feed the improvement plan.\n[FILL IN: your tools, owners and how you measure this function.]"
+    },
+    {
+     "heading": "8. Roles & Responsibilities",
+     "body": "",
+     "table": {
+      "columns": [
+       "Role",
+       "Responsibilities"
+      ],
+      "rows": [
+       [
+        "CISO",
+        "Owns the Protect function outcomes."
+       ],
+       [
+        "IT / Operations",
+        "Implements and maintains the technical controls described in this document."
+       ],
+       [
+        "Managers",
+        "Ensure their teams understand and follow the policy."
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "9. Compliance & Enforcement",
+     "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+    },
+    {
+     "heading": "10. Exceptions",
+     "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+    },
+    {
+     "heading": "11. Review",
+     "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+    }
+   ]
+  },
+  {
+   "type": "nist_csf__nist_csf_2_0_recover_function_policy_template_2",
+   "label": "2 0 Recover Function Policy",
+   "control_ref": null,
+   "sections": [
+    {
+     "heading": "1. Purpose",
+     "body": "This policy delivers the outcomes of the Recover function (RC) of the NIST Cybersecurity Framework 2.0. Recover restores the assets and operations affected by a cybersecurity incident."
+    },
+    {
+     "heading": "2. Scope",
+     "body": "The organisation's information, systems, suppliers and the people who support them."
+    },
+    {
+     "heading": "3. Recovery Plan Execution (RC.RP)",
+     "body": "Recovery is executed against a plan to restore affected assets and operations:\n- The recovery portion of the incident response plan is initiated once triggered during or after an incident.\n- Restoration is prioritised by the criticality of services, within defined recovery time and recovery point objectives.\n- Backups and restoration assets are verified, and the integrity of restored assets is confirmed before returning them to service.\n- [FILL IN: your recovery time and recovery point objectives for critical services.]"
+    },
+    {
+     "heading": "4. Recovery Communication (RC.CO)",
+     "body": "Recovery activities and progress are communicated so stakeholders are informed and coordinated:\n- Internal stakeholders and leadership receive updates on recovery status.\n- External stakeholders (customers, partners, authorities) are kept informed as appropriate, and public messaging is coordinated."
+    },
+    {
+     "heading": "5. Implementation, Measurement and Improvement",
+     "body": "Responsibility for these outcomes is assigned to named owners, the supporting controls and tools are operated and monitored, achievement is measured against the organisation's target profile, and gaps feed the improvement plan.\n[FILL IN: your tools, owners and how you measure this function.]"
+    },
+    {
+     "heading": "6. Roles & Responsibilities",
+     "body": "",
+     "table": {
+      "columns": [
+       "Role",
+       "Responsibilities"
+      ],
+      "rows": [
+       [
+        "CISO",
+        "Owns the Recover function outcomes."
+       ],
+       [
+        "IT / Operations",
+        "Implements and maintains the technical controls described in this document."
+       ],
+       [
+        "Managers",
+        "Ensure their teams understand and follow the policy."
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "7. Compliance & Enforcement",
+     "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+    },
+    {
+     "heading": "8. Exceptions",
+     "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+    },
+    {
+     "heading": "9. Review",
+     "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+    }
+   ]
+  },
+  {
+   "type": "nist_csf__nist_csf_2_0_respond_function_policy_template_2",
+   "label": "2 0 Respond Function Policy",
+   "control_ref": null,
+   "sections": [
+    {
+     "heading": "1. Purpose",
+     "body": "This policy delivers the outcomes of the Respond function (RS) of the NIST Cybersecurity Framework 2.0. Respond takes action on a detected cybersecurity incident to contain and manage it."
+    },
+    {
+     "heading": "2. Scope",
+     "body": "The organisation's information, systems, suppliers and the people who support them."
+    },
+    {
+     "heading": "3. Incident Management (RS.MA)",
+     "body": "Response is executed against a plan once an incident is declared:\n- A documented incident response plan with defined roles, severity levels and coordination is followed.\n- The response is managed through to resolution, with escalation as severity warrants.\n- [FILL IN: reference your incident response plan.]"
+    },
+    {
+     "heading": "4. Incident Analysis (RS.AN)",
+     "body": "Incidents are investigated to establish scope, root cause and impact, and relevant evidence is preserved in a defensible manner to support response and any legal or regulatory action."
+    },
+    {
+     "heading": "5. Incident Mitigation (RS.MI)",
+     "body": "Incidents are contained and eradicated to limit their effect on the organisation, prioritising the most critical systems and data."
+    },
+    {
+     "heading": "6. Reporting and Communication (RS.CO)",
+     "body": "Response activities are coordinated and reported to internal and external stakeholders, including authorities and affected parties, as required by policy and law."
+    },
+    {
+     "heading": "7. Implementation, Measurement and Improvement",
+     "body": "Responsibility for these outcomes is assigned to named owners, the supporting controls and tools are operated and monitored, achievement is measured against the organisation's target profile, and gaps feed the improvement plan.\n[FILL IN: your tools, owners and how you measure this function.]"
+    },
+    {
+     "heading": "8. Roles & Responsibilities",
+     "body": "",
+     "table": {
+      "columns": [
+       "Role",
+       "Responsibilities"
+      ],
+      "rows": [
+       [
+        "CISO",
+        "Owns the Respond function outcomes."
+       ],
+       [
+        "IT / Operations",
+        "Implements and maintains the technical controls described in this document."
+       ],
+       [
+        "Managers",
+        "Ensure their teams understand and follow the policy."
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "9. Compliance & Enforcement",
+     "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+    },
+    {
+     "heading": "10. Exceptions",
+     "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+    },
+    {
+     "heading": "11. Review",
+     "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+    }
+   ]
+  },
+  {
+   "type": "nist_csf__nist_csf_2_organizational_profile_template_1",
+   "label": "2 Organizational Profile",
+   "control_ref": null,
+   "sections": [
+    {
+     "heading": "1. Purpose",
+     "body": "This Organizational Profile describes the organisation's current and target cybersecurity posture using the NIST Cybersecurity Framework (CSF) 2.0. The Current Profile records where the organisation is today; the Target Profile records where it needs to be. The difference is the action plan."
+    },
+    {
+     "heading": "2. Scope",
+     "body": "[FILL IN: state the part of the organisation, systems or mission this profile covers.]"
+    },
+    {
+     "heading": "3. How to use this profile",
+     "body": "Work through the table below. For each Category, describe the current state, set the target state, and record the action, owner and target date that close the gap. The CSF 2.0 Functions are Govern, Identify, Protect, Detect, Respond and Recover.\nRate the current state consistently (for example on a simple scale or against the Category outcomes), and set the target state from the organisation's mission, risk appetite and legal, regulatory and contractual requirements rather than aiming for the maximum everywhere. Where useful, record the Tier (1 Partial to 4 Adaptive) that reflects how rigorous and adaptive the organisation's cybersecurity risk governance is."
+    },
+    {
+     "heading": "4. Organizational Profile",
+     "body": "",
+     "table": {
+      "columns": [
+       "Function",
+       "Category",
+       "Category name",
+       "Current state",
+       "Target state",
+       "Action / owner / date"
+      ],
+      "rows": [
+       [
+        "GOVERN",
+        "GV.OC",
+        "Organizational context",
+        "[FILL IN]",
+        "[FILL IN]",
+        "[FILL IN]"
+       ],
+       [
+        "GOVERN",
+        "GV.RM",
+        "Risk management strategy",
+        "[FILL IN]",
+        "[FILL IN]",
+        "[FILL IN]"
+       ],
+       [
+        "GOVERN",
+        "GV.RR",
+        "Roles, responsibilities and authorities",
+        "[FILL IN]",
+        "[FILL IN]",
+        "[FILL IN]"
+       ],
+       [
+        "GOVERN",
+        "GV.PO",
+        "Policy",
+        "[FILL IN]",
+        "[FILL IN]",
+        "[FILL IN]"
+       ],
+       [
+        "GOVERN",
+        "GV.OV",
+        "Oversight",
+        "[FILL IN]",
+        "[FILL IN]",
+        "[FILL IN]"
+       ],
+       [
+        "GOVERN",
+        "GV.SC",
+        "Cybersecurity supply chain risk management",
+        "[FILL IN]",
+        "[FILL IN]",
+        "[FILL IN]"
+       ],
+       [
+        "IDENTIFY",
+        "ID.AM",
+        "Asset management",
+        "[FILL IN]",
+        "[FILL IN]",
+        "[FILL IN]"
+       ],
+       [
+        "IDENTIFY",
+        "ID.RA",
+        "Risk assessment",
+        "[FILL IN]",
+        "[FILL IN]",
+        "[FILL IN]"
+       ],
+       [
+        "IDENTIFY",
+        "ID.IM",
+        "Improvement",
+        "[FILL IN]",
+        "[FILL IN]",
+        "[FILL IN]"
+       ],
+       [
+        "PROTECT",
+        "PR.AA",
+        "Identity management, authentication and access control",
+        "[FILL IN]",
+        "[FILL IN]",
+        "[FILL IN]"
+       ],
+       [
+        "PROTECT",
+        "PR.AT",
+        "Awareness and training",
+        "[FILL IN]",
+        "[FILL IN]",
+        "[FILL IN]"
+       ],
+       [
+        "PROTECT",
+        "PR.DS",
+        "Data security",
+        "[FILL IN]",
+        "[FILL IN]",
+        "[FILL IN]"
+       ],
+       [
+        "PROTECT",
+        "PR.PS",
+        "Platform security",
+        "[FILL IN]",
+        "[FILL IN]",
+        "[FILL IN]"
+       ],
+       [
+        "PROTECT",
+        "PR.IR",
+        "Technology infrastructure resilience",
+        "[FILL IN]",
+        "[FILL IN]",
+        "[FILL IN]"
+       ],
+       [
+        "DETECT",
+        "DE.CM",
+        "Continuous monitoring",
+        "[FILL IN]",
+        "[FILL IN]",
+        "[FILL IN]"
+       ],
+       [
+        "DETECT",
+        "DE.AE",
+        "Adverse event analysis",
+        "[FILL IN]",
+        "[FILL IN]",
+        "[FILL IN]"
+       ],
+       [
+        "RESPOND",
+        "RS.MA",
+        "Incident management",
+        "[FILL IN]",
+        "[FILL IN]",
+        "[FILL IN]"
+       ],
+       [
+        "RESPOND",
+        "RS.AN",
+        "Incident analysis",
+        "[FILL IN]",
+        "[FILL IN]",
+        "[FILL IN]"
+       ],
+       [
+        "RESPOND",
+        "RS.CO",
+        "Incident response reporting and communication",
+        "[FILL IN]",
+        "[FILL IN]",
+        "[FILL IN]"
+       ],
+       [
+        "RESPOND",
+        "RS.MI",
+        "Incident mitigation",
+        "[FILL IN]",
+        "[FILL IN]",
+        "[FILL IN]"
+       ],
+       [
+        "RECOVER",
+        "RC.RP",
+        "Incident recovery plan execution",
+        "[FILL IN]",
+        "[FILL IN]",
+        "[FILL IN]"
+       ],
+       [
+        "RECOVER",
+        "RC.CO",
+        "Incident recovery communication",
+        "[FILL IN]",
+        "[FILL IN]",
+        "[FILL IN]"
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "5. Action Plan and Prioritisation",
+     "body": "The gaps between the current and target states form the action plan. Actions are prioritised by the risk they address and the effort they require, given an owner and a target date, and tracked to closure so that the profile drives measurable improvement rather than sitting as a snapshot."
+    },
+    {
+     "heading": "6. Review",
+     "body": "This profile is reviewed at least annually, and after a significant change or security incident, and is updated as priorities and risks change."
+    }
+   ]
+  }
+ ]
+}

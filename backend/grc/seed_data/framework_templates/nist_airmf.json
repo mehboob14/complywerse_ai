@@ -1,0 +1,510 @@
+{
+ "framework_key": "nist_airmf",
+ "display_name": "NIST AI RMF",
+ "name_patterns": [
+  "airmf",
+  "airiskmanagement",
+  "nistai"
+ ],
+ "registers": [
+  {
+   "type": "nist_airmf__nist_ai_llm_secure_development_checklist_templat",
+   "label": "Nist Ai Llm Secure Development Checklist",
+   "description": "NIST AI RMF — Nist Ai Llm Secure Development Checklist (from the template).",
+   "columns": [
+    {
+     "key": "practice_group",
+     "label": "Practice group",
+     "type": "text"
+    },
+    {
+     "key": "ssdf_ref",
+     "label": "SSDF ref",
+     "type": "text"
+    },
+    {
+     "key": "ai_secure_development_practice",
+     "label": "AI secure-development practice",
+     "type": "textarea"
+    },
+    {
+     "key": "status",
+     "label": "Status",
+     "type": "text"
+    },
+    {
+     "key": "evidence_notes",
+     "label": "Evidence / notes",
+     "type": "text",
+     "picker": "evidence"
+    },
+    {
+     "key": "owner",
+     "label": "Owner",
+     "type": "text",
+     "picker": "users"
+    }
+   ],
+   "seed": [
+    {
+     "data": {
+      "practice_group": "PO Prepare the Organization",
+      "ssdf_ref": "PO.1.2",
+      "ai_secure_development_practice": "Define security requirements for AI model development, including data and model governance",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "practice_group": "PO Prepare the Organization",
+      "ssdf_ref": "PO.5.3",
+      "ai_secure_development_practice": "Secure and isolate the AI/ML development, training and fine-tuning environment",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "practice_group": "PS Protect the Software",
+      "ssdf_ref": "PS.1.1",
+      "ai_secure_development_practice": "Protect training data, model weights and configuration with access control and integrity checks",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "practice_group": "PS Protect the Software",
+      "ssdf_ref": "PS.2.1",
+      "ai_secure_development_practice": "Make model and dataset version-integrity information available to consumers",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "practice_group": "PS Protect the Software",
+      "ssdf_ref": "PS.3.2",
+      "ai_secure_development_practice": "Collect and retain provenance for training data, models and components",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "practice_group": "PW Produce Well-Secured Software",
+      "ssdf_ref": "PW.1.1",
+      "ai_secure_development_practice": "Threat-model AI-specific risks (data poisoning, model theft, evasion, prompt injection)",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "practice_group": "PW Produce Well-Secured Software",
+      "ssdf_ref": "PW.4.1",
+      "ai_secure_development_practice": "Verify the provenance and license of third-party models and datasets",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "practice_group": "PW Produce Well-Secured Software",
+      "ssdf_ref": "PW.4.4",
+      "ai_secure_development_practice": "Continuously check third-party models and datasets for known issues",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "practice_group": "PW Produce Well-Secured Software",
+      "ssdf_ref": "PW.8.2",
+      "ai_secure_development_practice": "Evaluate and test the model for security, robustness and abuse resistance",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "practice_group": "PW Produce Well-Secured Software",
+      "ssdf_ref": "PW.9.1",
+      "ai_secure_development_practice": "Define a secure default configuration for the model and its guardrails",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "practice_group": "RV Respond to Vulnerabilities",
+      "ssdf_ref": "RV.1.1",
+      "ai_secure_development_practice": "Establish a path to receive AI model and system vulnerability reports",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "practice_group": "RV Respond to Vulnerabilities",
+      "ssdf_ref": "RV.2.2",
+      "ai_secure_development_practice": "Remediate AI-specific vulnerabilities and update affected models",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "practice_group": "RV Respond to Vulnerabilities",
+      "ssdf_ref": "RV.3.4",
+      "ai_secure_development_practice": "Feed lessons learned back into AI model development",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    }
+   ],
+   "formSections": [
+    {
+     "title": "Item",
+     "keys": [
+      "practice_group",
+      "ssdf_ref"
+     ]
+    },
+    {
+     "title": "Assessment",
+     "keys": [
+      "ai_secure_development_practice",
+      "status",
+      "evidence_notes"
+     ]
+    },
+    {
+     "title": "Ownership & dates",
+     "keys": [
+      "owner"
+     ]
+    }
+   ]
+  },
+  {
+   "type": "nist_airmf__nist_ai_rmf_readiness_assessment_template_1",
+   "label": "Readiness Assessment",
+   "description": "NIST AI RMF — Readiness Assessment (from the template).",
+   "columns": [
+    {
+     "key": "function",
+     "label": "Function",
+     "type": "text"
+    },
+    {
+     "key": "category",
+     "label": "Category",
+     "type": "text"
+    },
+    {
+     "key": "ai_rmf_outcome",
+     "label": "AI RMF outcome",
+     "type": "textarea"
+    },
+    {
+     "key": "current_0_4",
+     "label": "Current (0-4)",
+     "type": "text"
+    },
+    {
+     "key": "target_0_4",
+     "label": "Target (0-4)",
+     "type": "date"
+    },
+    {
+     "key": "gap",
+     "label": "Gap",
+     "type": "textarea"
+    },
+    {
+     "key": "evidence_notes",
+     "label": "Evidence / notes",
+     "type": "text",
+     "picker": "evidence"
+    },
+    {
+     "key": "owner",
+     "label": "Owner",
+     "type": "text",
+     "picker": "users"
+    }
+   ],
+   "seed": [
+    {
+     "data": {
+      "function": "GOVERN",
+      "category": "GOVERN 1",
+      "ai_rmf_outcome": "Policies, processes and practices for mapping, measuring and managing AI risk are in place and implemented",
+      "current_0_4": "",
+      "target_0_4": "",
+      "gap": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "function": "GOVERN",
+      "category": "GOVERN 2",
+      "ai_rmf_outcome": "Accountability structures empower, train and make teams responsible for managing AI risk",
+      "current_0_4": "",
+      "target_0_4": "",
+      "gap": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "function": "GOVERN",
+      "category": "GOVERN 3",
+      "ai_rmf_outcome": "Workforce diversity, equity, inclusion and accessibility are prioritized across the AI lifecycle",
+      "current_0_4": "",
+      "target_0_4": "",
+      "gap": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "function": "GOVERN",
+      "category": "GOVERN 4",
+      "ai_rmf_outcome": "The organization commits to a culture that considers and communicates AI risk",
+      "current_0_4": "",
+      "target_0_4": "",
+      "gap": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "function": "GOVERN",
+      "category": "GOVERN 5",
+      "ai_rmf_outcome": "Processes are in place for robust engagement with relevant AI actors",
+      "current_0_4": "",
+      "target_0_4": "",
+      "gap": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "function": "GOVERN",
+      "category": "GOVERN 6",
+      "ai_rmf_outcome": "Policies address AI risks and benefits from third-party software, data and supply chain",
+      "current_0_4": "",
+      "target_0_4": "",
+      "gap": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "function": "MAP",
+      "category": "MAP 1",
+      "ai_rmf_outcome": "Context is established and understood",
+      "current_0_4": "",
+      "target_0_4": "",
+      "gap": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "function": "MAP",
+      "category": "MAP 2",
+      "ai_rmf_outcome": "Categorization of the AI system is performed",
+      "current_0_4": "",
+      "target_0_4": "",
+      "gap": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "function": "MAP",
+      "category": "MAP 3",
+      "ai_rmf_outcome": "AI capabilities, targeted usage, goals and expected benefits and costs are understood",
+      "current_0_4": "",
+      "target_0_4": "",
+      "gap": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "function": "MAP",
+      "category": "MAP 4",
+      "ai_rmf_outcome": "Risks and benefits are mapped for all components, including third-party software and data",
+      "current_0_4": "",
+      "target_0_4": "",
+      "gap": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "function": "MAP",
+      "category": "MAP 5",
+      "ai_rmf_outcome": "Impacts to individuals, groups, communities, organizations and society are characterized",
+      "current_0_4": "",
+      "target_0_4": "",
+      "gap": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "function": "MEASURE",
+      "category": "MEASURE 1",
+      "ai_rmf_outcome": "Appropriate methods and metrics are identified and applied",
+      "current_0_4": "",
+      "target_0_4": "",
+      "gap": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "function": "MEASURE",
+      "category": "MEASURE 2",
+      "ai_rmf_outcome": "AI systems are evaluated for trustworthy characteristics",
+      "current_0_4": "",
+      "target_0_4": "",
+      "gap": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "function": "MEASURE",
+      "category": "MEASURE 3",
+      "ai_rmf_outcome": "Mechanisms for tracking identified AI risks over time are in place",
+      "current_0_4": "",
+      "target_0_4": "",
+      "gap": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "function": "MEASURE",
+      "category": "MEASURE 4",
+      "ai_rmf_outcome": "Feedback about the efficacy of measurement is gathered and assessed",
+      "current_0_4": "",
+      "target_0_4": "",
+      "gap": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "function": "MANAGE",
+      "category": "MANAGE 1",
+      "ai_rmf_outcome": "AI risks from MAP and MEASURE are prioritized, responded to and managed",
+      "current_0_4": "",
+      "target_0_4": "",
+      "gap": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "function": "MANAGE",
+      "category": "MANAGE 2",
+      "ai_rmf_outcome": "Strategies to maximize benefits and minimize negative impacts are planned and implemented",
+      "current_0_4": "",
+      "target_0_4": "",
+      "gap": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "function": "MANAGE",
+      "category": "MANAGE 3",
+      "ai_rmf_outcome": "AI risks and benefits from third-party entities are managed",
+      "current_0_4": "",
+      "target_0_4": "",
+      "gap": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "function": "MANAGE",
+      "category": "MANAGE 4",
+      "ai_rmf_outcome": "Risk treatments, response, recovery and communication plans are documented and monitored",
+      "current_0_4": "",
+      "target_0_4": "",
+      "gap": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    }
+   ],
+   "formSections": [
+    {
+     "title": "Item",
+     "keys": [
+      "function",
+      "category"
+     ]
+    },
+    {
+     "title": "Assessment",
+     "keys": [
+      "ai_rmf_outcome",
+      "current_0_4",
+      "gap",
+      "evidence_notes"
+     ]
+    },
+    {
+     "title": "Ownership & dates",
+     "keys": [
+      "target_0_4",
+      "owner"
+     ]
+    }
+   ]
+  }
+ ],
+ "documents": []
+}

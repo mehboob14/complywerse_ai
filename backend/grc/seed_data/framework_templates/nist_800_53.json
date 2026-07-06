@@ -1,0 +1,3303 @@
+{
+ "framework_key": "nist_800_53",
+ "display_name": "NIST 800-53 / 800-171",
+ "name_patterns": [
+  "80053",
+  "800171",
+  "nist800"
+ ],
+ "registers": [
+  {
+   "type": "nist_800_53__nist_800_30_risk_assessment_template",
+   "label": "Risk Assessment",
+   "description": "NIST 800-53 / 800-171 — Risk Assessment (from the template).",
+   "columns": [
+    {
+     "key": "1",
+     "label": "1",
+     "type": "text"
+    },
+    {
+     "key": "2",
+     "label": "2",
+     "type": "text"
+    },
+    {
+     "key": "3",
+     "label": "3",
+     "type": "text"
+    },
+    {
+     "key": "4",
+     "label": "4",
+     "type": "text"
+    },
+    {
+     "key": "5",
+     "label": "5",
+     "type": "text"
+    },
+    {
+     "key": "6",
+     "label": "6",
+     "type": "text"
+    },
+    {
+     "key": "7",
+     "label": "7",
+     "type": "text"
+    },
+    {
+     "key": "8",
+     "label": "8",
+     "type": "text"
+    },
+    {
+     "key": "9",
+     "label": "9",
+     "type": "text"
+    },
+    {
+     "key": "10",
+     "label": "10",
+     "type": "text"
+    },
+    {
+     "key": "11",
+     "label": "11",
+     "type": "text"
+    },
+    {
+     "key": "12",
+     "label": "12",
+     "type": "text"
+    },
+    {
+     "key": "13",
+     "label": "13",
+     "type": "text"
+    }
+   ],
+   "seed": [
+    {
+     "data": {
+      "1": "",
+      "2": "",
+      "3": "Threat Source Characteristics",
+      "4": "",
+      "5": "",
+      "6": "",
+      "7": "",
+      "8": "",
+      "9": "",
+      "10": "",
+      "11": "",
+      "12": "",
+      "13": ""
+     }
+    },
+    {
+     "data": {
+      "1": "Threat Event",
+      "2": "Threat Source",
+      "3": "Capability",
+      "4": "Intent",
+      "5": "targeting",
+      "6": "Relevance",
+      "7": "Likelihood of Attack Initiation",
+      "8": "Vulnerabilities\nand\nPredisposing\nConditions",
+      "9": "Severity and\nPervasiveness",
+      "10": "Likelihood Initiated\nAttack Succeeds",
+      "11": "Overall Likelihood",
+      "12": "Level of Impact",
+      "13": "Risk"
+     }
+    },
+    {
+     "data": {
+      "1": "",
+      "2": "",
+      "3": "",
+      "4": "",
+      "5": "",
+      "6": "",
+      "7": "",
+      "8": "",
+      "9": "",
+      "10": "",
+      "11": "",
+      "12": "",
+      "13": ""
+     }
+    },
+    {
+     "data": {
+      "1": "",
+      "2": "",
+      "3": "",
+      "4": "",
+      "5": "",
+      "6": "",
+      "7": "",
+      "8": "",
+      "9": "",
+      "10": "",
+      "11": "",
+      "12": "",
+      "13": ""
+     }
+    },
+    {
+     "data": {
+      "1": "",
+      "2": "",
+      "3": "",
+      "4": "",
+      "5": "",
+      "6": "",
+      "7": "",
+      "8": "",
+      "9": "",
+      "10": "",
+      "11": "",
+      "12": "",
+      "13": ""
+     }
+    },
+    {
+     "data": {
+      "1": "",
+      "2": "",
+      "3": "",
+      "4": "",
+      "5": "",
+      "6": "",
+      "7": "",
+      "8": "",
+      "9": "",
+      "10": "",
+      "11": "",
+      "12": "",
+      "13": ""
+     }
+    },
+    {
+     "data": {
+      "1": "",
+      "2": "",
+      "3": "",
+      "4": "",
+      "5": "",
+      "6": "",
+      "7": "",
+      "8": "",
+      "9": "",
+      "10": "",
+      "11": "",
+      "12": "",
+      "13": ""
+     }
+    },
+    {
+     "data": {
+      "1": "",
+      "2": "",
+      "3": "",
+      "4": "",
+      "5": "",
+      "6": "",
+      "7": "",
+      "8": "",
+      "9": "",
+      "10": "",
+      "11": "",
+      "12": "",
+      "13": ""
+     }
+    },
+    {
+     "data": {
+      "1": "",
+      "2": "",
+      "3": "",
+      "4": "",
+      "5": "",
+      "6": "",
+      "7": "",
+      "8": "",
+      "9": "",
+      "10": "",
+      "11": "",
+      "12": "",
+      "13": ""
+     }
+    },
+    {
+     "data": {
+      "1": "",
+      "2": "",
+      "3": "",
+      "4": "",
+      "5": "",
+      "6": "",
+      "7": "",
+      "8": "",
+      "9": "",
+      "10": "",
+      "11": "",
+      "12": "",
+      "13": ""
+     }
+    },
+    {
+     "data": {
+      "1": "",
+      "2": "",
+      "3": "",
+      "4": "",
+      "5": "",
+      "6": "",
+      "7": "",
+      "8": "",
+      "9": "",
+      "10": "",
+      "11": "",
+      "12": "",
+      "13": ""
+     }
+    },
+    {
+     "data": {
+      "1": "",
+      "2": "",
+      "3": "",
+      "4": "",
+      "5": "",
+      "6": "",
+      "7": "",
+      "8": "",
+      "9": "",
+      "10": "",
+      "11": "",
+      "12": "",
+      "13": ""
+     }
+    },
+    {
+     "data": {
+      "1": "",
+      "2": "",
+      "3": "",
+      "4": "",
+      "5": "",
+      "6": "",
+      "7": "",
+      "8": "",
+      "9": "",
+      "10": "",
+      "11": "",
+      "12": "",
+      "13": ""
+     }
+    },
+    {
+     "data": {
+      "1": "",
+      "2": "",
+      "3": "",
+      "4": "",
+      "5": "",
+      "6": "",
+      "7": "",
+      "8": "",
+      "9": "",
+      "10": "",
+      "11": "",
+      "12": "",
+      "13": ""
+     }
+    },
+    {
+     "data": {
+      "1": "",
+      "2": "",
+      "3": "",
+      "4": "",
+      "5": "",
+      "6": "",
+      "7": "",
+      "8": "",
+      "9": "",
+      "10": "",
+      "11": "",
+      "12": "",
+      "13": ""
+     }
+    },
+    {
+     "data": {
+      "1": "",
+      "2": "",
+      "3": "",
+      "4": "",
+      "5": "",
+      "6": "",
+      "7": "",
+      "8": "",
+      "9": "",
+      "10": "",
+      "11": "",
+      "12": "",
+      "13": ""
+     }
+    },
+    {
+     "data": {
+      "1": "",
+      "2": "",
+      "3": "",
+      "4": "",
+      "5": "",
+      "6": "",
+      "7": "",
+      "8": "",
+      "9": "",
+      "10": "",
+      "11": "",
+      "12": "",
+      "13": ""
+     }
+    },
+    {
+     "data": {
+      "1": "",
+      "2": "",
+      "3": "",
+      "4": "",
+      "5": "",
+      "6": "",
+      "7": "",
+      "8": "",
+      "9": "",
+      "10": "",
+      "11": "",
+      "12": "",
+      "13": ""
+     }
+    },
+    {
+     "data": {
+      "1": "",
+      "2": "",
+      "3": "",
+      "4": "",
+      "5": "",
+      "6": "",
+      "7": "",
+      "8": "",
+      "9": "",
+      "10": "",
+      "11": "",
+      "12": "",
+      "13": ""
+     }
+    },
+    {
+     "data": {
+      "1": "",
+      "2": "",
+      "3": "",
+      "4": "",
+      "5": "",
+      "6": "",
+      "7": "",
+      "8": "",
+      "9": "",
+      "10": "",
+      "11": "",
+      "12": "",
+      "13": ""
+     }
+    },
+    {
+     "data": {
+      "1": "",
+      "2": "",
+      "3": "",
+      "4": "",
+      "5": "",
+      "6": "",
+      "7": "",
+      "8": "",
+      "9": "",
+      "10": "",
+      "11": "",
+      "12": "",
+      "13": ""
+     }
+    },
+    {
+     "data": {
+      "1": "",
+      "2": "",
+      "3": "",
+      "4": "",
+      "5": "",
+      "6": "",
+      "7": "",
+      "8": "",
+      "9": "",
+      "10": "",
+      "11": "",
+      "12": "",
+      "13": ""
+     }
+    },
+    {
+     "data": {
+      "1": "",
+      "2": "",
+      "3": "",
+      "4": "",
+      "5": "",
+      "6": "",
+      "7": "",
+      "8": "",
+      "9": "",
+      "10": "",
+      "11": "",
+      "12": "",
+      "13": ""
+     }
+    },
+    {
+     "data": {
+      "1": "",
+      "2": "",
+      "3": "",
+      "4": "",
+      "5": "",
+      "6": "",
+      "7": "",
+      "8": "",
+      "9": "",
+      "10": "",
+      "11": "",
+      "12": "",
+      "13": ""
+     }
+    },
+    {
+     "data": {
+      "1": "",
+      "2": "",
+      "3": "",
+      "4": "",
+      "5": "",
+      "6": "",
+      "7": "",
+      "8": "",
+      "9": "",
+      "10": "",
+      "11": "",
+      "12": "",
+      "13": ""
+     }
+    },
+    {
+     "data": {
+      "1": "",
+      "2": "",
+      "3": "",
+      "4": "",
+      "5": "",
+      "6": "",
+      "7": "",
+      "8": "",
+      "9": "",
+      "10": "",
+      "11": "",
+      "12": "",
+      "13": ""
+     }
+    },
+    {
+     "data": {
+      "1": "",
+      "2": "",
+      "3": "",
+      "4": "",
+      "5": "",
+      "6": "",
+      "7": "",
+      "8": "",
+      "9": "",
+      "10": "",
+      "11": "",
+      "12": "",
+      "13": ""
+     }
+    }
+   ],
+   "formSections": [
+    {
+     "title": "Item",
+     "keys": [
+      "1",
+      "2"
+     ]
+    },
+    {
+     "title": "Assessment",
+     "keys": [
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12",
+      "13"
+     ]
+    }
+   ]
+  },
+  {
+   "type": "nist_800_53__nist_800_171_cui_compliance_checklist_template_1",
+   "label": "Cui Compliance Checklist",
+   "description": "NIST 800-53 / 800-171 — Cui Compliance Checklist (from the template).",
+   "columns": [
+    {
+     "key": "requirement_id",
+     "label": "Requirement ID",
+     "type": "textarea"
+    },
+    {
+     "key": "family",
+     "label": "Family",
+     "type": "text"
+    },
+    {
+     "key": "security_requirement",
+     "label": "Security requirement",
+     "type": "textarea"
+    },
+    {
+     "key": "implementation_status",
+     "label": "Implementation status",
+     "type": "text"
+    },
+    {
+     "key": "evidence_notes",
+     "label": "Evidence / notes",
+     "type": "text",
+     "picker": "evidence"
+    },
+    {
+     "key": "poa_m_item",
+     "label": "POA&M item?",
+     "type": "text"
+    },
+    {
+     "key": "owner",
+     "label": "Owner",
+     "type": "text",
+     "picker": "users"
+    },
+    {
+     "key": "target_date",
+     "label": "Target date",
+     "type": "date"
+    }
+   ],
+   "seed": [
+    {
+     "data": {
+      "requirement_id": "03.01.01",
+      "family": "03.01 Access Control",
+      "security_requirement": "Account Management",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.01.02",
+      "family": "03.01 Access Control",
+      "security_requirement": "Access Enforcement",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.01.03",
+      "family": "03.01 Access Control",
+      "security_requirement": "Information Flow Enforcement",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.01.04",
+      "family": "03.01 Access Control",
+      "security_requirement": "Separation of Duties",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.01.05",
+      "family": "03.01 Access Control",
+      "security_requirement": "Least Privilege",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.01.06",
+      "family": "03.01 Access Control",
+      "security_requirement": "Least Privilege - Privileged Accounts",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.01.07",
+      "family": "03.01 Access Control",
+      "security_requirement": "Least Privilege - Privileged Functions",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.01.08",
+      "family": "03.01 Access Control",
+      "security_requirement": "Unsuccessful Logon Attempts",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.01.09",
+      "family": "03.01 Access Control",
+      "security_requirement": "System Use Notification",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.01.10",
+      "family": "03.01 Access Control",
+      "security_requirement": "Device Lock",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.01.11",
+      "family": "03.01 Access Control",
+      "security_requirement": "Session Termination",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.01.12",
+      "family": "03.01 Access Control",
+      "security_requirement": "Remote Access",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.01.16",
+      "family": "03.01 Access Control",
+      "security_requirement": "Wireless Access",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.01.18",
+      "family": "03.01 Access Control",
+      "security_requirement": "Access Control for Mobile Devices",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.01.20",
+      "family": "03.01 Access Control",
+      "security_requirement": "Use of External Systems",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.01.22",
+      "family": "03.01 Access Control",
+      "security_requirement": "Publicly Accessible Content",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.02.01",
+      "family": "03.02 Awareness and Training",
+      "security_requirement": "Literacy Training and Awareness",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.02.02",
+      "family": "03.02 Awareness and Training",
+      "security_requirement": "Role-Based Training",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.03.01",
+      "family": "03.03 Audit and Accountability",
+      "security_requirement": "Event Logging",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.03.02",
+      "family": "03.03 Audit and Accountability",
+      "security_requirement": "Audit Record Content",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.03.03",
+      "family": "03.03 Audit and Accountability",
+      "security_requirement": "Audit Record Generation",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.03.04",
+      "family": "03.03 Audit and Accountability",
+      "security_requirement": "Response to Audit Logging Process Failures",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.03.05",
+      "family": "03.03 Audit and Accountability",
+      "security_requirement": "Audit Record Review, Analysis, and Reporting",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.03.06",
+      "family": "03.03 Audit and Accountability",
+      "security_requirement": "Audit Record Reduction and Report Generation",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.03.07",
+      "family": "03.03 Audit and Accountability",
+      "security_requirement": "Time Stamps",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.03.08",
+      "family": "03.03 Audit and Accountability",
+      "security_requirement": "Protection of Audit Information",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.04.01",
+      "family": "03.04 Configuration Management",
+      "security_requirement": "Baseline Configuration",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.04.02",
+      "family": "03.04 Configuration Management",
+      "security_requirement": "Configuration Settings",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.04.03",
+      "family": "03.04 Configuration Management",
+      "security_requirement": "Configuration Change Control",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.04.04",
+      "family": "03.04 Configuration Management",
+      "security_requirement": "Impact Analyses",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.04.05",
+      "family": "03.04 Configuration Management",
+      "security_requirement": "Access Restrictions for Change",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.04.06",
+      "family": "03.04 Configuration Management",
+      "security_requirement": "Least Functionality",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.04.08",
+      "family": "03.04 Configuration Management",
+      "security_requirement": "Authorized Software - Allow by Exception",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.04.10",
+      "family": "03.04 Configuration Management",
+      "security_requirement": "System Component Inventory",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.04.11",
+      "family": "03.04 Configuration Management",
+      "security_requirement": "Information Location",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    },
+    {
+     "data": {
+      "requirement_id": "03.04.12",
+      "family": "03.04 Configuration Management",
+      "security_requirement": "System and Component Configuration for High-Risk Areas",
+      "implementation_status": "",
+      "evidence_notes": "",
+      "poa_m_item": "",
+      "owner": "",
+      "target_date": ""
+     }
+    }
+   ],
+   "formSections": [
+    {
+     "title": "Item",
+     "keys": [
+      "requirement_id",
+      "family"
+     ]
+    },
+    {
+     "title": "Assessment",
+     "keys": [
+      "security_requirement",
+      "implementation_status",
+      "evidence_notes",
+      "poa_m_item"
+     ]
+    },
+    {
+     "title": "Ownership & dates",
+     "keys": [
+      "owner",
+      "target_date"
+     ]
+    }
+   ]
+  },
+  {
+   "type": "nist_800_53__nist_800_190_container_security_checklist_templa",
+   "label": "Container Security Checklist",
+   "description": "NIST 800-53 / 800-171 — Container Security Checklist (from the template).",
+   "columns": [
+    {
+     "key": "layer",
+     "label": "Layer",
+     "type": "text"
+    },
+    {
+     "key": "800_190",
+     "label": "800-190",
+     "type": "text"
+    },
+    {
+     "key": "countermeasure_to_verify",
+     "label": "Countermeasure to verify",
+     "type": "textarea"
+    },
+    {
+     "key": "status",
+     "label": "Status",
+     "type": "text"
+    },
+    {
+     "key": "evidence_notes",
+     "label": "Evidence / notes",
+     "type": "text",
+     "picker": "evidence"
+    },
+    {
+     "key": "owner",
+     "label": "Owner",
+     "type": "text",
+     "picker": "users"
+    }
+   ],
+   "seed": [
+    {
+     "data": {
+      "layer": "Image",
+      "800_190": "4.1.1",
+      "countermeasure_to_verify": "Scan images for vulnerabilities at build time and continuously; remediate or block by severity",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "layer": "Image",
+      "800_190": "4.1.2",
+      "countermeasure_to_verify": "Validate image configuration against a hardening baseline and remove unnecessary components",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "layer": "Image",
+      "800_190": "4.1.3",
+      "countermeasure_to_verify": "Scan images for embedded malware and build only from trusted base images",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "layer": "Image",
+      "800_190": "4.1.4",
+      "countermeasure_to_verify": "Keep secrets out of images; inject them at runtime from a secrets manager",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "layer": "Image",
+      "800_190": "4.1.5",
+      "countermeasure_to_verify": "Allow only images from trusted sources; enforce image provenance and signing",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "layer": "Registry",
+      "800_190": "4.2.1",
+      "countermeasure_to_verify": "Use encrypted (TLS) connections to all registries",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "layer": "Registry",
+      "800_190": "4.2.2",
+      "countermeasure_to_verify": "Prune stale images and pin deployments to immutable, current digests",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "layer": "Registry",
+      "800_190": "4.2.3",
+      "countermeasure_to_verify": "Require authentication and least-privilege authorization for registry access",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "layer": "Orchestrator",
+      "800_190": "4.3.1",
+      "countermeasure_to_verify": "Apply least privilege and role-based access control to orchestrator administration",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "layer": "Orchestrator",
+      "800_190": "4.3.2",
+      "countermeasure_to_verify": "Authenticate and authorize all orchestrator access; isolate the management plane",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "layer": "Orchestrator",
+      "800_190": "4.3.3",
+      "countermeasure_to_verify": "Segment inter-container network traffic by sensitivity",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "layer": "Orchestrator",
+      "800_190": "4.3.4",
+      "countermeasure_to_verify": "Group workloads of similar sensitivity onto the same node set",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "layer": "Orchestrator",
+      "800_190": "4.3.5",
+      "countermeasure_to_verify": "Establish and verify node trust with secure node introduction and authentication",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "layer": "Container",
+      "800_190": "4.4.1",
+      "countermeasure_to_verify": "Keep the container runtime patched and monitored for vulnerabilities",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "layer": "Container",
+      "800_190": "4.4.2",
+      "countermeasure_to_verify": "Restrict each container's network access to only what the application requires",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "layer": "Container",
+      "800_190": "4.4.3",
+      "countermeasure_to_verify": "Run containers with least privilege (non-root, dropped capabilities, read-only file system where possible)",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "layer": "Container",
+      "800_190": "4.4.4",
+      "countermeasure_to_verify": "Manage application vulnerabilities inside containers with scanning and runtime defense",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "layer": "Container",
+      "800_190": "4.4.5",
+      "countermeasure_to_verify": "Detect and prevent rogue or unauthorized containers; control who can deploy",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "layer": "Host OS",
+      "800_190": "4.5.1",
+      "countermeasure_to_verify": "Use a minimal, container-specific host OS to reduce the attack surface",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "layer": "Host OS",
+      "800_190": "4.5.2",
+      "countermeasure_to_verify": "Group containers by sensitivity given the shared kernel; isolate high-risk workloads further",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "layer": "Host OS",
+      "800_190": "4.5.3",
+      "countermeasure_to_verify": "Patch and monitor host OS components",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "layer": "Host OS",
+      "800_190": "4.5.4",
+      "countermeasure_to_verify": "Restrict and audit host OS administrative access",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "layer": "Host OS",
+      "800_190": "4.5.5",
+      "countermeasure_to_verify": "Mount container file systems with least privilege and monitor host file integrity",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    }
+   ],
+   "formSections": [
+    {
+     "title": "Item",
+     "keys": [
+      "layer",
+      "800_190"
+     ]
+    },
+    {
+     "title": "Assessment",
+     "keys": [
+      "countermeasure_to_verify",
+      "status",
+      "evidence_notes"
+     ]
+    },
+    {
+     "title": "Ownership & dates",
+     "keys": [
+      "owner"
+     ]
+    }
+   ]
+  },
+  {
+   "type": "nist_800_53__nist_800_228_api_security_checklist_template_1",
+   "label": "Api Security Checklist",
+   "description": "NIST 800-53 / 800-171 — Api Security Checklist (from the template).",
+   "columns": [
+    {
+     "key": "area",
+     "label": "Area",
+     "type": "text"
+    },
+    {
+     "key": "rec",
+     "label": "Rec",
+     "type": "text"
+    },
+    {
+     "key": "api_security_recommendation",
+     "label": "API security recommendation",
+     "type": "textarea"
+    },
+    {
+     "key": "status",
+     "label": "Status",
+     "type": "text"
+    },
+    {
+     "key": "evidence_notes",
+     "label": "Evidence / notes",
+     "type": "text",
+     "picker": "evidence"
+    },
+    {
+     "key": "owner",
+     "label": "Owner",
+     "type": "text",
+     "picker": "users"
+    }
+   ],
+   "seed": [
+    {
+     "data": {
+      "area": "Inventory & governance",
+      "rec": "REC-API-1",
+      "api_security_recommendation": "Every API has a specification document describing what it does",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "area": "Inventory & governance",
+      "rec": "REC-API-2",
+      "api_security_recommendation": "API specifications use a well-defined interface description language (e.g. OpenAPI, gRPC)",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "area": "Inventory & governance",
+      "rec": "REC-API-3",
+      "api_security_recommendation": "Request and response schema are defined for each endpoint",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "area": "Inventory & governance",
+      "rec": "REC-API-4",
+      "api_security_recommendation": "Establish a centralized API governance framework with ownership",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "area": "Inventory & governance",
+      "rec": "REC-API-8",
+      "api_security_recommendation": "Maintain a runtime API inventory with ownership",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "area": "Sensitive data",
+      "rec": "REC-API-6",
+      "api_security_recommendation": "Annotate each field as public or internal in the schema",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "area": "Sensitive data",
+      "rec": "REC-API-7",
+      "api_security_recommendation": "Annotate each field with its semantic type to flag sensitive data",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "area": "Sensitive data",
+      "rec": "REC-API-25",
+      "api_security_recommendation": "Limit exposure of sensitive data using data masking in responses and logs",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "area": "Encryption",
+      "rec": "REC-API-9",
+      "api_security_recommendation": "Encrypt all runtime communication, even for public-data APIs",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "area": "Authentication",
+      "rec": "REC-API-11",
+      "api_security_recommendation": "Ensure robust authentication and correct processing of authentication",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "area": "Authentication",
+      "rec": "REC-API-14",
+      "api_security_recommendation": "Authenticate, then authorize, then validate, in that order",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "area": "Authorization",
+      "rec": "REC-API-12",
+      "api_security_recommendation": "Authorize the calling user and service for every request",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "area": "Authorization",
+      "rec": "REC-API-20",
+      "api_security_recommendation": "Use schema annotations to enforce field-level authorization and filtering",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "area": "Validation",
+      "rec": "REC-API-5",
+      "api_security_recommendation": "Include request and response validation in the API schema",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "area": "Validation",
+      "rec": "REC-API-13",
+      "api_security_recommendation": "Validate each request and response against the schema before processing",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "area": "Validation",
+      "rec": "REC-API-19",
+      "api_security_recommendation": "Use schema annotations for field-level input validation",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "area": "Validation",
+      "rec": "REC-API-10",
+      "api_security_recommendation": "Apply general request and response validation (WAF, bot detection)",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "area": "Resource limits",
+      "rec": "REC-API-15",
+      "api_security_recommendation": "Enforce limits on API and resource usage",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "area": "Resource limits",
+      "rec": "REC-API-16",
+      "api_security_recommendation": "Apply rate limiting following the specific recommendations",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "area": "Resource limits",
+      "rec": "REC-API-23",
+      "api_security_recommendation": "Design error codes so they do not enable resource enumeration",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "area": "Resource limits",
+      "rec": "REC-API-24",
+      "api_security_recommendation": "Block resource enumeration attacks through rate limiting and anomaly detection",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "area": "Resource limits",
+      "rec": "REC-API-26",
+      "api_security_recommendation": "Use fine-grained blocking to prevent a DoS or service crash",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "area": "Monitoring",
+      "rec": "REC-API-17",
+      "api_security_recommendation": "Support fine-grained request and user blocking at the serving stack",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "area": "Monitoring",
+      "rec": "REC-API-18",
+      "api_security_recommendation": "Monitor API access through the serving stack",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "area": "Monitoring",
+      "rec": "REC-API-21",
+      "api_security_recommendation": "Log and monitor traffic using semantic field labels",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "area": "Monitoring",
+      "rec": "REC-API-22",
+      "api_security_recommendation": "Scan payloads (including for generative AI APIs) for malicious content",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    }
+   ],
+   "formSections": [
+    {
+     "title": "Item",
+     "keys": [
+      "area",
+      "rec"
+     ]
+    },
+    {
+     "title": "Assessment",
+     "keys": [
+      "api_security_recommendation",
+      "status",
+      "evidence_notes"
+     ]
+    },
+    {
+     "title": "Ownership & dates",
+     "keys": [
+      "owner"
+     ]
+    }
+   ]
+  },
+  {
+   "type": "nist_800_53__nist_800_70_secure_baseline_hardening_register_t",
+   "label": "Secure Baseline Hardening Register",
+   "description": "NIST 800-53 / 800-171 — Secure Baseline Hardening Register (from the template).",
+   "columns": [
+    {
+     "key": "3",
+     "label": "3",
+     "type": "text"
+    },
+    {
+     "key": "aws_account_baseline",
+     "label": "AWS account baseline",
+     "type": "text"
+    },
+    {
+     "key": "cis_aws_foundations",
+     "label": "CIS AWS Foundations",
+     "type": "text"
+    },
+    {
+     "key": "cis",
+     "label": "CIS",
+     "type": "text"
+    },
+    {
+     "key": "v3_0",
+     "label": "v3.0",
+     "type": "text"
+    },
+    {
+     "key": "yes",
+     "label": "Yes",
+     "type": "text"
+    },
+    {
+     "key": "no",
+     "label": "No",
+     "type": "text"
+    },
+    {
+     "key": "cloud",
+     "label": "Cloud",
+     "type": "text"
+    },
+    {
+     "key": "2026_06_01",
+     "label": "2026-06-01",
+     "type": "text"
+    }
+   ],
+   "seed": [
+    {
+     "data": {
+      "3": "4",
+      "aws_account_baseline": "",
+      "cis_aws_foundations": "",
+      "cis": "",
+      "v3_0": "",
+      "yes": "",
+      "no": "",
+      "cloud": "",
+      "2026_06_01": ""
+     }
+    },
+    {
+     "data": {
+      "3": "5",
+      "aws_account_baseline": "",
+      "cis_aws_foundations": "",
+      "cis": "",
+      "v3_0": "",
+      "yes": "",
+      "no": "",
+      "cloud": "",
+      "2026_06_01": ""
+     }
+    },
+    {
+     "data": {
+      "3": "6",
+      "aws_account_baseline": "",
+      "cis_aws_foundations": "",
+      "cis": "",
+      "v3_0": "",
+      "yes": "",
+      "no": "",
+      "cloud": "",
+      "2026_06_01": ""
+     }
+    },
+    {
+     "data": {
+      "3": "7",
+      "aws_account_baseline": "",
+      "cis_aws_foundations": "",
+      "cis": "",
+      "v3_0": "",
+      "yes": "",
+      "no": "",
+      "cloud": "",
+      "2026_06_01": ""
+     }
+    },
+    {
+     "data": {
+      "3": "8",
+      "aws_account_baseline": "",
+      "cis_aws_foundations": "",
+      "cis": "",
+      "v3_0": "",
+      "yes": "",
+      "no": "",
+      "cloud": "",
+      "2026_06_01": ""
+     }
+    },
+    {
+     "data": {
+      "3": "9",
+      "aws_account_baseline": "",
+      "cis_aws_foundations": "",
+      "cis": "",
+      "v3_0": "",
+      "yes": "",
+      "no": "",
+      "cloud": "",
+      "2026_06_01": ""
+     }
+    },
+    {
+     "data": {
+      "3": "10",
+      "aws_account_baseline": "",
+      "cis_aws_foundations": "",
+      "cis": "",
+      "v3_0": "",
+      "yes": "",
+      "no": "",
+      "cloud": "",
+      "2026_06_01": ""
+     }
+    },
+    {
+     "data": {
+      "3": "11",
+      "aws_account_baseline": "",
+      "cis_aws_foundations": "",
+      "cis": "",
+      "v3_0": "",
+      "yes": "",
+      "no": "",
+      "cloud": "",
+      "2026_06_01": ""
+     }
+    },
+    {
+     "data": {
+      "3": "12",
+      "aws_account_baseline": "",
+      "cis_aws_foundations": "",
+      "cis": "",
+      "v3_0": "",
+      "yes": "",
+      "no": "",
+      "cloud": "",
+      "2026_06_01": ""
+     }
+    },
+    {
+     "data": {
+      "3": "13",
+      "aws_account_baseline": "",
+      "cis_aws_foundations": "",
+      "cis": "",
+      "v3_0": "",
+      "yes": "",
+      "no": "",
+      "cloud": "",
+      "2026_06_01": ""
+     }
+    },
+    {
+     "data": {
+      "3": "14",
+      "aws_account_baseline": "",
+      "cis_aws_foundations": "",
+      "cis": "",
+      "v3_0": "",
+      "yes": "",
+      "no": "",
+      "cloud": "",
+      "2026_06_01": ""
+     }
+    },
+    {
+     "data": {
+      "3": "15",
+      "aws_account_baseline": "",
+      "cis_aws_foundations": "",
+      "cis": "",
+      "v3_0": "",
+      "yes": "",
+      "no": "",
+      "cloud": "",
+      "2026_06_01": ""
+     }
+    },
+    {
+     "data": {
+      "3": "16",
+      "aws_account_baseline": "",
+      "cis_aws_foundations": "",
+      "cis": "",
+      "v3_0": "",
+      "yes": "",
+      "no": "",
+      "cloud": "",
+      "2026_06_01": ""
+     }
+    },
+    {
+     "data": {
+      "3": "17",
+      "aws_account_baseline": "",
+      "cis_aws_foundations": "",
+      "cis": "",
+      "v3_0": "",
+      "yes": "",
+      "no": "",
+      "cloud": "",
+      "2026_06_01": ""
+     }
+    },
+    {
+     "data": {
+      "3": "18",
+      "aws_account_baseline": "",
+      "cis_aws_foundations": "",
+      "cis": "",
+      "v3_0": "",
+      "yes": "",
+      "no": "",
+      "cloud": "",
+      "2026_06_01": ""
+     }
+    },
+    {
+     "data": {
+      "3": "19",
+      "aws_account_baseline": "",
+      "cis_aws_foundations": "",
+      "cis": "",
+      "v3_0": "",
+      "yes": "",
+      "no": "",
+      "cloud": "",
+      "2026_06_01": ""
+     }
+    },
+    {
+     "data": {
+      "3": "20",
+      "aws_account_baseline": "",
+      "cis_aws_foundations": "",
+      "cis": "",
+      "v3_0": "",
+      "yes": "",
+      "no": "",
+      "cloud": "",
+      "2026_06_01": ""
+     }
+    },
+    {
+     "data": {
+      "3": "21",
+      "aws_account_baseline": "",
+      "cis_aws_foundations": "",
+      "cis": "",
+      "v3_0": "",
+      "yes": "",
+      "no": "",
+      "cloud": "",
+      "2026_06_01": ""
+     }
+    },
+    {
+     "data": {
+      "3": "22",
+      "aws_account_baseline": "",
+      "cis_aws_foundations": "",
+      "cis": "",
+      "v3_0": "",
+      "yes": "",
+      "no": "",
+      "cloud": "",
+      "2026_06_01": ""
+     }
+    },
+    {
+     "data": {
+      "3": "23",
+      "aws_account_baseline": "",
+      "cis_aws_foundations": "",
+      "cis": "",
+      "v3_0": "",
+      "yes": "",
+      "no": "",
+      "cloud": "",
+      "2026_06_01": ""
+     }
+    },
+    {
+     "data": {
+      "3": "24",
+      "aws_account_baseline": "",
+      "cis_aws_foundations": "",
+      "cis": "",
+      "v3_0": "",
+      "yes": "",
+      "no": "",
+      "cloud": "",
+      "2026_06_01": ""
+     }
+    },
+    {
+     "data": {
+      "3": "25",
+      "aws_account_baseline": "",
+      "cis_aws_foundations": "",
+      "cis": "",
+      "v3_0": "",
+      "yes": "",
+      "no": "",
+      "cloud": "",
+      "2026_06_01": ""
+     }
+    }
+   ],
+   "formSections": [
+    {
+     "title": "Item",
+     "keys": [
+      "3",
+      "aws_account_baseline"
+     ]
+    },
+    {
+     "title": "Assessment",
+     "keys": [
+      "cis_aws_foundations",
+      "cis",
+      "v3_0",
+      "yes",
+      "no",
+      "cloud",
+      "2026_06_01"
+     ]
+    }
+   ]
+  },
+  {
+   "type": "nist_800_53__nist_fips_140_3_crypto_module_inventory_template",
+   "label": "Nist Fips 140 3 Crypto Module Inventory",
+   "description": "NIST 800-53 / 800-171 — Nist Fips 140 3 Crypto Module Inventory (from the template).",
+   "columns": [
+    {
+     "key": "2",
+     "label": "2",
+     "type": "text"
+    },
+    {
+     "key": "tls_termination",
+     "label": "TLS termination",
+     "type": "text"
+    },
+    {
+     "key": "vendor_crypto_library",
+     "label": "Vendor crypto library",
+     "type": "text"
+    },
+    {
+     "key": "fill_in_vendor",
+     "label": "[FILL IN: vendor]",
+     "type": "text"
+    },
+    {
+     "key": "fill_in_cert",
+     "label": "[FILL IN: cert #]",
+     "type": "text"
+    },
+    {
+     "key": "level_1",
+     "label": "Level 1",
+     "type": "text"
+    },
+    {
+     "key": "aes_gcm_ecdhe_sha_2",
+     "label": "AES-GCM, ECDHE, SHA-2",
+     "type": "text"
+    },
+    {
+     "key": "in_process",
+     "label": "In process",
+     "type": "text"
+    },
+    {
+     "key": "platform",
+     "label": "Platform",
+     "type": "text"
+    },
+    {
+     "key": "confirm_on_cmvp_module_list",
+     "label": "Confirm on CMVP module list",
+     "type": "text"
+    }
+   ],
+   "seed": [
+    {
+     "data": {
+      "2": "3",
+      "tls_termination": "",
+      "vendor_crypto_library": "",
+      "fill_in_vendor": "",
+      "fill_in_cert": "",
+      "level_1": "",
+      "aes_gcm_ecdhe_sha_2": "",
+      "in_process": "",
+      "platform": "",
+      "confirm_on_cmvp_module_list": ""
+     }
+    },
+    {
+     "data": {
+      "2": "4",
+      "tls_termination": "",
+      "vendor_crypto_library": "",
+      "fill_in_vendor": "",
+      "fill_in_cert": "",
+      "level_1": "",
+      "aes_gcm_ecdhe_sha_2": "",
+      "in_process": "",
+      "platform": "",
+      "confirm_on_cmvp_module_list": ""
+     }
+    },
+    {
+     "data": {
+      "2": "5",
+      "tls_termination": "",
+      "vendor_crypto_library": "",
+      "fill_in_vendor": "",
+      "fill_in_cert": "",
+      "level_1": "",
+      "aes_gcm_ecdhe_sha_2": "",
+      "in_process": "",
+      "platform": "",
+      "confirm_on_cmvp_module_list": ""
+     }
+    },
+    {
+     "data": {
+      "2": "6",
+      "tls_termination": "",
+      "vendor_crypto_library": "",
+      "fill_in_vendor": "",
+      "fill_in_cert": "",
+      "level_1": "",
+      "aes_gcm_ecdhe_sha_2": "",
+      "in_process": "",
+      "platform": "",
+      "confirm_on_cmvp_module_list": ""
+     }
+    },
+    {
+     "data": {
+      "2": "7",
+      "tls_termination": "",
+      "vendor_crypto_library": "",
+      "fill_in_vendor": "",
+      "fill_in_cert": "",
+      "level_1": "",
+      "aes_gcm_ecdhe_sha_2": "",
+      "in_process": "",
+      "platform": "",
+      "confirm_on_cmvp_module_list": ""
+     }
+    },
+    {
+     "data": {
+      "2": "8",
+      "tls_termination": "",
+      "vendor_crypto_library": "",
+      "fill_in_vendor": "",
+      "fill_in_cert": "",
+      "level_1": "",
+      "aes_gcm_ecdhe_sha_2": "",
+      "in_process": "",
+      "platform": "",
+      "confirm_on_cmvp_module_list": ""
+     }
+    },
+    {
+     "data": {
+      "2": "9",
+      "tls_termination": "",
+      "vendor_crypto_library": "",
+      "fill_in_vendor": "",
+      "fill_in_cert": "",
+      "level_1": "",
+      "aes_gcm_ecdhe_sha_2": "",
+      "in_process": "",
+      "platform": "",
+      "confirm_on_cmvp_module_list": ""
+     }
+    },
+    {
+     "data": {
+      "2": "10",
+      "tls_termination": "",
+      "vendor_crypto_library": "",
+      "fill_in_vendor": "",
+      "fill_in_cert": "",
+      "level_1": "",
+      "aes_gcm_ecdhe_sha_2": "",
+      "in_process": "",
+      "platform": "",
+      "confirm_on_cmvp_module_list": ""
+     }
+    },
+    {
+     "data": {
+      "2": "11",
+      "tls_termination": "",
+      "vendor_crypto_library": "",
+      "fill_in_vendor": "",
+      "fill_in_cert": "",
+      "level_1": "",
+      "aes_gcm_ecdhe_sha_2": "",
+      "in_process": "",
+      "platform": "",
+      "confirm_on_cmvp_module_list": ""
+     }
+    },
+    {
+     "data": {
+      "2": "12",
+      "tls_termination": "",
+      "vendor_crypto_library": "",
+      "fill_in_vendor": "",
+      "fill_in_cert": "",
+      "level_1": "",
+      "aes_gcm_ecdhe_sha_2": "",
+      "in_process": "",
+      "platform": "",
+      "confirm_on_cmvp_module_list": ""
+     }
+    },
+    {
+     "data": {
+      "2": "13",
+      "tls_termination": "",
+      "vendor_crypto_library": "",
+      "fill_in_vendor": "",
+      "fill_in_cert": "",
+      "level_1": "",
+      "aes_gcm_ecdhe_sha_2": "",
+      "in_process": "",
+      "platform": "",
+      "confirm_on_cmvp_module_list": ""
+     }
+    },
+    {
+     "data": {
+      "2": "14",
+      "tls_termination": "",
+      "vendor_crypto_library": "",
+      "fill_in_vendor": "",
+      "fill_in_cert": "",
+      "level_1": "",
+      "aes_gcm_ecdhe_sha_2": "",
+      "in_process": "",
+      "platform": "",
+      "confirm_on_cmvp_module_list": ""
+     }
+    },
+    {
+     "data": {
+      "2": "15",
+      "tls_termination": "",
+      "vendor_crypto_library": "",
+      "fill_in_vendor": "",
+      "fill_in_cert": "",
+      "level_1": "",
+      "aes_gcm_ecdhe_sha_2": "",
+      "in_process": "",
+      "platform": "",
+      "confirm_on_cmvp_module_list": ""
+     }
+    },
+    {
+     "data": {
+      "2": "16",
+      "tls_termination": "",
+      "vendor_crypto_library": "",
+      "fill_in_vendor": "",
+      "fill_in_cert": "",
+      "level_1": "",
+      "aes_gcm_ecdhe_sha_2": "",
+      "in_process": "",
+      "platform": "",
+      "confirm_on_cmvp_module_list": ""
+     }
+    },
+    {
+     "data": {
+      "2": "17",
+      "tls_termination": "",
+      "vendor_crypto_library": "",
+      "fill_in_vendor": "",
+      "fill_in_cert": "",
+      "level_1": "",
+      "aes_gcm_ecdhe_sha_2": "",
+      "in_process": "",
+      "platform": "",
+      "confirm_on_cmvp_module_list": ""
+     }
+    },
+    {
+     "data": {
+      "2": "18",
+      "tls_termination": "",
+      "vendor_crypto_library": "",
+      "fill_in_vendor": "",
+      "fill_in_cert": "",
+      "level_1": "",
+      "aes_gcm_ecdhe_sha_2": "",
+      "in_process": "",
+      "platform": "",
+      "confirm_on_cmvp_module_list": ""
+     }
+    },
+    {
+     "data": {
+      "2": "19",
+      "tls_termination": "",
+      "vendor_crypto_library": "",
+      "fill_in_vendor": "",
+      "fill_in_cert": "",
+      "level_1": "",
+      "aes_gcm_ecdhe_sha_2": "",
+      "in_process": "",
+      "platform": "",
+      "confirm_on_cmvp_module_list": ""
+     }
+    },
+    {
+     "data": {
+      "2": "20",
+      "tls_termination": "",
+      "vendor_crypto_library": "",
+      "fill_in_vendor": "",
+      "fill_in_cert": "",
+      "level_1": "",
+      "aes_gcm_ecdhe_sha_2": "",
+      "in_process": "",
+      "platform": "",
+      "confirm_on_cmvp_module_list": ""
+     }
+    },
+    {
+     "data": {
+      "2": "21",
+      "tls_termination": "",
+      "vendor_crypto_library": "",
+      "fill_in_vendor": "",
+      "fill_in_cert": "",
+      "level_1": "",
+      "aes_gcm_ecdhe_sha_2": "",
+      "in_process": "",
+      "platform": "",
+      "confirm_on_cmvp_module_list": ""
+     }
+    },
+    {
+     "data": {
+      "2": "22",
+      "tls_termination": "",
+      "vendor_crypto_library": "",
+      "fill_in_vendor": "",
+      "fill_in_cert": "",
+      "level_1": "",
+      "aes_gcm_ecdhe_sha_2": "",
+      "in_process": "",
+      "platform": "",
+      "confirm_on_cmvp_module_list": ""
+     }
+    },
+    {
+     "data": {
+      "2": "23",
+      "tls_termination": "",
+      "vendor_crypto_library": "",
+      "fill_in_vendor": "",
+      "fill_in_cert": "",
+      "level_1": "",
+      "aes_gcm_ecdhe_sha_2": "",
+      "in_process": "",
+      "platform": "",
+      "confirm_on_cmvp_module_list": ""
+     }
+    },
+    {
+     "data": {
+      "2": "24",
+      "tls_termination": "",
+      "vendor_crypto_library": "",
+      "fill_in_vendor": "",
+      "fill_in_cert": "",
+      "level_1": "",
+      "aes_gcm_ecdhe_sha_2": "",
+      "in_process": "",
+      "platform": "",
+      "confirm_on_cmvp_module_list": ""
+     }
+    }
+   ],
+   "formSections": [
+    {
+     "title": "Item",
+     "keys": [
+      "2",
+      "tls_termination"
+     ]
+    },
+    {
+     "title": "Assessment",
+     "keys": [
+      "vendor_crypto_library",
+      "fill_in_vendor",
+      "fill_in_cert",
+      "level_1",
+      "aes_gcm_ecdhe_sha_2",
+      "in_process",
+      "platform",
+      "confirm_on_cmvp_module_list"
+     ]
+    }
+   ]
+  },
+  {
+   "type": "nist_800_53__nist_fips_199_security_categorization_worksheet_",
+   "label": "Nist Fips 199 Security Categorization Worksheet",
+   "description": "NIST 800-53 / 800-171 — Nist Fips 199 Security Categorization Worksheet (from the template).",
+   "columns": [
+    {
+     "key": "ref",
+     "label": "Ref",
+     "type": "text"
+    },
+    {
+     "key": "information_type_system",
+     "label": "Information type / system",
+     "type": "text"
+    },
+    {
+     "key": "confidentiality",
+     "label": "Confidentiality",
+     "type": "text"
+    },
+    {
+     "key": "integrity",
+     "label": "Integrity",
+     "type": "text"
+    },
+    {
+     "key": "availability",
+     "label": "Availability",
+     "type": "text"
+    },
+    {
+     "key": "overall_categorization",
+     "label": "Overall categorization",
+     "type": "text"
+    },
+    {
+     "key": "rationale_notes",
+     "label": "Rationale / notes",
+     "type": "textarea"
+    },
+    {
+     "key": "owner",
+     "label": "Owner",
+     "type": "text",
+     "picker": "users"
+    }
+   ],
+   "seed": [
+    {
+     "data": {
+      "ref": "1",
+      "information_type_system": "Customer personal data",
+      "confidentiality": "Moderate",
+      "integrity": "Moderate",
+      "availability": "Low",
+      "overall_categorization": "",
+      "rationale_notes": "PII; breach harms individuals",
+      "owner": "Data owner"
+     }
+    },
+    {
+     "data": {
+      "ref": "2",
+      "information_type_system": "Public website content",
+      "confidentiality": "Low",
+      "integrity": "Moderate",
+      "availability": "Moderate",
+      "overall_categorization": "",
+      "rationale_notes": "Public data; integrity/availability matter",
+      "owner": "Marketing"
+     }
+    },
+    {
+     "data": {
+      "ref": "3",
+      "information_type_system": "",
+      "confidentiality": "",
+      "integrity": "",
+      "availability": "",
+      "overall_categorization": "",
+      "rationale_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "ref": "4",
+      "information_type_system": "",
+      "confidentiality": "",
+      "integrity": "",
+      "availability": "",
+      "overall_categorization": "",
+      "rationale_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "ref": "5",
+      "information_type_system": "",
+      "confidentiality": "",
+      "integrity": "",
+      "availability": "",
+      "overall_categorization": "",
+      "rationale_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "ref": "6",
+      "information_type_system": "",
+      "confidentiality": "",
+      "integrity": "",
+      "availability": "",
+      "overall_categorization": "",
+      "rationale_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "ref": "7",
+      "information_type_system": "",
+      "confidentiality": "",
+      "integrity": "",
+      "availability": "",
+      "overall_categorization": "",
+      "rationale_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "ref": "8",
+      "information_type_system": "",
+      "confidentiality": "",
+      "integrity": "",
+      "availability": "",
+      "overall_categorization": "",
+      "rationale_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "ref": "9",
+      "information_type_system": "",
+      "confidentiality": "",
+      "integrity": "",
+      "availability": "",
+      "overall_categorization": "",
+      "rationale_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "ref": "10",
+      "information_type_system": "",
+      "confidentiality": "",
+      "integrity": "",
+      "availability": "",
+      "overall_categorization": "",
+      "rationale_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "ref": "11",
+      "information_type_system": "",
+      "confidentiality": "",
+      "integrity": "",
+      "availability": "",
+      "overall_categorization": "",
+      "rationale_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "ref": "12",
+      "information_type_system": "",
+      "confidentiality": "",
+      "integrity": "",
+      "availability": "",
+      "overall_categorization": "",
+      "rationale_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "ref": "13",
+      "information_type_system": "",
+      "confidentiality": "",
+      "integrity": "",
+      "availability": "",
+      "overall_categorization": "",
+      "rationale_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "ref": "14",
+      "information_type_system": "",
+      "confidentiality": "",
+      "integrity": "",
+      "availability": "",
+      "overall_categorization": "",
+      "rationale_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "ref": "15",
+      "information_type_system": "",
+      "confidentiality": "",
+      "integrity": "",
+      "availability": "",
+      "overall_categorization": "",
+      "rationale_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "ref": "16",
+      "information_type_system": "",
+      "confidentiality": "",
+      "integrity": "",
+      "availability": "",
+      "overall_categorization": "",
+      "rationale_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "ref": "17",
+      "information_type_system": "",
+      "confidentiality": "",
+      "integrity": "",
+      "availability": "",
+      "overall_categorization": "",
+      "rationale_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "ref": "18",
+      "information_type_system": "",
+      "confidentiality": "",
+      "integrity": "",
+      "availability": "",
+      "overall_categorization": "",
+      "rationale_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "ref": "19",
+      "information_type_system": "",
+      "confidentiality": "",
+      "integrity": "",
+      "availability": "",
+      "overall_categorization": "",
+      "rationale_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "ref": "20",
+      "information_type_system": "",
+      "confidentiality": "",
+      "integrity": "",
+      "availability": "",
+      "overall_categorization": "",
+      "rationale_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "ref": "21",
+      "information_type_system": "",
+      "confidentiality": "",
+      "integrity": "",
+      "availability": "",
+      "overall_categorization": "",
+      "rationale_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "ref": "22",
+      "information_type_system": "",
+      "confidentiality": "",
+      "integrity": "",
+      "availability": "",
+      "overall_categorization": "",
+      "rationale_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "ref": "23",
+      "information_type_system": "",
+      "confidentiality": "",
+      "integrity": "",
+      "availability": "",
+      "overall_categorization": "",
+      "rationale_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "ref": "24",
+      "information_type_system": "",
+      "confidentiality": "",
+      "integrity": "",
+      "availability": "",
+      "overall_categorization": "",
+      "rationale_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "ref": "25",
+      "information_type_system": "",
+      "confidentiality": "",
+      "integrity": "",
+      "availability": "",
+      "overall_categorization": "",
+      "rationale_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "ref": "26",
+      "information_type_system": "",
+      "confidentiality": "",
+      "integrity": "",
+      "availability": "",
+      "overall_categorization": "",
+      "rationale_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "ref": "27",
+      "information_type_system": "",
+      "confidentiality": "",
+      "integrity": "",
+      "availability": "",
+      "overall_categorization": "",
+      "rationale_notes": "",
+      "owner": ""
+     }
+    }
+   ],
+   "formSections": [
+    {
+     "title": "Item",
+     "keys": [
+      "ref",
+      "information_type_system"
+     ]
+    },
+    {
+     "title": "Assessment",
+     "keys": [
+      "confidentiality",
+      "integrity",
+      "availability",
+      "overall_categorization",
+      "rationale_notes"
+     ]
+    },
+    {
+     "title": "Ownership & dates",
+     "keys": [
+      "owner"
+     ]
+    }
+   ]
+  }
+ ],
+ "documents": [
+  {
+   "type": "nist_800_53__nist_800_137_continuous_monitoring_plan_template",
+   "label": "Continuous Monitoring Plan",
+   "control_ref": null,
+   "sections": [
+    {
+     "heading": "1. Purpose",
+     "body": "This plan maintains ongoing awareness of information security, vulnerabilities and threats to support risk decisions. It follows the NIST ISCM process: define, establish, implement, analyze and report, respond, and review and update."
+    },
+    {
+     "heading": "2. Scope",
+     "body": "The information systems, controls and environment in scope for continuous monitoring across the organisation."
+    },
+    {
+     "heading": "3. Define the Strategy",
+     "body": "A monitoring strategy is defined and grounded in risk:\n- Monitoring is driven by organisational risk tolerance and the controls that matter most.\n- [FILL IN: state your risk tolerance and the priorities your monitoring supports.]"
+    },
+    {
+     "heading": "4. Establish the Program",
+     "body": "Metrics and frequencies are established:\n- Security metrics are defined for the controls and outcomes being monitored.\n- Monitoring and assessment frequencies are set from each item's volatility and risk.\n- [FILL IN: list your key metrics and their monitoring frequency.]"
+    },
+    {
+     "heading": "5. Implement the Program",
+     "body": "Monitoring is carried out, using automation where possible:\n- Data is collected from tools and assessments according to the defined frequencies.\n- Automated collection is used where available to improve timeliness and coverage."
+    },
+    {
+     "heading": "6. Analyze and Report Findings",
+     "body": "Data is analysed and reported to decision-makers:\n- Collected data is analysed against the metrics and reported to the relevant stakeholders.\n- Reporting supports risk-based decisions at the right level."
+    },
+    {
+     "heading": "7. Respond to Findings",
+     "body": "Findings are acted on:\n- Findings are mitigated, accepted, transferred or avoided as a risk decision.\n- Actions are tracked to closure."
+    },
+    {
+     "heading": "8. Review and Update",
+     "body": "The program is kept effective:\n- The monitoring strategy and program are reviewed and updated as risk, systems and threats change."
+    },
+    {
+     "heading": "9. Roles & Responsibilities",
+     "body": "",
+     "table": {
+      "columns": [
+       "Role",
+       "Responsibilities"
+      ],
+      "rows": [
+       [
+        "Security operations",
+        "Runs monitoring, analysis and reporting."
+       ],
+       [
+        "CISO / Security Lead",
+        "Owns the policy, approves exceptions, monitors compliance and reports to leadership."
+       ],
+       [
+        "IT / Operations",
+        "Implements and maintains the technical controls described in this document."
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "10. Testing & Maintenance",
+     "body": "This plan is reviewed at least annually and after every activation or major change. Exercises (tabletop or full) are scheduled to validate the plan and results are recorded as improvement actions."
+    }
+   ]
+  },
+  {
+   "type": "nist_800_53__nist_800_171_system_security_plan_ssp_template_1",
+   "label": "System Security Plan Ssp",
+   "control_ref": null,
+   "sections": [
+    {
+     "heading": "1. Purpose",
+     "body": "This System Security Plan describes a system that processes, stores or transmits Controlled Unclassified Information (CUI) and how it meets the NIST SP 800-171 security requirements. Maintaining an SSP is itself a requirement (03.15.02)."
+    },
+    {
+     "heading": "2. Scope",
+     "body": "The system identified below, including its boundary, environment and the people and components that support it."
+    },
+    {
+     "heading": "3. System Identification",
+     "body": "The system is identified and described:",
+     "table": {
+      "columns": [
+       "Field",
+       "Detail"
+      ],
+      "rows": [
+       [
+        "System name",
+        "[FILL IN]"
+       ],
+       [
+        "System owner",
+        "[FILL IN]"
+       ],
+       [
+        "Authorizing official / sponsor",
+        "[FILL IN]"
+       ],
+       [
+        "CUI categories handled",
+        "[FILL IN]"
+       ],
+       [
+        "Operating environment",
+        "[FILL IN: on-prem, cloud, hybrid]"
+       ],
+       [
+        "Date / version",
+        "[FILL IN]"
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "4. Authorization Boundary",
+     "body": "The boundary defines what is included in the system: its components, the CUI it handles, and the people and processes that support it.\n[FILL IN: describe the authorization boundary, including a diagram reference.]"
+    },
+    {
+     "heading": "5. Operational Environment",
+     "body": "The environment and any connections to other systems are described, including cloud services and external providers.\n[FILL IN: describe the environment and external connections.]"
+    },
+    {
+     "heading": "6. Security Requirements Implementation",
+     "body": "For each NIST SP 800-171 Rev 3 requirement family, the plan records how the requirements are met. Use the 800-171 compliance checklist for the requirement-by-requirement detail.",
+     "table": {
+      "columns": [
+       "Requirement family (800-171 R3)",
+       "How requirements are implemented"
+      ],
+      "rows": [
+       [
+        "03.01 Access Control",
+        "[FILL IN]"
+       ],
+       [
+        "03.02 Awareness and Training",
+        "[FILL IN]"
+       ],
+       [
+        "03.03 Audit and Accountability",
+        "[FILL IN]"
+       ],
+       [
+        "03.04 Configuration Management",
+        "[FILL IN]"
+       ],
+       [
+        "03.05 Identification and Authentication",
+        "[FILL IN]"
+       ],
+       [
+        "03.06 Incident Response",
+        "[FILL IN]"
+       ],
+       [
+        "03.07 Maintenance",
+        "[FILL IN]"
+       ],
+       [
+        "03.08 Media Protection",
+        "[FILL IN]"
+       ],
+       [
+        "03.09 Personnel Security",
+        "[FILL IN]"
+       ],
+       [
+        "03.10 Physical Protection",
+        "[FILL IN]"
+       ],
+       [
+        "03.11 Risk Assessment",
+        "[FILL IN]"
+       ],
+       [
+        "03.12 Security Assessment and Monitoring",
+        "[FILL IN]"
+       ],
+       [
+        "03.13 System and Communications Protection",
+        "[FILL IN]"
+       ],
+       [
+        "03.14 System and Information Integrity",
+        "[FILL IN]"
+       ],
+       [
+        "03.15 Planning",
+        "[FILL IN]"
+       ],
+       [
+        "03.16 System and Services Acquisition",
+        "[FILL IN]"
+       ],
+       [
+        "03.17 Supply Chain Risk Management",
+        "[FILL IN]"
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "7. Plan of Action and Milestones (POA&M)",
+     "body": "Requirements not yet fully implemented are tracked in a POA&M with milestones and dates (requirement 03.12.02).\n[FILL IN: reference your POA&M.]"
+    },
+    {
+     "heading": "8. Roles & Responsibilities",
+     "body": "",
+     "table": {
+      "columns": [
+       "Role",
+       "Responsibilities"
+      ],
+      "rows": [
+       [
+        "System owner",
+        "Owns the system and its SSP."
+       ],
+       [
+        "CISO / Security Lead",
+        "Owns the policy, approves exceptions, monitors compliance and reports to leadership."
+       ],
+       [
+        "IT / Operations",
+        "Implements and maintains the technical controls described in this document."
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "9. Testing & Maintenance",
+     "body": "This plan is reviewed at least annually and after every activation or major change. Exercises (tabletop or full) are scheduled to validate the plan and results are recorded as improvement actions."
+    }
+   ]
+  },
+  {
+   "type": "nist_800_53__nist_800_193_firmware_security_resiliency_policy",
+   "label": "Firmware Security Resiliency Policy",
+   "control_ref": null,
+   "sections": [
+    {
+     "heading": "1. Purpose",
+     "body": "This policy protects the integrity of platform firmware and its critical data, and ensures the organisation can detect and recover from corruption. It follows the NIST firmware resiliency properties of Protection, Detection and Recovery."
+    },
+    {
+     "heading": "2. Scope",
+     "body": "Platform firmware on clients, servers and network devices, including system BIOS/UEFI, baseboard management controllers and the firmware of critical components."
+    },
+    {
+     "heading": "3. Protection",
+     "body": "Firmware and its critical data are protected from unauthorised modification:\n- Firmware updates are authenticated (cryptographically signed) before they are applied.\n- Firmware update mechanisms are protected so only authorised updates succeed.\n- Critical platform data is protected against unauthorised change."
+    },
+    {
+     "heading": "4. Detection",
+     "body": "Corruption of firmware or critical data is detected:\n- Platform integrity is measured and verified (for example at boot, using a root of trust).\n- Unauthorised or unexpected firmware changes are detected and alerted.\n- [FILL IN: name your platform integrity / attestation capability.]"
+    },
+    {
+     "heading": "5. Recovery",
+     "body": "Firmware can be restored to a known-good state:\n- A protected recovery mechanism can restore firmware after detected corruption.\n- Recovery images are authenticated before use.\n- Recovery is tested so it works when needed."
+    },
+    {
+     "heading": "6. Lifecycle and Inventory",
+     "body": "Firmware is managed across the device lifecycle:\n- Devices are sourced and accepted with firmware integrity verified (see hardware supply-chain controls).\n- Firmware versions are inventoried and kept current within vendor support.\n- End-of-support devices are retired or compensated for."
+    },
+    {
+     "heading": "7. Roles & Responsibilities",
+     "body": "",
+     "table": {
+      "columns": [
+       "Role",
+       "Responsibilities"
+      ],
+      "rows": [
+       [
+        "IT operations",
+        "Manages firmware updates, integrity and recovery."
+       ],
+       [
+        "CISO / Security Lead",
+        "Owns the policy, approves exceptions, monitors compliance and reports to leadership."
+       ],
+       [
+        "IT / Operations",
+        "Implements and maintains the technical controls described in this document."
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "8. Compliance & Enforcement",
+     "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+    },
+    {
+     "heading": "9. Exceptions",
+     "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+    },
+    {
+     "heading": "10. Review",
+     "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+    }
+   ]
+  },
+  {
+   "type": "nist_800_53__nist_800_57_key_management_policy_template_1",
+   "label": "Key Management Policy",
+   "control_ref": null,
+   "sections": [
+    {
+     "heading": "1. Purpose",
+     "body": "This policy governs how cryptographic keys are generated, protected, used and retired so that the cryptography the organisation relies on remains trustworthy. It follows the NIST key-management lifecycle."
+    },
+    {
+     "heading": "2. Scope",
+     "body": "All cryptographic keys used to protect organisational information, in applications, infrastructure and third-party services."
+    },
+    {
+     "heading": "3. Approved Cryptography",
+     "body": "Only approved, validated cryptography is used:\n- Use cryptographic algorithms and key sizes that are currently approved by NIST.\n- Prefer FIPS-validated cryptographic modules (see the cryptographic module inventory).\n- [FILL IN: list your approved algorithms and minimum key sizes.]"
+    },
+    {
+     "heading": "4. Key Lifecycle",
+     "body": "Keys are managed across the pre-operational, operational, post-operational and destroyed phases:\n- Generation: keys are generated using approved methods and strong random sources.\n- Distribution and storage: private and secret keys are protected at all times, ideally in an HSM or key vault.\n- Use: keys are used only for their intended purpose and within their cryptoperiod.\n- Rotation: keys are rotated at the end of their cryptoperiod or on compromise.\n- Revocation and destruction: compromised or retired keys are revoked and securely destroyed.\n- Archival: keys needed to access archived data are retained and protected."
+    },
+    {
+     "heading": "5. Cryptoperiods",
+     "body": "Each key has a defined cryptoperiod (the time a key is authorised for use), set from its type, usage and risk.\n[FILL IN: set cryptoperiods for each key type you use.]"
+    },
+    {
+     "heading": "6. Protection and Separation of Duties",
+     "body": "Key-management duties and access are controlled:\n- Access to keys is restricted on least privilege; sensitive operations require more than one person.\n- Keys are never stored in source code, configuration files or alongside the data they protect."
+    },
+    {
+     "heading": "7. Roles & Responsibilities",
+     "body": "",
+     "table": {
+      "columns": [
+       "Role",
+       "Responsibilities"
+      ],
+      "rows": [
+       [
+        "Cryptography / platform",
+        "Operates key management and the key store."
+       ],
+       [
+        "CISO / Security Lead",
+        "Owns the policy, approves exceptions, monitors compliance and reports to leadership."
+       ],
+       [
+        "IT / Operations",
+        "Implements and maintains the technical controls described in this document."
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "8. Compliance & Enforcement",
+     "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+    },
+    {
+     "heading": "9. Exceptions",
+     "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+    },
+    {
+     "heading": "10. Review",
+     "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+    }
+   ]
+  },
+  {
+   "type": "nist_800_53__nist_800_88_media_sanitization_policy_template_1",
+   "label": "Media Sanitization Policy",
+   "control_ref": null,
+   "sections": [
+    {
+     "heading": "1. Purpose",
+     "body": "This policy ensures that information is removed from media before the media is reused, transferred or disposed of, so that data cannot be recovered. It is based on the NIST media sanitization decision of Clear, Purge or Destroy."
+    },
+    {
+     "heading": "2. Scope",
+     "body": "All storage media owned or controlled by the organisation, including computers, servers, mobile devices, removable media, printers and storage in cloud and on-premises systems."
+    },
+    {
+     "heading": "3. Sanitization Decision",
+     "body": "The sanitization method is chosen from the security categorization of the information and whether the media will leave organisational control:\n- Clear: apply logical techniques to sanitize data in all user-addressable locations, protecting against simple, non-invasive recovery.\n- Purge: apply physical or logical techniques that make recovery infeasible using state-of-the-art laboratory techniques.\n- Destroy: physically destroy the media so it cannot be reused and data cannot be recovered.\n- Higher-confidentiality data, or media leaving organisational control, requires Purge or Destroy."
+    },
+    {
+     "heading": "4. Method by Media Type",
+     "body": "The technique is matched to the media type using recognised methods:\n- Flash and solid-state media: use the device's verified secure-erase or cryptographic erase; destroy where required.\n- Magnetic hard drives: overwrite or degauss to Purge; shred or disintegrate to Destroy.\n- Mobile devices: use a full factory reset with encryption (cryptographic erase) per the manufacturer.\n- Paper and printed output: cross-cut shred.\n- [FILL IN: list the media types you hold and the chosen method for each.]"
+    },
+    {
+     "heading": "5. Verification",
+     "body": "Sanitization is verified before media is released:\n- A representative verification is performed after sanitization to confirm data was removed.\n- Equipment and tools used for sanitization are tested and kept current."
+    },
+    {
+     "heading": "6. Documentation",
+     "body": "Each sanitization action is recorded on a Certificate of Sanitization (below) and retained as evidence.",
+     "table": {
+      "columns": [
+       "Person performing sanitization",
+       "Media information",
+       "Sanitization details",
+       "Media destination",
+       "Signature"
+      ],
+      "rows": [
+       [
+        "Name, title, organisation, location, phone, email",
+        "Vendor/make, media type, model number, serial number, property number, source, classification, operational/damaged",
+        "Sanitization method (Clear / Purge / Destroy), technique, tools used (with version), verification/status, validation, notes",
+        "Internal reuse / external reuse / recycling / manufacturer / other",
+        "Signature and date of the person performing it, plus a concurrence signature"
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "7. Roles & Responsibilities",
+     "body": "",
+     "table": {
+      "columns": [
+       "Role",
+       "Responsibilities"
+      ],
+      "rows": [
+       [
+        "Asset/IT operations",
+        "Performs and verifies sanitization and completes the certificate."
+       ],
+       [
+        "CISO / Security Lead",
+        "Owns the policy, approves exceptions, monitors compliance and reports to leadership."
+       ],
+       [
+        "IT / Operations",
+        "Implements and maintains the technical controls described in this document."
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "8. Compliance & Enforcement",
+     "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+    },
+    {
+     "heading": "9. Exceptions",
+     "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+    },
+    {
+     "heading": "10. Review",
+     "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+    }
+   ]
+  }
+ ]
+}

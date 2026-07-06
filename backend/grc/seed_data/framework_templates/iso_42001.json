@@ -1,0 +1,834 @@
+{
+ "framework_key": "iso_42001",
+ "display_name": "ISO 42001",
+ "name_patterns": [
+  "42001"
+ ],
+ "registers": [
+  {
+   "type": "iso_42001__iso_42001_ai_risk_register_template_1",
+   "label": "Ai Risk Register",
+   "description": "ISO 42001 — Ai Risk Register (from the template).",
+   "columns": [
+    {
+     "key": "2",
+     "label": "2",
+     "type": "text"
+    },
+    {
+     "key": "customer_llm_assistant",
+     "label": "Customer LLM assistant",
+     "type": "text"
+    },
+    {
+     "key": "inaccurate_or_harmful_output",
+     "label": "Inaccurate or harmful output",
+     "type": "text"
+    },
+    {
+     "key": "medium",
+     "label": "Medium",
+     "type": "text"
+    },
+    {
+     "key": "medium_2",
+     "label": "Medium",
+     "type": "text"
+    },
+    {
+     "key": "medium_3",
+     "label": "Medium",
+     "type": "text"
+    },
+    {
+     "key": "guardrails_evaluation_disclaimers",
+     "label": "Guardrails, evaluation, disclaimers",
+     "type": "text"
+    },
+    {
+     "key": "low",
+     "label": "Low",
+     "type": "text"
+    },
+    {
+     "key": "product",
+     "label": "Product",
+     "type": "text"
+    },
+    {
+     "key": "open",
+     "label": "Open",
+     "type": "text"
+    }
+   ],
+   "seed": [],
+   "formSections": [
+    {
+     "title": "Item",
+     "keys": [
+      "2",
+      "customer_llm_assistant"
+     ]
+    },
+    {
+     "title": "Assessment",
+     "keys": [
+      "inaccurate_or_harmful_output",
+      "medium",
+      "medium_2",
+      "medium_3",
+      "guardrails_evaluation_disclaimers",
+      "low",
+      "product",
+      "open"
+     ]
+    }
+   ]
+  },
+  {
+   "type": "iso_42001__iso_42001_gap_assessment_template_1",
+   "label": "Gap Assessment",
+   "description": "ISO 42001 — Gap Assessment (from the template).",
+   "columns": [
+    {
+     "key": "area",
+     "label": "Area",
+     "type": "text"
+    },
+    {
+     "key": "clause_annex",
+     "label": "Clause/Annex",
+     "type": "text"
+    },
+    {
+     "key": "outcome_to_verify",
+     "label": "Outcome to verify",
+     "type": "textarea"
+    },
+    {
+     "key": "status",
+     "label": "Status",
+     "type": "text"
+    },
+    {
+     "key": "evidence_notes",
+     "label": "Evidence / notes",
+     "type": "text",
+     "picker": "evidence"
+    },
+    {
+     "key": "owner",
+     "label": "Owner",
+     "type": "text",
+     "picker": "users"
+    }
+   ],
+   "seed": [
+    {
+     "data": {
+      "area": "Clause 4 Context",
+      "clause_annex": "4",
+      "outcome_to_verify": "The organisation, interested parties and the scope of the AI management system are determined",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "area": "Clause 5 Leadership",
+      "clause_annex": "5",
+      "outcome_to_verify": "Leadership commitment, an AI policy and AI roles and responsibilities are established",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "area": "Clause 6 Planning",
+      "clause_annex": "6",
+      "outcome_to_verify": "AI risks and opportunities, AI risk assessment and treatment, AI objectives and AI impact assessment are planned",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "area": "Clause 7 Support",
+      "clause_annex": "7",
+      "outcome_to_verify": "Resources, competence, awareness, communication and documented information support the system",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "area": "Clause 8 Operation",
+      "clause_annex": "8",
+      "outcome_to_verify": "Operational planning and control, AI risk assessment/treatment and AI impact assessments are carried out",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "area": "Clause 9 Performance",
+      "clause_annex": "9",
+      "outcome_to_verify": "Monitoring, measurement, internal audit and management review evaluate the system",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "area": "Clause 10 Improvement",
+      "clause_annex": "10",
+      "outcome_to_verify": "Nonconformities are corrected and the AI management system is continually improved",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "area": "Annex A Policies",
+      "clause_annex": "A",
+      "outcome_to_verify": "Policies related to AI are defined and approved",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "area": "Annex A Organization",
+      "clause_annex": "A",
+      "outcome_to_verify": "Internal organisation, roles and responsibilities for AI are assigned",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "area": "Annex A Resources",
+      "clause_annex": "A",
+      "outcome_to_verify": "Resources for AI systems (data, tooling, compute, human) are identified and documented",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "area": "Annex A Impact assessment",
+      "clause_annex": "A",
+      "outcome_to_verify": "Processes assess the impacts of AI systems on individuals, groups and society",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "area": "Annex A Lifecycle",
+      "clause_annex": "A",
+      "outcome_to_verify": "The AI system lifecycle is managed (objectives, design, development, deployment, operation, retirement)",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "area": "Annex A Data for AI",
+      "clause_annex": "A",
+      "outcome_to_verify": "Data for AI systems is governed for quality, provenance and appropriate use",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "area": "Annex A Information & use",
+      "clause_annex": "A",
+      "outcome_to_verify": "Information is provided to interested parties and responsible use of AI systems is governed",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "area": "Annex A Third parties",
+      "clause_annex": "A",
+      "outcome_to_verify": "Third-party and supplier relationships affecting AI are managed",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    }
+   ],
+   "formSections": [
+    {
+     "title": "Item",
+     "keys": [
+      "area",
+      "clause_annex"
+     ]
+    },
+    {
+     "title": "Assessment",
+     "keys": [
+      "outcome_to_verify",
+      "status",
+      "evidence_notes"
+     ]
+    },
+    {
+     "title": "Ownership & dates",
+     "keys": [
+      "owner"
+     ]
+    }
+   ]
+  },
+  {
+   "type": "iso_42001__iso_42001_implementation_roadmap_template_1",
+   "label": "Implementation Roadmap",
+   "description": "ISO 42001 — Implementation Roadmap (from the template).",
+   "columns": [
+    {
+     "key": "3",
+     "label": "3",
+     "type": "text"
+    },
+    {
+     "key": "lifecycle",
+     "label": "Lifecycle",
+     "type": "text"
+    },
+    {
+     "key": "define_ai_system_lifecycle_and_data_governance_c",
+     "label": "Define AI system lifecycle and data governance controls",
+     "type": "text"
+    },
+    {
+     "key": "a",
+     "label": "A",
+     "type": "text"
+    },
+    {
+     "key": "medium",
+     "label": "Medium",
+     "type": "text"
+    },
+    {
+     "key": "ml",
+     "label": "ML",
+     "type": "text"
+    },
+    {
+     "key": "2026_11_01",
+     "label": "2026-11-01",
+     "type": "text"
+    },
+    {
+     "key": "not_started",
+     "label": "Not started",
+     "type": "text"
+    }
+   ],
+   "seed": [],
+   "formSections": [
+    {
+     "title": "Item",
+     "keys": [
+      "3",
+      "lifecycle"
+     ]
+    },
+    {
+     "title": "Assessment",
+     "keys": [
+      "define_ai_system_lifecycle_and_data_governance_c",
+      "a",
+      "medium",
+      "ml",
+      "2026_11_01",
+      "not_started"
+     ]
+    }
+   ]
+  }
+ ],
+ "documents": [
+  {
+   "type": "iso_42001__iso_42001_ai_impact_assessment_template_1",
+   "label": "Ai Impact Assessment",
+   "control_ref": null,
+   "sections": [
+    {
+     "heading": "1. Purpose",
+     "body": "This template structures an assessment of the potential impacts of an AI system on individuals, groups and society, which is central to the responsible-AI approach of ISO/IEC 42001."
+    },
+    {
+     "heading": "2. Scope",
+     "body": "A single AI system; complete one assessment per system or significant change."
+    },
+    {
+     "heading": "3. Conducting the Assessment",
+     "body": "Complete the sections below for the AI system, proportionate to its risk.",
+     "table": {
+      "columns": [
+       "Section",
+       "What to record"
+      ],
+      "rows": [
+       [
+        "AI system",
+        "[FILL IN: the AI system and its intended purpose]"
+       ],
+       [
+        "Stakeholders",
+        "Individuals, groups and society potentially affected"
+       ],
+       [
+        "Potential impacts",
+        "Benefits and harms, including fairness, safety, privacy, autonomy and environmental impacts"
+       ],
+       [
+        "Likelihood & severity",
+        "Assessment of how likely and how serious each impact is"
+       ],
+       [
+        "Mitigations",
+        "Measures to prevent or reduce harms, including human oversight"
+       ],
+       [
+        "Residual impact & decision",
+        "The remaining impact and the decision to proceed, change or stop"
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "4. When and How Often",
+     "body": "An assessment is carried out before deploying a new AI system or making a significant change to an existing one, is proportionate to the system's risk, draws on diverse input where appropriate, and is reviewed periodically and when the system or its context changes."
+    },
+    {
+     "heading": "5. Disclaimer",
+     "body": "This template is an independently created resource to help you implement a management system aligned to the relevant ISO standard. It is not affiliated with, endorsed by, or certified by ISO or any standards body, does not reproduce the text of the standard, and is not a substitute for professional advice or certification by an accredited body. Obtain the official standard from ISO."
+    },
+    {
+     "heading": "6. Roles & Responsibilities",
+     "body": "",
+     "table": {
+      "columns": [
+       "Role",
+       "Responsibilities"
+      ],
+      "rows": [
+       [
+        "AI system owner",
+        "Owns the impact assessment."
+       ],
+       [
+        "CISO / Security Lead",
+        "Owns the policy, approves exceptions, monitors compliance and reports to leadership."
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "7. Testing & Maintenance",
+     "body": "This plan is reviewed at least annually and after every activation or major change. Exercises (tabletop or full) are scheduled to validate the plan and results are recorded as improvement actions."
+    }
+   ]
+  },
+  {
+   "type": "iso_42001__iso_42001_ai_policy_template_1",
+   "label": "Ai Policy",
+   "control_ref": null,
+   "sections": [
+    {
+     "heading": "1. Purpose",
+     "body": "This AI policy sets the organisation's intentions and principles for the responsible development and use of AI, providing the framework for AI objectives, consistent with the approach of ISO/IEC 42001."
+    },
+    {
+     "heading": "2. Scope",
+     "body": "All AI systems the organisation develops, provides, deploys or uses."
+    },
+    {
+     "heading": "3. Principles",
+     "body": "The organisation commits to managing AI responsibly:\n- AI is used for legitimate purposes and in line with the organisation's values and obligations.\n- AI risks, including risks to individuals, groups and society, are assessed and managed.\n- AI systems are developed and used with appropriate transparency, oversight and accountability.\n- Data used for AI is handled responsibly and lawfully."
+    },
+    {
+     "heading": "4. Objectives and Governance",
+     "body": "AI objectives are set and reviewed, roles are assigned, and the AI management system is resourced, monitored and improved. [FILL IN: reference your AI objectives.]"
+    },
+    {
+     "heading": "5. Disclaimer",
+     "body": "This template is an independently created resource to help you implement a management system aligned to the relevant ISO standard. It is not affiliated with, endorsed by, or certified by ISO or any standards body, does not reproduce the text of the standard, and is not a substitute for professional advice or certification by an accredited body. Obtain the official standard from ISO."
+    },
+    {
+     "heading": "6. Roles & Responsibilities",
+     "body": "",
+     "table": {
+      "columns": [
+       "Role",
+       "Responsibilities"
+      ],
+      "rows": [
+       [
+        "Top management",
+        "Approves the AI policy."
+       ],
+       [
+        "AI governance lead",
+        "Owns and maintains it."
+       ],
+       [
+        "CISO / Security Lead",
+        "Owns the policy, approves exceptions, monitors compliance and reports to leadership."
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "7. Compliance & Enforcement",
+     "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+    },
+    {
+     "heading": "8. Exceptions",
+     "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+    },
+    {
+     "heading": "9. Review",
+     "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+    }
+   ]
+  },
+  {
+   "type": "iso_42001__iso_42001_ai_roles_responsibilities_template_2",
+   "label": "Ai Roles Responsibilities",
+   "control_ref": null,
+   "sections": [
+    {
+     "heading": "1. Purpose",
+     "body": "This document assigns the roles and responsibilities for the AI management system and for the AI systems within its scope, consistent with the approach of ISO/IEC 42001."
+    },
+    {
+     "heading": "2. Scope",
+     "body": "The people and functions involved in governing, developing, deploying and using AI systems."
+    },
+    {
+     "heading": "3. Roles",
+     "body": "Responsibility and authority for AI are assigned across the lifecycle:\n- Roles cover AI governance, risk management, data, development, deployment, human oversight and incident handling.\n- Top management retains accountability for the AIMS and provides the resources for it.\n- Where AI decisions can affect individuals, the role responsible for human oversight is named.\n- [FILL IN: list your AI roles and who holds them.]"
+    },
+    {
+     "heading": "4. Responsibilities",
+     "body": "Each role's responsibilities are defined so AI systems are managed end to end:\n- Responsibilities for the AIMS and for each stage of the AI lifecycle are assigned to named roles.\n- The people assigned have, or are given, the necessary competence for their AI responsibilities.\n- Escalation routes are defined for AI risks, incidents and oversight interventions."
+    },
+    {
+     "heading": "5. Disclaimer",
+     "body": "This template is an independently created resource to help you implement a management system aligned to the relevant ISO standard. It is not affiliated with, endorsed by, or certified by ISO or any standards body, does not reproduce the text of the standard, and is not a substitute for professional advice or certification by an accredited body. Obtain the official standard from ISO."
+    },
+    {
+     "heading": "6. Roles & Responsibilities",
+     "body": "",
+     "table": {
+      "columns": [
+       "Role",
+       "Responsibilities"
+      ],
+      "rows": [
+       [
+        "AI governance lead",
+        "Coordinates AI roles."
+       ],
+       [
+        "CISO / Security Lead",
+        "Owns the policy, approves exceptions, monitors compliance and reports to leadership."
+       ],
+       [
+        "Managers",
+        "Ensure their teams understand and follow the policy."
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "7. Compliance & Enforcement",
+     "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+    },
+    {
+     "heading": "8. Exceptions",
+     "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+    },
+    {
+     "heading": "9. Review",
+     "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+    }
+   ]
+  },
+  {
+   "type": "iso_42001__iso_42001_ai_system_lifecycle_policy_template_1",
+   "label": "Ai System Lifecycle Policy",
+   "control_ref": null,
+   "sections": [
+    {
+     "heading": "1. Purpose",
+     "body": "This policy governs the AI system lifecycle, from objectives and design through development, verification, deployment, operation and retirement, consistent with the approach of ISO/IEC 42001."
+    },
+    {
+     "heading": "2. Scope",
+     "body": "All AI systems the organisation develops or significantly configures."
+    },
+    {
+     "heading": "3. Lifecycle Stages",
+     "body": "AI systems are managed through defined stages:\n- Objectives and requirements, including intended purpose and acceptance criteria.\n- Design and development, with responsible-AI considerations built in.\n- Verification and validation, including testing for performance and for risks such as bias.\n- Deployment and operation, with monitoring and human oversight.\n- Retirement and decommissioning."
+    },
+    {
+     "heading": "4. Documentation and Change",
+     "body": "Each AI system is documented, and changes are controlled and re-assessed for impact and risk."
+    },
+    {
+     "heading": "5. Disclaimer",
+     "body": "This template is an independently created resource to help you implement a management system aligned to the relevant ISO standard. It is not affiliated with, endorsed by, or certified by ISO or any standards body, does not reproduce the text of the standard, and is not a substitute for professional advice or certification by an accredited body. Obtain the official standard from ISO."
+    },
+    {
+     "heading": "6. Roles & Responsibilities",
+     "body": "",
+     "table": {
+      "columns": [
+       "Role",
+       "Responsibilities"
+      ],
+      "rows": [
+       [
+        "ML / engineering",
+        "Manages the AI lifecycle."
+       ],
+       [
+        "AI governance lead",
+        "Oversees it."
+       ],
+       [
+        "IT / Operations",
+        "Implements and maintains the technical controls described in this document."
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "7. Compliance & Enforcement",
+     "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+    },
+    {
+     "heading": "8. Exceptions",
+     "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+    },
+    {
+     "heading": "9. Review",
+     "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+    }
+   ]
+  },
+  {
+   "type": "iso_42001__iso_42001_ai_transparency_use_policy_template_2",
+   "label": "Ai Transparency Use Policy",
+   "control_ref": null,
+   "sections": [
+    {
+     "heading": "1. Purpose",
+     "body": "This policy covers providing information to interested parties about AI systems and governing their responsible use, consistent with the approach of ISO/IEC 42001."
+    },
+    {
+     "heading": "2. Scope",
+     "body": "AI systems that interact with or affect users, customers or other interested parties."
+    },
+    {
+     "heading": "3. Information to Interested Parties",
+     "body": "People who use or are affected by an AI system are given what they need to understand it:\n- Its purpose, and where appropriate that they are interacting with or affected by AI.\n- Its capabilities and limitations, in terms the audience can understand.\n- How to raise a question, concern or complaint about it.\n- [FILL IN: list your AI touchpoints and the information provided at each.]"
+    },
+    {
+     "heading": "4. Responsible Use",
+     "body": "Use is kept within intended bounds:\n- The intended use of each AI system is defined, and uses outside it are discouraged or prevented.\n- Feedback and concerns are captured and acted on."
+    },
+    {
+     "heading": "5. Disclaimer",
+     "body": "This template is an independently created resource to help you implement a management system aligned to the relevant ISO standard. It is not affiliated with, endorsed by, or certified by ISO or any standards body, does not reproduce the text of the standard, and is not a substitute for professional advice or certification by an accredited body. Obtain the official standard from ISO."
+    },
+    {
+     "heading": "6. Roles & Responsibilities",
+     "body": "",
+     "table": {
+      "columns": [
+       "Role",
+       "Responsibilities"
+      ],
+      "rows": [
+       [
+        "Product / comms",
+        "Provides information and governs use."
+       ],
+       [
+        "CISO / Security Lead",
+        "Owns the policy, approves exceptions, monitors compliance and reports to leadership."
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "7. Compliance & Enforcement",
+     "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+    },
+    {
+     "heading": "8. Exceptions",
+     "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+    },
+    {
+     "heading": "9. Review",
+     "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+    }
+   ]
+  },
+  {
+   "type": "iso_42001__iso_42001_aims_scope_statement_template_2",
+   "label": "Aims Scope Statement",
+   "control_ref": null,
+   "sections": [
+    {
+     "heading": "1. Purpose",
+     "body": "This document defines the scope of the organisation's AI management system (AIMS), the boundary of what is managed under it, consistent with the approach of ISO/IEC 42001."
+    },
+    {
+     "heading": "2. Scope",
+     "body": "The AI systems, processes, people and locations included in the AI management system."
+    },
+    {
+     "heading": "3. Context",
+     "body": "The organisation establishes the context for managing its AI systems:\n- The internal and external issues relevant to its AI objectives are considered.\n- The interested parties (regulators, customers, affected individuals, internal stakeholders) and their requirements are identified.\n- The legal, regulatory and ethical obligations that apply to its AI use are recorded.\n- [FILL IN: summarise your context, interested parties and obligations.]"
+    },
+    {
+     "heading": "4. Scope",
+     "body": "The AIMS scope is defined explicitly:\n- It covers the AI systems, activities and organisational units that are managed under the system.\n- The interfaces and dependencies at the boundary (including third-party AI components and services) are stated.\n- Any exclusions are stated with a justification.\n- [FILL IN: define the scope, the systems and units included, and any exclusions.]"
+    },
+    {
+     "heading": "5. Roles in the AI Lifecycle",
+     "body": "The roles the organisation plays, for example as a provider, deployer or user of AI systems, are stated, because they determine which obligations and controls apply across the AI lifecycle."
+    },
+    {
+     "heading": "6. Disclaimer",
+     "body": "This template is an independently created resource to help you implement a management system aligned to the relevant ISO standard. It is not affiliated with, endorsed by, or certified by ISO or any standards body, does not reproduce the text of the standard, and is not a substitute for professional advice or certification by an accredited body. Obtain the official standard from ISO."
+    },
+    {
+     "heading": "7. Roles & Responsibilities",
+     "body": "",
+     "table": {
+      "columns": [
+       "Role",
+       "Responsibilities"
+      ],
+      "rows": [
+       [
+        "AI governance lead",
+        "Owns the AIMS and its scope."
+       ],
+       [
+        "CISO / Security Lead",
+        "Owns the policy, approves exceptions, monitors compliance and reports to leadership."
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "8. Compliance & Enforcement",
+     "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+    },
+    {
+     "heading": "9. Exceptions",
+     "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+    },
+    {
+     "heading": "10. Review",
+     "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+    }
+   ]
+  },
+  {
+   "type": "iso_42001__iso_42001_data_for_ai_policy_template_2",
+   "label": "Data For Ai Policy",
+   "control_ref": null,
+   "sections": [
+    {
+     "heading": "1. Purpose",
+     "body": "This policy governs the data used to develop and operate AI systems, so it is appropriate, well-understood and responsibly handled, consistent with the approach of ISO/IEC 42001."
+    },
+    {
+     "heading": "2. Scope",
+     "body": "The data used to train, test and operate the organisation's AI systems."
+    },
+    {
+     "heading": "3. Data Quality and Provenance",
+     "body": "Data feeding AI systems is fit for purpose and understood:\n- Data is selected for relevance and quality for the intended use.\n- Its provenance (where it came from and how) and any limitations are documented.\n- [FILL IN: describe your data sources and quality checks.]"
+    },
+    {
+     "heading": "4. Responsible Use",
+     "body": "Data is handled lawfully and fairly:\n- Data is used lawfully and for legitimate purposes, with privacy and other obligations met.\n- Bias and representativeness are considered and addressed where they could cause harm."
+    },
+    {
+     "heading": "5. Management",
+     "body": "Data used by AI systems is documented, access-controlled and retained appropriately."
+    },
+    {
+     "heading": "6. Disclaimer",
+     "body": "This template is an independently created resource to help you implement a management system aligned to the relevant ISO standard. It is not affiliated with, endorsed by, or certified by ISO or any standards body, does not reproduce the text of the standard, and is not a substitute for professional advice or certification by an accredited body. Obtain the official standard from ISO."
+    },
+    {
+     "heading": "7. Roles & Responsibilities",
+     "body": "",
+     "table": {
+      "columns": [
+       "Role",
+       "Responsibilities"
+      ],
+      "rows": [
+       [
+        "Data / ML lead",
+        "Owns data for AI."
+       ],
+       [
+        "Privacy lead",
+        "Advises on personal data."
+       ],
+       [
+        "CISO / Security Lead",
+        "Owns the policy, approves exceptions, monitors compliance and reports to leadership."
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "8. Compliance & Enforcement",
+     "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+    },
+    {
+     "heading": "9. Exceptions",
+     "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+    },
+    {
+     "heading": "10. Review",
+     "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+    }
+   ]
+  }
+ ]
+}

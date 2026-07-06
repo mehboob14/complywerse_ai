@@ -18,6 +18,7 @@ from ....models import (
 from ....routers.auth_router import require_auth, get_user_tenants
 from ..schema import ensure_framework_template_tables
 from ..seed_data import REGISTER_TYPES, REGISTER_LABELS, REGISTER_SEEDS
+from .. import definitions as D
 
 
 def _ensure_schema(db: Session = Depends(get_db)) -> None:
@@ -82,9 +83,16 @@ def _tenant_id(user: GRCUser, db: Session) -> int:
 
 
 def _validate_type(register_type: str) -> None:
-    if register_type not in REGISTER_TYPES:
+    if register_type not in REGISTER_TYPES and register_type not in D.all_register_types():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
                             detail=f"Unknown register_type '{register_type}'")
+
+
+def _has_seed(register_type: str) -> bool:
+    if register_type in REGISTER_SEEDS:
+        return bool(REGISTER_SEEDS.get(register_type))
+    rd = D.register_def(register_type)
+    return bool(rd and rd.get("seed"))
 
 
 def _serialize(e: FrameworkRegisterEntry) -> Dict[str, Any]:
@@ -133,22 +141,32 @@ def _seed(db: Session, tid: int, journey_id: int, framework_id: Optional[int],
           register_type: str, user_id: Optional[int]) -> None:
     """Populate the register with the template's default rows (idempotent —
     only runs when the register has no rows for this journey)."""
-    seed = REGISTER_SEEDS.get(register_type) or []
-    for i, (reference, title) in enumerate(seed):
-        db.add(FrameworkRegisterEntry(
-            tenant_id=tid,
-            journey_id=journey_id,
-            uploaded_framework_id=framework_id,
-            register_type=register_type,
-            seq=i,
-            is_seed=True,
-            reference=reference,
-            title=title,
-            status="not_started" if register_type == "gap_analysis" else None,
-            created_by=user_id,
-        ))
-    if seed:
-        db.commit()
+    if register_type in REGISTER_SEEDS:
+        # ISO 27001 hand-tuned registers: (reference, title) tuples.
+        seed = REGISTER_SEEDS.get(register_type) or []
+        for i, (reference, title) in enumerate(seed):
+            db.add(FrameworkRegisterEntry(
+                tenant_id=tid, journey_id=journey_id, uploaded_framework_id=framework_id,
+                register_type=register_type, seq=i, is_seed=True,
+                reference=reference, title=title,
+                status="not_started" if register_type == "gap_analysis" else None,
+                created_by=user_id,
+            ))
+        if seed:
+            db.commit()
+    else:
+        # Generated framework registers: each seed row is a {data: {...}} dict.
+        rd = D.register_def(register_type)
+        rows = (rd or {}).get("seed", []) if rd else []
+        for i, row in enumerate(rows):
+            db.add(FrameworkRegisterEntry(
+                tenant_id=tid, journey_id=journey_id, uploaded_framework_id=framework_id,
+                register_type=register_type, seq=i, is_seed=True,
+                data=row.get("data", {}) or {},
+                created_by=user_id,
+            ))
+        if rows:
+            db.commit()
 
 
 def _summary(entries: List[FrameworkRegisterEntry], register_type: str) -> Dict[str, Any]:
@@ -230,7 +248,7 @@ def list_entries(
     _validate_type(register_type)
     tid = _tenant_id(user, db)
     existing = _query(db, tid, journey_id, register_type).all()
-    if not existing and REGISTER_SEEDS.get(register_type):
+    if not existing and _has_seed(register_type):
         _seed(db, tid, journey_id, framework_id, register_type, user.id)
         existing = _query(db, tid, journey_id, register_type).all()
     return {
@@ -385,7 +403,7 @@ def reset_register(
         FrameworkRegisterEntry.register_type == register_type,
     ).delete(synchronize_session=False)
     db.commit()
-    if REGISTER_SEEDS.get(register_type):
+    if _has_seed(register_type):
         _seed(db, tid, journey_id, framework_id, register_type, user.id)
     entries = _query(db, tid, journey_id, register_type).all()
     return {

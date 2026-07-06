@@ -1,0 +1,916 @@
+{
+ "framework_key": "pci_dss",
+ "display_name": "PCI DSS",
+ "name_patterns": [
+  "pci"
+ ],
+ "registers": [
+  {
+   "type": "pci_dss__pci_dss_cardholder_data_inventory_template_1",
+   "label": "Cardholder Data Inventory",
+   "description": "PCI DSS — Cardholder Data Inventory (from the template).",
+   "columns": [
+    {
+     "key": "2",
+     "label": "2",
+     "type": "text"
+    },
+    {
+     "key": "support_tooling",
+     "label": "Support tooling",
+     "type": "text"
+    },
+    {
+     "key": "should_hold_none",
+     "label": "Should hold none",
+     "type": "text"
+    },
+    {
+     "key": "no",
+     "label": "No",
+     "type": "text"
+    },
+    {
+     "key": "n_a",
+     "label": "n/a",
+     "type": "text"
+    },
+    {
+     "key": "n_a_2",
+     "label": "n/a",
+     "type": "text"
+    },
+    {
+     "key": "support",
+     "label": "Support",
+     "type": "text"
+    }
+   ],
+   "seed": [],
+   "formSections": [
+    {
+     "title": "Item",
+     "keys": [
+      "2",
+      "support_tooling"
+     ]
+    },
+    {
+     "title": "Assessment",
+     "keys": [
+      "should_hold_none",
+      "no",
+      "n_a",
+      "n_a_2",
+      "support"
+     ]
+    }
+   ]
+  },
+  {
+   "type": "pci_dss__pci_dss_readiness_assessment_template_1",
+   "label": "Readiness Assessment",
+   "description": "PCI DSS — Readiness Assessment (from the template).",
+   "columns": [
+    {
+     "key": "goal",
+     "label": "Goal",
+     "type": "text"
+    },
+    {
+     "key": "req",
+     "label": "Req",
+     "type": "text"
+    },
+    {
+     "key": "outcome_to_verify",
+     "label": "Outcome to verify",
+     "type": "textarea"
+    },
+    {
+     "key": "status",
+     "label": "Status",
+     "type": "text"
+    },
+    {
+     "key": "evidence_notes",
+     "label": "Evidence / notes",
+     "type": "text",
+     "picker": "evidence"
+    },
+    {
+     "key": "owner",
+     "label": "Owner",
+     "type": "text",
+     "picker": "users"
+    }
+   ],
+   "seed": [
+    {
+     "data": {
+      "goal": "Build & maintain a secure network",
+      "req": "1-2",
+      "outcome_to_verify": "Network security controls are in place and secure configurations replace vendor defaults",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "goal": "Protect account data",
+      "req": "3-4",
+      "outcome_to_verify": "Stored account data is protected and cardholder data is encrypted in transit over open networks",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "goal": "Vulnerability management",
+      "req": "5-6",
+      "outcome_to_verify": "Systems are protected from malware and secure systems and software are developed and maintained",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "goal": "Access control",
+      "req": "7-8-9",
+      "outcome_to_verify": "Access to system components and cardholder data is restricted by need to know, identified, authenticated and physically restricted",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "goal": "Monitor & test networks",
+      "req": "10-11",
+      "outcome_to_verify": "Access is logged and monitored, and security of systems and networks is tested regularly",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "goal": "Information security policy",
+      "req": "12",
+      "outcome_to_verify": "An information security policy and programme support the requirements",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    }
+   ],
+   "formSections": [
+    {
+     "title": "Item",
+     "keys": [
+      "goal",
+      "req"
+     ]
+    },
+    {
+     "title": "Assessment",
+     "keys": [
+      "outcome_to_verify",
+      "status",
+      "evidence_notes"
+     ]
+    },
+    {
+     "title": "Ownership & dates",
+     "keys": [
+      "owner"
+     ]
+    }
+   ]
+  },
+  {
+   "type": "pci_dss__pci_dss_saq_a_checklist_template",
+   "label": "Saq A Checklist",
+   "description": "PCI DSS — Saq A Checklist (from the template).",
+   "columns": [
+    {
+     "key": "req",
+     "label": "Req #",
+     "type": "text"
+    },
+    {
+     "key": "pci_dss_v4_0_requirement_saq_a_focus",
+     "label": "PCI DSS v4.0 requirement (SAQ A focus)",
+     "type": "textarea"
+    },
+    {
+     "key": "status",
+     "label": "Status",
+     "type": "text"
+    },
+    {
+     "key": "owner",
+     "label": "Owner",
+     "type": "text",
+     "picker": "users"
+    },
+    {
+     "key": "evidence_notes",
+     "label": "Evidence / notes",
+     "type": "text",
+     "picker": "evidence"
+    }
+   ],
+   "seed": [
+    {
+     "data": {
+      "req": "2.2",
+      "pci_dss_v4_0_requirement_saq_a_focus": "Vendor default passwords/accounts changed or disabled",
+      "status": "",
+      "owner": "",
+      "evidence_notes": ""
+     }
+    },
+    {
+     "data": {
+      "req": "3.3",
+      "pci_dss_v4_0_requirement_saq_a_focus": "Sensitive authentication data not stored after authorisation",
+      "status": "",
+      "owner": "",
+      "evidence_notes": ""
+     }
+    },
+    {
+     "data": {
+      "req": "4.2",
+      "pci_dss_v4_0_requirement_saq_a_focus": "Strong cryptography protects PAN during transmission",
+      "status": "",
+      "owner": "",
+      "evidence_notes": ""
+     }
+    },
+    {
+     "data": {
+      "req": "6.3",
+      "pci_dss_v4_0_requirement_saq_a_focus": "Security vulnerabilities identified and addressed",
+      "status": "",
+      "owner": "",
+      "evidence_notes": ""
+     }
+    },
+    {
+     "data": {
+      "req": "6.4",
+      "pci_dss_v4_0_requirement_saq_a_focus": "Public-facing web applications protected",
+      "status": "",
+      "owner": "",
+      "evidence_notes": ""
+     }
+    },
+    {
+     "data": {
+      "req": "8.2",
+      "pci_dss_v4_0_requirement_saq_a_focus": "Unique user IDs and proper account lifecycle",
+      "status": "",
+      "owner": "",
+      "evidence_notes": ""
+     }
+    },
+    {
+     "data": {
+      "req": "8.3",
+      "pci_dss_v4_0_requirement_saq_a_focus": "Strong authentication for users and admins",
+      "status": "",
+      "owner": "",
+      "evidence_notes": ""
+     }
+    },
+    {
+     "data": {
+      "req": "8.4",
+      "pci_dss_v4_0_requirement_saq_a_focus": "MFA implemented for access to the CDE/admin",
+      "status": "",
+      "owner": "",
+      "evidence_notes": ""
+     }
+    },
+    {
+     "data": {
+      "req": "9.4",
+      "pci_dss_v4_0_requirement_saq_a_focus": "Media with cardholder data secured/destroyed (if any)",
+      "status": "",
+      "owner": "",
+      "evidence_notes": ""
+     }
+    },
+    {
+     "data": {
+      "req": "11.6",
+      "pci_dss_v4_0_requirement_saq_a_focus": "Unauthorised changes to payment pages detected (e-commerce)",
+      "status": "",
+      "owner": "",
+      "evidence_notes": ""
+     }
+    },
+    {
+     "data": {
+      "req": "12.1",
+      "pci_dss_v4_0_requirement_saq_a_focus": "Information security policy established & maintained",
+      "status": "",
+      "owner": "",
+      "evidence_notes": ""
+     }
+    },
+    {
+     "data": {
+      "req": "12.6",
+      "pci_dss_v4_0_requirement_saq_a_focus": "Security awareness program in place",
+      "status": "",
+      "owner": "",
+      "evidence_notes": ""
+     }
+    },
+    {
+     "data": {
+      "req": "12.8",
+      "pci_dss_v4_0_requirement_saq_a_focus": "Third-party service provider risk managed",
+      "status": "",
+      "owner": "",
+      "evidence_notes": ""
+     }
+    },
+    {
+     "data": {
+      "req": "12.10",
+      "pci_dss_v4_0_requirement_saq_a_focus": "Incident response plan in place and tested",
+      "status": "",
+      "owner": "",
+      "evidence_notes": ""
+     }
+    }
+   ],
+   "formSections": [
+    {
+     "title": "Item",
+     "keys": [
+      "req",
+      "pci_dss_v4_0_requirement_saq_a_focus"
+     ]
+    },
+    {
+     "title": "Assessment",
+     "keys": [
+      "status",
+      "evidence_notes"
+     ]
+    },
+    {
+     "title": "Ownership & dates",
+     "keys": [
+      "owner"
+     ]
+    }
+   ]
+  },
+  {
+   "type": "pci_dss__pci_dss_saq_selector_template_1",
+   "label": "Saq Selector",
+   "description": "PCI DSS — Saq Selector (from the template).",
+   "columns": [
+    {
+     "key": "saq_type",
+     "label": "SAQ type",
+     "type": "text"
+    },
+    {
+     "key": "who_it_is_for",
+     "label": "Who it is for",
+     "type": "textarea"
+    },
+    {
+     "key": "applies_to_you",
+     "label": "Applies to you?",
+     "type": "text"
+    }
+   ],
+   "seed": [
+    {
+     "data": {
+      "saq_type": "SAQ A",
+      "who_it_is_for": "Card-not-present, all cardholder data functions fully outsourced to PCI DSS compliant third parties",
+      "applies_to_you": ""
+     }
+    },
+    {
+     "data": {
+      "saq_type": "SAQ A-EP",
+      "who_it_is_for": "E-commerce merchants that outsource payment processing but whose website can affect the payment page",
+      "applies_to_you": ""
+     }
+    },
+    {
+     "data": {
+      "saq_type": "SAQ B",
+      "who_it_is_for": "Merchants using only imprint machines or standalone dial-out terminals (no electronic storage)",
+      "applies_to_you": ""
+     }
+    },
+    {
+     "data": {
+      "saq_type": "SAQ B-IP",
+      "who_it_is_for": "Merchants using standalone, approved IP-connected payment terminals (no electronic storage)",
+      "applies_to_you": ""
+     }
+    },
+    {
+     "data": {
+      "saq_type": "SAQ C-VT",
+      "who_it_is_for": "Merchants using a virtual terminal on one isolated computer, no electronic storage",
+      "applies_to_you": ""
+     }
+    },
+    {
+     "data": {
+      "saq_type": "SAQ C",
+      "who_it_is_for": "Merchants with payment application systems connected to the internet, no electronic storage",
+      "applies_to_you": ""
+     }
+    },
+    {
+     "data": {
+      "saq_type": "SAQ P2PE",
+      "who_it_is_for": "Merchants using a validated point-to-point encryption solution, no electronic storage",
+      "applies_to_you": ""
+     }
+    },
+    {
+     "data": {
+      "saq_type": "SAQ D (Merchant)",
+      "who_it_is_for": "All other merchants not meeting another SAQ",
+      "applies_to_you": ""
+     }
+    },
+    {
+     "data": {
+      "saq_type": "SAQ D (Service Provider)",
+      "who_it_is_for": "Service providers eligible to complete an SAQ",
+      "applies_to_you": ""
+     }
+    }
+   ],
+   "formSections": [
+    {
+     "title": "Item",
+     "keys": [
+      "saq_type",
+      "who_it_is_for"
+     ]
+    },
+    {
+     "title": "Assessment",
+     "keys": [
+      "applies_to_you"
+     ]
+    }
+   ]
+  }
+ ],
+ "documents": [
+  {
+   "type": "pci_dss__pci_dss_access_control_policy_template_2",
+   "label": "Access Control Policy",
+   "control_ref": null,
+   "sections": [
+    {
+     "heading": "1. Purpose",
+     "body": "This policy restricts access to system components and cardholder data by business need to know, supporting the PCI DSS access-control requirements."
+    },
+    {
+     "heading": "2. Scope",
+     "body": "All access to the cardholder data environment and cardholder data."
+    },
+    {
+     "heading": "3. Need to Know and Least Privilege",
+     "body": "Access to system components and cardholder data is restricted to what each role requires:\n- Access is granted on documented need-to-know and least privilege, through an approval process.\n- Privileges are assigned by role and default to deny-all unless explicitly granted.\n- Access rights are reviewed periodically and removed promptly on termination or role change."
+    },
+    {
+     "heading": "4. Authentication",
+     "body": "Users are uniquely identified and strongly authenticated:\n- Every user has a unique ID, and shared or generic accounts are avoided.\n- Strong authentication is enforced, and multi-factor authentication protects all access into the CDE, and all remote and administrative access.\n- Credentials are managed securely and vendor-default accounts and passwords are changed or disabled.\n- [FILL IN: state your MFA coverage and method.]"
+    },
+    {
+     "heading": "5. Disclaimer",
+     "body": "This template is an independently created resource to help you work toward PCI DSS compliance. It is not affiliated with or endorsed by the PCI Security Standards Council, does not reproduce the PCI DSS, and is not a substitute for a Qualified Security Assessor. Obtain the official PCI DSS from the PCI SSC."
+    },
+    {
+     "heading": "6. Roles & Responsibilities",
+     "body": "",
+     "table": {
+      "columns": [
+       "Role",
+       "Responsibilities"
+      ],
+      "rows": [
+       [
+        "IT / security",
+        "Manages access and authentication."
+       ],
+       [
+        "CISO / Security Lead",
+        "Owns the policy, approves exceptions, monitors compliance and reports to leadership."
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "7. Compliance & Enforcement",
+     "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+    },
+    {
+     "heading": "8. Exceptions",
+     "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+    },
+    {
+     "heading": "9. Review",
+     "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+    }
+   ]
+  },
+  {
+   "type": "pci_dss__pci_dss_encryption_key_management_policy_templat",
+   "label": "Encryption Key Management Policy",
+   "control_ref": null,
+   "sections": [
+    {
+     "heading": "1. Purpose",
+     "body": "This policy protects account data through encryption and key management, supporting the PCI DSS requirements to protect stored account data and encrypt transmission over open networks."
+    },
+    {
+     "heading": "2. Scope",
+     "body": "Account data at rest and in transit within and beyond the cardholder data environment."
+    },
+    {
+     "heading": "3. Protecting Stored Data",
+     "body": "Account data is minimised and protected wherever it is stored:\n- The primary account number (PAN) is rendered unreadable wherever it is stored, for example through strong cryptography.\n- Sensitive authentication data (such as the full track, CVV or PIN) is not retained after authorisation.\n- Storage of account data is kept to the minimum necessary, with a defined retention and disposal process.\n- [FILL IN: state how PAN is rendered unreadable and your account-data retention.]"
+    },
+    {
+     "heading": "4. Transmission and Key Management",
+     "body": "Account data is protected in transit and the keys that protect it are controlled:\n- PAN is encrypted with strong cryptography during transmission over open, public networks.\n- Cryptographic keys are generated, distributed, stored, rotated and retired through a protected, documented process.\n- Access to keys is restricted to the fewest custodians necessary and separated from the data they protect."
+    },
+    {
+     "heading": "5. Disclaimer",
+     "body": "This template is an independently created resource to help you work toward PCI DSS compliance. It is not affiliated with or endorsed by the PCI Security Standards Council, does not reproduce the PCI DSS, and is not a substitute for a Qualified Security Assessor. Obtain the official PCI DSS from the PCI SSC."
+    },
+    {
+     "heading": "6. Roles & Responsibilities",
+     "body": "",
+     "table": {
+      "columns": [
+       "Role",
+       "Responsibilities"
+      ],
+      "rows": [
+       [
+        "Security / engineering",
+        "Owns cryptography and key management."
+       ],
+       [
+        "CISO / Security Lead",
+        "Owns the policy, approves exceptions, monitors compliance and reports to leadership."
+       ],
+       [
+        "IT / Operations",
+        "Implements and maintains the technical controls described in this document."
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "7. Compliance & Enforcement",
+     "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+    },
+    {
+     "heading": "8. Exceptions",
+     "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+    },
+    {
+     "heading": "9. Review",
+     "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+    }
+   ]
+  },
+  {
+   "type": "pci_dss__pci_dss_incident_response_plan_template_2",
+   "label": "Incident Response Plan",
+   "control_ref": null,
+   "sections": [
+    {
+     "heading": "1. Purpose",
+     "body": "This incident response plan ensures the organisation can respond to a suspected or confirmed compromise of cardholder data, supporting the PCI DSS incident-response requirement."
+    },
+    {
+     "heading": "2. Scope",
+     "body": "Security incidents affecting the cardholder data environment or cardholder data."
+    },
+    {
+     "heading": "3. Response Process",
+     "body": "The plan covers the lifecycle of a suspected cardholder-data compromise:\n- Defined roles and severity levels so the response is coordinated.\n- Detection, containment, eradication and recovery steps.\n- A post-incident review, and testing of the plan at least annually."
+    },
+    {
+     "heading": "4. Notification",
+     "body": "The plan provides for timely notification of the parties a card-data compromise requires:\n- The relevant payment brands and the acquiring bank.\n- Regulators and affected individuals where required by law.\n- [FILL IN: list your acquirer, payment-brand and regulator contacts.]"
+    },
+    {
+     "heading": "5. Readiness and Triggers",
+     "body": "Designated personnel are available to respond on a 24/7 basis, and the plan is triggered by alerts from security monitoring such as intrusion-detection, change-detection and fraud-detection systems; it is reviewed and updated after each incident and at least annually."
+    },
+    {
+     "heading": "6. Disclaimer",
+     "body": "This template is an independently created resource to help you work toward PCI DSS compliance. It is not affiliated with or endorsed by the PCI Security Standards Council, does not reproduce the PCI DSS, and is not a substitute for a Qualified Security Assessor. Obtain the official PCI DSS from the PCI SSC."
+    },
+    {
+     "heading": "7. Roles & Responsibilities",
+     "body": "",
+     "table": {
+      "columns": [
+       "Role",
+       "Responsibilities"
+      ],
+      "rows": [
+       [
+        "Incident lead",
+        "Runs response."
+       ],
+       [
+        "CISO / Security Lead",
+        "Owns the policy, approves exceptions, monitors compliance and reports to leadership."
+       ],
+       [
+        "IT / Operations",
+        "Implements and maintains the technical controls described in this document."
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "8. Testing & Maintenance",
+     "body": "This plan is reviewed at least annually and after every activation or major change. Exercises (tabletop or full) are scheduled to validate the plan and results are recorded as improvement actions."
+    }
+   ]
+  },
+  {
+   "type": "pci_dss__pci_dss_information_security_policy_template_2",
+   "label": "Information Security Policy",
+   "control_ref": null,
+   "sections": [
+    {
+     "heading": "1. Purpose",
+     "body": "This policy establishes the information security programme that protects cardholder data, supporting the PCI DSS requirement for an overall information security policy."
+    },
+    {
+     "heading": "2. Scope",
+     "body": "The cardholder data environment (CDE) and the people and systems that support it."
+    },
+    {
+     "heading": "3. Security Programme",
+     "body": "The organisation maintains an overall information security policy and programme that protects account data:\n- The policy covers security roles, risk management, acceptable use of technology, and the protection of account data.\n- It is published, kept current, and reviewed at least once every 12 months and after significant change.\n- The cardholder data environment (CDE) is scoped and documented so the programme is applied to everything in it.\n- [FILL IN: reference your CDE scope and the cardholder data inventory.]"
+    },
+    {
+     "heading": "4. Responsibilities and Awareness",
+     "body": "Security responsibilities are formally assigned, and personnel understand their obligations:\n- A named owner is accountable for the PCI programme, with day-to-day responsibilities assigned to defined roles.\n- Personnel receive security awareness training and acknowledge the acceptable-use and security policies.\n- The programme is supported by the subordinate PCI policies (access, network, encryption, vulnerability, logging and incident response)."
+    },
+    {
+     "heading": "5. Disclaimer",
+     "body": "This template is an independently created resource to help you work toward PCI DSS compliance. It is not affiliated with or endorsed by the PCI Security Standards Council, does not reproduce the PCI DSS, and is not a substitute for a Qualified Security Assessor. Obtain the official PCI DSS from the PCI SSC."
+    },
+    {
+     "heading": "6. Roles & Responsibilities",
+     "body": "",
+     "table": {
+      "columns": [
+       "Role",
+       "Responsibilities"
+      ],
+      "rows": [
+       [
+        "Security lead",
+        "Owns the PCI programme."
+       ],
+       [
+        "CISO / Security Lead",
+        "Owns the policy, approves exceptions, monitors compliance and reports to leadership."
+       ],
+       [
+        "Managers",
+        "Ensure their teams understand and follow the policy."
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "7. Compliance & Enforcement",
+     "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+    },
+    {
+     "heading": "8. Exceptions",
+     "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+    },
+    {
+     "heading": "9. Review",
+     "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+    }
+   ]
+  },
+  {
+   "type": "pci_dss__pci_dss_logging_monitoring_policy_template_2",
+   "label": "Logging Monitoring Policy",
+   "control_ref": null,
+   "sections": [
+    {
+     "heading": "1. Purpose",
+     "body": "This policy ensures access to system components and cardholder data is logged and monitored, supporting the PCI DSS logging and monitoring requirements."
+    },
+    {
+     "heading": "2. Scope",
+     "body": "System components in the cardholder data environment and the access to them."
+    },
+    {
+     "heading": "3. Logging",
+     "body": "Activity in the cardholder data environment is recorded so it can be reconstructed:\n- Audit logs capture access to cardholder data, administrative actions, and key security events, with enough detail to attribute each event.\n- Clocks are synchronised to a consistent time source, and logs are protected from alteration and unauthorised access.\n- Logs are retained for at least 12 months, with at least the most recent three months immediately available for analysis.\n- [FILL IN: confirm your retention period and log sources.]"
+    },
+    {
+     "heading": "4. Monitoring and Testing",
+     "body": "Logs and the environment are actively watched:\n- Logs are reviewed, using automated mechanisms where required, and security events are alerted on and triaged.\n- Critical files are monitored for unauthorised change, and the network is monitored and tested for unexpected activity.\n- A failure of a critical security control is detected, alerted on and responded to promptly."
+    },
+    {
+     "heading": "5. Disclaimer",
+     "body": "This template is an independently created resource to help you work toward PCI DSS compliance. It is not affiliated with or endorsed by the PCI Security Standards Council, does not reproduce the PCI DSS, and is not a substitute for a Qualified Security Assessor. Obtain the official PCI DSS from the PCI SSC."
+    },
+    {
+     "heading": "6. Roles & Responsibilities",
+     "body": "",
+     "table": {
+      "columns": [
+       "Role",
+       "Responsibilities"
+      ],
+      "rows": [
+       [
+        "SecOps",
+        "Owns logging and monitoring."
+       ],
+       [
+        "CISO / Security Lead",
+        "Owns the policy, approves exceptions, monitors compliance and reports to leadership."
+       ],
+       [
+        "IT / Operations",
+        "Implements and maintains the technical controls described in this document."
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "7. Compliance & Enforcement",
+     "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+    },
+    {
+     "heading": "8. Exceptions",
+     "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+    },
+    {
+     "heading": "9. Review",
+     "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+    }
+   ]
+  },
+  {
+   "type": "pci_dss__pci_dss_network_security_policy_template_2",
+   "label": "Network Security Policy",
+   "control_ref": null,
+   "sections": [
+    {
+     "heading": "1. Purpose",
+     "body": "This policy ensures network security controls protect and segment the cardholder data environment, supporting the PCI DSS network-security requirements."
+    },
+    {
+     "heading": "2. Scope",
+     "body": "The network components that protect or connect to the cardholder data environment."
+    },
+    {
+     "heading": "3. Network Controls",
+     "body": "Network security controls protect the cardholder data environment:\n- Firewalls or equivalent controls restrict inbound and outbound traffic to and from the CDE to only what is necessary, denying all else.\n- Rulesets are documented with a business justification and reviewed at least every six months.\n- Connections to untrusted networks and any wireless access into the CDE are controlled and secured.\n- [FILL IN: reference your network diagram and rule-review process.]"
+    },
+    {
+     "heading": "4. Segmentation",
+     "body": "Segmentation is used to keep scope and risk down:\n- The CDE is segmented from other networks so that out-of-scope systems cannot reach it.\n- Where segmentation is relied on to reduce scope, it is validated periodically (and by penetration testing where required)."
+    },
+    {
+     "heading": "5. Disclaimer",
+     "body": "This template is an independently created resource to help you work toward PCI DSS compliance. It is not affiliated with or endorsed by the PCI Security Standards Council, does not reproduce the PCI DSS, and is not a substitute for a Qualified Security Assessor. Obtain the official PCI DSS from the PCI SSC."
+    },
+    {
+     "heading": "6. Roles & Responsibilities",
+     "body": "",
+     "table": {
+      "columns": [
+       "Role",
+       "Responsibilities"
+      ],
+      "rows": [
+       [
+        "Network / security",
+        "Owns network security and segmentation."
+       ],
+       [
+        "CISO / Security Lead",
+        "Owns the policy, approves exceptions, monitors compliance and reports to leadership."
+       ],
+       [
+        "IT / Operations",
+        "Implements and maintains the technical controls described in this document."
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "7. Compliance & Enforcement",
+     "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+    },
+    {
+     "heading": "8. Exceptions",
+     "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+    },
+    {
+     "heading": "9. Review",
+     "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+    }
+   ]
+  },
+  {
+   "type": "pci_dss__pci_dss_vulnerability_management_policy_template",
+   "label": "Vulnerability Management Policy",
+   "control_ref": null,
+   "sections": [
+    {
+     "heading": "1. Purpose",
+     "body": "This policy protects systems from malicious software and manages vulnerabilities, supporting the PCI DSS vulnerability-management requirements."
+    },
+    {
+     "heading": "2. Scope",
+     "body": "System components in and connected to the cardholder data environment."
+    },
+    {
+     "heading": "3. Malware and Patching",
+     "body": "System components are protected from malware and known vulnerabilities:\n- Anti-malware protection is deployed on susceptible systems, kept current, and actively running.\n- Security patches are applied promptly, with critical and high-risk patches prioritised within defined timeframes.\n- [FILL IN: name your anti-malware and patching tools and cadence.]"
+    },
+    {
+     "heading": "4. Scanning and Secure Development",
+     "body": "Vulnerabilities are found and fixed before they can be exploited:\n- Internal vulnerability scans, and external scans by an Approved Scanning Vendor (ASV), are performed at least quarterly and after significant change.\n- Findings are risk-ranked and remediated, and external scans are repeated until a passing result is achieved.\n- Bespoke and custom software is developed and maintained securely, addressing common vulnerabilities."
+    },
+    {
+     "heading": "5. Disclaimer",
+     "body": "This template is an independently created resource to help you work toward PCI DSS compliance. It is not affiliated with or endorsed by the PCI Security Standards Council, does not reproduce the PCI DSS, and is not a substitute for a Qualified Security Assessor. Obtain the official PCI DSS from the PCI SSC."
+    },
+    {
+     "heading": "6. Roles & Responsibilities",
+     "body": "",
+     "table": {
+      "columns": [
+       "Role",
+       "Responsibilities"
+      ],
+      "rows": [
+       [
+        "IT / security",
+        "Owns vulnerability management and scanning."
+       ],
+       [
+        "CISO / Security Lead",
+        "Owns the policy, approves exceptions, monitors compliance and reports to leadership."
+       ],
+       [
+        "IT / Operations",
+        "Implements and maintains the technical controls described in this document."
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "7. Compliance & Enforcement",
+     "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+    },
+    {
+     "heading": "8. Exceptions",
+     "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+    },
+    {
+     "heading": "9. Review",
+     "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+    }
+   ]
+  }
+ ]
+}

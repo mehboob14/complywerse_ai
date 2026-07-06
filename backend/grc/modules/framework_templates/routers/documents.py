@@ -16,6 +16,7 @@ from ....models import FrameworkDocument, GRCUser, get_db
 from ....routers.auth_router import require_auth, get_user_tenants
 from ..schema import ensure_framework_template_tables
 from ..seed_data import DOC_TYPES, DOCUMENT_TEMPLATES
+from .. import definitions as D
 
 
 def _ensure_schema(db: Session = Depends(get_db)) -> None:
@@ -52,9 +53,21 @@ def _tenant_id(user: GRCUser, db: Session) -> int:
 
 
 def _validate_type(doc_type: str) -> None:
-    if doc_type not in DOC_TYPES:
+    if doc_type not in DOC_TYPES and doc_type not in D.all_doc_types():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
                             detail=f"Unknown doc_type '{doc_type}'")
+
+
+def _doc_template(doc_type: str) -> dict:
+    """ISO 27001 hand-tuned template, or a generated framework's document def."""
+    tpl = DOCUMENT_TEMPLATES.get(doc_type)
+    if tpl:
+        return tpl
+    dd = D.document_def(doc_type)
+    if dd:
+        return {"title": dd.get("label") or doc_type, "control_ref": dd.get("control_ref"),
+                "sections": dd.get("sections", [])}
+    return {}
 
 
 def _serialize(d: FrameworkDocument) -> Dict[str, Any]:
@@ -95,7 +108,7 @@ def get_or_create_document(
         FrameworkDocument.doc_type == doc_type,
     ).first()
     if not d:
-        tpl = DOCUMENT_TEMPLATES.get(doc_type, {})
+        tpl = _doc_template(doc_type)
         d = FrameworkDocument(
             tenant_id=tid,
             journey_id=journey_id,
@@ -150,7 +163,7 @@ def reset_document(
     ).first()
     if not d:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
-    tpl = DOCUMENT_TEMPLATES.get(doc_type, {})
+    tpl = _doc_template(doc_type)
     d.sections = copy.deepcopy(tpl.get("sections") or [])
     db.commit()
     db.refresh(d)
