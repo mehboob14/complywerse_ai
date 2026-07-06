@@ -7,7 +7,7 @@ import {
   Plus, Trash2, RotateCcw, ShieldAlert, ExternalLink, Loader2, Pencil, Sparkles, Search, X,
 } from 'lucide-react';
 import { frameworkTemplatesApi } from '@/lib/api';
-import { AnimatedModal, RightSlidePanel } from '@/components/ui';
+import { AnimatedModal, RightSlidePanel, MultiSelectDropdown } from '@/components/ui';
 import { useToast } from '@/components/ui/ToastProvider';
 import {
   REGISTER_CONFIGS, TONE_CLASSES,
@@ -33,6 +33,31 @@ interface FrameworkRisk {
   category?: string | null;
   status?: string | null;
   register_type?: string | null;
+}
+
+/** Standard single-select dropdown used across the platform, wrapped for a form field. */
+function FormDropdown({ value, items, placeholder, onChange, searchable }: {
+  value: string;
+  items: Array<{ value: string; label: string; subLabel?: string }>;
+  placeholder?: string;
+  onChange: (v: string) => void;
+  searchable?: boolean;
+}) {
+  return (
+    <MultiSelectDropdown
+      title={placeholder || 'Select'}
+      items={items}
+      selectedValues={value ? [value] : []}
+      onApply={(vals) => onChange(vals[0] || '')}
+      multiSelect={false}
+      triggerVariant="input"
+      size="md"
+      showSelectionInTrigger
+      forceSearch={searchable ?? items.length > 8}
+      placeholder={placeholder}
+      className="w-full"
+    />
+  );
 }
 
 export default function FrameworkRegisterTab({ registerType, journeyId, frameworkId, frameworkName, tenantUsers, frameworkControls = [] }: Props) {
@@ -166,13 +191,17 @@ export default function FrameworkRegisterTab({ registerType, journeyId, framewor
     const set = (v: unknown) => setEditing((prev) => (prev ? { ...prev, draft: { ...prev.draft, [col.key]: v } } : prev));
     const cls = 'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500/30';
     if (col.picker === 'framework_risks') {
+      const items = frameworkRisks.map((r) => ({ value: String(r.id), label: `#${r.id} — ${r.title}` }));
       const selectedId = (editing?.draft.risk_register_id as number | null) ?? null;
       return (
         <div>
-          <select
-            value={selectedId ?? ''}
-            onChange={(e) => {
-              const rid = e.target.value ? Number(e.target.value) : null;
+          <FormDropdown
+            value={selectedId != null ? String(selectedId) : ''}
+            items={items}
+            placeholder="Select a risk from this framework…"
+            searchable
+            onChange={(v) => {
+              const rid = v ? Number(v) : null;
               const risk = frameworkRisks.find((r) => r.id === rid);
               setEditing((prev) => prev ? { ...prev, draft: {
                 ...prev.draft,
@@ -181,11 +210,7 @@ export default function FrameworkRegisterTab({ registerType, journeyId, framewor
                 title: risk ? (risk.title || prev.draft.title || '') : prev.draft.title,
               } } : prev);
             }}
-            className={cls}
-          >
-            <option value="">Select a risk from this framework…</option>
-            {frameworkRisks.map((r) => <option key={r.id} value={r.id}>#{r.id} — {r.title}</option>)}
-          </select>
+          />
           {frameworkRisks.length === 0 && (
             <p className="mt-1 text-[11px] text-slate-400">No framework risks yet. Move risks over from Gap Analysis or Internal Audit (or add them to the ERM register under this framework), then they’ll appear here.</p>
           )}
@@ -195,14 +220,11 @@ export default function FrameworkRegisterTab({ registerType, journeyId, framewor
     if (col.picker === 'framework_controls') {
       const opts = frameworkControls.map((c) => (c.title ? `${c.code} — ${c.title}` : c.code));
       const cur = (val as string) || '';
-      const has = opts.includes(cur);
+      const items = opts.map((o) => ({ value: o, label: o }));
+      if (cur && !opts.includes(cur)) items.unshift({ value: cur, label: cur });
       return (
         <div>
-          <select value={cur} onChange={(e) => set(e.target.value)} className={cls}>
-            <option value="">Select an Annex A control…</option>
-            {cur && !has && <option value={cur}>{cur}</option>}
-            {opts.map((o) => <option key={o} value={o}>{o}</option>)}
-          </select>
+          <FormDropdown value={cur} items={items} placeholder="Select a clause / control…" searchable onChange={(v) => set(v)} />
           {frameworkControls.length === 0 && (
             <p className="mt-1 text-[11px] text-slate-400">Controls load from this framework’s Requirements tab.</p>
           )}
@@ -210,31 +232,19 @@ export default function FrameworkRegisterTab({ registerType, journeyId, framewor
       );
     }
     if (col.picker === 'users') {
-      const opts = tenantUsers.map((u) => u.name);
+      const items = tenantUsers.map((u) => ({ value: u.name, label: u.name }));
       const cur = (val as string) || '';
-      const has = opts.includes(cur);
-      return (
-        <select value={cur} onChange={(e) => set(e.target.value)} className={cls}>
-          <option value="">Unassigned</option>
-          {cur && !has && <option value={cur}>{cur}</option>}
-          {opts.map((o) => <option key={o} value={o}>{o}</option>)}
-        </select>
-      );
+      if (cur && !items.some((i) => i.value === cur)) items.unshift({ value: cur, label: cur });
+      return <FormDropdown value={cur} items={items} placeholder="Unassigned" onChange={(v) => set(v)} />;
     }
     if (col.type === 'select') {
-      return (
-        <select value={(val as string) ?? ''} onChange={(e) => set(e.target.value)} className={cls}>
-          {col.options!.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
-      );
+      const items = col.options!.filter((o) => o.value !== '').map((o) => ({ value: o.value, label: o.label }));
+      return <FormDropdown value={(val as string) || ''} items={items} placeholder={col.label} onChange={(v) => set(v)} />;
     }
     if (col.type === 'owner') {
-      return (
-        <select value={(val as number | null) ?? ''} onChange={(e) => set(e.target.value ? Number(e.target.value) : null)} className={cls}>
-          <option value="">Unassigned</option>
-          {tenantUsers.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
-        </select>
-      );
+      const items = tenantUsers.map((u) => ({ value: String(u.id), label: u.name }));
+      const cur = val != null ? String(val) : '';
+      return <FormDropdown value={cur} items={items} placeholder="Unassigned" onChange={(v) => set(v ? Number(v) : null)} />;
     }
     if (col.type === 'date') {
       return <input type="date" value={val ? String(val).slice(0, 10) : ''} onChange={(e) => set(e.target.value || null)} className={cls} />;

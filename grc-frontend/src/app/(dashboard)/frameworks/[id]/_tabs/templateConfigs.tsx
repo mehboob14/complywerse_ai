@@ -147,7 +147,7 @@ export const REGISTER_CONFIGS: Record<string, RegisterConfig> = {
     description: 'Work through the ISO 27001 audit checklist. Record evidence reviewed and a result; log nonconformities and opportunities for improvement, and move any finding to the risk register.',
     moveToRisk: true,
     columns: [
-      { key: 'reference', label: 'Clause / control', type: 'text', minWidth: '120px' },
+      { key: 'reference', label: 'Clause / control', type: 'text', minWidth: '160px', picker: 'framework_controls' },
       { key: 'title', label: 'Audit question', type: 'textarea', grow: true },
       { key: 'evidence_reviewed', label: 'Evidence reviewed', type: 'textarea', grow: true },
       { key: 'result', label: 'Result', type: 'select', options: AUDIT_RESULT, minWidth: '132px' },

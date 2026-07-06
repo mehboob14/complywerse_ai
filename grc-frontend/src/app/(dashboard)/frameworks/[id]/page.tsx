@@ -4386,7 +4386,7 @@ export default function CertificationJourneyPage() {
       case 'gap-analysis':
         return <FrameworkRegisterTab registerType="gap_analysis" journeyId={journeyId} frameworkId={appFwId} frameworkName={(journey as any)?.framework_name || 'ISO 27001'} tenantUsers={templateTenantUsers} />;
       case 'internal-audit':
-        return <FrameworkRegisterTab registerType="internal_audit" journeyId={journeyId} frameworkId={appFwId} frameworkName={(journey as any)?.framework_name || 'ISO 27001'} tenantUsers={templateTenantUsers} />;
+        return <FrameworkRegisterTab registerType="internal_audit" journeyId={journeyId} frameworkId={appFwId} frameworkName={(journey as any)?.framework_name || 'ISO 27001'} tenantUsers={templateTenantUsers} frameworkControls={templateFrameworkControls} />;
       case 'risk-treatment':
         return <FrameworkRegisterTab registerType="risk_treatment" journeyId={journeyId} frameworkId={appFwId} frameworkName={(journey as any)?.framework_name || 'ISO 27001'} tenantUsers={templateTenantUsers} frameworkControls={templateFrameworkControls} />;
       case 'scope-statement':
