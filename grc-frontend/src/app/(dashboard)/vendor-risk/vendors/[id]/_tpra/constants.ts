@@ -183,15 +183,41 @@ export const DOMAIN_LABELS: Record<string, string> = {
 
 export const DOMAIN_KEYS = Object.keys(DOMAIN_LABELS);
 
+// ── Named RACI resolution ────────────────────────────────────────────────────
+// The RACI labels in STAGE_META are org *functions*, not people. This maps each
+// playbook label to a key in the assessment-level team roster (TeamRosterPanel's
+// TEAM_ROLES) so a stage's abstract R/A/C/I resolve to the actual assigned users.
+// Labels with no owning roster function (e.g. the external "Vendor") map to null
+// and render as unassigned. Keys are matched case-insensitively.
+export const RACI_LABEL_TO_ROSTER_KEY: Record<string, string | null> = {
+  'business owner': 'business_owner',
+  'risk owner': 'business_owner',
+  'tprm lead': 'tprm_lead',
+  'tprm': 'tprm_lead',
+  'tprm analyst': 'tprm_analyst',
+  'domain reviewers': 'security',
+  'security': 'security',
+  'privacy': 'privacy',
+  'legal': 'legal',
+  'procurement': 'procurement',
+  'risk committee / exec owner': 'exec_approver',
+  'risk committee': 'exec_approver',
+  'it': 'it',
+};
+
+export function rosterKeyForRaciLabel(label: string): string | null {
+  return RACI_LABEL_TO_ROSTER_KEY[label.trim().toLowerCase()] ?? null;
+}
+
 // ── Style helpers (match the existing vendor-risk soft-tone tier badges) ─────
 export function tierBadge(tier?: string | null): string {
   const styles: Record<string, string> = {
-    critical: 'bg-red-50 text-red-700 border-red-200',
+    critical: 'bg-rose-50 text-rose-700 border-rose-200',
     high: 'bg-orange-50 text-orange-700 border-orange-200',
     medium: 'bg-amber-50 text-amber-700 border-amber-200',
     low: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   };
-  return styles[(tier || '').toLowerCase()] || 'bg-gray-100 text-gray-600 border-gray-200';
+  return styles[(tier || '').toLowerCase()] || 'bg-slate-100 text-slate-600 border-slate-200';
 }
 
 export function severityBadge(sev?: string | null): string {
@@ -203,13 +229,13 @@ export function stageStatusStyle(status: StageStatus): { dot: string; text: stri
     case 'complete':
       return { dot: 'bg-emerald-500', text: 'text-emerald-700', ring: 'ring-emerald-200' };
     case 'in_progress':
-      return { dot: 'bg-blue-500', text: 'text-blue-700', ring: 'ring-blue-300' };
+      return { dot: 'bg-primary-500', text: 'text-primary-700', ring: 'ring-primary-300' };
     case 'blocked':
-      return { dot: 'bg-red-500', text: 'text-red-700', ring: 'ring-red-200' };
+      return { dot: 'bg-rose-500', text: 'text-rose-700', ring: 'ring-rose-200' };
     case 'skipped':
-      return { dot: 'bg-gray-400', text: 'text-gray-500', ring: 'ring-gray-200' };
+      return { dot: 'bg-slate-400', text: 'text-slate-500', ring: 'ring-slate-200' };
     default:
-      return { dot: 'bg-gray-300', text: 'text-gray-400', ring: 'ring-gray-200' };
+      return { dot: 'bg-slate-300', text: 'text-slate-400', ring: 'ring-slate-200' };
   }
 }
 

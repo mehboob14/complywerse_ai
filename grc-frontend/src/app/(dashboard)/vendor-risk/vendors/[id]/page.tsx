@@ -1,8 +1,8 @@
 ﻿'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { vendorRiskApi, tenantApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
@@ -104,45 +104,46 @@ interface UserOption {
 const titleCase = (s: string) =>
   (s ?? '').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
+// Sanctioned ramp: critical=rose, high=orange, medium=amber, low=emerald; neutral fallback slate.
 const getTierBadge = (tier: string) => {
   const styles: Record<string, string> = {
-    critical: 'bg-red-50 text-red-700 border border-red-200',
+    critical: 'bg-rose-50 text-rose-700 border border-rose-200',
     high: 'bg-orange-50 text-orange-700 border border-orange-200',
-    medium: 'bg-yellow-50 text-yellow-700 border border-yellow-200',
-    low: 'bg-green-50 text-green-700 border border-green-200',
+    medium: 'bg-amber-50 text-amber-700 border border-amber-200',
+    low: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
   };
-  return styles[tier?.toLowerCase()] || 'bg-gray-50 text-gray-700 border border-gray-200';
+  return styles[tier?.toLowerCase()] || 'bg-slate-50 text-slate-700 border border-slate-200';
 };
 
 const getStatusBadge = (status: string) => {
   const styles: Record<string, string> = {
-    active: 'bg-green-50 text-green-700 border border-green-200',
-    under_review: 'bg-blue-50 text-blue-700 border border-blue-200',
-    onboarding: 'bg-purple-50 text-purple-700 border border-purple-200',
-    offboarded: 'bg-gray-50 text-gray-700 border border-gray-200',
-    suspended: 'bg-red-50 text-red-700 border border-red-200',
-    completed: 'bg-green-50 text-green-700 border border-green-200',
-    approved: 'bg-green-50 text-green-700 border border-green-200',
-    reviewed: 'bg-indigo-50 text-indigo-700 border border-indigo-200',
-    submitted: 'bg-yellow-50 text-yellow-700 border border-yellow-200',
-    in_progress: 'bg-blue-50 text-blue-700 border border-blue-200',
-    draft: 'bg-gray-50 text-gray-700 border border-gray-200',
-    open: 'bg-red-50 text-red-700 border border-red-200',
+    active: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+    under_review: 'bg-primary-50 text-primary-700 border border-primary-200',
+    onboarding: 'bg-slate-50 text-slate-700 border border-slate-200',
+    offboarded: 'bg-slate-50 text-slate-700 border border-slate-200',
+    suspended: 'bg-rose-50 text-rose-700 border border-rose-200',
+    completed: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+    approved: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+    reviewed: 'bg-primary-50 text-primary-700 border border-primary-200',
+    submitted: 'bg-amber-50 text-amber-700 border border-amber-200',
+    in_progress: 'bg-primary-50 text-primary-700 border border-primary-200',
+    draft: 'bg-slate-50 text-slate-700 border border-slate-200',
+    open: 'bg-rose-50 text-rose-700 border border-rose-200',
     investigating: 'bg-orange-50 text-orange-700 border border-orange-200',
-    resolved: 'bg-green-50 text-green-700 border border-green-200',
-    closed: 'bg-gray-50 text-gray-700 border border-gray-200',
+    resolved: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+    closed: 'bg-slate-50 text-slate-700 border border-slate-200',
   };
-  return styles[status?.toLowerCase()] || 'bg-gray-50 text-gray-700 border border-gray-200';
+  return styles[status?.toLowerCase()] || 'bg-slate-50 text-slate-700 border border-slate-200';
 };
 
 const getSeverityBadge = (severity: string) => {
   const styles: Record<string, string> = {
-    critical: 'bg-red-50 text-red-700 border border-red-200',
+    critical: 'bg-rose-50 text-rose-700 border border-rose-200',
     high: 'bg-orange-50 text-orange-700 border border-orange-200',
-    medium: 'bg-yellow-50 text-yellow-700 border border-yellow-200',
-    low: 'bg-green-50 text-green-700 border border-green-200',
+    medium: 'bg-amber-50 text-amber-700 border border-amber-200',
+    low: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
   };
-  return styles[severity?.toLowerCase()] || 'bg-gray-50 text-gray-700 border border-gray-200';
+  return styles[severity?.toLowerCase()] || 'bg-slate-50 text-slate-700 border border-slate-200';
 };
 
 type TabType = 'lifecycle' | 'overview' | 'assessments' | 'sla' | 'incidents';
@@ -163,12 +164,29 @@ const ASSESSMENT_TYPES = [
 export default function VendorDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const vendorId = Number(params.id);
   const { hasPermission } = usePermissions();
   const canEdit = hasPermission('vendor_risk:vendors:edit');
   const canCreate = hasPermission('vendor_risk:vendors:create');
   const [activeTab, setActiveTab] = useState<TabType>('lifecycle');
+  const tabRefs = useRef<Partial<Record<TabType, HTMLButtonElement | null>>>({});
+
+  // Deep-link receiver — ?stage=<key>&finding=<id> lands on the lifecycle tab,
+  // selects the stage, and (if a finding id is present) opens it in FindingsPanel.
+  // Read once on mount so later in-app tab clicks aren't overridden.
+  const deepLinkStage = searchParams?.get('stage') || null;
+  const deepLinkFindingRaw = searchParams?.get('finding');
+  const deepLinkFinding = deepLinkFindingRaw && !Number.isNaN(Number(deepLinkFindingRaw)) ? Number(deepLinkFindingRaw) : null;
+  const deepLinkApplied = useRef(false);
+  useEffect(() => {
+    if (deepLinkApplied.current) return;
+    if (deepLinkStage || deepLinkFinding != null) {
+      setActiveTab('lifecycle');
+      deepLinkApplied.current = true;
+    }
+  }, [deepLinkStage, deepLinkFinding]);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showAssessmentModal, setShowAssessmentModal] = useState(false);
   const [showIncidentModal, setShowIncidentModal] = useState(false);
@@ -274,7 +292,7 @@ export default function VendorDetailPage() {
       <div className="flex flex-col items-center justify-center h-64 text-gray-500">
         <AlertCircle className="h-8 w-8 mb-2" />
         <p>Vendor not found</p>
-        <Link href="/vendor-risk/vendors" className="text-blue-600 hover:underline mt-2 text-sm">Back to list</Link>
+        <Link href="/vendor-risk/vendors" className="text-primary-600 hover:underline mt-2 text-sm">Back to list</Link>
       </div>
     );
   }
@@ -360,37 +378,69 @@ export default function VendorDetailPage() {
 
       {/* Tabs */}
       <div className="border-b border-gray-200">
-        <nav className="flex gap-6">
-          {tabs.map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className={`pb-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
-                activeTab === tab.key
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              {tab.label}
-              {tab.count != null && tab.count > 0 && (
-                <span className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-full">{tab.count}</span>
-              )}
-            </button>
-          ))}
+        <nav
+          role="tablist"
+          aria-label="Vendor detail sections"
+          className="flex gap-6"
+          onKeyDown={(e) => {
+            const idx = tabs.findIndex((t) => t.key === activeTab);
+            if (idx < 0) return;
+            let next = idx;
+            if (e.key === 'ArrowRight') next = (idx + 1) % tabs.length;
+            else if (e.key === 'ArrowLeft') next = (idx - 1 + tabs.length) % tabs.length;
+            else if (e.key === 'Home') next = 0;
+            else if (e.key === 'End') next = tabs.length - 1;
+            else return;
+            e.preventDefault();
+            const nextKey = tabs[next].key;
+            setActiveTab(nextKey);
+            tabRefs.current[nextKey]?.focus();
+          }}
+        >
+          {tabs.map((tab) => {
+            const selected = activeTab === tab.key;
+            return (
+              <button
+                key={tab.key}
+                id={`vendor-tab-${tab.key}`}
+                ref={(el) => { tabRefs.current[tab.key] = el; }}
+                role="tab"
+                type="button"
+                aria-selected={selected}
+                aria-controls={`vendor-tabpanel-${tab.key}`}
+                tabIndex={selected ? 0 : -1}
+                onClick={() => setActiveTab(tab.key)}
+                className={`pb-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-1 rounded-t ${
+                  selected
+                    ? 'border-primary-600 text-primary-700 font-semibold'
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {tab.label}
+                {tab.count != null && tab.count > 0 && (
+                  <span className="text-xs bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-full">{tab.count}</span>
+                )}
+              </button>
+            );
+          })}
         </nav>
       </div>
 
       {/* Lifecycle Tab — productionized 11-stage TPRA lifecycle */}
       {activeTab === 'lifecycle' && (
-        <TpraLifecycle
-          vendorId={vendorId}
-          onChanged={() => queryClient.invalidateQueries({ queryKey: ['vendor', vendorId] })}
-        />
+        <div role="tabpanel" id="vendor-tabpanel-lifecycle" aria-labelledby="vendor-tab-lifecycle" tabIndex={0} className="focus:outline-none">
+          <TpraLifecycle
+            vendorId={vendorId}
+            initialStage={deepLinkStage}
+            initialFindingId={deepLinkFinding}
+            onChanged={() => queryClient.invalidateQueries({ queryKey: ['vendor', vendorId] })}
+          />
+        </div>
       )}
 
       {/* Overview Tab */}
       {activeTab === 'overview' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+        <div role="tabpanel" id="vendor-tabpanel-overview" aria-labelledby="vendor-tab-overview" tabIndex={0} className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 focus:outline-none">
           <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4 space-y-4">
             <h3 className="text-sm font-semibold text-slate-900">Contact Information</h3>
             {[
@@ -435,7 +485,7 @@ export default function VendorDetailPage() {
               <h3 className="text-sm font-semibold text-slate-900 mb-2">Services Provided</h3>
               <div className="flex flex-wrap gap-2">
                 {(Array.isArray(vendor.services_provided) ? vendor.services_provided : [vendor.services_provided]).map((s, i) => (
-                  <span key={i} className="inline-flex px-2.5 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-medium">
+                  <span key={i} className="inline-flex px-2.5 py-1 bg-primary-50 text-primary-700 rounded-full text-xs font-medium">
                     {String(s)}
                   </span>
                 ))}
@@ -453,7 +503,7 @@ export default function VendorDetailPage() {
 
       {/* Assessments Tab */}
       {activeTab === 'assessments' && (
-        <div className="space-y-4">
+        <div role="tabpanel" id="vendor-tabpanel-assessments" aria-labelledby="vendor-tab-assessments" tabIndex={0} className="space-y-4 focus:outline-none">
           <div className="flex justify-end">
             {canCreate && (
               <button
@@ -513,7 +563,7 @@ export default function VendorDetailPage() {
                             e.stopPropagation();
                             router.push(`/vendor-risk/assessments/${a.id}?tab=questionnaire`);
                           }}
-                          className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100"
+                          className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium text-primary-700 bg-primary-50 border border-primary-200 hover:bg-primary-100"
                         >
                           View Linked Questions
                         </button>
@@ -529,7 +579,7 @@ export default function VendorDetailPage() {
 
       {/* SLA Tab */}
       {activeTab === 'sla' && (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden p-3 sm:p-4">
+        <div role="tabpanel" id="vendor-tabpanel-sla" aria-labelledby="vendor-tab-sla" tabIndex={0} className="bg-white rounded-xl border border-gray-200 overflow-hidden p-3 sm:p-4 focus:outline-none">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
@@ -567,7 +617,7 @@ export default function VendorDetailPage() {
 
       {/* Incidents Tab */}
       {activeTab === 'incidents' && (
-        <div className="space-y-4">
+        <div role="tabpanel" id="vendor-tabpanel-incidents" aria-labelledby="vendor-tab-incidents" tabIndex={0} className="space-y-4 focus:outline-none">
           <div className="flex justify-end">
             {canCreate && (
               <button

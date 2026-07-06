@@ -44,7 +44,14 @@ interface AuditEntry {
   assessment_id: number | null; created_at: string;
 }
 
-export default function TpraLifecycle({ vendorId, onChanged }: { vendorId: number; onChanged?: () => void }) {
+export default function TpraLifecycle({
+  vendorId, onChanged, initialStage, initialFindingId,
+}: {
+  vendorId: number;
+  onChanged?: () => void;
+  initialStage?: string | null;
+  initialFindingId?: number | null;
+}) {
   const qc = useQueryClient();
   const { toast } = useToast();
   const { hasPermission } = usePermissions();
@@ -59,6 +66,7 @@ export default function TpraLifecycle({ vendorId, onChanged }: { vendorId: numbe
   const [selected, setSelected] = useState<string | null>(null);
   const [sendBackOpen, setSendBackOpen] = useState(false);
   const [skipOpen, setSkipOpen] = useState(false);
+  const [reassessOpen, setReassessOpen] = useState(false);
   const [activityOpen, setActivityOpen] = useState(false);
 
   // Per-vendor audit timeline (TPRM-010) — loaded on demand.
@@ -73,10 +81,13 @@ export default function TpraLifecycle({ vendorId, onChanged }: { vendorId: numbe
     queryFn: async () => (await tpraApi.getLifecycle(vendorId)).data as LifecycleResponse,
   });
 
-  // Default the selected stage to the current one once loaded.
+  // Default the selected stage once loaded — honour a valid deep-link stage first,
+  // otherwise fall back to the current stage.
   useEffect(() => {
-    if (data?.current && selected === null) setSelected(data.current);
-  }, [data?.current, selected]);
+    if (selected !== null) return;
+    if (initialStage && STAGE_META[initialStage]) { setSelected(initialStage); return; }
+    if (data?.current) setSelected(data.current);
+  }, [data?.current, selected, initialStage]);
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ['tpra-lifecycle', vendorId] });
@@ -134,7 +145,7 @@ export default function TpraLifecycle({ vendorId, onChanged }: { vendorId: numbe
 
   const reassessMut = useMutation({
     mutationFn: (reason: string) => tpraApi.reassess(vendorId, { reason }),
-    onSuccess: () => { refresh(); toast({ type: 'success', title: 'Reassessment opened' }); },
+    onSuccess: () => { refresh(); setReassessOpen(false); toast({ type: 'success', title: 'Reassessment opened' }); },
     onError: (e) => toast({ type: 'error', title: 'Failed', message: errMsg(e, 'Try again.') }),
   });
 
@@ -221,9 +232,9 @@ export default function TpraLifecycle({ vendorId, onChanged }: { vendorId: numbe
         </div>
         {canReassess && (
           <button
-            onClick={() => { const reason = window.prompt('Reason for reassessment?'); if (reason) reassessMut.mutate(reason); }}
+            onClick={() => setReassessOpen(true)}
             className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50">
-            <RefreshCw className="h-3.5 w-3.5" /> New reassessment
+            <RefreshCw className="h-3.5 w-3.5" strokeWidth={1.75} /> New reassessment
           </button>
         )}
         <button onClick={() => setActivityOpen(true)}
@@ -269,7 +280,8 @@ export default function TpraLifecycle({ vendorId, onChanged }: { vendorId: numbe
           <StageBody stageKey={selectedKey} vendorId={vendorId} assessmentId={assessment.id}
             assessment={assessment} canRunEngines={canRunEngines} onChanged={refresh}
             onRunTiering={() => tieringMut.mutate()} tieringBusy={tieringMut.isPending}
-            onRunScoring={() => scoringMut.mutate()} scoringBusy={scoringMut.isPending} />
+            onRunScoring={() => scoringMut.mutate()} scoringBusy={scoringMut.isPending}
+            initialFindingId={initialFindingId} />
         </StageWorkspace>
       )}
 
@@ -286,6 +298,13 @@ export default function TpraLifecycle({ vendorId, onChanged }: { vendorId: numbe
         cta="Skip stage" busy={skipMut.isPending}
         note="Allowed for this tier. The skip is recorded with your name and reason."
         onSubmit={(reason) => skipMut.mutate({ stage: selectedKey, reason })} />
+
+      {/* New reassessment modal — replaces window.prompt; enforces a non-empty reason. */}
+      <ReasonModal open={reassessOpen} onClose={() => setReassessOpen(false)}
+        title="New reassessment"
+        cta="Open reassessment" busy={reassessMut.isPending}
+        note="Opens a fresh assessment version for this vendor. The reason is recorded on the audit trail."
+        onSubmit={(reason) => reassessMut.mutate(reason)} />
 
       {/* Per-vendor activity timeline (TPRM-010) */}
       <RightSlidePanel isOpen={activityOpen} onClose={() => setActivityOpen(false)} title="Activity" width="w-full max-w-lg">
@@ -348,11 +367,12 @@ function StageChip({ stage, active, isCurrent, onClick }: { stage: StageInstance
 }
 
 function StageBody({
-  stageKey, vendorId, assessmentId, assessment, canRunEngines, onChanged, onRunTiering, tieringBusy, onRunScoring, scoringBusy,
+  stageKey, vendorId, assessmentId, assessment, canRunEngines, onChanged, onRunTiering, tieringBusy, onRunScoring, scoringBusy, initialFindingId,
 }: {
   stageKey: string; vendorId: number; assessmentId: number;
   assessment: LifecycleResponse['assessment']; canRunEngines: boolean; onChanged?: () => void;
   onRunTiering: () => void; tieringBusy: boolean; onRunScoring: () => void; scoringBusy: boolean;
+  initialFindingId?: number | null;
 }) {
   switch (stageKey) {
     case 'intake':
@@ -401,7 +421,7 @@ function StageBody({
     case 'questionnaire':
       return <QuestionnaireReviewPanel vendorId={vendorId} assessmentId={assessmentId} />;
     case 'findings':
-      return <FindingsPanel assessmentId={assessmentId} />;
+      return <FindingsPanel assessmentId={assessmentId} initialFindingId={initialFindingId} />;
     case 'contracting':
       return <ContractsPanel vendorId={vendorId} assessmentId={assessmentId} />;
     case 'approval':

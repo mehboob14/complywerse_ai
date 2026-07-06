@@ -5,7 +5,7 @@
 // remediation tasks + risk-acceptance records. RBAC-gated; optimistic concurrency
 // via row_version; toasts on success/error.
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus, Trash2, RotateCcw, ChevronDown, ChevronRight, ShieldCheck, Wrench, AlertOctagon, Loader2,
@@ -31,7 +31,7 @@ function errMsg(e: unknown, fallback: string): string {
   return anyE?.response?.data?.detail || fallback;
 }
 
-export default function FindingsPanel({ assessmentId }: { assessmentId: number }) {
+export default function FindingsPanel({ assessmentId, initialFindingId }: { assessmentId: number; initialFindingId?: number | null }) {
   const qc = useQueryClient();
   const { toast } = useToast();
   const { hasPermission } = usePermissions();
@@ -44,7 +44,9 @@ export default function FindingsPanel({ assessmentId }: { assessmentId: number }
   const [sevFilter, setSevFilter] = useState('');
   const [showRemoved, setShowRemoved] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
-  const [expanded, setExpanded] = useState<number | null>(null);
+  const [expanded, setExpanded] = useState<number | null>(initialFindingId ?? null);
+  // Open + scroll to a deep-linked finding once it appears in the loaded list.
+  const deepLinkDone = useRef(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ['tpra-findings', assessmentId, statusFilter, sevFilter, showRemoved],
@@ -81,6 +83,18 @@ export default function FindingsPanel({ assessmentId }: { assessmentId: number }
   });
 
   const findings = data?.items || [];
+
+  useEffect(() => {
+    if (deepLinkDone.current || initialFindingId == null) return;
+    if (findings.some((f) => f.id === initialFindingId)) {
+      setExpanded(initialFindingId);
+      deepLinkDone.current = true;
+      // Defer to after the card renders, then bring it into view.
+      requestAnimationFrame(() => {
+        document.getElementById(`tpra-finding-${initialFindingId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    }
+  }, [findings, initialFindingId]);
 
   return (
     <div className="space-y-3">
@@ -201,7 +215,7 @@ function FindingCard({
   const isRemoved = !!finding.deleted_at;
 
   return (
-    <div className={`rounded-xl border bg-white ${isRemoved ? 'border-dashed border-gray-300 opacity-60' : 'border-gray-200'}`}>
+    <div id={`tpra-finding-${finding.id}`} className={`scroll-mt-4 rounded-xl border bg-white ${isRemoved ? 'border-dashed border-gray-300 opacity-60' : 'border-gray-200'}`}>
       <div className="flex items-start gap-3 p-3">
         <button onClick={onToggle} disabled={isRemoved} aria-label={expanded ? 'Collapse' : 'Expand'}
           className="mt-0.5 text-gray-400 hover:text-gray-600 disabled:opacity-40">
@@ -223,15 +237,15 @@ function FindingCard({
             <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">{finding.status.replace('_', ' ')}</span>
             {finding.linked_risk_id && (
               <Link href="/erm/risks/list"
-                className="inline-flex items-center gap-1 rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-700 hover:bg-indigo-100">
-                <ArrowUpRight className="h-3 w-3" /> In Risk Register
+                className="inline-flex items-center gap-1 rounded-full border border-primary-200 bg-primary-50 px-2 py-0.5 text-[11px] font-medium text-primary-700 hover:bg-primary-100">
+                <ArrowUpRight className="h-3 w-3" strokeWidth={1.75} /> In Risk Register
               </Link>
             )}
             {finding.linked_issue_id && (
               <Link href={`/issues/${finding.linked_issue_id}`}
                 title="Tracked as a shared Issue — unified owner / SLA / workflow"
-                className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700 hover:bg-blue-100">
-                <ArrowUpRight className="h-3 w-3" /> Issue #{finding.linked_issue_id}
+                className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-700 hover:bg-slate-100">
+                <ArrowUpRight className="h-3 w-3" strokeWidth={1.75} /> Issue #{finding.linked_issue_id}
               </Link>
             )}
           </div>
