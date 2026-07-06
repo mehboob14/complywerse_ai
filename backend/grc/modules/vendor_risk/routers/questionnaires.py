@@ -319,8 +319,24 @@ def send_questionnaire(
     db.commit()
     db.refresh(qr)
 
+    # Best-effort email invite (Wave 4) — 'Generate link' never depends on it; the
+    # analyst always has the copyable link, and this no-ops gracefully if SMTP is unset.
+    if qr.respondent_email:
+        try:
+            import os as _os
+            from ....tasks.tprm import send_questionnaire_invite
+            from ....models import Tenant as _Tenant
+            _t = db.query(_Tenant).filter(_Tenant.id == vendor.tenant_id).first()
+            if _t and _t.slug:
+                send_questionnaire_invite.delay(
+                    tenant_slug=_t.slug, response_id=qr.id,
+                    base_url=_os.environ.get("FRONTEND_URL", ""),
+                )
+        except Exception:
+            pass
+
     return {
-        "message": "Questionnaire sent successfully",
+        "message": "Vendor questionnaire link generated",
         "token": token,
         "expires_at": expires_at.isoformat(),
         "questionnaire_response": serialize_questionnaire_response(qr),

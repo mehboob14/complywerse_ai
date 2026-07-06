@@ -88,8 +88,8 @@ export default function MonitoringFeedPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-lg font-semibold text-slate-900">Continuous Monitoring</h1>
-        <p className="text-sm text-gray-500">Outside-in signals keep vendor ratings fresh between formal reviews.</p>
+        <h1 className="text-lg font-semibold text-slate-900">Monitoring Signals</h1>
+        <p className="text-sm text-slate-500">Manually-logged signals for now — connect a ratings feed (BitSight / SecurityScorecard / UpGuard) to refresh automatically.</p>
       </div>
 
       <div className="flex flex-wrap items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-2.5">
