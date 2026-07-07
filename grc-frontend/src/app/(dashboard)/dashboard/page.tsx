@@ -48,9 +48,11 @@ import {
   ClipboardList, ListTodo, AlertCircle, FileCheck as FileCheck2, BookOpen,
   Clock as ClockIcon, Folder, RefreshCw, CheckCircle as CheckCircleIcon,
   Gauge, Flame, Building2,
+  Inbox, ArrowRight,
   type LucideIcon,
 } from 'lucide-react';
 import Link from 'next/link';
+import { usePermissions } from '@/hooks/usePermissions';
 import MainModuleCards from '@/components/dashboard/MainModuleCards';
 import CyberKpiPanel from '@/components/dashboard/CyberKpiPanel';
 
@@ -2472,6 +2474,8 @@ function buildWidgetsForTab(tab: MainTab): WorkspaceWidgetConfig[] {
 export default function MainDashboard() {
   const [activeTab, setActiveTab] = useState<MainTab>('executive');
   const activeWidgets = useMemo(() => buildWidgetsForTab(activeTab), [activeTab]);
+  const { hasAnyPermission, isAdmin } = usePermissions();
+  const canSeeMyWork = isAdmin || hasAnyPermission(['compliance:frameworks:*', 'controls:control_library:*', 'evidence:evidence_library:*']);
 
   // Hidden for now: the legacy "Executive Overview" tab bar + draggable widget
   // workspace. The new aggregated dashboard (MainModuleCards + CyberKpiPanel)
@@ -2482,6 +2486,18 @@ export default function MainDashboard() {
     <div className="-m-4 flex flex-col bg-[var(--color-surface)] lg:-m-5">
       {/* Aggregated module scorecards — each ring-card links to its module overview. */}
       <div className="px-3 pt-4 sm:px-6">
+        {canSeeMyWork && (
+          <Link href="/my-work" className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-primary-200 bg-primary-50 px-4 py-3 transition-colors hover:bg-primary-100">
+            <div className="flex items-center gap-3">
+              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-500 text-[#0a0a0a]"><Inbox className="h-5 w-5" strokeWidth={1.75} /></span>
+              <div>
+                <p className="text-sm font-semibold text-slate-900">My Work</p>
+                <p className="text-xs text-slate-500">Your assigned requirements across every framework, in one queue</p>
+              </div>
+            </div>
+            <span className="inline-flex items-center gap-1 text-sm font-semibold text-primary-700">Open <ArrowRight className="h-4 w-4" /></span>
+          </Link>
+        )}
         <MainModuleCards />
         {/* Cyber Security KPI reporting dashboard (quarterly target vs actual). */}
         <CyberKpiPanel />
