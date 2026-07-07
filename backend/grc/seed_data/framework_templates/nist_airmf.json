@@ -20,7 +20,8 @@
     {
      "key": "ssdf_ref",
      "label": "SSDF ref",
-     "type": "text"
+     "type": "text",
+     "picker": "framework_controls"
     },
     {
      "key": "ai_secure_development_practice",

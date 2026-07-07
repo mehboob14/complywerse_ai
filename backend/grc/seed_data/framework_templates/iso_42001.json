@@ -171,7 +171,8 @@
     {
      "key": "clause_annex",
      "label": "Clause/Annex",
-     "type": "text"
+     "type": "text",
+     "picker": "framework_controls"
     },
     {
      "key": "outcome_to_verify",

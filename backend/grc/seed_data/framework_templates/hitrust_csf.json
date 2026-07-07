@@ -18,7 +18,8 @@
     {
      "key": "requirement_control",
      "label": "Requirement / control",
-     "type": "textarea"
+     "type": "text",
+     "picker": "framework_controls"
     },
     {
      "key": "responsibility",

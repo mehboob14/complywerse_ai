@@ -148,7 +148,8 @@
     {
      "key": "article",
      "label": "Article",
-     "type": "text"
+     "type": "text",
+     "picker": "framework_controls"
     },
     {
      "key": "obligation_to_verify",
@@ -392,7 +393,19 @@
     {
      "key": "significant",
      "label": "Significant?",
-     "type": "text"
+     "type": "select",
+     "options": [
+      {
+       "value": "Yes",
+       "label": "Yes",
+       "tone": "emerald"
+      },
+      {
+       "value": "No",
+       "label": "No",
+       "tone": "rose"
+      }
+     ]
     },
     {
      "key": "early_warning_due_24h",
@@ -412,7 +425,19 @@
     {
      "key": "reported_to_authority",
      "label": "Reported to authority?",
-     "type": "text"
+     "type": "select",
+     "options": [
+      {
+       "value": "Yes",
+       "label": "Yes",
+       "tone": "emerald"
+      },
+      {
+       "value": "No",
+       "label": "No",
+       "tone": "rose"
+      }
+     ]
     },
     {
      "key": "status",
@@ -613,12 +638,36 @@
     {
      "key": "security_assessed",
      "label": "Security assessed?",
-     "type": "text"
+     "type": "select",
+     "options": [
+      {
+       "value": "Yes",
+       "label": "Yes",
+       "tone": "emerald"
+      },
+      {
+       "value": "No",
+       "label": "No",
+       "tone": "rose"
+      }
+     ]
     },
     {
      "key": "contract_security_clauses",
      "label": "Contract security clauses?",
-     "type": "text"
+     "type": "select",
+     "options": [
+      {
+       "value": "Yes",
+       "label": "Yes",
+       "tone": "emerald"
+      },
+      {
+       "value": "No",
+       "label": "No",
+       "tone": "rose"
+      }
+     ]
     },
     {
      "key": "last_reviewed",

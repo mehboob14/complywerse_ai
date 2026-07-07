@@ -47,7 +47,24 @@ def humanize_file(fn):
 AUTO_RE = re.compile(r"^\s*(ref\.?|ref\s*#|ref\s*no\.?|reference\s*#?|control\s*id|id|#|no\.?|s/?n|serial|item\s*#|control\s*#|line\s*#|req\s*#|entry\s*#)\s*$", re.I)
 DATETIME_RE = re.compile(r"requested|logged\s*at|received|submitted|timestamp|date\s*[&/]\s*time|date and time", re.I)
 DATE_RE = re.compile(r"\b(date|due|target|deadline|review|expiry|effective|when|timeline)\b", re.I)
-USER_RE = re.compile(r"\b(owner|responsible|assigned|assignee|reviewer|approver|approved by|accountable|dpo|contact|lead|sponsor)\b", re.I)
+USER_RE = re.compile(r"\b(owner|responsible|assigned|assignee|reviewer|approver|approved by|accountable|dpo|contact|lead|sponsor|prepared by|author|signed by|custodian|steward)\b", re.I)
+# Columns that REFERENCE a framework requirement/control -> requirement dropdown.
+REQREF_RE = re.compile(r"^\s*(req\b|requirement\b|control\s*(ref|id|#|no)|clause\b|article\b|annex\b|sub-?category\b|safeguard\b|principle\b|criteri|standard\s*ref|section\s*ref|mapping\b|maps\s*to)", re.I)
+# A framework control code, e.g. 1.1.1 / PR.AC-1 / A.5.1 / 164.308(a) / Art. 28 / CC6.1
+CODE_RE = re.compile(
+    r"^(?=.*\d)(?!\d{4}[.\-/]\d\d?[.\-/]\d)("
+    r"(art(icle)?|§|sec(tion)?|reg|clause|req|item|principle|std)\.?\s*[0-9]{1,3}[a-z()\.]*"  # Art. 28 / Clause 6
+    r"|[0-9A-Za-z]{1,4}([.\-\)][0-9A-Za-z()]{1,7}){1,5}"                                        # 1.1.1 / PR.AC-1 / 164.308(a)
+    r")\)?$", re.I)
+YESNO_OPTS = [{"value": "Yes", "label": "Yes", "tone": "emerald"}, {"value": "No", "label": "No", "tone": "rose"}]
+
+def is_code_like(vals):
+    vs = [v for v in vals if v]
+    if not vs:
+        return False
+    good = sum(1 for v in vs if CODE_RE.match(v.strip()))
+    return good >= max(1, int(0.6 * len(vs)))
+
 EVID_RE = re.compile(r"\b(evidence|attachment|link to)\b", re.I)
 SELECT_RE = re.compile(r"\b(status|result|rating|level|priority|severity|likelihood|impact|applicab|maturity|conform|compliance|y/?n|yes/no|band|tier|score|state|decision|classification|category|frequency|disposition|outcome)\b", re.I)
 LONG_RE = re.compile(r"\b(description|justification|gap|action|notes|remediation|requirement|comment|detail|analysis|scope|plan|recommendation|finding|purpose|guidance|summary|question|objective|control|activity|measure|procedure|mitigation|treatment|response|note)\b", re.I)
@@ -172,19 +189,26 @@ def parse_xlsx(path):
             if 2 <= len(toks) <= 6:
                 hdr_opts = toks
                 disp_label = re.sub(r"\s*\([^)]*\)\s*$", "", label).strip() or label
+        code_like = is_code_like(vals)
         if AUTO_RE.match(label):
             ctype = "auto"
+        elif REQREF_RE.match(label) and avglen < 40:
+            picker = "framework_controls"; ctype = "text"
         elif USER_RE.search(label):
             picker = "users"; ctype = "text"
         elif EVID_RE.search(label):
             picker = "evidence"; ctype = "text"
-        elif DATETIME_RE.search(label):
-            ctype = "datetime"
         elif hdr_opts:
             ctype = "select"
             options = [{"value": v, "label": v, "tone": tone_for(v)} for v in hdr_opts]
+        elif label.strip().endswith("?") and len(label) < 40:
+            ctype = "select"; options = list(YESNO_OPTS)
+        elif DATETIME_RE.search(label):
+            ctype = "datetime"
         elif DATE_RE.search(label) and avglen <= 24:
             ctype = "date"
+        elif code_like and avglen < 22:
+            picker = "framework_controls"; ctype = "text"
         elif SELECT_RE.search(label) and 0 < len(distinct) <= 12 and all(len(v) <= 32 for v in distinct):
             ctype = "select"
             options = [{"value": v, "label": v, "tone": tone_for(v)} for v in distinct]

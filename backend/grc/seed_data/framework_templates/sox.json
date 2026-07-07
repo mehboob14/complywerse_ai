@@ -169,12 +169,36 @@
     {
      "key": "design_effective",
      "label": "Design effective?",
-     "type": "date"
+     "type": "select",
+     "options": [
+      {
+       "value": "Yes",
+       "label": "Yes",
+       "tone": "emerald"
+      },
+      {
+       "value": "No",
+       "label": "No",
+       "tone": "rose"
+      }
+     ]
     },
     {
      "key": "operating_effective",
      "label": "Operating effective?",
-     "type": "date"
+     "type": "select",
+     "options": [
+      {
+       "value": "Yes",
+       "label": "Yes",
+       "tone": "emerald"
+      },
+      {
+       "value": "No",
+       "label": "No",
+       "tone": "rose"
+      }
+     ]
     }
    ],
    "seed": [
@@ -228,15 +252,15 @@
      "keys": [
       "control",
       "frequency",
-      "evidence"
+      "evidence",
+      "design_effective",
+      "operating_effective"
      ]
     },
     {
      "title": "Ownership & dates",
      "keys": [
-      "owner",
-      "design_effective",
-      "operating_effective"
+      "owner"
      ]
     }
    ]

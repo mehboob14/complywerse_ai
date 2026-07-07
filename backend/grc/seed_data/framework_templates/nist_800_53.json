@@ -508,7 +508,8 @@
     {
      "key": "requirement_id",
      "label": "Requirement ID",
-     "type": "textarea"
+     "type": "text",
+     "picker": "framework_controls"
     },
     {
      "key": "family",
@@ -534,7 +535,19 @@
     {
      "key": "poa_m_item",
      "label": "POA&M item?",
-     "type": "text"
+     "type": "select",
+     "options": [
+      {
+       "value": "Yes",
+       "label": "Yes",
+       "tone": "emerald"
+      },
+      {
+       "value": "No",
+       "label": "No",
+       "tone": "rose"
+      }
+     ]
     },
     {
      "key": "owner",
@@ -1753,7 +1766,8 @@
     {
      "key": "800_190",
      "label": "800-190",
-     "type": "text"
+     "type": "text",
+     "picker": "framework_controls"
     },
     {
      "key": "countermeasure_to_verify",
@@ -2047,7 +2061,8 @@
     {
      "key": "rec",
      "label": "Rec",
-     "type": "text"
+     "type": "text",
+     "picker": "framework_controls"
     },
     {
      "key": "api_security_recommendation",
@@ -2386,17 +2401,42 @@
     {
      "key": "version",
      "label": "Version",
-     "type": "text"
+     "type": "text",
+     "picker": "framework_controls"
     },
     {
      "key": "applied",
      "label": "Applied?",
-     "type": "text"
+     "type": "select",
+     "options": [
+      {
+       "value": "Yes",
+       "label": "Yes",
+       "tone": "emerald"
+      },
+      {
+       "value": "No",
+       "label": "No",
+       "tone": "rose"
+      }
+     ]
     },
     {
      "key": "deviations_documented",
      "label": "Deviations documented?",
-     "type": "text"
+     "type": "select",
+     "options": [
+      {
+       "value": "Yes",
+       "label": "Yes",
+       "tone": "emerald"
+      },
+      {
+       "value": "No",
+       "label": "No",
+       "tone": "rose"
+      }
+     ]
     },
     {
      "key": "owner",

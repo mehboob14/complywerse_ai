@@ -28,7 +28,8 @@
     {
      "key": "cfr",
      "label": "CFR",
-     "type": "text"
+     "type": "text",
+     "picker": "framework_controls"
     },
     {
      "key": "priority",
@@ -158,7 +159,19 @@
     {
      "key": "encrypted",
      "label": "Encrypted?",
-     "type": "text"
+     "type": "select",
+     "options": [
+      {
+       "value": "Yes",
+       "label": "Yes",
+       "tone": "emerald"
+      },
+      {
+       "value": "No",
+       "label": "No",
+       "tone": "rose"
+      }
+     ]
     },
     {
      "key": "access_controls",
@@ -168,7 +181,19 @@
     {
      "key": "business_associate",
      "label": "Business associate?",
-     "type": "text"
+     "type": "select",
+     "options": [
+      {
+       "value": "Yes",
+       "label": "Yes",
+       "tone": "emerald"
+      },
+      {
+       "value": "No",
+       "label": "No",
+       "tone": "rose"
+      }
+     ]
     },
     {
      "key": "owner",
@@ -250,7 +275,8 @@
     {
      "key": "cfr",
      "label": "CFR",
-     "type": "text"
+     "type": "text",
+     "picker": "framework_controls"
     },
     {
      "key": "requirement_to_verify",
@@ -399,7 +425,8 @@
     {
      "key": "safeguard_area",
      "label": "Safeguard area",
-     "type": "text"
+     "type": "text",
+     "picker": "framework_controls"
     },
     {
      "key": "standard",
@@ -705,12 +732,14 @@
     {
      "key": "safeguard_area",
      "label": "Safeguard area",
-     "type": "text"
+     "type": "text",
+     "picker": "framework_controls"
     },
     {
      "key": "cfr",
      "label": "CFR",
-     "type": "text"
+     "type": "text",
+     "picker": "framework_controls"
     },
     {
      "key": "standard_to_verify",

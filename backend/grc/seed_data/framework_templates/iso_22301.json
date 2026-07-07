@@ -18,7 +18,8 @@
     {
      "key": "clause",
      "label": "Clause",
-     "type": "text"
+     "type": "text",
+     "picker": "framework_controls"
     },
     {
      "key": "outcome_to_verify",

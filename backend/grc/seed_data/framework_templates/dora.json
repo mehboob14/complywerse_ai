@@ -29,7 +29,8 @@
     {
      "key": "dora_article",
      "label": "DORA article",
-     "type": "text"
+     "type": "text",
+     "picker": "framework_controls"
     },
     {
      "key": "priority",
@@ -144,7 +145,8 @@
     {
      "key": "article",
      "label": "Article",
-     "type": "text"
+     "type": "text",
+     "picker": "framework_controls"
     },
     {
      "key": "obligation_to_verify",
@@ -388,7 +390,8 @@
     {
      "key": "article",
      "label": "Article",
-     "type": "text"
+     "type": "text",
+     "picker": "framework_controls"
     },
     {
      "key": "required_contractual_provision",
@@ -584,12 +587,36 @@
     {
      "key": "major",
      "label": "Major?",
-     "type": "text"
+     "type": "select",
+     "options": [
+      {
+       "value": "Yes",
+       "label": "Yes",
+       "tone": "emerald"
+      },
+      {
+       "value": "No",
+       "label": "No",
+       "tone": "rose"
+      }
+     ]
     },
     {
      "key": "reported_to_authority",
      "label": "Reported to authority?",
-     "type": "text"
+     "type": "select",
+     "options": [
+      {
+       "value": "Yes",
+       "label": "Yes",
+       "tone": "emerald"
+      },
+      {
+       "value": "No",
+       "label": "No",
+       "tone": "rose"
+      }
+     ]
     },
     {
      "key": "date_reported",
@@ -699,7 +726,8 @@
     {
      "key": "contract_reference",
      "label": "Contract reference",
-     "type": "text"
+     "type": "text",
+     "picker": "framework_controls"
     },
     {
      "key": "concentration_risk",
@@ -709,12 +737,36 @@
     {
      "key": "subcontracting",
      "label": "Subcontracting?",
-     "type": "text"
+     "type": "select",
+     "options": [
+      {
+       "value": "Yes",
+       "label": "Yes",
+       "tone": "emerald"
+      },
+      {
+       "value": "No",
+       "label": "No",
+       "tone": "rose"
+      }
+     ]
     },
     {
      "key": "exit_plan",
      "label": "Exit plan?",
-     "type": "textarea"
+     "type": "select",
+     "options": [
+      {
+       "value": "Yes",
+       "label": "Yes",
+       "tone": "emerald"
+      },
+      {
+       "value": "No",
+       "label": "No",
+       "tone": "rose"
+      }
+     ]
     },
     {
      "key": "owner",

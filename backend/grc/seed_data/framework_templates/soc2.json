@@ -13,7 +13,8 @@
     {
      "key": "criteria",
      "label": "Criteria",
-     "type": "text"
+     "type": "text",
+     "picker": "framework_controls"
     },
     {
      "key": "control_objective",
@@ -358,19 +359,8 @@
     {
      "key": "criteria_cc_category",
      "label": "Criteria",
-     "type": "select",
-     "options": [
-      {
-       "value": "CC",
-       "label": "CC",
-       "tone": "slate"
-      },
-      {
-       "value": "category",
-       "label": "category",
-       "tone": "slate"
-      }
-     ]
+     "type": "text",
+     "picker": "framework_controls"
     },
     {
      "key": "control_owner",
@@ -524,7 +514,8 @@
     {
      "key": "related_control",
      "label": "Related control",
-     "type": "textarea"
+     "type": "text",
+     "picker": "framework_controls"
     },
     {
      "key": "owner",
@@ -545,12 +536,36 @@
     {
      "key": "received",
      "label": "Received?",
-     "type": "datetime"
+     "type": "select",
+     "options": [
+      {
+       "value": "Yes",
+       "label": "Yes",
+       "tone": "emerald"
+      },
+      {
+       "value": "No",
+       "label": "No",
+       "tone": "rose"
+      }
+     ]
     },
     {
      "key": "reviewed",
      "label": "Reviewed?",
-     "type": "text"
+     "type": "select",
+     "options": [
+      {
+       "value": "Yes",
+       "label": "Yes",
+       "tone": "emerald"
+      },
+      {
+       "value": "No",
+       "label": "No",
+       "tone": "rose"
+      }
+     ]
     },
     {
      "key": "notes",
@@ -636,7 +651,8 @@
     {
      "key": "criteria",
      "label": "Criteria",
-     "type": "text"
+     "type": "text",
+     "picker": "framework_controls"
     },
     {
      "key": "priority",
@@ -904,7 +920,8 @@
     {
      "key": "criteria_area",
      "label": "Criteria area",
-     "type": "text"
+     "type": "text",
+     "picker": "framework_controls"
     },
     {
      "key": "ref",
