@@ -4369,7 +4369,7 @@ export default function CertificationJourneyPage() {
 
   const renderActiveTab = () => {
     const dynReg = (fwTemplateDef?.registers || []).find((r) => r.type === activeTab);
-    if (dynReg) return <FrameworkDynamicRegisterTab config={dynReg} journeyId={journeyId} frameworkId={appFwId} frameworkName={templateFrameworkName} tenantUsers={templateTenantUsers} />;
+    if (dynReg) return <FrameworkDynamicRegisterTab config={dynReg} journeyId={journeyId} frameworkId={appFwId} frameworkName={templateFrameworkName} tenantUsers={templateTenantUsers} frameworkControls={templateFrameworkControls} />;
     const dynDoc = (fwTemplateDef?.documents || []).find((d) => d.type === activeTab);
     if (dynDoc) return <FrameworkDocumentTab docType={dynDoc.type} journeyId={journeyId} frameworkId={appFwId} frameworkName={templateFrameworkName} tenantUsers={templateTenantUsers} />;
     switch (activeTab) {

@@ -16,6 +16,12 @@
      "type": "auto"
     },
     {
+     "key": "pci_requirement",
+     "label": "PCI DSS requirement",
+     "type": "text",
+     "picker": "framework_controls"
+    },
+    {
      "key": "system_process",
      "label": "System / process",
      "type": "text"
@@ -23,28 +29,138 @@
     {
      "key": "cardholder_data_stored_processed_transmitted",
      "label": "Cardholder data stored/processed/transmitted",
-     "type": "text"
+     "type": "select",
+     "options": [
+      {
+       "value": "Stored",
+       "label": "Stored",
+       "tone": "amber"
+      },
+      {
+       "value": "Processed",
+       "label": "Processed",
+       "tone": "amber"
+      },
+      {
+       "value": "Transmitted",
+       "label": "Transmitted",
+       "tone": "amber"
+      },
+      {
+       "value": "Stored & processed",
+       "label": "Stored & processed",
+       "tone": "orange"
+      },
+      {
+       "value": "Not stored",
+       "label": "Not stored",
+       "tone": "slate"
+      }
+     ]
     },
     {
      "key": "in_cde",
      "label": "In CDE?",
-     "type": "text"
+     "type": "select",
+     "options": [
+      {
+       "value": "Yes",
+       "label": "Yes",
+       "tone": "emerald"
+      },
+      {
+       "value": "No",
+       "label": "No",
+       "tone": "rose"
+      }
+     ]
     },
     {
      "key": "encrypted",
      "label": "Encrypted?",
-     "type": "text"
+     "type": "select",
+     "options": [
+      {
+       "value": "Yes",
+       "label": "Yes",
+       "tone": "emerald"
+      },
+      {
+       "value": "No",
+       "label": "No",
+       "tone": "rose"
+      }
+     ]
     },
     {
      "key": "retention",
      "label": "Retention",
-     "type": "text"
+     "type": "select",
+     "options": [
+      {
+       "value": "Not retained",
+       "label": "Not retained",
+       "tone": "emerald"
+      },
+      {
+       "value": "<= 90 days",
+       "label": "<= 90 days",
+       "tone": "amber"
+      },
+      {
+       "value": "1 year",
+       "label": "1 year",
+       "tone": "amber"
+      },
+      {
+       "value": "3 years",
+       "label": "3 years",
+       "tone": "orange"
+      },
+      {
+       "value": "7 years",
+       "label": "7 years",
+       "tone": "orange"
+      },
+      {
+       "value": "Other",
+       "label": "Other",
+       "tone": "slate"
+      }
+     ]
     },
     {
      "key": "owner",
      "label": "Owner",
      "type": "text",
      "picker": "users"
+    },
+    {
+     "key": "assessment",
+     "label": "Assessment",
+     "type": "select",
+     "options": [
+      {
+       "value": "Compliant",
+       "label": "Compliant",
+       "tone": "emerald"
+      },
+      {
+       "value": "Partial",
+       "label": "Partial",
+       "tone": "amber"
+      },
+      {
+       "value": "Non-compliant",
+       "label": "Non-compliant",
+       "tone": "rose"
+      },
+      {
+       "value": "Not assessed",
+       "label": "Not assessed",
+       "tone": "slate"
+      }
+     ]
     }
    ],
    "seed": [
@@ -73,28 +189,21 @@
    ],
    "formSections": [
     {
-     "title": "Item",
+     "title": "Cardholder Data Inventory",
      "keys": [
       "ref",
-      "system_process"
-     ]
-    },
-    {
-     "title": "Assessment",
-     "keys": [
+      "pci_requirement",
+      "system_process",
       "cardholder_data_stored_processed_transmitted",
       "in_cde",
       "encrypted",
-      "retention"
-     ]
-    },
-    {
-     "title": "Ownership & dates",
-     "keys": [
-      "owner"
+      "retention",
+      "owner",
+      "assessment"
      ]
     }
-   ]
+   ],
+   "assetSource": "cde"
   },
   {
    "type": "pci_dss__pci_dss_readiness_assessment_template_1",
@@ -109,7 +218,8 @@
     {
      "key": "req",
      "label": "Req",
-     "type": "text"
+     "type": "text",
+     "picker": "framework_controls"
     },
     {
      "key": "outcome_to_verify",
@@ -119,7 +229,34 @@
     {
      "key": "status",
      "label": "Status",
-     "type": "text"
+     "type": "select",
+     "options": [
+      {
+       "value": "Not started",
+       "label": "Not started",
+       "tone": "slate"
+      },
+      {
+       "value": "In progress",
+       "label": "In progress",
+       "tone": "amber"
+      },
+      {
+       "value": "Compliant",
+       "label": "Compliant",
+       "tone": "emerald"
+      },
+      {
+       "value": "Non-compliant",
+       "label": "Non-compliant",
+       "tone": "rose"
+      },
+      {
+       "value": "N/A",
+       "label": "N/A",
+       "tone": "slate"
+      }
+     ]
     },
     {
      "key": "evidence_notes",
@@ -198,23 +335,13 @@
    ],
    "formSections": [
     {
-     "title": "Item",
+     "title": "Readiness Assessment",
      "keys": [
       "goal",
-      "req"
-     ]
-    },
-    {
-     "title": "Assessment",
-     "keys": [
+      "req",
       "outcome_to_verify",
       "status",
-      "evidence_notes"
-     ]
-    },
-    {
-     "title": "Ownership & dates",
-     "keys": [
+      "evidence_notes",
       "owner"
      ]
     }
@@ -228,7 +355,8 @@
     {
      "key": "req",
      "label": "Req #",
-     "type": "auto"
+     "type": "text",
+     "picker": "framework_controls"
     },
     {
      "key": "pci_dss_v4_0_requirement_saq_a_focus",
@@ -238,7 +366,34 @@
     {
      "key": "status",
      "label": "Status",
-     "type": "text"
+     "type": "select",
+     "options": [
+      {
+       "value": "Not started",
+       "label": "Not started",
+       "tone": "slate"
+      },
+      {
+       "value": "In progress",
+       "label": "In progress",
+       "tone": "amber"
+      },
+      {
+       "value": "Met",
+       "label": "Met",
+       "tone": "emerald"
+      },
+      {
+       "value": "Not met",
+       "label": "Not met",
+       "tone": "rose"
+      },
+      {
+       "value": "N/A",
+       "label": "N/A",
+       "tone": "slate"
+      }
+     ]
     },
     {
      "key": "owner",
@@ -383,23 +538,13 @@
    ],
    "formSections": [
     {
-     "title": "Item",
+     "title": "Saq A Checklist",
      "keys": [
       "req",
-      "pci_dss_v4_0_requirement_saq_a_focus"
-     ]
-    },
-    {
-     "title": "Assessment",
-     "keys": [
+      "pci_dss_v4_0_requirement_saq_a_focus",
       "status",
+      "owner",
       "evidence_notes"
-     ]
-    },
-    {
-     "title": "Ownership & dates",
-     "keys": [
-      "owner"
      ]
     }
    ]
@@ -412,7 +557,49 @@
     {
      "key": "saq_type",
      "label": "SAQ type",
-     "type": "text"
+     "type": "select",
+     "options": [
+      {
+       "value": "SAQ A",
+       "label": "SAQ A",
+       "tone": "slate"
+      },
+      {
+       "value": "SAQ A-EP",
+       "label": "SAQ A-EP",
+       "tone": "slate"
+      },
+      {
+       "value": "SAQ B",
+       "label": "SAQ B",
+       "tone": "slate"
+      },
+      {
+       "value": "SAQ B-IP",
+       "label": "SAQ B-IP",
+       "tone": "slate"
+      },
+      {
+       "value": "SAQ C",
+       "label": "SAQ C",
+       "tone": "slate"
+      },
+      {
+       "value": "SAQ C-VT",
+       "label": "SAQ C-VT",
+       "tone": "slate"
+      },
+      {
+       "value": "SAQ D",
+       "label": "SAQ D",
+       "tone": "slate"
+      },
+      {
+       "value": "SAQ P2PE",
+       "label": "SAQ P2PE",
+       "tone": "slate"
+      }
+     ]
     },
     {
      "key": "who_it_is_for",
@@ -422,7 +609,46 @@
     {
      "key": "applies_to_you",
      "label": "Applies to you?",
-     "type": "text"
+     "type": "select",
+     "options": [
+      {
+       "value": "Yes",
+       "label": "Yes",
+       "tone": "emerald"
+      },
+      {
+       "value": "No",
+       "label": "No",
+       "tone": "rose"
+      },
+      {
+       "value": "Maybe",
+       "label": "Maybe",
+       "tone": "amber"
+      }
+     ]
+    },
+    {
+     "key": "assessment",
+     "label": "Assessment",
+     "type": "select",
+     "options": [
+      {
+       "value": "Selected",
+       "label": "Selected",
+       "tone": "emerald"
+      },
+      {
+       "value": "Under review",
+       "label": "Under review",
+       "tone": "amber"
+      },
+      {
+       "value": "Not applicable",
+       "label": "Not applicable",
+       "tone": "slate"
+      }
+     ]
     }
    ],
    "seed": [
@@ -492,16 +718,12 @@
    ],
    "formSections": [
     {
-     "title": "Item",
+     "title": "Saq Selector",
      "keys": [
       "saq_type",
-      "who_it_is_for"
-     ]
-    },
-    {
-     "title": "Assessment",
-     "keys": [
-      "applies_to_you"
+      "who_it_is_for",
+      "applies_to_you",
+      "assessment"
      ]
     }
    ]

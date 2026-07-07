@@ -3,8 +3,8 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { Plus, Trash2, RotateCcw, Loader2, Pencil, Search, Sparkles, ShieldAlert, ExternalLink, X, Paperclip } from 'lucide-react';
-import { frameworkTemplatesApi, evidenceApi } from '@/lib/api';
+import { Plus, Trash2, RotateCcw, Loader2, Pencil, Search, Sparkles, ShieldAlert, ExternalLink, X, Paperclip, RefreshCw, MinusCircle } from 'lucide-react';
+import { frameworkTemplatesApi, evidenceApi, certificationsApi } from '@/lib/api';
 import { AnimatedModal, RightSlidePanel, MultiSelectDropdown } from '@/components/ui';
 import { useToast } from '@/components/ui/ToastProvider';
 import { TONE_CLASSES, type Tone, type TenantUserOption } from './templateConfigs';
@@ -13,9 +13,9 @@ import { TONE_CLASSES, type Tone, type TenantUserOption } from './templateConfig
 export interface DynColumn {
   key: string;
   label: string;
-  type: 'text' | 'textarea' | 'select' | 'date' | string;
+  type: 'text' | 'textarea' | 'select' | 'date' | 'datetime' | 'auto' | string;
   options?: Array<{ value: string; label: string; tone?: string }>;
-  picker?: 'users' | 'evidence' | string;
+  picker?: 'users' | 'evidence' | 'framework_controls' | string;
 }
 export interface DynRegisterConfig {
   type: string;
@@ -23,6 +23,7 @@ export interface DynRegisterConfig {
   description?: string;
   columns: DynColumn[];
   formSections?: Array<{ title: string; keys: string[] }>;
+  assetSource?: string;
 }
 interface DynEntry {
   id: number;
@@ -37,6 +38,7 @@ interface Props {
   frameworkId: number | null;
   frameworkName: string;
   tenantUsers: TenantUserOption[];
+  frameworkControls?: Array<{ code: string; title: string }>;
 }
 
 function FormDropdown({ value, items, placeholder, onChange, searchable }: {
@@ -63,7 +65,7 @@ function FormDropdown({ value, items, placeholder, onChange, searchable }: {
   );
 }
 
-export default function FrameworkDynamicRegisterTab({ config, journeyId, frameworkId, frameworkName, tenantUsers }: Props) {
+export default function FrameworkDynamicRegisterTab({ config, journeyId, frameworkId, frameworkName, tenantUsers, frameworkControls = [] }: Props) {
   const qc = useQueryClient();
   const { toast } = useToast();
   const queryKey = ['ft-register', config.type, journeyId];
@@ -170,6 +172,35 @@ export default function FrameworkDynamicRegisterTab({ config, journeyId, framewo
       toast({ type: 'error', title: 'AI assist failed', message: e?.response?.data?.detail || 'Try again.' }),
   });
 
+  // ── Cardholder Data Inventory: sync rows from the CDE assets in the system ──
+  const isCdeInventory = config.assetSource === 'cde';
+  const cdeSyncMut = useMutation({
+    mutationFn: async () => {
+      const res = await certificationsApi.getCDESystems();
+      const systems = ((res.data as { systems?: Array<{ id: number; name: string; asset_type?: string; owner_name?: string }> })?.systems) || [];
+      const haveIds = new Set(rows.map((r) => (r.data as Record<string, unknown>).__asset_id).filter(Boolean).map(Number));
+      const haveNames = new Set(rows.map((r) => String((r.data as Record<string, unknown>).system_process || '').trim().toLowerCase()).filter(Boolean));
+      const toAdd = systems.filter((s) => !haveIds.has(s.id) && !haveNames.has((s.name || '').trim().toLowerCase()));
+      for (const s of toAdd) {
+        await frameworkTemplatesApi.registers.create(config.type, { journey_id: journeyId, framework_id: frameworkId }, {
+          data: { system_process: s.name, in_cde: 'Yes', owner: s.owner_name || '', __asset_id: s.id, __asset_type: s.asset_type || '' },
+        });
+      }
+      return { added: toAdd.length, total: systems.length };
+    },
+    onSuccess: (r) => { invalidate(); toast({ type: 'success', title: 'Synced CDE assets', message: `${r.added} added${r.total ? ` from ${r.total} CDE system${r.total === 1 ? '' : 's'}` : ''}.` }); },
+    onError: () => toast({ type: 'error', title: 'Sync failed', message: 'Could not load CDE assets.' }),
+  });
+  const removeCdeMut = useMutation({
+    mutationFn: async (row: DynEntry) => {
+      const assetId = (row.data as Record<string, unknown>).__asset_id;
+      if (assetId) { try { await certificationsApi.updateCDESystemScope(Number(assetId), { cde_environment: false }); } catch { /* asset may be gone */ } }
+      await frameworkTemplatesApi.registers.remove(row.id);
+    },
+    onSuccess: () => { invalidate(); toast({ type: 'success', title: 'Removed from CDE', message: 'Asset unflagged and row removed.' }); },
+    onError: () => toast({ type: 'error', title: 'Could not remove', message: 'Try again.' }),
+  });
+
   // Most meaningful value in a row — used as the default risk title.
   const rowTitle = (row: DynEntry) => {
     const data = row.data || {};
@@ -208,6 +239,7 @@ export default function FrameworkDynamicRegisterTab({ config, journeyId, framewo
     }
     if (col.type === 'datetime') return raw ? <span className="text-sm text-slate-600">{new Date(String(raw)).toLocaleString()}</span> : <span className="text-xs text-slate-300">—</span>;
     if (col.type === 'date') return raw ? <span className="text-sm text-slate-600">{new Date(String(raw)).toLocaleDateString()}</span> : <span className="text-xs text-slate-300">—</span>;
+    if (col.picker === 'framework_controls') return raw ? <span className="rounded bg-primary-50 px-1.5 py-0.5 font-mono text-[11px] text-primary-700">{String(raw)}</span> : <span className="text-xs text-slate-300">—</span>;
     const txt = raw == null ? '' : String(raw);
     if (!txt) return <span className="text-xs text-slate-300">—</span>;
     if (col.picker === 'users') return <span className="text-sm text-slate-700">{userName(txt)}</span>;
@@ -230,6 +262,17 @@ export default function FrameworkDynamicRegisterTab({ config, journeyId, framewo
       const items = [...evidenceItems];
       if (cur && !items.some((i) => i.value === cur)) items.unshift({ value: cur, label: cur });
       return <FormDropdown value={cur} items={items} placeholder="Link evidence…" searchable onChange={set} />;
+    }
+    if (col.picker === 'framework_controls') {
+      const cur = (val as string) || '';
+      const items = frameworkControls.map((c) => ({ value: c.code, label: c.title ? `${c.code} — ${c.title}` : c.code }));
+      if (cur && !frameworkControls.some((c) => c.code === cur)) items.unshift({ value: cur, label: cur });
+      return (
+        <div>
+          <FormDropdown value={cur} items={items} placeholder="Select a requirement…" searchable onChange={set} />
+          {frameworkControls.length === 0 && <p className="mt-1 text-[11px] text-slate-400">Requirements load from this framework’s Requirements tab.</p>}
+        </div>
+      );
     }
     if (col.type === 'auto') {
       return <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-mono text-slate-500">{(val as string) || 'Auto-generated on save'}</div>;
@@ -265,6 +308,12 @@ export default function FrameworkDynamicRegisterTab({ config, journeyId, framewo
           {config.description && <p className="mt-1 text-sm text-slate-500">{config.description}</p>}
         </div>
         <div className="flex flex-shrink-0 items-center gap-2">
+          {isCdeInventory && (
+            <button type="button" onClick={() => cdeSyncMut.mutate()} disabled={cdeSyncMut.isPending}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-semibold text-sky-700 hover:bg-sky-100 disabled:opacity-50">
+              {cdeSyncMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" strokeWidth={1.75} />} Sync from CDE assets
+            </button>
+          )}
           <button type="button" onClick={() => aiMut.mutate(rows)} disabled={aiMut.isPending || rows.length === 0}
             className="inline-flex items-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-700 hover:bg-purple-100 disabled:opacity-50">
             {aiMut.isPending && busyRowId === null ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" strokeWidth={1.75} />}
@@ -327,6 +376,11 @@ export default function FrameworkDynamicRegisterTab({ config, journeyId, framewo
                         <ShieldAlert className="h-3.5 w-3.5" strokeWidth={1.75} />
                       </button>
                     )}
+                    {isCdeInventory && (row.data as Record<string, unknown>).__asset_id ? (
+                      <button type="button" onClick={() => removeCdeMut.mutate(row)} className="rounded-md p-1.5 text-slate-400 hover:bg-amber-50 hover:text-amber-600" title="Remove from CDE (unflag the asset)" aria-label="Remove from CDE">
+                        <MinusCircle className="h-3.5 w-3.5" strokeWidth={1.75} />
+                      </button>
+                    ) : null}
                     <button type="button" onClick={() => openEdit(row)} className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700" title="Edit" aria-label="Edit row"><Pencil className="h-3.5 w-3.5" strokeWidth={1.75} /></button>
                     <button type="button" onClick={() => setDeleteRow(row)} className="rounded-md p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600" title="Delete" aria-label="Delete row"><Trash2 className="h-3.5 w-3.5" strokeWidth={1.75} /></button>
                   </div>
