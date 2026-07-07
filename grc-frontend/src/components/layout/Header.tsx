@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, ChevronRight, LogOut, UserCircle, Users, Search, Loader2, Sparkles, AlertCircle, ClipboardCheck } from 'lucide-react';
+import { ChevronDown, ChevronRight, LogOut, UserCircle, Users, Search, Loader2, Sparkles, ClipboardCheck } from 'lucide-react';
 import Link from 'next/link';
 import { apiClient, searchApi } from '@/lib/api';
 
@@ -19,8 +19,8 @@ const PAGE_TITLES: Record<string, { title: string; subtitle?: string }> = {
   '/vulnerabilities/reports': { title: 'Vulnerability Reports' },
   '/vulnerabilities/departments': { title: 'Department Management' },
   '/vulnerabilities/exceptions': { title: 'Exception Queue', subtitle: 'Cross-tenant exception review and approval workflow' },
-  '/dashboard': { title: 'Overview' },
-  '/governance': { title: 'Governance', subtitle: 'Policy and document lifecycle management' },
+  '/dashboard': { title: 'Performance Overview' },
+  '/governance': { title: 'Document Management', subtitle: 'Policy and document lifecycle management' },
   '/governance/documents': { title: 'Governance', subtitle: 'Policy and document lifecycle management' },
   '/governance/mappings': { title: 'Governance', subtitle: 'Policy and document lifecycle management' },
   '/governance/approvals': { title: 'Governance', subtitle: 'Policy and document lifecycle management' },
@@ -28,7 +28,7 @@ const PAGE_TITLES: Record<string, { title: string; subtitle?: string }> = {
   '/governance/reviews': { title: 'Governance', subtitle: 'Policy and document lifecycle management' },
   '/governance/attestations': { title: 'Governance', subtitle: 'Policy and document lifecycle management' },
   '/governance/workflows': { title: 'Governance', subtitle: 'Policy and document lifecycle management' },
-  '/evidence': { title: 'Evidence Library' },
+  '/evidence': { title: 'Evidence Management' },
   '/frameworks': { title: 'Frameworks' },
   '/controls': { title: 'Controls' },
   '/erm': { title: 'Enterprise Risk Management', subtitle: 'Comprehensive risk identification, assessment, and monitoring' },
@@ -207,15 +207,7 @@ export default function Header() {
           </button>
         </form>
 
-        {/* Issues — applies across all modules, so it lives in the top bar. */}
-        <Link
-          href="/issues"
-          title="Issues"
-          className="relative rounded-md p-1.5 text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-subtle)] hover:text-[var(--color-text)]"
-          aria-label="Issues"
-        >
-          <AlertCircle size={18} strokeWidth={1.75} />
-        </Link>
+        {/* Issues moved into the sidebar "Issue & Incident Management" module. */}
 
         {/* Pending compliance approvals — opens a dropdown (not a page). */}
         <div className="relative" ref={approvalsRef}>
