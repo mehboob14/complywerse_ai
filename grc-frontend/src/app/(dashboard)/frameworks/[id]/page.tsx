@@ -1503,6 +1503,7 @@ export default function CertificationJourneyPage() {
     queryKey: ['ft-definition', templateFrameworkName],
     queryFn: async () => (await frameworkTemplatesApi.definition(templateFrameworkName)).data as {
       matched: boolean;
+      display_name?: string;
       registers: Array<{ type: string; label: string; description?: string; columns: any[]; formSections?: any[] }>;
       documents: Array<{ type: string; label: string; control_ref?: string | null }>;
     },
@@ -1521,13 +1522,12 @@ export default function CertificationJourneyPage() {
     );
   };
   
-  const tabs: { id: TabType; label: string; icon?: React.ReactNode }[] = [
-    { id: 'overview', label: 'Overview' },
-    ...(isCertificationFramework ? [{ id: 'phases' as TabType, label: 'Phases' }] : []),
+  // Framework-specific group (CDE Scope + ISO/engine template tabs) under a
+  // short framework label, so the tab bar can group + wrap instead of scroll.
+  const frameworkGroupLabel = fwTemplateDef?.display_name
+    || (isIso27001Framework ? 'ISO 27001' : (isPciDssFramework ? 'PCI DSS' : (templateFrameworkName || 'Framework')));
+  const frameworkGroupTabs: { id: TabType; label: string }[] = [
     ...(isPciDssFramework ? [{ id: 'cde-scope' as TabType, label: 'CDE Scope' }] : []),
-    { id: 'controls', label: 'Requirements' },
-    { id: 'assigned-to-me' as TabType, label: 'Assigned to Me' },
-    { id: 'applicability', label: 'Applicability' },
     ...(isIso27001Framework ? [
       { id: 'gap-analysis' as TabType, label: 'Gap Analysis' },
       { id: 'internal-audit' as TabType, label: 'Internal Audit' },
@@ -1537,9 +1537,28 @@ export default function CertificationJourneyPage() {
     ] : []),
     ...(fwTemplateDef?.registers || []).map((r) => ({ id: r.type as TabType, label: r.label })),
     ...(fwTemplateDef?.documents || []).map((d) => ({ id: d.type as TabType, label: d.label })),
-    { id: 'artifacts' as TabType, label: 'Artifacts' },
-    { id: 'history' as TabType, label: 'History' },
   ];
+  const tabGroups: { label: string; tabs: { id: TabType; label: string; badge?: number }[] }[] = [
+    {
+      label: 'Program',
+      tabs: [
+        { id: 'overview' as TabType, label: 'Overview' },
+        ...(isCertificationFramework ? [{ id: 'phases' as TabType, label: 'Phases' }] : []),
+        { id: 'applicability' as TabType, label: 'Applicability' },
+      ],
+    },
+    {
+      label: 'Work',
+      tabs: [
+        { id: 'controls' as TabType, label: 'Requirements', badge: ((controls as any[])?.length) || undefined },
+        { id: 'assigned-to-me' as TabType, label: 'Assigned to Me' },
+        { id: 'artifacts' as TabType, label: 'Artifacts' },
+        { id: 'history' as TabType, label: 'History' },
+      ],
+    },
+    ...(frameworkGroupTabs.length ? [{ label: frameworkGroupLabel, tabs: frameworkGroupTabs }] : []),
+  ];
+  const tabs = tabGroups.flatMap((g) => g.tabs);
 
   useEffect(() => {
     const el = contentScrollRef.current;
@@ -4603,24 +4622,31 @@ export default function CertificationJourneyPage() {
         </div>{/* end collapsible wrapper */}
       </div>
 
-      <div className="mb-6 overflow-x-auto">
-        <div className="flex min-w-max gap-1 border-b border-slate-200">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`whitespace-nowrap px-4 py-3 text-sm font-medium transition-colors ${
-                activeTab === tab.id
-                  ? 'border-b-2 border-primary-600 text-primary-700'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              {tab.label}
-            </button>
+      <div className="mb-6 border-b border-slate-200">
+        <div className="flex flex-wrap items-center gap-y-0.5 pb-px">
+          {tabGroups.filter((g) => g.tabs.length).map((group, gi) => (
+            <Fragment key={`${group.label}-${gi}`}>
+              {gi > 0 && <span className="mx-2 h-5 w-px self-center bg-slate-200" />}
+              <span className="mr-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">{group.label}</span>
+              {group.tabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`inline-flex items-center whitespace-nowrap border-b-2 px-2.5 py-2 text-sm font-medium transition-colors ${
+                    activeTab === tab.id
+                      ? 'border-primary-600 text-primary-700'
+                      : 'border-transparent text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  {tab.label}
+                  {tab.badge != null && <span className="ml-1.5 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">{tab.badge}</span>}
+                </button>
+              ))}
+            </Fragment>
           ))}
           <button
-            onClick={() => setCardsCollapsed(prev => !prev)}
-            className="ml-4 flex items-center gap-1 px-3 py-2 text-xs text-slate-500 hover:text-slate-700 transition-colors border-b-2 border-transparent"
+            onClick={() => setCardsCollapsed((prev) => !prev)}
+            className="ml-auto flex items-center gap-1 self-center px-2 py-1 text-xs text-slate-500 transition-colors hover:text-slate-700"
             title={cardsCollapsed ? 'Show summary cards' : 'Hide summary cards'}
           >
             {cardsCollapsed ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
