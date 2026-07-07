@@ -197,10 +197,12 @@ def document_ai(body: DocumentAIRequest, db: Session = Depends(get_db), user: GR
     user_prompt = (
         f"Framework: {body.framework_name}. Document: {body.title or body.doc_type}. "
         f"Organization: {body.organization or '[the organization]'}.\n"
-        "Rewrite each section body into clear, audit-ready prose suitable for this ISMS document. "
+        "PRESERVE THE TEMPLATE FORMAT EXACTLY: return the same section headings in the same order; "
+        "do not add, remove, rename or reorder sections. Only fill in / expand each section's body into "
+        "clear, audit-ready prose suitable for this document. "
         "Replace bracketed placeholders with sensible draft content the user can refine. "
         "Do not invent specific facts you cannot know — where a real value is required, keep a clearly "
-        "marked placeholder like [e.g. ...]. Keep each section focused and do not change the heading.\n\n"
+        "marked placeholder like [e.g. ...].\n\n"
         f"Sections (JSON): {json.dumps(secs, ensure_ascii=False)}\n\n"
         'Return JSON of the form: {"sections":[{"heading":"<unchanged heading>", '
         '"body":"<drafted body>"}], "summary":"<one short sentence>"}'

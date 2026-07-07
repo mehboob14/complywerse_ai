@@ -42,6 +42,8 @@ class DocumentUpdate(BaseModel):
     effective_date: Optional[datetime] = None
     next_review_date: Optional[datetime] = None
     status: Optional[str] = None
+    reviewer_id: Optional[int] = None
+    approver_id: Optional[int] = None
     sections: Optional[List[Dict[str, Any]]] = None
 
 
@@ -50,6 +52,15 @@ def _tenant_id(user: GRCUser, db: Session) -> int:
     if not tenants:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tenant context")
     return tenants[0]
+
+
+def _tenant_name(db: Session) -> str:
+    try:
+        from ....models import Tenant
+        t = db.query(Tenant).first()
+        return (getattr(t, "name", "") or "") if t else ""
+    except Exception:
+        return ""
 
 
 def _validate_type(doc_type: str) -> None:
@@ -86,6 +97,9 @@ def _serialize(d: FrameworkDocument) -> Dict[str, Any]:
         "effective_date": d.effective_date.isoformat() if d.effective_date else None,
         "next_review_date": d.next_review_date.isoformat() if d.next_review_date else None,
         "status": d.status,
+        "reviewer_id": d.reviewer_id,
+        "approver_id": d.approver_id,
+        "submitted_for_review_at": d.submitted_for_review_at.isoformat() if d.submitted_for_review_at else None,
         "sections": d.sections or [],
         "created_at": d.created_at.isoformat() if d.created_at else None,
         "updated_at": d.updated_at.isoformat() if d.updated_at else None,
@@ -116,6 +130,7 @@ def get_or_create_document(
             doc_type=doc_type,
             title=tpl.get("title") or doc_type,
             control_ref=tpl.get("control_ref"),
+            organization=_tenant_name(db) or None,
             sections=copy.deepcopy(tpl.get("sections") or []),
             created_by=user.id,
         )
@@ -139,11 +154,36 @@ def update_document(
     ).first()
     if not d:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
-    for k, v in payload.model_dump(exclude_unset=True).items():
+    updates = payload.model_dump(exclude_unset=True)
+    for k, v in updates.items():
         setattr(d, k, v)
+    # Review-workflow transitions.
+    if updates.get("status") == "approved" and not d.approval_date:
+        d.approval_date = datetime.utcnow()
+    if updates.get("status") == "in_review":
+        d.submitted_for_review_at = datetime.utcnow()
+        d.submitted_by = user.id
     db.commit()
     db.refresh(d)
     return _serialize(d)
+
+
+@router.delete("/{doc_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_document(
+    doc_id: int,
+    db: Session = Depends(get_db),
+    user: GRCUser = Depends(require_auth),
+):
+    tid = _tenant_id(user, db)
+    d = db.query(FrameworkDocument).filter(
+        FrameworkDocument.id == doc_id,
+        FrameworkDocument.tenant_id == tid,
+    ).first()
+    if not d:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+    db.delete(d)
+    db.commit()
+    return None
 
 
 @router.post("/{doc_type}/reset")

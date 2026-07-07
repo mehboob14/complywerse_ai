@@ -348,7 +348,7 @@
     {
      "key": "control_id",
      "label": "Control ID",
-     "type": "textarea"
+     "type": "auto"
     },
     {
      "key": "control_description",
@@ -513,7 +513,7 @@
     {
      "key": "ref",
      "label": "Ref",
-     "type": "text"
+     "type": "auto"
     },
     {
      "key": "evidence_request_pbc",
@@ -535,7 +535,7 @@
     {
      "key": "requested",
      "label": "Requested",
-     "type": "text"
+     "type": "datetime"
     },
     {
      "key": "due",
@@ -545,7 +545,7 @@
     {
      "key": "received",
      "label": "Received?",
-     "type": "text"
+     "type": "datetime"
     },
     {
      "key": "reviewed",
@@ -621,7 +621,7 @@
     {
      "key": "ref",
      "label": "Ref",
-     "type": "text"
+     "type": "auto"
     },
     {
      "key": "workstream",
@@ -756,7 +756,7 @@
     {
      "key": "ref",
      "label": "Ref",
-     "type": "text"
+     "type": "auto"
     },
     {
      "key": "risk",
@@ -909,7 +909,7 @@
     {
      "key": "ref",
      "label": "Ref",
-     "type": "text"
+     "type": "auto"
     },
     {
      "key": "outcome_to_verify",

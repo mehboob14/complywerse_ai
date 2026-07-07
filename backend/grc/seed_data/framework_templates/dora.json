@@ -14,7 +14,7 @@
     {
      "key": "ref",
      "label": "Ref",
-     "type": "text"
+     "type": "auto"
     },
     {
      "key": "workstream",
@@ -557,12 +557,12 @@
     {
      "key": "ref",
      "label": "Ref",
-     "type": "text"
+     "type": "auto"
     },
     {
      "key": "date_time_detected",
      "label": "Date/time detected",
-     "type": "date"
+     "type": "datetime"
     },
     {
      "key": "description",
@@ -665,7 +665,6 @@
     {
      "title": "Ownership & dates",
      "keys": [
-      "date_time_detected",
       "date_reported",
       "owner"
      ]
@@ -680,7 +679,7 @@
     {
      "key": "ref",
      "label": "Ref",
-     "type": "text"
+     "type": "auto"
     },
     {
      "key": "ict_third_party_provider",

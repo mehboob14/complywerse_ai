@@ -13,7 +13,7 @@
     {
      "key": "ref",
      "label": "Ref",
-     "type": "text"
+     "type": "auto"
     },
     {
      "key": "system_process",
@@ -228,7 +228,7 @@
     {
      "key": "req",
      "label": "Req #",
-     "type": "text"
+     "type": "auto"
     },
     {
      "key": "pci_dss_v4_0_requirement_saq_a_focus",

@@ -2366,7 +2366,7 @@
     {
      "key": "ref",
      "label": "Ref",
-     "type": "text"
+     "type": "auto"
     },
     {
      "key": "system_platform",
@@ -2772,7 +2772,7 @@
     {
      "key": "ref",
      "label": "Ref",
-     "type": "text"
+     "type": "auto"
     },
     {
      "key": "system_use",
@@ -3214,7 +3214,7 @@
     {
      "key": "ref",
      "label": "Ref",
-     "type": "text"
+     "type": "auto"
     },
     {
      "key": "information_type_system",

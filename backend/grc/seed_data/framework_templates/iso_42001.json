@@ -13,7 +13,7 @@
     {
      "key": "ref",
      "label": "Ref",
-     "type": "text"
+     "type": "auto"
     },
     {
      "key": "ai_system_use",
@@ -380,7 +380,7 @@
     {
      "key": "ref",
      "label": "Ref",
-     "type": "text"
+     "type": "auto"
     },
     {
      "key": "workstream",
@@ -395,7 +395,7 @@
     {
      "key": "ref_2",
      "label": "Ref",
-     "type": "text"
+     "type": "auto"
     },
     {
      "key": "priority",

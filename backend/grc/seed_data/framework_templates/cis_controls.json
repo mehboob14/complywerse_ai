@@ -16,7 +16,7 @@
     {
      "key": "ref",
      "label": "Ref",
-     "type": "text"
+     "type": "auto"
     },
     {
      "key": "asset",
@@ -115,7 +115,7 @@
     {
      "key": "ref",
      "label": "Ref",
-     "type": "text"
+     "type": "auto"
     },
     {
      "key": "software",
@@ -458,7 +458,7 @@
     {
      "key": "control",
      "label": "Control #",
-     "type": "textarea"
+     "type": "auto"
     },
     {
      "key": "cis_control",

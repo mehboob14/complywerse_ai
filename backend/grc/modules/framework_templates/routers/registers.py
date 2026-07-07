@@ -95,6 +95,29 @@ def _has_seed(register_type: str) -> bool:
     return bool(rd and rd.get("seed"))
 
 
+def _auto_prefix(label: str) -> str:
+    words = ["".join(ch for ch in w if ch.isalpha()) for w in (label or "").replace("/", " ").split()]
+    words = [w for w in words if w]
+    if not words:
+        return "ID"
+    if len(words) >= 2:
+        return "".join(w[0] for w in words[:4]).upper()
+    return words[0][:3].upper()
+
+
+def _fill_auto(register_type: str, data: dict, n: int) -> dict:
+    """Assign platform-generated sequential values to 'auto' columns."""
+    rd = D.register_def(register_type)
+    if not rd:
+        return data or {}
+    out = dict(data or {})
+    for c in rd.get("columns", []):
+        if c.get("type") == "auto":
+            pref = c.get("prefix") or _auto_prefix(c.get("label", ""))
+            out[c["key"]] = f"{pref}-{n:03d}"
+    return out
+
+
 def _serialize(e: FrameworkRegisterEntry) -> Dict[str, Any]:
     return {
         "id": e.id,
@@ -162,7 +185,7 @@ def _seed(db: Session, tid: int, journey_id: int, framework_id: Optional[int],
             db.add(FrameworkRegisterEntry(
                 tenant_id=tid, journey_id=journey_id, uploaded_framework_id=framework_id,
                 register_type=register_type, seq=i, is_seed=True,
-                data=row.get("data", {}) or {},
+                data=_fill_auto(register_type, row.get("data", {}) or {}, i + 1),
                 created_by=user_id,
             ))
         if rows:
@@ -284,6 +307,8 @@ def create_entry(
         created_by=user.id,
         **payload.model_dump(exclude_unset=True),
     )
+    if register_type not in REGISTER_SEEDS:
+        e.data = _fill_auto(register_type, e.data or {}, max_seq + 1)
     db.add(e)
     db.commit()
     db.refresh(e)

@@ -20,7 +20,7 @@
     {
      "key": "id",
      "label": "ID",
-     "type": "text"
+     "type": "auto"
     },
     {
      "key": "outcomes_to_verify",
@@ -139,7 +139,7 @@
     {
      "key": "ref",
      "label": "Ref",
-     "type": "text"
+     "type": "auto"
     },
     {
      "key": "workstream",
@@ -154,7 +154,7 @@
     {
      "key": "ref_2",
      "label": "Ref",
-     "type": "text"
+     "type": "auto"
     },
     {
      "key": "priority",

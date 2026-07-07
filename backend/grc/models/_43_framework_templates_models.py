@@ -114,7 +114,12 @@ class FrameworkDocument(Base):
     approval_date = Column(DateTime, nullable=True)
     effective_date = Column(DateTime, nullable=True)
     next_review_date = Column(DateTime, nullable=True)
-    status = Column(String(50), default="draft")  # draft | approved
+    status = Column(String(50), default="draft")  # draft | in_review | approved
+    # Review workflow (governance-style): a reviewer + approver, submission audit.
+    reviewer_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    approver_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    submitted_for_review_at = Column(DateTime, nullable=True)
+    submitted_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
 
     # Sections: [{ "heading": str, "body": str,
     #              "table"?: { "columns": [str], "rows": [[str]] } }, ...]

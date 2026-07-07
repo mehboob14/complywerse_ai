@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { Plus, Trash2, RotateCcw, Loader2, Pencil, Search, Sparkles, ShieldAlert, ExternalLink, X } from 'lucide-react';
+import { Plus, Trash2, RotateCcw, Loader2, Pencil, Search, Sparkles, ShieldAlert, ExternalLink, X, Paperclip } from 'lucide-react';
 import { frameworkTemplatesApi, evidenceApi } from '@/lib/api';
 import { AnimatedModal, RightSlidePanel, MultiSelectDropdown } from '@/components/ui';
 import { useToast } from '@/components/ui/ToastProvider';
@@ -76,16 +76,16 @@ export default function FrameworkDynamicRegisterTab({ config, journeyId, framewo
   const rows = useMemo(() => data?.entries || [], [data]);
 
   const hasEvidenceCol = config.columns.some((c) => c.picker === 'evidence');
+  const [editing, setEditing] = useState<{ mode: 'add' | 'edit'; id?: number; draft: Record<string, unknown> } | null>(null);
   const { data: evidenceLib } = useQuery({
     queryKey: ['evidence-all'],
     queryFn: async () => (await evidenceApi.getAll()).data as unknown as Array<{ id: number; name?: string; title?: string; file_name?: string }>,
-    enabled: hasEvidenceCol,
+    enabled: hasEvidenceCol || editing != null,
     staleTime: 60_000,
   });
   const evidenceItems = (evidenceLib || []).map((e) => ({ value: e.name || e.title || e.file_name || `Evidence #${e.id}`, label: e.name || e.title || e.file_name || `Evidence #${e.id}` }));
 
   const [search, setSearch] = useState('');
-  const [editing, setEditing] = useState<{ mode: 'add' | 'edit'; id?: number; draft: Record<string, unknown> } | null>(null);
   const [deleteRow, setDeleteRow] = useState<DynEntry | null>(null);
   const [moveCtx, setMoveCtx] = useState<{ entry: DynEntry; title: string; description: string } | null>(null);
   const [aiSummary, setAiSummary] = useState<string | null>(null);
@@ -148,6 +148,27 @@ export default function FrameworkDynamicRegisterTab({ config, journeyId, framewo
     },
     onError: () => toast({ type: 'error', title: 'Could not create risk', message: 'Please try again.' }),
   });
+  // AI assist inside the item popup — fills the draft form for the user to review + save.
+  const popupAiMut = useMutation({
+    mutationFn: async () => {
+      if (!editing) return {} as Record<string, unknown>;
+      const res = await frameworkTemplatesApi.ai.register({
+        register_type: config.type, framework_name: frameworkName,
+        rows: [{ id: editing.id ?? 0, ...editing.draft }],
+      });
+      const out = res.data as { suggestions: Array<Record<string, unknown>>; keys: string[] };
+      const sug = (out.suggestions || [])[0] || {};
+      const patch: Record<string, unknown> = {};
+      (out.keys || []).forEach((k) => { if (sug[k] != null && sug[k] !== '') patch[k] = sug[k]; });
+      return patch;
+    },
+    onSuccess: (patch) => {
+      setEditing((prev) => (prev ? { ...prev, draft: { ...prev.draft, ...patch } } : prev));
+      toast({ type: 'success', title: 'AI filled the form', message: 'Review the suggestions, then Save.' });
+    },
+    onError: (e: { response?: { data?: { detail?: string } } }) =>
+      toast({ type: 'error', title: 'AI assist failed', message: e?.response?.data?.detail || 'Try again.' }),
+  });
 
   // Most meaningful value in a row — used as the default risk title.
   const rowTitle = (row: DynEntry) => {
@@ -179,11 +200,13 @@ export default function FrameworkDynamicRegisterTab({ config, journeyId, framewo
   // ── read-only display cell ──
   const displayCell = (row: DynEntry, col: DynColumn) => {
     const raw = (row.data || {})[col.key];
+    if (col.type === 'auto') return raw ? <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] text-slate-600">{String(raw)}</span> : <span className="text-xs text-slate-300">—</span>;
     if (col.type === 'select') {
       const meta = optionMeta(col, raw);
       if (!meta || !meta.value) return <span className="text-xs text-slate-300">—</span>;
       return <span className={`inline-flex rounded-md border px-2 py-0.5 text-[11px] font-medium ${TONE_CLASSES[(meta.tone as Tone) || 'slate'] || TONE_CLASSES.slate}`}>{meta.label}</span>;
     }
+    if (col.type === 'datetime') return raw ? <span className="text-sm text-slate-600">{new Date(String(raw)).toLocaleString()}</span> : <span className="text-xs text-slate-300">—</span>;
     if (col.type === 'date') return raw ? <span className="text-sm text-slate-600">{new Date(String(raw)).toLocaleDateString()}</span> : <span className="text-xs text-slate-300">—</span>;
     const txt = raw == null ? '' : String(raw);
     if (!txt) return <span className="text-xs text-slate-300">—</span>;
@@ -208,10 +231,14 @@ export default function FrameworkDynamicRegisterTab({ config, journeyId, framewo
       if (cur && !items.some((i) => i.value === cur)) items.unshift({ value: cur, label: cur });
       return <FormDropdown value={cur} items={items} placeholder="Link evidence…" searchable onChange={set} />;
     }
+    if (col.type === 'auto') {
+      return <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-mono text-slate-500">{(val as string) || 'Auto-generated on save'}</div>;
+    }
     if (col.type === 'select') {
       const items = (col.options || []).filter((o) => o.value !== '').map((o) => ({ value: o.value, label: o.label }));
       return <FormDropdown value={(val as string) || ''} items={items} placeholder={col.label} onChange={set} />;
     }
+    if (col.type === 'datetime') return <input type="datetime-local" value={val ? String(val).slice(0, 16) : ''} onChange={(e) => set(e.target.value || null)} className={cls} />;
     if (col.type === 'date') return <input type="date" value={val ? String(val).slice(0, 10) : ''} onChange={(e) => set(e.target.value || null)} className={cls} />;
     if (col.type === 'textarea') return <textarea rows={3} value={(val as string) ?? ''} onChange={(e) => set(e.target.value)} className={`${cls} resize-y`} />;
     return <input type="text" value={(val as string) ?? ''} onChange={(e) => set(e.target.value)} className={cls} />;
@@ -287,10 +314,9 @@ export default function FrameworkDynamicRegisterTab({ config, journeyId, framewo
                 {config.columns.map((c) => <td key={c.key} className="px-3 py-2.5">{displayCell(row, c)}</td>)}
                 <td className="px-3 py-2.5">
                   <div className="flex items-center justify-end gap-1">
-                    <button type="button" onClick={() => { setBusyRowId(row.id); aiMut.mutate([row]); }} disabled={aiMut.isPending}
-                      className="rounded-md p-1.5 text-slate-400 hover:bg-purple-50 hover:text-purple-600 disabled:opacity-40" title="AI assess this row" aria-label="AI assess row">
-                      {busyRowId === row.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" strokeWidth={1.75} />}
-                    </button>
+                    {row.data && (row.data as Record<string, unknown>).__evidence ? (
+                      <span className="text-emerald-500" title={`Evidence: ${String((row.data as Record<string, unknown>).__evidence)}`}><Paperclip className="h-3.5 w-3.5" strokeWidth={1.75} /></span>
+                    ) : null}
                     {row.risk_register_id ? (
                       <Link href={`/erm/risks/${row.risk_register_id}`} className="inline-flex items-center gap-1 rounded-md bg-rose-50 px-2 py-1 text-[11px] font-medium text-rose-700 hover:bg-rose-100" title="Open linked risk">
                         Risk #{row.risk_register_id} <ExternalLink className="h-3 w-3" />
@@ -321,12 +347,18 @@ export default function FrameworkDynamicRegisterTab({ config, journeyId, framewo
         subtitle={frameworkName}
         width="620px"
         footer={
-          <div className="flex justify-end gap-2">
-            <button type="button" onClick={() => setEditing(null)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50">Cancel</button>
-            <button type="button" onClick={submitForm} disabled={saveMut.isPending}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-primary-500 px-4 py-2 text-sm font-semibold text-[#0a0a0a] hover:bg-primary-600 disabled:opacity-50">
-              {saveMut.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {editing?.mode === 'add' ? 'Add row' : 'Save changes'}
+          <div className="flex items-center justify-between gap-2">
+            <button type="button" onClick={() => popupAiMut.mutate()} disabled={popupAiMut.isPending}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50 px-3 py-2 text-sm font-semibold text-purple-700 hover:bg-purple-100 disabled:opacity-50">
+              {popupAiMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" strokeWidth={1.75} />} AI assess this item
             </button>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setEditing(null)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50">Cancel</button>
+              <button type="button" onClick={submitForm} disabled={saveMut.isPending}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-primary-500 px-4 py-2 text-sm font-semibold text-[#0a0a0a] hover:bg-primary-600 disabled:opacity-50">
+                {saveMut.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {editing?.mode === 'add' ? 'Add row' : 'Save changes'}
+              </button>
+            </div>
           </div>
         }
       >
@@ -349,6 +381,21 @@ export default function FrameworkDynamicRegisterTab({ config, journeyId, framewo
                 </div>
               </div>
             ))}
+            {!hasEvidenceCol && (
+              <div>
+                <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Evidence</h3>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">Linked evidence</label>
+                  <FormDropdown
+                    value={(editing.draft.__evidence as string) || ''}
+                    items={(evidenceLib || []).map((e) => { const n = e.name || e.title || e.file_name || `Evidence #${e.id}`; return { value: n, label: n }; })}
+                    placeholder="Link evidence…"
+                    searchable
+                    onChange={(v) => setEditing((prev) => (prev ? { ...prev, draft: { ...prev.draft, __evidence: v } } : prev))}
+                  />
+                </div>
+              </div>
+            )}
           </div>
         )}
       </RightSlidePanel>

@@ -2,10 +2,31 @@
 
 import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Trash2, RotateCcw, Save, Loader2, GripVertical, Sparkles, X } from 'lucide-react';
+import { Plus, Trash2, RotateCcw, Save, Loader2, GripVertical, Sparkles, X, Send, CheckCircle2 } from 'lucide-react';
 import { frameworkTemplatesApi } from '@/lib/api';
+import { AnimatedModal, MultiSelectDropdown } from '@/components/ui';
 import { useToast } from '@/components/ui/ToastProvider';
 import type { TenantUserOption } from './templateConfigs';
+
+function UserDropdown({ value, users, placeholder, onChange }: {
+  value: string; users: TenantUserOption[]; placeholder?: string; onChange: (v: string) => void;
+}) {
+  return (
+    <MultiSelectDropdown
+      title={placeholder || 'Select user'}
+      items={users.map((u) => ({ value: String(u.id), label: u.name }))}
+      selectedValues={value ? [value] : []}
+      onApply={(vals) => onChange(vals[0] || '')}
+      multiSelect={false}
+      triggerVariant="input"
+      size="sm"
+      showSelectionInTrigger
+      forceSearch={users.length > 8}
+      placeholder={placeholder}
+      className="w-full"
+    />
+  );
+}
 
 interface DocTable { columns: string[]; rows: string[][]; }
 interface DocSection { heading: string; body: string; table?: DocTable; }
@@ -24,6 +45,9 @@ interface FrameworkDoc {
   effective_date: string | null;
   next_review_date: string | null;
   status: string | null;
+  reviewer_id: number | null;
+  approver_id: number | null;
+  submitted_for_review_at: string | null;
   sections: DocSection[];
 }
 
@@ -59,7 +83,7 @@ export default function FrameworkDocumentTab({ docType, journeyId, frameworkId, 
       title: d.title, organization: d.organization, owner_id: d.owner_id, owner_name: d.owner_name,
       classification: d.classification, version: d.version, approved_by: d.approved_by,
       approval_date: d.approval_date, effective_date: d.effective_date, next_review_date: d.next_review_date,
-      status: d.status, sections: d.sections,
+      status: d.status, reviewer_id: d.reviewer_id, approver_id: d.approver_id, sections: d.sections,
     }),
     onSuccess: () => { setDirty(false); qc.invalidateQueries({ queryKey }); toast({ type: 'success', title: 'Saved', message: 'Document updated.' }); },
     onError: () => toast({ type: 'error', title: 'Save failed', message: 'Please try again.' }),
@@ -88,6 +112,23 @@ export default function FrameworkDocumentTab({ docType, journeyId, frameworkId, 
     onError: (e: { response?: { data?: { detail?: string } } }) =>
       toast({ type: 'error', title: 'AI draft failed', message: e?.response?.data?.detail || 'Try again.' }),
   });
+
+  const [showDelete, setShowDelete] = useState(false);
+  const deleteMut = useMutation({
+    mutationFn: () => frameworkTemplatesApi.documents.remove(doc!.id),
+    onSuccess: () => { setShowDelete(false); qc.invalidateQueries({ queryKey }); toast({ type: 'success', title: 'Document deleted', message: 'A fresh copy is created from the template on next open.' }); },
+    onError: () => toast({ type: 'error', title: 'Delete failed', message: 'Please try again.' }),
+  });
+  const doTransition = (newStatus: string) => {
+    if (!doc) return;
+    if (newStatus === 'in_review' && (!doc.reviewer_id || !doc.approver_id)) {
+      toast({ type: 'error', title: 'Reviewer & approver required', message: 'Assign a reviewer and approver first.' });
+      return;
+    }
+    const nd = { ...doc, status: newStatus };
+    setDoc(nd);
+    saveMut.mutate(nd);
+  };
 
   const set = <K extends keyof FrameworkDoc>(key: K, value: FrameworkDoc[K]) => {
     setDoc((prev) => (prev ? { ...prev, [key]: value } : prev));
@@ -139,10 +180,30 @@ export default function FrameworkDocumentTab({ docType, journeyId, frameworkId, 
       {/* Header + save */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="text-base font-semibold text-slate-900">{doc.title}</h3>
-          {doc.control_ref && <p className="mt-0.5 text-xs text-slate-500">ISO 27001 · {doc.control_ref}</p>}
+          <div className="flex items-center gap-2">
+            <h3 className="text-base font-semibold text-slate-900">{doc.title}</h3>
+            {(() => {
+              const st = doc.status || 'draft';
+              const cls = st === 'approved' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : st === 'in_review' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-slate-100 text-slate-600 border-slate-200';
+              const lbl = st === 'in_review' ? 'In review' : st.charAt(0).toUpperCase() + st.slice(1);
+              return <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${cls}`}>{lbl}</span>;
+            })()}
+          </div>
+          {doc.control_ref && <p className="mt-0.5 text-xs text-slate-500">{frameworkName} · {doc.control_ref}</p>}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {(doc.status || 'draft') === 'draft' && (
+            <button type="button" onClick={() => doTransition('in_review')} disabled={saveMut.isPending}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-100 disabled:opacity-50">
+              <Send className="h-3.5 w-3.5" strokeWidth={1.75} /> Send for review
+            </button>
+          )}
+          {(doc.status || 'draft') === 'in_review' && (
+            <button type="button" onClick={() => doTransition('approved')} disabled={saveMut.isPending}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50">
+              <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={1.75} /> Approve
+            </button>
+          )}
           <button type="button" onClick={() => aiMut.mutate()} disabled={aiMut.isPending}
             className="inline-flex items-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-700 hover:bg-purple-100 disabled:opacity-50">
             {aiMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" strokeWidth={1.75} />} AI draft
@@ -155,6 +216,10 @@ export default function FrameworkDocumentTab({ docType, journeyId, frameworkId, 
             className="inline-flex items-center gap-1.5 rounded-lg bg-primary-500 px-3 py-1.5 text-xs font-semibold text-[#0a0a0a] hover:bg-primary-600 disabled:opacity-50">
             {saveMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" strokeWidth={2} />}
             {dirty ? 'Save changes' : 'Saved'}
+          </button>
+          <button type="button" onClick={() => setShowDelete(true)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-500 hover:border-rose-300 hover:text-rose-600" title="Delete document" aria-label="Delete document">
+            <Trash2 className="h-3.5 w-3.5" strokeWidth={1.75} />
           </button>
         </div>
       </div>
@@ -194,7 +259,19 @@ export default function FrameworkDocumentTab({ docType, journeyId, frameworkId, 
           </div>
           <div>
             <label className={labelCls}>Approved by</label>
-            <input className={inputCls} value={doc.approved_by || ''} onChange={(e) => set('approved_by', e.target.value)} placeholder="[Name / Title]" />
+            <MultiSelectDropdown title="Approved by"
+              items={[...(doc.approved_by && !tenantUsers.some((u) => u.name === doc.approved_by) ? [{ value: doc.approved_by, label: doc.approved_by }] : []), ...tenantUsers.map((u) => ({ value: u.name, label: u.name }))]}
+              selectedValues={doc.approved_by ? [doc.approved_by] : []}
+              onApply={(v) => set('approved_by', v[0] || null)}
+              multiSelect={false} triggerVariant="input" size="sm" showSelectionInTrigger forceSearch={tenantUsers.length > 8} placeholder="Select approver" className="w-full" />
+          </div>
+          <div>
+            <label className={labelCls}>Reviewer</label>
+            <UserDropdown value={doc.reviewer_id != null ? String(doc.reviewer_id) : ''} users={tenantUsers} placeholder="Select reviewer" onChange={(v) => set('reviewer_id', v ? Number(v) : null)} />
+          </div>
+          <div>
+            <label className={labelCls}>Approver</label>
+            <UserDropdown value={doc.approver_id != null ? String(doc.approver_id) : ''} users={tenantUsers} placeholder="Select approver" onChange={(v) => set('approver_id', v ? Number(v) : null)} />
           </div>
           <div>
             <label className={labelCls}>Effective date</label>
@@ -208,6 +285,7 @@ export default function FrameworkDocumentTab({ docType, journeyId, frameworkId, 
             <label className={labelCls}>Status</label>
             <select className={inputCls} value={doc.status || 'draft'} onChange={(e) => set('status', e.target.value)}>
               <option value="draft">Draft</option>
+              <option value="in_review">In review</option>
               <option value="approved">Approved</option>
             </select>
           </div>
@@ -281,6 +359,19 @@ export default function FrameworkDocumentTab({ docType, journeyId, frameworkId, 
           <Plus className="h-4 w-4" strokeWidth={1.75} /> Add section
         </button>
       </div>
+
+      <AnimatedModal isOpen={showDelete} onClose={() => setShowDelete(false)} title="Delete document" size="md">
+        <div className="space-y-4 p-5">
+          <p className="text-sm text-slate-600">Delete <span className="font-medium text-slate-900">{doc.title}</span>? A fresh copy is created from the template the next time this tab is opened.</p>
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={() => setShowDelete(false)} className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50">Cancel</button>
+            <button type="button" onClick={() => deleteMut.mutate()} disabled={deleteMut.isPending}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-50">
+              {deleteMut.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Delete
+            </button>
+          </div>
+        </div>
+      </AnimatedModal>
     </div>
   );
 }

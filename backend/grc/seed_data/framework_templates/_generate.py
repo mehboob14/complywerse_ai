@@ -44,6 +44,8 @@ def humanize_file(fn):
     base = re.sub(r"^(iso.?27001|cis.?controls|dora|gdpr|hipaa|hitrust|iso.?22301|iso.?42001|nis2|nist.?800.?\d*|nist.?ai.?rmf|nist.?csf|pci.?dss|soc.?2|sox)\b[\s-]*", "", base, flags=re.I)
     return re.sub(r"\s+", " ", base).strip().title() or "Register"
 
+AUTO_RE = re.compile(r"^\s*(ref\.?|ref\s*#|ref\s*no\.?|reference\s*#?|control\s*id|id|#|no\.?|s/?n|serial|item\s*#|control\s*#|line\s*#|req\s*#|entry\s*#)\s*$", re.I)
+DATETIME_RE = re.compile(r"requested|logged\s*at|received|submitted|timestamp|date\s*[&/]\s*time|date and time", re.I)
 DATE_RE = re.compile(r"\b(date|due|target|deadline|review|expiry|effective|when|timeline)\b", re.I)
 USER_RE = re.compile(r"\b(owner|responsible|assigned|assignee|reviewer|approver|approved by|accountable|dpo|contact|lead|sponsor)\b", re.I)
 EVID_RE = re.compile(r"\b(evidence|attachment|link to)\b", re.I)
@@ -170,10 +172,14 @@ def parse_xlsx(path):
             if 2 <= len(toks) <= 6:
                 hdr_opts = toks
                 disp_label = re.sub(r"\s*\([^)]*\)\s*$", "", label).strip() or label
-        if USER_RE.search(label):
+        if AUTO_RE.match(label):
+            ctype = "auto"
+        elif USER_RE.search(label):
             picker = "users"; ctype = "text"
         elif EVID_RE.search(label):
             picker = "evidence"; ctype = "text"
+        elif DATETIME_RE.search(label):
+            ctype = "datetime"
         elif hdr_opts:
             ctype = "select"
             options = [{"value": v, "label": v, "tone": tone_for(v)} for v in hdr_opts]

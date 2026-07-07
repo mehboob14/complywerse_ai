@@ -14,7 +14,7 @@
     {
      "key": "col",
      "label": "#",
-     "type": "text"
+     "type": "auto"
     },
     {
      "key": "gdpr_area",

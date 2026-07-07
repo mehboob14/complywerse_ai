@@ -8,6 +8,7 @@ two tables on first request per engine (idempotent, checkfirst) so the feature
 works without depending on restart ordering.
 """
 import threading
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from ...models import Base, FrameworkRegisterEntry, FrameworkDocument
@@ -33,6 +34,15 @@ def ensure_framework_template_tables(db: Session) -> None:
                 tables=[FrameworkRegisterEntry.__table__, FrameworkDocument.__table__],
                 checkfirst=True,
             )
+            # Additive columns for the document review workflow — create_all does
+            # NOT alter an already-provisioned table on existing tenant DBs.
+            for col, ddl in (("reviewer_id", "INTEGER"), ("approver_id", "INTEGER"),
+                             ("submitted_for_review_at", "TIMESTAMP"), ("submitted_by", "INTEGER")):
+                try:
+                    db.execute(text(f"ALTER TABLE grc_framework_documents ADD COLUMN IF NOT EXISTS {col} {ddl}"))
+                    db.commit()
+                except Exception:
+                    db.rollback()
             _ensured.add(key)
         except Exception:
             # Never break a request on a self-heal failure; the query will
