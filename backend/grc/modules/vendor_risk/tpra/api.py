@@ -8,7 +8,7 @@ and append an audit row. History-bearing records soft-delete + restore.
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File, Form
 from pydantic import BaseModel
@@ -19,10 +19,10 @@ from ....models import (
     get_db, GRCUser, Vendor, VendorAssessment,
     TPRAStageInstance, TPRAFinding, TPRARemediation, TPRARiskAcceptance,
     TPRAContract, TPRAControlObligation, TPRAApproval, TPRAMonitoringSignal,
-    TPRAEvidenceLink, Evidence, TPRATieringConfig, TPRAAuditLog,
+    TPRAEvidenceLink, Evidence, TPRATieringConfig, TPRAAuditLog, TPRASharedAssessment,
 )
 from ....routers.auth_router import require_auth, get_user_tenants
-from . import service, rbac
+from . import service, rbac, exchange
 from .stages import stages_payload, is_valid_stage
 from .engine_monitoring import should_trigger_reassessment
 from .schema_migrations import ensure_tpra_columns
@@ -139,10 +139,34 @@ def s_obligation(o: TPRAControlObligation) -> dict:
     }
 
 
+def _condition_stats(conditions) -> tuple:
+    """(open, overdue) counts over an approval's tracked conditions. A legacy plain
+    -string condition counts as open/untracked."""
+    now = datetime.utcnow()
+    open_ct = overdue_ct = 0
+    for c in (conditions or []):
+        if not isinstance(c, dict):
+            open_ct += 1
+            continue
+        if c.get("status") == "closed":
+            continue
+        open_ct += 1
+        due = c.get("due_date")
+        if due:
+            try:
+                if datetime.fromisoformat(str(due).replace("Z", "")) < now:
+                    overdue_ct += 1
+            except (ValueError, TypeError):
+                pass
+    return open_ct, overdue_ct
+
+
 def s_approval(a: TPRAApproval) -> dict:
+    _open, _overdue = _condition_stats(a.conditions)
     return {
         "id": a.id, "assessment_id": a.assessment_id, "decision": a.decision,
         "conditions": a.conditions or [], "recommendation": a.recommendation,
+        "open_conditions": _open, "overdue_conditions": _overdue,
         "rationale": a.rationale, "approver_id": a.approver_id,
         "residual_rating": a.residual_rating, "created_at": a.created_at,
     }
@@ -154,6 +178,8 @@ def s_signal(s: TPRAMonitoringSignal) -> dict:
         "severity": s.severity, "source": s.source, "title": s.title, "detail": s.detail,
         "occurred_at": s.occurred_at, "triggered_reassessment": s.triggered_reassessment,
         "triggered_assessment_id": s.triggered_assessment_id, "acknowledged": s.acknowledged,
+        "acknowledged_by": getattr(s, "acknowledged_by", None),
+        "acknowledged_at": getattr(s, "acknowledged_at", None),
         "row_version": s.row_version,
     }
 
@@ -197,19 +223,24 @@ class ReassessIn(BaseModel):
     reason: str
     assessment_type: Optional[str] = "reassessment"
 
+# Controlled vocabularies (no free-text severity/status that a typo can slip past
+# the gate/suspension logic, which string-matches on these exact values).
+_SEVERITY = Literal["critical", "high", "medium", "low"]
+_FINDING_STATUS = Literal["open", "in_remediation", "accepted", "closed"]
+
 class FindingIn(BaseModel):
     domain: str = "cybersecurity"
-    severity: str = "medium"
+    severity: _SEVERITY = "medium"
     title: Optional[str] = None
     description: Optional[str] = None
-    status: Optional[str] = "open"
+    status: _FINDING_STATUS = "open"
 
 class FindingUpdate(BaseModel):
     domain: Optional[str] = None
-    severity: Optional[str] = None
+    severity: Optional[_SEVERITY] = None
     title: Optional[str] = None
     description: Optional[str] = None
-    status: Optional[str] = None
+    status: Optional[_FINDING_STATUS] = None
     row_version: Optional[int] = None
 
 class RemediationIn(BaseModel):
@@ -257,9 +288,21 @@ class ObligationUpdate(BaseModel):
     row_version: Optional[int] = None
 
 class ApprovalIn(BaseModel):
-    decision: str
+    decision: Literal["approve", "approve_with_conditions", "defer", "reject"]
     conditions: Optional[list] = None
     rationale: Optional[str] = None
+
+class ConditionUpdate(BaseModel):
+    status: Optional[Literal["open", "closed"]] = None
+    owner_id: Optional[int] = None
+    due_date: Optional[datetime] = None
+
+class PublishShareIn(BaseModel):
+    expires_days: Optional[int] = 180
+
+class ImportShareIn(BaseModel):
+    share_token: Optional[str] = None
+    package: Optional[dict] = None
 
 class SignalIn(BaseModel):
     signal_type: str
@@ -274,6 +317,7 @@ class SignalUpdate(BaseModel):
     title: Optional[str] = None
     detail: Optional[str] = None
     acknowledged: Optional[bool] = None
+    row_version: Optional[int] = None  # optimistic-concurrency token (was missing)
 
 class ChecklistItemIn(BaseModel):
     text: str
@@ -284,13 +328,6 @@ class ChecklistItemIn(BaseModel):
 
 class ChecklistIn(BaseModel):
     items: List[ChecklistItemIn]
-
-class RoleAssignmentIn(BaseModel):
-    role: str          # R | A | C | I
-    user_id: int
-
-class RolesIn(BaseModel):
-    assigned_roles: List[RoleAssignmentIn]
 
 class TeamIn(BaseModel):
     # Assessment-level RACI team roster: {role_key: user_id}. Assigned once.
@@ -505,6 +542,17 @@ def run_scoring(assessment_id: int, db: Session = Depends(get_db), user: GRCUser
     a = _assessment(db, assessment_id, tids)
     v = _vendor(db, a.vendor_id, tids)
     rbac.require_write(db, user, "assessments", "edit")
+    # Completeness precondition — don't score out of band against no/empty answers
+    # (a residual computed from nothing collapses to inherent and can silently drive
+    # a go decision). The lifecycle stage gate enforces all-answered; this guards the
+    # raw endpoint when called directly.
+    from .engine_scoring import normalize_answer as _norm
+    _resp = service.collect_responses_for_scoring(db, a.id)
+    if not _resp or not any(_norm(r.get("answer")) is not None for r in _resp):
+        raise HTTPException(
+            status_code=400,
+            detail="No answered questionnaire responses to score — issue and collect the questionnaire first.",
+        )
     result = service.run_scoring(db, v, a, actor_id=user.id)
     db.commit()
     return result
@@ -594,6 +642,32 @@ def update_finding(finding_id: int, body: FindingUpdate, db: Session = Depends(g
     rbac.require_write(db, user, "findings", "edit")
     _check_concurrency(f, body.row_version)
     prev_status = f.status
+    # State-machine guard — 'accepted' and 'closed' are NOT free status flips:
+    #  • 'accepted' must go through the acceptance workflow (POST .../acceptances)
+    #    so an accountable owner signs off and a TPRARiskAcceptance record exists;
+    #  • 'closed' requires evidence of fix — at least one completed remediation.
+    # Without this, a critical finding could clear the approval gate and auto-
+    # reactivate a suspended vendor simply by picking a status from a dropdown.
+    if body.status and body.status != prev_status:
+        if body.status == "accepted":
+            raise HTTPException(
+                status_code=400,
+                detail="Use 'Accept risk' to record an accountable sign-off — a finding cannot be set to 'accepted' directly.",
+            )
+        if body.status == "closed":
+            _completed_rem = (
+                db.query(TPRARemediation.id)
+                .filter(
+                    TPRARemediation.finding_id == f.id,
+                    TPRARemediation.deleted_at.is_(None),
+                    TPRARemediation.status == "completed",
+                ).first()
+            )
+            if not _completed_rem:
+                raise HTTPException(
+                    status_code=400,
+                    detail="A finding can only be closed after a remediation is completed (evidence of fix) — or record a risk acceptance instead.",
+                )
     for field in ("domain", "severity", "title", "description", "status"):
         val = getattr(body, field)
         if val is not None:
@@ -807,10 +881,15 @@ def create_remediation(finding_id: int, body: RemediationIn, db: Session = Depen
     tids = _tids(user, db)
     f = _get(db, TPRAFinding, finding_id, tids)
     rbac.require_write(db, user, "findings", "edit")
+    # Auto-populate a due date from the finding's severity SLA when the analyst
+    # didn't set one, so every remediation carries an aging clock (a critical must
+    # be fixed in days, not "whenever") and can actually surface as overdue.
+    from .stages import remediation_sla_days_for
+    _due = body.due_date or (datetime.utcnow() + timedelta(days=remediation_sla_days_for(f.severity)))
     r = TPRARemediation(
         tenant_id=f.tenant_id, finding_id=f.id, title=body.title, plan=body.plan,
         treatment_type=body.treatment_type or "remediate", owner_id=body.owner_id,
-        due_date=body.due_date, status=body.status or "open",
+        due_date=_due, status=body.status or "open",
     )
     if f.status == "open":
         f.status = "in_remediation"
@@ -858,7 +937,23 @@ def delete_remediation(rem_id: int, db: Session = Depends(get_db), user: GRCUser
 def create_acceptance(finding_id: int, body: AcceptanceIn, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
     tids = _tids(user, db)
     f = _get(db, TPRAFinding, finding_id, tids)
-    rbac.require_write(db, user, "findings", "accept_risk")
+    # accept_risk is high-sensitivity: require the dedicated permission (no broad
+    # erm:risks:edit backdoor) so it can be held by an accountable approver role.
+    rbac.require_write(db, user, "findings", "accept_risk", allow_fallback=False)
+    # Segregation of duties — the person who raised a critical/high finding cannot
+    # sign off its own acceptance; an independent accountable owner must.
+    if f.severity in ("critical", "high") and f.created_by and f.created_by == user.id:
+        raise HTTPException(
+            status_code=403,
+            detail="Segregation of duties: the finding's author cannot accept its own critical/high risk — a different accountable owner must sign off.",
+        )
+    # Critical/high acceptances must be time-boxed so they are re-reviewed on a date
+    # rather than standing perpetually (an expired acceptance re-surfaces the risk).
+    if f.severity in ("critical", "high") and body.expiry is None:
+        raise HTTPException(
+            status_code=400,
+            detail="An expiry date is required to accept a critical/high risk (acceptances must be time-boxed for re-review).",
+        )
     a = TPRARiskAcceptance(
         tenant_id=f.tenant_id, finding_id=f.id, rationale=body.rationale,
         accepted_by=user.id, accepted_at=datetime.utcnow(), expiry=body.expiry, status="active",
@@ -1038,11 +1133,53 @@ def list_approvals(assessment_id: int, db: Session = Depends(get_db), user: GRCU
 def create_approval(assessment_id: int, body: ApprovalIn, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
     tids = _tids(user, db)
     a = _assessment(db, assessment_id, tids)
-    rbac.require_write(db, user, "approvals", "approve")
+    # approvals:approve is high-sensitivity — no broad erm:risks:edit backdoor.
+    rbac.require_write(db, user, "approvals", "approve", allow_fallback=False)
+    if body.decision in ("approve", "approve_with_conditions"):
+        # Segregation of duties — the approver must be independent of whoever
+        # performed or reviewed the assessment.
+        if user.id is not None and user.id in (a.assessed_by, a.reviewed_by):
+            raise HTTPException(
+                status_code=403,
+                detail="Segregation of duties: the assessor/reviewer cannot approve their own assessment — an independent approver is required.",
+            )
+        # Preconditions — a positive decision requires a computed residual and no
+        # unmitigated critical findings (the gate can otherwise be pre-stamped).
+        if a.residual_score is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Score the assessment before recording an approval decision.",
+            )
+        _open_crit = service.count_open_critical(db, a.id)
+        if _open_crit > 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot approve while {_open_crit} unmitigated critical finding(s) remain — remediate or formally accept them first.",
+            )
     rec = service.recommend_decision(a.residual_rating or "medium", service.count_open_critical(db, a.id))
+    # Conditions are TRACKED items chased to closure, not write-once text: each
+    # carries a stable id + status + owner + due date, so open/overdue conditions
+    # can be surfaced instead of captured-and-forgotten. Accepts plain strings
+    # (legacy UI) or structured dicts.
+    _conditions = []
+    for i, c in enumerate(body.conditions or []):
+        if isinstance(c, dict):
+            _text = str(c.get("text") or c.get("condition") or "").strip()
+            if not _text:
+                continue
+            _conditions.append({
+                "id": str(c.get("id") or f"c{i}"), "text": _text,
+                "status": c.get("status") or "open", "owner_id": c.get("owner_id"),
+                "due_date": c.get("due_date"), "resolved_at": c.get("resolved_at"),
+            })
+        elif str(c).strip():
+            _conditions.append({
+                "id": f"c{i}", "text": str(c).strip(), "status": "open",
+                "owner_id": None, "due_date": None, "resolved_at": None,
+            })
     ap = TPRAApproval(
         tenant_id=a.tenant_id, vendor_id=a.vendor_id, assessment_id=a.id,
-        decision=body.decision, conditions=body.conditions or [], recommendation=rec,
+        decision=body.decision, conditions=_conditions, recommendation=rec,
         rationale=body.rationale, approver_id=user.id, residual_rating=a.residual_rating,
     )
     db.add(ap)
@@ -1052,6 +1189,151 @@ def create_approval(assessment_id: int, body: ApprovalIn, db: Session = Depends(
                         to_value=body.decision, reason=body.rationale)
     db.commit()
     return s_approval(ap)
+
+
+@router.patch("/approvals/{approval_id}/conditions/{condition_id}")
+def update_condition(approval_id: int, condition_id: str, body: ConditionUpdate,
+                     db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    """Track an approval condition to closure — resolve it, or assign an owner/due
+    date. The append-only decision itself is never changed; only the condition's
+    state moves, so 'approve with conditions' is chased rather than forgotten."""
+    tids = _tids(user, db)
+    ap = _get(db, TPRAApproval, approval_id, tids)
+    rbac.require_write(db, user, "approvals", "edit")
+    new_conditions = []
+    found = False
+    for c in (ap.conditions or []):
+        c = dict(c) if isinstance(c, dict) else {"id": None, "text": str(c), "status": "open"}
+        if str(c.get("id")) == str(condition_id):
+            if body.status is not None:
+                c["status"] = body.status
+                c["resolved_at"] = datetime.utcnow().isoformat() if body.status == "closed" else None
+            if body.owner_id is not None:
+                c["owner_id"] = body.owner_id
+            if body.due_date is not None:
+                c["due_date"] = body.due_date.isoformat()
+            found = True
+        new_conditions.append(c)
+    if not found:
+        raise HTTPException(status_code=404, detail="Condition not found")
+    ap.conditions = new_conditions  # new list + copied dicts flags the JSON column dirty
+    service.write_audit(db, ap.tenant_id, entity="approval", action="update",
+                        vendor_id=ap.vendor_id, assessment_id=ap.assessment_id, entity_id=ap.id,
+                        actor_id=user.id, extra={"condition": condition_id, "status": body.status})
+    db.commit()
+    return s_approval(ap)
+
+
+# ── Vendor exchange — shared / reusable assessments ──────────────────────────
+
+def s_shared(x: TPRASharedAssessment) -> dict:
+    return {
+        "id": x.id, "vendor_id": x.vendor_id, "vendor_name": x.vendor_name,
+        "source_assessment_id": x.source_assessment_id, "template_name": x.template_name,
+        "residual_rating": x.residual_rating, "residual_score": x.residual_score,
+        "inherent_tier": x.inherent_tier, "evidence_count": x.evidence_count,
+        "response_count": len(x.responses or {}), "share_token": x.share_token,
+        "status": x.status, "validated_at": x.validated_at, "expires_at": x.expires_at,
+        "created_at": x.created_at,
+    }
+
+
+@router.post("/assessments/{assessment_id}/publish-shared", status_code=status.HTTP_201_CREATED)
+def publish_shared(assessment_id: int, body: PublishShareIn = PublishShareIn(),
+                   db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    tids = _tids(user, db)
+    a = _assessment(db, assessment_id, tids)
+    v = _vendor(db, a.vendor_id, tids)
+    rbac.require_write(db, user, "assessments", "edit")
+    ensure_tpra_columns(db)
+    try:
+        shared = exchange.publish_shared_assessment(db, v, a, actor_id=user.id,
+                                                    expires_days=body.expires_days or 180)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    db.commit()
+    return {"shared": s_shared(shared), "package": exchange.to_package(shared)}
+
+
+@router.get("/shared-assessments")
+def list_shared(db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    tids = _tids(user, db)
+    rows = (
+        db.query(TPRASharedAssessment)
+        .filter(TPRASharedAssessment.tenant_id.in_(tids))
+        .order_by(TPRASharedAssessment.created_at.desc())
+        .all()
+    )
+    return {"items": [s_shared(x) for x in rows], "total": len(rows)}
+
+
+@router.get("/shared-assessments/{share_token}/package")
+def shared_package(share_token: str, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    tids = _tids(user, db)
+    x = (
+        db.query(TPRASharedAssessment)
+        .filter(TPRASharedAssessment.share_token == share_token, TPRASharedAssessment.tenant_id.in_(tids))
+        .first()
+    )
+    if not x:
+        raise HTTPException(status_code=404, detail="Shared assessment not found")
+    return exchange.to_package(x)
+
+
+@router.delete("/shared-assessments/{shared_id}")
+def revoke_shared(shared_id: int, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    tids = _tids(user, db)
+    x = _get(db, TPRASharedAssessment, shared_id, tids)
+    rbac.require_write(db, user, "assessments", "edit")
+    x.status = "revoked"
+    service.write_audit(db, x.tenant_id, entity="shared_assessment", action="delete",
+                        vendor_id=x.vendor_id, entity_id=x.id, actor_id=user.id)
+    db.commit()
+    return {"revoked": True, "id": x.id}
+
+
+@router.post("/assessments/{assessment_id}/import-shared")
+def import_shared(assessment_id: int, body: ImportShareIn,
+                  db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    tids = _tids(user, db)
+    a = _assessment(db, assessment_id, tids)
+    v = _vendor(db, a.vendor_id, tids)
+    rbac.require_write(db, user, "assessments", "edit")
+    if body.package:
+        pkg = body.package
+        if pkg.get("format") != exchange.PACKAGE_FORMAT:
+            raise HTTPException(status_code=400, detail="Unrecognized shared-assessment package format.")
+        responses = pkg.get("responses") or {}
+        template_id, template_name = pkg.get("template_id"), pkg.get("template_name")
+        source_label = f"package:{pkg.get('vendor_name') or '?'}"
+    elif body.share_token:
+        shared = (
+            db.query(TPRASharedAssessment)
+            .filter(
+                TPRASharedAssessment.share_token == body.share_token,
+                TPRASharedAssessment.tenant_id.in_(tids),
+                TPRASharedAssessment.status == "active",
+            ).first()
+        )
+        if not shared:
+            raise HTTPException(status_code=404, detail="Shared assessment not found or not active.")
+        responses = shared.responses or {}
+        template_id, template_name = shared.template_id, shared.template_name
+        source_label = f"shared:{shared.vendor_name or '?'}"
+    else:
+        raise HTTPException(status_code=400, detail="Provide a share_token or a package to import.")
+    try:
+        qr = exchange.import_into_assessment(
+            db, v, a, responses=responses, template_id=template_id,
+            template_name=template_name, source_label=source_label, actor_id=user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    db.commit()
+    return {
+        "imported": True, "responses": len(qr.responses or {}), "source": source_label,
+        "note": "Answers pre-filled — run scoring to compute your own residual.",
+    }
 
 
 # ── Monitoring signals ───────────────────────────────────────────────────────
@@ -1081,11 +1363,27 @@ def create_signal(vendor_id: int, body: SignalIn, db: Session = Depends(get_db),
     db.flush()
     triggered = None
     if should_trigger_reassessment(sig.signal_type, sig.severity):
-        new = service.create_reassessment_version(
-            db, v, actor_id=user.id, reason=f"Auto-triggered by {sig.signal_type} signal",
-            triggered_signal=sig,
+        # Dedup / debounce — if a reassessment is already IN FLIGHT (a superseding
+        # version already open in the diligence phase), attach this signal to it
+        # rather than superseding + restarting, which would discard in-flight
+        # progress and let a burst of signals spawn a storm of reassessments.
+        active = service.get_active_assessment(db, v)
+        _in_flight = (
+            active is not None
+            and (active.version_no or 1) > 1
+            and active.lifecycle_status == "active"
+            and active.current_stage not in ("monitoring", "reassessment")
         )
-        triggered = new.id
+        if _in_flight:
+            sig.triggered_reassessment = True
+            sig.triggered_assessment_id = active.id
+            triggered = active.id
+        else:
+            new = service.create_reassessment_version(
+                db, v, actor_id=user.id, reason=f"Auto-triggered by {sig.signal_type} signal",
+                triggered_signal=sig,
+            )
+            triggered = new.id
     service.write_audit(db, v.tenant_id, entity="signal", action="create",
                         vendor_id=v.id, entity_id=sig.id, actor_id=user.id, to_value=body.signal_type,
                         extra={"triggered_assessment_id": triggered})
@@ -1098,11 +1396,17 @@ def update_signal(signal_id: int, body: SignalUpdate, db: Session = Depends(get_
     tids = _tids(user, db)
     s = _get(db, TPRAMonitoringSignal, signal_id, tids)
     rbac.require_write(db, user, "monitoring", "edit")
+    ensure_tpra_columns(db)  # acknowledged_by/at are post-provisioning columns
     _check_concurrency(s, body.row_version)
+    _was_ack = bool(s.acknowledged)
     for field in ("severity", "title", "detail", "acknowledged"):
         val = getattr(body, field)
         if val is not None:
             setattr(s, field, val)
+    # Attribute the acknowledgement (who + when) when it transitions to acknowledged.
+    if s.acknowledged and not _was_ack:
+        s.acknowledged_by = user.id
+        s.acknowledged_at = datetime.utcnow()
     _bump(s)
     service.write_audit(db, s.tenant_id, entity="signal", action="update", vendor_id=s.vendor_id, entity_id=s.id, actor_id=user.id)
     db.commit()
@@ -1155,37 +1459,11 @@ def save_stage_checklist(
     return s_stage(row)
 
 
-# ── Assign duties (RACI) — who is Responsible/Accountable/Consulted/Informed ──
-
-@router.put("/assessments/{assessment_id}/stages/{stage_key}/roles")
-def save_stage_roles(
-    assessment_id: int, stage_key: str, body: RolesIn,
-    db: Session = Depends(get_db), user: GRCUser = Depends(require_auth),
-):
-    tids = _tids(user, db)
-    a = _assessment(db, assessment_id, tids)
-    rbac.require_write(db, user, "assessments", "edit")
-    if not is_valid_stage(stage_key):
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Unknown stage")
-    row = db.query(TPRAStageInstance).filter(
-        TPRAStageInstance.assessment_id == a.id,
-        TPRAStageInstance.stage_key == stage_key,
-        TPRAStageInstance.tenant_id.in_(tids),
-    ).first()
-    if not row:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Stage not found")
-    row.assigned_roles = [
-        {"role": r.role, "user_id": r.user_id}
-        for r in body.assigned_roles if r.role in ("R", "A", "C", "I")
-    ]
-    _bump(row)
-    service.write_audit(
-        db, a.tenant_id, entity="stage", action="update", vendor_id=a.vendor_id,
-        assessment_id=a.id, entity_id=row.id, actor_id=user.id,
-        extra={"stage": stage_key, "roles": len(row.assigned_roles)},
-    )
-    db.commit()
-    return s_stage(row)
+# NOTE: the per-stage RACI write endpoint (PUT .../stages/{key}/roles) was RETIRED.
+# The canonical duty-assignment model is the assessment-level team roster
+# (PUT .../team); the orphaned per-stage RaciPanel that wrote here was deleted, so
+# this was a second, independently-writable source of truth for accountability. The
+# stage.assigned_roles column is left in place (read-only via s_stage) for back-compat.
 
 
 # ── Assessment team roster (RACI, assigned once) ─────────────────────────────

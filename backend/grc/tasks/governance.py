@@ -151,6 +151,25 @@ def _run_parse_with_own_session(
             pass
 
 
+def dispatch_parse(tenant_slug: str, document_id: int, user_id: int) -> str:
+    """Fire policy-statement parsing in the background. Prefers Celery (a worker
+    on the `parsing` queue picks it up); falls back to an in-process daemon
+    thread when the broker is unreachable or `DISABLE_CELERY_DISPATCH=1`.
+
+    Mirrors `dispatch_auto_map`. Safe to call right after a document is created —
+    the caller MUST have committed the doc (and its file_path/content) first,
+    since the job re-reads it through a separate tenant session.
+    """
+    import os as _os
+    force_thread = _os.environ.get("DISABLE_CELERY_DISPATCH", "").strip().lower() in ("1", "true", "yes", "on")
+    if not force_thread:
+        try:
+            return parse_policy_document.delay(tenant_slug, document_id, user_id).id
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("parse celery dispatch failed (%s); falling back to thread", exc)
+    return dispatch_parse_in_thread(tenant_slug, document_id, user_id)
+
+
 def dispatch_gap_analysis_in_thread(
     tenant_slug: str, run_ids: list, document_id: int, user_id: int,
 ) -> str:
@@ -360,4 +379,6 @@ __all__ = [
     "auto_map_document_controls",
     "dispatch_auto_map",
     "dispatch_auto_map_in_thread",
+    "dispatch_parse",
+    "dispatch_parse_in_thread",
 ]

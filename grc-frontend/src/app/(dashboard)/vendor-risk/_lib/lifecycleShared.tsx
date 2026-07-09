@@ -57,12 +57,12 @@ export function stageNumberLabel(key?: string | null): string {
 
 export function tierBadge(tier?: string | null): string {
   const styles: Record<string, string> = {
-    critical: 'bg-red-50 text-red-700 border-red-200',
+    critical: 'bg-rose-50 text-rose-700 border-rose-200',
     high: 'bg-orange-50 text-orange-700 border-orange-200',
     medium: 'bg-amber-50 text-amber-700 border-amber-200',
     low: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   };
-  return styles[(tier || '').toLowerCase()] || 'bg-gray-100 text-gray-600 border-gray-200';
+  return styles[(tier || '').toLowerCase()] || 'bg-slate-100 text-slate-600 border-slate-200';
 }
 
 // Compact 11-dot progress rail. `currentKey` is the in-progress stage; everything
@@ -83,8 +83,8 @@ export function StageProgress({
           const color = done
             ? 'bg-primary-500'
             : active
-              ? (s.gate ? 'bg-amber-500 ring-2 ring-amber-200' : 'bg-blue-500 ring-2 ring-blue-200')
-              : 'bg-gray-200';
+              ? (s.gate ? 'bg-amber-500 ring-2 ring-amber-200' : 'bg-primary-500 ring-2 ring-primary-200')
+              : 'bg-slate-200';
           return <span key={s.key} title={`${String(i + 1).padStart(2, '0')} ${s.label}`} className={`${dot} rounded-full ${color}`} />;
         })}
       </div>

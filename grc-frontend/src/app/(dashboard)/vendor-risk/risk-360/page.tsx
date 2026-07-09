@@ -164,16 +164,32 @@ export default function Risk360Page() {
                               {DOMAINS.map((d) => {
                                 const ds = r.domain_scores?.[d.key];
                                 const res = ds?.residual;
+                                const scored = res != null;
                                 const hex = DOMAIN_HEX[d.key] || '#64748b';
+                                // Coverage % = questions answered / total for the domain, when known.
+                                const total = ds?.total ?? 0;
+                                const coverage = total > 0 ? Math.round(((ds?.answered ?? 0) / total) * 100) : null;
                                 return (
                                   <div key={d.key} className="min-w-0">
                                     <div className="flex items-center justify-between gap-1">
                                       <span className="truncate text-[11px] text-slate-600">{d.label}</span>
-                                      <span className="font-mono text-[11px] font-semibold" style={{ color: res != null ? scoreColor(res) : '#94a3b8' }}>{res != null ? res : '—'}</span>
+                                      {scored ? (
+                                        <span className="font-mono text-[11px] font-semibold" style={{ color: scoreColor(res) }}>{res}</span>
+                                      ) : (
+                                        <span className="rounded bg-slate-100 px-1 py-px text-[9px] font-medium text-slate-500">Not assessed</span>
+                                      )}
                                     </div>
-                                    <div className="mt-0.5 h-1 overflow-hidden rounded-full bg-gray-100" role="img" aria-label={`${d.label} residual ${res ?? 'not scored'}`}>
-                                      <div className="h-full rounded-full" style={{ width: `${res != null ? Math.min(100, res) : 0}%`, background: hex }} />
-                                    </div>
+                                    {scored ? (
+                                      <div className="mt-1 h-1 overflow-hidden rounded-full bg-gray-100" role="img" aria-label={`${d.label} residual ${res}`}>
+                                        <div className="h-full rounded-full" style={{ width: `${Math.min(100, res)}%`, background: hex }} />
+                                      </div>
+                                    ) : (
+                                      // Neutral, distinctly "unscored" treatment: dashed slate track, no fill.
+                                      <div className="mt-1 h-1 rounded-full border border-dashed border-slate-300 bg-slate-50" role="img" aria-label={`${d.label} not assessed`} />
+                                    )}
+                                    {coverage != null && (
+                                      <p className="mt-0.5 text-[9px] text-gray-400">{coverage}% covered</p>
+                                    )}
                                   </div>
                                 );
                               })}

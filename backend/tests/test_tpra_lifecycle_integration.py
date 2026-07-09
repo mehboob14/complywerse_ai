@@ -6,29 +6,32 @@ send-back invalidation, versioned reassessment (no history loss), RBAC deny, and
 audit logging. Uses an in-memory SQLite DB with only the tables the service
 touches (FKs to uncreated tables are inert on SQLite).
 """
+from datetime import datetime, timedelta
+
 import pytest
+from fastapi import HTTPException
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from grc.models import (
     Base, Tenant, GRCUser, Role, Permission, RolePermission, UserRole, Risk,
-    Vendor, VendorAssessment,
+    Vendor, VendorAssessment, VendorQuestionnaireTemplate, VendorQuestionnaireResponse,
     TPRAStageInstance, TPRAQuestion, TPRAQuestionResponse, TPRAFinding,
     TPRARemediation, TPRARiskAcceptance, TPRAContract, TPRAControlObligation,
-    TPRAApproval, TPRAMonitoringSignal, TPRAAuditLog, TPRATieringConfig, TPRARiskDomain,
-    TPRARiskSnapshot,
+    TPRAApproval, TPRAMonitoringSignal, TPRAAuditLog, TPRATieringConfig, TPRARiskDomain, TPRAEvidenceLink,
+    TPRARiskSnapshot, TPRASharedAssessment,
 )
 from grc.modules.vendor_risk.tpra import service, rbac
 from grc.modules.vendor_risk.tpra.engine_snapshots import write_portfolio_snapshot
 
 _TABLES = [
     Tenant, GRCUser, Role, Permission, RolePermission, UserRole, Risk,
-    Vendor, VendorAssessment,
+    Vendor, VendorAssessment, VendorQuestionnaireTemplate, VendorQuestionnaireResponse,
     TPRAStageInstance, TPRAQuestion, TPRAQuestionResponse, TPRAFinding,
     TPRARemediation, TPRARiskAcceptance, TPRAContract, TPRAControlObligation,
-    TPRAApproval, TPRAMonitoringSignal, TPRAAuditLog, TPRATieringConfig, TPRARiskDomain,
-    TPRARiskSnapshot,
+    TPRAApproval, TPRAMonitoringSignal, TPRAAuditLog, TPRATieringConfig, TPRARiskDomain, TPRAEvidenceLink,
+    TPRARiskSnapshot, TPRASharedAssessment,
 ]
 
 
@@ -362,6 +365,441 @@ def test_scoring_rolls_up_to_risk_register(db):
     service.run_scoring(db, v, a, actor_id=1)
     db.commit()
     assert db.query(Risk).filter(Risk.source_reference.like(f"vendor:{v.id}%")).count() == 1
+
+
+# ── Wave 2: finding / acceptance governance ──────────────────────────────────
+
+def _admin(db, uid, email):
+    """A user with the Administrator role (bypasses RBAC; SoD still applies)."""
+    role = db.query(Role).filter(Role.name == "Administrator").first()
+    if not role:
+        role = Role(id=1, name="Administrator")
+        db.add(role)
+        db.flush()
+    u = GRCUser(id=uid, username=f"admin{uid}", email=email)
+    db.add(u)
+    db.add(UserRole(user_id=uid, role_id=role.id, tenant_id=1))
+    db.commit()
+    return u
+
+
+def _critical_finding(db, v, a, created_by):
+    f = TPRAFinding(tenant_id=1, vendor_id=v.id, assessment_id=a.id, domain="cybersecurity",
+                    severity="critical", title="MFA missing", status="open",
+                    is_critical_control_fail=True, created_by=created_by)
+    db.add(f)
+    db.commit()
+    return f
+
+
+def test_finding_cannot_be_flipped_to_accepted_directly(db):
+    from grc.modules.vendor_risk.tpra import api
+    u = _admin(db, 60, "a60@acme.test")
+    v = _vendor(db)
+    a = service.ensure_active_assessment(db, v, actor_id=60)
+    db.commit()
+    f = _critical_finding(db, v, a, created_by=60)
+    with pytest.raises(HTTPException) as ei:
+        api.update_finding(f.id, api.FindingUpdate(status="accepted"), db=db, user=u)
+    assert ei.value.status_code == 400
+
+
+def test_finding_cannot_be_closed_without_completed_remediation(db):
+    from grc.modules.vendor_risk.tpra import api
+    u = _admin(db, 61, "a61@acme.test")
+    v = _vendor(db)
+    a = service.ensure_active_assessment(db, v, actor_id=61)
+    db.commit()
+    f = _critical_finding(db, v, a, created_by=61)
+    with pytest.raises(HTTPException) as ei:
+        api.update_finding(f.id, api.FindingUpdate(status="closed"), db=db, user=u)
+    assert ei.value.status_code == 400
+    # After a completed remediation (evidence of fix), closing is allowed.
+    db.add(TPRARemediation(tenant_id=1, finding_id=f.id, title="Rolled out MFA", status="completed"))
+    db.commit()
+    res = api.update_finding(f.id, api.FindingUpdate(status="closed"), db=db, user=u)
+    assert res["status"] == "closed"
+
+
+def test_acceptance_sod_author_cannot_self_accept_critical(db):
+    from grc.modules.vendor_risk.tpra import api
+    author = _admin(db, 62, "a62@acme.test")
+    other = _admin(db, 63, "a63@acme.test")
+    v = _vendor(db)
+    a = service.ensure_active_assessment(db, v, actor_id=62)
+    db.commit()
+    f = _critical_finding(db, v, a, created_by=62)
+    exp = datetime.utcnow() + timedelta(days=90)
+    # The author accepting their own critical → segregation-of-duties 403.
+    with pytest.raises(HTTPException) as ei:
+        api.create_acceptance(f.id, api.AcceptanceIn(rationale="ok", expiry=exp), db=db, user=author)
+    assert ei.value.status_code == 403
+    # An independent accountable owner may accept.
+    res = api.create_acceptance(f.id, api.AcceptanceIn(rationale="ok", expiry=exp), db=db, user=other)
+    assert res is not None
+    db.refresh(f)
+    assert f.status == "accepted"
+
+
+def test_critical_acceptance_requires_expiry(db):
+    from grc.modules.vendor_risk.tpra import api
+    other = _admin(db, 64, "a64@acme.test")
+    v = _vendor(db)
+    a = service.ensure_active_assessment(db, v, actor_id=1)
+    db.commit()
+    f = _critical_finding(db, v, a, created_by=999)  # raised by someone else
+    with pytest.raises(HTTPException) as ei:
+        api.create_acceptance(f.id, api.AcceptanceIn(rationale="ok", expiry=None), db=db, user=other)
+    assert ei.value.status_code == 400
+
+
+def test_expired_acceptance_no_longer_mitigates_critical(db):
+    v = _vendor(db)
+    a = service.ensure_active_assessment(db, v, actor_id=1)
+    db.commit()
+    f = _critical_finding(db, v, a, created_by=1)
+    # An already-expired active acceptance must NOT mitigate the critical.
+    db.add(TPRARiskAcceptance(tenant_id=1, finding_id=f.id, rationale="old", status="active",
+                              expiry=datetime.utcnow() - timedelta(days=1)))
+    db.commit()
+    assert service.count_open_critical(db, a.id) == 1
+    # A future-dated acceptance DOES mitigate.
+    db.query(TPRARiskAcceptance).filter(TPRARiskAcceptance.finding_id == f.id).update(
+        {"expiry": datetime.utcnow() + timedelta(days=30)})
+    db.commit()
+    assert service.count_open_critical(db, a.id) == 0
+
+
+# ── Wave 2: approval integrity (SoD + preconditions + decision enum) ─────────
+
+def test_approval_requires_independent_approver(db):
+    from grc.modules.vendor_risk.tpra import api
+    assessor = _admin(db, 70, "a70@acme.test")
+    approver = _admin(db, 71, "a71@acme.test")
+    v = _vendor(db)
+    a = service.ensure_active_assessment(db, v, actor_id=70)
+    a.assessed_by = 70
+    a.residual_score = 20.0
+    a.residual_rating = "low"
+    db.commit()
+    # SoD: the assessor cannot approve their own assessment.
+    with pytest.raises(HTTPException) as ei:
+        api.create_approval(a.id, api.ApprovalIn(decision="approve"), db=db, user=assessor)
+    assert ei.value.status_code == 403
+    # An independent approver can (scored, no open criticals).
+    res = api.create_approval(a.id, api.ApprovalIn(decision="approve"), db=db, user=approver)
+    assert res is not None
+
+
+def test_approval_requires_a_score(db):
+    from grc.modules.vendor_risk.tpra import api
+    approver = _admin(db, 72, "a72@acme.test")
+    v = _vendor(db)
+    a = service.ensure_active_assessment(db, v, actor_id=1)
+    a.residual_score = None
+    db.commit()
+    with pytest.raises(HTTPException) as ei:
+        api.create_approval(a.id, api.ApprovalIn(decision="approve"), db=db, user=approver)
+    assert ei.value.status_code == 400
+
+
+def test_approval_blocked_by_open_critical_but_reject_allowed(db):
+    from grc.modules.vendor_risk.tpra import api
+    approver = _admin(db, 73, "a73@acme.test")
+    v = _vendor(db)
+    a = service.ensure_active_assessment(db, v, actor_id=1)
+    a.residual_score = 30.0
+    db.commit()
+    _critical_finding(db, v, a, created_by=999)  # open, unmitigated
+    with pytest.raises(HTTPException) as ei:
+        api.create_approval(a.id, api.ApprovalIn(decision="approve"), db=db, user=approver)
+    assert ei.value.status_code == 400
+    # A reject decision is always allowed (no SoD/precondition gate on rejection).
+    res = api.create_approval(a.id, api.ApprovalIn(decision="reject"), db=db, user=approver)
+    assert res is not None
+
+
+def test_approval_decision_must_be_a_valid_enum(db):
+    from grc.modules.vendor_risk.tpra import api
+    with pytest.raises(Exception):
+        api.ApprovalIn(decision="yolo")
+
+
+# ── Wave 2: reassessment cadence reset ───────────────────────────────────────
+
+def test_reassessment_resets_the_cadence_clock(db):
+    v = _vendor(db, tier="high")
+    a1 = service.ensure_active_assessment(db, v, actor_id=1)
+    service.run_tiering(db, v, a1, actor_id=1)
+    db.commit()
+    # Simulate an overdue next-review date on the prior cycle.
+    v.next_reassessment_date = datetime.utcnow() - timedelta(days=10)
+    db.commit()
+    service.create_reassessment_version(db, v, actor_id=1, reason="annual review")
+    db.commit()
+    # Completing/opening the reassessment advanced the clock to a future date and
+    # recorded the cadence (no longer overdue against a stale target).
+    assert v.next_reassessment_date > datetime.utcnow()
+    assert v.reassessment_cadence_days and v.reassessment_cadence_days > 0
+
+
+# ── Wave 2: RBAC on the legacy lifecycle router ──────────────────────────────
+
+def _viewer(db, uid, email):
+    """A tenant member with a non-privileged role and no TPRA write permission."""
+    role = db.query(Role).filter(Role.name == "Viewer").first()
+    if not role:
+        role = Role(id=99, name="Viewer")
+        db.add(role)
+        db.flush()
+    u = GRCUser(id=uid, username=f"viewer{uid}", email=email)
+    db.add(u)
+    db.add(UserRole(user_id=uid, role_id=role.id, tenant_id=1))
+    db.commit()
+    return u
+
+
+def test_legacy_lifecycle_write_endpoints_require_permission(db):
+    from grc.modules.vendor_risk.routers import lifecycle as legacy
+    v = _vendor(db)
+    viewer = _viewer(db, 80, "v80@acme.test")  # tenant member, no write permission
+    # advance-stage was previously auth-only (any tenant user could set the stage).
+    with pytest.raises(HTTPException) as e1:
+        legacy.advance_stage(v.id, legacy.AdvanceStageRequest(target_stage="tiering"),
+                             db=db, current_user=viewer)
+    assert e1.value.status_code == 403
+    # offboarding attestation was previously auth-only too.
+    with pytest.raises(HTTPException) as e2:
+        legacy.update_offboarding(v.id, legacy.OffboardingUpdate(items=[]),
+                                  db=db, current_user=viewer)
+    assert e2.value.status_code == 403
+
+
+# ── Wave 2: tier-driven auto-routing (right-sized path) ──────────────────────
+
+def test_low_tier_auto_skips_diligence_and_advance_steps_over(db):
+    from grc.modules.vendor_risk.tpra.engine_tiering import FACTOR_KEYS
+    v = _vendor(db, tier="low")
+    a = service.ensure_active_assessment(db, v, actor_id=1)
+    a.current_stage = "tiering"
+    db.commit()
+    # Deterministically produce a LOW tier (all factors 0).
+    service.run_tiering(db, v, a, actor_id=1, factors={k: 0 for k in FACTOR_KEYS})
+    db.commit()
+    assert a.inherent_tier == "low"
+    stages = {s.stage_key: s.status for s in service.get_stage_instances(db, a.id)}
+    for sk in ("dd_planning", "questionnaire", "scoring", "findings"):
+        assert stages[sk] == "skipped"  # right-sized away by tier
+    # Advancing from tiering steps OVER the skipped stages onto the next actionable one.
+    adv = service.advance_stage(db, v, a, actor_id=1)
+    db.commit()
+    assert adv["advanced"] is True
+    assert a.current_stage == "contracting"
+    stages2 = {s.stage_key: s.status for s in service.get_stage_instances(db, a.id)}
+    assert stages2["contracting"] == "in_progress"
+
+
+# ── Wave 2/3: monitoring signal acknowledgement + auto-trigger dedup ─────────
+
+def test_signal_acknowledgement_records_who_and_when(db):
+    from grc.modules.vendor_risk.tpra import api
+    u = _admin(db, 90, "a90@acme.test")
+    v = _vendor(db)
+    sig = TPRAMonitoringSignal(tenant_id=1, vendor_id=v.id, signal_type="breach",
+                               severity="high", acknowledged=False)
+    db.add(sig)
+    db.commit()
+    api.update_signal(sig.id, api.SignalUpdate(acknowledged=True), db=db, user=u)
+    db.refresh(sig)
+    assert sig.acknowledged is True
+    assert sig.acknowledged_by == 90
+    assert sig.acknowledged_at is not None
+
+
+def test_auto_trigger_dedups_when_reassessment_in_flight(db):
+    from grc.modules.vendor_risk.tpra import api
+    u = _admin(db, 91, "a91@acme.test")
+    v = _vendor(db)
+    a1 = service.ensure_active_assessment(db, v, actor_id=91)
+    service.run_tiering(db, v, a1, actor_id=91)
+    db.commit()
+    # First breach spawns a reassessment (version 2, in flight at dd_planning).
+    r1 = api.create_signal(v.id, api.SignalIn(signal_type="breach", severity="high", title="breach 1"),
+                           db=db, user=u)
+    first = r1["triggered_reassessment_id"]
+    assert first is not None
+    assert service.get_active_assessment(db, v).version_no == 2
+    # A second breach while it's in flight ATTACHES to the same reassessment (no storm).
+    r2 = api.create_signal(v.id, api.SignalIn(signal_type="breach", severity="high", title="breach 2"),
+                           db=db, user=u)
+    assert r2["triggered_reassessment_id"] == first
+    assert service.get_active_assessment(db, v).version_no == 2  # not superseded again
+
+
+# ── Wave 3: per-severity remediation SLA ─────────────────────────────────────
+
+def test_remediation_auto_populates_due_date_from_severity_sla(db):
+    from grc.modules.vendor_risk.tpra import api
+    u = _admin(db, 92, "a92@acme.test")
+    v = _vendor(db)
+    a = service.ensure_active_assessment(db, v, actor_id=92)
+    db.commit()
+    f = _critical_finding(db, v, a, created_by=92)  # critical -> 7-day SLA
+    api.create_remediation(f.id, api.RemediationIn(title="Roll out MFA"), db=db, user=u)
+    rem = db.query(TPRARemediation).filter(TPRARemediation.finding_id == f.id).first()
+    assert rem.due_date is not None  # no manual date supplied, yet a clock exists
+    delta_days = (rem.due_date - datetime.utcnow()).days
+    assert 5 <= delta_days <= 8  # ~7-day critical SLA
+
+
+# ── Wave 3: approval condition tracking ──────────────────────────────────────
+
+def test_approval_conditions_are_tracked_and_resolvable(db):
+    from grc.modules.vendor_risk.tpra import api
+    approver = _admin(db, 93, "a93@acme.test")
+    v = _vendor(db)
+    a = service.ensure_active_assessment(db, v, actor_id=1)
+    a.residual_score = 20.0
+    a.residual_rating = "low"
+    db.commit()
+    res = api.create_approval(
+        a.id,
+        api.ApprovalIn(decision="approve_with_conditions",
+                       conditions=["Provide MFA evidence within 30 days", "Complete pen test"]),
+        db=db, user=approver,
+    )
+    assert res["open_conditions"] == 2
+    assert all(c["status"] == "open" and c["text"] for c in res["conditions"])
+    cid = res["conditions"][0]["id"]
+    # Resolving a condition closes it and drops the open count.
+    res2 = api.update_condition(res["id"], cid, api.ConditionUpdate(status="closed"), db=db, user=approver)
+    assert res2["open_conditions"] == 1
+
+
+def test_overdue_condition_is_flagged(db):
+    from grc.modules.vendor_risk.tpra import api
+    approver = _admin(db, 94, "a94@acme.test")
+    v = _vendor(db)
+    a = service.ensure_active_assessment(db, v, actor_id=1)
+    a.residual_score = 20.0
+    db.commit()
+    past = (datetime.utcnow() - timedelta(days=5)).isoformat()
+    res = api.create_approval(
+        a.id,
+        api.ApprovalIn(decision="approve_with_conditions",
+                       conditions=[{"text": "Deliver SOC 2", "due_date": past}]),
+        db=db, user=approver,
+    )
+    assert res["open_conditions"] == 1
+    assert res["overdue_conditions"] == 1
+
+
+# ── Wave 3: two-response-model unification (score the REAL vendor answers) ────
+
+def test_run_scoring_scores_the_real_questionnaire_blob(db):
+    # The normalized TPRAQuestionResponse table has no write path in prod; the vendor
+    # portal writes VendorQuestionnaireResponse.responses. run_scoring must score THAT.
+    v = _vendor(db)
+    a = service.ensure_active_assessment(db, v, actor_id=1)
+    service.run_tiering(db, v, a, actor_id=1)
+    tpl = VendorQuestionnaireTemplate(tenant_id=1, name="SIG-Lite", questions=[
+        {"id": "mfa", "text": "MFA enforced?", "domain": "cybersecurity", "weight": 2.0, "critical_control": True},
+        {"id": "patch", "text": "Patching?", "domain": "cybersecurity", "weight": 1.0, "critical_control": False},
+    ])
+    db.add(tpl)
+    db.flush()
+    a.template_id = tpl.id
+    db.add(VendorQuestionnaireResponse(
+        tenant_id=1, vendor_id=v.id, assessment_id=a.id, template_id=tpl.id,
+        status="submitted", token="tok-real-blob-1", responses={"mfa": "no", "patch": "yes"},
+    ))
+    db.commit()
+    result = service.run_scoring(db, v, a, actor_id=1)
+    db.commit()
+    # It scored the REAL answers: the failed critical control raised a blocking finding
+    # (previously run_scoring read the empty normalized table and found nothing).
+    assert result["findings_created"] == 1
+    assert service.count_open_critical(db, a.id) == 1
+    assert a.residual_score is not None
+
+
+def test_run_scoring_endpoint_blocks_when_no_answers(db):
+    from grc.modules.vendor_risk.tpra import api
+    u = _admin(db, 95, "a95@acme.test")
+    v = _vendor(db)
+    a = service.ensure_active_assessment(db, v, actor_id=95)
+    db.commit()
+    # No questionnaire submitted → the raw endpoint refuses to score empty input.
+    with pytest.raises(HTTPException) as ei:
+        api.run_scoring(a.id, db=db, user=u)
+    assert ei.value.status_code == 400
+
+
+# ── Vendor exchange — publish / package / import / re-score ──────────────────
+
+def _completed_questionnaire_assessment(db, u, vendor_name, answers):
+    v = _vendor(db, name=vendor_name)
+    a = service.ensure_active_assessment(db, v, actor_id=u.id)
+    service.run_tiering(db, v, a, actor_id=u.id)
+    tpl = VendorQuestionnaireTemplate(tenant_id=1, name="SIG-Lite", questions=[
+        {"id": "mfa", "text": "MFA?", "domain": "cybersecurity", "weight": 2.0, "critical_control": True},
+        {"id": "patch", "text": "Patch?", "domain": "cybersecurity", "weight": 1.0},
+    ])
+    db.add(tpl)
+    db.flush()
+    a.template_id = tpl.id
+    db.add(VendorQuestionnaireResponse(
+        tenant_id=1, vendor_id=v.id, assessment_id=a.id, template_id=tpl.id,
+        status="submitted", token=f"tok-{vendor_name}"[:60], responses=answers,
+    ))
+    db.commit()
+    return v, a
+
+
+def test_vendor_exchange_publish_import_and_rescore(db):
+    from grc.modules.vendor_risk.tpra import api, exchange
+    u = _admin(db, 96, "a96@acme.test")
+    pv, pa = _completed_questionnaire_assessment(db, u, "PublisherCo", {"mfa": "yes", "patch": "yes"})
+
+    # Publish → a reusable shared assessment + a portable package.
+    res = api.publish_shared(pa.id, api.PublishShareIn(), db=db, user=u)
+    token = res["shared"]["share_token"]
+    package = res["package"]
+    assert package["format"] == exchange.PACKAGE_FORMAT
+    assert package["responses"] == {"mfa": "yes", "patch": "yes"}
+
+    # A new assessment imports the shared answers BY TOKEN (intra-tenant reuse).
+    bv = _vendor(db, name="BuyerCopy")
+    ba = service.ensure_active_assessment(db, bv, actor_id=96)
+    db.commit()
+    imp = api.import_shared(ba.id, api.ImportShareIn(share_token=token), db=db, user=u)
+    assert imp["imported"] is True and imp["responses"] == 2
+    # Pre-filled → the BUYER scores it with their own governed engine (unification).
+    qr = service._latest_submitted_questionnaire(db, ba.id)
+    assert qr is not None and qr.responses == {"mfa": "yes", "patch": "yes"}
+    service.run_tiering(db, bv, ba, actor_id=96)
+    result = service.run_scoring(db, bv, ba, actor_id=96)
+    db.commit()
+    assert result is not None and ba.residual_score is not None
+
+    # Import via PACKAGE (cross-tenant transport) also works.
+    bv2 = _vendor(db, name="BuyerViaPackage")
+    ba2 = service.ensure_active_assessment(db, bv2, actor_id=96)
+    db.commit()
+    imp2 = api.import_shared(ba2.id, api.ImportShareIn(package=package), db=db, user=u)
+    assert imp2["imported"] is True
+
+
+def test_publish_shared_requires_answers(db):
+    from grc.modules.vendor_risk.tpra import api
+    u = _admin(db, 97, "a97@acme.test")
+    v = _vendor(db, name="NoAnswers")
+    a = service.ensure_active_assessment(db, v, actor_id=97)
+    db.commit()
+    # Nothing to share (no submitted questionnaire) → 400.
+    with pytest.raises(HTTPException) as ei:
+        api.publish_shared(a.id, api.PublishShareIn(), db=db, user=u)
+    assert ei.value.status_code == 400
 
 
 def test_portfolio_snapshot_aggregates_active_vendors(db):

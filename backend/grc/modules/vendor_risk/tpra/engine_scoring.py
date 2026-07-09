@@ -58,6 +58,39 @@ def normalize_answer(ans) -> Optional[str]:
     return None
 
 
+def build_responses_from_answers(question_defs: List[dict], answers: Optional[dict]) -> List[dict]:
+    """Map a questionnaire template's question defs + a ``{question_id: answer}``
+    answer blob into the response dicts :func:`score_assessment` consumes.
+
+    Pure (no DB). This is the bridge that lets the governed scoring engine run on
+    the answers the vendor portal actually submits (stored as a JSON blob keyed by
+    question id) rather than on the normalized response table. Answer values may be
+    plain strings ("yes"/"no"/"partial") — ``normalize_answer`` coerces them, so a
+    string answer is scored correctly instead of silently counting as zero.
+    """
+    answers = answers or {}
+    out: List[dict] = []
+    for i, q in enumerate(question_defs or []):
+        qid = q.get("id", i)
+        # Answer keys are the question id; tolerate both str and native-typed keys.
+        ans = answers.get(str(qid))
+        if ans is None:
+            ans = answers.get(qid)
+        # An answer stored as {"value": "yes", ...} or {"answer": ...} is unwrapped.
+        if isinstance(ans, dict):
+            ans = ans.get("value") or ans.get("answer") or ans.get("response")
+        out.append({
+            "domain": q.get("domain") or "cybersecurity",
+            "answer": ans,
+            "weight": float(q.get("weight", 1.0) or 1.0),
+            "critical_control": bool(q.get("critical_control")),
+            "question_key": qid,
+            "question_id": qid,
+            "title": q.get("text"),
+        })
+    return out
+
+
 def score_assessment(
     responses: List[dict],
     inherent_score: float,

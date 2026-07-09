@@ -7,6 +7,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { ExternalLink, ArrowUpRight, Loader2, ShieldAlert, CheckCircle2 } from 'lucide-react';
 import { tpraApi } from '@/lib/api';
 import { useToast } from '@/components/ui/ToastProvider';
@@ -20,6 +21,7 @@ function errMsg(e: unknown, fallback: string): string {
 
 export default function RiskRegisterPanel({ assessmentId, assessment }: { assessmentId: number; assessment: TpraAssessment }) {
   const qc = useQueryClient();
+  const router = useRouter();
   const { toast } = useToast();
   const { hasPermission } = usePermissions();
   const canEdit = hasPermission('vendor_risk:assessments:edit') || hasPermission('erm:risks:edit');
@@ -32,7 +34,16 @@ export default function RiskRegisterPanel({ assessmentId, assessment }: { assess
 
   const promote = useMutation({
     mutationFn: (id: number) => tpraApi.promoteFindingToRegister(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['tpra-findings-risk-drawer', assessmentId] }); toast({ type: 'success', title: 'Moved to Risk Register' }); },
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ['tpra-findings-risk-drawer', assessmentId] });
+      const riskId = (res?.data as { risk_id?: number })?.risk_id;
+      toast({
+        type: 'success', title: 'Moved to Risk Register',
+        message: riskId ? 'Opening it so you can complete the risk details.' : undefined,
+      });
+      // Take the user to THIS risk in the ERM register to fill the required fields.
+      if (riskId) router.push(`/erm/risks/list?edit=${riskId}`);
+    },
     onError: (e) => toast({ type: 'error', title: 'Could not move', message: errMsg(e, 'Try again.') }),
   });
 
@@ -67,7 +78,7 @@ export default function RiskRegisterPanel({ assessmentId, assessment }: { assess
         {isLoading ? (
           <div className="flex items-center gap-2 py-4 text-xs text-gray-500"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>
         ) : findings.length === 0 ? (
-          <p className="py-2 text-xs text-gray-400">No findings yet — run scoring to raise them.</p>
+          <p className="py-2 text-xs text-gray-400">No findings yet — run scoring to raise them, or add one with &ldquo;Add finding&rdquo; in the Findings list.</p>
         ) : (
           <div className="space-y-1.5">
             {findings.map((f) => (
@@ -80,7 +91,8 @@ export default function RiskRegisterPanel({ assessmentId, assessment }: { assess
                   {f.domain && <p className="mt-0.5 text-[11px] capitalize text-gray-400">{f.domain.replace('_', ' ')}</p>}
                 </div>
                 {f.linked_risk_id ? (
-                  <Link href="/erm/risks/list" className="inline-flex flex-shrink-0 items-center gap-1 rounded-md bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-600">
+                  <Link href={`/erm/risks/list?edit=${f.linked_risk_id}`} title="Open this risk in the ERM Risk Register"
+                    className="inline-flex flex-shrink-0 items-center gap-1 rounded-md bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-600 hover:bg-emerald-100">
                     <CheckCircle2 className="h-3 w-3" /> In register
                   </Link>
                 ) : canEdit ? (

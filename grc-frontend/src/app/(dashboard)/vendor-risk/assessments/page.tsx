@@ -3,7 +3,7 @@
 // Vendor Assessments — rebuilt as the TPRA lifecycle workspace. One row per
 // vendor showing its active assessment's stage / tier / residual / open findings,
 // driven by the single /vendor-risk/tpra/board endpoint. Row → the vendor's
-// Lifecycle tab. "Start lifecycle" onboards a vendor into the 11-stage flow.
+// Lifecycle tab. "New Assessment" picks a vendor and onboards it into the 11-stage flow.
 
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
@@ -44,7 +44,9 @@ export default function VendorAssessmentsPage() {
   const [search, setSearch] = useState('');
   const [tierFilter, setTierFilter] = useState('all');
   const [stageFilter, setStageFilter] = useState('all');
-  const [hideNotStarted, setHideNotStarted] = useState(false);
+  // Default ON: Assessments reads as the in-flight / overdue work queue, so
+  // vendors awaiting onboarding are hidden until the analyst opts to see them.
+  const [hideNotStarted, setHideNotStarted] = useState(true);
   const [showStart, setShowStart] = useState(false);
   const [startVendorId, setStartVendorId] = useState('');
 
@@ -70,7 +72,7 @@ export default function VendorAssessmentsPage() {
       qc.invalidateQueries({ queryKey: ['tpra-board'] });
       setShowStart(false);
       setStartVendorId('');
-      toast({ type: 'success', title: 'Lifecycle started' });
+      toast({ type: 'success', title: 'Assessment created' });
       router.push(`/vendor-risk/vendors/${vendorId}`);
     },
     onError: (e) => toast({ type: 'error', title: 'Could not start', message: errMsg(e, 'Try again.') }),
@@ -122,7 +124,7 @@ export default function VendorAssessmentsPage() {
           <Link href="/vendor-risk/questionnaires" className="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50">Questionnaires</Link>
           {canCreate && (
             <button onClick={() => setShowStart(true)} className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium">
-              <Plus className="h-4 w-4" /> Start lifecycle
+              <Plus className="h-4 w-4" /> New Assessment
             </button>
           )}
         </div>
@@ -241,8 +243,8 @@ export default function VendorAssessmentsPage() {
                           </button>
                         ) : canCreate ? (
                           <button onClick={(e) => { e.stopPropagation(); startMut.mutate(r.vendor_id); }} disabled={startMut.isPending}
-                            className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50" title="Start lifecycle">
-                            {startMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PlayCircle className="h-3.5 w-3.5" />} Start
+                            className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50" title="Create this vendor's assessment">
+                            {startMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PlayCircle className="h-3.5 w-3.5" />} Assess
                           </button>
                         ) : null}
                       </div>
@@ -256,14 +258,14 @@ export default function VendorAssessmentsPage() {
       </div>
 
       {/* Start lifecycle panel */}
-      <RightSlidePanel isOpen={showStart} onClose={() => setShowStart(false)} title="Start TPRA lifecycle" width="w-full max-w-lg"
-        subtitle="Onboard a vendor into the 11-stage third-party risk lifecycle"
+      <RightSlidePanel isOpen={showStart} onClose={() => setShowStart(false)} title="New Assessment" width="w-full max-w-lg"
+        subtitle="Pick a vendor to create its third-party risk assessment (the 11-stage TPRA lifecycle)"
         footer={
           <div className="flex justify-end gap-2">
             <button onClick={() => setShowStart(false)} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
             <button onClick={() => startVendorId && startMut.mutate(Number(startVendorId))} disabled={!startVendorId || startMut.isPending}
               className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50">
-              {startMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />} Start lifecycle
+              {startMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />} Create Assessment
             </button>
           </div>
         }>

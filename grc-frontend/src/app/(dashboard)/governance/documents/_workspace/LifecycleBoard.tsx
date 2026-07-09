@@ -65,7 +65,7 @@ function BoardCard({
       )}
 
       <div className="mt-2">
-        <FrameworkPills ids={doc.applicable_framework_ids ?? doc.framework_ids ?? []} nameMap={nameMap} max={3} />
+        <FrameworkPills ids={doc.framework_ids ?? []} nameMap={nameMap} max={3} />
       </div>
 
       <div className="mt-2.5 flex items-center justify-between gap-2">

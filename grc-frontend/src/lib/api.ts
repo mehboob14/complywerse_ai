@@ -467,10 +467,12 @@ export const governanceApi = {
     apiClient.get(`/governance/applicability/framework/${frameworkId}`),
   getApplicabilityAuditLog: (frameworkId: number) =>
     apiClient.get(`/governance/applicability/audit-log/${frameworkId}`),
-  setClauseApplicability: (data: { control_id: number; uploaded_framework_id: number; is_applicable: boolean; justification: string }) =>
+  setClauseApplicability: (data: { control_id: number; uploaded_framework_id: number; is_applicable: boolean; justification: string; owner_id?: number | null; owner_name?: string | null; implementation_status?: string | null; linked_evidence_id?: number | null }) =>
     apiClient.post('/governance/applicability', data),
   reviewApplicability: (applicabilityId: number, data: { status: string; review_comment?: string }) =>
     apiClient.put(`/governance/applicability/${applicabilityId}/review`, data),
+  updateApplicabilityDetails: (applicabilityId: number, data: { owner_id?: number | null; owner_name?: string | null; implementation_status?: string | null; linked_evidence_id?: number | null }) =>
+    apiClient.put(`/governance/applicability/${applicabilityId}/details`, data),
   linkControl: (data: { document_id: number; internal_control_id: number; link_type?: string; notes?: string; force_relink?: boolean }) =>
     apiClient.post('/governance/mappings/control', data),
   unlinkControl: (linkId: number) =>
@@ -687,6 +689,7 @@ export const assetsApi = {
     vendor?: string;
     location?: string;
     cde_environment?: boolean;
+    pci_dss?: Record<string, unknown> | null;
   }) => apiClient.post<ITAsset>('/assets', data),
   update: (id: number, data: Partial<ITAsset>) => apiClient.put<ITAsset>(`/assets/${id}`, data),
   delete: (id: number) => apiClient.delete(`/assets/${id}`),
@@ -2115,6 +2118,16 @@ export const tpraApi = {
   listApprovals: (assessmentId: number) => apiClient.get(`/vendor-risk/tpra/assessments/${assessmentId}/approvals`),
   createApproval: (assessmentId: number, data: { decision: string; conditions?: string[]; rationale?: string }) =>
     apiClient.post(`/vendor-risk/tpra/assessments/${assessmentId}/approvals`, data),
+  resolveCondition: (approvalId: number, conditionId: string, data: { status?: 'open' | 'closed'; owner_id?: number; due_date?: string }) =>
+    apiClient.patch(`/vendor-risk/tpra/approvals/${approvalId}/conditions/${conditionId}`, data),
+  // Vendor exchange — publish / reuse / portable shared assessments.
+  publishShared: (assessmentId: number, data?: { expires_days?: number }) =>
+    apiClient.post(`/vendor-risk/tpra/assessments/${assessmentId}/publish-shared`, data || {}),
+  listShared: () => apiClient.get(`/vendor-risk/tpra/shared-assessments`),
+  sharedPackage: (shareToken: string) => apiClient.get(`/vendor-risk/tpra/shared-assessments/${shareToken}/package`),
+  revokeShared: (sharedId: number) => apiClient.delete(`/vendor-risk/tpra/shared-assessments/${sharedId}`),
+  importShared: (assessmentId: number, data: { share_token?: string; package?: Record<string, unknown> }) =>
+    apiClient.post(`/vendor-risk/tpra/assessments/${assessmentId}/import-shared`, data),
 
   // Per-stage task checklist + DD-planning
   saveChecklist: (
@@ -2123,8 +2136,6 @@ export const tpraApi = {
   ) => apiClient.put(`/vendor-risk/tpra/assessments/${assessmentId}/stages/${stageKey}/checklist`, { items }),
   savePlan: (assessmentId: number, data: { template_id?: number; reviewed_by?: number; due_date?: string }) =>
     apiClient.post(`/vendor-risk/tpra/assessments/${assessmentId}/plan`, data),
-  saveRoles: (assessmentId: number, stageKey: string, assigned_roles: Array<{ role: string; user_id: number }>) =>
-    apiClient.put(`/vendor-risk/tpra/assessments/${assessmentId}/stages/${stageKey}/roles`, { assigned_roles }),
   saveTeam: (assessmentId: number, roster: Record<string, number>) =>
     apiClient.put(`/vendor-risk/tpra/assessments/${assessmentId}/team`, { roster }),
   // Admin / Settings — program config (tiering weights, thresholds, cadence)
@@ -4441,6 +4452,105 @@ export const onboardingApi = {
     port?: number;
     hosts: Array<{ ip: string; hostname?: string | null; asset_name?: string | null }>;
   }) => apiClient.post('/onboarding/import', data),
+};
+
+// ── Framework template registers + documents (ISO 27001 template tabs) ───────
+export const frameworkTemplatesApi = {
+  registers: {
+    list: (registerType: string, params: { journey_id: number; framework_id?: number | null }) =>
+      apiClient.get(`/framework-templates/registers/${registerType}`, { params }),
+    create: (registerType: string, params: { journey_id: number; framework_id?: number | null }, payload: Record<string, unknown>) =>
+      apiClient.post(`/framework-templates/registers/${registerType}`, payload, { params }),
+    update: (entryId: number, payload: Record<string, unknown>) =>
+      apiClient.put(`/framework-templates/registers/entries/${entryId}`, payload),
+    remove: (entryId: number) =>
+      apiClient.delete(`/framework-templates/registers/entries/${entryId}`),
+    moveToRisk: (entryId: number, body: { title?: string; description?: string; category?: string; framework_name?: string }) =>
+      apiClient.post(`/framework-templates/registers/entries/${entryId}/move-to-risk`, body),
+    reset: (registerType: string, params: { journey_id: number; framework_id?: number | null }) =>
+      apiClient.post(`/framework-templates/registers/${registerType}/reset`, {}, { params }),
+    applyAI: (registerType: string, params: { journey_id: number }, items: Array<{ id: number; fields: Record<string, unknown> }>) =>
+      apiClient.post(`/framework-templates/registers/${registerType}/apply-ai`, items, { params }),
+    frameworkRisks: (params: { journey_id: number; framework_name?: string }) =>
+      apiClient.get('/framework-templates/registers/framework-risks', { params }),
+  },
+  ai: {
+    register: (body: { register_type: string; framework_name?: string; rows: Array<Record<string, unknown>> }) =>
+      apiClient.post('/framework-templates/ai/register', body, { timeout: 120000 }),
+    document: (body: { doc_type: string; framework_name?: string; title?: string; organization?: string | null; sections: Array<Record<string, unknown>> }) =>
+      apiClient.post('/framework-templates/ai/document', body, { timeout: 120000 }),
+  },
+  documents: {
+    get: (docType: string, params: { journey_id: number; framework_id?: number | null }) =>
+      apiClient.get(`/framework-templates/documents/${docType}`, { params }),
+    update: (docId: number, payload: Record<string, unknown>) =>
+      apiClient.put(`/framework-templates/documents/${docId}`, payload),
+    reset: (docType: string, params: { journey_id: number }) =>
+      apiClient.post(`/framework-templates/documents/${docType}/reset`, {}, { params }),
+    remove: (docId: number) => apiClient.delete(`/framework-templates/documents/${docId}`),
+  },
+  definition: (frameworkName: string) =>
+    apiClient.get('/framework-templates/definition', { params: { framework_name: frameworkName } }),
+};
+
+// ─── Business Continuity Management (BCM) ────────────────────────────────────
+export const bcmApi = {
+  dashboard: () => apiClient.get('/bcm/dashboard'),
+  settings: {
+    get: () => apiClient.get('/bcm/settings'),
+    update: (data: { finding_issue_threshold?: string }) => apiClient.put('/bcm/settings', data),
+  },
+  options: {
+    documents: (search?: string) => apiClient.get('/bcm/document-options', { params: { search } }),
+    incidents: (search?: string) => apiClient.get('/bcm/incident-options', { params: { search } }),
+    risks: (search?: string) => apiClient.get('/bcm/risk-options', { params: { search } }),
+    users: (search?: string) => apiClient.get('/bcm/user-options', { params: { search } }),
+    assets: (search?: string) => apiClient.get('/bcm/asset-options', { params: { search } }),
+  },
+  plans: {
+    list: (params?: { status_filter?: string; search?: string }) => apiClient.get('/bcm/plans', { params }),
+    get: (id: number) => apiClient.get(`/bcm/plans/${id}`),
+    create: (data: Record<string, unknown>) => apiClient.post('/bcm/plans', data),
+    update: (id: number, data: Record<string, unknown>) => apiClient.put(`/bcm/plans/${id}`, data),
+    remove: (id: number) => apiClient.delete(`/bcm/plans/${id}`),
+    transition: (id: number, status: string) => apiClient.post(`/bcm/plans/${id}/transition`, { status }),
+  },
+  bia: {
+    list: (planId: number) => apiClient.get(`/bcm/plans/${planId}/bia`),
+    get: (id: number) => apiClient.get(`/bcm/bia/${id}`),
+    create: (planId: number, data: Record<string, unknown>) => apiClient.post(`/bcm/plans/${planId}/bia`, data),
+    update: (id: number, data: Record<string, unknown>) => apiClient.put(`/bcm/bia/${id}`, data),
+    remove: (id: number) => apiClient.delete(`/bcm/bia/${id}`),
+    linkRisk: (id: number, data: { risk_id?: number }) => apiClient.post(`/bcm/bia/${id}/link-risk`, data),
+    addDependency: (id: number, data: Record<string, unknown>) => apiClient.post(`/bcm/bia/${id}/dependencies`, data),
+    addStrategy: (id: number, data: Record<string, unknown>) => apiClient.post(`/bcm/bia/${id}/recovery-strategies`, data),
+  },
+  dependencies: {
+    update: (id: number, data: Record<string, unknown>) => apiClient.put(`/bcm/dependencies/${id}`, data),
+    remove: (id: number) => apiClient.delete(`/bcm/dependencies/${id}`),
+  },
+  strategies: {
+    update: (id: number, data: Record<string, unknown>) => apiClient.put(`/bcm/recovery-strategies/${id}`, data),
+    remove: (id: number) => apiClient.delete(`/bcm/recovery-strategies/${id}`),
+  },
+  drills: {
+    list: (params?: { plan_id?: number; status_filter?: string; source_type?: string; drill_type?: string; search?: string }) =>
+      apiClient.get('/bcm/drills', { params }),
+    get: (id: number) => apiClient.get(`/bcm/drills/${id}`),
+    create: (data: Record<string, unknown>) => apiClient.post('/bcm/drills', data),
+    update: (id: number, data: Record<string, unknown>) => apiClient.put(`/bcm/drills/${id}`, data),
+    remove: (id: number) => apiClient.delete(`/bcm/drills/${id}`),
+    transition: (id: number, status: string) => apiClient.post(`/bcm/drills/${id}/transition`, { status }),
+    saveResult: (id: number, data: Record<string, unknown>) => apiClient.post(`/bcm/drills/${id}/result`, data),
+  },
+  findings: {
+    list: (drillId: number) => apiClient.get(`/bcm/drills/${drillId}/findings`),
+    create: (drillId: number, data: Record<string, unknown>) => apiClient.post(`/bcm/drills/${drillId}/findings`, data),
+    update: (id: number, data: Record<string, unknown>) => apiClient.put(`/bcm/findings/${id}`, data),
+    remove: (id: number) => apiClient.delete(`/bcm/findings/${id}`),
+    createIssue: (id: number) => apiClient.post(`/bcm/findings/${id}/create-issue`, {}),
+    linkRisk: (id: number, data: { risk_id?: number }) => apiClient.post(`/bcm/findings/${id}/link-risk`, data),
+  },
 };
 
 export default apiClient;

@@ -19,6 +19,21 @@ class ApplicabilityRequest(BaseModel):
     uploaded_framework_id: int
     is_applicable: bool
     justification: Optional[str] = ""
+    # Statement-of-Applicability template metadata (optional).
+    owner_id: Optional[int] = None
+    owner_name: Optional[str] = None
+    implementation_status: Optional[str] = None
+    linked_evidence_id: Optional[int] = None
+
+
+class ApplicabilityDetailsRequest(BaseModel):
+    """Patch just the SoA metadata (owner / implementation status / linked
+    evidence) on an existing applicability row — does not touch the Applicable
+    Yes/No decision or its review status."""
+    owner_id: Optional[int] = None
+    owner_name: Optional[str] = None
+    implementation_status: Optional[str] = None
+    linked_evidence_id: Optional[int] = None
 
 
 class ApplicabilityReviewRequest(BaseModel):
@@ -48,6 +63,10 @@ def serialize_applicability(record, db):
         "reviewed_by_name": reviewed_user.display_name or reviewed_user.username if reviewed_user else None,
         "reviewed_at": record.reviewed_at.isoformat() if record.reviewed_at else None,
         "review_comment": record.review_comment,
+        "owner_id": record.owner_id,
+        "owner_name": record.owner_name,
+        "implementation_status": record.implementation_status,
+        "linked_evidence_id": record.linked_evidence_id,
         "created_at": record.created_at.isoformat() if record.created_at else None,
     }
 
@@ -160,6 +179,16 @@ def set_clause_applicability(
         )
         db.add(record)
 
+    # SoA template metadata (owner / implementation status / linked evidence).
+    if request.owner_id is not None:
+        record.owner_id = request.owner_id
+    if request.owner_name is not None:
+        record.owner_name = request.owner_name
+    if request.implementation_status is not None:
+        record.implementation_status = request.implementation_status
+    if request.linked_evidence_id is not None:
+        record.linked_evidence_id = request.linked_evidence_id
+
     db.flush()
 
     # No propagation to ControlImplementation here — that happens only
@@ -177,6 +206,31 @@ def set_clause_applicability(
     db.commit()
     db.refresh(record)
 
+    return serialize_applicability(record, db)
+
+
+@router.put("/{applicability_id}/details")
+def update_applicability_details(
+    applicability_id: int,
+    request: ApplicabilityDetailsRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Update SoA metadata (owner / implementation status / linked evidence) on
+    an existing applicability row without changing its Applicable decision or
+    review status."""
+    user_tenants = get_user_tenants(current_user, db)
+    record = db.query(ClauseApplicability).filter(
+        ClauseApplicability.id == applicability_id,
+        ClauseApplicability.tenant_id.in_(user_tenants),
+    ).first()
+    if not record:
+        raise HTTPException(status_code=404, detail="Applicability record not found")
+    for k, v in request.dict(exclude_unset=True).items():
+        setattr(record, k, v)
+    record.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(record)
     return serialize_applicability(record, db)
 
 

@@ -482,6 +482,7 @@ class RiskCreate(RiskBase):
     status: Optional[str] = "open"
     treatment_plan: Optional[str] = None
     root_cause: Optional[str] = None
+    consequences: Optional[str] = None
     recommendations: Optional[str] = None
     closure_status: Optional[str] = None
 
@@ -504,6 +505,7 @@ class RiskUpdate(BaseModel):
     status: Optional[str] = None
     treatment_plan: Optional[str] = None
     root_cause: Optional[str] = None
+    consequences: Optional[str] = None
     recommendations: Optional[str] = None
     closure_status: Optional[str] = None
     closure_notes: Optional[str] = None
@@ -537,6 +539,7 @@ class RiskResponse(BaseModel):
     status: str
     treatment_plan: Optional[str]
     root_cause: Optional[str] = None
+    consequences: Optional[str] = None
     recommendations: Optional[str] = None
     closure_status: Optional[str] = None
     closed_at: Optional[datetime] = None
@@ -855,6 +858,7 @@ class ITAssetBase(BaseModel):
     vendor: Optional[str] = None
     location: Optional[str] = None
     cde_environment: bool = False
+    pci_dss: Optional[dict] = None
     # Phase 5.1 — Exposure metadata. All optional; writers may supply.
     internet_facing: Optional[bool] = None
     network_segment: Optional[str] = None
@@ -937,6 +941,7 @@ class ITAssetUpdate(BaseModel):
     location: Optional[str] = None
     status: Optional[str] = None
     cde_environment: Optional[bool] = None
+    pci_dss: Optional[dict] = None
     # Phase 5 — Operational context fields. Lifecycle state is intentionally
     # NOT updatable through this generic endpoint; clients must use
     # POST /assets/{id}/lifecycle-transition so the state machine runs.
@@ -976,6 +981,7 @@ class ITAssetResponse(BaseModel):
     location: Optional[str]
     status: str
     cde_environment: bool = False
+    pci_dss: Optional[dict] = None
     created_at: datetime
     # Phase 5 fields — all optional on the response so older rows that
     # haven't been touched since the migration still serialize cleanly.

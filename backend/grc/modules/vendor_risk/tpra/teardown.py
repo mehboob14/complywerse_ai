@@ -26,6 +26,7 @@ from .seed import DEMO_VENDOR_NAME
 
 # Child→parent order so plain DROPs work even without CASCADE.
 TPRA_TABLES = [
+    "grc_tpra_shared_assessments",
     "grc_tpra_evidence_links",
     "grc_tpra_risk_snapshots",
     "grc_tpra_control_obligations",

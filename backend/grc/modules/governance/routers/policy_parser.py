@@ -819,6 +819,87 @@ def parse_policy_document(
     }
 
 
+def maybe_autoparse_document(db: Session, tenant_slug: Optional[str], document_id: int, user_id: int) -> bool:
+    """Auto-dispatch policy-statement parsing right after a document is created.
+
+    Called from the document-creation endpoints (create, upload-with-file,
+    upload-file) so a freshly uploaded / drafted doc is parsed automatically —
+    the user no longer has to open it and click "Run parsing". Guardrails:
+      * needs a tenant_slug (background job is tenant-scoped) — else skip;
+      * skip if the doc already has PolicyStatement rows (don't re-parse or
+        clobber; already-parsed docs are handled by the manual re-parse flow);
+      * skip if there's nothing parseable (no file on disk AND empty content);
+      * NEVER raise — a parse-dispatch failure must not fail the create request.
+
+    Returns True iff a parse was dispatched. The heavy OpenAI work runs in the
+    background exactly like the manual parse button (Celery, thread-fallback).
+    """
+    import logging as _logging
+    try:
+        if not tenant_slug:
+            return False
+        document = db.query(GovernanceDocument).filter(
+            GovernanceDocument.id == document_id
+        ).first()
+        if not document:
+            return False
+        already_parsed = db.query(PolicyStatement.id).filter(
+            PolicyStatement.document_id == document_id
+        ).first()
+        if already_parsed:
+            return False
+        # Only auto-parse a FILE when its type is text-extractable —
+        # extract_text_from_file handles pdf/docx/doc; xls/xlsx raise, which
+        # would otherwise dispatch a guaranteed-"failed" parse on a perfectly
+        # valid spreadsheet upload (and that terminal "failed" status is never
+        # swept). Non-extractable uploads fall back to requiring inline content.
+        file_type = str(getattr(document, "file_type", "") or "").lower()
+        has_extractable_file = bool(
+            getattr(document, "file_path", None)
+            and os.path.exists(document.file_path)
+            and file_type in ("pdf", "docx", "doc")
+        )
+        has_content = bool(getattr(document, "content", None) and str(document.content).strip())
+        if not (has_extractable_file or has_content):
+            return False
+
+        # Share the manual parse endpoint's per-tenant ceiling so a burst of
+        # document creates (e.g. bulk import) can't spawn unthrottled parse
+        # threads and exhaust the tenant DB connection pool. Over the limit →
+        # skip auto-parse silently; the user can still parse manually.
+        from ....tasks.base import tenant_rate_limit, RateLimitExceeded
+        try:
+            tenant_rate_limit(tenant_slug, bucket="governance_parse")
+        except RateLimitExceeded:
+            return False
+
+        # Seed the same Redis status the manual endpoint writes so the detail
+        # page's poller shows "queued" immediately the first time it's opened.
+        from ....job_status import set_status as _set_redis_status
+        _set_redis_status(tenant_slug, "policy_parse", document_id, {
+            "status": "queued",
+            "message": "Auto-parse queued after document creation",
+            "processed_chunks": 0,
+            "total_chunks": 0,
+            "current_chunk": 0,
+            "progress_percent": 0,
+            "updated_at": datetime.utcnow().isoformat(),
+        })
+
+        from ....tasks.governance import dispatch_parse
+        dispatch_parse(tenant_slug, document_id, user_id)
+        print(
+            f"[DISPATCH] auto-parse-on-create → dispatched tenant={tenant_slug} doc={document_id}",
+            flush=True,
+        )
+        return True
+    except Exception:  # noqa: BLE001
+        _logging.getLogger(__name__).warning(
+            "auto-parse dispatch skipped for doc %s", document_id, exc_info=True
+        )
+        return False
+
+
 @router.get("/{document_id}/policy-statements")
 def get_document_policy_statements(
     document_id: int,

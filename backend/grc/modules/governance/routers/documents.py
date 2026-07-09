@@ -347,6 +347,24 @@ def list_documents(
     }
 
 
+def _resolve_tenant_slug_for_autoparse(tenant_id: int) -> Optional[str]:
+    """Resolve a tenant's slug from its id via the master DB so we can dispatch
+    the tenant-scoped auto-parse job after a document is created. Returns None
+    (auto-parse simply skips) if it can't be resolved. Never raises."""
+    try:
+        from ....db import MasterSession
+        from ....models import Tenant as MasterTenant
+        master = MasterSession()
+        try:
+            row = master.query(MasterTenant.slug).filter(MasterTenant.id == tenant_id).first()
+            return row[0] if row else None
+        finally:
+            master.close()
+    except Exception:
+        logger.warning("Could not resolve tenant slug for tenant_id=%s", tenant_id, exc_info=True)
+        return None
+
+
 @router.post("", status_code=status.HTTP_201_CREATED)
 def create_document(
     document: GovernanceDocumentCreate,
@@ -439,9 +457,21 @@ def create_document(
         }
     )
     db.commit()
-    
+
     db.refresh(db_document)
-    
+
+    # Auto-run policy parsing on create so the user never has to open the doc
+    # and click "Run parsing". Guarded + non-fatal (see maybe_autoparse_document):
+    # skips already-parsed / content-less docs, and a dispatch failure never
+    # fails the create.
+    try:
+        from .policy_parser import maybe_autoparse_document
+        maybe_autoparse_document(
+            db, _resolve_tenant_slug_for_autoparse(tenant_id), db_document.id, current_user.id
+        )
+    except Exception:
+        logger.warning("auto-parse hook failed for doc %s", db_document.id, exc_info=True)
+
     return serialize_document(db_document, db)
 
 
@@ -1501,6 +1531,24 @@ def update_document_status(
         new_value=new_status
     )
 
+    # When the document reaches an approved/published state, any gap-remediation
+    # clauses applied to it (left in_progress pending sign-off) are now formally
+    # accepted — close them out. Applying a clause keeps the finding in_progress
+    # until this review/approval step completes.
+    if new_status in ("approved", "published"):
+        from ....models import PolicyGapFinding
+        _now = datetime.utcnow()
+        applied_findings = db.query(PolicyGapFinding).filter(
+            PolicyGapFinding.document_id == document.id,
+            PolicyGapFinding.tenant_id == document.tenant_id,
+            PolicyGapFinding.applied_at.isnot(None),
+            PolicyGapFinding.remediation_status == "in_progress",
+        ).all()
+        for _f in applied_findings:
+            _f.remediation_status = "closed"
+            _f.actual_close_date = _now
+            _f.updated_at = _now
+
     db.commit()
     db.refresh(document)
 
@@ -1723,7 +1771,17 @@ async def upload_document_file(
     
     db.commit()
     db.refresh(document)
-    
+
+    # Auto-run parsing after a file is attached (guarded + non-fatal). Skips
+    # docs that are already parsed — re-parsing an existing doc stays manual.
+    try:
+        from .policy_parser import maybe_autoparse_document
+        maybe_autoparse_document(
+            db, _resolve_tenant_slug_for_autoparse(document.tenant_id), document.id, current_user.id
+        )
+    except Exception:
+        logger.warning("auto-parse hook failed for doc %s", document.id, exc_info=True)
+
     return {
         "message": "File uploaded successfully",
         "document": serialize_document(document, db)
@@ -1969,9 +2027,19 @@ async def create_document_with_file(
         }
     )
     db.commit()
-    
+
     db.refresh(document)
-    
+
+    # Auto-run parsing on upload-create so the extracted policy statements are
+    # ready without a manual "Run parsing" click (guarded + non-fatal).
+    try:
+        from .policy_parser import maybe_autoparse_document
+        maybe_autoparse_document(
+            db, _resolve_tenant_slug_for_autoparse(tenant_id), document.id, current_user.id
+        )
+    except Exception:
+        logger.warning("auto-parse hook failed for doc %s", document.id, exc_info=True)
+
     return {
         "message": "Document created successfully",
         "document": serialize_document(document, db)

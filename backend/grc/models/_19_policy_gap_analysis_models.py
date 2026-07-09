@@ -120,6 +120,13 @@ class PolicyGapFinding(Base):
     applied_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
     applied_clause_text = Column(Text, nullable=True)
     applied_version_id = Column(Integer, ForeignKey("grc_governance_document_versions.id"), nullable=True)
+    # Document.status captured at apply time so an override/undo can restore it.
+    applied_prev_status = Column(String(50), nullable=True)
+    # Statement sync: the PolicyStatement updated (replace) or created (append)
+    # by the applied clause, plus its pre-change text so an override/undo can
+    # restore it. prev_text is NULL when a brand-new statement was created.
+    applied_statement_id = Column(Integer, ForeignKey("grc_policy_statements.id"), nullable=True)
+    applied_statement_prev_text = Column(Text, nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

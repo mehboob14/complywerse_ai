@@ -9,7 +9,6 @@ import {
   Link2,
   Unlink,
   ChevronRight,
-  ChevronDown,
   BookOpen,
   FileCheck,
   ClipboardList,
@@ -20,6 +19,8 @@ import {
   AlertCircle,
   Loader2,
   Sparkles,
+  CheckCircle,
+  Search,
 } from 'lucide-react';
 import { SearchInput, MultiSelectDropdown, RightSlidePanel, PageLoader } from '@/components/ui';
 
@@ -72,6 +73,8 @@ interface RecommendedControl {
   description: string | null;
   is_linked: boolean;
   statements: RecStatement[];
+  uploaded_framework_id?: number | null;
+  rationale?: string | null;
 }
 
 interface DocumentMappings {
@@ -82,6 +85,24 @@ interface DocumentMappings {
   regulatory_links: unknown[];
   asset_links: unknown[];
   recommended_controls?: RecommendedControl[];
+  // The framework scope (in-scope ∪ referenced UploadedFramework ids) the backend
+  // filtered the recommendations to. Empty → document has no frameworks set.
+  framework_scope_ids?: number[];
+}
+
+// Full statement text keyed by statement id, for the mapping-detail popup.
+type StatementTextMap = Map<number, { code: string | null; text: string }>;
+
+// Per-framework coverage (mapped/missing + the missing "gap" clauses), used to
+// enrich the per-framework groups. From GET /governance/mappings/document/{id}/coverage.
+interface CoverageFramework {
+  framework_id: number;
+  framework_name: string;
+  total_controls: number;
+  mapped_count: number;
+  missing_count: number;
+  coverage_pct: number;
+  missing_controls: Array<{ id: number; reference: string; title: string; domain: string | null }>;
 }
 
 const DOCUMENT_TYPES = [
@@ -128,30 +149,32 @@ const getStatusStyle = (status: string) => {
 // (e.g. "a.5.1" → "A.5.1"); digits and punctuation are unaffected.
 const upperCode = (s: string | null | undefined) => (s ?? '').toUpperCase();
 
-const KIND_META: Record<string, { label: string; cls: string }> = {
-  internal: { label: 'Internal', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  normalized: { label: 'Normalized', cls: 'bg-violet-50 text-violet-700 border-violet-200' },
-  framework: { label: 'Framework', cls: 'bg-blue-50 text-blue-700 border-blue-200' },
-  parsed: { label: 'Framework', cls: 'bg-blue-50 text-blue-700 border-blue-200' },
-};
+const matchPct = (r: RecommendedControl) =>
+  typeof r.max_confidence === 'number' ? Math.round(r.max_confidence * 100) : null;
 
-// AI control recommendations for the selected document, rolled up from its
-// statements (internal ERM + framework controls). Read-only review surface —
-// populated automatically by the post-parse auto-map.
+const barColor = (pct: number) => (pct >= 80 ? '#10b981' : pct >= 50 ? '#f59e0b' : '#ef4444');
+
+// Framework-FIRST mapping surface for the selected document. Each in-scope /
+// referenced framework is a collapsible card (coverage bar + covered/gaps counts);
+// expanding it lists that framework's clauses split into MAPPED and NOT-MAPPED
+// (the gap). Statements are demoted — a small "N stmt" hint + the detail popup —
+// so the framework→clause coverage story leads. Frameworks collapse (first open)
+// with internally-scrolled lists so the page doesn't grow unbounded.
 function RecommendedControlsSection({
-  recs, documentId, canLink,
-}: { recs: RecommendedControl[]; documentId: number | null; canLink: boolean }) {
+  recs, documentId, canLink, statementText, coverage = [],
+}: {
+  recs: RecommendedControl[]; documentId: number | null; canLink: boolean;
+  statementText: StatementTextMap; coverage?: CoverageFramework[];
+}) {
   const queryClient = useQueryClient();
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [detail, setDetail] = useState<RecommendedControl | null>(null);
   const [pendingKey, setPendingKey] = useState<string | null>(null);
-
+  const [search, setSearch] = useState('');
+  const [statusView, setStatusView] = useState<'all' | 'mapped' | 'gaps'>('all');
+  const [openFw, setOpenFw] = useState<Set<string> | null>(null); // null = default (first framework open)
   const keyOf = (r: RecommendedControl) => `${r.control_kind}::${r.control_code ?? ''}`;
-  const toggle = (k: string) =>
-    setExpanded((prev) => {
-      const n = new Set(prev);
-      if (n.has(k)) n.delete(k); else n.add(k);
-      return n;
-    });
+  const OTHER = 'Other';
+  const fwNameOf = (r: RecommendedControl) => r.framework_name || OTHER;
 
   const linkMutation = useMutation({
     mutationFn: ({ r, link }: { r: RecommendedControl; link: boolean }) =>
@@ -165,97 +188,202 @@ function RecommendedControlsSection({
     },
   });
 
+  const LinkButton = ({ r, small }: { r: RecommendedControl; small?: boolean }) => {
+    const isPending = pendingKey === keyOf(r) && linkMutation.isPending;
+    return (
+      <button
+        onClick={(e) => { e.stopPropagation(); linkMutation.mutate({ r, link: !r.is_linked }); }}
+        disabled={isPending}
+        className={`inline-flex items-center gap-1 rounded-md ${small ? 'px-2 py-1 text-[11px]' : 'px-2.5 py-1.5 text-xs'} font-medium disabled:opacity-50 ${
+          r.is_linked ? 'border border-slate-200 text-slate-600 hover:bg-slate-50' : 'bg-primary-600 text-white hover:bg-primary-700'
+        }`}
+      >
+        {isPending ? <Loader2 strokeWidth={1.75} className="h-3 w-3 animate-spin" />
+          : r.is_linked ? <Unlink strokeWidth={1.75} className="h-3 w-3" /> : <Link2 strokeWidth={1.75} className="h-3 w-3" />}
+        {r.is_linked ? 'Unlink' : 'Link'}
+      </button>
+    );
+  };
+
+  // One entry PER FRAMEWORK: its mapped clauses (from recs) + its coverage/gaps
+  // (from the coverage endpoint). Frameworks come from coverage (authoritative,
+  // scoped) unioned with any framework a mapped rec names (covers pre-restart /
+  // normalized rows). Search matches framework name, clause ref/title, or gaps.
+  const groups = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const byName = new Map<string, { name: string; cov: CoverageFramework | null; mapped: RecommendedControl[] }>();
+    coverage.forEach((c) => byName.set(c.framework_name, { name: c.framework_name, cov: c, mapped: [] }));
+    recs.forEach((r) => {
+      const name = fwNameOf(r);
+      let g = byName.get(name);
+      if (!g) { g = { name, cov: null, mapped: [] }; byName.set(name, g); }
+      g.mapped.push(r);
+    });
+    let list = Array.from(byName.values());
+    if (q) {
+      list = list.map((g) => {
+        const nameHit = g.name.toLowerCase().includes(q);
+        if (nameHit) return g;
+        const mapped = g.mapped.filter((r) =>
+          `${r.clause_reference ?? ''} ${r.control_code ?? ''} ${r.control_title ?? ''}`.toLowerCase().includes(q));
+        const cov = g.cov
+          ? { ...g.cov, missing_controls: g.cov.missing_controls.filter((c) => `${c.reference ?? ''} ${c.title ?? ''}`.toLowerCase().includes(q)) }
+          : null;
+        return { ...g, mapped, cov };
+      }).filter((g) => g.name.toLowerCase().includes(q) || g.mapped.length > 0 || (g.cov?.missing_controls.length ?? 0) > 0);
+    }
+    list.sort((a, b) => {
+      const ap = a.cov?.coverage_pct ?? 999;
+      const bp = b.cov?.coverage_pct ?? 999;
+      if (ap !== bp) return ap - bp; // worst coverage first
+      if (b.mapped.length !== a.mapped.length) return b.mapped.length - a.mapped.length;
+      return a.name.localeCompare(b.name);
+    });
+    return list;
+  }, [recs, coverage, search]);
+
+  const totalGaps = coverage.reduce((n, c) => n + (c.missing_count || 0), 0);
+  const showToolbar = recs.length > 6 || groups.length > 1 || totalGaps > 0;
+
+  const isOpen = (name: string, idx: number) => (search.trim() ? true : openFw ? openFw.has(name) : idx === 0);
+  const toggleFw = (name: string) => setOpenFw((prev) => {
+    const base = prev ?? new Set(groups.length ? [groups[0].name] : []);
+    const n = new Set(base);
+    if (n.has(name)) n.delete(name); else n.add(name);
+    return n;
+  });
+
   return (
     <div>
-      <div className="mb-2 flex items-center gap-2">
+      <div className="mb-2 flex flex-wrap items-center gap-2">
         <Sparkles strokeWidth={1.75} className="h-4 w-4 text-primary-600" />
-        <h4 className="text-sm font-semibold text-slate-900">AI-recommended controls</h4>
-        {recs.length > 0 && (
-          <span className="rounded-full bg-primary-50 px-2 py-0.5 text-[11px] font-medium text-primary-700">{recs.length}</span>
+        <h4 className="text-sm font-semibold text-slate-900">Framework mappings</h4>
+        {(recs.length > 0 || coverage.length > 0) && (
+          <span className="text-[11px] text-slate-500">
+            {groups.length} framework{groups.length === 1 ? '' : 's'} · {recs.length} mapped{totalGaps ? ` · ${totalGaps} gaps` : ''}
+          </span>
         )}
       </div>
-      {recs.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-3 text-xs text-slate-500">
-          No control recommendations yet. They populate automatically after the document is parsed into statements.
+
+      {recs.length === 0 && coverage.length === 0 ? (
+        <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-center text-xs text-slate-500">
+          No framework clauses matched yet. Recommendations populate automatically after the document is parsed into
+          statements, scoped to this document&apos;s in-scope &amp; referenced frameworks.
         </p>
       ) : (
         <>
-          <p className="mb-2 text-[11px] text-slate-500">
-            Matched from this document&apos;s statements across your frameworks and internal controls. Expand to see the exact statements, then link the ones you want.
-          </p>
-          <div className="space-y-1.5 max-h-[28rem] overflow-y-auto pr-1">
-            {recs.map((r, i) => {
-              const meta = KIND_META[r.control_kind] || { label: r.control_kind, cls: 'bg-slate-100 text-slate-600 border-slate-200' };
-              const pct = r.link_source === 'ai' && typeof r.max_confidence === 'number'
-                ? `${Math.round(r.max_confidence * 100)}%` : null;
-              const k = keyOf(r);
-              const isOpen = expanded.has(k);
-              const isPending = pendingKey === k && linkMutation.isPending;
-              const clause = r.clause_reference || r.control_code;
-              const showCode = r.control_code && r.control_code !== clause;
-              return (
-                <div key={`${k}-${i}`} className={`rounded-lg border bg-white px-3 py-2.5 ${r.is_linked ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200'}`}>
-                  <div className="flex items-start gap-3">
-                    <div className="rounded-lg bg-primary-50 p-2">
-                      <Sparkles strokeWidth={1.75} className="h-4 w-4 text-primary-600" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <span className="font-semibold text-slate-900">{upperCode(clause) || '—'}</span>
-                        {showCode && <span className="text-[11px] text-slate-400">({upperCode(r.control_code)})</span>}
-                        <span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${meta.cls}`}>{meta.label}</span>
-                        {pct && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">{pct} match</span>}
-                        {r.coverage_type && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">{r.coverage_type}</span>}
-                        {r.link_source === 'derived' && (
-                          <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">derived</span>
-                        )}
-                        {r.is_linked && (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
-                            <Link2 strokeWidth={1.75} className="h-3 w-3" /> Linked
-                          </span>
-                        )}
-                      </div>
-                      {r.control_title && <p className="mt-0.5 text-sm font-medium text-slate-700">{r.control_title}</p>}
-                      {r.description && <p className="mt-0.5 line-clamp-2 text-xs text-slate-500">{r.description}</p>}
-                      <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                        {r.framework_name && <span className="truncate text-[11px] text-slate-400">{r.framework_name}</span>}
-                        <button
-                          onClick={() => toggle(k)}
-                          className="inline-flex items-center gap-1 rounded text-[11px] font-medium text-primary-600 hover:text-primary-700"
-                        >
-                          {isOpen ? <ChevronDown strokeWidth={1.75} className="h-3 w-3" /> : <ChevronRight strokeWidth={1.75} className="h-3 w-3" />}
-                          {r.statement_count} statement{r.statement_count === 1 ? '' : 's'}
-                        </button>
-                        {canLink && (
-                          <button
-                            onClick={() => linkMutation.mutate({ r, link: !r.is_linked })}
-                            disabled={isPending}
-                            className={`ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium disabled:opacity-50 ${
-                              r.is_linked
-                                ? 'border border-slate-200 text-slate-600 hover:bg-slate-50'
-                                : 'bg-primary-600 text-white hover:bg-primary-700'
-                            }`}
-                          >
-                            {isPending ? <Loader2 strokeWidth={1.75} className="h-3 w-3 animate-spin" />
-                              : r.is_linked ? <Unlink strokeWidth={1.75} className="h-3 w-3" /> : <Link2 strokeWidth={1.75} className="h-3 w-3" />}
-                            {r.is_linked ? 'Unlink' : 'Link'}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
+          {showToolbar && (
+            <div className="mb-2.5 flex flex-col gap-2 sm:flex-row sm:items-center">
+              <div className="relative flex-1">
+                <Search strokeWidth={1.75} className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search frameworks, clauses, titles…"
+                  className="w-full rounded-lg border border-slate-200 bg-white py-1.5 pl-8 pr-3 text-xs text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                />
+              </div>
+              <div className="inline-flex shrink-0 rounded-lg border border-slate-200 p-0.5">
+                {(['all', 'mapped', 'gaps'] as const).map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => setStatusView(v)}
+                    className={`rounded-md px-2.5 py-1 text-xs font-medium capitalize transition-colors ${statusView === v ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+                  >
+                    {v}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
-                  {isOpen && (
-                    <div className="mt-2 space-y-1.5 border-t border-slate-100 pt-2">
-                      {r.statements.length === 0 ? (
-                        <p className="text-[11px] text-slate-400">No statement detail available.</p>
+          <div className="space-y-2">
+            {groups.length === 0 ? (
+              <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-center text-xs text-slate-500">No frameworks match your search.</p>
+            ) : groups.map((g, idx) => {
+              const open = isOpen(g.name, idx);
+              const pct = g.cov?.coverage_pct;
+              const total = g.cov?.total_controls;
+              const gaps = g.cov?.missing_controls ?? [];
+              const mappedCount = g.cov?.mapped_count ?? g.mapped.length;
+              return (
+                <div key={g.name} className="overflow-hidden rounded-lg border border-slate-200">
+                  <button
+                    type="button"
+                    onClick={() => toggleFw(g.name)}
+                    className="flex w-full items-center gap-3 bg-white px-3 py-2.5 text-left hover:bg-slate-50"
+                  >
+                    <ChevronRight strokeWidth={1.75} className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${open ? 'rotate-90' : ''}`} />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-slate-900">{g.name}</p>
+                      {typeof pct === 'number' && (
+                        <div className="mt-1 flex items-center gap-2">
+                          <span className="h-1.5 w-full max-w-[200px] overflow-hidden rounded-full bg-slate-100">
+                            <span className="block h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: barColor(pct) }} />
+                          </span>
+                          <span className="text-[11px] font-medium" style={{ color: barColor(pct) }}>{pct}%</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1.5 text-[11px]">
+                      {typeof total === 'number' ? (
+                        <span className="text-slate-500">{mappedCount}/{total} covered</span>
                       ) : (
-                        r.statements.map((s) => (
-                          <div key={s.id} className="rounded-md bg-slate-50 px-2.5 py-1.5">
-                            {s.statement_code && <span className="text-[10px] font-semibold text-slate-500">{s.statement_code}</span>}
-                            <p className="text-[11px] text-slate-600">{s.snippet}</p>
+                        <span className="rounded-full bg-primary-50 px-2 py-0.5 font-medium text-primary-700">{g.mapped.length} mapped</span>
+                      )}
+                      {g.cov && g.cov.missing_count > 0 && (
+                        <span className="rounded-full bg-rose-50 px-2 py-0.5 font-medium text-rose-600">{g.cov.missing_count} gaps</span>
+                      )}
+                    </div>
+                  </button>
+
+                  {open && (
+                    <div className="border-t border-slate-100">
+                      {statusView !== 'gaps' && (
+                        <div>
+                          <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Mapped ({g.mapped.length})</p>
+                          {g.mapped.length === 0 ? (
+                            <p className="px-3 pb-2 text-xs text-slate-500">No clauses of this framework are mapped by this document yet.</p>
+                          ) : (
+                            <div className="max-h-72 divide-y divide-slate-50 overflow-y-auto">
+                              {g.mapped.map((r, i) => {
+                                const pctR = matchPct(r);
+                                const clause = r.clause_reference || r.control_code;
+                                return (
+                                  <div
+                                    key={`${keyOf(r)}-${i}`}
+                                    onClick={() => setDetail(r)}
+                                    className="flex cursor-pointer items-center gap-2 px-3 py-1.5 hover:bg-slate-50"
+                                  >
+                                    <CheckCircle strokeWidth={1.75} className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
+                                    <span className="shrink-0 text-sm font-semibold text-slate-900">{upperCode(clause) || '—'}</span>
+                                    <span className="min-w-0 flex-1 truncate text-xs text-slate-500">{r.control_title || ''}</span>
+                                    {pctR !== null && <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">{pctR}%</span>}
+                                    {r.statement_count > 0 && <span className="shrink-0 text-[10px] text-slate-400">{r.statement_count} stmt</span>}
+                                    {canLink && <LinkButton r={r} small />}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {statusView !== 'mapped' && gaps.length > 0 && (
+                        <div className="border-t border-slate-100 bg-rose-50/20">
+                          <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-rose-500">Not mapped ({gaps.length})</p>
+                          <div className="max-h-72 divide-y divide-rose-100/60 overflow-y-auto">
+                            {gaps.map((c) => (
+                              <div key={c.id} className="flex items-center gap-2 px-3 py-1.5">
+                                <span className="h-3 w-3 shrink-0 rounded-full border border-rose-300" />
+                                <span className="shrink-0 font-mono text-xs text-rose-600">{upperCode(c.reference)}</span>
+                                <span className="min-w-0 flex-1 truncate text-xs text-slate-600">{c.title}</span>
+                                {c.domain && <span className="shrink-0 text-[10px] text-slate-400">{c.domain}</span>}
+                              </div>
+                            ))}
                           </div>
-                        ))
+                        </div>
                       )}
                     </div>
                   )}
@@ -265,6 +393,75 @@ function RecommendedControlsSection({
           </div>
         </>
       )}
+
+      {/* Detail popup — full clause + statements + rationale for one mapping. */}
+      <RightSlidePanel
+        isOpen={!!detail}
+        onClose={() => setDetail(null)}
+        title="Mapping detail"
+        widthClassName="w-[560px]"
+      >
+        {detail && (
+          <div className="space-y-4">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-lg font-semibold text-slate-900">{upperCode(detail.clause_reference || detail.control_code) || '—'}</span>
+                {detail.framework_name && <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-xs font-medium text-slate-600">{detail.framework_name}</span>}
+                {detail.is_linked && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                    <Link2 strokeWidth={1.75} className="h-3 w-3" /> Linked
+                  </span>
+                )}
+              </div>
+              {detail.control_title && <p className="mt-1 text-sm font-medium text-slate-800">{detail.control_title}</p>}
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                {matchPct(detail) !== null && <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700">{matchPct(detail)}% match</span>}
+                {detail.coverage_type && <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-medium capitalize text-slate-500">{detail.coverage_type}</span>}
+                {detail.domain && <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">{detail.domain}</span>}
+              </div>
+            </div>
+
+            {canLink && <div><LinkButton r={detail} /></div>}
+
+            {detail.rationale && (
+              <div>
+                <h5 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Why it matched</h5>
+                <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">{detail.rationale}</p>
+              </div>
+            )}
+
+            {detail.description && (
+              <div>
+                <h5 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Clause text</h5>
+                <p className="whitespace-pre-wrap rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">{detail.description}</p>
+              </div>
+            )}
+
+            <div>
+              <h5 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Covered by {detail.statement_count} statement{detail.statement_count === 1 ? '' : 's'}
+              </h5>
+              <div className="space-y-1.5">
+                {detail.statements.length === 0 ? (
+                  <p className="text-xs text-slate-400">No statement detail available.</p>
+                ) : (
+                  detail.statements.map((s) => {
+                    const full = statementText.get(s.id);
+                    return (
+                      <div key={s.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                        {(s.statement_code || full?.code) && (
+                          <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{s.statement_code || full?.code}</span>
+                        )}
+                        <p className="mt-0.5 text-sm text-slate-700">{full?.text || s.snippet || '—'}</p>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </RightSlidePanel>
     </div>
   );
 }
@@ -286,6 +483,11 @@ export default function GovernanceMappingsPage({ initialDocumentId }: { initialD
   const canCreate = hasPermission('governance:mappings:create');
   const canDelete = hasPermission('governance:mappings:delete');
 
+  // Embedded = rendered inside a single document's Mappings tab. In that mode we
+  // lock to that one document: no document picker, no portfolio stats — just this
+  // document's framework-clause mapping table scoped to its own frameworks.
+  const embedded = initialDocumentId != null;
+
   const { data: documentsData, isLoading: documentsLoading } = useQuery({
     queryKey: ['governance-documents-list', typeFilter, searchTerm],
     queryFn: async () => {
@@ -296,6 +498,7 @@ export default function GovernanceMappingsPage({ initialDocumentId }: { initialD
       return response.data;
     },
     placeholderData: keepPreviousData,
+    enabled: !embedded, // single-doc mode never needs the full documents list
   });
 
   const { data: mappingsData, isLoading: mappingsLoading } = useQuery({
@@ -315,6 +518,56 @@ export default function GovernanceMappingsPage({ initialDocumentId }: { initialD
       return response.data as InternalControl[];
     },
   });
+
+  // Full statement text for the selected document — powers the "full statement
+  // text" in the mapping-detail popup (the recommendations payload only carries a
+  // 240-char snippet). Shares the parent Statements-tab cache key.
+  const { data: statementsData } = useQuery({
+    queryKey: ['document-policy-statements', selectedDocumentId],
+    queryFn: async () => {
+      if (!selectedDocumentId) return null;
+      const response = await governanceApi.getDocumentPolicyStatements(selectedDocumentId);
+      return response.data; // raw — same shape the document's Statements tab caches under this key
+    },
+    enabled: !!selectedDocumentId,
+  });
+
+  const statementText: StatementTextMap = useMemo(() => {
+    // This query key is SHARED with the document detail page's Statements tab,
+    // which caches the raw `{ statements: [...] }` object. Guard BOTH shapes so a
+    // shared-cache read (object) doesn't crash the map build with `.forEach`.
+    const arr: Array<{ id: number; statement_code: string | null; statement_text: string }> =
+      Array.isArray(statementsData) ? statementsData : ((statementsData as any)?.statements ?? []);
+    const m: StatementTextMap = new Map();
+    arr.forEach((s) => m.set(s.id, { code: s.statement_code ?? null, text: s.statement_text ?? '' }));
+    return m;
+  }, [statementsData]);
+
+  // Per-framework coverage (mapped/missing + gap clauses) — enriches the
+  // per-framework groups with a coverage bar + the "not covered" list. Only in
+  // embedded mode; shares the cache key the old ControlCoveragePanel used.
+  const { data: coverageData } = useQuery({
+    queryKey: ['doc-coverage', selectedDocumentId],
+    queryFn: async () => {
+      if (!selectedDocumentId) return null;
+      const response = await governanceApi.getDocumentCoverage(selectedDocumentId);
+      return response.data as { frameworks: CoverageFramework[] };
+    },
+    enabled: !!selectedDocumentId && embedded,
+  });
+  const coverageFrameworks = coverageData?.frameworks ?? [];
+
+  // Which frameworks the mappings were scoped to (in-scope ∪ referenced), plus
+  // resolved names (from the recommendation rows) for the "mapped against" header.
+  const frameworkScope = useMemo(() => {
+    const ids = mappingsData?.framework_scope_ids ?? [];
+    const nameById = new Map<number, string>();
+    (mappingsData?.recommended_controls ?? []).forEach((r) => {
+      if (r.uploaded_framework_id != null && r.framework_name) nameById.set(r.uploaded_framework_id, r.framework_name);
+    });
+    const names = ids.map((id) => nameById.get(id) || `Framework #${id}`);
+    return { ids, names };
+  }, [mappingsData]);
 
   const linkMutation = useMutation({
     mutationFn: (data: { document_id: number; internal_control_id: number; link_type: string; notes?: string; force_relink?: boolean }) =>
@@ -385,14 +638,7 @@ export default function GovernanceMappingsPage({ initialDocumentId }: { initialD
     );
     const coveragePct = totalDocs > 0 ? Math.round((docsWithMappings / totalDocs) * 100) : 0;
 
-    const totalMappings = mappingsData ? mappingsData.control_links.length : 0;
-
-    const docsByType: Record<string, number> = {};
-    documents.forEach(doc => {
-      docsByType[doc.doc_type] = (docsByType[doc.doc_type] || 0) + 1;
-    });
-
-    return { totalDocs, docsWithMappings, coveragePct, totalMappings, docsByType };
+    return { totalDocs, docsWithMappings, coveragePct };
   }, [documents, allControlsData, mappingsData]);
 
   const selectedDocument = useMemo(() => {
@@ -435,9 +681,245 @@ export default function GovernanceMappingsPage({ initialDocumentId }: { initialD
     [],
   );
 
-  if (documentsLoading) {
+  // Shared: the manually-linked internal-controls list (empty state or list).
+  const linkedControlsList = (mappingsData?.control_links?.length ?? 0) === 0 ? (
+    <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-center">
+      <p className="text-sm text-slate-600">No internal controls linked yet</p>
+      <p className="text-xs text-slate-500 mt-0.5">Use &quot;Link Control&quot; to attach internal (ERM) controls.</p>
+    </div>
+  ) : (
+    <div className="space-y-1.5 max-h-72 overflow-y-auto">
+      {mappingsData?.control_links?.map((link) => (
+        <div
+          key={link.id}
+          className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2.5 hover:bg-slate-50 transition-all"
+        >
+          <div className="rounded-lg bg-emerald-50 p-2">
+            <Shield strokeWidth={1.75} className="h-4 w-4 text-emerald-600" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-medium text-slate-900">{upperCode(link.control_code)}</p>
+            <p className="text-sm text-slate-600 truncate">{link.control_name}</p>
+            <div className="flex items-center gap-2 mt-1">
+              <span className="text-xs px-2 py-0.5 rounded-full bg-primary-50 text-primary-700 capitalize">
+                {link.link_type.replace('_', ' ')}
+              </span>
+              {link.notes && (
+                <span className="text-xs text-slate-600 truncate max-w-32">{link.notes}</span>
+              )}
+            </div>
+          </div>
+          {canDelete && <button
+            onClick={() => handleUnlinkControl(link.id)}
+            disabled={unlinkMutation.isPending}
+            className="p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+            title="Unlink control"
+          >
+            <Unlink strokeWidth={1.75} className="h-4 w-4" />
+          </button>}
+        </div>
+      ))}
+    </div>
+  );
+
+  // Shared: the "Link internal control" slide-over.
+  const linkModal = (
+    <RightSlidePanel
+      isOpen={showLinkModal}
+      onClose={() => {
+        setShowLinkModal(false);
+        setControlSearchTerm('');
+        setLinkNotes('');
+        setLinkError(null);
+      }}
+      title="Link Control"
+      widthClassName="w-[640px]"
+    >
+      <div className="space-y-3.5">
+        <p className="text-xs text-slate-600">
+          Search and select an internal control to link to &quot;{selectedDocument?.title || mappingsData?.document_title || 'this document'}&quot;
+        </p>
+
+        {linkError && (
+          <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            <AlertCircle strokeWidth={1.75} className="h-4 w-4 flex-shrink-0 mt-0.5" />
+            <span>{linkError}</span>
+          </div>
+        )}
+
+        <SearchInput
+          value={controlSearchTerm}
+          onChange={setControlSearchTerm}
+          placeholder="Search internal controls by ID or name..."
+          size="md"
+          autoFocus
+        />
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Link Type</label>
+            <MultiSelectDropdown
+              title="Link Type"
+              items={LINK_TYPES.map((t) => ({ value: t.value, label: t.label }))}
+              selectedValues={[selectedLinkType]}
+              onApply={(values) => setSelectedLinkType(values[0] || 'implements')}
+              multiSelect={false}
+              triggerVariant="input"
+              triggerClassName="w-full"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Notes (optional)</label>
+            <input
+              type="text"
+              placeholder="Add notes..."
+              value={linkNotes}
+              onChange={(e) => setLinkNotes(e.target.value)}
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+            />
+          </div>
+        </div>
+
+        <div className="border border-slate-200 rounded-lg max-h-64 overflow-y-auto">
+          {controlsLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 strokeWidth={1.75} className="h-6 w-6 animate-spin text-primary-600" />
+            </div>
+          ) : filteredControls.length === 0 ? (
+            <div className="text-center py-6">
+              <p className="text-slate-600">
+                {controlSearchTerm ? 'No matching internal controls found' : 'No internal controls available for this document'}
+              </p>
+              <p className="text-xs text-slate-500 mt-1">
+                Controls already linked to the selected document are excluded from this list.
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-200">
+              {filteredControls.slice(0, 50).map((control) => (
+                <button
+                  key={control.id}
+                  onClick={() => handleLinkControl(control)}
+                  disabled={linkMutation.isPending}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-slate-50 transition-all disabled:opacity-50"
+                >
+                  <div className="rounded-lg bg-primary-50 p-2">
+                    <Shield strokeWidth={1.75} className="h-4 w-4 text-primary-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-slate-900">{upperCode(control.control_id)}</p>
+                    <p className="text-sm text-slate-600 truncate">{control.name}</p>
+                    {control.category && (
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        {control.category}{control.sub_category ? ` / ${control.sub_category}` : ''}
+                      </p>
+                    )}
+                    {control.source_document_id && control.source_document_id !== selectedDocumentId && (
+                      <p className="text-xs text-amber-700 mt-1">
+                        Currently linked to {documentTitleById.get(control.source_document_id) || 'another document'}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {control.source_document_id && control.source_document_id !== selectedDocumentId ? (
+                      <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+                        Re-link
+                      </span>
+                    ) : (
+                      <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                        Link
+                      </span>
+                    )}
+                    <Plus strokeWidth={1.75} className="h-4 w-4 text-primary-600" />
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {filteredControls.length > 50 && (
+          <p className="text-xs text-slate-500 text-center">
+            Showing first 50 results. Use search to narrow down.
+          </p>
+        )}
+
+        <div className="flex justify-end gap-2.5 pt-3.5 border-t border-slate-200">
+          <button
+            onClick={() => {
+              setShowLinkModal(false);
+              setControlSearchTerm('');
+              setLinkNotes('');
+              setLinkError(null);
+            }}
+            className="px-4 py-2 text-sm font-medium text-slate-700 hover:text-slate-900 rounded-lg hover:bg-slate-100 transition-all"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </RightSlidePanel>
+  );
+
+  if (!embedded && documentsLoading) {
     return (
       <PageLoader className="h-64" />
+    );
+  }
+
+  // ── Embedded (single-document) mode ─────────────────────────────────────
+  // Locked to THIS document: no picker, no portfolio stats — just its framework
+  // clause mappings (scoped to its own frameworks) + linked internal controls.
+  if (embedded) {
+    const embeddedRecs = mappingsData?.recommended_controls ?? [];
+    const linkedCount = mappingsData?.control_links?.length ?? 0;
+    const noFrameworks = mappingsData?.framework_scope_ids != null && frameworkScope.ids.length === 0;
+    return (
+      <div className="space-y-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h3 className="text-base font-semibold text-slate-900">Framework mappings</h3>
+            <p className="text-xs text-slate-500">How this document&apos;s statements map to its in-scope &amp; referenced framework clauses.</p>
+          </div>
+          {canCreate && (
+            <button onClick={() => setShowLinkModal(true)} className="btn-primary btn-sm shrink-0">
+              <Plus className="h-4 w-4" /> Link internal control
+            </button>
+          )}
+        </div>
+
+        {mappingsLoading ? (
+          <div className="flex items-center justify-center py-10">
+            <Loader2 strokeWidth={1.75} className="h-6 w-6 animate-spin text-primary-600" />
+          </div>
+        ) : noFrameworks ? (
+          <div className="rounded-lg border border-dashed border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            No in-scope or reference frameworks are set for this document, so there are no framework clauses to map against.
+            Edit the document and pick its frameworks — mapping runs only for those.
+          </div>
+        ) : (
+          <RecommendedControlsSection
+            recs={embeddedRecs}
+            documentId={selectedDocumentId}
+            canLink={canCreate}
+            statementText={statementText}
+            coverage={coverageFrameworks}
+          />
+        )}
+
+        <div>
+          <div className="mb-2 flex items-center gap-2">
+            <Shield strokeWidth={1.75} className="h-4 w-4 text-emerald-600" />
+            <h4 className="text-sm font-semibold text-slate-900">Linked internal controls</h4>
+            {linkedCount > 0 && (
+              <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">{linkedCount}</span>
+            )}
+          </div>
+          {linkedControlsList}
+        </div>
+
+        {linkModal}
+      </div>
     );
   }
 
@@ -466,45 +948,6 @@ export default function GovernanceMappingsPage({ initialDocumentId }: { initialD
             </div>
           )}
         </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-lg border border-slate-200 bg-white p-2.5">
-          <div className="flex items-center gap-2">
-            <div className="rounded-md bg-primary-50 p-1.5">
-              <Link2 strokeWidth={1.75} className="h-4 w-4 text-primary-600" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-slate-900">
-                {coverageSummary.coveragePct}%
-                <span className="ml-1 text-xs font-normal text-slate-500">
-                  ({coverageSummary.docsWithMappings}/{coverageSummary.totalDocs})
-                </span>
-              </p>
-              <p className="text-xs text-slate-600">Policies mapped</p>
-            </div>
-          </div>
-        </div>
-        {Object.entries(coverageSummary.docsByType).map(([type, count]) => {
-          const style = getTypeStyle(type);
-          const Icon = style.icon || FileText;
-          return (
-            <div
-              key={type}
-              className="rounded-lg border border-slate-200 bg-white p-2.5 hover:bg-slate-50 transition-all"
-            >
-              <div className="flex items-center gap-2">
-                <div className={`rounded-md ${style.bgColor} p-1.5`}>
-                  <Icon strokeWidth={1.75} className={`h-4 w-4 ${style.color}`} />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-slate-900">{count}</p>
-                  <p className="text-xs text-slate-600 capitalize">{type}s</p>
-                </div>
-              </div>
-            </div>
-          );
-        })}
       </div>
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
@@ -618,193 +1061,28 @@ export default function GovernanceMappingsPage({ initialDocumentId }: { initialD
             </div>
           ) : (
             <div className="space-y-4">
-              {/* Manually-linked internal controls */}
-              {(mappingsData?.control_links?.length ?? 0) === 0 ? (
-                <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-center">
-                  <p className="text-sm text-slate-600">No internal controls linked yet</p>
-                  <p className="text-xs text-slate-500 mt-0.5">Use &quot;Link Control&quot; to attach internal (ERM) controls.</p>
-                </div>
-              ) : (
-                <div className="space-y-1.5 max-h-72 overflow-y-auto">
-                  {mappingsData?.control_links?.map((link) => (
-                    <div
-                      key={link.id}
-                      className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2.5 hover:bg-slate-50 transition-all"
-                    >
-                      <div className="rounded-lg bg-emerald-50 p-2">
-                        <Shield strokeWidth={1.75} className="h-4 w-4 text-emerald-600" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-slate-900">{upperCode(link.control_code)}</p>
-                        <p className="text-sm text-slate-600 truncate">{link.control_name}</p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="text-xs px-2 py-0.5 rounded-full bg-primary-50 text-primary-700 capitalize">
-                            {link.link_type.replace('_', ' ')}
-                          </span>
-                          {link.notes && (
-                            <span className="text-xs text-slate-600 truncate max-w-32">{link.notes}</span>
-                          )}
-                        </div>
-                      </div>
-                      {canDelete && <button
-                        onClick={() => handleUnlinkControl(link.id)}
-                        disabled={unlinkMutation.isPending}
-                        className="p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                        title="Unlink control"
-                      >
-                        <Unlink strokeWidth={1.75} className="h-4 w-4" />
-                      </button>}
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* AI-recommended controls — rolled up from this document's statements */}
+              {/* Framework control mappings — scoped to this document's frameworks */}
               <RecommendedControlsSection
                 recs={mappingsData?.recommended_controls ?? []}
                 documentId={selectedDocumentId}
                 canLink={canCreate}
+                statementText={statementText}
               />
+
+              {/* Manually-linked internal controls */}
+              <div>
+                <div className="mb-2 flex items-center gap-2">
+                  <Shield strokeWidth={1.75} className="h-4 w-4 text-emerald-600" />
+                  <h4 className="text-sm font-semibold text-slate-900">Linked internal controls</h4>
+                </div>
+                {linkedControlsList}
+              </div>
             </div>
           )}
         </div>
       </div>
 
-      <RightSlidePanel
-        isOpen={showLinkModal}
-        onClose={() => {
-          setShowLinkModal(false);
-          setControlSearchTerm('');
-          setLinkNotes('');
-          setLinkError(null);
-        }}
-        title="Link Control"
-        widthClassName="w-[640px]"
-      >
-        <div className="space-y-3.5">
-          <p className="text-xs text-slate-600">
-            Search and select an internal control to link to &quot;{selectedDocument?.title}&quot;
-          </p>
-
-          {linkError && (
-            <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-              <AlertCircle strokeWidth={1.75} className="h-4 w-4 flex-shrink-0 mt-0.5" />
-              <span>{linkError}</span>
-            </div>
-          )}
-
-          <SearchInput
-            value={controlSearchTerm}
-            onChange={setControlSearchTerm}
-            placeholder="Search internal controls by ID or name..."
-            size="md"
-            autoFocus
-          />
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Link Type</label>
-              <MultiSelectDropdown
-                title="Link Type"
-                items={LINK_TYPES.map((t) => ({ value: t.value, label: t.label }))}
-                selectedValues={[selectedLinkType]}
-                onApply={(values) => setSelectedLinkType(values[0] || 'implements')}
-                multiSelect={false}
-                triggerVariant="input"
-                triggerClassName="w-full"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Notes (optional)</label>
-              <input
-                type="text"
-                placeholder="Add notes..."
-                value={linkNotes}
-                onChange={(e) => setLinkNotes(e.target.value)}
-                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-              />
-            </div>
-          </div>
-
-          <div className="border border-slate-200 rounded-lg max-h-64 overflow-y-auto">
-            {controlsLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 strokeWidth={1.75} className="h-6 w-6 animate-spin text-primary-600" />
-              </div>
-            ) : filteredControls.length === 0 ? (
-              <div className="text-center py-6">
-                <p className="text-slate-600">
-                  {controlSearchTerm ? 'No matching internal controls found' : 'No internal controls available for this document'}
-                </p>
-                <p className="text-xs text-slate-500 mt-1">
-                  Controls already linked to the selected document are excluded from this list.
-                </p>
-              </div>
-            ) : (
-              <div className="divide-y divide-slate-200">
-                {filteredControls.slice(0, 50).map((control) => (
-                  <button
-                    key={control.id}
-                    onClick={() => handleLinkControl(control)}
-                    disabled={linkMutation.isPending}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-slate-50 transition-all disabled:opacity-50"
-                  >
-                    <div className="rounded-lg bg-primary-50 p-2">
-                      <Shield strokeWidth={1.75} className="h-4 w-4 text-primary-600" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-slate-900">{upperCode(control.control_id)}</p>
-                      <p className="text-sm text-slate-600 truncate">{control.name}</p>
-                      {control.category && (
-                        <p className="text-xs text-slate-500 mt-0.5">
-                          {control.category}{control.sub_category ? ` / ${control.sub_category}` : ''}
-                        </p>
-                      )}
-                      {control.source_document_id && control.source_document_id !== selectedDocumentId && (
-                        <p className="text-xs text-amber-700 mt-1">
-                          Currently linked to {documentTitleById.get(control.source_document_id) || 'another document'}
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {control.source_document_id && control.source_document_id !== selectedDocumentId ? (
-                        <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
-                          Re-link
-                        </span>
-                      ) : (
-                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
-                          Link
-                        </span>
-                      )}
-                      <Plus strokeWidth={1.75} className="h-4 w-4 text-primary-600" />
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {filteredControls.length > 50 && (
-            <p className="text-xs text-slate-500 text-center">
-              Showing first 50 results. Use search to narrow down.
-            </p>
-          )}
-
-          <div className="flex justify-end gap-2.5 pt-3.5 border-t border-slate-200">
-            <button
-              onClick={() => {
-                setShowLinkModal(false);
-                setControlSearchTerm('');
-                setLinkNotes('');
-                setLinkError(null);
-              }}
-              className="px-4 py-2 text-sm font-medium text-slate-700 hover:text-slate-900 rounded-lg hover:bg-slate-100 transition-all"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      </RightSlidePanel>
+      {linkModal}
     </div>
   );
 }

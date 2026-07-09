@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { usePermissions } from '@/hooks/usePermissions';
 import { assetsApi } from '@/lib/api';
 import { CriticalityCoverageWidget } from '@/components/assets/CriticalityCoverageWidget';
+import PciAttributesFields from '@/components/assets/PciAttributesFields';
 import { ITAsset, AssetType } from '@/types';
 import { PageLoader, ComboBoxInput, type ComboBoxOption } from '@/components/ui';
 import { AssetsWorkspace } from './_workspace/AssetsWorkspace';
@@ -520,16 +521,20 @@ const CRITICALITY_OPTIONS: ComboBoxOption[] = [
 ];
 
 
-function AssetModal({
+export function AssetModal({
   onClose,
   onSave,
   isLoading,
   initialData,
+  forceCde,
 }: {
   onClose: () => void;
   onSave: (data: Parameters<typeof assetsApi.create>[0]) => void;
   isLoading: boolean;
   initialData?: ITAsset | null;
+  /** Default the "CDE Environment" toggle on (used by the PCI Cardholder Data
+   *  Inventory, which only ever creates CDE assets). */
+  forceCde?: boolean;
 }) {
   const parseSubComponents = (value?: string) =>
     value
@@ -555,7 +560,8 @@ function AssetModal({
     sub_components: parseSubComponents(initialData?.custodian),
     ip_address: initialData?.ip_address || '',
     status: (initialData?.status || 'active') as 'active' | 'inactive' | 'decommissioned',
-    cde_environment: (initialData as any)?.cde_environment || false,
+    cde_environment: (initialData as any)?.cde_environment || forceCde || false,
+    pci_dss: (((initialData as any)?.pci_dss) || {}) as Record<string, string>,
     // Exposure metadata — drive the ISO 27005 derived criticality.
     data_classification: ((initialData as any)?.data_classification || '') as '' | 'public' | 'internal' | 'confidential' | 'restricted',
     internet_facing: Boolean((initialData as any)?.internet_facing),
@@ -668,6 +674,7 @@ function AssetModal({
       custodian: formData.sub_components.length > 0 ? formData.sub_components.join(', ') : undefined,
       ip_address: formData.ip_address || undefined,
       cde_environment: formData.cde_environment,
+      pci_dss: formData.cde_environment ? formData.pci_dss : null,
       // Exposure metadata — feeds the derived criticality.
       data_classification: formData.data_classification || undefined,
       internet_facing: formData.internet_facing,
@@ -1053,6 +1060,18 @@ function AssetModal({
                   </div>
                 )}
               </div>
+
+              {/* PCI DSS attributes — revealed when the asset is in the CDE.
+                  Shared component so the IT Assets form and the PCI Cardholder
+                  Data Inventory show identical fields. */}
+              {formData.cde_environment && (
+                <div className="mb-3">
+                  <PciAttributesFields
+                    value={formData.pci_dss}
+                    onChange={(patch) => setFormData({ ...formData, pci_dss: { ...formData.pci_dss, ...patch } as Record<string, string> })}
+                  />
+                </div>
+              )}
 
               {/* CIA Ratings — primary input to derived criticality */}
               <div>

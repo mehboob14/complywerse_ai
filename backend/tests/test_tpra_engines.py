@@ -11,7 +11,7 @@ from grc.modules.vendor_risk.tpra.engine_tiering import (
 )
 from grc.modules.vendor_risk.tpra.engine_scoring import (
     score_assessment, normalize_answer, REDUCTION_CAP,
-    residual_to_grade,
+    residual_to_grade, build_responses_from_answers,
 )
 from grc.modules.vendor_risk.tpra.engine_gates import (
     evaluate_stage_exit, recommend_decision,
@@ -264,3 +264,52 @@ def test_score_assessment_emits_grade():
     assert out["rating_grade"] in ("A", "B", "C", "D", "F")
     # Lower residual than inherent (controls removed risk) → grade reflects residual band.
     assert out["rating_grade"] == residual_to_grade(out["overall_residual"])
+
+
+# ── Portal-blob → engine bridge (TPRM-CRITICAL scoring fix) ──────────────────
+
+# A minimal template shaped like VendorQuestionnaireTemplate.questions.
+_SAMPLE_QS = [
+    {"id": "cyber_mfa", "text": "MFA enforced?", "domain": "cybersecurity", "weight": 2.0, "critical_control": True},
+    {"id": "cyber_patch", "text": "Patching SLA met?", "domain": "cybersecurity", "weight": 1.0, "critical_control": False},
+    {"id": "priv_dpa", "text": "DPA in place?", "domain": "data_privacy", "weight": 1.0, "critical_control": False},
+]
+
+
+def test_build_responses_maps_blob_to_engine_rows():
+    rows = build_responses_from_answers(
+        _SAMPLE_QS, {"cyber_mfa": "no", "cyber_patch": "yes", "priv_dpa": "partial"})
+    assert len(rows) == 3
+    by_id = {r["question_id"]: r for r in rows}
+    assert by_id["cyber_mfa"]["answer"] == "no"
+    assert by_id["cyber_mfa"]["critical_control"] is True
+    assert by_id["cyber_mfa"]["domain"] == "cybersecurity"
+    assert by_id["cyber_mfa"]["weight"] == 2.0
+
+
+def test_build_responses_tolerates_dict_and_missing_answers():
+    rows = build_responses_from_answers(_SAMPLE_QS, {"cyber_mfa": {"value": "yes"}})
+    by_id = {r["question_id"]: r for r in rows}
+    assert by_id["cyber_mfa"]["answer"] == "yes"       # unwrapped from a dict-shaped answer
+    assert by_id["cyber_patch"]["answer"] is None       # missing → None (engine excludes it)
+
+
+def test_string_answers_are_scored_not_zeroed():
+    # Regression for the legacy bug: string answers used to score 0 → false "low".
+    # All-"yes" (good posture) must REDUCE residual below inherent, not sit at 0/inherent.
+    rows = build_responses_from_answers(
+        _SAMPLE_QS, {"cyber_mfa": "yes", "cyber_patch": "yes", "priv_dpa": "yes"})
+    good = score_assessment(rows, inherent_score=80.0)
+    assert good["overall_residual"] < 80.0             # controls reduced risk
+    assert good["overall_residual"] > 0.0              # not the false-zero bug
+
+
+def test_all_no_critical_questionnaire_is_not_scored_low():
+    # THE headline bug: a vendor answering "no" to every critical control must not
+    # come out "low". The critical-control floor forces at least "high".
+    rows = build_responses_from_answers(
+        _SAMPLE_QS, {"cyber_mfa": "no", "cyber_patch": "no", "priv_dpa": "no"})
+    res = score_assessment(rows, inherent_score=50.0)
+    assert res["blocking"] is True
+    assert res["residual_rating"] in ("high", "critical")
+    assert res["residual_rating"] != "low"

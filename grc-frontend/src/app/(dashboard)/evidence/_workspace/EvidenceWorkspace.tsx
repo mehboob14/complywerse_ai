@@ -117,10 +117,8 @@ export function EvidenceWorkspace({ canCreate, canDelete, onUploadClick }: Evide
 
   const VIEWS: { key: ViewMode; label: string; icon: typeof Table2 }[] = [
     { key: 'workbench', label: 'Workbench', icon: LayoutPanelLeft },
-    { key: 'register', label: 'Register', icon: Table2 },
     { key: 'pipeline', label: 'Pipeline', icon: KanbanSquare },
     { key: 'snapshot', label: 'Snapshot', icon: PieChart },
-    { key: 'performance', label: 'Performance', icon: Trophy },
   ];
 
   const STATS = [

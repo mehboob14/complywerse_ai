@@ -16,6 +16,17 @@ PERMISSION_MATRIX = [
         ]
     },
     {
+        "module": "bcm",
+        "display_name": "Business Continuity Management",
+        "submodules": [
+            {"name": "plans", "display_name": "BCM Plans", "actions": ["view", "create", "edit", "delete", "approve"]},
+            {"name": "bia", "display_name": "Business Impact Analysis", "actions": ["view", "create", "edit", "delete"]},
+            {"name": "drills", "display_name": "Drills & Tests", "actions": ["view", "create", "edit", "delete"]},
+            {"name": "findings", "display_name": "Drill Findings", "actions": ["view", "create", "edit", "delete"]},
+            {"name": "dashboard", "display_name": "BCM Dashboard", "actions": ["view"]},
+        ]
+    },
+    {
         "module": "risks",
         "display_name": "Risk Management",
         "submodules": [

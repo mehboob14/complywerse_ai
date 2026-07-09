@@ -21,7 +21,8 @@ class CertificationJourney(Base):
     notes = Column(Text, nullable=True)
     generated_phases = Column(JSON, nullable=True)
     phases_completion = Column(JSON, nullable=True)  # Tracks completion status of each phase: {1: true, 2: false, ...}
-    
+    stage_owners = Column(JSON, nullable=True)  # Per-stage owner assignment: {"1": {type: user|team|role, ref_id, label}, ...}
+
     tenant = relationship("Tenant", back_populates="certification_journeys")
     framework = relationship("Framework")
     uploaded_framework = relationship("UploadedFramework")

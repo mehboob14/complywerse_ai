@@ -579,6 +579,7 @@ def get_cde_systems(
                 "criticality": asset.criticality,
                 "status": asset.status,
                 "cde_environment": asset.cde_environment,
+                "pci_dss": asset.pci_dss or {},
                 "created_at": asset.created_at.isoformat() if asset.created_at else None,
             }
             for asset in assets
@@ -668,8 +669,43 @@ def get_certification(
         "notes": journey.notes,
         "phases": phases_list,
         "has_generated_phases": bool(journey.generated_phases and len(journey.generated_phases) > 0),
+        "stage_owners": journey.stage_owners or {},
         "progress": progress_payload
     }
+
+
+@router.patch("/{journey_id}/stage-owners/{stage_n}")
+def set_stage_owner(
+    journey_id: int,
+    stage_n: int,
+    body: dict,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Assign (or clear) the owner of a single journey stage. The owner can be a
+    user, team, or role that exists in the tenant. Stored as a JSON map on the
+    journey — the static flow owner is only ever a suggestion/hint."""
+    journey = get_journey_or_404(journey_id, current_user, db)
+    owners = dict(journey.stage_owners or {})
+    owner_type = body.get("owner_type")
+    if owner_type in (None, "", "none"):
+        owners.pop(str(stage_n), None)
+    else:
+        if owner_type not in ("user", "team", "role"):
+            raise HTTPException(status_code=400, detail="owner_type must be user, team, or role")
+        owners[str(stage_n)] = {
+            "type": owner_type,
+            "ref_id": body.get("ref_id"),
+            "label": body.get("label") or "",
+        }
+    journey.stage_owners = owners
+    try:
+        from sqlalchemy.orm.attributes import flag_modified
+        flag_modified(journey, "stage_owners")
+    except Exception:
+        pass
+    db.commit()
+    return {"journey_id": journey_id, "stage_n": stage_n, "stage_owners": journey.stage_owners or {}}
 
 
 @router.patch("/{journey_id}", response_model=CertificationJourneyResponse)

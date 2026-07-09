@@ -613,6 +613,11 @@ export default function PolicyDetailPage() {
     onSuccess: () => {
       toast({ type: 'success', title: 'Override Applied' });
       queryClient.invalidateQueries({ queryKey: ['document-gap-findings', id] });
+      // An override can revert an applied clause, so refresh the document
+      // content + version history too.
+      queryClient.invalidateQueries({ queryKey: ['governance-document', id] });
+      queryClient.invalidateQueries({ queryKey: ['document-versions', id] });
+      queryClient.invalidateQueries({ queryKey: ['compliance-summary', id] });
       setEditingRow(null);
       setEditAction(null);
       setOverrideForm({ status: 'fully_compliant', justification: '' });
@@ -689,16 +694,17 @@ export default function PolicyDetailPage() {
       const v = response?.data?.applied_version_number;
       toast({
         type: 'success',
-        title: 'Gap closed',
+        title: 'Clause applied — pending approval',
         message: v
-          ? `Document updated — version ${v} saved with the prior content archived.`
-          : 'The document has been updated.'
+          ? `Saved to the document as version ${v} (prior content archived). The gap stays in progress until the document's reviewer and approver approve.`
+          : "Saved to the document. The gap stays in progress until the reviewer and approver approve."
       });
       // Refresh findings (status=closed), document content (new clause),
       // and version-history list.
       queryClient.invalidateQueries({ queryKey: ['document-gap-findings', id] });
       queryClient.invalidateQueries({ queryKey: ['governance-document', id] });
       queryClient.invalidateQueries({ queryKey: ['document-versions', id] });
+      queryClient.invalidateQueries({ queryKey: ['compliance-summary', id] });
       setAddressGapFinding(null);
       setAddressGapMode('append');
       setAddressGapOriginal('');
@@ -2310,6 +2316,35 @@ function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, docType }:
   const [showFullViewer, setShowFullViewer] = useState(false);
   const canEdit = isMarkdown && !doc?.has_file;
 
+  // If the document is a file-backed PDF, render the *exact* original file in
+  // an iframe rather than the markdown/HTML re-parse (which distorts tables,
+  // spacing and page layout). Fetch it once as a blob → object URL and revoke
+  // on unmount so we don't leak. Non-PDF files (docx/xlsx) fall through to the
+  // parsed view below, since browsers can't render those inline.
+  const isPdfFile = !!doc?.has_file && (
+    String(doc?.file_type || '').toLowerCase() === 'pdf' || /\.pdf$/i.test(String(doc?.file_name || ''))
+  );
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [pdfError, setPdfError] = useState(false);
+  useEffect(() => {
+    if (!isPdfFile || !doc?.id) { setPdfUrl(null); return; }
+    let cancelled = false;
+    let objectUrl: string | null = null;
+    setPdfError(false);
+    governanceApi.downloadDocumentFile(doc.id)
+      .then((res) => {
+        if (cancelled) return;
+        const blob = res.data instanceof Blob ? res.data : new Blob([res.data as BlobPart], { type: 'application/pdf' });
+        objectUrl = URL.createObjectURL(blob);
+        setPdfUrl(objectUrl);
+      })
+      .catch(() => { if (!cancelled) setPdfError(true); });
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [isPdfFile, doc?.id]);
+
   const openEditor = () => { startEdit(); setShowFullViewer(true); };
   const closeFullViewer = () => { setShowFullViewer(false); if (editing) setEditing(false); };
 
@@ -2389,8 +2424,24 @@ function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, docType }:
 
   // The read-only document body (markdown / sanitized HTML / empty), rendered
   // both as the collapsed inline preview and inside the full-view popup.
-  const renderReadBody = () => (
-    htmlLoading ? (
+  const renderReadBody = (full = false) => (
+    isPdfFile ? (
+      pdfError ? (
+        <div className="flex h-48 flex-col items-center justify-center gap-3 text-slate-600">
+          <FileText className="h-12 w-12" />
+          <p>Couldn&rsquo;t load the file preview.</p>
+          <p className="text-sm">Use &ldquo;Download File&rdquo; above to view it.</p>
+        </div>
+      ) : pdfUrl ? (
+        <iframe
+          src={pdfUrl}
+          title={doc?.file_name || doc?.title || 'Document'}
+          className={`w-full rounded-lg border border-slate-200 bg-white ${full ? 'h-[76vh]' : 'h-[340px]'}`}
+        />
+      ) : (
+        <div className="flex h-48 items-center justify-center"><PageLoader size="md" /></div>
+      )
+    ) : htmlLoading ? (
       <div className="flex h-48 items-center justify-center"><PageLoader size="md" /></div>
     ) : isMarkdown ? (
       <GovernanceDocumentMarkdown
@@ -2470,7 +2521,7 @@ function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, docType }:
               </div>
             </div>
             <div className="flex-1 overflow-y-auto px-6 py-5">
-              {editing ? editorBody : renderReadBody()}
+              {editing ? editorBody : renderReadBody(true)}
             </div>
           </div>
         </div>
@@ -3270,11 +3321,6 @@ function StatementsTab({ statements, statementsLoading, parsePolicyMutation, isP
                         <>
                           <div className="flex items-start justify-between mb-2">
                             <div className="flex items-center gap-2">
-                              {stmt.statement_code && (
-                                <span className="rounded bg-primary-50 px-2 py-0.5 text-xs font-mono text-primary-400">
-                                  {stmt.statement_code}
-                                </span>
-                              )}
                               {stmt.source_section && (
                                 <span className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
                                   {stmt.source_section}
@@ -3590,12 +3636,12 @@ function ControlCoveragePanel({ documentId }: { documentId: number }) {
 }
 
 function ControlsTab({ documentId }: any) {
-  // Coverage/gap panel + the full Policy-Control Mappings surface, scoped
-  // (auto-selected) to this document — same functionality as the standalone
-  // Mappings page, embedded here so it lives with the document.
+  // The framework-mapping surface, scoped (auto-selected) to this document. It
+  // now owns the per-framework coverage bars + gap ("not covered") lists that
+  // ControlCoveragePanel used to show separately, so the tab is one coherent
+  // surface instead of two panels that could tell contradictory stories.
   return (
     <div className="space-y-4">
-      <ControlCoveragePanel documentId={documentId} />
       <GovernanceMappingsPage initialDocumentId={documentId} />
     </div>
   );
@@ -3899,6 +3945,11 @@ function GapFindingRow({
 
                 {isEditing && editAction === 'override' && (
                   <div className="rounded-lg border border-primary-300 bg-primary-50 p-3 space-y-3" onClick={(e) => e.stopPropagation()}>
+                    {finding.applied_at && (
+                      <p className="rounded-md bg-amber-50 px-2 py-1.5 text-xs text-amber-700">
+                        This clause was applied to the document. Overriding will undo that change and revert the document to its previous version.
+                      </p>
+                    )}
                     <label className="text-sm font-medium text-slate-700">Override Compliance Status</label>
                     <select
                       value={overrideForm.status}

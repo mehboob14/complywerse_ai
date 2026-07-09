@@ -3,19 +3,16 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  LayoutDashboard,
   FileText,
-  Calendar,
-  CheckSquare,
-  Link2,
   AlertTriangle,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
+// "Overview" now lives in the sidebar (Governance Oversight) — kept out of this
+// top nav so it isn't duplicated on the documents bar.
 const governanceNavigation = [
-  { name: 'Overview', href: '/governance', icon: LayoutDashboard },
   { name: 'Documents', href: '/governance/documents', icon: FileText },
-  { name: 'Exceptions', href: '/governance/exceptions', icon: AlertTriangle },
+  { name: 'Policy Exceptions', href: '/governance/exceptions', icon: AlertTriangle },
 ];
 
 export default function GovernanceLayout({

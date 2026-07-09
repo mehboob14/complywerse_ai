@@ -350,7 +350,7 @@ export default function AssessmentDetailPage() {
     <div className="p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <button onClick={() => router.push('/vendor-risk/assessments')} className="text-gray-400 hover:text-gray-600">
+        <button onClick={() => router.push('/vendor-risk/assessments')} aria-label="Back to assessments" className="text-gray-400 hover:text-gray-600">
           <ArrowLeft className="h-5 w-5" />
         </button>
         <div className="flex-1">
@@ -408,10 +408,14 @@ export default function AssessmentDetailPage() {
 
       {/* Tabs */}
       <div className="border-b border-gray-200">
-        <nav className="flex gap-6">
+        <nav className="flex gap-6" role="tablist" aria-label="Assessment sections">
           {tabs.map((tab) => (
             <button
               key={tab.key}
+              role="tab"
+              id={`assessment-tab-${tab.key}`}
+              aria-selected={activeTab === tab.key}
+              aria-controls={`assessment-panel-${tab.key}`}
               onClick={() => setActiveTab(tab.key)}
               className={`pb-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
                 activeTab === tab.key
@@ -428,7 +432,7 @@ export default function AssessmentDetailPage() {
 
       {/* â•â•â• Overview Tab â•â•â• */}
       {activeTab === 'overview' && (
-        <div className="space-y-4 sm:space-y-6">
+        <div className="space-y-4 sm:space-y-6" role="tabpanel" id="assessment-panel-overview" aria-labelledby="assessment-tab-overview">
           {/* Info Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {[
@@ -677,7 +681,7 @@ export default function AssessmentDetailPage() {
 
       {/* â•â•â• Questionnaire Tab â•â•â• */}
       {activeTab === 'questionnaire' && (
-        <div className="space-y-4">
+        <div className="space-y-4" role="tabpanel" id="assessment-panel-questionnaire" aria-labelledby="assessment-tab-questionnaire">
           {(assessment.questionnaire_responses ?? []).length === 0 ? (
             <div className="bg-white rounded-xl border border-gray-200 p-8 text-center">
               <ClipboardList className="h-10 w-10 text-gray-300 mx-auto mb-3" />
@@ -886,7 +890,7 @@ export default function AssessmentDetailPage() {
 
       {/* â•â•â• Scoring & Approval Tab â•â•â• */}
       {activeTab === 'scoring' && (
-        <div className="space-y-4 sm:space-y-6">
+        <div className="space-y-4 sm:space-y-6" role="tabpanel" id="assessment-panel-scoring" aria-labelledby="assessment-tab-scoring">
           {/* Current Scores */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4 text-center">

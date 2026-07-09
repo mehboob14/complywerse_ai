@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 import os
 import uuid
 import threading
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Form, BackgroundTasks
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_, func
@@ -14,6 +15,7 @@ from ....models import (
     AssessmentItemEvidence, RCSAResponseEvidence,
     GRCUser, Tenant, get_db, engine
 )
+from ....db import open_tenant_session
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 
 EVIDENCE_UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), "uploads", "evidence")
@@ -72,13 +74,29 @@ OCR_PROCESSABLE_TYPES = {
 }
 
 
-def process_evidence_background(evidence_id: int):
-    """Background task to process OCR and AI assessment for uploaded evidence."""
-    from sqlalchemy.orm import Session as DBSession
+logger = logging.getLogger(__name__)
+
+
+def process_evidence_background(evidence_id: int, tenant_slug: str):
+    """Background task to process OCR and AI assessment for uploaded evidence.
+
+    Runs on upload for OCR-processable files: OCR first, then (once OCR has
+    content) the AI assessment. Failures are LOGGED (not swallowed) so a
+    non-running AI assessment can be diagnosed from the backend logs.
+
+    IMPORTANT: this is database-per-tenant, so the thread MUST open a
+    tenant-scoped session (`open_tenant_session(slug)`). Binding to the master
+    `engine` — as this once did — queries the wrong database, finds no evidence
+    row, and silently returns, which is why auto-OCR never ran.
+    """
     from .ocr import process_evidence_ocr
     from .ai_assessment import run_ai_assessment
-    
-    db = DBSession(bind=engine)
+
+    if not tenant_slug:
+        logger.error("process_evidence_background called without tenant_slug for evidence %s", evidence_id)
+        return
+
+    db = open_tenant_session(tenant_slug)
     try:
         evidence = db.query(Evidence).filter(Evidence.id == evidence_id).first()
         if not evidence:
@@ -113,17 +131,27 @@ def process_evidence_background(evidence_id: int):
         if file_ext in OCR_PROCESSABLE_TYPES:
             try:
                 ocr_result = process_evidence_ocr(evidence, db)
-                
+
                 if ocr_result.status == "completed" and evidence.ocr_content:
                     try:
-                        run_ai_assessment(evidence, db)
+                        run_ai_assessment(evidence, db, user_id=getattr(evidence, "uploaded_by", None))
                     except Exception:
-                        pass
+                        logger.exception(
+                            "Auto AI-assessment failed for evidence %s after OCR completed", evidence_id
+                        )
+                elif ocr_result.status == "completed":
+                    logger.warning(
+                        "Evidence %s OCR completed but produced no content — skipping AI assessment", evidence_id
+                    )
             except Exception:
-                evidence.ocr_status = "failed"
-                db.commit()
+                logger.exception("OCR processing failed for evidence %s", evidence_id)
+                try:
+                    evidence.ocr_status = "failed"
+                    db.commit()
+                except Exception:
+                    db.rollback()
     except Exception:
-        pass
+        logger.exception("Background OCR/assessment task crashed for evidence %s", evidence_id)
     finally:
         db.close()
 
@@ -682,7 +710,7 @@ async def upload_evidence(
     if ocr_status_val == "pending":
         thread = threading.Thread(
             target=process_evidence_background,
-            args=(db_evidence.id,),
+            args=(db_evidence.id, tenant.slug),
             daemon=True
         )
         thread.start()

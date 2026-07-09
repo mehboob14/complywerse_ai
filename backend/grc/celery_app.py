@@ -200,6 +200,14 @@ celery_app.conf.update(
             "schedule": 24 * 60 * 60,
             "options": {"queue": "parsing"},
         },
+        # TPRM — continuous-monitoring connector poll fan-out (every 6h). A no-op
+        # until a live provider is registered in tpra.monitoring_connectors.CONNECTORS;
+        # the seam is scheduled now so a feed goes live by adding the connector alone.
+        "tprm-monitoring-connector-poll": {
+            "task": "grc.tasks.tprm.poll_monitoring_connectors_sweep",
+            "schedule": 6 * 60 * 60,
+            "options": {"queue": "parsing"},
+        },
         # Phase 7 — Cloud connector sync fan-out. Every 6 hours; per-row
         # `sync_schedule_seconds` further filters out fresh connectors,
         # so an admin can opt a connector into hourly sync without us

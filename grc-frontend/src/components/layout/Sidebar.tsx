@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -36,6 +36,8 @@ import {
   Gavel,
   Landmark,
   ShieldAlert,
+  LifeBuoy,
+  CalendarClock,
   // CIS integration icons
   type LucideIcon,
 } from "lucide-react";
@@ -54,12 +56,14 @@ interface NavItem {
   icon: LucideIcon;
   requiredPermissions?: string[];
   requiredModules?: string[];
+  /** Path prefix for active-highlighting when it differs from href. */
+  activeMatch?: string;
 }
 
 interface NavGroup {
   name: string;
   icon?: LucideIcon;
-  items: NavEntry[];   // may contain nested groups (folder → sub-dropdown)
+  items: NavEntry[];   // may contain nested groups (folder ΓåÆ sub-dropdown)
   defaultOpen?: boolean;
   requiredModules?: string[];
   adminOnly?: boolean;
@@ -70,13 +74,13 @@ type NavEntry = (NavItem & { requiredModules?: string[]; adminOnly?: boolean }) 
 const ADMIN_DEFAULT_MODULES = [
   'dashboard', 'risks', 'erm', 'controls', 'compliance', 'evidence', 'governance',
   'vulnerabilities', 'assets', 'frameworks', 'reports', 'admin', 'workflow_engine', 'integrations',
-  'is_projects', 'critical_tasks'
+  'is_projects', 'critical_tasks', 'bcm'
 ];
 
 const AUTHENTICATED_DEFAULT_MODULES = [
   'dashboard', 'risks', 'erm', 'controls', 'compliance', 'evidence', 'governance',
   'vulnerabilities', 'assets', 'frameworks', 'reports', 'workflow_engine', 'integrations',
-  'is_projects', 'critical_tasks'
+  'is_projects', 'critical_tasks', 'bcm'
 ];
 
 const normalizePerm = (perm: string): string => {
@@ -139,7 +143,7 @@ const navigation: NavEntry[] = [
     requiredModules: ['compliance', 'controls', 'evidence', 'frameworks'],
     items: [
       { name: 'Overview', href: '/compliance', icon: LayoutDashboard, requiredPermissions: ['compliance:frameworks:*', 'controls:control_library:*', 'evidence:evidence_library:*'] },
-      { name: 'Frameworks', href: '/frameworks', icon: Layers, requiredPermissions: ['compliance:frameworks:*'] },
+      { name: 'Frameworks', href: '/frameworks/manage', activeMatch: '/frameworks', icon: Layers, requiredPermissions: ['compliance:frameworks:*'] },
       { name: 'Evidence Management', href: '/evidence', icon: FileText, requiredPermissions: ['evidence:evidence_library:*', 'evidence:evidence_upload:*'] },
       { name: 'Regulatory Changes', href: '/governance/regulatory-changes', icon: GitPullRequest, requiredPermissions: ['governance:regulatory_changes:*'] },
       { name: 'Regulatory Feeds', href: '/governance/regulatory-feeds', icon: Rss, requiredPermissions: ['governance:regulatory_changes:*'] },
@@ -176,15 +180,29 @@ const navigation: NavEntry[] = [
           { name: 'Saudi PDPL', href: '/assessments/pdpl', icon: ShieldCheck, requiredPermissions: ['compliance:assessments:*'] },
         ],
       },
+      {
+        name: 'Business Continuity',
+        icon: LifeBuoy,
+        requiredModules: ['bcm'],
+        items: [
+          { name: 'Overview', href: '/bcm', icon: LayoutDashboard, requiredPermissions: ['bcm:dashboard:*'] },
+          { name: 'Continuity Plans', href: '/bcm/plans', icon: ClipboardList, requiredPermissions: ['bcm:plans:*'] },
+          { name: 'Drills & Invocations', href: '/bcm/drills', icon: CalendarClock, requiredPermissions: ['bcm:drills:*'] },
+        ],
+      },
     ],
   },
   {
     name: 'Control Testing & Assurance',
     icon: CheckCircle,
+    requiredModules: ['controls', 'erm'],
     items: [
       { name: 'Assurance Overview', href: '/control-library/assurance', icon: LayoutDashboard, requiredPermissions: ['controls:control_library:*'] },
-      { name: 'Control Catalog',    href: '/controls',                   icon: Layers,          requiredPermissions: ['controls:control_library:*'] },
-      { name: 'Normalized Library', href: '/control-library',            icon: Library,         requiredPermissions: ['controls:control_library:*'] },
+      { name: 'Controls Overview', href: '/controls/overview', icon: Shield, requiredPermissions: ['controls:control_library:*'] },
+      { name: 'Control Catalog', href: '/controls', icon: Layers, requiredPermissions: ['controls:control_library:*'] },
+      { name: 'Control Workbench', href: '/controls/workbench', icon: ClipboardCheck, requiredPermissions: ['controls:control_library:*'] },
+      { name: 'Normalized Library', href: '/control-library', icon: Library, requiredPermissions: ['controls:control_library:*'] },
+      { name: 'Internal Controls', href: '/erm/internal-controls', icon: Target, requiredPermissions: ['erm:internal_controls:*'] },
     ],
   },
   {
@@ -201,6 +219,7 @@ const navigation: NavEntry[] = [
     items: [
       { name: 'IT Asset Inventory',        href: '/assets',                        icon: Server,        requiredPermissions: ['dashboard:assets*'] },
       { name: 'CIS Benchmark',             href: '/compliance-overview',           icon: ShieldCheck,   requiredPermissions: ['compliance:scan:execute', 'erm:risks:*', 'compliance:agents:manage'] },
+      { name: 'Assets Risk Posture',       href: '/risk-posture',                  icon: Activity,      requiredPermissions: ['erm:risks:*'] },
       { name: 'Criticality Assessments',   href: '/assets/criticality-assessments', icon: ClipboardCheck, requiredPermissions: ['assets:criticality_assessments:view'] },
       { name: 'Vulnerabilities',           href: '/vulnerabilities',               icon: Bug,           requiredPermissions: ['vulnerabilities:vulnerability_register:*'], requiredModules: ['vulnerabilities'] },
       { name: 'Access Reviews',            href: '/admin/access-reviews',          icon: Users,         requiredPermissions: ['compliance:frameworks:*'] },
@@ -231,16 +250,19 @@ function isGroup(item: NavEntry): item is NavGroup {
   return 'items' in item;
 }
 
-// Nested-nav helpers: a group may contain sub-groups (folder → sub-dropdown).
+// Nested-nav helpers: a group may contain sub-groups (folder ΓåÆ sub-dropdown).
 function leafHrefs(entries: NavEntry[]): string[] {
-  const out: string[] = [];
-  for (const e of entries) { if (isGroup(e)) out.push(...leafHrefs(e.items)); else out.push(e.href); }
-  return out;
+  return flattenLeaves(entries).map((it) => it.href);
 }
-function bestActiveHref(pathname: string, hrefs: string[]): string | undefined {
-  return hrefs
-    .filter((h) => pathname === h || (h !== '/dashboard' && pathname.startsWith(h + '/')))
-    .sort((a, b) => b.length - a.length)[0];
+function bestActiveHref(pathname: string, items: NavItem[]): string | undefined {
+  const matchPath = (it: NavItem) => it.activeMatch ?? it.href;
+  return items
+    .filter((it) => {
+      const m = matchPath(it);
+      return pathname === m || (m !== '/dashboard' && pathname.startsWith(m + '/'));
+    })
+    .sort((a, b) => matchPath(b).length - matchPath(a).length)
+    .map((it) => it.href)[0];
 }
 function flattenLeaves(entries: NavEntry[]): NavItem[] {
   const out: NavItem[] = [];
@@ -248,7 +270,7 @@ function flattenLeaves(entries: NavEntry[]): NavItem[] {
   return out;
 }
 
-// A nested collapsible (Assessments → Cyber Security → templates). Indented one
+// A nested collapsible (Assessments ΓåÆ Cyber Security ΓåÆ templates). Indented one
 // level under its parent group; auto-opens when a descendant route is active.
 function NavSubGroup({ group, activeHref }: { group: NavGroup; activeHref?: string }) {
   const hrefs = leafHrefs(group.items);
@@ -329,9 +351,9 @@ function NavItemLink({ item, collapsed }: { item: NavItem; collapsed: boolean })
 
 function NavGroupSection({ group, collapsed }: { group: NavGroup; collapsed: boolean }) {
   const pathname = usePathname();
-  const activeChildHref = bestActiveHref(pathname, leafHrefs(group.items));
+  const activeChildHref = bestActiveHref(pathname, flattenLeaves(group.items));
   const hasActiveChild = Boolean(activeChildHref);
-  // Closed by default — only auto-open the section whose page is currently
+  // Closed by default ΓÇö only auto-open the section whose page is currently
   // active (so a deep-link still reveals its context) or one explicitly marked
   // defaultOpen.
   const [isOpen, setIsOpen] = useState(group.defaultOpen === true || hasActiveChild);
@@ -404,7 +426,7 @@ function NavGroupSection({ group, collapsed }: { group: NavGroup; collapsed: boo
         />
       </button>
 
-      {/* Animated open/close — the grid-rows 0fr→1fr trick smoothly expands the
+      {/* Animated open/close ΓÇö the grid-rows 0frΓåÆ1fr trick smoothly expands the
           height without measuring content, and the inner items fade + slide in
           (staggered) as the section "populates". */}
       <div
@@ -451,7 +473,7 @@ function NavGroupSection({ group, collapsed }: { group: NavGroup; collapsed: boo
   );
 }
 
-// ─── Administration popover ──────────────────────────────────────────────────
+// ΓöÇΓöÇΓöÇ Administration popover ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 // The Administration entry used to live in the scrolling nav. It's now a
 // pinned button at the bottom of the sidebar that opens a flyout listing
 // every admin sub-section as a button. Each button deep-links to /admin
@@ -679,7 +701,7 @@ export default function Sidebar() {
     return hasPermission(item.requiredPermissions);
   };
 
-  // Recursive: groups may now contain nested groups (folder → sub-dropdown).
+  // Recursive: groups may now contain nested groups (folder ΓåÆ sub-dropdown).
   const filterEntries = (entries: NavEntry[]): NavEntry[] =>
     entries.reduce<NavEntry[]>((acc, item) => {
       if (isGroup(item)) {
@@ -710,7 +732,7 @@ export default function Sidebar() {
         {!collapsed && (
           <span className="whitespace-nowrap text-base font-semibold text-[var(--color-text)] flex items-baseline gap-0.5">
             Compl<span className="relative inline-block leading-none">
-              <span style={{ fontVariantLigatures: 'none' }}>ı</span>
+              <span style={{ fontVariantLigatures: 'none' }}>─▒</span>
               <span
                 className="logo-dot absolute left-1/2 rounded-full"
                 style={{ top: '-3px', width: '5px', height: '5px', background: 'var(--color-base, #14b8a6)' }}
@@ -733,7 +755,7 @@ export default function Sidebar() {
         </button>
       </div>
 
-      {/* Top-aligned nav — items start at the top (no vertical centering). */}
+      {/* Top-aligned nav ΓÇö items start at the top (no vertical centering). */}
       <nav className="flex-1 overflow-y-auto scrollbar-thin px-2.5 py-3 space-y-1">
         {filteredNavigation.map((item) => {
           if (isGroup(item)) {
@@ -755,7 +777,7 @@ export default function Sidebar() {
         })}
       </nav>
 
-      {/* Administration popover — pinned at the bottom. The old nav
+      {/* Administration popover ΓÇö pinned at the bottom. The old nav
           entry was `adminOnly: true`, and admins bypass module + perm
           checks, so the effective gate is just "is admin". Non-admins
           see no Administration row at all. */}

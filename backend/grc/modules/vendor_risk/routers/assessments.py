@@ -376,29 +376,36 @@ def score_assessment(
         ).first()
 
     questions = (template.questions or []) if template else []
-    question_map = {str(q.get("id", i)): q for i, q in enumerate(questions)}
-
     responses = qr.responses or {}
-    total_weight = 0.0
-    weighted_sum = 0.0
 
-    for q_id, answer_data in responses.items():
-        question_def = question_map.get(str(q_id), {})
-        weight = float(question_def.get("weight", 1.0))
-        score = 0.0
-        if isinstance(answer_data, dict):
-            score = float(answer_data.get("score", 0))
-        elif isinstance(answer_data, (int, float)):
-            score = float(answer_data)
+    # TPRM-CRITICAL FIX — score through the GOVERNED engine instead of a weighted
+    # average of raw answer strings. The old path did float("yes") → 0, so every
+    # string answer counted as zero (an all-"no" critical questionnaire scored
+    # "low"), and it treated questionnaire answers as INHERENT risk. Correct model:
+    # inherent risk comes from tiering; questionnaire answers drive control POSTURE,
+    # which REDUCES inherent to residual (a failed critical control floors "high").
+    from ..tpra.engine_scoring import (
+        score_assessment as engine_score,
+        build_responses_from_answers,
+    )
+    from ..tpra.bootstrap import get_tiering_config
 
-        weighted_sum += score * weight
-        total_weight += weight
+    inherent = assessment.inherent_score
+    if not inherent:
+        # Neutral provisional inherent when tiering hasn't run for this assessment,
+        # so residual still responds to the answers rather than collapsing to a
+        # false "low". Run the tiering stage for a real inherent value.
+        inherent = 50.0
+    cfg = get_tiering_config(db, assessment.tenant_id)
+    resp_list = build_responses_from_answers(questions, responses)
+    result = engine_score(resp_list, inherent_score=inherent, config=cfg)
 
-    inherent_score = round(weighted_sum / total_weight, 2) if total_weight > 0 else 0.0
-
-    assessment.inherent_score = inherent_score
-    assessment.risk_rating = _calculate_risk_rating(inherent_score)
-    assessment.residual_score = inherent_score  # residual equals inherent until mitigations applied
+    assessment.inherent_score = result["overall_inherent"]
+    assessment.residual_score = result["overall_residual"]
+    assessment.residual_rating = result["residual_rating"]
+    assessment.risk_rating = result["residual_rating"]   # keep the legacy field in sync
+    assessment.rating_grade = result["rating_grade"]
+    assessment.domain_scores = result["domain_scores"]
     assessment.status = "reviewed"
     assessment.updated_at = datetime.utcnow()
 

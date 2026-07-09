@@ -343,6 +343,10 @@ export default function GovernanceDocumentsPage() {
     queryClient.invalidateQueries({ queryKey: ['governance-documents'] });
     queryClient.invalidateQueries({ queryKey: ['governance-documents-hierarchy'] });
     queryClient.invalidateQueries({ queryKey: ['governance-documents-parent-options'] });
+    // The register (DocumentsWorkspace) fetches under its OWN keys — invalidate
+    // them too, else a new upload / edit never shows up without a hard refresh.
+    ['gov-docs-workspace', 'gov-docs-hierarchy', 'gov-docs-summary', 'gov-docs-overdue', 'gov-docs-mypending', 'gov-docs-coverage']
+      .forEach((k) => queryClient.invalidateQueries({ queryKey: [k] }));
   };
 
   // Kept solely so its `error` can drive the load-failure banner below.
@@ -402,13 +406,15 @@ export default function GovernanceDocumentsPage() {
       };
       return governanceApi.createDocument(payload as any);
     },
-    onSuccess: (response) => {
+    onSuccess: () => {
       invalidateDocumentQueries();
+      // Auto-parse on create is now owned by the BACKEND — every document
+      // create/upload endpoint dispatches parsing server-side. The old
+      // client-side trigger was removed to avoid a double parse (backend +
+      // client) that billed OpenAI twice and could flip a freshly created doc
+      // into "review_required". We still clear the one-shot flag so its
+      // setters stay harmless.
       if (autoParseAfterCreate) {
-        const createdDocumentId = (response.data as { id?: number } | undefined)?.id;
-        if (createdDocumentId) {
-          parsePolicyMutation.mutate(createdDocumentId);
-        }
         setAutoParseAfterCreate(false);
       }
       setIsModalOpen(false);
@@ -1038,9 +1044,18 @@ function UploadDocumentModal({ onClose, onSubmit, isLoading }: UploadDocumentMod
       const response = await apiClient.get('/framework-upload/upload');
       const data = response.data;
       const items = Array.isArray(data) ? data : data?.items || data?.frameworks || [];
-      return (items as any[]).filter((f) =>
+      const filtered = (items as any[]).filter((f) =>
         f.is_active && ['parsed', 'published', 'classified', 'completed'].includes(f.upload_status),
       );
+      // Dedup by name — global + tenant copies (or repeat uploads) otherwise
+      // show the same framework twice. Keep the most recent (highest id).
+      const byName = new Map<string, any>();
+      for (const f of filtered) {
+        const key = String(f.name || '').trim().toLowerCase();
+        const existing = byName.get(key);
+        if (!existing || (f.id || 0) > (existing.id || 0)) byName.set(key, f);
+      }
+      return Array.from(byName.values());
     },
     staleTime: 5 * 60 * 1000,
   });
@@ -1537,9 +1552,18 @@ function DocumentModal({ document, parentDocuments, onClose, onSubmit, isLoading
       const response = await apiClient.get('/framework-upload/upload');
       const data = response.data;
       const items = Array.isArray(data) ? data : data?.items || data?.frameworks || [];
-      return (items as any[]).filter((f) =>
+      const filtered = (items as any[]).filter((f) =>
         f.is_active && ['parsed', 'published', 'classified', 'completed'].includes(f.upload_status),
       );
+      // Dedup by name — global + tenant copies (or repeat uploads) otherwise
+      // show the same framework twice. Keep the most recent (highest id).
+      const byName = new Map<string, any>();
+      for (const f of filtered) {
+        const key = String(f.name || '').trim().toLowerCase();
+        const existing = byName.get(key);
+        if (!existing || (f.id || 0) > (existing.id || 0)) byName.set(key, f);
+      }
+      return Array.from(byName.values());
     },
     staleTime: 5 * 60 * 1000,
   });
@@ -2643,7 +2667,7 @@ function AIDraftPolicyModal({ parentDocuments, prefill, onClose, onGenerate, onU
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">In-scope frameworks</label>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Reference frameworks</label>
                       <MultiSelectDropdown
                         title="Frameworks"
                         items={(frameworks || []).map((fw: any) => ({ value: String(fw.id), label: fw.name }))}
@@ -2683,9 +2707,9 @@ function AIDraftPolicyModal({ parentDocuments, prefill, onClose, onGenerate, onU
                       )}
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">Applicable frameworks</label>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">In-scope frameworks</label>
                       <MultiSelectDropdown
-                        title="Applicable frameworks"
+                        title="In-scope frameworks"
                         items={(frameworks || []).map((fw: any) => ({ value: String(fw.id), label: fw.name }))}
                         selectedValues={selectedApplicableFrameworkIds.map(String)}
                         onApply={(vals) => setSelectedApplicableFrameworkIds(vals.map(Number))}

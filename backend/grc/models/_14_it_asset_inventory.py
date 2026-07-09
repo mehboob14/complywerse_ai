@@ -26,6 +26,9 @@ class ITAsset(Base):
     location = Column(String(255), nullable=True)
     status = Column(String(50), default="active")  # active, inactive, decommissioned
     cde_environment = Column(Boolean, default=False)
+    # PCI DSS cardholder-data-inventory attributes for CDE assets:
+    # { pci_requirement, cardholder_data, encrypted, retention, assessment }.
+    pci_dss = Column(JSON, nullable=True)
 
     # ── Phase 5.1: Exposure metadata ───────────────────────────────────────
     # Operational context that the existing `criticality`/`status` columns

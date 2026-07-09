@@ -1144,6 +1144,7 @@ def create_risk(
         status=risk.status or "open",
         treatment_plan=risk.treatment_plan,
         root_cause=getattr(risk, "root_cause", None),
+        consequences=getattr(risk, "consequences", None),
         recommendations=getattr(risk, "recommendations", None),
         closure_status=risk.closure_status,
     )
@@ -2807,7 +2808,7 @@ AVAILABLE CONTROLS FOR RECOMMENDATION (select the most relevant ones):
 
 Based on this risk, provide suggestions in the following JSON format:
 {{
-    "suggested_description": "<A comprehensive 2-4 sentence professional risk description that explains what the risk is, its context, and potential business impact>",
+    "suggested_description": "<A concise 1-2 sentence (max ~35 words) risk description: plainly state the risk and its primary business impact. No preamble, no reasoning, no restating the inputs>",
     
     "suggested_causes": [
         "<Root cause 1 - specific and actionable>",
@@ -2852,6 +2853,7 @@ GUIDELINES:
 3. Be specific and actionable in causes and consequences
 4. Match the professional tone expected in enterprise GRC systems
 5. ONLY recommend controls that exist in the provided list - use exact IDs
+6. Keep suggested_description SHORT — 2-3 lines maximum (~35 words), a plain statement of the risk and its impact, NOT an analysis or a restatement of the inputs
 
 Return ONLY valid JSON, no additional text."""
 

@@ -10,7 +10,6 @@ import {
   Loader2,
   Plus,
   X,
-  Send,
   Trash2,
   Shield,
   Lock,
@@ -21,8 +20,10 @@ import {
   FileText,
   Paperclip,
   Copy,
+  Check,
   Eye,
   ExternalLink,
+  Link2 as LinkIcon,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -83,7 +84,7 @@ const CATEGORIES = ['security', 'privacy', 'compliance', 'operational', 'financi
 // Single neutral chip for every category — keeps the page calm and consistent
 // with how other modules tag rows. The category is identifying metadata, not
 // a status that warrants its own colour.
-const getCategoryBadge = (_category: string) => 'bg-gray-100 text-gray-700';
+const getCategoryBadge = (_category: string) => 'bg-slate-100 text-slate-700';
 
 const getCategoryIcon = (category: string) => {
   const icons: Record<string, typeof Shield> = {
@@ -103,7 +104,7 @@ const getCategoryIcon = (category: string) => {
 const getResponseStatusPill = (status: string) => {
   const tones: Record<string, string> = {
     pending: 'bg-amber-50 text-amber-700 border-amber-200',
-    in_progress: 'bg-blue-50 text-blue-700 border-blue-200',
+    in_progress: 'bg-primary-50 text-primary-700 border-primary-200',
     submitted: 'bg-emerald-50 text-emerald-700 border-emerald-200',
     expired: 'bg-gray-100 text-gray-600 border-gray-200',
   };
@@ -179,7 +180,14 @@ export default function VendorQuestionnairesPage() {
   const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [sendSuccess, setSendSuccess] = useState<{ token: string } | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
   const [selectedResponse, setSelectedResponse] = useState<QuestionnaireResponseRecord | null>(null);
+
+  const copyLink = (value: string) => {
+    navigator.clipboard?.writeText(value);
+    setLinkCopied(true);
+    window.setTimeout(() => setLinkCopied(false), 2000);
+  };
 
   const emptyQuestion = (): Question => ({
     id: crypto.randomUUID?.() || String(Date.now()),
@@ -533,20 +541,22 @@ export default function VendorQuestionnairesPage() {
                   <div className="flex items-center gap-0.5 flex-shrink-0">
                     <button
                       onClick={() => setShowPreviewModal(template)}
-                      className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                      aria-label={`Preview questions in ${template.name}`}
+                      className="p-1.5 text-gray-500 hover:text-primary-600 hover:bg-primary-50 rounded-md transition-colors"
                       title="Preview questions"
                     >
-                      <Eye className="h-4 w-4" />
+                      <Eye className="h-4 w-4" strokeWidth={1.75} />
                     </button>
                     {canDelete && (
                       <button
                         onClick={() => {
                           if (confirm('Delete this template?')) deleteMutation.mutate(template.id);
                         }}
+                        aria-label={`Delete template ${template.name}`}
                         className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
                         title="Delete template"
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Trash2 className="h-4 w-4" strokeWidth={1.75} />
                       </button>
                     )}
                   </div>
@@ -590,10 +600,10 @@ export default function VendorQuestionnairesPage() {
                       setSendForm({ vendor_id: '', assessment_id: '', respondent_email: '', respondent_name: '' });
                       setShowSendModal(true);
                     }}
-                    className="w-full px-3 py-1.5 bg-blue-50 text-blue-700 rounded-md text-xs font-medium hover:bg-blue-100 flex items-center justify-center gap-1.5"
+                    className="w-full px-3 py-1.5 bg-primary-50 text-primary-700 rounded-md text-xs font-medium hover:bg-primary-100 flex items-center justify-center gap-1.5"
                   >
-                    <Send className="h-3.5 w-3.5" />
-                    Send to Vendor
+                    <LinkIcon className="h-3.5 w-3.5" strokeWidth={1.75} />
+                    Generate vendor link
                   </button>
                 </div>
               </div>
@@ -648,7 +658,7 @@ export default function VendorQuestionnairesPage() {
                         <td className="px-4 py-3 text-sm text-gray-500 font-mono">#{response.id}</td>
                         <td className="px-4 py-3 text-sm text-gray-800">
                           {vendor ? (
-                            <Link href={`/vendor-risk/vendors/${vendor.id}`} className="text-blue-600 hover:text-blue-800">
+                            <Link href={`/vendor-risk/vendors/${vendor.id}`} className="text-primary-600 hover:text-primary-800">
                               {vendor.name}
                             </Link>
                           ) : (
@@ -660,7 +670,7 @@ export default function VendorQuestionnairesPage() {
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-700">
                           {assessment ? (
-                            <Link href={`/vendor-risk/assessments/${assessment.id}`} className="text-blue-600 hover:text-blue-800">
+                            <Link href={`/vendor-risk/assessments/${assessment.id}`} className="text-primary-600 hover:text-primary-800">
                               #{assessment.id} {formatAssessmentType(assessment.assessment_type)}
                             </Link>
                           ) : (
@@ -682,26 +692,29 @@ export default function VendorQuestionnairesPage() {
                           <div className="flex items-center justify-end gap-2">
                             <button
                               onClick={() => setSelectedResponse(response)}
-                              className="p-1.5 text-gray-500 hover:text-blue-700 rounded"
+                              aria-label={`View questions and answers for response #${response.id}`}
+                              className="p-1.5 text-gray-500 hover:text-primary-700 rounded"
                               title="View questions and answers"
                             >
-                              <Eye className="h-4 w-4" />
+                              <Eye className="h-4 w-4" strokeWidth={1.75} />
                             </button>
                             <button
                               onClick={() => navigator.clipboard.writeText(responseLink)}
+                              aria-label={`Copy response link for response #${response.id}`}
                               className="p-1.5 text-gray-500 hover:text-gray-700 rounded"
                               title="Copy response link"
                             >
-                              <Copy className="h-4 w-4" />
+                              <Copy className="h-4 w-4" strokeWidth={1.75} />
                             </button>
                             <a
                               href={responseLink}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="p-1.5 text-gray-500 hover:text-blue-700 rounded"
+                              aria-label={`Open response link for response #${response.id} in a new tab`}
+                              className="p-1.5 text-gray-500 hover:text-primary-700 rounded"
                               title="Open response link"
                             >
-                              <ExternalLink className="h-4 w-4" />
+                              <ExternalLink className="h-4 w-4" strokeWidth={1.75} />
                             </a>
                           </div>
                         </td>
@@ -881,18 +894,18 @@ export default function VendorQuestionnairesPage() {
                   <button
                     type="button"
                     onClick={() => loadDefaultQuestions(templateForm.category)}
-                    className="text-xs text-purple-600 hover:text-purple-800 flex items-center gap-1 px-2 py-1 bg-purple-50 rounded-lg"
+                    className="flex items-center gap-1 rounded-lg bg-primary-50 px-2 py-1 text-xs text-primary-700 hover:bg-primary-100"
                   >
-                    <Sparkles className="h-3 w-3" />
+                    <Sparkles className="h-3 w-3" strokeWidth={1.75} />
                     Load {templateForm.category.charAt(0).toUpperCase() + templateForm.category.slice(1)} Defaults
                   </button>
                 )}
                 <button
                   type="button"
                   onClick={addQuestion}
-                  className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1 px-2 py-1 bg-blue-50 rounded-lg"
+                  className="flex items-center gap-1 rounded-lg bg-primary-50 px-2 py-1 text-xs text-primary-700 hover:bg-primary-100"
                 >
-                  <Plus className="h-3 w-3" /> Add Question
+                  <Plus className="h-3 w-3" strokeWidth={1.75} /> Add Question
                 </button>
               </div>
             </div>
@@ -944,7 +957,7 @@ export default function VendorQuestionnairesPage() {
                             type="checkbox"
                             checked={q.required}
                             onChange={(e) => updateQuestion(idx, 'required', e.target.checked)}
-                            className="rounded border-gray-300 text-blue-600"
+                            className="rounded border-gray-300 text-primary-600"
                           />
                           Required
                         </label>
@@ -982,9 +995,9 @@ export default function VendorQuestionnairesPage() {
                           <button
                             type="button"
                             onClick={() => addOption(idx)}
-                            className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1 mt-1"
+                            className="mt-1 flex items-center gap-1 text-xs text-primary-600 hover:text-primary-800"
                           >
-                            <Plus className="h-3 w-3" /> Add Option
+                            <Plus className="h-3 w-3" strokeWidth={1.75} /> Add Option
                           </button>
                         </div>
                       )}
@@ -1032,7 +1045,7 @@ export default function VendorQuestionnairesPage() {
                           {q.type?.replace('_', '/')}
                         </span>
                         <span className="text-xs text-gray-400">Weight: {q.weight || 3}/5</span>
-                        {q.required && <span className="text-xs text-blue-600">Required</span>}
+                        {q.required && <span className="text-xs text-primary-600">Required</span>}
                         {q.evidence_required && (
                           <span className="text-xs text-orange-600 flex items-center gap-1">
                             <Paperclip className="h-3 w-3" /> Evidence Required
@@ -1058,7 +1071,7 @@ export default function VendorQuestionnairesPage() {
         )}
       </RightSlidePanel>
 
-      {/* Send Questionnaire Slide Panel */}
+      {/* Generate Vendor Link Slide Panel */}
       <RightSlidePanel
         isOpen={showSendModal}
         onClose={() => {
@@ -1066,7 +1079,8 @@ export default function VendorQuestionnairesPage() {
           setSendSuccess(null);
           setSendForm({ vendor_id: '', assessment_id: '', respondent_email: '', respondent_name: '' });
         }}
-        title="Send Questionnaire"
+        title="Generate vendor link"
+        subtitle="Mints a private response link — no email is sent automatically."
         width="w-full max-w-3xl"
         footer={
           sendSuccess ? (
@@ -1105,12 +1119,12 @@ export default function VendorQuestionnairesPage() {
                 {sendMutation.isPending ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    Saving...
+                    Generating...
                   </>
                 ) : (
                   <>
-                    <Send className="h-4 w-4" />
-                    Send Questionnaire
+                    <LinkIcon className="h-4 w-4" strokeWidth={1.75} />
+                    Generate link
                   </>
                 )}
               </button>
@@ -1120,28 +1134,36 @@ export default function VendorQuestionnairesPage() {
       >
         {sendSuccess ? (
           <div className="space-y-4">
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
-              <FileCheck className="h-8 w-8 text-green-600 mx-auto mb-2" />
-              <p className="text-sm font-medium text-green-800">Questionnaire sent successfully!</p>
-              <p className="text-xs text-green-600 mt-1">Share the link below with the vendor to fill out the questionnaire.</p>
+            <div className="rounded-lg border border-primary-200 bg-primary-50 p-4 text-center">
+              <LinkIcon className="mx-auto mb-2 h-8 w-8 text-primary-600" strokeWidth={1.75} />
+              <p className="text-sm font-medium text-primary-800">Vendor link generated</p>
+              <p className="mt-1 text-xs text-primary-700">
+                No email is sent yet — copy this link and share it with the vendor.
+              </p>
             </div>
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
-              <label className="block text-xs text-gray-500 mb-1">Vendor Response Link</label>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <label className="mb-1 block text-xs font-medium text-slate-600">Vendor response link</label>
               <div className="flex items-center gap-2">
                 <input
                   type="text"
                   readOnly
                   value={buildQuestionnaireLink(sendSuccess.token)}
-                  className={inputClass}
+                  onFocus={(e) => e.currentTarget.select()}
+                  className={`${inputClass} font-mono text-xs`}
                 />
                 <button
                   type="button"
-                  onClick={() => navigator.clipboard.writeText(buildQuestionnaireLink(sendSuccess.token))}
-                  className="cw-btn-primary inline-flex items-center gap-1 rounded-lg px-3 py-2 text-sm"
+                  onClick={() => copyLink(buildQuestionnaireLink(sendSuccess.token))}
+                  aria-label="Copy vendor response link"
+                  className="cw-btn-primary inline-flex shrink-0 items-center gap-1 rounded-lg px-3 py-2 text-sm"
                 >
-                  <Copy className="h-4 w-4" /> Copy
+                  {linkCopied ? <Check className="h-4 w-4" strokeWidth={1.75} /> : <Copy className="h-4 w-4" strokeWidth={1.75} />}
+                  {linkCopied ? 'Copied' : 'Copy'}
                 </button>
               </div>
+              <p className="mt-2 text-[11px] text-slate-500">
+                The link is private to this vendor. Anyone with it can complete the questionnaire until it expires.
+              </p>
             </div>
           </div>
         ) : (

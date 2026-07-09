@@ -165,6 +165,13 @@ class ClauseApplicability(Base):
     justification = Column(Text, nullable=True)
     status = Column(String(50), default="pending")  # pending, approved, rejected
 
+    # Statement-of-Applicability template fields (owner / implementation status /
+    # linked policy or evidence). Added additively — see compliance schema_migrations.
+    owner_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    owner_name = Column(String(255), nullable=True)
+    implementation_status = Column(String(50), nullable=True)  # not_started, in_progress, implemented, verified, not_applicable
+    linked_evidence_id = Column(Integer, nullable=True)  # id in the central evidence library
+
     requested_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
     requested_at = Column(DateTime, nullable=True)
     reviewed_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)

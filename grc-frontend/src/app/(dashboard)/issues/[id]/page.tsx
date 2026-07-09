@@ -9,12 +9,11 @@ import Link from 'next/link';
 import {
   ArrowLeft, ClipboardList, ListChecks, Activity as ActivityIcon, MessageSquare,
   Bug, AlertTriangle, Shield, FileCheck, Server, Building2, Loader2, CheckCircle2,
-  X, Plus, ExternalLink, Rocket, Calendar, User, Trash2, ShieldCheck,
+  X, Plus, ExternalLink, Rocket, Calendar, User, Trash2, ShieldCheck, ChevronRight,
 } from 'lucide-react';
 import { apiClient, issuesApi } from '@/lib/api';
+import { InlineLinkPicker } from '@/components/ui';
 import { SeverityChip, StateChip, SourceChip, formatDate, timeAgo } from '../_components/shared';
-
-type Tab = 'overview' | 'capa' | 'linked' | 'comments' | 'activity';
 
 interface IssueDetail {
   id: number;
@@ -64,6 +63,52 @@ const LINK_TABS: Array<{ key: keyof IssueDetail['link_counts']; label: string; i
   { key: 'vendors',         label: 'Vendors',         icon: Building2,   api: 'vendors' },
 ];
 
+type LinkFamily = typeof LINK_TABS[number]['api'];
+
+// Defensive: the list endpoints return either a bare array or {items:[]}.
+function rowsToOptions(
+  raw: unknown,
+  label: (x: any) => string | undefined,
+  sub: (x: any) => string | undefined,
+): { value: string; label: string; subLabel?: string }[] {
+  const rows = (Array.isArray(raw) ? raw : (raw as any)?.items ?? (raw as any)?.data ?? []) as any[];
+  return rows
+    .filter((x) => x && x.id != null)
+    .map((x) => ({ value: String(x.id), label: label(x) || `#${x.id}`, subLabel: sub(x) || undefined }));
+}
+
+// Searchable "Link" dropdown per family: candidate source + the add-body shape
+// for issuesApi.links[family].add. Uses the global InlineLinkPicker UI.
+const LINK_PICKER: Record<LinkFamily, {
+  fetch: () => Promise<{ value: string; label: string; subLabel?: string }[]>;
+  addBody: (id: number) => Record<string, unknown>;
+}> = {
+  vulns: {
+    fetch: async () => rowsToOptions((await apiClient.get('/vuln-management/vulnerabilities')).data, (x) => x.title || x.cve_id || x.name, (x) => x.cve_id),
+    addBody: (id) => ({ vulnerability_id: id }),
+  },
+  risks: {
+    fetch: async () => rowsToOptions((await apiClient.get('/risks')).data, (x) => x.title, (x) => x.category),
+    addBody: (id) => ({ risk_id: id }),
+  },
+  assets: {
+    fetch: async () => rowsToOptions((await apiClient.get('/assets')).data, (x) => x.name, (x) => x.asset_type),
+    addBody: (id) => ({ asset_id: id }),
+  },
+  controls: {
+    fetch: async () => rowsToOptions((await apiClient.get('/control-library')).data, (x) => x.name || x.title || x.code, (x) => x.code),
+    addBody: (id) => ({ target_type: 'normalized', control_id: id }),
+  },
+  evidence: {
+    fetch: async () => rowsToOptions((await apiClient.get('/evidence')).data, (x) => x.name, () => undefined),
+    addBody: (id) => ({ evidence_id: id }),
+  },
+  vendors: {
+    fetch: async () => rowsToOptions((await apiClient.get('/vendor-risk/vendors')).data, (x) => x.name || x.vendor_name, (x) => x.category),
+    addBody: (id) => ({ vendor_id: id }),
+  },
+};
+
 const TRANSITIONS: Record<string, string[]> = {
   new:             ['triage', 'in_progress', 'cancelled'],
   triage:          ['in_progress', 'cancelled'],
@@ -80,8 +125,8 @@ export default function IssueDetailPage() {
   const qc = useQueryClient();
   const issueId = Number(params.id);
 
-  const [tab, setTab] = useState<Tab>('overview');
   const [showClose, setShowClose] = useState(false);
+  const [openSection, setOpenSection] = useState<null | 'capa' | 'linked' | 'comments' | 'activity'>(null);
   const [closeNotes, setCloseNotes] = useState('');
 
   const { data, isLoading, error } = useQuery<IssueDetail>({
@@ -183,42 +228,60 @@ export default function IssueDetailPage() {
         </div>
       </div>
 
-      {/* Sub-tabs */}
-      <nav className="inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
-        {([
-          { id: 'overview', label: 'Overview',    icon: ClipboardList,  count: null },
-          { id: 'capa',     label: 'CAPA Actions',icon: ListChecks,     count: data.link_counts.actions },
-          { id: 'linked',   label: 'Linked Items',icon: Shield,         count:
-              data.link_counts.vulnerabilities + data.link_counts.risks + data.link_counts.assets +
-              data.link_counts.controls + data.link_counts.evidence + data.link_counts.vendors },
-          { id: 'comments', label: 'Comments',    icon: MessageSquare,  count: data.link_counts.comments },
-          { id: 'activity', label: 'Activity',    icon: ActivityIcon,   count: null },
-        ] as const).map((t) => {
-          const Icon = t.icon;
-          const active = tab === t.id;
-          return (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
-                active ? 'bg-primary-600 text-[#0a0a0a]' : 'text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              <Icon className="h-3.5 w-3.5" />
-              {t.label}
-              {t.count != null && t.count > 0 && (
-                <span className={`rounded-full px-1.5 text-[10px] ${active ? 'bg-black/10 text-[#0a0a0a]' : 'bg-slate-100 text-slate-700'}`}>{t.count}</span>
-              )}
-            </button>
-          );
-        })}
-      </nav>
+      {/* Overview inline; the detailed areas are compact cards that open in a
+          popup — keeps the record short instead of one long scroll. */}
+      <div className="space-y-4">
+        <OverviewTab data={data} />
 
-      {tab === 'overview' && <OverviewTab data={data} />}
-      {tab === 'capa' && <CAPATab issueId={issueId} />}
-      {tab === 'linked' && <LinkedItemsTab issueId={issueId} counts={data.link_counts} />}
-      {tab === 'comments' && <CommentsTab issueId={issueId} />}
-      {tab === 'activity' && <ActivityTab issueId={issueId} />}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {([
+            { key: 'capa', label: 'CAPA Actions', icon: ListChecks, count: data.link_counts.actions },
+            { key: 'linked', label: 'Linked Items', icon: Shield, count:
+                data.link_counts.vulnerabilities + data.link_counts.risks + data.link_counts.assets +
+                data.link_counts.controls + data.link_counts.evidence + data.link_counts.vendors },
+            { key: 'comments', label: 'Comments', icon: MessageSquare, count: data.link_counts.comments },
+            { key: 'activity', label: 'Activity', icon: ActivityIcon, count: null },
+          ] as const).map((s) => {
+            const Icon = s.icon;
+            return (
+              <button
+                key={s.key}
+                onClick={() => setOpenSection(s.key)}
+                className="group flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white p-3.5 text-left shadow-sm transition-colors hover:border-primary-300 hover:bg-slate-50"
+              >
+                <span className="flex min-w-0 items-center gap-2.5">
+                  <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-50 text-primary-600"><Icon className="h-4 w-4" /></span>
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-medium text-slate-800">{s.label}</span>
+                    {s.count != null && <span className="block text-xs text-slate-400">{s.count} {s.count === 1 ? 'item' : 'items'}</span>}
+                  </span>
+                </span>
+                <ChevronRight className="h-4 w-4 shrink-0 text-slate-300 transition-colors group-hover:text-primary-500" />
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Section popup — full detail for the clicked card. */}
+      {openSection && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" onClick={() => setOpenSection(null)}>
+          <div className="flex max-h-[85vh] w-full max-w-3xl flex-col rounded-xl border border-slate-200 bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-slate-200 px-4 py-2.5">
+              <h4 className="text-sm font-semibold text-slate-900">
+                {openSection === 'capa' ? 'CAPA Actions' : openSection === 'linked' ? 'Linked Items' : openSection === 'comments' ? 'Comments' : 'Activity'}
+              </h4>
+              <button onClick={() => setOpenSection(null)}><X className="h-4 w-4 text-slate-400" /></button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-4">
+              {openSection === 'capa' && <CAPATab issueId={issueId} />}
+              {openSection === 'linked' && <LinkedItemsTab issueId={issueId} counts={data.link_counts} />}
+              {openSection === 'comments' && <CommentsTab issueId={issueId} />}
+              {openSection === 'activity' && <ActivityTab issueId={issueId} />}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Closure modal */}
       {showClose && (
@@ -891,6 +954,7 @@ function CAPADetailModal({
 function LinkedItemsTab({ issueId, counts }: { issueId: number; counts: IssueDetail['link_counts'] }) {
   const [linkTab, setLinkTab] = useState<typeof LINK_TABS[number]['api']>(LINK_TABS[0].api);
   const tabMeta = LINK_TABS.find((t) => t.api === linkTab)!;
+  const qc = useQueryClient();
 
   const { data, isLoading } = useQuery<Array<Record<string, unknown>>>({
     queryKey: ['issue-links', issueId, linkTab],
@@ -902,9 +966,26 @@ function LinkedItemsTab({ issueId, counts }: { issueId: number; counts: IssueDet
     },
   });
 
+  // Candidate pool for the active family + the "Link" mutation.
+  const { data: candidates } = useQuery({
+    queryKey: ['issue-link-candidates', linkTab],
+    queryFn: () => LINK_PICKER[linkTab].fetch(),
+    staleTime: 60_000,
+  });
+  const addMut = useMutation({
+    mutationFn: (id: number) =>
+      (issuesApi.links[linkTab] as unknown as { add: (i: number, b: Record<string, unknown>) => Promise<unknown> })
+        .add(issueId, LINK_PICKER[linkTab].addBody(id)),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['issue-links', issueId, linkTab] });
+      qc.invalidateQueries({ queryKey: ['issue-detail', issueId] });
+    },
+  });
+
   return (
     <div className="space-y-2">
-      <div className="flex flex-wrap gap-1.5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap gap-1.5">
         {LINK_TABS.map((t) => {
           const Icon = t.icon;
           const active = linkTab === t.api;
@@ -921,6 +1002,18 @@ function LinkedItemsTab({ issueId, counts }: { issueId: number; counts: IssueDet
             </button>
           );
         })}
+        </div>
+        <InlineLinkPicker
+          triggerLabel={`Link ${tabMeta.label.toLowerCase()}`}
+          triggerClassName="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-primary-700 disabled:opacity-50"
+          triggerIcon={<Plus className="h-3.5 w-3.5" />}
+          items={candidates || []}
+          isLoading={addMut.isPending}
+          emptyText={`No ${tabMeta.label.toLowerCase()} available`}
+          searchPlaceholder={`Search ${tabMeta.label.toLowerCase()}`}
+          popoverWidth={320}
+          onSelect={(v) => addMut.mutate(Number(v))}
+        />
       </div>
       <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm min-h-[200px]">
         {isLoading ? <Loader2 className="mx-auto h-5 w-5 animate-spin text-slate-400" /> :
