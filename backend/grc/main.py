@@ -5,6 +5,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 from .models import init_master_db
+from .startup_seed import ensure_startup_seed_data
 from .audit_logger import should_audit_request, parse_request_payload, write_audit_log
 from .routers import (
     auth_router,
@@ -249,6 +250,7 @@ app.include_router(access_review_router)
 @app.on_event("startup")
 def on_startup():
     init_master_db()
+    ensure_startup_seed_data()
 
     # Self-heal: add any compliance-module columns that pre-existing tenant DBs
     # are missing. New tenants get them via `Base.metadata.create_all` at
