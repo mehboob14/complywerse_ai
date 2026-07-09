@@ -13,7 +13,9 @@ import json
 import logging
 import os
 import re
+from contextlib import redirect_stdout
 from datetime import datetime
+from io import StringIO
 from pathlib import Path
 from typing import Any, Iterable, Optional
 
@@ -54,19 +56,19 @@ def _short(value: Optional[str], limit: int) -> str:
     return text[:limit]
 
 
-def _seed_framework_names() -> set[str]:
-    names: set[str] = set()
+def _seed_framework_catalog() -> dict[str, Path]:
+    catalog: dict[str, Path] = {}
     if not _FRAMEWORK_SEED_DIR.exists():
-        return names
+        return catalog
     for path in _FRAMEWORK_SEED_DIR.glob("*.json"):
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
             name = ((data.get("metadata") or {}).get("name") or "").strip()
             if name:
-                names.add(name)
+                catalog[name] = path
         except Exception:
             logger.warning("Could not read framework seed %s", path, exc_info=True)
-    return names
+    return catalog
 
 
 def _load_baseline() -> Optional[dict]:
@@ -131,31 +133,45 @@ def _ensure_local_tenant_row(db: Session, tenant: dict) -> None:
 
 def ensure_local_framework_catalog(db: Session) -> dict:
     """Seed missing local framework JSONs into the tenant database."""
-    seed_names = _seed_framework_names()
-    if not seed_names:
+    seed_catalog = _seed_framework_catalog()
+    if not seed_catalog:
         return {"seeded": False, "reason": "no_seed_files"}
 
     existing_names = {
-        name for (name,) in db.query(UploadedFramework.name).filter(
-            UploadedFramework.is_active.is_(True)
-        ).all()
+        name for (name,) in db.query(UploadedFramework.name).all()
     }
-    missing = sorted(seed_names - existing_names)
+    missing = sorted(set(seed_catalog) - existing_names)
     if not missing:
         return {"seeded": False, "missing": 0}
 
-    from .seed_frameworks import seed_uploaded_frameworks
+    from .seed_frameworks import load_framework_json, seed_framework_from_json
 
     before_frameworks = db.query(UploadedFramework).count()
     before_controls = db.query(ParsedFrameworkControl).count()
-    seeded = seed_uploaded_frameworks(db, uploaded_by=_first_user_id(db))
+    user_id = _first_user_id(db)
+    seeded_count = 0
+    for name in missing:
+        data = load_framework_json(str(seed_catalog[name]))
+        if data is None:
+            continue
+        # The shared seeder prints operator-facing progress and defensive
+        # truncation notices. Capture them so backend startup remains readable;
+        # exceptions still escape and roll back the tenant seed transaction.
+        stdout = StringIO()
+        with redirect_stdout(stdout):
+            seeded = seed_framework_from_json(db, data, uploaded_by=user_id)
+        if seeded is not None:
+            seeded_count += 1
+        output = stdout.getvalue().strip()
+        if output:
+            logger.debug("Framework seed output for %s:\n%s", name, output)
     db.flush()
     return {
         "seeded": True,
         "missing": len(missing),
         "created_frameworks": max(0, db.query(UploadedFramework).count() - before_frameworks),
         "created_controls": max(0, db.query(ParsedFrameworkControl).count() - before_controls),
-        "seed_returned": len(seeded or []),
+        "seed_returned": seeded_count,
     }
 
 
