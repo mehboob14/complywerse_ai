@@ -22,6 +22,7 @@ import FixFirstCard from '@/components/dashboard/erm/FixFirstCard';
 import RiskHeatmap from '@/components/dashboard/erm/RiskHeatmap';
 import TopRisks from '@/components/dashboard/erm/TopRisks';
 import SectionDetailModal from '@/components/dashboard/erm/SectionDetailModal';
+import { SCORECARD_QUERY_KEYS } from '@/components/dashboard/scorecard-query-keys';
 
 // The three approved chart families cycle across the section cards so the
 // grid mixes all of them: area profile → waterfall → dot matrix.
@@ -100,7 +101,7 @@ export default function ERMOverviewPage() {
   const [openKey, setOpenKey] = useState<string | null>(null);
 
   const { data: overview, isLoading } = useQuery({
-    queryKey: ['erm-sections-overview'],
+    queryKey: [...SCORECARD_QUERY_KEYS.erm],
     queryFn: async () => {
       const response = await ermApi.dashboard.getSectionsOverview();
       return response.data as SectionsOverviewPayload;

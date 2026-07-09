@@ -25,7 +25,7 @@ WEEKS = 9  # past weekly points to backfill (today is added live by the endpoint
 def seed(db, tid):
     ms.ensure_table(db)
     now = datetime.utcnow()
-    metrics = compute_kpi_metrics(db, now)
+    metrics = compute_kpi_metrics(db, now, tenant_ids=[tid])
     today = now.date()
     written = 0
     for key, m in metrics.items():

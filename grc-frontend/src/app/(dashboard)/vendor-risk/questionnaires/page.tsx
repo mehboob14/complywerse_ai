@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tansta
 import { vendorRiskApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import { SearchInput, MultiSelectDropdown, RightSlidePanel, PageLoader } from '@/components/ui';
+import { TPRM_QUERY_OPTS } from '../_lib/tprmQuery';
 import {
   ClipboardList,
   Loader2,
@@ -222,6 +223,7 @@ export default function VendorQuestionnairesPage() {
       return (Array.isArray(data) ? data : data.items ?? []) as QuestionnaireTemplate[];
     },
     placeholderData: keepPreviousData,
+    ...TPRM_QUERY_OPTS,
   });
 
   const { data: vendors } = useQuery({
@@ -232,6 +234,7 @@ export default function VendorQuestionnairesPage() {
       return (Array.isArray(data) ? data : data.items ?? []) as VendorOption[];
     },
     placeholderData: keepPreviousData,
+    ...TPRM_QUERY_OPTS,
   });
 
   const { data: assessments } = useQuery({
@@ -242,6 +245,7 @@ export default function VendorQuestionnairesPage() {
       return (Array.isArray(data) ? data : data.items ?? []) as AssessmentOption[];
     },
     placeholderData: keepPreviousData,
+    ...TPRM_QUERY_OPTS,
   });
 
   const { data: questionnaireResponses } = useQuery({
@@ -252,6 +256,7 @@ export default function VendorQuestionnairesPage() {
       return (Array.isArray(data) ? data : []) as QuestionnaireResponseRecord[];
     },
     placeholderData: keepPreviousData,
+    ...TPRM_QUERY_OPTS,
   });
 
 
@@ -453,7 +458,7 @@ export default function VendorQuestionnairesPage() {
   }));
 
 
-  if (isLoading) {
+  if (isLoading && !templates) {
     return (
       <div className="flex items-center justify-center h-64">
         <PageLoader size="md" />

@@ -31,7 +31,7 @@ export type Kpi = {
   history: Point[];
 };
 
-// Which cybersecurity domains map to a live in-platform metric.
+// Which cybersecurity domains map to a live in-platform metric (exact workbook names).
 const DOMAIN_TO_METRIC: Record<string, string> = {
   'cybersecurity assurance & compliance': 'policy_review',
   'identity and access management': 'access_cert',
@@ -41,6 +41,27 @@ const DOMAIN_TO_METRIC: Record<string, string> = {
   'risk management': 'risk_treatment',
   'business continuity': 'incident_resolution',
 };
+
+// Fuzzy fallback when area_domain is abbreviated (e.g. seed rows or custom uploads).
+const METRIC_KEYWORDS: { key: string; patterns: RegExp[] }[] = [
+  { key: 'policy_review', patterns: [/policy|document review|governance|assurance.*compliance/i] },
+  { key: 'vuln_sla', patterns: [/vulnerabilit|patch|remediation|cve|within sla/i] },
+  { key: 'access_cert', patterns: [/access cert|identity|privilege|iam\b/i] },
+  { key: 'asset_monitoring', patterns: [/asset.*monitor|inventory.*monitor|last.?seen|seen in the last/i] },
+  { key: 'asset_vuln_free', patterns: [/physical security|free of open critical/i] },
+  { key: 'risk_treatment', patterns: [/treatment plan|risk.*treat/i] },
+  { key: 'incident_resolution', patterns: [/incident|mean time|mttr|contain|business continuity|response time/i] },
+];
+
+function resolveMetricKey(domain: string, topic: string, def: string): string | undefined {
+  const exact = DOMAIN_TO_METRIC[domain.trim().toLowerCase()];
+  if (exact) return exact;
+  const blob = `${domain} ${topic} ${def}`.toLowerCase();
+  for (const { key, patterns } of METRIC_KEYWORDS) {
+    if (patterns.some((p) => p.test(blob))) return key;
+  }
+  return undefined;
+}
 
 function catalog(item: any) {
   const r: string = item?.remarks || '';
@@ -54,7 +75,7 @@ function catalog(item: any) {
 export function buildKpis(items: any[], metrics: Record<string, LiveMetric>): Kpi[] {
   return (items || []).map((it) => {
     const c = catalog(it);
-    const key = DOMAIN_TO_METRIC[c.domain.trim().toLowerCase()];
+    const key = resolveMetricKey(c.domain, c.topic, c.def);
     const m = key ? metrics?.[key] : undefined;
     if (m) {
       return {

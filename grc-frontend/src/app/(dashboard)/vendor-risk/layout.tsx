@@ -105,10 +105,15 @@ export default function VendorRiskLayout({
         </div>
       </div>
 
-      {/* TPRM-013: key by pathname so tab navigation FROM a vendor-detail route
-          always remounts the target screen (App Router otherwise reused the stale
-          detail subtree). */}
-      <div key={pathname} className="px-4 sm:px-6 py-4 sm:py-5 space-y-4 sm:space-y-6">{children}</div>
+      {/* Remount only when entering/leaving a vendor-detail route so tab hops
+          between Dashboard / Vendors / Findings reuse cached queries instead of
+          flashing "Loading program dashboard…" on every click. */}
+      <div
+        key={/\/vendor-risk\/vendors\/\d+/.test(pathname ?? '') ? pathname : 'vendor-risk-shell'}
+        className="px-4 sm:px-6 py-4 sm:py-5 space-y-4 sm:space-y-6"
+      >
+        {children}
+      </div>
     </div>
   );
 }

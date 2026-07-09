@@ -14,6 +14,7 @@ import { Shield, AlertCircle, ExternalLink, Layers, ArrowUpRight, ChevronDown, C
 import { tpraApi } from '@/lib/api';
 import { PageLoader } from '@/components/ui';
 import { DOMAIN_HEX, sevBadgeCls, scoreColor, fmtDate, titleCase } from '../_lib/tprmShared';
+import { TPRM_QUERY_OPTS } from '../_lib/tprmQuery';
 
 type DomainScore = { residual?: number; inherent?: number; rating?: string; posture?: number; answered?: number; total?: number };
 interface RegisterRisk {
@@ -47,14 +48,17 @@ export default function Risk360Page() {
   const { data: reg, isLoading, error, refetch } = useQuery({
     queryKey: ['tprm-risk-register'],
     queryFn: async () => (await tpraApi.riskRegister()).data as RegisterResp,
+    ...TPRM_QUERY_OPTS,
   });
   const { data: dash } = useQuery({
     queryKey: ['tprm-dashboard', 'portfolio'],
     queryFn: async () => (await tpraApi.dashboard('portfolio')).data as { findings_by_domain: Record<string, number> },
+    ...TPRM_QUERY_OPTS,
   });
   const { data: coverage } = useQuery({
     queryKey: ['tprm-coverage'],
     queryFn: async () => (await tpraApi.getCoverage()).data as CoverageResp,
+    ...TPRM_QUERY_OPTS,
   });
 
   const byDomain = dash?.findings_by_domain || {};
@@ -89,7 +93,7 @@ export default function Risk360Page() {
           </div>
         </div>
 
-        {isLoading ? (
+        {isLoading && !reg ? (
           <div className="flex h-40 items-center justify-center"><PageLoader size="md" label="Loading register…" /></div>
         ) : error ? (
           <div className="flex h-40 flex-col items-center justify-center text-red-500">

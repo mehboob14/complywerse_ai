@@ -17,8 +17,9 @@ import {
   SectionDetailModal,
 } from '@/components/dashboard/score-kit';
 import { SectionWeightTunerModal } from '@/components/dashboard/score-tuning';
+import { SCORECARD_QUERY_KEYS } from '@/components/dashboard/scorecard-query-keys';
 
-const ASSURANCE_TUNING = { configBase: '/control-library/assurance', invalidateKey: ['assurance-sections-overview'] as unknown[] };
+const ASSURANCE_TUNING = { configBase: '/control-library/assurance', invalidateKey: [...SCORECARD_QUERY_KEYS.assurance] as unknown[] };
 
 /**
  * Control Testing & Assurance board — a first-class section-scorecard over the
@@ -119,7 +120,7 @@ export default function ControlAssuranceOverviewCards() {
   const [tuning, setTuning] = useState(false);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['assurance-sections-overview'],
+    queryKey: [...SCORECARD_QUERY_KEYS.assurance],
     queryFn: async () => {
       try { return (await apiClient.get('/control-library/assurance/sections-overview')).data as Payload; }
       catch { return null; }
@@ -138,21 +139,33 @@ export default function ControlAssuranceOverviewCards() {
       </div>
     );
   }
-  if (!data) return null;
 
-  const score = data.performance.score == null ? null : Math.round(data.performance.score);
+  const payload = data ?? {
+    as_of: new Date().toISOString(),
+    sections: {},
+    attention_queue: { total: 0 },
+    performance: { score: null, grade: null },
+  } as Payload;
+
+  const score = payload.performance.score == null ? null : Math.round(payload.performance.score);
   const band = scoreBand(score);
-  const order = ['coverage', 'effectiveness', 'quality'];
-  const sections = order.map((k) => data.sections[k]).filter((s): s is OverviewSection => Boolean(s));
-  const attention = ATTENTION_META.map((m) => ({ ...m, count: data.attention_queue?.[m.key] ?? 0 }));
-  const attentionTotal = data.attention_queue?.total ?? 0;
-  const controlsUnderAssurance = (data.sections?.coverage as { counts?: { active?: number } })?.counts?.active ?? 0;
+  const order = ['coverage', 'effectiveness', 'quality'] as const;
+  const sections = order.map((k) => payload.sections[k]).filter((s): s is OverviewSection => Boolean(s));
+  const attention = ATTENTION_META.map((m) => ({ ...m, count: payload.attention_queue?.[m.key] ?? 0 }));
+  const attentionTotal = payload.attention_queue?.total ?? 0;
+  const controlsUnderAssurance = (payload.sections?.coverage as { counts?: { active?: number } })?.counts?.active ?? 0;
 
-  const radarData = sections.map((s) => ({
-    axis: SECTION_META[s.key]?.short ?? s.label,
-    score: s.score == null ? 0 : Math.round(s.score),
-    target: 85,
-  }));
+  const radarData = order.map((key) => {
+    const s = payload.sections[key];
+    const label = SECTION_META[key]?.short ?? s?.label ?? key;
+    const hasData = s?.score != null;
+    return {
+      axis: label,
+      score: hasData ? Math.round(s!.score as number) : 0,
+      target: 85,
+      hasData,
+    };
+  });
 
   return (
     <div className="space-y-3.5">
@@ -164,9 +177,9 @@ export default function ControlAssuranceOverviewCards() {
               <ScoreRing score={score} size={84} />
               <div className="min-w-0">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Control Testing &amp; Assurance</p>
-                {data.performance.grade && (
+                {payload.performance.grade && (
                   <span className="mt-1.5 inline-block rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
-                    style={{ backgroundColor: `${band.hex}14`, color: band.hex }}>{data.performance.grade}</span>
+                    style={{ backgroundColor: `${band.hex}14`, color: band.hex }}>{payload.performance.grade}</span>
                 )}
                 <p className="mt-1.5 text-[11px] text-slate-400">{controlsUnderAssurance} control{controlsUnderAssurance === 1 ? '' : 's'} under assurance · {sections.length} weighted areas</p>
               </div>
@@ -205,6 +218,7 @@ export default function ControlAssuranceOverviewCards() {
             <span className="ml-auto text-[10.5px] text-slate-400">score vs 85 target</span>
           </div>
           <ResponsiveContainer width="100%" height={210}>
+            {radarData.length > 0 ? (
             <RadarChart data={radarData} outerRadius="72%">
               <PolarGrid stroke="#e2e8f0" />
               <PolarAngleAxis dataKey="axis" tick={{ fontSize: 11, fill: '#475569' }} />
@@ -213,6 +227,9 @@ export default function ControlAssuranceOverviewCards() {
               <Radar name="Score" dataKey="score" stroke={band.hex} fill={band.hex} fillOpacity={0.22} strokeWidth={2} />
               <RTooltip contentStyle={{ fontSize: 12, border: '1px solid #e2e8f0', borderRadius: 8, color: '#1e293b' }} />
             </RadarChart>
+            ) : (
+              <div className="flex h-full items-center justify-center text-xs text-slate-400">No scored areas yet</div>
+            )}
           </ResponsiveContainer>
         </div>
 

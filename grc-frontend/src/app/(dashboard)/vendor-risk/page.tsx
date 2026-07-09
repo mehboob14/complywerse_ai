@@ -22,6 +22,7 @@ import EmptyState from '@/components/common/EmptyState';
 import {
   SEV_HEX, TIER_ORDER, DOMAIN_LABELS, sevBadgeCls, gradeColor, scoreColor, fmtDate, titleCase,
 } from './_lib/tprmShared';
+import { TPRM_QUERY_OPTS } from './_lib/tprmQuery';
 
 interface Kpis {
   active_vendors: number; onboarded_this_period: number; critical_coverage: number;
@@ -234,13 +235,15 @@ export default function VendorRiskDashboardPage() {
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['tprm-dashboard', scope],
     queryFn: async () => (await tpraApi.dashboard(scope)).data as Dashboard,
+    ...TPRM_QUERY_OPTS,
   });
   const { data: trend } = useQuery({
     queryKey: ['tprm-trend'],
     queryFn: async () => (await tpraApi.riskTrend({ scope: 'portfolio', months: 12 })).data as Trend,
+    ...TPRM_QUERY_OPTS,
   });
 
-  if (isLoading) return <div className="flex h-72 items-center justify-center"><PageLoader size="md" label="Loading program dashboard…" /></div>;
+  if (isLoading && !data) return <div className="flex h-72 items-center justify-center"><PageLoader size="md" label="Loading program dashboard…" /></div>;
   if (error) {
     return (
       <div className="flex h-64 flex-col items-center justify-center text-red-500">
@@ -250,7 +253,15 @@ export default function VendorRiskDashboardPage() {
       </div>
     );
   }
-  if (!data) return null;
+  if (!data) {
+    return (
+      <div className="flex h-64 flex-col items-center justify-center text-slate-500">
+        <AlertCircle className="mb-2 h-8 w-8" />
+        <p className="text-sm">No dashboard data returned.</p>
+        <button onClick={() => refetch()} className="mt-2 text-xs font-medium text-primary-600 hover:underline">Retry</button>
+      </div>
+    );
+  }
   const k = data.kpis;
 
   if (k.active_vendors === 0) {

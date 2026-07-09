@@ -30,11 +30,19 @@ from .models import (
     ComplianceAssessmentDocument,
     ComplianceAssessmentDocumentItem,
     ComplianceSlaPolicy,
+    GovernanceDocument,
     GRCUser,
+    ISProject,
+    ISProjectMilestone,
+    ITAsset,
+    Issue,
+    IssueAction,
     NormalizationRun,
     NormalizedControl,
     NormalizedControlLink,
     ParsedFrameworkControl,
+    Risk,
+    RiskIncident,
     Tenant,
     UploadedFramework,
 )
@@ -756,6 +764,327 @@ def _ensure_nca_container_and_dcc(
     }
 
 
+def _run_backend_seed_script(script_name: str, db: Session, slug: str) -> bool:
+    """Load backend/seed_demo_*.py and run seed(db, slug|tids)."""
+    try:
+        import importlib.util
+        from pathlib import Path as _Path
+        seed_path = _Path(__file__).resolve().parent.parent / script_name
+        spec = importlib.util.spec_from_file_location(script_name.replace(".py", ""), seed_path)
+        if not (spec and spec.loader):
+            return False
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        if script_name == "seed_demo_it_assets.py":
+            user = db.query(GRCUser).order_by(GRCUser.id.asc()).first()
+            if not user:
+                return False
+            from .routers.auth_router import get_user_tenants
+            tids = get_user_tenants(user, db)
+            if not tids:
+                return False
+            mod.seed(db, tids)
+        else:
+            mod.seed(db, slug)
+        return True
+    except Exception:
+        logger.exception("Seed script %s failed for tenant %s", script_name, slug)
+        return False
+
+
+def ensure_issues_incidents_seed(db: Session, tenant_id: int) -> dict:
+    """Populate issue/incident dashboards — idempotent per code, not all-or-nothing."""
+    user_id = _first_user_id(db)
+    now = datetime.utcnow()
+    out: dict[str, Any] = {"seeded": False, "issues_created": 0, "incidents_created": 0, "actions_created": 0}
+
+    existing_codes = {
+        row[0] for row in db.query(Issue.code).filter(Issue.tenant_id == tenant_id).all() if row[0]
+    }
+    specs = [
+        ("ISS-001", "Privileged access review overdue", "high", "open", False, 5),
+        ("ISS-002", "Backup validation failure on finance DB", "critical", "in_progress", True, -2),
+        ("ISS-003", "Vendor SOC report expired", "medium", "open", False, 14),
+        ("ISS-004", "Change ticket missing CAB approval", "low", "closed", False, None),
+    ]
+    for code, title, severity, wf, breached, due_days in specs:
+        if code in existing_codes:
+            continue
+        issue = Issue(
+            tenant_id=tenant_id,
+            code=code,
+            title=title,
+            description=f"Operational issue seeded for dashboard metrics: {title}.",
+            severity=severity,
+            status="open" if wf != "closed" else "closed",
+            workflow_state=wf,
+            issue_type="audit_finding",
+            category="security",
+            impact="high" if severity in ("critical", "high") else "medium",
+            urgency="high" if severity in ("critical", "high") else "medium",
+            owner_id=user_id,
+            assignee_id=user_id,
+            reporter_id=user_id,
+            sla_breached=breached,
+            due_date=now + timedelta(days=due_days) if due_days is not None else None,
+            closed_at=now - timedelta(days=3) if wf == "closed" else None,
+        )
+        db.add(issue)
+        db.flush()
+        db.add(IssueAction(
+            issue_id=issue.id,
+            action_type="corrective",
+            title=f"Remediate: {title[:60]}",
+            status="completed" if wf == "closed" else ("in_progress" if wf == "in_progress" else "planned"),
+            assignee_id=user_id,
+            due_date=now + timedelta(days=(due_days or 10)),
+            completed_at=now - timedelta(days=1) if wf == "closed" else None,
+            created_by=user_id,
+        ))
+        out["issues_created"] += 1
+        out["seeded"] = True
+
+    if not db.query(RiskIncident.id).filter(RiskIncident.tenant_id == tenant_id).first():
+        risk = db.query(Risk.id).filter(Risk.tenant_id == tenant_id).order_by(Risk.id.asc()).first()
+        incident_specs = [
+            ("Phishing campaign blocked at mail gateway", "high", "resolved", 12, True),
+            ("Unauthorized API access attempt", "critical", "investigating", 4, False),
+        ]
+        for title, severity, status, ago, with_rca in incident_specs:
+            occurred = now - timedelta(days=ago)
+            discovered = occurred + timedelta(days=1)
+            resolved = now - timedelta(days=max(ago - 3, 1)) if status == "resolved" else None
+            db.add(RiskIncident(
+                tenant_id=tenant_id,
+                risk_id=risk.id if risk else None,
+                title=title,
+                severity=severity,
+                status=status,
+                incident_date=occurred,
+                discovered_date=discovered,
+                reported_by=user_id,
+                resolved_at=resolved,
+                root_cause="Credential reuse on a third-party integration." if with_rca else None,
+                financial_impact=12500.0 if with_rca else None,
+                operational_impact="Mail flow delayed 45 minutes during containment." if with_rca else None,
+            ))
+            out["incidents_created"] += 1
+        out["seeded"] = True
+
+    if not db.query(IssueAction.id).join(Issue, Issue.id == IssueAction.issue_id).filter(Issue.tenant_id == tenant_id).first():
+        for issue in db.query(Issue).filter(Issue.tenant_id == tenant_id).all():
+            db.add(IssueAction(
+                issue_id=issue.id,
+                action_type="corrective",
+                title=f"Remediate: {issue.title[:60]}",
+                status="in_progress" if (issue.workflow_state or "") not in ("closed", "cancelled") else "completed",
+                assignee_id=user_id,
+                due_date=now + timedelta(days=10),
+                completed_at=now - timedelta(days=1) if (issue.workflow_state or "") == "closed" else None,
+                created_by=user_id,
+            ))
+        out["seeded"] = True
+        out["actions_created"] = len(
+            db.query(IssueAction.id).join(Issue, Issue.id == IssueAction.issue_id)
+            .filter(Issue.tenant_id == tenant_id).all()
+        )
+
+    if not out["seeded"]:
+        out["reason"] = "issues_and_incidents_exist"
+    return out
+
+
+def ensure_assurance_workbench_seed(db: Session, tenant_id: int, user_id: Optional[int] = None) -> dict:
+    """Materialize CT&A work items from internal controls so assurance scorecards have data."""
+    from grc.models import InternalControl, ControlWorkItem
+    from grc.modules.control_library.routers.workbench import ensure_tables, sync_internal_control_work_items
+
+    out: dict[str, Any] = {"seeded": False, "work_items": 0}
+    try:
+        uid = user_id or _first_user_id(db)
+        ensure_tables(db)
+        now = datetime.utcnow()
+        for ic in db.query(InternalControl).filter(InternalControl.tenant_id == tenant_id).all():
+            if ic.status == "pending_approval":
+                ic.status = "active"
+            if ic.status == "active":
+                if not ic.next_test_date:
+                    ic.next_test_date = now + timedelta(days=45)
+                if not ic.last_tested_at and (ic.design_effectiveness or "") != "not_tested":
+                    ic.last_tested_at = now - timedelta(days=21)
+                if not ic.design_effectiveness or ic.design_effectiveness == "not_tested":
+                    ic.design_effectiveness = "partially_effective"
+                if not ic.operating_effectiveness or ic.operating_effectiveness == "not_tested":
+                    ic.operating_effectiveness = "partially_effective"
+        sync_internal_control_work_items(db, tenant_id, created_by=uid)
+        out["work_items"] = db.query(ControlWorkItem).filter(ControlWorkItem.tenant_id == tenant_id).count()
+        out["seeded"] = out["work_items"] > 0
+    except Exception:
+        logger.exception("Assurance workbench seed failed for tenant %s", tenant_id)
+        out["reason"] = "error"
+    return out
+
+
+def ensure_operational_dashboard_seed(db: Session, tenant_id: int, slug: str) -> dict:
+    """ERM, compliance, assets, and issues data powering module overview boards."""
+    out: dict[str, Any] = {
+        "erm": False, "compliance": False, "assets": False, "issues": False,
+    }
+    if not db.query(Risk.id).filter(Risk.title.like("[DEMO]%")).first():
+        out["erm"] = _run_backend_seed_script("seed_demo_erm.py", db, slug)
+    if not db.query(UploadedFramework.id).filter(UploadedFramework.name.like("[DEMO]%")).first():
+        out["compliance"] = _run_backend_seed_script("seed_demo_compliance.py", db, slug)
+    if not db.query(ITAsset.id).filter(ITAsset.name.like("[DEMO]%")).first():
+        out["assets"] = _run_backend_seed_script("seed_demo_it_assets.py", db, slug)
+    issues = ensure_issues_incidents_seed(db, tenant_id)
+    out["issues"] = issues.get("seeded", False)
+    out["issues_detail"] = issues
+    assurance = ensure_assurance_workbench_seed(db, tenant_id)
+    out["assurance"] = assurance.get("seeded", False)
+    out["assurance_detail"] = assurance
+    return out
+
+
+def ensure_governance_dashboard_seed(db: Session, tenant_id: int, slug: str) -> dict:
+    """Backfill governance portfolio + IS projects so section cards have data."""
+    out: dict[str, Any] = {"governance_docs": False, "is_projects": False}
+
+    has_demo_docs = db.query(GovernanceDocument.id).filter(
+        GovernanceDocument.tenant_id == tenant_id,
+        GovernanceDocument.document_code.like("DEMO-%"),
+    ).first()
+    if not has_demo_docs:
+        try:
+            import importlib.util
+            from pathlib import Path as _Path
+            seed_path = _Path(__file__).resolve().parent.parent / "seed_demo_governance_docs.py"
+            spec = importlib.util.spec_from_file_location("seed_demo_governance_docs", seed_path)
+            if spec and spec.loader:
+                mod = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(mod)
+                mod.seed(db, slug)
+                out["governance_docs"] = True
+        except Exception:
+            logger.exception("Governance portfolio seed failed for tenant %s", slug)
+
+    if db.query(ISProject.id).filter(ISProject.tenant_id == tenant_id).first():
+        return out
+
+    user_id = _first_user_id(db)
+    now = datetime.utcnow()
+    specs = [
+        ("ISO 27001 Certification Program", "In Progress", "On Track", 120, 185000, 94000),
+        ("Privileged Access Management Rollout", "In Progress", "On Track", 90, 75000, 68000),
+        ("Security Awareness Platform Refresh", "Planning", "At Risk", 180, 42000, 12000),
+    ]
+    created = 0
+    for name, status, health, days_out, budget_est, budget_act in specs:
+        proj = ISProject(
+            tenant_id=tenant_id,
+            name=name,
+            description=f"Governance-tracked initiative: {name}.",
+            category="Security",
+            priority="High",
+            status=status,
+            health=health,
+            project_owner_id=user_id,
+            created_by=user_id,
+            start_date=now - timedelta(days=45),
+            target_end_date=now + timedelta(days=days_out),
+            budget_estimated=float(budget_est),
+            budget_actual=float(budget_act),
+            business_justification="Seeded on backend startup to populate governance IS Projects metrics.",
+            completion_percentage=35 if status == "In Progress" else 10,
+        )
+        db.add(proj)
+        db.flush()
+        db.add(ISProjectMilestone(
+            project_id=proj.id,
+            name="Phase 1 — design complete",
+            description="Initial design and stakeholder sign-off.",
+            target_date=now - timedelta(days=10),
+            actual_completion_date=now - timedelta(days=3),
+            status="completed",
+            completion_percentage=100,
+        ))
+        db.add(ISProjectMilestone(
+            project_id=proj.id,
+            name="Phase 2 — implementation",
+            description="Core implementation and control validation.",
+            target_date=now + timedelta(days=45),
+            status="in_progress",
+            completion_percentage=40,
+        ))
+        created += 1
+    out["is_projects"] = created > 0
+    out["is_projects_created"] = created
+    return out
+
+
+def ensure_vendor_risk_portfolio_seed(db: Session, tenant_id: int) -> dict:
+    """Seed TPRM portfolio + templates when a tenant has no vendors (powers dashboard tabs)."""
+    from grc.models import Vendor
+    if db.query(Vendor.id).filter(Vendor.tenant_id == tenant_id).first():
+        return {"seeded": False, "reason": "has_vendors"}
+    try:
+        from grc.modules.vendor_risk.tpra.seed import seed_templates, seed_portfolio
+        from grc.modules.vendor_risk.tpra.bootstrap import ensure_tpra_tenant_defaults
+        ensure_tpra_tenant_defaults(db, tenant_id)
+        templates = seed_templates(db, tenant_id)
+        portfolio = seed_portfolio(db, tenant_id, months=12)
+        db.commit()
+        return {
+            "seeded": bool(templates or portfolio.get("created")),
+            "templates": templates,
+            "portfolio": portfolio,
+        }
+    except Exception:
+        logger.exception("Vendor risk portfolio seed failed for tenant %s", tenant_id)
+        db.rollback()
+        return {"seeded": False, "reason": "error"}
+
+
+def ensure_kpi_trend_history_seed(db: Session, tenant_id: int) -> dict:
+    """Backfill weekly trend points for live KPI metrics (powers dashboard sparklines)."""
+    try:
+        from grc.services import metric_snapshots as ms
+        from grc.modules.assessments.kpi_live import compute_kpi_metrics
+        import math
+        from datetime import datetime, timedelta
+
+        ms.ensure_table(db)
+        from grc.models import MetricSnapshot
+        if db.query(MetricSnapshot.id).filter(
+            MetricSnapshot.tenant_id == tenant_id,
+            MetricSnapshot.metric.like("kpi_%"),
+        ).first():
+            return {"seeded": False, "reason": "already_has_history"}
+
+        now = datetime.utcnow()
+        metrics = compute_kpi_metrics(db, now, tenant_ids=[tenant_id])
+        today = now.date()
+        written = 0
+        weeks = 9
+        for key, m in metrics.items():
+            cur = m.get("actual")
+            if cur is None:
+                continue
+            offset = sum(ord(c) for c in key) % 7
+            start = max(0.0, cur - 18.0)
+            for i in range(weeks):
+                frac = i / float(weeks)
+                base = start + (cur - start) * frac
+                wobble = 5.0 * math.sin(i * 1.1 + offset)
+                val = max(0.0, min(100.0, round(base + wobble, 1)))
+                d = today - timedelta(weeks=(weeks - i))
+                ms.upsert(db, tenant_id, f"kpi_{key}", d, val)
+                written += 1
+        return {"seeded": written > 0, "points_written": written}
+    except Exception:
+        logger.exception("KPI trend history seed failed for tenant %s", tenant_id)
+        return {"seeded": False, "reason": "error"}
+
+
 def ensure_compliance_assessment_seed_data(db: Session, tenant_id: int) -> dict:
     """Seed local compliance assessment records that power /assessments dashboards."""
     payload = _load_assessment_seed()
@@ -802,13 +1131,26 @@ def ensure_startup_seed_data() -> dict:
             catalog = ensure_local_framework_catalog(db)
             baseline = ensure_static_control_library_baseline(db, tenant["id"])
             assessments = ensure_compliance_assessment_seed_data(db, tenant["id"])
+            governance = ensure_governance_dashboard_seed(db, tenant["id"], slug)
+            operational = ensure_operational_dashboard_seed(db, tenant["id"], slug)
+            vendor_risk = ensure_vendor_risk_portfolio_seed(db, tenant["id"])
+            kpi_history = ensure_kpi_trend_history_seed(db, tenant["id"])
             db.commit()
-            if catalog.get("seeded") or baseline.get("seeded") or assessments.get("seeded"):
+            if (catalog.get("seeded") or baseline.get("seeded") or assessments.get("seeded")
+                    or governance.get("governance_docs") or governance.get("is_projects")
+                    or operational.get("erm") or operational.get("compliance")
+                    or operational.get("assets") or operational.get("issues")
+                    or vendor_risk.get("seeded")
+                    or kpi_history.get("seeded")):
                 summary["seeded"].append({
                     "slug": slug,
                     "catalog": catalog,
                     "baseline": baseline,
                     "assessments": assessments,
+                    "governance": governance,
+                    "operational": operational,
+                    "vendor_risk": vendor_risk,
+                    "kpi_history": kpi_history,
                 })
                 logger.info("Startup seed completed for tenant %s: %s", slug, summary["seeded"][-1])
         except Exception:

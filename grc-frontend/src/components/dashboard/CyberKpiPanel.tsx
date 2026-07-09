@@ -4,8 +4,8 @@
  * Cyber Security KPI panel for the MAIN dashboard. The KPI list comes from the
  * uploaded workbook (the catalog); the ACTUAL values are computed LIVE from real
  * modules where the platform owns the data (policy reviews, vulnerability SLA,
- * access certification) and overlaid. KPIs with no in-platform source are flagged
- * "external" with no number — nothing static, nothing fabricated. Detail/logic
+ * access certification) and overlaid. External workbook rows are omitted here;
+ * manage the full catalog on the KPI Report page. Detail/logic modal is shared
  * modal is shared with the KPI Report page (kpiShared).
  */
 
@@ -78,11 +78,9 @@ export default function CyberKpiPanel() {
 
   const kpis = buildKpis(data.items, data.metrics);
   const liveKpis = kpis.filter((k) => k.live);
-  const extKpis = kpis.filter((k) => !k.live);
   const onT = liveKpis.filter((k) => k.onTarget).length;
   const offT = liveKpis.filter((k) => k.onTarget === false).length;
-  const ext = extKpis.length;
-  const domains = new Set(kpis.map((k) => k.domain)).size;
+  const domains = new Set(liveKpis.map((k) => k.domain)).size;
 
   return (
     <div className="mb-6 rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -93,7 +91,7 @@ export default function CyberKpiPanel() {
           </span>
           <div>
             <h3 className="text-[15px] font-semibold text-slate-800">Cyber Security KPIs</h3>
-            <p className="text-[11px] text-slate-400">{kpis.length} KPIs across {domains} domains · {liveKpis.length} computed live from real modules</p>
+            <p className="text-[11px] text-slate-400">{liveKpis.length} live KPIs across {domains} domains · computed from real modules</p>
           </div>
         </div>
         <Link href="/assessments/cs_kpi" className="group inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-[12px] font-semibold text-slate-600 transition-colors hover:border-slate-300 hover:text-slate-800">
@@ -101,21 +99,30 @@ export default function CyberKpiPanel() {
         </Link>
       </div>
 
-      <div className="grid grid-cols-2 gap-2.5 px-5 py-3.5 sm:grid-cols-4">
+      <div className="grid grid-cols-3 gap-2.5 px-5 py-3.5 sm:grid-cols-3">
         <Tile label="Live KPIs" value={`${liveKpis.length}`} tone={TEAL} />
         <Tile label="On target" value={`${onT}`} tone={GOOD} />
         <Tile label="Below target" value={`${offT}`} tone={offT > 0 ? BAD : GOOD} />
-        <Tile label="External (no feed)" value={`${ext}`} />
       </div>
 
       {/* Live KPIs as compact rich cards; the last card(s) widen to fill the row (no gaps). */}
-      <div className="grid grid-cols-1 gap-2.5 px-5 pb-5 sm:grid-cols-2 lg:grid-cols-3">
-        {liveKpis.map((k, i) => {
-          const rem = liveKpis.length % 3;
-          const span = i === liveKpis.length - 1 ? (rem === 1 ? 3 : rem === 2 ? 2 : 1) : 1;
-          return <KpiRichCard key={i} k={k} onOpen={() => setSel(k)} span={span} />;
-        })}
-      </div>
+      {liveKpis.length > 0 ? (
+        <div className="grid grid-cols-1 gap-2.5 px-5 pb-5 sm:grid-cols-2 lg:grid-cols-3">
+          {liveKpis.map((k, i) => {
+            const rem = liveKpis.length % 3;
+            const span = i === liveKpis.length - 1 ? (rem === 1 ? 3 : rem === 2 ? 2 : 1) : 1;
+            return <KpiRichCard key={i} k={k} onOpen={() => setSel(k)} span={span} />;
+          })}
+        </div>
+      ) : (
+        <div className="mx-5 mb-5 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center">
+          <p className="text-sm font-medium text-slate-700">No live module feeds matched this catalog yet</p>
+          <p className="mt-1 text-[11px] leading-5 text-slate-500">
+            KPI workbook rows need a cybersecurity domain that maps to platform data (vulnerabilities, incidents, assets, governance reviews, etc.).
+            Upload or seed a KPI report to get started.
+          </p>
+        </div>
+      )}
 
       <KpiDetailModal k={sel} onClose={() => setSel(null)} />
     </div>

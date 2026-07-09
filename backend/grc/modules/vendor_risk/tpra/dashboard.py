@@ -21,7 +21,8 @@ from ....models import (
 )
 from ....routers.auth_router import require_auth, get_user_tenants
 from .engine_scoring import residual_to_grade
-from .bootstrap import get_tiering_config
+from .bootstrap import get_tiering_config, ensure_tpra_tenant_defaults
+from .schema_migrations import ensure_tpra_columns
 
 router = APIRouter(prefix="/tpra", tags=["TPRA Dashboard"])
 
@@ -39,6 +40,12 @@ def _tids(user: GRCUser, db: Session) -> List[int]:
     return get_user_tenants(user, db) or [-1]
 
 
+def _prep_tpra_db(db: Session, tids: List[int]) -> None:
+    ensure_tpra_columns(db)
+    if tids and tids[0] > 0:
+        ensure_tpra_tenant_defaults(db, tids[0])
+
+
 @router.get("/dashboard")
 def program_dashboard(
     scope: str = Query("portfolio", pattern="^(portfolio|mine)$"),
@@ -48,6 +55,7 @@ def program_dashboard(
     """KPI cards + chart datasets, computed live. `scope=mine` filters to the
     vendors the caller owns (analyst queue); `portfolio` is the exec view."""
     tids = _tids(user, db)
+    _prep_tpra_db(db, tids)
     now = datetime.utcnow()
 
     vq = db.query(Vendor).filter(
@@ -187,6 +195,7 @@ def risk_trend(
     """Risk-over-time series from RiskSnapshot (monthly buckets, latest per month),
     with the risk-appetite threshold line."""
     tids = _tids(user, db)
+    _prep_tpra_db(db, tids)
     since = datetime.utcnow() - timedelta(days=months * 31)
 
     q = db.query(TPRARiskSnapshot).filter(
@@ -246,6 +255,7 @@ def findings_register(
     """Cross-portfolio findings register — every gap across vendors, with vendor
     name, SLA due date and overdue flag. Filter / sort / paginate."""
     tids = _tids(user, db)
+    _prep_tpra_db(db, tids)
     now = datetime.utcnow()
     overdue_ids = _overdue_finding_ids(db, tids, now)
 
@@ -305,6 +315,7 @@ def third_party_risk_register(
     linked back to their vendor — not TPRA-internal findings."""
     from ....models import Risk  # lazy: avoid cross-module import cost at boot
     tids = _tids(user, db)
+    _prep_tpra_db(db, tids)
     risks = db.query(Risk).filter(
         Risk.tenant_id.in_(tids),
         or_(
@@ -367,6 +378,7 @@ def monitoring_feed(
     """Portfolio monitoring feed — outside-in signals across all vendors, newest
     first. Filter / paginate."""
     tids = _tids(user, db)
+    _prep_tpra_db(db, tids)
     q = db.query(TPRAMonitoringSignal).filter(
         TPRAMonitoringSignal.tenant_id.in_(tids), TPRAMonitoringSignal.deleted_at.is_(None),
     )

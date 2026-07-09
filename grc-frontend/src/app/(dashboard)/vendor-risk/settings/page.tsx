@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Settings, Save, RotateCcw, Loader2, AlertCircle, SlidersHorizontal, Gauge, CalendarClock } from 'lucide-react';
 import { tpraApi } from '@/lib/api';
+import { TPRM_QUERY_OPTS } from '../_lib/tprmQuery';
 import { PageLoader } from '@/components/ui';
 import { useToast } from '@/components/ui/ToastProvider';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -36,6 +37,7 @@ export default function VendorRiskSettingsPage() {
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['tprm-config'],
     queryFn: async () => (await tpraApi.getConfig()).data as ConfigResp,
+    ...TPRM_QUERY_OPTS,
   });
 
   // Local editable form. Weights shown as percentages (normalized on save).

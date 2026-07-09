@@ -66,12 +66,18 @@ export function scoreBand(score: number | null | undefined) {
   return SCORE_BANDS.find((b) => score >= b.min) ?? NULL_BAND;
 }
 
+/** Fills partial grid rows — avoids empty columns when section count isn't a multiple of 4. */
+export const SCORECARD_SECTION_GRID =
+  'grid gap-3 grid-cols-[repeat(auto-fill,minmax(260px,1fr))]';
+
 export function ScoreRing({ score, size = 64 }: { score: number | null; size?: number }) {
   const band = scoreBand(score);
   const stroke = 6;
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   const pct = score == null ? 0 : Math.max(0, Math.min(100, score));
+  // A literal 0% score still needs a visible arc so "weak" isn't mistaken for "no data".
+  const arcLen = score === 0 ? c * 0.06 : (pct / 100) * c;
   return (
     <div className="relative flex-shrink-0" style={{ width: size, height: size }}>
       <svg width={size} height={size} className="-rotate-90">
@@ -79,7 +85,7 @@ export function ScoreRing({ score, size = 64 }: { score: number | null; size?: n
         <circle
           cx={size / 2} cy={size / 2} r={r} fill="none"
           stroke={band.hex} strokeWidth={stroke} strokeLinecap="round"
-          strokeDasharray={`${(pct / 100) * c} ${c}`}
+          strokeDasharray={`${arcLen} ${c}`}
         />
       </svg>
       <span
@@ -94,7 +100,9 @@ export function ScoreRing({ score, size = 64 }: { score: number | null; size?: n
 
 export function MetricRow({ metric }: { metric: OverviewMetric }) {
   const band = scoreBand(metric.score);
-  const pct = metric.score == null ? 0 : Math.max(0, Math.min(100, metric.score));
+  const noData = metric.score == null;
+  const isZero = metric.score === 0;
+  const pct = noData ? 0 : Math.max(isZero ? 4 : 0, Math.min(100, metric.score));
   return (
     <div className="px-4 py-3.5">
       <div className="mb-1.5 flex items-center justify-between gap-3">
@@ -111,17 +119,21 @@ export function MetricRow({ metric }: { metric: OverviewMetric }) {
             </span>
           )}
           <span className={`text-sm font-bold tabular-nums ${scoreTone(metric.score)}`}>
-            {metric.score == null ? 'n/a' : `${Math.round(metric.score)}%`}
+            {noData ? 'n/a' : `${Math.round(metric.score)}%`}
           </span>
         </span>
       </div>
       <div className="h-2 overflow-hidden rounded-full bg-slate-100">
         <div
           className="h-2 rounded-full transition-all"
-          style={{ width: `${pct}%`, backgroundColor: metric.score == null ? '#e2e8f0' : band.hex }}
+          style={{ width: `${pct}%`, backgroundColor: noData ? '#e2e8f0' : band.hex }}
         />
       </div>
-      <p className="mt-1.5 text-[11px] leading-4 text-slate-400">= {metric.formula}</p>
+      <p className="mt-1.5 text-[11px] leading-4 text-slate-400">
+        {noData && metric.denominator === 0
+          ? 'No records in this area yet — section excluded from module score until data exists.'
+          : `= ${metric.formula}`}
+      </p>
     </div>
   );
 }
@@ -130,11 +142,16 @@ export function SectionGraphCard({ section, onOpen }: { section: OverviewSection
   const band = scoreBand(section.score);
   const rings = section.metrics
     .filter((m) => m.score != null)
-    .map((m) => ({
-      name: m.label,
-      value: Math.round(m.score as number),
-      fill: scoreBand(m.score).hex,
-    }));
+    .map((m) => {
+      const rounded = Math.round(m.score as number);
+      return {
+        name: m.label,
+        actual: rounded,
+        // RadialBar at 0 renders invisible — keep a sliver so weak scores read clearly.
+        value: rounded === 0 ? 3 : rounded,
+        fill: scoreBand(m.score).hex,
+      };
+    });
   return (
     <button
       type="button"
@@ -175,7 +192,10 @@ export function SectionGraphCard({ section, onOpen }: { section: OverviewSection
                 contentStyle={{ fontSize: 12, border: '1px solid #e2e8f0', borderRadius: 8, boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', color: '#1e293b' }}
                 wrapperStyle={{ zIndex: 20 }}
                 offset={24}
-                formatter={(value) => `${value}%`}
+                formatter={(_value, _name, item) => {
+                  const actual = (item?.payload as { actual?: number })?.actual;
+                  return [`${actual ?? _value}%`, item?.payload?.name ?? ''];
+                }}
               />
             </RadialBarChart>
           </ResponsiveContainer>

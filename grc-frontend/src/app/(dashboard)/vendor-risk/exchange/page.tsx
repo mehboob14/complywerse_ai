@@ -9,6 +9,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Share2, Download, Copy, Trash2, Loader2, CheckCircle2, Info, PackageOpen } from 'lucide-react';
 import { tpraApi, vendorRiskApi } from '@/lib/api';
+import { TPRM_QUERY_OPTS } from '../_lib/tprmQuery';
 import { useToast } from '@/components/ui/ToastProvider';
 import { usePermissions } from '@/hooks/usePermissions';
 
@@ -49,10 +50,12 @@ export default function ExchangePage() {
   const { data: sharedData, isLoading } = useQuery({
     queryKey: ['tpra-shared'],
     queryFn: async () => (await tpraApi.listShared()).data as { items: Shared[] },
+    ...TPRM_QUERY_OPTS,
   });
   const { data: vendorData } = useQuery({
     queryKey: ['tpra-exchange-vendors'],
     queryFn: async () => (await vendorRiskApi.getVendors()).data as { items?: Vendor[] } | Vendor[],
+    ...TPRM_QUERY_OPTS,
   });
 
   const vendors: Vendor[] = Array.isArray(vendorData) ? vendorData : (vendorData?.items || []);

@@ -14,16 +14,22 @@ def _pct(n, d):
     return round(100.0 * n / d, 1) if d else None
 
 
-def compute_kpi_metrics(db, now=None):
+def compute_kpi_metrics(db, now=None, tenant_ids=None):
     """Return {key: {label, actual, numerator, denominator, formula, target,
     direction, source, href, on_target}} for every KPI the platform can measure."""
     now = now or datetime.utcnow()
     metrics = {}
+    tids = tenant_ids or None
+
+    def _scoped(query, model):
+        if tids and hasattr(model, "tenant_id"):
+            return query.filter(model.tenant_id.in_(tids))
+        return query
 
     # 1) Policy / document reviews on time — Governance
     try:
         from grc.models._13_governance_document_management_enhanced import GovernanceDocument
-        docs = db.query(GovernanceDocument).all()
+        docs = _scoped(db.query(GovernanceDocument), GovernanceDocument).all()
         with_date = [d for d in docs if getattr(d, "next_review_date", None)]
         on_time = [d for d in with_date if d.next_review_date and d.next_review_date >= now]
         if with_date:
@@ -43,7 +49,7 @@ def compute_kpi_metrics(db, now=None):
             from grc.models._22_vulnerability_management import Vulnerability
         except Exception:
             from grc.models import Vulnerability
-        vulns = db.query(Vulnerability).all()
+        vulns = _scoped(db.query(Vulnerability), Vulnerability).all()
         if vulns:
             overdue = [v for v in vulns if getattr(v, "due_date", None) and v.due_date < now
                        and str(getattr(v, "status", "") or "").lower() not in ("resolved", "closed")]
@@ -61,7 +67,7 @@ def compute_kpi_metrics(db, now=None):
     # 3) Access certification completed — Access review
     try:
         from grc.models._40_access_review_models import AccessReviewItem
-        items = db.query(AccessReviewItem).all()
+        items = _scoped(db.query(AccessReviewItem), AccessReviewItem).all()
         if items:
             decided = [i for i in items if str(getattr(i, "decision", "pending") or "pending").lower() != "pending"]
             metrics["access_cert"] = {
@@ -77,7 +83,7 @@ def compute_kpi_metrics(db, now=None):
     # 4) Assets monitored recently — IT Assets inventory
     try:
         from grc.models._14_it_asset_inventory import ITAsset
-        assets = db.query(ITAsset).all()
+        assets = _scoped(db.query(ITAsset), ITAsset).all()
         if assets:
             seen = [a for a in assets if getattr(a, "last_seen_at", None) and a.last_seen_at >= now - timedelta(days=30)]
             metrics["asset_monitoring"] = {
@@ -98,9 +104,9 @@ def compute_kpi_metrics(db, now=None):
             from grc.models._22_vulnerability_management import Vulnerability
         except Exception:
             from grc.models import Vulnerability
-        assets = db.query(ITAsset).all()
+        assets = _scoped(db.query(ITAsset), ITAsset).all()
         if assets:
-            bad = {v.id for v in db.query(Vulnerability).all()
+            bad = {v.id for v in _scoped(db.query(Vulnerability), Vulnerability).all()
                    if str(getattr(v, "severity", "") or "").lower() in ("critical", "high")
                    and str(getattr(v, "status", "") or "").lower() not in ("resolved", "closed")}
             bad_assets = {l.asset_id for l in db.query(VulnerabilityAssetLink).all() if l.vulnerability_id in bad}
@@ -118,7 +124,7 @@ def compute_kpi_metrics(db, now=None):
     # 6) Risks with a treatment plan — Risk management register
     try:
         from grc.models._11_enterprise_risk_management import Risk
-        risks = db.query(Risk).all()
+        risks = _scoped(db.query(Risk), Risk).all()
         if risks:
             treated = [r for r in risks if (getattr(r, "treatment_plan", None) or "").strip()]
             metrics["risk_treatment"] = {
@@ -134,7 +140,7 @@ def compute_kpi_metrics(db, now=None):
     # 7) Incidents resolved or contained — Risk management incidents (business continuity)
     try:
         from grc.models._11_enterprise_risk_management import RiskIncident
-        incs = db.query(RiskIncident).all()
+        incs = _scoped(db.query(RiskIncident), RiskIncident).all()
         if incs:
             resolved = [i for i in incs if str(getattr(i, "status", "") or "").lower() in ("resolved", "closed", "contained")]
             metrics["incident_resolution"] = {

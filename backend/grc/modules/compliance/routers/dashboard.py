@@ -1049,6 +1049,17 @@ def get_compliance_sections_overview(
     ]
 
     # ---------- Control Effectiveness (CT&A workbench) ----------
+    # Mirror internal controls into work items before scoring (same as assurance board).
+    try:
+        from grc.modules.control_library.routers.workbench import ensure_tables, sync_internal_control_work_items
+        ensure_tables(db)
+        uid = getattr(current_user, "id", None)
+        for tid in scoped:
+            sync_internal_control_work_items(db, tid, created_by=uid)
+        db.flush()
+    except Exception:
+        db.rollback()
+
     # The assurance layer: a control being "implemented"/"verified" is not the
     # same as it being TESTED and operating effectively. Reads the CT&A workbench
     # (ControlWorkItem / ControlWorkTest) — design vs operating effectiveness,

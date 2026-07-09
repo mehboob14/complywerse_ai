@@ -11,6 +11,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Check, RotateCcw, X, Loader2 } from 'lucide-react';
 import apiClient from '@/lib/api';
+import { SCORECARD_QUERY_KEYS } from '@/components/dashboard/scorecard-query-keys';
 import { bandColor } from './scoring';
 
 type CfgSection = { key: string; label: string; default_weight: number; weight: number };
@@ -71,7 +72,7 @@ export default function ScorecardTuner({ scoreByKey, onClose }: { scoreByKey: Re
       return (await apiClient.put('/erm/dashboard/scorecard-config', body)).data;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['erm-sections-overview'] });
+      qc.invalidateQueries({ queryKey: [...SCORECARD_QUERY_KEYS.erm] });
       qc.invalidateQueries({ queryKey: ['erm-scorecard-config'] });
       onClose();
     },
@@ -79,7 +80,7 @@ export default function ScorecardTuner({ scoreByKey, onClose }: { scoreByKey: Re
   const reset = useMutation({
     mutationFn: async () => (await apiClient.delete('/erm/dashboard/scorecard-config')).data,
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['erm-sections-overview'] });
+      qc.invalidateQueries({ queryKey: [...SCORECARD_QUERY_KEYS.erm] });
       qc.invalidateQueries({ queryKey: ['erm-scorecard-config'] });
       onClose();
     },

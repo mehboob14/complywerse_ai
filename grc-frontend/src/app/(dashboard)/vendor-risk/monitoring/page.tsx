@@ -14,6 +14,7 @@ import { PageLoader } from '@/components/ui';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useToast } from '@/components/ui/ToastProvider';
 import { SEV_HEX, sevBadgeCls, fmtDate, titleCase, TIER_ORDER } from '../_lib/tprmShared';
+import { TPRM_QUERY_OPTS } from '../_lib/tprmQuery';
 
 interface Signal {
   id: number; vendor_id: number; vendor_name: string | null; signal_type: string;
@@ -50,6 +51,7 @@ export default function MonitoringFeedPage() {
       skip: page * PAGE, limit: PAGE,
     })).data as { items: Signal[]; total: number },
     placeholderData: keepPreviousData,
+    ...TPRM_QUERY_OPTS,
   });
 
   // Acknowledge — same update-signal endpoint the per-vendor SignalsPanel uses
@@ -128,7 +130,7 @@ export default function MonitoringFeedPage() {
         <span className="ml-auto font-mono text-[11px] text-gray-400">{total} signal{total === 1 ? '' : 's'}</span>
       </div>
 
-      {isLoading ? (
+      {isLoading && !data ? (
         <div className="flex h-64 items-center justify-center"><PageLoader size="md" label="Loading monitoring feed…" /></div>
       ) : error ? (
         <div className="flex h-48 flex-col items-center justify-center text-red-500">

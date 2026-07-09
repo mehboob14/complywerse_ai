@@ -11,6 +11,7 @@ import { AlertTriangle, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-re
 import { tpraApi } from '@/lib/api';
 import { PageLoader } from '@/components/ui';
 import { sevBadgeCls, DOMAIN_LABELS, DOMAIN_KEYS, STATUS_LABELS, fmtDate, titleCase, TIER_ORDER } from '../_lib/tprmShared';
+import { TPRM_QUERY_OPTS } from '../_lib/tprmQuery';
 
 interface Finding {
   id: number; vendor_id: number; vendor_name: string | null; domain: string;
@@ -50,6 +51,7 @@ export default function FindingsRegisterPage() {
       skip: page * PAGE, limit: PAGE,
     })).data as { items: Finding[]; total: number; skip: number; limit: number },
     placeholderData: keepPreviousData,
+    ...TPRM_QUERY_OPTS,
   });
 
   const reset = (fn: () => void) => { fn(); setPage(0); };
@@ -79,7 +81,7 @@ export default function FindingsRegisterPage() {
         <span className="ml-auto font-mono text-[11px] text-gray-400">{total} finding{total === 1 ? '' : 's'}</span>
       </div>
 
-      {isLoading ? (
+      {isLoading && !data ? (
         <div className="flex h-64 items-center justify-center"><PageLoader size="md" label="Loading findings…" /></div>
       ) : error ? (
         <div className="flex h-48 flex-col items-center justify-center text-red-500">

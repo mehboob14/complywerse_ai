@@ -376,6 +376,27 @@ def _get_or_create_work_item(db: Session, tenant_id: int, source_type: str, sour
     return wi
 
 
+def sync_internal_control_work_items(
+    db: Session, tenant_id: int, created_by=None,
+) -> int:
+    """Materialize CT&A work items from the internal-control register (idempotent).
+
+    The assurance scorecard reads ControlWorkItem rows; without this sync the
+    board stays empty until someone opens a control in the workbench."""
+    ensure_tables(db)
+    synced = 0
+    ic_ids = [
+        row[0] for row in db.query(InternalControl.id)
+        .filter(InternalControl.tenant_id == tenant_id).all()
+    ]
+    for ic_id in ic_ids:
+        if _get_or_create_work_item(db, tenant_id, "internal", ic_id, created_by=created_by):
+            synced += 1
+    if synced:
+        db.flush()
+    return synced
+
+
 def _seed_from_internal_control(db, wi: ControlWorkItem, ic: InternalControl, tenant_id: int):
     wi.status = ic.status or "draft"
     wi.workflow_status = ic.workflow_status

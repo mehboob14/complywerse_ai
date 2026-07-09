@@ -19,6 +19,7 @@ import { useToast } from '@/components/ui/ToastProvider';
 import {
   StageProgress, STAGE_SEQUENCE, tierBadge, stageLabel, stageNumberLabel, type BoardRow,
 } from '../_lib/lifecycleShared';
+import { TPRM_QUERY_OPTS } from '../_lib/tprmQuery';
 
 interface VendorOption { id: number; name: string }
 
@@ -54,6 +55,7 @@ export default function VendorAssessmentsPage() {
     queryKey: ['tpra-board'],
     queryFn: async () => (await tpraApi.getBoard()).data as { items: BoardRow[]; total: number },
     placeholderData: keepPreviousData,
+    ...TPRM_QUERY_OPTS,
   });
 
   const { data: vendors } = useQuery({
@@ -98,7 +100,7 @@ export default function VendorAssessmentsPage() {
     });
   }, [rows, search, tierFilter, stageFilter, hideNotStarted]);
 
-  if (isLoading) {
+  if (isLoading && !data) {
     return <div className="flex items-center justify-center h-64"><PageLoader size="md" label="Loading vendor lifecycle…" /></div>;
   }
   if (error) {

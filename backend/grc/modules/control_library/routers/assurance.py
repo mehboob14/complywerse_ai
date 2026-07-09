@@ -13,6 +13,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from ....models import get_db, GRCUser, ControlWorkItem, ControlWorkTest
 from ....routers.auth_router import require_auth, get_user_tenants
+from .workbench import ensure_tables, sync_internal_control_work_items
 
 router = APIRouter(prefix="/assurance", tags=["Control Library - Assurance"])
 
@@ -48,6 +49,17 @@ def get_assurance_sections_overview(
     if not scoped:
         return {"as_of": now.isoformat(), "sections": {}, "attention_queue": {},
                 "performance": {"score": None, "grade": None, "components": []}}
+
+    # Assurance reads the workbench layer — mirror internal controls into work items
+    # so tenants with a populated register get a real score without manual promotion.
+    try:
+        ensure_tables(db)
+        uid = getattr(current_user, "id", None)
+        for tid in scoped:
+            sync_internal_control_work_items(db, tid, created_by=uid)
+        db.flush()
+    except SQLAlchemyError:
+        db.rollback()
 
     try:
         wis = db.query(

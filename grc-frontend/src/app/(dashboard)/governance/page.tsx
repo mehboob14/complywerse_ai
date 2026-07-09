@@ -13,6 +13,7 @@ import {
   MetricRow,
   SectionGraphCard,
   SectionDetailModal,
+  SCORECARD_SECTION_GRID,
 } from '@/components/dashboard/score-kit';
 import { SectionWeightTuner } from '@/components/dashboard/score-tuning';
 import {
@@ -25,7 +26,9 @@ import {
   SlidersHorizontal,
 } from 'lucide-react';
 
-const GOVERNANCE_TUNING = { configBase: '/governance/dashboard', invalidateKey: ['governance-documents-overview'] as unknown[] };
+import { SCORECARD_QUERY_KEYS } from '@/components/dashboard/scorecard-query-keys';
+
+const GOVERNANCE_TUNING = { configBase: '/governance/dashboard', invalidateKey: [...SCORECARD_QUERY_KEYS.governance] as unknown[] };
 import {
   Tooltip as RTooltip,
   ResponsiveContainer,
@@ -187,7 +190,7 @@ export default function GovernanceDashboardPage() {
   });
 
   const { data: docsOverview, isLoading: docsOverviewLoading } = useQuery({
-    queryKey: ['governance-documents-overview'],
+    queryKey: [...SCORECARD_QUERY_KEYS.governance],
     queryFn: async () => {
       try {
         const response = await governanceApi.getDocumentsOverview();
@@ -414,7 +417,7 @@ export default function GovernanceDashboardPage() {
             </div>
             <Layers className="h-4 w-4 text-blue-600" />
           </div>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className={SCORECARD_SECTION_GRID}>
             {sectionCards.map((section) => (
               <SectionGraphCard key={section.key} section={section} onOpen={() => setOpenSection(section)} />
             ))}

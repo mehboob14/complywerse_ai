@@ -21,7 +21,6 @@ import {
   Target,
   Activity,
   AlertCircle,
-  Library,
   Bug,
   Clock,
   Layers,
@@ -38,7 +37,7 @@ import {
   ShieldAlert,
   LifeBuoy,
   CalendarClock,
-  // CIS integration icons
+  Building2,
   type LucideIcon,
 } from "lucide-react";
 import { useState, useEffect } from "react";
@@ -128,7 +127,6 @@ const navigation: NavEntry[] = [
           { name: 'Risk Register', href: '/erm/risks', icon: AlertTriangle, requiredPermissions: ['erm:risks:*'] },
           { name: 'Risk Assessments', href: '/erm/risk-assessments', icon: ClipboardList, requiredPermissions: ['risks:risk_assessment:*', 'erm:rcsa:*'] },
           { name: 'RCSA', href: '/erm/rcsa', icon: ClipboardList, requiredPermissions: ['erm:rcsa:*'] },
-          { name: 'Vendor Risk', href: '/vendor-risk', icon: Shield, requiredPermissions: ['erm:risks:*'] },
           // moved out of Advanced Analytics into the sidebar
           { name: 'Scenario Analysis', href: '/erm/analytics/scenario', icon: Target, requiredPermissions: ['erm:risks:*'] },
           { name: 'Bow-Tie Analysis', href: '/erm/analytics/bowtie', icon: Workflow, requiredPermissions: ['erm:risks:*'] },
@@ -136,6 +134,13 @@ const navigation: NavEntry[] = [
         ],
       },
     ],
+  },
+  {
+    name: 'Third-Party Vendor Risk',
+    href: '/vendor-risk',
+    icon: Building2,
+    requiredModules: ['erm'],
+    requiredPermissions: ['erm:risks:*'],
   },
   {
     name: 'Compliance Management',
@@ -195,21 +200,18 @@ const navigation: NavEntry[] = [
   {
     name: 'Control Testing & Assurance',
     icon: CheckCircle,
-    requiredModules: ['controls', 'erm'],
+    requiredModules: ['controls'],
     items: [
       { name: 'Assurance Overview', href: '/control-library/assurance', icon: LayoutDashboard, requiredPermissions: ['controls:control_library:*'] },
       { name: 'Controls Overview', href: '/controls/overview', icon: Shield, requiredPermissions: ['controls:control_library:*'] },
       { name: 'Control Catalog', href: '/controls', icon: Layers, requiredPermissions: ['controls:control_library:*'] },
-      { name: 'Control Workbench', href: '/controls/workbench', icon: ClipboardCheck, requiredPermissions: ['controls:control_library:*'] },
-      { name: 'Normalized Library', href: '/control-library', icon: Library, requiredPermissions: ['controls:control_library:*'] },
-      { name: 'Internal Controls', href: '/erm/internal-controls', icon: Target, requiredPermissions: ['erm:internal_controls:*'] },
     ],
   },
   {
     name: 'Issue & Incident Management',
     icon: AlertCircle,
     items: [
-      { name: 'Issues', href: '/issues', icon: ListTodo, requiredPermissions: ['issues:issues:*'] },
+      { name: 'Issues', href: '/issues', icon: ListTodo, requiredPermissions: ['issue_management:issues:*'] },
       { name: 'Incidents', href: '/erm/incidents', icon: AlertCircle, requiredPermissions: ['erm:incidents:*'] },
     ],
   },
@@ -217,7 +219,7 @@ const navigation: NavEntry[] = [
     name: 'Cybersecurity Assurance',
     icon: ShieldCheck,
     items: [
-      { name: 'IT Asset Inventory',        href: '/assets',                        icon: Server,        requiredPermissions: ['dashboard:assets*'] },
+      { name: 'IT Asset Inventory',        href: '/assets',                        icon: Server,        requiredPermissions: ['assets:asset_inventory:*'] },
       { name: 'CIS Benchmark',             href: '/compliance-overview',           icon: ShieldCheck,   requiredPermissions: ['compliance:scan:execute', 'erm:risks:*', 'compliance:agents:manage'] },
       { name: 'Assets Risk Posture',       href: '/risk-posture',                  icon: Activity,      requiredPermissions: ['erm:risks:*'] },
       { name: 'Criticality Assessments',   href: '/assets/criticality-assessments', icon: ClipboardCheck, requiredPermissions: ['assets:criticality_assessments:view'] },
@@ -731,13 +733,7 @@ export default function Sidebar() {
       )}>
         {!collapsed && (
           <span className="whitespace-nowrap text-base font-semibold text-[var(--color-text)] flex items-baseline gap-0.5">
-            Compl<span className="relative inline-block leading-none">
-              <span style={{ fontVariantLigatures: 'none' }}>─▒</span>
-              <span
-                className="logo-dot absolute left-1/2 rounded-full"
-                style={{ top: '-3px', width: '5px', height: '5px', background: 'var(--color-base, #14b8a6)' }}
-              />
-            </span>verse
+            Compliverse
             <span className="ml-1 text-xs font-medium text-[var(--color-base)] opacity-70">AI</span>
           </span>
         )}

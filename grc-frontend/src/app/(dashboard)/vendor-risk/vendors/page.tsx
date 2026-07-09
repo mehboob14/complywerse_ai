@@ -14,6 +14,7 @@ import {
 import Link from 'next/link';
 import { SearchInput, MultiSelectDropdown, RightSlidePanel, PageLoader, AnimatedModal } from '@/components/ui';
 import { StageProgress, stageNumberLabel } from '../_lib/lifecycleShared';
+import { TPRM_QUERY_OPTS } from '../_lib/tprmQuery';
 
 interface Vendor {
   id: number;
@@ -132,7 +133,7 @@ export default function VendorListPage() {
   // Intake (Stage 01) — start the TPRA lifecycle as soon as the vendor record exists.
   const [startLifecycle, setStartLifecycle] = useState(true);
 
-  const { data: vendors, isLoading } = useQuery({
+  const { data: vendors, isLoading, error, refetch } = useQuery({
     queryKey: ['vendors'],
     queryFn: async () => {
       const res = await vendorRiskApi.getVendors();
@@ -140,6 +141,7 @@ export default function VendorListPage() {
       return (Array.isArray(data) ? data : data.items ?? []) as Vendor[];
     },
     placeholderData: keepPreviousData,
+    ...TPRM_QUERY_OPTS,
   });
 
   const { data: users } = useQuery({
@@ -260,10 +262,19 @@ export default function VendorListPage() {
     subLabel: u.email,
   }));
 
-  if (isLoading) {
+  if (isLoading && !vendors) {
     return (
       <div className="flex items-center justify-center h-64">
-        <PageLoader size="md" />
+        <PageLoader size="md" label="Loading vendors…" />
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div className="flex h-64 flex-col items-center justify-center text-red-500">
+        <AlertCircle className="mb-2 h-8 w-8" />
+        <p className="text-sm">Failed to load vendors.</p>
+        <button onClick={() => refetch()} className="mt-2 text-xs font-medium text-primary-600 hover:underline">Retry</button>
       </div>
     );
   }

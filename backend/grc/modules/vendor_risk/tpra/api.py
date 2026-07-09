@@ -362,6 +362,10 @@ def lifecycle_board(db: Session = Depends(get_db), user: GRCUser = Depends(requi
     stage / tier / residual / open-finding counts. Powers the rebuilt Assessments
     workspace in a single call (no N+1)."""
     tids = _tids(user, db)
+    ensure_tpra_columns(db)
+    if tids and tids[0] > 0:
+        from .bootstrap import ensure_tpra_tenant_defaults
+        ensure_tpra_tenant_defaults(db, tids[0])
     vendors = (
         db.query(Vendor)
         .filter(Vendor.tenant_id.in_(tids), Vendor.deleted_at.is_(None))

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { X, SlidersHorizontal, Check, RotateCcw, Loader2 } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '@/lib/api';
+import { SCORECARD_QUERY_KEYS } from '@/components/dashboard/scorecard-query-keys';
 import type { ModulePerformance, Section } from './types';
 import { BAND_COLOR, BAND_LABEL, bandColor, bandOf } from './scoring';
 import DraggableWeightBar from './DraggableWeightBar';
@@ -152,7 +153,7 @@ function MetricEditor({ section, onSaved, onCancel, onPreview }: { section: Sect
     return w.map((x) => x / s);
   });
 
-  const invalidate = () => qc.invalidateQueries({ queryKey: ['erm-sections-overview'] });
+  const invalidate = () => qc.invalidateQueries({ queryKey: [...SCORECARD_QUERY_KEYS.erm] });
   const save = useMutation({
     mutationFn: async () => {
       const mw = Object.fromEntries(metrics.map((m, i) => [m.key as string, weights[i]]));

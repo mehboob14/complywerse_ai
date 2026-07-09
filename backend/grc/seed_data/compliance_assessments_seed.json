@@ -818,7 +818,7 @@
       "items": [
         {
           "item_number": "KPI-001",
-          "area_domain": "Patch Management",
+          "area_domain": "Vulnerability Management",
           "control_description": "Critical vulnerabilities remediated within SLA.",
           "compliance_status": "partially_complied",
           "priority": "high",
@@ -827,7 +827,7 @@
         },
         {
           "item_number": "KPI-002",
-          "area_domain": "Incident Response",
+          "area_domain": "Business Continuity",
           "control_description": "Mean time to contain high-severity incidents.",
           "compliance_status": "complied",
           "priority": "medium",

@@ -1085,22 +1085,36 @@ def get_documents_overview(
 
     def _kpi_latest(remarks):
         """Latest quarter with data -> (target, actual, lower_is_better); else None.
-        remarks blob: '... | Qn: target%/actual% | ...'; some KPIs are lower-is-better."""
+        Supports Qn: target/actual blobs and 'Target: X | Actual: Y' import rows."""
         if not remarks:
             return None
         pairs = _re.findall(r"Q\d\s*:\s*([\d.]+)%?\s*/\s*([\d.]+)%?", remarks)
-        if not pairs:
-            return None
-        tgt, act = pairs[-1]
-        lower = bool(_re.search(r"\bnot\b|past deadline|open past|do not", remarks, _re.I))
-        return float(tgt), float(act), lower
+        if pairs:
+            tgt, act = pairs[-1]
+            lower = bool(_re.search(r"\bnot\b|past deadline|open past|do not", remarks, _re.I))
+            return float(tgt), float(act), lower
+        m = _re.search(r"Target:\s*([\d.]+).*?Actual:\s*([\d.]+)", remarks, _re.I)
+        if m:
+            tgt, act = float(m.group(1)), float(m.group(2))
+            lower = bool(_re.search(
+                r"\bnot\b|past deadline|open past|do not|hours|mean time|mttr|days\b",
+                remarks, _re.I))
+            return tgt, act, lower
+        return None
 
     kpi_total = len(kpi_rows)
     _kpi_parsed = [_kpi_latest(r[0]) for r in kpi_rows]
     kpi_reported = sum(1 for p in _kpi_parsed if p is not None)
     kpi_on_target = sum(1 for p in _kpi_parsed if p is not None
                         and (p[1] <= p[0] if p[2] else p[1] >= p[0]))
-    kpi_cells = sum(len(_re.findall(r"Q\d\s*:\s*[\d.]+%?\s*/\s*[\d.]+%?", r[0] or "")) for r in kpi_rows)
+    kpi_cells = 0
+    for r in kpi_rows:
+        remarks = r[0] or ""
+        q_cells = len(_re.findall(r"Q\d\s*:\s*[\d.]+%?\s*/\s*[\d.]+%?", remarks))
+        if q_cells:
+            kpi_cells += q_cells
+        elif _kpi_latest(remarks):
+            kpi_cells += 1
 
     # ---- IS Projects (governance portfolio oversight) -----------------------
     try:

@@ -11,6 +11,7 @@ import PciAttributesFields from '@/components/assets/PciAttributesFields';
 import { ITAsset, AssetType } from '@/types';
 import { PageLoader, ComboBoxInput, type ComboBoxOption } from '@/components/ui';
 import { AssetsWorkspace } from './_workspace/AssetsWorkspace';
+import InventoryScorecard from '@/components/dashboard/InventoryScorecard';
 import {
   Loader2,
   AlertCircle,
@@ -348,9 +349,7 @@ export default function AssetsPage() {
 
   return (
     <div className="assets-light space-y-4 sm:space-y-5 px-3 sm:px-4 pt-3">
-      {/* Criticality coverage banner hidden — keep import + component
-          on disk so re-enabling is a single-line uncomment.
-      <CriticalityCoverageWidget /> */}
+      <InventoryScorecard />
 
       <AssetsWorkspace
         assets={(assets as ITAsset[]) || []}

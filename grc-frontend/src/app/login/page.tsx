@@ -268,14 +268,7 @@ export default function LoginPage() {
         <div className="mb-6 text-center">
           <div className="inline-flex items-center gap-1.5">
             <span className="text-2xl font-bold text-slate-950 tracking-tight">
-              Compl<span className="relative inline-block">
-                {/* dotless i via unicode + colored dot above */}
-                <span style={{ fontVariantLigatures: 'none' }}>ı</span>
-                <span
-                  className="absolute left-1/2 -translate-x-1/2 rounded-full"
-                  style={{ top: '-3px', width: '5px', height: '5px', background: 'var(--color-base, #14b8a6)' }}
-                />
-              </span>verse
+              Compliverse
             </span>
             <span className="text-sm font-medium text-slate-950 self-end mb-0.5">AI</span>
           </div>

@@ -16,6 +16,7 @@ import {
   AlertTriangle, Clock, X, ArrowRight, Layers,
 } from 'lucide-react';
 import { scoreBand, ScoreRing, MetricRow, type OverviewMetric } from '@/components/dashboard/score-kit';
+import { SCORECARD_QUERY_KEYS } from '@/components/dashboard/scorecard-query-keys';
 import { SlaClosurePanel, type SlaContext } from './SlaClosurePanel';
 import { computeRollup, fmtDate, type SlaItemInput, type SlaPolicy } from './slaEngine';
 import type { SlaPoint } from './types';
@@ -195,7 +196,7 @@ export default function AssessmentsBoardOverview({ onOpen, slaPoints = [], slaPo
 }) {
   const [open, setOpen] = useState<Assess | null>(null);
   const { data, isLoading } = useQuery({
-    queryKey: ['assessments-board-overview'],
+    queryKey: [...SCORECARD_QUERY_KEYS.assessments],
     queryFn: async () => (await apiClient.get('/compliance/assessments/overview')).data as Payload,
   });
 

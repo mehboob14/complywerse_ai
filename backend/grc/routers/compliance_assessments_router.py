@@ -5153,7 +5153,7 @@ def kpi_live_metrics(
     from grc.modules.assessments.kpi_live import compute_kpi_metrics
     now = datetime.utcnow()
     tids = get_user_tenants(current_user, db) or []
-    metrics = compute_kpi_metrics(db, now)
+    metrics = compute_kpi_metrics(db, now, tenant_ids=tids or None)
 
     # Snapshot today's value per KPI, then read the trend history so the dashboard
     # can draw a real line over time (grc_metric_snapshot; idempotent daily upsert).
