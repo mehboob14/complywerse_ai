@@ -32,7 +32,10 @@ export interface ToastProviderProps {
 
 export function ToastProvider({ children, maxToasts = 5 }: ToastProviderProps) {
   const [toasts, setToasts] = useState<ToastData[]>([]);
-  const suppressToasts = true;
+  // Toasts are the app's only notification channel (~40 call sites, incl. every
+  // alert()->toast conversion). This was left hardcoded to true (a WIP/debug
+  // switch), silently swallowing all of them; re-enabled so they actually show.
+  const suppressToasts = false;
 
   const toast = useCallback((options: ToastOptions): string => {
     const id = generateToastId();

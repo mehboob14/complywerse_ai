@@ -63,7 +63,7 @@ export default function VendorsTab({ frameworkId }: { frameworkId: string }) {
                 {v.last_assessed_at ? new Date(v.last_assessed_at).toLocaleDateString() : '—'}
               </td>
               <td className="px-4 py-2 align-top text-right">
-                <Link href={`/vendor-risk/${v.id}`} target="_blank" className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline">
+                <Link href={`/vendor-risk/${v.id}`} target="_blank" className="inline-flex items-center gap-1 text-xs text-primary-700 hover:underline">
                   Open <ExternalLink className="h-3 w-3" />
                 </Link>
               </td>

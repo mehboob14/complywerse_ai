@@ -15,7 +15,7 @@ const TEAM_ROLES = [
 ] as const;
 
 const ROLE_STYLES: Record<string, string> = {
-  lead: 'border-blue-200 bg-blue-50 text-blue-700',
+  lead: 'border-primary-200 bg-primary-50 text-primary-700',
   member: 'border-slate-200 bg-slate-50 text-slate-700',
   viewer: 'border-slate-200 bg-white text-slate-600',
 };
@@ -67,13 +67,13 @@ export default function TeamsAdminPage() {
 
       <div className="bg-white border border-slate-200 rounded-xl shadow-card">
         <div className="p-6 border-b border-slate-200 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-black flex items-center gap-2">
+          <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
             <Users size={16} className="text-slate-600" />
             Teams
           </h2>
           <button
             onClick={() => setCreateOpen(true)}
-            className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm flex items-center gap-1.5"
+            className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-[color:var(--color-on-base,#0a0a0a)] rounded-lg text-sm flex items-center gap-1.5"
           >
             <Plus size={14} />
             New Team
@@ -122,7 +122,7 @@ export default function TeamsAdminPage() {
                         <div className="inline-flex gap-1">
                           <button
                             onClick={() => setManaging(t)}
-                            className="px-2 py-1 border border-blue-300 bg-blue-50 text-blue-700 rounded text-xs hover:bg-blue-100 inline-flex items-center gap-1"
+                            className="px-2 py-1 border border-primary-200 bg-primary-50 text-primary-700 rounded text-xs hover:bg-primary-100 inline-flex items-center gap-1"
                             title="Manage members"
                           >
                             <UserPlus size={11} />
@@ -321,7 +321,7 @@ function TeamFormModal({
             <button
               type="submit"
               disabled={saving}
-              className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm flex items-center gap-1.5 disabled:opacity-50"
+              className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-[color:var(--color-on-base,#0a0a0a)] rounded-lg text-sm flex items-center gap-1.5 disabled:opacity-50"
             >
               {saving && <Loader2 size={13} className="animate-spin" />}
               {mode === 'create' ? 'Create' : 'Save'}
@@ -435,7 +435,7 @@ function MembersModal({
                 type="button"
                 onClick={() => addUserId && addMutation.mutate()}
                 disabled={!addUserId || addMutation.isPending || busy}
-                className="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm flex items-center gap-1 disabled:opacity-50"
+                className="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-[color:var(--color-on-base,#0a0a0a)] rounded-lg text-sm flex items-center gap-1 disabled:opacity-50"
               >
                 {addMutation.isPending && <Loader2 size={12} className="animate-spin" />}
                 Add

@@ -29,10 +29,10 @@ type Agent = {
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  active: 'bg-green-100 text-green-800 border-green-200',
-  pending: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-  stale: 'bg-orange-100 text-orange-800 border-orange-200',
-  revoked: 'bg-gray-200 text-gray-700 border-gray-300',
+  active: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  pending: 'bg-amber-50 text-amber-700 border-amber-200',
+  stale: 'bg-amber-50 text-amber-700 border-amber-200',
+  revoked: 'bg-slate-100 text-slate-600 border-slate-300',
 };
 
 function fmtAgo(iso?: string | null): string {
@@ -133,7 +133,7 @@ export default function AgentsAdminPage() {
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="min-w-0 max-w-3xl">
-          <h1 className="text-2xl font-semibold text-gray-900">Compliance Agents</h1>
+          <h1 className="text-2xl font-semibold text-slate-900">Compliance Agents</h1>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           <Link
@@ -154,8 +154,8 @@ export default function AgentsAdminPage() {
             }}
             className={`px-4 py-2 text-sm font-medium rounded-md whitespace-nowrap border ${
               canManageAgents
-                ? 'border-blue-200 bg-white text-blue-700 hover:bg-blue-50'
-                : 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed'
+                ? 'border-primary-200 bg-white text-primary-700 hover:bg-primary-50'
+                : 'border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed'
             }`}
           >
             {canManageAgents ? '🔌 Open Connect Wizard →' : '🔒 Open Connect Wizard'}
@@ -175,8 +175,8 @@ export default function AgentsAdminPage() {
             }}
             disabled={permsLoading}
             title={!canManageAgents && !permsLoading ? "You don't have permission to install agents" : 'Start the guided agent setup'}
-            className={`px-4 py-2 text-white text-sm font-medium rounded-md whitespace-nowrap disabled:opacity-50 ${
-              canManageAgents ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-400 cursor-not-allowed'
+            className={`px-4 py-2 text-sm font-medium rounded-md whitespace-nowrap disabled:opacity-50 ${
+              canManageAgents ? 'bg-primary-600 text-[#0a0a0a] hover:bg-primary-700' : 'bg-slate-300 text-slate-500 cursor-not-allowed'
             }`}
           >
             {canManageAgents ? '🪄 Setup Wizard' : '🔒 Setup Wizard'}
@@ -198,25 +198,25 @@ export default function AgentsAdminPage() {
           fleet-management tool (GPO / Intune / Ansible / Jamf). Cisco /
           AWS / Oracle DB etc don't get a native agent — they use the
           Agentless Connect Wizard surfaced below. */}
-      <div className="bg-white border border-gray-200 rounded-lg shadow-sm">
-        <div className="px-5 py-3 border-b border-gray-200">
-          <h2 className="text-sm font-semibold text-gray-900">Endpoint agent packages</h2>
+      <div className="bg-white border border-slate-200 rounded-lg shadow-sm">
+        <div className="px-5 py-3 border-b border-slate-200">
+          <h2 className="text-sm font-semibold text-slate-900">Endpoint agent packages</h2>
         </div>
-        <div className="grid md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-gray-200">
+        <div className="grid md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-slate-200">
           <div className="p-4">
             <div className="flex items-center gap-2 mb-2">
               <span className="text-xl">🪟</span>
-              <span className="font-semibold text-sm text-gray-900">Windows</span>
+              <span className="font-semibold text-sm text-slate-900">Windows</span>
               <span
-                className="ml-auto text-[10px] text-gray-500"
+                className="ml-auto text-[10px] text-slate-500"
                 title="Self-elevating .cmd wrapper that downloads setup.ps1 + agent.py. Notarised MSI is on the roadmap."
               >
                 .cmd · x64
               </span>
             </div>
-            <div className="text-xs text-gray-600 mb-3">
+            <div className="text-xs text-slate-600 mb-3">
               Win 10 / 11 + Server 2016/19/22. Runs as
-              <code className="bg-gray-100 px-1 rounded mx-0.5">LocalSystem</code>.
+              <code className="bg-slate-100 px-1 rounded mx-0.5">LocalSystem</code>.
             </div>
             <InstallerButtons
               endpoint="installer.cmd"
@@ -224,7 +224,7 @@ export default function AgentsAdminPage() {
               hint="One file. Runs on any Windows host. Will refuse to enrol on Linux/Mac."
               toast={toast}
             />
-            <Link href="/admin/integrations/connect?platform=windows" className="mt-1.5 block text-center text-[10px] text-gray-500 hover:text-blue-700 hover:underline">
+            <Link href="/admin/integrations/connect?platform=windows" className="mt-1.5 block text-center text-[10px] text-slate-500 hover:text-primary-700 hover:underline">
               or connect agentless (WinRM)
             </Link>
           </div>
@@ -232,17 +232,17 @@ export default function AgentsAdminPage() {
           <div className="p-4">
             <div className="flex items-center gap-2 mb-2">
               <span className="text-xl">🐧</span>
-              <span className="font-semibold text-sm text-gray-900">Linux</span>
+              <span className="font-semibold text-sm text-slate-900">Linux</span>
               <span
-                className="ml-auto text-[10px] text-gray-500"
+                className="ml-auto text-[10px] text-slate-500"
                 title="Self-elevating .sh bootstrap that installs as systemd. Native .deb + .rpm packages are on the roadmap."
               >
                 .sh bootstrap
               </span>
             </div>
-            <div className="text-xs text-gray-600 mb-3">
+            <div className="text-xs text-slate-600 mb-3">
               Ubuntu 20/22/24 · Debian 11/12 · RHEL 8/9 · AlmaLinux · Amazon Linux. Installs as
-              <code className="bg-gray-100 px-1 rounded mx-0.5">systemd</code> service.
+              <code className="bg-slate-100 px-1 rounded mx-0.5">systemd</code> service.
             </div>
             <InstallerButtons
               endpoint="installer.sh"
@@ -250,7 +250,7 @@ export default function AgentsAdminPage() {
               hint="One file. Runs on any Linux host. Will refuse to enrol on Windows/Mac."
               toast={toast}
             />
-            <Link href="/admin/integrations/connect?platform=linux" className="mt-1.5 block text-center text-[10px] text-gray-500 hover:text-blue-700 hover:underline">
+            <Link href="/admin/integrations/connect?platform=linux" className="mt-1.5 block text-center text-[10px] text-slate-500 hover:text-primary-700 hover:underline">
               or connect agentless (SSH)
             </Link>
           </div>
@@ -258,15 +258,15 @@ export default function AgentsAdminPage() {
           <div className="p-4">
             <div className="flex items-center gap-2 mb-2">
               <span className="text-xl">🍎</span>
-              <span className="font-semibold text-sm text-gray-900">macOS</span>
+              <span className="font-semibold text-sm text-slate-900">macOS</span>
               <span
-                className="ml-auto text-[10px] text-gray-500"
+                className="ml-auto text-[10px] text-slate-500"
                 title="Double-clickable .command bootstrap (Terminal opens, asks for sudo). Signed .pkg is on the roadmap."
               >
                 .command
               </span>
             </div>
-            <div className="text-xs text-gray-600 mb-3">
+            <div className="text-xs text-slate-600 mb-3">
               macOS 12 Monterey or later. Notarised PKG installs as a launch daemon.
             </div>
             <InstallerButtons
@@ -275,28 +275,28 @@ export default function AgentsAdminPage() {
               hint="One file. Runs on any Mac. Will refuse to enrol on Windows/Linux."
               toast={toast}
             />
-            <p className="mt-1.5 text-center text-[10px] text-gray-400">macOS uses agent-only onboarding</p>
+            <p className="mt-1.5 text-center text-[10px] text-slate-400">macOS uses agent-only onboarding</p>
           </div>
         </div>
       </div>
 
       {/* ─── COLLECTOR AGENT (Linux, reaches OUT to remote targets) ─────── */}
-      <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
-        <div className="border-b border-gray-200 px-5 py-3">
-          <h2 className="text-sm font-semibold text-gray-900">Collector agent</h2>
+      <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
+        <div className="border-b border-slate-200 px-5 py-3">
+          <h2 className="text-sm font-semibold text-slate-900">Collector agent</h2>
         </div>
         <div className="grid md:grid-cols-2 gap-4 p-4">
-          <div className="p-4 border border-gray-200 rounded-lg">
+          <div className="p-4 border border-slate-200 rounded-lg">
             <div className="flex items-center gap-2 mb-2">
               <span className="text-xl">📡</span>
-              <span className="font-semibold text-sm text-gray-900">Collector agent (Linux)</span>
-              <span className="ml-auto text-[10px] text-gray-500">SSH / SQL / LDAP drivers preinstalled</span>
+              <span className="font-semibold text-sm text-slate-900">Collector agent (Linux)</span>
+              <span className="ml-auto text-[10px] text-slate-500">SSH / SQL / LDAP drivers preinstalled</span>
             </div>
-            <div className="text-xs text-gray-600 mb-3">
-              Same agent binary as endpoint, runs in <code className="bg-gray-100 px-1 rounded">mode=collector</code>. Installer also
-              pip-installs <code className="bg-gray-100 px-1 rounded">paramiko</code>, <code className="bg-gray-100 px-1 rounded">pymssql</code>,
-              <code className="bg-gray-100 px-1 rounded">psycopg2</code>, <code className="bg-gray-100 px-1 rounded">pymysql</code>,
-              <code className="bg-gray-100 px-1 rounded">oracledb</code>, <code className="bg-gray-100 px-1 rounded">ldap3</code> so the box
+            <div className="text-xs text-slate-600 mb-3">
+              Same agent binary as endpoint, runs in <code className="bg-slate-100 px-1 rounded">mode=collector</code>. Installer also
+              pip-installs <code className="bg-slate-100 px-1 rounded">paramiko</code>, <code className="bg-slate-100 px-1 rounded">pymssql</code>,
+              <code className="bg-slate-100 px-1 rounded">psycopg2</code>, <code className="bg-slate-100 px-1 rounded">pymysql</code>,
+              <code className="bg-slate-100 px-1 rounded">oracledb</code>, <code className="bg-slate-100 px-1 rounded">ldap3</code> so the box
               can execute every remote-target runner.
             </div>
             <InstallerButtons
@@ -307,9 +307,9 @@ export default function AgentsAdminPage() {
               extraParams={{ collector: 1 }}
             />
           </div>
-          <div className="p-4 border border-gray-200 rounded-lg bg-blue-50/40">
-            <div className="text-xs font-semibold text-blue-800 mb-2">When to use a collector vs server-side agentless?</div>
-            <ul className="text-[11px] text-gray-700 space-y-1.5 list-disc list-inside">
+          <div className="p-4 border border-primary-200 rounded-lg bg-primary-50">
+            <div className="text-xs font-semibold text-primary-800 mb-2">When to use a collector vs server-side agentless?</div>
+            <ul className="text-[11px] text-slate-700 space-y-1.5 list-disc list-inside">
               <li><strong>Use the collector</strong> when the bank's firewall blocks inbound from Compliverse — collector dials OUT, then dials IN to the targets it can already reach.</li>
               <li><strong>Use agentless</strong> when Compliverse can reach the targets directly (cloud-hosted backend + targets with public IPs / VPN).</li>
               <li>Both paths reuse the same Connect Wizard credentials. Switching is a one-line config change.</li>
@@ -322,10 +322,10 @@ export default function AgentsAdminPage() {
       <AgentlessTargetsSection />
 
       {/* Agents table */}
-      <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
+      <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-600">
+            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
               <tr>
                 <th className="text-left px-4 py-2.5">Agent</th>
                 <th className="text-left px-4 py-2.5 w-32">Mode</th>
@@ -337,7 +337,7 @@ export default function AgentsAdminPage() {
                 <th className="text-right px-4 py-2.5 w-24">Action</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-slate-100">
               {agents.length === 0 && (
                 <tr>
                   <td colSpan={8} className="px-4 py-2">
@@ -352,25 +352,25 @@ export default function AgentsAdminPage() {
                 </tr>
               )}
               {agents.map((a) => (
-                <tr key={a.id} className="hover:bg-gray-50">
+                <tr key={a.id} className="hover:bg-slate-50">
                   <td className="px-4 py-3">
-                    <div className="font-medium text-gray-900">{a.agent_name}</div>
+                    <div className="font-medium text-slate-900">{a.agent_name}</div>
                     {a.agent_version && (
-                      <div className="text-[10px] text-gray-500">v{a.agent_version}</div>
+                      <div className="text-[10px] text-slate-500">v{a.agent_version}</div>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-xs text-gray-700 capitalize">{a.mode}</td>
-                  <td className="px-4 py-3 font-mono text-xs text-gray-700">
-                    {a.hostname || <span className="text-gray-400">—</span>}
+                  <td className="px-4 py-3 text-xs text-slate-700 capitalize">{a.mode}</td>
+                  <td className="px-4 py-3 font-mono text-xs text-slate-700">
+                    {a.hostname || <span className="text-slate-400">—</span>}
                   </td>
-                  <td className="px-4 py-3 text-xs text-gray-700 capitalize">{a.os_family || '—'}</td>
+                  <td className="px-4 py-3 text-xs text-slate-700 capitalize">{a.os_family || '—'}</td>
                   <td className="px-4 py-3">
                     {(() => {
                       const eff = effectiveStatus(a);
                       const isStale = eff === 'stale' && a.status === 'active';
                       return (
                         <span
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-medium border uppercase ${STATUS_COLORS[eff] ?? 'bg-gray-100'}`}
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-medium border uppercase ${STATUS_COLORS[eff] ?? 'bg-slate-100 text-slate-600 border-slate-200'}`}
                           title={isStale ? 'Heartbeat not received in 5+ minutes' : undefined}
                         >
                           {eff}
@@ -378,15 +378,15 @@ export default function AgentsAdminPage() {
                       );
                     })()}
                   </td>
-                  <td className="px-4 py-3 text-xs text-gray-600">{fmtAgo(a.last_heartbeat_at)}</td>
-                  <td className="px-4 py-3 text-xs text-gray-600">{fmtAgo(a.last_result_at)}</td>
+                  <td className="px-4 py-3 text-xs text-slate-600">{fmtAgo(a.last_heartbeat_at)}</td>
+                  <td className="px-4 py-3 text-xs text-slate-600">{fmtAgo(a.last_result_at)}</td>
                   <td className="px-4 py-3 text-right">
                     {a.status === 'revoked' ? (
-                      <span className="text-xs text-gray-400">revoked</span>
+                      <span className="text-xs text-slate-400">revoked</span>
                     ) : (
                       <button
                         onClick={() => { setRevokeTarget(a); setRevokeReason(''); }}
-                        className="text-xs text-red-600 hover:underline"
+                        className="text-xs text-rose-600 hover:underline"
                       >
                         Revoke
                       </button>
@@ -403,13 +403,13 @@ export default function AgentsAdminPage() {
       {revokeTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-1">Revoke agent?</h3>
-            <p className="text-sm text-gray-600 mb-4">
+            <h3 className="text-lg font-semibold text-slate-900 mb-1">Revoke agent?</h3>
+            <p className="text-sm text-slate-600 mb-4">
               <strong>{revokeTarget.agent_name}</strong>'s next heartbeat will be
               rejected and it will lose access to the backend. Asset records remain
               intact; only the agent's push capability is killed.
             </p>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
+            <label className="block text-xs font-medium text-slate-700 mb-1">
               Reason (optional)
             </label>
             <textarea
@@ -417,19 +417,19 @@ export default function AgentsAdminPage() {
               onChange={(e) => setRevokeReason(e.target.value)}
               placeholder="e.g. Replaced by new build, host decommissioned…"
               rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500"
+              className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500"
             />
             <div className="flex justify-end gap-2 mt-5">
               <button
                 onClick={() => { setRevokeTarget(null); setRevokeReason(''); }}
-                className="px-4 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50"
+                className="px-4 py-1.5 text-sm border border-slate-300 rounded-md hover:bg-slate-50"
               >
                 Cancel
               </button>
               <button
                 onClick={() => revokeMut.mutate({ id: revokeTarget.id, reason: revokeReason })}
                 disabled={revokeMut.isPending}
-                className="px-4 py-1.5 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50"
+                className="px-4 py-1.5 text-sm bg-rose-600 text-white rounded-md hover:bg-rose-700 disabled:opacity-50"
               >
                 {revokeMut.isPending ? 'Revoking…' : 'Revoke agent'}
               </button>
@@ -498,11 +498,11 @@ function InstallerButtons({
             });
           }
         }}
-        className="block w-full text-center px-3 py-2 bg-blue-600 text-white text-xs font-medium rounded-md hover:bg-blue-700"
+        className="block w-full text-center px-3 py-2 bg-primary-600 text-[#0a0a0a] text-xs font-medium rounded-md hover:bg-primary-700"
       >
         📥 {label}
       </button>
-      <div className="mt-1 text-center text-[10px] text-gray-500">{hint}</div>
+      <div className="mt-1 text-center text-[10px] text-slate-500">{hint}</div>
     </>
   );
 }
@@ -515,14 +515,14 @@ function InstallerButtons({
 // (one source of truth, not two pages of the same logic).
 function AgentlessTargetsSection() {
   return (
-    <section className="rounded-lg border border-gray-200 bg-white shadow-sm">
-      <div className="border-b border-gray-200 px-5 py-3">
-        <h2 className="text-sm font-semibold text-gray-900">Agentless targets</h2>
+    <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
+      <div className="border-b border-slate-200 px-5 py-3">
+        <h2 className="text-sm font-semibold text-slate-900">Agentless targets</h2>
       </div>
       <div className="flex items-center justify-end gap-3 p-5">
         <Link
           href="/admin/integrations/connect"
-          className="inline-flex items-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-3.5 py-2 text-xs font-medium text-blue-700 hover:bg-blue-100"
+          className="inline-flex items-center gap-1.5 rounded-md border border-primary-200 bg-primary-50 px-3.5 py-2 text-xs font-medium text-primary-700 hover:bg-primary-100"
         >
           <Plus className="h-3.5 w-3.5" />
           Open Connect Wizard

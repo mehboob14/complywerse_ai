@@ -246,10 +246,10 @@ export default function SetupWizard({ open, onClose, discoveryPrefill }: SetupWi
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[92vh] overflow-y-auto">
         {/* Header + breadcrumb */}
-        <div className="px-5 pt-4 pb-2.5 border-b border-gray-100">
+        <div className="px-5 pt-4 pb-2.5 border-b border-slate-100">
           <div className="flex items-center justify-between mb-2.5">
-            <h2 className="text-base font-semibold text-gray-900">🪄 Setup Wizard</h2>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">×</button>
+            <h2 className="text-base font-semibold text-slate-900">🪄 Setup Wizard</h2>
+            <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-2xl leading-none">×</button>
           </div>
           <ol className="flex items-center gap-1.5 text-xs">
             {chain.map((s, i) => {
@@ -258,15 +258,15 @@ export default function SetupWizard({ open, onClose, discoveryPrefill }: SetupWi
               return (
                 <li key={s} className="flex items-center gap-1.5">
                   <span className={`flex items-center justify-center w-6 h-6 rounded-full font-semibold ${
-                    isDone ? 'bg-green-600 text-white'
-                    : isActive ? 'bg-blue-600 text-white'
-                    : 'bg-gray-200 text-gray-500'
+                    isDone ? 'bg-emerald-600 text-white'
+                    : isActive ? 'bg-primary-600 text-[#0a0a0a]'
+                    : 'bg-slate-200 text-slate-500'
                   }`}>{isDone ? '✓' : i + 1}</span>
                   <span className={`font-medium ${
-                    isActive ? 'text-blue-700' : isDone ? 'text-green-700' : 'text-gray-500'
+                    isActive ? 'text-primary-700' : isDone ? 'text-emerald-700' : 'text-slate-500'
                   }`}>{labelFor(s)}</span>
                   {i < chain.length - 1 && (
-                    <span className={`mx-0.5 ${isDone ? 'text-green-400' : 'text-gray-300'}`}>›</span>
+                    <span className={`mx-0.5 ${isDone ? 'text-emerald-400' : 'text-slate-300'}`}>›</span>
                   )}
                 </li>
               );
@@ -279,39 +279,39 @@ export default function SetupWizard({ open, onClose, discoveryPrefill }: SetupWi
           {/* ─── STEP 1: METHOD ─── */}
           {step === 'method' && (
             <>
-              <h3 className="text-sm font-semibold text-gray-900 mb-0.5">How do you want to scan?</h3>
-              <p className="text-xs text-gray-500 mb-3">Pick the deployment that fits your security posture.</p>
+              <h3 className="text-sm font-semibold text-slate-900 mb-0.5">How do you want to scan?</h3>
+              <p className="text-xs text-slate-500 mb-3">Pick the deployment that fits your security posture.</p>
               <div className="grid grid-cols-2 gap-2.5">
                 <button
                   onClick={() => setMethod('agentless')}
                   className={`text-left p-3 rounded-lg border-2 transition ${
-                    method === 'agentless' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
+                    method === 'agentless' ? 'border-primary-500 bg-primary-50' : 'border-slate-200 hover:border-slate-300'
                   }`}
                 >
                   <div className="flex items-center gap-2 mb-1.5"><span className="text-xl">📡</span><span className="font-semibold text-sm">Agentless</span></div>
-                  <div className="text-xs text-gray-600 mb-2">Cloud directly connects to your targets over WinRM / SSH / SQL.</div>
+                  <div className="text-xs text-slate-600 mb-2">Cloud directly connects to your targets over WinRM / SSH / SQL.</div>
                   <ul className="text-[11px] space-y-0">
-                    <li className="text-green-700">✓ Quick setup, no install</li>
-                    <li className="text-red-600">✗ Firewall must allow inbound</li>
-                    <li className="text-red-600">✗ Creds stored in cloud DB</li>
+                    <li className="text-emerald-700">✓ Quick setup, no install</li>
+                    <li className="text-rose-600">✗ Firewall must allow inbound</li>
+                    <li className="text-rose-600">✗ Creds stored in cloud DB</li>
                   </ul>
-                  <div className="text-[11px] text-gray-500 mt-1.5 pt-1.5 border-t border-gray-200">Best for: small / test</div>
+                  <div className="text-[11px] text-slate-500 mt-1.5 pt-1.5 border-t border-slate-200">Best for: small / test</div>
                 </button>
 
                 <button
                   onClick={() => setMethod('agent')}
                   className={`text-left p-3 rounded-lg border-2 transition ${
-                    method === 'agent' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
+                    method === 'agent' ? 'border-primary-500 bg-primary-50' : 'border-slate-200 hover:border-slate-300'
                   }`}
                 >
                   <div className="flex items-center gap-2 mb-1.5"><span className="text-xl">🛡️</span><span className="font-semibold text-sm">With Agent</span></div>
-                  <div className="text-xs text-gray-600 mb-2">Small program on your network calls cloud outbound.</div>
+                  <div className="text-xs text-slate-600 mb-2">Small program on your network calls cloud outbound.</div>
                   <ul className="text-[11px] space-y-0">
-                    <li className="text-green-700">✓ Firewall closed (outbound only)</li>
-                    <li className="text-green-700">✓ Creds stay on-prem</li>
-                    <li className="text-green-700">✓ Bank's preferred mode</li>
+                    <li className="text-emerald-700">✓ Firewall closed (outbound only)</li>
+                    <li className="text-emerald-700">✓ Creds stay on-prem</li>
+                    <li className="text-emerald-700">✓ Bank's preferred mode</li>
                   </ul>
-                  <div className="text-[11px] text-gray-500 mt-1.5 pt-1.5 border-t border-gray-200">Best for: production / paranoid banks</div>
+                  <div className="text-[11px] text-slate-500 mt-1.5 pt-1.5 border-t border-slate-200">Best for: production / paranoid banks</div>
                 </button>
               </div>
             </>
@@ -320,29 +320,29 @@ export default function SetupWizard({ open, onClose, discoveryPrefill }: SetupWi
           {/* ─── STEP 2: AGENT TYPE ─── */}
           {step === 'agent_type' && (
             <>
-              <h3 className="text-sm font-semibold text-gray-900 mb-0.5">What does the agent scan?</h3>
-              <p className="text-xs text-gray-500 mb-3">This determines whether the agent watches its own host or reaches out to others.</p>
+              <h3 className="text-sm font-semibold text-slate-900 mb-0.5">What does the agent scan?</h3>
+              <p className="text-xs text-slate-500 mb-3">This determines whether the agent watches its own host or reaches out to others.</p>
               <div className="grid grid-cols-2 gap-2.5">
                 <button
                   onClick={() => setAgentMode('endpoint')}
                   className={`text-left p-3 rounded-lg border-2 transition ${
-                    agentMode === 'endpoint' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
+                    agentMode === 'endpoint' ? 'border-primary-500 bg-primary-50' : 'border-slate-200 hover:border-slate-300'
                   }`}
                 >
-                  <div className="flex items-center gap-2 mb-1.5"><span className="text-xl">🏠</span><span className="font-semibold text-sm">Endpoint</span><span className="ml-auto text-[10px] text-blue-700 bg-blue-100 rounded px-1.5 py-0.5">1 PC = 1 agent</span></div>
-                  <div className="text-xs text-gray-600 mb-2">Agent installs on each PC. Scans only that PC's local OS settings (registry, secedit, etc.).</div>
-                  <div className="text-[11px] text-gray-500 pt-1.5 border-t border-gray-200">Best for: Windows / Linux PCs &amp; servers</div>
+                  <div className="flex items-center gap-2 mb-1.5"><span className="text-xl">🏠</span><span className="font-semibold text-sm">Endpoint</span><span className="ml-auto text-[10px] text-primary-700 bg-primary-100 rounded px-1.5 py-0.5">1 PC = 1 agent</span></div>
+                  <div className="text-xs text-slate-600 mb-2">Agent installs on each PC. Scans only that PC's local OS settings (registry, secedit, etc.).</div>
+                  <div className="text-[11px] text-slate-500 pt-1.5 border-t border-slate-200">Best for: Windows / Linux PCs &amp; servers</div>
                 </button>
 
                 <button
                   onClick={() => setAgentMode('collector')}
                   className={`text-left p-3 rounded-lg border-2 transition ${
-                    agentMode === 'collector' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
+                    agentMode === 'collector' ? 'border-primary-500 bg-primary-50' : 'border-slate-200 hover:border-slate-300'
                   }`}
                 >
-                  <div className="flex items-center gap-2 mb-1.5"><span className="text-xl">🌐</span><span className="font-semibold text-sm">Collector</span><span className="ml-auto text-[10px] text-blue-700 bg-blue-100 rounded px-1.5 py-0.5">1 VM = many</span></div>
-                  <div className="text-xs text-gray-600 mb-2">Agent installs on 1 VM. SSH-es / queries dozens of network devices using stored credentials.</div>
-                  <div className="text-[11px] text-gray-500 pt-1.5 border-t border-gray-200">Best for: Cisco / Oracle / AWS</div>
+                  <div className="flex items-center gap-2 mb-1.5"><span className="text-xl">🌐</span><span className="font-semibold text-sm">Collector</span><span className="ml-auto text-[10px] text-primary-700 bg-primary-100 rounded px-1.5 py-0.5">1 VM = many</span></div>
+                  <div className="text-xs text-slate-600 mb-2">Agent installs on 1 VM. SSH-es / queries dozens of network devices using stored credentials.</div>
+                  <div className="text-[11px] text-slate-500 pt-1.5 border-t border-slate-200">Best for: Cisco / Oracle / AWS</div>
                 </button>
               </div>
             </>
@@ -351,8 +351,8 @@ export default function SetupWizard({ open, onClose, discoveryPrefill }: SetupWi
           {/* ─── STEP 3: ENROLLMENT METHOD ─── */}
           {step === 'enrollment_method' && (
             <>
-              <h3 className="text-sm font-semibold text-gray-900 mb-0.5">How many agents do you need?</h3>
-              <p className="text-xs text-gray-500 mb-3">
+              <h3 className="text-sm font-semibold text-slate-900 mb-0.5">How many agents do you need?</h3>
+              <p className="text-xs text-slate-500 mb-3">
                 {agentMode === 'endpoint'
                   ? 'One token per PC. For 500 PCs you get 500 unique tokens.'
                   : 'One token per collector VM. Usually you need very few.'}
@@ -370,13 +370,13 @@ export default function SetupWizard({ open, onClose, discoveryPrefill }: SetupWi
                   const isSelected = enrollMethod === kind;
                   const isRec = kind === recommended;
                   const isFaded = kind !== recommended && kind !== 'discovery' && !isSelected;
-                  if (isSelected) return 'border-blue-500 bg-blue-50';
-                  if (isRec) return 'border-green-400 bg-green-50/40 hover:border-green-500';
-                  if (isFaded) return 'border-gray-200 bg-gray-50/60 opacity-70 hover:opacity-100 hover:border-gray-400';
-                  return 'border-gray-200 hover:border-gray-300';
+                  if (isSelected) return 'border-primary-500 bg-primary-50';
+                  if (isRec) return 'border-emerald-400 bg-emerald-50/40 hover:border-emerald-500';
+                  if (isFaded) return 'border-slate-200 bg-slate-50/60 opacity-70 hover:opacity-100 hover:border-slate-400';
+                  return 'border-slate-200 hover:border-slate-300';
                 };
                 const RecBadge = () => (
-                  <span className="ml-auto text-[10px] text-green-700 bg-green-100 border border-green-200 rounded px-1.5 py-0.5">Recommended</span>
+                  <span className="ml-auto text-[10px] text-emerald-700 bg-emerald-100 border border-emerald-200 rounded px-1.5 py-0.5">Recommended</span>
                 );
                 return (
                   <div className="grid grid-cols-3 gap-2.5">
@@ -389,8 +389,8 @@ export default function SetupWizard({ open, onClose, discoveryPrefill }: SetupWi
                         <span className="font-semibold text-sm">Single</span>
                         {recommended === 'single' && <RecBadge />}
                       </div>
-                      <div className="text-xs text-gray-600 mb-1.5">One agent, one token. Manual install on one target.</div>
-                      <div className="text-[10px] text-gray-500 pt-1.5 border-t border-gray-200">
+                      <div className="text-xs text-slate-600 mb-1.5">One agent, one token. Manual install on one target.</div>
+                      <div className="text-[10px] text-slate-500 pt-1.5 border-t border-slate-200">
                         {agentMode === 'collector' ? '1 collector VM scans many devices' : 'For a single test PC'}
                       </div>
                     </button>
@@ -404,8 +404,8 @@ export default function SetupWizard({ open, onClose, discoveryPrefill }: SetupWi
                         <span className="font-semibold text-sm">Bulk paste</span>
                         {recommended === 'bulk' && <RecBadge />}
                       </div>
-                      <div className="text-xs text-gray-600 mb-1.5">Paste 100s of hostnames. Backend returns CSV of tokens.</div>
-                      <div className="text-[10px] text-gray-500 pt-1.5 border-t border-gray-200">
+                      <div className="text-xs text-slate-600 mb-1.5">Paste 100s of hostnames. Backend returns CSV of tokens.</div>
+                      <div className="text-[10px] text-slate-500 pt-1.5 border-t border-slate-200">
                         {agentMode === 'endpoint' ? '500 PCs via GPO / SCCM / Ansible' : 'Multi-collector setup (rare)'}
                       </div>
                     </button>
@@ -418,8 +418,8 @@ export default function SetupWizard({ open, onClose, discoveryPrefill }: SetupWi
                         <span className="text-lg">🔍</span>
                         <span className="font-semibold text-sm">From Discovery</span>
                       </div>
-                      <div className="text-xs text-gray-600 mb-1.5">Network scan first → reachable hostnames brought here.</div>
-                      <div className="text-[10px] text-gray-500 pt-1.5 border-t border-gray-200">Best for: unknown networks</div>
+                      <div className="text-xs text-slate-600 mb-1.5">Network scan first → reachable hostnames brought here.</div>
+                      <div className="text-[10px] text-slate-500 pt-1.5 border-t border-slate-200">Best for: unknown networks</div>
                     </button>
                   </div>
                 );
@@ -430,33 +430,33 @@ export default function SetupWizard({ open, onClose, discoveryPrefill }: SetupWi
           {/* ─── STEP 4: CONFIGURE ─── */}
           {step === 'configure' && (
             <>
-              <h3 className="text-sm font-semibold text-gray-900 mb-1">Configure</h3>
-              <p className="text-xs text-gray-500 mb-4">
+              <h3 className="text-sm font-semibold text-slate-900 mb-1">Configure</h3>
+              <p className="text-xs text-slate-500 mb-4">
                 <span className="inline-flex items-center gap-1.5">
-                  <span className="px-1.5 py-0.5 bg-gray-100 rounded">{method === 'agent' ? 'With Agent' : 'Agentless'}</span>
-                  {agentMode && <><span>›</span><span className="px-1.5 py-0.5 bg-gray-100 rounded">{agentMode}</span></>}
-                  {enrollMethod && <><span>›</span><span className="px-1.5 py-0.5 bg-gray-100 rounded">{enrollMethod}</span></>}
+                  <span className="px-1.5 py-0.5 bg-slate-100 rounded">{method === 'agent' ? 'With Agent' : 'Agentless'}</span>
+                  {agentMode && <><span>›</span><span className="px-1.5 py-0.5 bg-slate-100 rounded">{agentMode}</span></>}
+                  {enrollMethod && <><span>›</span><span className="px-1.5 py-0.5 bg-slate-100 rounded">{enrollMethod}</span></>}
                 </span>
               </p>
 
               {enrollMethod === 'single' && (
                 <div className="space-y-3">
                   <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">Agent name</label>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">Agent name</label>
                     <input
                       type="text"
                       value={singleName}
                       onChange={(e) => setSingleName(e.target.value)}
                       placeholder={agentMode === 'collector' ? 'e.g. cisco-collector-vm' : 'e.g. DC-01'}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">Target OS</label>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">Target OS</label>
                     <select
                       value={osFamily}
                       onChange={(e) => setOsFamily(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm"
                     >
                       <option value="windows">Windows</option>
                       <option value="linux">Linux</option>
@@ -469,25 +469,25 @@ export default function SetupWizard({ open, onClose, discoveryPrefill }: SetupWi
               {enrollMethod === 'bulk' && (
                 <div className="space-y-3">
                   <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">Hostnames</label>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">Hostnames</label>
                     <textarea
                       value={bulkHostnames}
                       onChange={(e) => setBulkHostnames(e.target.value)}
                       rows={7}
                       placeholder={'HASSAN-PC01\nAISHA-PC02\nAHMED-PC03\n…'}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm font-mono"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm font-mono"
                     />
-                    <p className="text-xs text-gray-500 mt-1">
+                    <p className="text-xs text-slate-500 mt-1">
                       {bulkHostnames.split(/[\n,]/).map(s => s.trim()).filter(Boolean).length} hostnames detected
                       {discoveryPrefill?.hostnames?.length ? ' (prefilled from Discovery)' : ''}
                     </p>
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">Target OS</label>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">Target OS</label>
                     <select
                       value={osFamily}
                       onChange={(e) => setOsFamily(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm"
                     >
                       <option value="windows">Windows</option>
                       <option value="linux">Linux</option>
@@ -502,30 +502,30 @@ export default function SetupWizard({ open, onClose, discoveryPrefill }: SetupWi
           {/* ─── STEP 5: RESULT ─── */}
           {step === 'result' && singleResult && (
             <>
-              <h3 className="text-sm font-semibold text-gray-900 mb-1">✅ Agent #{singleResult.agent_id} enrolled</h3>
+              <h3 className="text-sm font-semibold text-slate-900 mb-1">✅ Agent #{singleResult.agent_id} enrolled</h3>
               <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2 my-3">
                 ⚠ This install command contains a one-time token. Copy it now — it can't be retrieved later.
               </div>
               <div className="space-y-3">
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs font-medium text-gray-700">Windows (PowerShell, run as Administrator):</label>
-                    <button onClick={() => copy(singleResult.install_command_windows, 'win')} className="text-xs text-blue-600 hover:underline">
+                    <label className="text-xs font-medium text-slate-700">Windows (PowerShell, run as Administrator):</label>
+                    <button onClick={() => copy(singleResult.install_command_windows, 'win')} className="text-xs text-primary-700 hover:underline">
                       {copied === 'win' ? '✓ Copied' : 'Copy'}
                     </button>
                   </div>
-                  <pre className="bg-gray-900 text-green-300 text-xs p-3 rounded overflow-x-auto whitespace-pre-wrap break-all">
+                  <pre className="bg-slate-900 text-emerald-300 text-xs p-3 rounded overflow-x-auto whitespace-pre-wrap break-all">
                     {singleResult.install_command_windows}
                   </pre>
                 </div>
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs font-medium text-gray-700">Linux (bash, run as root):</label>
-                    <button onClick={() => copy(singleResult.install_command_linux, 'lin')} className="text-xs text-blue-600 hover:underline">
+                    <label className="text-xs font-medium text-slate-700">Linux (bash, run as root):</label>
+                    <button onClick={() => copy(singleResult.install_command_linux, 'lin')} className="text-xs text-primary-700 hover:underline">
                       {copied === 'lin' ? '✓ Copied' : 'Copy'}
                     </button>
                   </div>
-                  <pre className="bg-gray-900 text-green-300 text-xs p-3 rounded overflow-x-auto whitespace-pre-wrap break-all">
+                  <pre className="bg-slate-900 text-emerald-300 text-xs p-3 rounded overflow-x-auto whitespace-pre-wrap break-all">
                     {singleResult.install_command_linux}
                   </pre>
                 </div>
@@ -536,15 +536,15 @@ export default function SetupWizard({ open, onClose, discoveryPrefill }: SetupWi
           {step === 'result' && bulkResult && (
             <>
               <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-semibold text-gray-900">✅ {bulkResult.count} agents enrolled</h3>
+                <h3 className="text-sm font-semibold text-slate-900">✅ {bulkResult.count} agents enrolled</h3>
                 <span className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">⚠ Tokens shown ONCE</span>
               </div>
 
               {/* Enrolled tokens — compact, scroll if long */}
-              <div className="border border-gray-200 rounded-md overflow-hidden mb-3">
+              <div className="border border-slate-200 rounded-md overflow-hidden mb-3">
                 <div className="max-h-44 overflow-y-auto">
                   <table className="w-full text-xs">
-                    <thead className="bg-gray-50 text-gray-600 sticky top-0">
+                    <thead className="bg-slate-50 text-slate-600 sticky top-0">
                       <tr>
                         <th className="text-left px-2.5 py-1.5">Hostname</th>
                         <th className="text-left px-2.5 py-1.5 w-16">ID</th>
@@ -553,10 +553,10 @@ export default function SetupWizard({ open, onClose, discoveryPrefill }: SetupWi
                     </thead>
                     <tbody>
                       {bulkResult.agents.map(a => (
-                        <tr key={a.agent_id} className="border-t border-gray-100">
+                        <tr key={a.agent_id} className="border-t border-slate-100">
                           <td className="px-2.5 py-1 font-mono">{a.hostname}</td>
                           <td className="px-2.5 py-1">{a.agent_id}</td>
-                          <td className="px-2.5 py-1 font-mono text-gray-500">{a.enrollment_token.slice(0, 24)}…</td>
+                          <td className="px-2.5 py-1 font-mono text-slate-500">{a.enrollment_token.slice(0, 24)}…</td>
                         </tr>
                       ))}
                     </tbody>
@@ -565,68 +565,68 @@ export default function SetupWizard({ open, onClose, discoveryPrefill }: SetupWi
               </div>
 
               {/* "You do this" vs "automatic" — clearly separated. */}
-              <div className="border border-gray-200 rounded-lg overflow-hidden mb-3">
-                <div className="bg-gray-50 px-3 py-2 border-b border-gray-200">
-                  <div className="text-xs font-semibold text-gray-900">Mass-deploy in 3 manual steps + 1 automatic</div>
-                  <div className="text-[11px] text-gray-500">Compliverse can't push to your PCs directly — your Windows AD does that. Set it up once, then it's hands-free.</div>
+              <div className="border border-slate-200 rounded-lg overflow-hidden mb-3">
+                <div className="bg-slate-50 px-3 py-2 border-b border-slate-200">
+                  <div className="text-xs font-semibold text-slate-900">Mass-deploy in 3 manual steps + 1 automatic</div>
+                  <div className="text-[11px] text-slate-500">Compliverse can't push to your PCs directly — your Windows AD does that. Set it up once, then it's hands-free.</div>
                 </div>
-                <div className="divide-y divide-gray-100">
+                <div className="divide-y divide-slate-100">
                   <div className="flex items-start gap-2.5 px-3 py-2">
-                    <span className="flex-none w-5 h-5 rounded-full bg-blue-600 text-white text-[11px] font-semibold flex items-center justify-center">1</span>
+                    <span className="flex-none w-5 h-5 rounded-full bg-primary-600 text-[#0a0a0a] text-[11px] font-semibold flex items-center justify-center">1</span>
                     <div className="flex-1 min-w-0">
-                      <div className="text-xs font-medium text-gray-900">Download 3 files</div>
-                      <div className="text-[11px] text-gray-600">CSV (tokens), the agent installer, and the GPO deploy script.</div>
+                      <div className="text-xs font-medium text-slate-900">Download 3 files</div>
+                      <div className="text-[11px] text-slate-600">CSV (tokens), the agent installer, and the GPO deploy script.</div>
                       <div className="flex flex-wrap gap-1.5 mt-1.5">
-                        <button onClick={downloadCsv} className="px-2 py-0.5 text-[11px] bg-green-600 text-white rounded hover:bg-green-700">📥 enrollments.csv</button>
-                        <a href="/grc/agent/install.exe" className="px-2 py-0.5 text-[11px] bg-gray-700 text-white rounded hover:bg-gray-800" download>📥 ComplyverseAgent.exe</a>
-                        <button onClick={downloadGpoScript} className="px-2 py-0.5 text-[11px] bg-gray-700 text-white rounded hover:bg-gray-800">📥 Deploy-ComplyverseAgent.ps1</button>
+                        <button onClick={downloadCsv} className="px-2 py-0.5 text-[11px] bg-primary-600 text-[#0a0a0a] rounded hover:bg-primary-700">📥 enrollments.csv</button>
+                        <a href="/grc/agent/install.exe" className="px-2 py-0.5 text-[11px] bg-slate-700 text-white rounded hover:bg-slate-800" download>📥 ComplyverseAgent.exe</a>
+                        <button onClick={downloadGpoScript} className="px-2 py-0.5 text-[11px] bg-slate-700 text-white rounded hover:bg-slate-800">📥 Deploy-ComplyverseAgent.ps1</button>
                       </div>
                     </div>
-                    <span className="flex-none text-[10px] text-blue-700 bg-blue-50 border border-blue-200 rounded px-1.5 py-0.5">You</span>
+                    <span className="flex-none text-[10px] text-primary-700 bg-primary-50 border border-primary-200 rounded px-1.5 py-0.5">You</span>
                   </div>
 
                   <div className="flex items-start gap-2.5 px-3 py-2">
-                    <span className="flex-none w-5 h-5 rounded-full bg-blue-600 text-white text-[11px] font-semibold flex items-center justify-center">2</span>
+                    <span className="flex-none w-5 h-5 rounded-full bg-primary-600 text-[#0a0a0a] text-[11px] font-semibold flex items-center justify-center">2</span>
                     <div className="flex-1 min-w-0">
-                      <div className="text-xs font-medium text-gray-900">Drop all 3 on your AD file share</div>
-                      <div className="text-[11px] text-gray-600">
-                        e.g. <code className="bg-gray-100 px-1 rounded">\\fileserver\compliverse\</code>. Permissions: only Domain Computers + Domain Admins.
+                      <div className="text-xs font-medium text-slate-900">Drop all 3 on your AD file share</div>
+                      <div className="text-[11px] text-slate-600">
+                        e.g. <code className="bg-slate-100 px-1 rounded">\\fileserver\compliverse\</code>. Permissions: only Domain Computers + Domain Admins.
                       </div>
                     </div>
-                    <span className="flex-none text-[10px] text-blue-700 bg-blue-50 border border-blue-200 rounded px-1.5 py-0.5">You</span>
+                    <span className="flex-none text-[10px] text-primary-700 bg-primary-50 border border-primary-200 rounded px-1.5 py-0.5">You</span>
                   </div>
 
                   <div className="flex items-start gap-2.5 px-3 py-2">
-                    <span className="flex-none w-5 h-5 rounded-full bg-blue-600 text-white text-[11px] font-semibold flex items-center justify-center">3</span>
+                    <span className="flex-none w-5 h-5 rounded-full bg-primary-600 text-[#0a0a0a] text-[11px] font-semibold flex items-center justify-center">3</span>
                     <div className="flex-1 min-w-0">
-                      <div className="text-xs font-medium text-gray-900">Configure AD GPO Startup script</div>
-                      <div className="text-[11px] text-gray-600">
+                      <div className="text-xs font-medium text-slate-900">Configure AD GPO Startup script</div>
+                      <div className="text-[11px] text-slate-600">
                         Group Policy Mgmt Console →{' '}
                         <em>Computer Configuration › Policies › Windows Settings › Scripts › Startup</em> →
-                        point to the <code className="bg-gray-100 px-1 rounded">.ps1</code> from step 2.
+                        point to the <code className="bg-slate-100 px-1 rounded">.ps1</code> from step 2.
                       </div>
                     </div>
-                    <span className="flex-none text-[10px] text-blue-700 bg-blue-50 border border-blue-200 rounded px-1.5 py-0.5">You</span>
+                    <span className="flex-none text-[10px] text-primary-700 bg-primary-50 border border-primary-200 rounded px-1.5 py-0.5">You</span>
                   </div>
 
-                  <div className="flex items-start gap-2.5 px-3 py-2 bg-green-50/50">
-                    <span className="flex-none w-5 h-5 rounded-full bg-green-600 text-white text-[11px] font-semibold flex items-center justify-center">✓</span>
+                  <div className="flex items-start gap-2.5 px-3 py-2 bg-emerald-50/50">
+                    <span className="flex-none w-5 h-5 rounded-full bg-emerald-600 text-white text-[11px] font-semibold flex items-center justify-center">✓</span>
                     <div className="flex-1 min-w-0">
-                      <div className="text-xs font-medium text-gray-900">On next reboot — each PC installs itself</div>
-                      <div className="text-[11px] text-gray-600">
+                      <div className="text-xs font-medium text-slate-900">On next reboot — each PC installs itself</div>
+                      <div className="text-[11px] text-slate-600">
                         GPO runs the script under SYSTEM, the script reads that PC's row from
                         the CSV, fires the installer with that token, the agent registers and
                         comes online. Repeat <em>never</em> — new PCs auto-enroll too.
                       </div>
                     </div>
-                    <span className="flex-none text-[10px] text-green-700 bg-green-50 border border-green-200 rounded px-1.5 py-0.5">Auto</span>
+                    <span className="flex-none text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5">Auto</span>
                   </div>
                 </div>
               </div>
 
               {/* "GPO kya hai" inline help — one-line answer for non-AD admins. */}
-              <details className="text-[11px] text-gray-600 mb-1">
-                <summary className="cursor-pointer hover:text-gray-900">What is GPO? Who runs it? Why isn't it automatic from here?</summary>
+              <details className="text-[11px] text-slate-600 mb-1">
+                <summary className="cursor-pointer hover:text-slate-900">What is GPO? Who runs it? Why isn't it automatic from here?</summary>
                 <p className="mt-2 pl-4 leading-relaxed">
                   <strong>Group Policy Objects (GPO)</strong> are a feature of Microsoft Active
                   Directory — they let one AD admin push settings (or run scripts) on every
@@ -642,23 +642,23 @@ export default function SetupWizard({ open, onClose, discoveryPrefill }: SetupWi
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-3 border-t border-gray-100 flex items-center justify-between gap-2 bg-gray-50 rounded-b-xl">
+        <div className="px-6 py-3 border-t border-slate-100 flex items-center justify-between gap-2 bg-slate-50 rounded-b-xl">
           <div>
             {step !== 'method' && step !== 'result' && (
-              <button onClick={goBack} className="text-sm text-gray-600 hover:text-gray-900">
+              <button onClick={goBack} className="text-sm text-slate-600 hover:text-slate-900">
                 ← Back
               </button>
             )}
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={onClose} className="px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-white">
+            <button onClick={onClose} className="px-3 py-1.5 text-sm border border-slate-300 rounded-md hover:bg-white">
               {step === 'result' ? 'Close' : 'Cancel'}
             </button>
             {step !== 'configure' && step !== 'result' && (
               <button
                 onClick={onNext}
                 disabled={!canNext()}
-                className="px-4 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                className="px-4 py-1.5 text-sm bg-primary-600 text-[#0a0a0a] rounded-md hover:bg-primary-700 disabled:opacity-50"
               >
                 Next →
               </button>
@@ -671,13 +671,13 @@ export default function SetupWizard({ open, onClose, discoveryPrefill }: SetupWi
                   (enrollMethod === 'bulk' && !bulkHostnames.trim()) ||
                   singleMut.isPending || bulkMut.isPending
                 }
-                className="px-4 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                className="px-4 py-1.5 text-sm bg-primary-600 text-[#0a0a0a] rounded-md hover:bg-primary-700 disabled:opacity-50"
               >
                 {(singleMut.isPending || bulkMut.isPending) ? 'Generating…' : enrollMethod === 'bulk' ? 'Generate tokens →' : 'Generate token →'}
               </button>
             )}
             {step === 'result' && bulkResult && (
-              <button onClick={downloadCsv} className="px-4 py-1.5 text-sm bg-green-600 text-white rounded-md hover:bg-green-700">
+              <button onClick={downloadCsv} className="px-4 py-1.5 text-sm bg-primary-600 text-[#0a0a0a] rounded-md hover:bg-primary-700">
                 📥 Download CSV
               </button>
             )}

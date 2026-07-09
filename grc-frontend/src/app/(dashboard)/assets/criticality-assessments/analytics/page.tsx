@@ -25,11 +25,13 @@ import {
   type IacaItem,
 } from '@/lib/api';
 
+// Criticality-tier data-viz scale — sanctioned ramp:
+// critical=rose, high=orange, medium=amber, low=emerald.
 const BAND_COLOR: Record<string, string> = {
-  mission_critical: '#f43f5e',
-  high: '#fb923c',
-  moderate: '#facc15',
-  low: '#34d399',
+  mission_critical: '#f43f5e', // rose-500
+  high: '#fb923c',             // orange-400
+  moderate: '#fbbf24',         // amber-400
+  low: '#34d399',              // emerald-400
 };
 const STATUS_COLOR: Record<string, string> = {
   draft: '#94a3b8',
@@ -147,7 +149,7 @@ export default function CriticalityAnalyticsPage() {
           label="Assets covered"
           value={`${coverage?.assessed_assets ?? 0} / ${coverage?.total_assets ?? 0}`}
           icon={ShieldCheck}
-          tone="indigo"
+          tone="teal"
           hint={coverage && coverage.total_assets > 0
             ? `${Math.round((coverage.assessed_assets / coverage.total_assets) * 100)}% coverage`
             : undefined}
@@ -277,7 +279,7 @@ export default function CriticalityAnalyticsPage() {
                     <td className="px-3 py-2 text-right">
                       <Link
                         href={`/assets/criticality-assessments?open=${r.kind}:${r.id}`}
-                        className="text-xs text-blue-600 hover:underline"
+                        className="text-xs text-primary-700 hover:underline"
                       >
                         Open →
                       </Link>
@@ -299,12 +301,12 @@ function KpiTile({
   label: string;
   value: number | string;
   icon: typeof ShieldCheck;
-  tone: 'slate' | 'indigo' | 'emerald' | 'rose';
+  tone: 'slate' | 'teal' | 'emerald' | 'rose';
   hint?: string;
 }) {
   const tones = {
     slate: 'bg-slate-50 text-slate-700 border-slate-200',
-    indigo: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+    teal: 'bg-primary-50 text-primary-700 border-primary-200',
     emerald: 'bg-emerald-50 text-emerald-700 border-emerald-200',
     rose: 'bg-rose-50 text-rose-700 border-rose-200',
   }[tone];

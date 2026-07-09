@@ -166,8 +166,14 @@ export default function EvidencePage() {
       return res;
     },
     onSuccess: () => {
+      // Legacy keys (kept for any old lists) …
       queryClient.invalidateQueries({ queryKey: ['evidence-items'] });
       queryClient.invalidateQueries({ queryKey: ['evidence-summary'] });
+      // … and the keys the workspace (register + workbench) actually reads, so
+      // the new row appears immediately with no manual browser refresh.
+      queryClient.invalidateQueries({ queryKey: ['ev-ws-items'] });
+      queryClient.invalidateQueries({ queryKey: ['ev-ws-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['ev-ws-expiring'] });
       setIsUploadModalOpen(false);
     },
   });

@@ -66,7 +66,7 @@ export default function AssetsTab({ frameworkId }: { frameworkId: string }) {
                 {Array.isArray(a.compliance_scope) ? a.compliance_scope.join(', ') : '—'}
               </td>
               <td className="px-4 py-2 align-top text-right">
-                <Link href={`/assets/${a.id}`} target="_blank" className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline">
+                <Link href={`/assets/${a.id}`} target="_blank" className="inline-flex items-center gap-1 text-xs text-primary-700 hover:underline">
                   Open <ExternalLink className="h-3 w-3" />
                 </Link>
               </td>

@@ -8,22 +8,27 @@ import {
   Megaphone, Settings, Shield, Users,
 } from 'lucide-react';
 
+// Severity ramp — sanctioned scale (critical=rose, high=orange, medium=amber,
+// low=emerald, informational=slate). Genuine data-viz scale.
 export const SEVERITY_TONE: Record<string, { chip: string; dot: string }> = {
   critical:      { chip: 'border-rose-200 bg-rose-50 text-rose-700',         dot: 'bg-rose-500' },
   high:          { chip: 'border-orange-200 bg-orange-50 text-orange-700',   dot: 'bg-orange-500' },
   medium:        { chip: 'border-amber-200 bg-amber-50 text-amber-700',      dot: 'bg-amber-500' },
-  low:           { chip: 'border-blue-200 bg-blue-50 text-blue-700',         dot: 'bg-blue-500' },
+  low:           { chip: 'border-emerald-200 bg-emerald-50 text-emerald-700',dot: 'bg-emerald-500' },
   informational: { chip: 'border-slate-200 bg-slate-100 text-slate-600',     dot: 'bg-slate-400' },
 };
 
+// Workflow-state ramp — brand-accent hues (violet/blue/cyan) flattened to the
+// teal primary for the active states; neutral/procedural states use slate,
+// review = amber, closed = emerald. Labels disambiguate same-hue pills.
 export const STATE_TONE: Record<string, { chip: string; label: string }> = {
-  new:             { chip: 'border-slate-200 bg-slate-50 text-slate-700',   label: 'New' },
-  triage:          { chip: 'border-violet-200 bg-violet-50 text-violet-700',label: 'Triage' },
-  in_progress:     { chip: 'border-blue-200 bg-blue-50 text-blue-700',      label: 'In Progress' },
-  resolution:      { chip: 'border-cyan-200 bg-cyan-50 text-cyan-700',      label: 'Resolution' },
-  closure_review:  { chip: 'border-amber-200 bg-amber-50 text-amber-700',   label: 'Closure Review' },
+  new:             { chip: 'border-slate-200 bg-slate-50 text-slate-700',       label: 'New' },
+  triage:          { chip: 'border-slate-200 bg-slate-100 text-slate-700',      label: 'Triage' },
+  in_progress:     { chip: 'border-primary-200 bg-primary-50 text-primary-700', label: 'In Progress' },
+  resolution:      { chip: 'border-primary-200 bg-primary-50 text-primary-700', label: 'Resolution' },
+  closure_review:  { chip: 'border-amber-200 bg-amber-50 text-amber-700',       label: 'Closure Review' },
   closed:          { chip: 'border-emerald-200 bg-emerald-50 text-emerald-700', label: 'Closed' },
-  cancelled:       { chip: 'border-slate-200 bg-slate-100 text-slate-500',  label: 'Cancelled' },
+  cancelled:       { chip: 'border-slate-200 bg-slate-100 text-slate-500',      label: 'Cancelled' },
 };
 
 export const SOURCE_ICONS: Record<string, React.ElementType> = {

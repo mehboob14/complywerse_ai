@@ -119,7 +119,7 @@ export function ClassificationMatrixEditor() {
         </div>
         <div className="mt-2.5 flex justify-end">
           <button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:bg-slate-300">
+            className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-semibold text-[#0a0a0a] hover:bg-primary-700 disabled:bg-slate-300 disabled:text-slate-500">
             {saveMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
             Save Cell
           </button>

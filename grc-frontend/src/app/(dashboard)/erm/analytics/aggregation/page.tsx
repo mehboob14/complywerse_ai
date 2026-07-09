@@ -39,12 +39,12 @@ const CATEGORY_COLORS: Record<string, string> = {
 };
 
 const STATUS_COLORS: Record<string, { bg: string; text: string; border: string }> = {
-  open: { bg: 'bg-blue-500/10', text: 'text-blue-400', border: 'border-blue-500/30' },
-  mitigated: { bg: 'bg-emerald-500/10', text: 'text-emerald-400', border: 'border-emerald-500/30' },
-  accepted: { bg: 'bg-amber-500/10', text: 'text-amber-400', border: 'border-amber-500/30' },
-  closed: { bg: 'bg-slate-500/10', text: 'text-slate-600', border: 'border-slate-500/30' },
-  transferred: { bg: 'bg-purple-500/10', text: 'text-purple-400', border: 'border-purple-500/30' },
-  monitoring: { bg: 'bg-cyan-500/10', text: 'text-cyan-400', border: 'border-cyan-500/30' },
+  open: { bg: 'bg-primary-50', text: 'text-primary-700', border: 'border-primary-200' },
+  mitigated: { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200' },
+  accepted: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200' },
+  closed: { bg: 'bg-slate-100', text: 'text-slate-600', border: 'border-slate-200' },
+  transferred: { bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-200' },
+  monitoring: { bg: 'bg-primary-50', text: 'text-primary-700', border: 'border-primary-200' },
 };
 
 function getStatusStyle(status: string) {
@@ -52,7 +52,7 @@ function getStatusStyle(status: string) {
 }
 
 function getCategoryColor(category: string) {
-  return CATEGORY_COLORS[category?.toLowerCase()] || '#6366f1';
+  return CATEGORY_COLORS[category?.toLowerCase()] || '#1ed4b0';
 }
 
 type TabType = 'category' | 'business_unit' | 'status';
@@ -131,8 +131,8 @@ export default function RiskAggregationPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3 mb-3">
-            <div className="p-2 rounded-lg bg-blue-500/10">
-              <AlertTriangle className="h-5 w-5 text-blue-400" />
+            <div className="p-2 rounded-lg bg-primary-50">
+              <AlertTriangle className="h-5 w-5 text-primary-600" strokeWidth={1.75} />
             </div>
             <span className="text-sm font-medium text-slate-600">Total Risks</span>
           </div>
@@ -163,15 +163,15 @@ export default function RiskAggregationPage() {
 
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3 mb-3">
-            <div className="p-2 rounded-lg bg-cyan-500/10">
-              <TrendingDown className="h-5 w-5 text-cyan-400" />
+            <div className="p-2 rounded-lg bg-primary-50">
+              <TrendingDown className="h-5 w-5 text-primary-600" strokeWidth={1.75} />
             </div>
             <span className="text-sm font-medium text-slate-600">Risk Reduction</span>
           </div>
           <p className="text-3xl font-bold text-slate-900">{Number(summary.risk_reduction_pct || 0).toFixed(1)}%</p>
           <div className="mt-2 w-full bg-slate-100 rounded-full h-2">
             <div
-              className="bg-cyan-500 h-2 rounded-full transition-all"
+              className="bg-primary-500 h-2 rounded-full transition-all"
               style={{ width: `${Math.min(100, Number(summary.risk_reduction_pct || 0))}%` }}
             />
           </div>
@@ -211,7 +211,7 @@ export default function RiskAggregationPage() {
                 onClick={() => setActiveTab(tab.key)}
                 className={`flex items-center gap-2 px-5 py-3 text-sm font-medium transition-colors border-b-2 ${
                   activeTab === tab.key
-                    ? 'border-blue-500 text-blue-400'
+                    ? 'border-primary-500 text-primary-700'
                     : 'border-transparent text-slate-600 hover:text-slate-900'
                 }`}
               >

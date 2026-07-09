@@ -78,7 +78,7 @@ export default function RuleLibraryPage() {
                   <div className="text-[11.5px] leading-snug text-slate-600"><span className="text-slate-400">reads</span> {r.reads} <span className="text-slate-400">· trips when</span> {r.trips}</div>
                 </div>
                 <div className="flex flex-wrap gap-1.5">
-                  {r.regulation !== '—' && r.regulation.split('·').map((x) => <span key={x} className="rounded bg-blue-50 px-1.5 py-0.5 text-[9.5px] font-bold tracking-wide text-blue-600">{x.trim()}</span>)}
+                  {r.regulation !== '—' && r.regulation.split('·').map((x) => <span key={x} className="rounded bg-slate-100 px-1.5 py-0.5 text-[9.5px] font-bold tracking-wide text-slate-600">{x.trim()}</span>)}
                 </div>
                 <div className="flex justify-end">
                   <button disabled={!r.runnable} onClick={() => update.mutate({ ruleId: r.id, enabled: !r.enabled })}

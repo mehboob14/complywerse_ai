@@ -112,10 +112,10 @@ interface AssessmentDashboard {
 
 const COMPLIANCE_STATUSES = [
   { value: 'not_assessed', label: 'Not Assessed', color: 'text-slate-600', bgColor: 'bg-slate-50', icon: HelpCircle },
-  { value: 'compliant', label: 'Compliant', color: 'text-green-600', bgColor: 'bg-green-50', icon: CheckCircle },
-  { value: 'partially_compliant', label: 'Partially Compliant', color: 'text-yellow-600', bgColor: 'bg-yellow-50', icon: AlertTriangle },
-  { value: 'non_compliant', label: 'Non-Compliant', color: 'text-red-600', bgColor: 'bg-red-50', icon: XCircle },
-  { value: 'not_applicable', label: 'Not Applicable', color: 'text-slate-500', bgColor: 'bg-slate-600/20', icon: X },
+  { value: 'compliant', label: 'Compliant', color: 'text-emerald-700', bgColor: 'bg-emerald-50', icon: CheckCircle },
+  { value: 'partially_compliant', label: 'Partially Compliant', color: 'text-amber-700', bgColor: 'bg-amber-50', icon: AlertTriangle },
+  { value: 'non_compliant', label: 'Non-Compliant', color: 'text-rose-700', bgColor: 'bg-rose-50', icon: XCircle },
+  { value: 'not_applicable', label: 'Not Applicable', color: 'text-slate-500', bgColor: 'bg-slate-100', icon: X },
 ];
 
 const EVIDENCE_TYPES = [
@@ -128,10 +128,10 @@ const EVIDENCE_TYPES = [
 ];
 
 const PRIORITY_OPTIONS = [
-  { value: 'critical', label: 'Critical', color: 'text-red-600' },
+  { value: 'critical', label: 'Critical', color: 'text-rose-600' },
   { value: 'high', label: 'High', color: 'text-orange-600' },
-  { value: 'medium', label: 'Medium', color: 'text-yellow-600' },
-  { value: 'low', label: 'Low', color: 'text-green-600' },
+  { value: 'medium', label: 'Medium', color: 'text-amber-600' },
+  { value: 'low', label: 'Low', color: 'text-emerald-600' },
 ];
 
 const getStatusStyle = (status: string) => {
@@ -385,7 +385,7 @@ export default function AssessmentPage() {
   ];
 
   const evidenceCoverageData = [
-    { name: 'Uploaded', value: evidenceStats?.controls_with_evidence ?? 0, color: '#3b82f6' },
+    { name: 'Uploaded', value: evidenceStats?.controls_with_evidence ?? 0, color: '#1ed4b0' },
     { name: 'Pending Upload', value: evidenceStats?.controls_without_evidence ?? 0, color: '#cbd5e1' },
   ];
 
@@ -402,7 +402,7 @@ export default function AssessmentPage() {
             <select
               value={selectedAssessmentId ?? ''}
               onChange={(e) => setSelectedAssessmentId(e.target.value ? Number(e.target.value) : null)}
-              className="w-64 appearance-none rounded-lg border border-slate-300 bg-slate-200 py-2 pl-3 pr-10 text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="w-64 appearance-none rounded-lg border border-slate-300 bg-white py-2 pl-3 pr-10 text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
             >
               <option value="">Select an assessment...</option>
               {assessments.map((assessment) => (
@@ -417,7 +417,7 @@ export default function AssessmentPage() {
         </div>
         {canCreate && <button
           onClick={() => setIsNewAssessmentModalOpen(true)}
-          className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-white transition-colors hover:bg-primary-700"
+          className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-[#0a0a0a] transition-colors hover:bg-primary-700"
         >
           <Plus className="h-4 w-4" />
           New Assessment
@@ -434,37 +434,37 @@ export default function AssessmentPage() {
                 </div>
                 <div>
                   <p className="text-sm text-slate-600">Total Controls</p>
-                  <p className="text-2xl font-bold text-black">{dashboard.total_items}</p>
+                  <p className="text-2xl font-bold text-slate-900">{dashboard.total_items}</p>
                 </div>
               </div>
             </div>
             
             <div className="rounded-xl border border-slate-200 bg-white p-4">
               <div className="flex items-center gap-3">
-                                  <CheckCircle className="h-5 w-5 text-green-600" />
+                                  <CheckCircle className="h-5 w-5 text-emerald-600" strokeWidth={1.75} />
                 <div>
                   <p className="text-sm text-slate-600">Compliant</p>
-                  <p className="text-2xl font-bold text-green-600">{dashboard.compliance_breakdown.compliant}</p>
+                  <p className="text-2xl font-bold text-emerald-600">{dashboard.compliance_breakdown.compliant}</p>
                 </div>
               </div>
             </div>
             
             <div className="rounded-xl border border-slate-200 bg-white p-4">
               <div className="flex items-center gap-3">
-                                  <AlertTriangle className="h-5 w-5 text-yellow-600" />
+                                  <AlertTriangle className="h-5 w-5 text-amber-600" strokeWidth={1.75} />
                 <div>
                   <p className="text-sm text-slate-600">Partial</p>
-                  <p className="text-2xl font-bold text-yellow-600">{dashboard.compliance_breakdown.partially_compliant}</p>
+                  <p className="text-2xl font-bold text-amber-600">{dashboard.compliance_breakdown.partially_compliant}</p>
                 </div>
               </div>
             </div>
             
             <div className="rounded-xl border border-slate-200 bg-white p-4">
               <div className="flex items-center gap-3">
-                                  <XCircle className="h-5 w-5 text-red-600" />
+                                  <XCircle className="h-5 w-5 text-rose-600" strokeWidth={1.75} />
                 <div>
                   <p className="text-sm text-slate-600">Non-Compliant</p>
-                  <p className="text-2xl font-bold text-red-600">{dashboard.compliance_breakdown.non_compliant}</p>
+                  <p className="text-2xl font-bold text-rose-600">{dashboard.compliance_breakdown.non_compliant}</p>
                 </div>
               </div>
             </div>
@@ -497,7 +497,7 @@ export default function AssessmentPage() {
             </div>
             <div className="h-3 overflow-hidden rounded-full bg-slate-200">
               <div
-                className="h-full bg-gradient-to-r from-primary-600 to-primary-400 transition-all duration-500"
+                className="h-full bg-primary-600 transition-all duration-500"
                 style={{ width: `${progressPercentage}%` }}
               />
             </div>
@@ -509,7 +509,7 @@ export default function AssessmentPage() {
 
           <div className="grid gap-4 lg:grid-cols-3">
             <div className="rounded-xl border border-slate-200 bg-white p-4">
-              <h3 className="mb-3 text-sm font-semibold text-black">Compliance Progress (Done vs Remaining)</h3>
+              <h3 className="mb-3 text-sm font-semibold text-slate-900">Compliance Progress (Done vs Remaining)</h3>
               <div className="h-52">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
@@ -533,7 +533,7 @@ export default function AssessmentPage() {
             </div>
 
             <div className="rounded-xl border border-slate-200 bg-white p-4">
-              <h3 className="mb-3 text-sm font-semibold text-black">Evidence Upload Coverage</h3>
+              <h3 className="mb-3 text-sm font-semibold text-slate-900">Evidence Upload Coverage</h3>
               <div className="h-52">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
@@ -555,12 +555,12 @@ export default function AssessmentPage() {
                 </ResponsiveContainer>
               </div>
               <p className="mt-2 text-xs text-slate-600">
-                Total evidence uploaded: <span className="font-semibold text-black">{evidenceStats?.total_evidence_uploaded ?? 0}</span>
+                Total evidence uploaded: <span className="font-semibold text-slate-900">{evidenceStats?.total_evidence_uploaded ?? 0}</span>
               </p>
             </div>
 
             <div className="rounded-xl border border-slate-200 bg-white p-4">
-              <h3 className="mb-3 text-sm font-semibold text-black">Evidence Review Status</h3>
+              <h3 className="mb-3 text-sm font-semibold text-slate-900">Evidence Review Status</h3>
               <div className="h-52">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={evidenceReviewData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
@@ -568,7 +568,7 @@ export default function AssessmentPage() {
                     <XAxis dataKey="name" tick={{ fill: '#475569', fontSize: 12 }} />
                     <YAxis tick={{ fill: '#475569', fontSize: 12 }} allowDecimals={false} />
                     <Tooltip />
-                    <Bar dataKey="value" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="value" fill="#1ed4b0" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -587,7 +587,7 @@ export default function AssessmentPage() {
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Search controls..."
-                className="w-full rounded-lg border border-slate-300 bg-slate-200 py-2 pl-10 pr-4 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-4 text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               />
             </div>
             
@@ -596,7 +596,7 @@ export default function AssessmentPage() {
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               >
                 <option value="all">All Statuses</option>
                 {COMPLIANCE_STATUSES.map((status) => (
@@ -608,7 +608,7 @@ export default function AssessmentPage() {
             <select
               value={domainFilter}
               onChange={(e) => setDomainFilter(e.target.value)}
-              className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
             >
               <option value="all">All Domains</option>
               {domains.map((domain) => (
@@ -632,7 +632,7 @@ export default function AssessmentPage() {
                     <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-600">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-700">
+                <tbody className="divide-y divide-slate-200">
                   {detailLoading ? (
                     <tr>
                       <td colSpan={8} className="px-4 py-8 text-center">
@@ -653,7 +653,7 @@ export default function AssessmentPage() {
                         <tr key={item.id} className="hover:bg-slate-50">
                           <td className="px-4 py-3">
                             <div className="max-w-xs">
-                              <p className="truncate font-medium text-black">{item.control_id || `Control ${item.parsed_control_id}`}</p>
+                              <p className="truncate font-medium text-slate-900">{item.control_id || `Control ${item.parsed_control_id}`}</p>
                               <p className="truncate text-sm text-slate-600">{item.control_title || 'Untitled'}</p>
                             </div>
                           </td>
@@ -673,12 +673,12 @@ export default function AssessmentPage() {
                             <p className="max-w-xs truncate text-sm text-slate-600">{item.gap_description || '-'}</p>
                           </td>
                           <td className="px-4 py-3 text-center">
-                            <span className={`inline-flex items-center justify-center rounded-full px-2 py-0.5 text-xs font-medium ${item.evidence_count > 0 ? 'bg-green-50 text-green-700' : 'bg-slate-600/50 text-slate-600'}`}>
+                            <span className={`inline-flex items-center justify-center rounded-full px-2 py-0.5 text-xs font-medium ${item.evidence_count > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
                               {item.evidence_count}
                             </span>
                           </td>
                           <td className="px-4 py-3 text-center">
-                            <span className={`inline-flex items-center justify-center rounded-full px-2 py-0.5 text-xs font-medium ${item.remediation_count > 0 ? 'bg-yellow-50 text-yellow-700' : 'bg-slate-600/50 text-slate-600'}`}>
+                            <span className={`inline-flex items-center justify-center rounded-full px-2 py-0.5 text-xs font-medium ${item.remediation_count > 0 ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-500'}`}>
                               {item.remediation_count}
                             </span>
                           </td>
@@ -686,21 +686,21 @@ export default function AssessmentPage() {
                             <div className="flex items-center justify-end gap-1">
                               <button
                                 onClick={() => handleOpenStatusModal(item)}
-                                className="rounded p-1.5 text-slate-600 transition-colors hover:bg-slate-600 hover:text-slate-900"
+                                className="rounded p-1.5 text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
                                 title="Update Status"
                               >
                                 <CheckCircle className="h-4 w-4" />
                               </button>
                               <button
                                 onClick={() => handleOpenEvidenceModal(item)}
-                                className="rounded p-1.5 text-slate-600 transition-colors hover:bg-slate-600 hover:text-slate-900"
+                                className="rounded p-1.5 text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
                                 title="Upload Evidence"
                               >
                                 <Upload className="h-4 w-4" />
                               </button>
                               <button
                                 onClick={() => handleOpenRemediationModal(item)}
-                                className="rounded p-1.5 text-slate-600 transition-colors hover:bg-slate-600 hover:text-slate-900"
+                                className="rounded p-1.5 text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
                                 title="Add Remediation"
                               >
                                 <Wrench className="h-4 w-4" />
@@ -721,11 +721,11 @@ export default function AssessmentPage() {
       {!selectedAssessmentId && !assessmentsLoading && (
         <div className="flex flex-col items-center justify-center rounded-xl border border-slate-200 bg-white py-16">
           <FileText className="mb-4 h-16 w-16 text-slate-600" />
-          <h3 className="mb-2 text-lg font-medium text-black">No Assessment Selected</h3>
+          <h3 className="mb-2 text-lg font-medium text-slate-900">No Assessment Selected</h3>
           <p className="mb-4 text-slate-600">Select an existing assessment or create a new one to get started</p>
           {canCreate && <button
             onClick={() => setIsNewAssessmentModalOpen(true)}
-            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-white transition-colors hover:bg-primary-700"
+            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-[#0a0a0a] transition-colors hover:bg-primary-700"
           >
             <Plus className="h-4 w-4" />
             Create New Assessment
@@ -735,12 +735,12 @@ export default function AssessmentPage() {
 
       {isNewAssessmentModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="flex h-[70vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl">
-            <div className="flex items-center justify-between border-b border-gray-200 p-4">
-              <h2 className="text-lg font-semibold text-black">New Assessment</h2>
+          <div className="flex h-[70vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b border-slate-200 p-4">
+              <h2 className="text-lg font-semibold text-slate-900">New Assessment</h2>
               <button
                 onClick={() => setIsNewAssessmentModalOpen(false)}
-                className="rounded p-1 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700"
+                className="rounded p-1 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -749,12 +749,12 @@ export default function AssessmentPage() {
               <div className="grid gap-4 md:grid-cols-2">
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-slate-600">
-                  Framework <span className="text-red-600">*</span>
+                  Framework <span className="text-rose-600">*</span>
                 </label>
                 <select
                   value={newAssessmentForm.uploaded_framework_id || ''}
                   onChange={(e) => setNewAssessmentForm({ ...newAssessmentForm, uploaded_framework_id: Number(e.target.value) })}
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 >
                   <option value="">Select a framework...</option>
                   {uniqueFrameworks.filter((f: UploadedFramework) => f.upload_status === 'parsed' && f.parsed_controls_count > 0).map((f: UploadedFramework) => (
@@ -766,14 +766,14 @@ export default function AssessmentPage() {
               </div>
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-slate-600">
-                  Assessment Name <span className="text-red-600">*</span>
+                  Assessment Name <span className="text-rose-600">*</span>
                 </label>
                 <input
                   type="text"
                   value={newAssessmentForm.name}
                   onChange={(e) => setNewAssessmentForm({ ...newAssessmentForm, name: e.target.value })}
                   placeholder="e.g., Q1 2026 SOC 2 Assessment"
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-black placeholder-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 />
               </div>
               <div className="md:col-span-2">
@@ -783,7 +783,7 @@ export default function AssessmentPage() {
                   onChange={(e) => setNewAssessmentForm({ ...newAssessmentForm, description: e.target.value })}
                   placeholder="Brief description of the assessment scope and objectives"
                   rows={3}
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-black placeholder-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 />
               </div>
               <div>
@@ -792,22 +792,22 @@ export default function AssessmentPage() {
                   type="date"
                   value={newAssessmentForm.target_completion_date}
                   onChange={(e) => setNewAssessmentForm({ ...newAssessmentForm, target_completion_date: e.target.value })}
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 />
               </div>
               </div>
             </div>
-            <div className="flex justify-end gap-3 border-t border-gray-200 p-4">
+            <div className="flex justify-end gap-3 border-t border-slate-200 p-4">
               <button
                 onClick={() => setIsNewAssessmentModalOpen(false)}
-                className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 transition-colors hover:bg-gray-50"
+                className="rounded-lg border border-slate-300 px-4 py-2 text-slate-700 transition-colors hover:bg-slate-50"
               >
                 Cancel
               </button>
               <button
                 onClick={handleCreateAssessment}
                 disabled={!newAssessmentForm.uploaded_framework_id || !newAssessmentForm.name.trim() || createAssessmentMutation.isPending}
-                className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-white transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-[#0a0a0a] transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {createAssessmentMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
                 Create Assessment
@@ -822,7 +822,7 @@ export default function AssessmentPage() {
           <div className="w-full max-w-lg rounded-xl border border-slate-200 bg-white shadow-xl">
             <div className="flex items-center justify-between border-b border-slate-200 p-4">
               <div>
-                <h2 className="text-lg font-semibold text-black">Update Compliance Status</h2>
+                <h2 className="text-lg font-semibold text-slate-900">Update Compliance Status</h2>
                 <p className="text-sm text-slate-600">{selectedItem.control_id || `Control ${selectedItem.parsed_control_id}`}</p>
               </div>
               <button
@@ -838,7 +838,7 @@ export default function AssessmentPage() {
                 <select
                   value={statusUpdateForm.compliance_status}
                   onChange={(e) => setStatusUpdateForm({ ...statusUpdateForm, compliance_status: e.target.value })}
-                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 >
                   {COMPLIANCE_STATUSES.map((status) => (
                     <option key={status.value} value={status.value}>{status.label}</option>
@@ -852,7 +852,7 @@ export default function AssessmentPage() {
                   onChange={(e) => setStatusUpdateForm({ ...statusUpdateForm, assessment_notes: e.target.value })}
                   placeholder="Notes about the assessment findings..."
                   rows={3}
-                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 />
               </div>
               <div>
@@ -862,7 +862,7 @@ export default function AssessmentPage() {
                   onChange={(e) => setStatusUpdateForm({ ...statusUpdateForm, gap_description: e.target.value })}
                   placeholder="Describe any gaps or deficiencies identified..."
                   rows={3}
-                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 />
               </div>
             </div>
@@ -876,7 +876,7 @@ export default function AssessmentPage() {
               <button
                 onClick={handleStatusUpdate}
                 disabled={updateItemMutation.isPending}
-                className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-white transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-[#0a0a0a] transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {updateItemMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
                 Update Status
@@ -891,7 +891,7 @@ export default function AssessmentPage() {
           <div className="w-full max-w-lg rounded-xl border border-slate-200 bg-white shadow-xl">
             <div className="flex items-center justify-between border-b border-slate-200 p-4">
               <div>
-                <h2 className="text-lg font-semibold text-black">Upload Evidence</h2>
+                <h2 className="text-lg font-semibold text-slate-900">Upload Evidence</h2>
                 <p className="text-sm text-slate-600">{selectedItem.control_id || `Control ${selectedItem.parsed_control_id}`}</p>
               </div>
               <button
@@ -908,7 +908,7 @@ export default function AssessmentPage() {
                 onClick={() => fileInputRef.current?.click()}
                 className={`flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed p-6 transition-colors ${
                   evidenceForm.file
-                    ? 'border-green-500 bg-green-50'
+                    ? 'border-emerald-500 bg-emerald-50'
                     : 'border-slate-300 hover:border-slate-400 hover:bg-slate-50'
                 }`}
               >
@@ -920,11 +920,11 @@ export default function AssessmentPage() {
                 />
                 {evidenceForm.file ? (
                   <>
-                    <FileText className="mb-2 h-10 w-10 text-green-600" />
-                    <p className="text-center text-black">{evidenceForm.file.name}</p>
+                    <FileText className="mb-2 h-10 w-10 text-emerald-600" />
+                    <p className="text-center text-slate-900">{evidenceForm.file.name}</p>
                     <button
                       onClick={(e) => { e.stopPropagation(); setEvidenceForm(prev => ({ ...prev, file: null })); }}
-                      className="mt-2 text-sm text-red-600 hover:text-red-300"
+                      className="mt-2 text-sm text-rose-600 hover:text-rose-700"
                     >
                       Remove
                     </button>
@@ -932,7 +932,7 @@ export default function AssessmentPage() {
                 ) : (
                   <>
                     <Upload className="mb-2 h-10 w-10 text-slate-600" />
-                    <p className="text-center text-black">Drag and drop a file here, or click to browse</p>
+                    <p className="text-center text-slate-900">Drag and drop a file here, or click to browse</p>
                     <p className="mt-1 text-sm text-slate-600">PDF, DOCX, images, or other documents</p>
                   </>
                 )}
@@ -942,7 +942,7 @@ export default function AssessmentPage() {
                 <select
                   value={evidenceForm.evidence_type}
                   onChange={(e) => setEvidenceForm({ ...evidenceForm, evidence_type: e.target.value })}
-                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 >
                   {EVIDENCE_TYPES.map((type) => (
                     <option key={type.value} value={type.value}>{type.label}</option>
@@ -956,7 +956,7 @@ export default function AssessmentPage() {
                   onChange={(e) => setEvidenceForm({ ...evidenceForm, description: e.target.value })}
                   placeholder="Brief description of the evidence..."
                   rows={3}
-                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 />
               </div>
             </div>
@@ -970,7 +970,7 @@ export default function AssessmentPage() {
               <button
                 onClick={handleEvidenceUpload}
                 disabled={!evidenceForm.file || uploadEvidenceMutation.isPending}
-                className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-white transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-[#0a0a0a] transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {uploadEvidenceMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
                 Upload Evidence
@@ -985,7 +985,7 @@ export default function AssessmentPage() {
           <div className="w-full max-w-lg rounded-xl border border-slate-200 bg-white shadow-xl">
             <div className="flex items-center justify-between border-b border-slate-200 p-4">
               <div>
-                <h2 className="text-lg font-semibold text-black">Add Remediation</h2>
+                <h2 className="text-lg font-semibold text-slate-900">Add Remediation</h2>
                 <p className="text-sm text-slate-600">{selectedItem.control_id || `Control ${selectedItem.parsed_control_id}`}</p>
               </div>
               <button
@@ -998,14 +998,14 @@ export default function AssessmentPage() {
             <div className="space-y-4 p-4">
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-slate-600">
-                  Title <span className="text-red-600">*</span>
+                  Title <span className="text-rose-600">*</span>
                 </label>
                 <input
                   type="text"
                   value={remediationForm.title}
                   onChange={(e) => setRemediationForm({ ...remediationForm, title: e.target.value })}
                   placeholder="e.g., Implement access control policy"
-                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 />
               </div>
               <div>
@@ -1015,7 +1015,7 @@ export default function AssessmentPage() {
                   onChange={(e) => setRemediationForm({ ...remediationForm, description: e.target.value })}
                   placeholder="Detailed description of the remediation action..."
                   rows={3}
-                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 />
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
@@ -1024,7 +1024,7 @@ export default function AssessmentPage() {
                   <select
                     value={remediationForm.priority}
                     onChange={(e) => setRemediationForm({ ...remediationForm, priority: e.target.value })}
-                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                   >
                     {PRIORITY_OPTIONS.map((priority) => (
                       <option key={priority.value} value={priority.value}>{priority.label}</option>
@@ -1037,7 +1037,7 @@ export default function AssessmentPage() {
                     type="date"
                     value={remediationForm.due_date}
                     onChange={(e) => setRemediationForm({ ...remediationForm, due_date: e.target.value })}
-                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                   />
                 </div>
               </div>
@@ -1048,7 +1048,7 @@ export default function AssessmentPage() {
                   value={remediationForm.estimated_effort}
                   onChange={(e) => setRemediationForm({ ...remediationForm, estimated_effort: e.target.value })}
                   placeholder="e.g., 2 weeks, 40 hours"
-                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 />
               </div>
             </div>
@@ -1062,7 +1062,7 @@ export default function AssessmentPage() {
               <button
                 onClick={handleRemediationCreate}
                 disabled={!remediationForm.title.trim() || createRemediationMutation.isPending}
-                className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-white transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-[#0a0a0a] transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {createRemediationMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
                 Create Remediation

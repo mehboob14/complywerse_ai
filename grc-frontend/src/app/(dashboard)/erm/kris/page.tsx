@@ -28,10 +28,10 @@ import {
 import { MultiSelectDropdown, RightSlidePanel, PageLoader } from '@/components/ui';
 
 const KRI_STATUS_COLORS = {
-  green: 'bg-green-500',
+  green: 'bg-emerald-500',
   amber: 'bg-amber-500',
-  red: 'bg-red-500',
-  unknown: 'bg-slate-500',
+  red: 'bg-rose-500',
+  unknown: 'bg-slate-400',
 };
 
 export default function KRIsPage() {
@@ -141,12 +141,12 @@ export default function KRIsPage() {
           {alertCount > 0 && (
             <div className="flex items-center gap-2">
               {redAlerts > 0 && (
-                <span className="rounded-full bg-red-500/20 px-3 py-1 text-sm text-red-400">
+                <span className="rounded-full bg-rose-50 px-3 py-1 text-sm text-rose-700">
                   {redAlerts} Critical
                 </span>
               )}
               {amberAlerts > 0 && (
-                <span className="rounded-full bg-amber-500/20 px-3 py-1 text-sm text-amber-400">
+                <span className="rounded-full bg-amber-50 px-3 py-1 text-sm text-amber-700">
                   {amberAlerts} Warning
                 </span>
               )}
@@ -166,7 +166,7 @@ export default function KRIsPage() {
           {canCreate && (
             <button
               onClick={() => setShowCreateModal(true)}
-              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-500"
+              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-[#0a0a0a] hover:bg-primary-700"
             >
               <Plus className="h-4 w-4" />
               Add KRI
@@ -248,8 +248,8 @@ export default function KRIsPage() {
 
             {uploadResult ? (
               <div className="space-y-4">
-                <div className={`rounded-lg p-4 ${uploadResult.created > 0 ? 'bg-green-500/10 border border-green-500/30' : 'bg-red-500/10 border border-red-500/30'}`}>
-                  <p className={`text-sm font-medium ${uploadResult.created > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                <div className={`rounded-lg p-4 ${uploadResult.created > 0 ? 'bg-emerald-50 border border-emerald-200' : 'bg-rose-50 border border-rose-200'}`}>
+                  <p className={`text-sm font-medium ${uploadResult.created > 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
                     {uploadResult.message}
                   </p>
                   {uploadResult.created > 0 && (
@@ -260,7 +260,7 @@ export default function KRIsPage() {
                   {uploadResult.errors.length > 0 && (
                     <div className="mt-2 max-h-32 overflow-y-auto">
                       {uploadResult.errors.map((err, i) => (
-                        <p key={i} className="text-xs text-red-400">{err}</p>
+                        <p key={i} className="text-xs text-rose-600">{err}</p>
                       ))}
                     </div>
                   )}
@@ -279,7 +279,7 @@ export default function KRIsPage() {
                 <p className="text-sm text-slate-600">
                   Upload an Excel file with KRI data. Expected columns: KRI Name, Description, Frequency, Green/Amber/Red Thresholds, Current Value, etc.
                 </p>
-                <div className="rounded-lg border-2 border-dashed border-gray-300 p-6 text-center">
+                <div className="rounded-lg border-2 border-dashed border-slate-300 p-6 text-center">
                   <input
                     type="file"
                     accept=".xlsx,.xls"
@@ -298,7 +298,7 @@ export default function KRIsPage() {
                   <button
                     type="button"
                     onClick={() => setShowUploadModal(false)}
-                    className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                    className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
                   >
                     Cancel
                   </button>
@@ -373,7 +373,7 @@ function KRICard({
           {canDelete && (
             <button
               onClick={onDelete}
-              className="rounded p-1.5 text-slate-600 hover:bg-red-500/20 hover:text-red-400"
+              className="rounded p-1.5 text-slate-600 hover:bg-rose-50 hover:text-rose-600"
             >
               <Trash2 className="h-4 w-4" />
             </button>
@@ -396,7 +396,7 @@ function KRICard({
             )}
           </div>
           {trend !== 0 && (
-            <div className={`flex items-center gap-1 ${trend > 0 ? 'text-green-400' : 'text-red-400'}`}>
+            <div className={`flex items-center gap-1 ${trend > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
               {trend > 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
               <span className="text-sm">{Math.abs(trend).toFixed(1)}</span>
             </div>
@@ -405,7 +405,7 @@ function KRICard({
 
         <div className="mt-4 flex gap-2">
           <div className="flex items-center gap-1.5">
-            <div className="h-2 w-2 rounded-full bg-green-500" />
+            <div className="h-2 w-2 rounded-full bg-emerald-500" />
             <span className="text-xs text-slate-600">≤{kri.green_threshold}</span>
           </div>
           <div className="flex items-center gap-1.5">
@@ -413,7 +413,7 @@ function KRICard({
             <span className="text-xs text-slate-600">≤{kri.amber_threshold}</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="h-2 w-2 rounded-full bg-red-500" />
+            <div className="h-2 w-2 rounded-full bg-rose-500" />
             <span className="text-xs text-slate-600">&gt;{kri.amber_threshold}</span>
           </div>
         </div>
@@ -523,14 +523,14 @@ function KRIModal({
     >
       <div className="px-6 py-4">
         <form id="kri-form" onSubmit={handleSubmit} className="space-y-4">
-          <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
             <div className="flex items-center justify-between gap-3">
               <p className="text-xs text-slate-600">Use AI to prefill KRI details for manual entry</p>
               <button
                 type="button"
                 onClick={() => aiSuggestMutation.mutate()}
                 disabled={!formData.name || aiSuggestMutation.isPending}
-                className="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs text-slate-800 hover:bg-gray-50 disabled:opacity-50"
+                className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 disabled:opacity-50"
               >
                 {aiSuggestMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
                 AI Suggest
@@ -540,7 +540,7 @@ function KRIModal({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-800 mb-1">Risk *</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Risk *</label>
             <MultiSelectDropdown
               title="Risk"
               items={risks.map((risk) => ({
@@ -561,29 +561,29 @@ function KRIModal({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-800 mb-1">Name *</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Name *</label>
             <input
               type="text"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               required
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-800 mb-1">Description</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
             <textarea
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               rows={2}
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-800 mb-1">Metric Type</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Metric Type</label>
               <MultiSelectDropdown
                 title="Metric Type"
                 items={[
@@ -603,40 +603,40 @@ function KRIModal({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-800 mb-1">Unit</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Unit</label>
               <input
                 type="text"
                 value={formData.unit}
                 onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-800 mb-1">Green Threshold</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Green Threshold</label>
               <input
                 type="number"
                 value={formData.green_threshold}
                 onChange={(e) => setFormData({ ...formData, green_threshold: Number(e.target.value) })}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-800 mb-1">Amber Threshold</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Amber Threshold</label>
               <input
                 type="number"
                 value={formData.amber_threshold}
                 onChange={(e) => setFormData({ ...formData, amber_threshold: Number(e.target.value) })}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-800 mb-1">Direction</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Direction</label>
               <MultiSelectDropdown
                 title="Direction"
                 items={[
@@ -653,7 +653,7 @@ function KRIModal({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-800 mb-1">Frequency</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Frequency</label>
               <MultiSelectDropdown
                 title="Frequency"
                 items={[
@@ -678,7 +678,7 @@ function KRIModal({
             <button
               type="button"
               onClick={onClose}
-              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
             >
               Cancel
             </button>
@@ -737,14 +737,14 @@ function MeasureKRIModal({
       <div className="px-6 py-4">
         <form id="measure-kri-form" onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-800 mb-1">Value *</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Value *</label>
             <div className="flex items-center gap-2">
               <input
                 type="number"
                 step="0.01"
                 value={value}
                 onChange={(e) => setValue(Number(e.target.value))}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 required
               />
               {kri.unit && <span className="text-slate-600">{kri.unit}</span>}
@@ -752,11 +752,11 @@ function MeasureKRIModal({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-800 mb-1">Notes (optional)</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Notes (optional)</label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               rows={2}
             />
           </div>
@@ -765,7 +765,7 @@ function MeasureKRIModal({
             <button
               type="button"
               onClick={onClose}
-              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
             >
               Cancel
             </button>

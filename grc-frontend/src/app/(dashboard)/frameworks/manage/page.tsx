@@ -191,13 +191,13 @@ export default function FrameworksManagePage() {
       case 'draft':
         return { label: 'Uploaded', color: 'bg-slate-50 text-slate-700', icon: FileText, description: 'File uploaded, waiting for text extraction' };
       case 'text_extracted':
-        return { label: 'Text Extracted', color: 'bg-blue-50 text-blue-700', icon: FileText, description: 'Text extracted, waiting for AI parsing' };
+        return { label: 'Text Extracted', color: 'bg-slate-100 text-slate-700', icon: FileText, description: 'Text extracted, waiting for AI parsing' };
       case 'parsing':
-        return { label: 'Parsing Controls', color: 'bg-purple-50 text-purple-700', icon: Sparkles, description: 'AI is extracting controls and requirements' };
+        return { label: 'Parsing Controls', color: 'bg-primary-50 text-primary-700', icon: Sparkles, description: 'AI is extracting controls and requirements' };
       case 'completed':
         return { label: 'Ready', color: 'bg-emerald-50 text-emerald-700', icon: CheckCircle, description: 'Framework ready to use' };
       case 'parsed':
-        return { label: 'Parsed', color: 'bg-blue-50 text-blue-700', icon: CheckCircle, description: 'Framework parsed, ready to publish or start certification' };
+        return { label: 'Parsed', color: 'bg-primary-50 text-primary-700', icon: CheckCircle, description: 'Framework parsed, ready to publish or start certification' };
       case 'published':
         return { label: 'Published', color: 'bg-emerald-50 text-emerald-700', icon: CheckCircle, description: 'Framework published and active' };
       case 'error':
@@ -205,7 +205,7 @@ export default function FrameworksManagePage() {
       case 'classifying':
         return { label: 'Classifying Framework', color: 'bg-amber-50 text-amber-700', icon: Sparkles, description: 'AI is analyzing framework type' };
       case 'classified':
-        return { label: 'Classified', color: 'bg-cyan-50 text-cyan-700', icon: Tag, description: 'Framework classified, ready to view overview' };
+        return { label: 'Classified', color: 'bg-primary-50 text-primary-700', icon: Tag, description: 'Framework classified, ready to view overview' };
       default:
         return { label: status, color: 'bg-slate-50 text-slate-700', icon: FileStack, description: 'Processing' };
     }
@@ -251,7 +251,7 @@ export default function FrameworksManagePage() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'completed': return 'bg-emerald-50 text-emerald-700';
-      case 'in_progress': return 'bg-blue-50 text-blue-700';
+      case 'in_progress': return 'bg-primary-50 text-primary-700';
       case 'on_hold': return 'bg-amber-50 text-amber-700';
       default: return 'bg-slate-50 text-slate-700';
     }
@@ -303,7 +303,7 @@ export default function FrameworksManagePage() {
       {filteredProcessingFrameworks.length > 0 && (
         <section>
           <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-slate-900">
-            <RefreshCw className={`h-5 w-5 text-purple-600 ${isFetching ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`h-5 w-5 text-primary-600 ${isFetching ? 'animate-spin' : ''}`} strokeWidth={1.75} />
             Processing Frameworks
             <span className="ml-2 text-sm font-normal text-slate-500">Auto-refreshing every 3s</span>
           </h2>
@@ -326,10 +326,10 @@ export default function FrameworksManagePage() {
               const statusInfo = getUploadStatusInfo(framework.upload_status);
               const StatusIcon = statusInfo.icon;
               return (
-                <div key={framework.id} className="rounded-xl border-2 border-purple-200 bg-white p-6 shadow-sm">
+                <div key={framework.id} className="rounded-xl border border-primary-200 bg-white p-6 shadow-sm">
                   <div className="flex items-start gap-3">
-                    <div className="rounded-lg bg-purple-50 p-2">
-                      <Sparkles className="h-6 w-6 text-purple-600 animate-pulse" />
+                    <div className="rounded-lg bg-primary-50 p-2">
+                      <Sparkles className="h-6 w-6 text-primary-600 animate-pulse" strokeWidth={1.75} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <h3 className="font-semibold text-slate-900 truncate">{stripCertificationPostfix(framework.name)}</h3>
@@ -356,7 +356,7 @@ export default function FrameworksManagePage() {
                           <span>AI parsing in progress…</span>
                         </div>
                         <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
-                          <div className="h-full w-full rounded-full bg-gradient-to-r from-purple-500 to-blue-500 animate-pulse" />
+                          <div className="h-full w-full rounded-full bg-primary-500 animate-pulse" />
                         </div>
                       </div>
                     )}
@@ -394,7 +394,7 @@ export default function FrameworksManagePage() {
       {filteredActiveCertifications.length > 0 && (
         <section>
           <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-slate-900">
-            <Target className="h-5 w-5 text-blue-600" />
+            <Target className="h-5 w-5 text-primary-600" strokeWidth={1.75} />
             Active Certification Journeys
           </h2>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -406,13 +406,13 @@ export default function FrameworksManagePage() {
               return (
                 <div
                   key={cert.id}
-                  className="cw-card p-6 shadow-sm group cursor-pointer transition-all hover:border-blue-300 hover:shadow-lg"
+                  className="cw-card p-6 shadow-sm group cursor-pointer transition-all hover:border-primary-300 hover:shadow-lg"
                   onClick={() => router.push(`/frameworks/${cert.id}`)}
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="rounded-lg bg-blue-50 p-2">
-                        <Shield className="h-5 w-5 text-blue-600" />
+                      <div className="rounded-lg bg-primary-50 p-2">
+                        <Shield className="h-5 w-5 text-primary-600" strokeWidth={1.75} />
                       </div>
                       <div>
                         <h3 className="font-semibold text-slate-900">{stripCertificationPostfix(cert.name)}</h3>
@@ -477,7 +477,7 @@ export default function FrameworksManagePage() {
                         {inProgress} in progress
                       </span>
                     </div>
-                    <ArrowRight className="h-4 w-4 text-blue-600" />
+                    <ArrowRight className="h-4 w-4 text-primary-600" strokeWidth={1.75} />
                   </div>
 
                   {cert.target_date && (
@@ -502,8 +502,8 @@ export default function FrameworksManagePage() {
           {filteredAvailableFrameworks?.map((framework: UploadedFramework) => (
             <div key={framework.id} className="cw-card p-6 shadow-sm group transition-all hover:border-slate-300 hover:shadow-md">
               <div className="flex items-start gap-3">
-                <div className="rounded-lg bg-blue-50 p-2 transition-colors group-hover:bg-blue-100">
-                  <FileStack className="h-6 w-6 text-blue-600" />
+                <div className="rounded-lg bg-primary-50 p-2 transition-colors group-hover:bg-primary-100">
+                  <FileStack className="h-6 w-6 text-primary-600" strokeWidth={1.75} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <h3 className="font-semibold text-slate-900 truncate">{stripCertificationPostfix(framework.name)}</h3>
@@ -532,7 +532,7 @@ export default function FrameworksManagePage() {
                   <span className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium whitespace-nowrap ${
                     framework.classification === 'certification'
                       ? 'bg-emerald-50 text-emerald-700'
-                      : 'bg-blue-50 text-blue-700'
+                      : 'bg-primary-50 text-primary-700'
                   }`}>
                     {framework.classification === 'certification' ? '🏆 Certification' : '📋 Compliance'}
                     <span className="text-slate-500 ml-1">(0%)</span>
@@ -544,9 +544,9 @@ export default function FrameworksManagePage() {
                 {(framework.classification === 'certification' || framework.classification === 'compliance') && (
                   <Link
                     href={`/frameworks/overview/${framework.id}`}
-                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-cyan-50 px-3 py-2 text-cyan-700 hover:bg-cyan-100 transition-colors"
+                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary-50 px-3 py-2 text-primary-700 hover:bg-primary-100 transition-colors"
                   >
-                    <Eye className="h-4 w-4" />
+                    <Eye className="h-4 w-4" strokeWidth={1.75} />
                     View Overview
                   </Link>
                 )}

@@ -39,8 +39,8 @@ function residualTone(level?: string | null) {
 function statusTone(s?: string | null) {
   const v = (s || '').toLowerCase();
   if (v === 'closed') return { bg: 'bg-emerald-100', text: 'text-emerald-800' };
-  if (v === 'in progress') return { bg: 'bg-blue-100', text: 'text-blue-800' };
-  if (v === 'accepted') return { bg: 'bg-violet-100', text: 'text-violet-800' };
+  if (v === 'in progress') return { bg: 'bg-primary-100', text: 'text-primary-800' };
+  if (v === 'accepted') return { bg: 'bg-slate-100', text: 'text-slate-800' };
   return { bg: 'bg-amber-100', text: 'text-amber-800' };
 }
 
@@ -247,7 +247,7 @@ export default function AIRiskAssessmentPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-200 pb-3">
         <div>
           <h1 className="text-xl font-semibold text-slate-900 flex items-center gap-2">
-            <Bot className="h-5 w-5 text-blue-600" />
+            <Bot className="h-5 w-5 text-primary-600" strokeWidth={1.75} />
             AI Risk Assessment
           </h1>
           <p className="text-sm text-slate-600 mt-1">
@@ -283,23 +283,23 @@ export default function AIRiskAssessmentPage() {
           />
           <button
             onClick={openNew}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md bg-blue-600 hover:bg-blue-700 text-white"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md bg-primary-600 hover:bg-primary-700 text-[#0a0a0a]"
           >
-            <Plus className="h-4 w-4" />
+            <Plus className="h-4 w-4" strokeWidth={1.75} />
             New Entry
           </button>
         </div>
       </div>
 
       {uploadResult && (
-        <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800 flex items-start gap-2">
+        <div className="rounded-md border border-primary-200 bg-primary-50 p-3 text-sm text-primary-800 flex items-start gap-2">
           <FileSpreadsheet className="h-4 w-4 mt-0.5 shrink-0" />
           <div className="flex-1">
             <strong>Imported {uploadResult.imported} entries</strong>
             {uploadResult.errors > 0 && <span> ({uploadResult.errors} errors)</span>}
-            <span className="text-blue-600 ml-1">from {uploadResult.file}.</span>
+            <span className="text-primary-600 ml-1">from {uploadResult.file}.</span>
           </div>
-          <button onClick={() => setUploadResult(null)} className="text-blue-700 hover:text-blue-900">
+          <button onClick={() => setUploadResult(null)} className="text-primary-700 hover:text-primary-900">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -320,13 +320,13 @@ export default function AIRiskAssessmentPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search AI system, description, owner, ID..."
-              className="w-full pl-9 pr-3 py-2 text-sm rounded-md border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full pl-9 pr-3 py-2 text-sm rounded-md border border-slate-300 focus:outline-none focus:ring-2 focus:ring-primary-500"
             />
           </div>
           <select
             value={filterCategory}
             onChange={(e) => setFilterCategory(e.target.value)}
-            className="px-3 py-2 text-sm rounded-md border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="px-3 py-2 text-sm rounded-md border border-slate-300 focus:outline-none focus:ring-2 focus:ring-primary-500"
           >
             <option value="">All categories</option>
             {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
@@ -334,7 +334,7 @@ export default function AIRiskAssessmentPage() {
           <select
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
-            className="px-3 py-2 text-sm rounded-md border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="px-3 py-2 text-sm rounded-md border border-slate-300 focus:outline-none focus:ring-2 focus:ring-primary-500"
           >
             <option value="">All status</option>
             {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
@@ -388,7 +388,7 @@ export default function AIRiskAssessmentPage() {
                   <Td>
                     <div className="font-medium text-slate-900 break-words">{entry.ai_system_use_case || '-'}</div>
                     {aiUnused && (
-                      <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-medium text-violet-700">
+                      <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-primary-50 px-2 py-0.5 text-[10px] font-medium text-primary-700">
                         <Sparkles className="h-3 w-3" /> AI suggestion ready
                       </span>
                     )}
@@ -415,8 +415,8 @@ export default function AIRiskAssessmentPage() {
                     </span>
                     {entry.bridged_risk_id && (
                       <Link
-                        href={`/risks/${entry.bridged_risk_id}`}
-                        className="mt-1 inline-flex items-center gap-1 text-[10px] text-blue-700 hover:underline"
+                        href={`/erm/risks/${entry.bridged_risk_id}`}
+                        className="mt-1 inline-flex items-center gap-1 text-[10px] text-primary-700 hover:underline"
                       >
                         <Link2 className="h-3 w-3" /> Risk #{entry.bridged_risk_id}
                       </Link>
@@ -431,7 +431,7 @@ export default function AIRiskAssessmentPage() {
                           setGeneratingFor(entry.id);
                           suggestMutation.mutate(entry.id);
                         }}
-                        className="p-1.5 rounded-md text-violet-600 hover:bg-violet-50 disabled:opacity-50"
+                        className="p-1.5 rounded-md text-primary-600 hover:bg-primary-50 disabled:opacity-50"
                       >
                         {generatingFor === entry.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                       </button>
@@ -447,7 +447,7 @@ export default function AIRiskAssessmentPage() {
                       <button
                         title="Edit"
                         onClick={() => openEdit(entry)}
-                        className="p-1.5 rounded-md text-slate-600 hover:bg-slate-100 hover:text-blue-600"
+                        className="p-1.5 rounded-md text-slate-600 hover:bg-slate-100 hover:text-primary-600"
                       >
                         <Edit2 className="h-4 w-4" />
                       </button>
@@ -679,7 +679,7 @@ export default function AIRiskAssessmentPage() {
                 <button
                   disabled={!form.risk_description?.trim() || createMutation.isPending || updateMutation.isPending}
                   onClick={submitForm}
-                  className="px-3 py-1.5 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-1"
+                  className="px-3 py-1.5 text-sm rounded-md bg-primary-600 text-[#0a0a0a] hover:bg-primary-700 disabled:opacity-50 inline-flex items-center gap-1"
                 >
                   {(createMutation.isPending || updateMutation.isPending) && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                   {editingId ? 'Save Changes' : 'Create Entry'}
@@ -730,8 +730,8 @@ export default function AIRiskAssessmentPage() {
         }
         :global(.form-input:focus) {
           outline: none;
-          border-color: #3b82f6;
-          box-shadow: 0 0 0 2px rgba(59,130,246,0.2);
+          border-color: #1ed4b0;
+          box-shadow: 0 0 0 2px rgba(30,212,176,0.2);
         }
       `}</style>
     </div>
@@ -766,7 +766,7 @@ function KpiCard({ label, value, tone }: { label: string; value: number; tone: '
     slate: 'text-slate-900',
     amber: 'text-amber-600',
     rose: 'text-rose-600',
-    violet: 'text-violet-700',
+    violet: 'text-primary-700',
   }[tone];
   return (
     <div className="bg-white border border-slate-200 rounded-lg px-3 py-3">
@@ -788,9 +788,9 @@ function AISection({
   if (!entry) return null;
   const hasAI = !!entry.ai_generated_at;
   return (
-    <div className="border border-violet-200 bg-violet-50/40 rounded-lg p-3">
+    <div className="border border-slate-200 bg-slate-50 rounded-lg p-3">
       <div className="flex items-center justify-between mb-2">
-        <h4 className="text-sm font-semibold text-violet-900 flex items-center gap-1.5">
+        <h4 className="text-sm font-semibold text-slate-900 flex items-center gap-1.5">
           <Sparkles className="h-4 w-4" />
           AI Suggestions
         </h4>
@@ -798,7 +798,7 @@ function AISection({
           <button
             onClick={onSuggest}
             disabled={generating}
-            className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50"
+            className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md bg-primary-600 text-[#0a0a0a] hover:bg-primary-700 disabled:opacity-50"
           >
             {generating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
             {hasAI ? 'Regenerate' : 'Generate'}
@@ -816,7 +816,7 @@ function AISection({
         </div>
       </div>
       {!hasAI ? (
-        <p className="text-xs text-violet-700">
+        <p className="text-xs text-slate-600">
           Click <span className="font-medium">Generate</span> to ask the platform AI for a mitigation plan,
           suggested controls, and likelihood / impact scoring based on the risk description and category.
         </p>
@@ -835,12 +835,12 @@ function AISection({
             <SuggestionRow label="Residual" value={entry.ai_suggested_residual_level} />
           </div>
           {entry.ai_rationale && (
-            <div className="rounded-md bg-white border border-violet-200 p-2 text-violet-800">
-              <div className="text-[10px] font-semibold uppercase tracking-wide text-violet-600">Rationale</div>
+            <div className="rounded-md bg-white border border-slate-200 p-2 text-slate-700">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Rationale</div>
               <div className="mt-0.5 text-xs">{entry.ai_rationale}</div>
             </div>
           )}
-          <div className="text-[10px] text-violet-600">
+          <div className="text-[10px] text-slate-500">
             Generated {entry.ai_generated_at ? new Date(entry.ai_generated_at).toLocaleString() : ''}
             {entry.ai_model && <span className="ml-1">· model {entry.ai_model}</span>}
           </div>
@@ -852,9 +852,9 @@ function AISection({
 
 function SuggestionRow({ label, value }: { label: string; value?: string | null }) {
   return (
-    <div className="rounded-md bg-white border border-violet-200 p-2">
-      <div className="text-[10px] font-semibold uppercase tracking-wide text-violet-600">{label}</div>
-      <div className="mt-0.5 text-xs text-violet-900">{value || '-'}</div>
+    <div className="rounded-md bg-white border border-slate-200 p-2">
+      <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{label}</div>
+      <div className="mt-0.5 text-xs text-slate-900">{value || '-'}</div>
     </div>
   );
 }
@@ -876,17 +876,17 @@ function EvidenceSection({
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   return (
-    <div className="rounded-lg border border-blue-200 bg-blue-50/40 p-3 space-y-3">
+    <div className="rounded-lg border border-primary-200 bg-primary-50/40 p-3 space-y-3">
       <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 text-sm font-semibold text-blue-900">
-          <Paperclip className="h-4 w-4 text-blue-700" />
+        <div className="flex items-center gap-2 text-sm font-semibold text-primary-900">
+          <Paperclip className="h-4 w-4 text-primary-700" strokeWidth={1.75} />
           Supporting Evidence ({items.length})
         </div>
         <button
           type="button"
           onClick={() => inputRef.current?.click()}
           disabled={uploading}
-          className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md bg-primary-600 hover:bg-primary-700 text-[#0a0a0a] disabled:opacity-50"
         >
           {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
           {uploading ? 'Uploading…' : 'Upload File'}
@@ -910,8 +910,8 @@ function EvidenceSection({
       ) : (
         <ul className="space-y-1.5">
           {items.map((it) => (
-            <li key={it.link_id ?? it.evidence_id} className="flex items-center gap-2 rounded-md border border-blue-100 bg-white px-2.5 py-1.5 text-xs">
-              <FileText className="h-3.5 w-3.5 shrink-0 text-blue-600" />
+            <li key={it.link_id ?? it.evidence_id} className="flex items-center gap-2 rounded-md border border-primary-100 bg-white px-2.5 py-1.5 text-xs">
+              <FileText className="h-3.5 w-3.5 shrink-0 text-primary-600" />
               <div className="min-w-0 flex-1">
                 <div className="truncate font-medium text-slate-900">
                   {it.file_name || it.name || `Evidence #${it.evidence_id}`}
@@ -929,7 +929,7 @@ function EvidenceSection({
                     target="_blank"
                     rel="noreferrer"
                     title="Download"
-                    className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-blue-600"
+                    className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-primary-600"
                   >
                     <Download className="h-3.5 w-3.5" />
                   </a>

@@ -19,28 +19,28 @@ type AssessmentType = 'periodic' | 'annual' | 'ad_hoc' | 'triggered';
 type Methodology = 'qualitative' | 'quantitative' | 'semi_quantitative';
 
 const STATUS_CONFIG: Record<AssessmentStatus, { label: string; color: string; bgColor: string }> = {
-  draft: { label: 'Draft', color: 'text-slate-700', bgColor: 'bg-slate-500/20' },
-  in_progress: { label: 'In Progress', color: 'text-blue-400', bgColor: 'bg-blue-500/20' },
-  under_review: { label: 'Under Review', color: 'text-amber-400', bgColor: 'bg-amber-500/20' },
-  approved: { label: 'Approved', color: 'text-emerald-400', bgColor: 'bg-emerald-500/20' },
-  closed: { label: 'Closed', color: 'text-purple-400', bgColor: 'bg-purple-500/20' },
+  draft: { label: 'Draft', color: 'text-slate-700', bgColor: 'bg-slate-100' },
+  in_progress: { label: 'In Progress', color: 'text-primary-700', bgColor: 'bg-primary-50' },
+  under_review: { label: 'Under Review', color: 'text-amber-700', bgColor: 'bg-amber-50' },
+  approved: { label: 'Approved', color: 'text-emerald-700', bgColor: 'bg-emerald-50' },
+  closed: { label: 'Closed', color: 'text-slate-700', bgColor: 'bg-slate-100' },
 };
 
 const getScoreColor = (score: number | null | undefined) => {
-  if (!score) return { text: 'text-slate-600', bg: 'bg-slate-500/20' };
-  if (score >= 21) return { text: 'text-red-400', bg: 'bg-red-500/20' };
-  if (score >= 13) return { text: 'text-orange-400', bg: 'bg-orange-500/20' };
-  if (score >= 6) return { text: 'text-amber-400', bg: 'bg-amber-500/20' };
-  return { text: 'text-green-400', bg: 'bg-green-500/20' };
+  if (!score) return { text: 'text-slate-600', bg: 'bg-slate-100' };
+  if (score >= 21) return { text: 'text-rose-700', bg: 'bg-rose-50' };
+  if (score >= 13) return { text: 'text-orange-700', bg: 'bg-orange-50' };
+  if (score >= 6) return { text: 'text-amber-700', bg: 'bg-amber-50' };
+  return { text: 'text-emerald-700', bg: 'bg-emerald-50' };
 };
 
 const getRatingStyle = (rating: string | null | undefined) => {
   switch (rating) {
-    case 'critical': return { label: 'Critical', color: 'text-red-400', bg: 'bg-red-500/20' };
-    case 'high': return { label: 'High', color: 'text-orange-400', bg: 'bg-orange-500/20' };
-    case 'medium': return { label: 'Medium', color: 'text-amber-400', bg: 'bg-amber-500/20' };
-    case 'low': return { label: 'Low', color: 'text-green-400', bg: 'bg-green-500/20' };
-    default: return { label: 'Unrated', color: 'text-slate-600', bg: 'bg-slate-500/20' };
+    case 'critical': return { label: 'Critical', color: 'text-rose-700', bg: 'bg-rose-50' };
+    case 'high': return { label: 'High', color: 'text-orange-700', bg: 'bg-orange-50' };
+    case 'medium': return { label: 'Medium', color: 'text-amber-700', bg: 'bg-amber-50' };
+    case 'low': return { label: 'Low', color: 'text-emerald-700', bg: 'bg-emerald-50' };
+    default: return { label: 'Unrated', color: 'text-slate-600', bg: 'bg-slate-100' };
   }
 };
 
@@ -344,8 +344,8 @@ export default function RiskAssessmentDetailPage() {
 
   if (error || !assessment) {
     return (
-      <div className="flex h-64 flex-col items-center justify-center text-red-400">
-        <AlertCircle className="mb-2 h-8 w-8" />
+      <div className="flex h-64 flex-col items-center justify-center text-rose-600">
+        <AlertCircle className="mb-2 h-8 w-8" strokeWidth={1.75} />
         <p>Failed to load risk assessment</p>
         <Link href="/erm/risk-assessments" className="mt-4 text-sm text-primary-400 hover:underline">
           Back to Assessments
@@ -364,7 +364,7 @@ export default function RiskAssessmentDetailPage() {
             href="/erm/risk-assessments"
             className="mt-1 rounded-lg p-1.5 text-slate-600 hover:bg-white hover:text-slate-900"
           >
-            <ArrowLeft size={20} />
+            <ArrowLeft size={20} strokeWidth={1.75} />
           </Link>
           <div>
             <div className="flex items-center gap-3">
@@ -408,14 +408,14 @@ export default function RiskAssessmentDetailPage() {
               <button
                 onClick={() => statusMutation.mutate('in_progress')}
                 disabled={statusMutation.isPending}
-                className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                className="flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-sm font-medium text-[#0a0a0a] hover:bg-primary-700 disabled:opacity-50"
               >
                 {statusMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Activity size={14} />}
                 Start Assessment
               </button>
               <button
                 onClick={() => { if (confirm('Delete this assessment?')) deleteMutation.mutate(); }}
-                className="flex items-center gap-1.5 rounded-lg border border-red-500/50 px-3 py-1.5 text-sm text-red-400 hover:bg-red-500/20"
+                className="flex items-center gap-1.5 rounded-lg border border-rose-200 px-3 py-1.5 text-sm text-rose-600 hover:bg-rose-50"
               >
                 <Trash2 size={14} />
               </button>
@@ -444,7 +444,7 @@ export default function RiskAssessmentDetailPage() {
               <button
                 onClick={() => statusMutation.mutate('in_progress')}
                 disabled={statusMutation.isPending}
-                className="flex items-center gap-1.5 rounded-lg border border-amber-500/50 px-3 py-1.5 text-sm text-amber-400 hover:bg-amber-500/20 disabled:opacity-50"
+                className="flex items-center gap-1.5 rounded-lg border border-amber-200 px-3 py-1.5 text-sm text-amber-700 hover:bg-amber-50 disabled:opacity-50"
               >
                 <XCircle size={14} />
                 Send Back
@@ -455,7 +455,7 @@ export default function RiskAssessmentDetailPage() {
             <button
               onClick={() => statusMutation.mutate('closed')}
               disabled={statusMutation.isPending}
-              className="flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-purple-700 disabled:opacity-50"
+              className="flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-sm font-medium text-[#0a0a0a] hover:bg-primary-700 disabled:opacity-50"
             >
               <CheckCircle size={14} />
               Close
@@ -496,7 +496,7 @@ export default function RiskAssessmentDetailPage() {
         {isEditable && (
           <button
             onClick={() => { setShowAddRisksModal(true); refetchAvailable(); }}
-            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700"
+            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-[#0a0a0a] hover:bg-primary-700"
           >
             <Plus size={16} />
             Add Risks
@@ -526,12 +526,12 @@ export default function RiskAssessmentDetailPage() {
             const residualColor = getScoreColor(residualScore);
             const ratingStyle = getRatingStyle(editing.risk_rating as string || computeRating(residualScore));
             const categoryColors: Record<string, string> = {
-              strategic: 'bg-purple-500/20 text-purple-400',
-              operational: 'bg-blue-500/20 text-blue-400',
-              financial: 'bg-green-500/20 text-green-400',
-              compliance: 'bg-yellow-500/20 text-yellow-400',
-              technology: 'bg-cyan-500/20 text-cyan-400',
-              third_party: 'bg-orange-500/20 text-orange-400',
+              strategic: 'bg-slate-100 text-slate-700',
+              operational: 'bg-primary-50 text-primary-700',
+              financial: 'bg-emerald-50 text-emerald-700',
+              compliance: 'bg-amber-50 text-amber-700',
+              technology: 'bg-slate-100 text-slate-700',
+              third_party: 'bg-orange-50 text-orange-700',
             };
 
             return (
@@ -542,7 +542,7 @@ export default function RiskAssessmentDetailPage() {
                       <div className="flex items-center gap-2 flex-wrap">
                         <h3 className="font-semibold text-slate-900">{ar.risk_title || `Risk #${ar.risk_id}`}</h3>
                         {ar.risk_category && (
-                          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${categoryColors[ar.risk_category] || 'bg-slate-500/20 text-slate-600'}`}>
+                          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${categoryColors[ar.risk_category] || 'bg-slate-100 text-slate-600'}`}>
                             {ar.risk_category.replace('_', ' ')}
                           </span>
                         )}
@@ -556,7 +556,7 @@ export default function RiskAssessmentDetailPage() {
                         <button
                           onClick={() => { setAiLoadingRiskId(ar.id); aiSuggestMutation.mutate(ar.id); }}
                           disabled={aiLoadingRiskId === ar.id}
-                          className="flex items-center gap-1 rounded-lg bg-gradient-to-r from-purple-600 to-blue-600 px-2 py-1 text-xs font-medium text-white hover:from-purple-700 hover:to-blue-700 disabled:opacity-50"
+                          className="flex items-center gap-1 rounded-lg bg-primary-600 px-2 py-1 text-xs font-medium text-[#0a0a0a] hover:bg-primary-700 disabled:opacity-50"
                           title="AI Assist"
                         >
                           {aiLoadingRiskId === ar.id ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
@@ -566,7 +566,7 @@ export default function RiskAssessmentDetailPage() {
                       {isEditable && (
                         <button
                           onClick={() => { if (confirm('Remove this risk from assessment?')) removeRiskMutation.mutate(ar.id); }}
-                          className="rounded p-1 text-slate-500 hover:bg-red-500/20 hover:text-red-400"
+                          className="rounded p-1 text-slate-500 hover:bg-rose-50 hover:text-rose-600"
                           title="Remove risk"
                         >
                           <Trash2 size={14} />
@@ -703,7 +703,7 @@ export default function RiskAssessmentDetailPage() {
                       <button
                         onClick={() => handleSaveRisk(ar.id)}
                         disabled={updateRiskMutation.isPending}
-                        className="flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
+                        className="flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-sm font-medium text-[#0a0a0a] hover:bg-primary-700 disabled:opacity-50"
                       >
                         {updateRiskMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
                         Save Scoring
@@ -754,7 +754,7 @@ export default function RiskAssessmentDetailPage() {
               <button
                 onClick={() => bulkAddMutation.mutate(Array.from(selectedRiskIds))}
                 disabled={selectedRiskIds.size === 0 || bulkAddMutation.isPending}
-                className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
+                className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-[#0a0a0a] hover:bg-primary-700 disabled:opacity-50"
               >
                 {bulkAddMutation.isPending && <Loader2 size={14} className="animate-spin" />}
                 Add Selected ({selectedRiskIds.size})
@@ -880,11 +880,11 @@ function ExpandedRiskSection({
                     <p className="text-sm text-slate-900">{kri.kri_name || `KRI #${kri.kri_id}`}</p>
                     <div className="flex gap-3 text-xs text-slate-600">
                       {kri.observed_value != null && <span>Value: {kri.observed_value}</span>}
-                      {kri.threshold_status && <span className={kri.threshold_status === 'breached' ? 'text-red-400' : kri.threshold_status === 'warning' ? 'text-amber-400' : 'text-green-400'}>{kri.threshold_status}</span>}
+                      {kri.threshold_status && <span className={kri.threshold_status === 'breached' ? 'text-rose-600' : kri.threshold_status === 'warning' ? 'text-amber-600' : 'text-emerald-600'}>{kri.threshold_status}</span>}
                     </div>
                   </div>
                   {isEditable && (
-                    <button onClick={() => onUnlinkKRI(kri.id)} className="rounded p-1 text-slate-500 hover:text-red-400"><X size={14} /></button>
+                    <button onClick={() => onUnlinkKRI(kri.id)} className="rounded p-1 text-slate-500 hover:text-rose-600"><X size={14} /></button>
                   )}
                 </div>
               ))
@@ -909,7 +909,7 @@ function ExpandedRiskSection({
                     {inc.impact_on_rating && <p className="text-xs text-slate-600">Impact: {inc.impact_on_rating}</p>}
                   </div>
                   {isEditable && (
-                    <button onClick={() => onUnlinkIncident(inc.id)} className="rounded p-1 text-slate-500 hover:text-red-400"><X size={14} /></button>
+                    <button onClick={() => onUnlinkIncident(inc.id)} className="rounded p-1 text-slate-500 hover:text-rose-600"><X size={14} /></button>
                   )}
                 </div>
               ))
@@ -934,7 +934,7 @@ function ExpandedRiskSection({
                     {f.relevance_notes && <p className="text-xs text-slate-600">{f.relevance_notes}</p>}
                   </div>
                   {isEditable && (
-                    <button onClick={() => onUnlinkRCSA(f.id)} className="rounded p-1 text-slate-500 hover:text-red-400"><X size={14} /></button>
+                    <button onClick={() => onUnlinkRCSA(f.id)} className="rounded p-1 text-slate-500 hover:text-rose-600"><X size={14} /></button>
                   )}
                 </div>
               ))
@@ -986,7 +986,7 @@ function EditAssessmentModal({
     >
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Name <span className="text-red-400">*</span></label>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Name <span className="text-rose-500">*</span></label>
             <input type="text" required value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 focus:border-primary-500 focus:outline-none" />
           </div>
           <div>
@@ -1032,7 +1032,7 @@ function EditAssessmentModal({
           </div>
           <div className="flex justify-end gap-3 border-t border-slate-200 pt-4">
             <button type="button" onClick={onClose} className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Cancel</button>
-            <button type="submit" disabled={isPending || !form.name.trim()} className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50">
+            <button type="submit" disabled={isPending || !form.name.trim()} className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-[#0a0a0a] hover:bg-primary-700 disabled:opacity-50">
               {isPending && <Loader2 size={14} className="animate-spin" />}
               Save Changes
             </button>
@@ -1079,7 +1079,7 @@ function LinkModal({
       footer={
         <div className="flex justify-end gap-3">
           <button onClick={onClose} className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Cancel</button>
-          <button onClick={handleLink} disabled={!selectedId || isPending} className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50">
+          <button onClick={handleLink} disabled={!selectedId || isPending} className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-[#0a0a0a] hover:bg-primary-700 disabled:opacity-50">
             {isPending && <Loader2 size={14} className="animate-spin" />}
             Link
           </button>

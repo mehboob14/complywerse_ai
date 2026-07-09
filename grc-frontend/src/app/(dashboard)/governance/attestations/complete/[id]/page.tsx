@@ -48,22 +48,11 @@ export default function CompleteAttestationPage() {
   const { data: attestation, isLoading, error } = useQuery({
     queryKey: ['attestation', attestationId],
     queryFn: async () => {
-      try {
-        const response = await attestationApi.getAttestation(attestationId);
-        return response.data as Attestation;
-      } catch {
-        return {
-          id: attestationId,
-          campaign_id: 1,
-          campaign_name: 'Q4 2025 Policy Attestation',
-          attestation_type: 'policy_acknowledgment',
-          attestation_text: 'I have read and understand the Information Security Policy and agree to abide by its requirements. I acknowledge that:\n\n1. I will protect confidential information and not share it with unauthorized parties.\n2. I will use company systems and resources responsibly and only for authorized purposes.\n3. I will report any security incidents or suspicious activities immediately.\n4. I will complete required security awareness training on time.\n5. I understand that violations may result in disciplinary action.',
-          status: 'pending',
-          due_date: '2025-01-31',
-          requires_evidence: false,
-          evidence_description: 'Please upload your completed security awareness training certificate.',
-        } as Attestation;
-      }
+      // No mock/demo fallback — a failed load must surface the real error
+      // (the render guards on `error`), never a fabricated attestation a user
+      // could unknowingly sign.
+      const response = await attestationApi.getAttestation(attestationId);
+      return response.data as Attestation;
     },
   });
 
@@ -81,6 +70,11 @@ export default function CompleteAttestationPage() {
       const payload: Record<string, unknown> = {
         user_comments: data.comments || undefined,
       };
+      // No attestation file-upload endpoint exists (completeAttestation is
+      // JSON-only), so record the evidence filename as a reference rather than
+      // silently dropping the file. Formal evidence is linked via the Evidence
+      // module (link-to-evidence).
+      if (data.evidence) payload.evidence_reference = data.evidence.name;
       return attestationApi.completeAttestation(attestationId, payload);
     },
     onSuccess: () => {
@@ -138,8 +132,8 @@ export default function CompleteAttestationPage() {
     return (
       <div className="card p-8 text-center">
         <AlertCircle className="h-12 w-12 text-rose-500 mx-auto mb-4" />
-        <h3 className="text-base font-medium text-black mb-2">Attestation Not Found</h3>
-        <p className="text-gray-500 mb-4">The requested attestation could not be loaded.</p>
+        <h3 className="text-base font-medium text-slate-900 mb-2">Attestation Not Found</h3>
+        <p className="text-slate-500 mb-4">The requested attestation could not be loaded.</p>
         <Link href="/governance/attestations" className="btn-primary">
           Back to Attestations
         </Link>
@@ -151,8 +145,8 @@ export default function CompleteAttestationPage() {
     return (
       <div className="card p-8 text-center">
         <CheckCircle className="h-12 w-12 text-emerald-500 mx-auto mb-4" />
-        <h3 className="text-base font-medium text-black mb-2">Already Completed</h3>
-        <p className="text-gray-500 mb-4">This attestation has already been completed.</p>
+        <h3 className="text-base font-medium text-slate-900 mb-2">Already Completed</h3>
+        <p className="text-slate-500 mb-4">This attestation has already been completed.</p>
         <Link href="/governance/attestations" className="btn-primary">
           Back to Attestations
         </Link>
@@ -166,12 +160,12 @@ export default function CompleteAttestationPage() {
     <div className="mx-auto max-w-2xl space-y-4 sm:space-y-6">
       <div className="page-header">
         <div className="flex items-center gap-3 mb-2">
-          <Link href="/governance/attestations" className="text-gray-500 hover:text-black">
+          <Link href="/governance/attestations" className="text-slate-500 hover:text-slate-900">
             <ArrowLeft className="h-4 w-4" />
           </Link>
           <div className="flex-1">
-            <h1 className="text-lg sm:text-xl font-semibold text-black">Complete Attestation</h1>
-            <p className="text-gray-500 text-xs mt-0.5">{attestation.campaign_name}</p>
+            <h1 className="text-lg sm:text-xl font-semibold text-slate-900">Complete Attestation</h1>
+            <p className="text-slate-500 text-xs mt-0.5">{attestation.campaign_name}</p>
           </div>
         </div>
       </div>
@@ -193,10 +187,10 @@ export default function CompleteAttestationPage() {
           <div className="card p-4 border-primary-200 bg-primary-50/30">
             <div className="flex items-center gap-2 mb-1">
               <FileText className="h-4 w-4 text-primary-500" />
-              <span className="text-sm font-medium text-black">Referenced Document</span>
+              <span className="text-sm font-medium text-slate-900">Referenced Document</span>
             </div>
             <div className="flex items-center justify-between">
-              <p className="text-sm text-gray-600">{campaignDetail.linked_document_title}</p>
+              <p className="text-sm text-slate-600">{campaignDetail.linked_document_title}</p>
               <Link
                 href={`/governance/documents/${campaignDetail.linked_document_id}`}
                 target="_blank"
@@ -214,29 +208,29 @@ export default function CompleteAttestationPage() {
               <ClipboardCheck className="h-4 w-4 text-primary-500" />
             </div>
             <div>
-              <h3 className="text-sm font-medium text-black">Attestation Statement</h3>
-              <span className="text-xs text-gray-500 capitalize">{attestation.attestation_type?.replace(/_/g, ' ')}</span>
+              <h3 className="text-sm font-medium text-slate-900">Attestation Statement</h3>
+              <span className="text-xs text-slate-500 capitalize">{attestation.attestation_type?.replace(/_/g, ' ')}</span>
             </div>
           </div>
 
-          <div className="bg-slate-50 rounded-lg p-3 border border-gray-200 mb-4">
-            <p className="text-gray-700 text-sm whitespace-pre-line">{attestation.attestation_text}</p>
+          <div className="bg-slate-50 rounded-lg p-3 border border-slate-200 mb-4">
+            <p className="text-slate-700 text-sm whitespace-pre-line">{attestation.attestation_text}</p>
           </div>
 
-          <div className="flex items-center gap-2 text-xs text-gray-500 mb-3">
+          <div className="flex items-center gap-2 text-xs text-slate-500 mb-3">
             <Calendar className="h-3.5 w-3.5" />
             <span>Due: {new Date(attestation.due_date).toLocaleDateString()}</span>
           </div>
 
-          <div className="flex items-start gap-3 p-3 bg-slate-50 rounded-lg border border-gray-200">
+          <div className="flex items-start gap-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
             <input
               type="checkbox"
               id="acknowledge"
               checked={acknowledged}
               onChange={(e) => setAcknowledged(e.target.checked)}
-              className="mt-0.5 rounded border-gray-300 text-primary-500 focus:ring-primary-500"
+              className="mt-0.5 rounded border-slate-300 text-primary-500 focus:ring-primary-500"
             />
-            <label htmlFor="acknowledge" className="text-gray-700 text-sm">
+            <label htmlFor="acknowledge" className="text-slate-700 text-sm">
               I have read, understand, and agree to comply with the above statement. I acknowledge that this attestation is legally binding and represents my commitment to the stated requirements.
             </label>
           </div>
@@ -249,15 +243,15 @@ export default function CompleteAttestationPage() {
                 <Upload className="h-4 w-4 text-amber-600" />
               </div>
               <div>
-                <h3 className="text-sm font-medium text-black">Evidence Upload</h3>
+                <h3 className="text-sm font-medium text-slate-900">Evidence Upload</h3>
                 <span className="text-xs text-amber-600">Required</span>
               </div>
             </div>
 
             {attestation.evidence_description && (
-              <div className="flex items-start gap-2 mb-3 p-2.5 bg-slate-50 rounded-lg border border-gray-200">
+              <div className="flex items-start gap-2 mb-3 p-2.5 bg-slate-50 rounded-lg border border-slate-200">
                 <Info className="h-3.5 w-3.5 text-primary-500 mt-0.5 flex-shrink-0" />
-                <p className="text-gray-500 text-xs">{attestation.evidence_description}</p>
+                <p className="text-slate-500 text-xs">{attestation.evidence_description}</p>
               </div>
             )}
 
@@ -270,18 +264,18 @@ export default function CompleteAttestationPage() {
             />
 
             {evidenceFile ? (
-              <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-gray-200">
+              <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
                 <div className="flex items-center gap-3">
                   <FileText className="h-4 w-4 text-primary-500" />
                   <div>
-                    <p className="text-black text-sm">{evidenceFile.name}</p>
-                    <p className="text-xs text-gray-500">{(evidenceFile.size / 1024).toFixed(1)} KB</p>
+                    <p className="text-slate-900 text-sm">{evidenceFile.name}</p>
+                    <p className="text-xs text-slate-500">{(evidenceFile.size / 1024).toFixed(1)} KB</p>
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={removeFile}
-                  className="p-1.5 text-gray-400 hover:text-rose-500 hover:bg-rose-50 rounded"
+                  className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded"
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -290,18 +284,18 @@ export default function CompleteAttestationPage() {
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="w-full p-5 border-2 border-dashed border-gray-200 rounded-lg hover:border-primary-300 transition-colors text-center"
+                className="w-full p-5 border-2 border-dashed border-slate-200 rounded-lg hover:border-primary-300 transition-colors text-center"
               >
-                <Upload className="h-6 w-6 text-gray-400 mx-auto mb-1" />
-                <p className="text-gray-500 text-sm">Click to upload evidence</p>
-                <p className="text-xs text-gray-400 mt-0.5">PDF, DOC, DOCX, PNG, JPG (max 10MB)</p>
+                <Upload className="h-6 w-6 text-slate-400 mx-auto mb-1" />
+                <p className="text-slate-500 text-sm">Click to upload evidence</p>
+                <p className="text-xs text-slate-400 mt-0.5">PDF, DOC, DOCX, PNG, JPG (max 10MB)</p>
               </button>
             )}
           </div>
         )}
 
         <div className="card p-4">
-          <h3 className="text-sm font-medium text-black mb-2">Comments (Optional)</h3>
+          <h3 className="text-sm font-medium text-slate-900 mb-2">Comments (Optional)</h3>
           <textarea
             value={comments}
             onChange={(e) => setComments(e.target.value)}

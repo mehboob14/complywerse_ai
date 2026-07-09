@@ -30,25 +30,25 @@ type ActionStatus = 'open' | 'in_progress' | 'completed' | 'overdue' | 'cancelle
 type ActionPriority = 'critical' | 'high' | 'medium' | 'low';
 
 const ACTION_TYPES: { value: ActionType; label: string; color: string }[] = [
-  { value: 'mitigate', label: 'Mitigate', color: 'bg-blue-500/20 text-blue-400' },
-  { value: 'transfer', label: 'Transfer', color: 'bg-purple-500/20 text-purple-400' },
-  { value: 'avoid', label: 'Avoid', color: 'bg-orange-500/20 text-orange-400' },
-  { value: 'accept', label: 'Accept', color: 'bg-slate-500/20 text-slate-600' },
+  { value: 'mitigate', label: 'Mitigate', color: 'bg-primary-50 text-primary-700' },
+  { value: 'transfer', label: 'Transfer', color: 'bg-primary-50 text-primary-700' },
+  { value: 'avoid', label: 'Avoid', color: 'bg-orange-50 text-orange-700' },
+  { value: 'accept', label: 'Accept', color: 'bg-slate-100 text-slate-600' },
 ];
 
 const ACTION_STATUSES: { value: ActionStatus; label: string; color: string }[] = [
-  { value: 'open', label: 'Open', color: 'bg-blue-500/20 text-blue-400' },
-  { value: 'in_progress', label: 'In Progress', color: 'bg-yellow-500/20 text-yellow-400' },
-  { value: 'completed', label: 'Completed', color: 'bg-green-500/20 text-green-400' },
-  { value: 'overdue', label: 'Overdue', color: 'bg-red-500/20 text-red-400' },
-  { value: 'cancelled', label: 'Cancelled', color: 'bg-slate-500/20 text-slate-600' },
+  { value: 'open', label: 'Open', color: 'bg-primary-50 text-primary-700' },
+  { value: 'in_progress', label: 'In Progress', color: 'bg-amber-50 text-amber-700' },
+  { value: 'completed', label: 'Completed', color: 'bg-emerald-50 text-emerald-700' },
+  { value: 'overdue', label: 'Overdue', color: 'bg-rose-50 text-rose-700' },
+  { value: 'cancelled', label: 'Cancelled', color: 'bg-slate-100 text-slate-600' },
 ];
 
 const ACTION_PRIORITIES: { value: ActionPriority; label: string; color: string }[] = [
-  { value: 'critical', label: 'Critical', color: 'bg-red-500/20 text-red-400' },
-  { value: 'high', label: 'High', color: 'bg-orange-500/20 text-orange-400' },
-  { value: 'medium', label: 'Medium', color: 'bg-yellow-500/20 text-yellow-400' },
-  { value: 'low', label: 'Low', color: 'bg-green-500/20 text-green-400' },
+  { value: 'critical', label: 'Critical', color: 'bg-rose-50 text-rose-700' },
+  { value: 'high', label: 'High', color: 'bg-orange-50 text-orange-700' },
+  { value: 'medium', label: 'Medium', color: 'bg-amber-50 text-amber-700' },
+  { value: 'low', label: 'Low', color: 'bg-emerald-50 text-emerald-700' },
 ];
 
 interface MitigationActionFormData {
@@ -173,8 +173,8 @@ export default function MitigationActionsPage() {
       <div className="grid gap-4 sm:grid-cols-4">
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-blue-500/20 p-2">
-              <ListTodo className="h-5 w-5 text-blue-400" />
+            <div className="rounded-lg bg-primary-50 p-2">
+              <ListTodo className="h-5 w-5 text-primary-600" />
             </div>
             <div>
               <p className="text-2xl font-bold text-slate-900">{stats.total}</p>
@@ -184,8 +184,8 @@ export default function MitigationActionsPage() {
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-yellow-500/20 p-2">
-              <Clock className="h-5 w-5 text-yellow-400" />
+            <div className="rounded-lg bg-amber-50 p-2">
+              <Clock className="h-5 w-5 text-amber-600" />
             </div>
             <div>
               <p className="text-2xl font-bold text-slate-900">{stats.open}</p>
@@ -193,21 +193,21 @@ export default function MitigationActionsPage() {
             </div>
           </div>
         </div>
-        <div className="rounded-xl border border-red-700/50 bg-white p-4">
+        <div className="rounded-xl border border-rose-200 bg-white p-4">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-red-500/20 p-2">
-              <AlertTriangle className="h-5 w-5 text-red-400" />
+            <div className="rounded-lg bg-rose-50 p-2">
+              <AlertTriangle className="h-5 w-5 text-rose-600" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-red-400">{stats.overdue}</p>
+              <p className="text-2xl font-bold text-rose-600">{stats.overdue}</p>
               <p className="text-sm text-slate-600">Overdue Actions</p>
             </div>
           </div>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-green-500/20 p-2">
-              <CheckCircle className="h-5 w-5 text-green-400" />
+            <div className="rounded-lg bg-emerald-50 p-2">
+              <CheckCircle className="h-5 w-5 text-emerald-600" />
             </div>
             <div>
               <p className="text-2xl font-bold text-slate-900">{stats.completedThisMonth}</p>
@@ -255,7 +255,7 @@ export default function MitigationActionsPage() {
         {canCreate && (
         <button
           onClick={() => setShowCreateModal(true)}
-          className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-500"
+          className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-[#0a0a0a] hover:bg-primary-700"
         >
           <Plus className="h-4 w-4" />
           Add Action
@@ -320,7 +320,7 @@ export default function MitigationActionsPage() {
                       <td className="px-4 py-3 max-w-xs">
                         <Link
                           href={`/erm/risks`}
-                          className="flex items-center gap-1 text-sm text-primary-400 hover:text-primary-300"
+                          className="flex items-center gap-1 text-sm text-primary-600 hover:text-primary-700"
                         >
                           <LinkIcon className="h-3 w-3 flex-shrink-0" />
                           <span className="min-w-0 truncate">{action.riskTitle || `Risk #${action.risk_id}`}</span>
@@ -346,7 +346,7 @@ export default function MitigationActionsPage() {
                       </td>
                       <td className="px-4 py-3">
                         {action.due_date ? (
-                          <span className={`text-sm ${isOverdue ? 'text-red-400 font-medium' : 'text-slate-700'}`}>
+                          <span className={`text-sm ${isOverdue ? 'text-rose-600 font-medium' : 'text-slate-700'}`}>
                             {new Date(action.due_date).toLocaleDateString()}
                             {isOverdue && ' (Overdue)'}
                           </span>
@@ -364,7 +364,7 @@ export default function MitigationActionsPage() {
                           {action.status !== 'completed' && action.status !== 'cancelled' && (
                             <button
                               onClick={() => setCompletingAction(action)}
-                              className="rounded p-1.5 text-slate-600 hover:bg-green-500/20 hover:text-green-400"
+                              className="rounded p-1.5 text-slate-600 hover:bg-emerald-50 hover:text-emerald-600"
                               title="Complete Action"
                             >
                               <CheckCircle className="h-4 w-4" />
@@ -383,7 +383,7 @@ export default function MitigationActionsPage() {
                                 deleteMutation.mutate(action.id);
                               }
                             }}
-                            className="rounded p-1.5 text-slate-600 hover:bg-red-500/20 hover:text-red-400"
+                            className="rounded p-1.5 text-slate-600 hover:bg-rose-50 hover:text-rose-600"
                             title="Delete"
                           >
                             <Trash2 className="h-4 w-4" />
@@ -613,7 +613,7 @@ function ExpandedActionDetail({ action }: { action: RiskMitigationAction & { ris
                 linkMutation.mutate(Number(pendingEvidenceId));
               }}
               disabled={!pendingEvidenceId || linkMutation.isPending}
-              className="flex items-center gap-1 rounded bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              className="flex items-center gap-1 rounded bg-primary-600 px-3 py-1.5 text-xs font-medium text-[#0a0a0a] hover:bg-primary-700 disabled:bg-slate-300 disabled:cursor-not-allowed"
             >
               {linkMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <LinkIcon className="h-3 w-3" />}
               Link
@@ -622,7 +622,7 @@ function ExpandedActionDetail({ action }: { action: RiskMitigationAction & { ris
         )}
 
         {linkError && (
-          <div className="mb-2 rounded border border-red-200 bg-red-50 px-2 py-1 text-xs text-red-700">
+          <div className="mb-2 rounded border border-rose-200 bg-rose-50 px-2 py-1 text-xs text-rose-700">
             {linkError}
           </div>
         )}
@@ -782,13 +782,13 @@ function ActionModal({
     >
       <form id="mitigation-action-form" onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-800 mb-1">Risk *</label>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Risk *</label>
           {action ? (
             <input
               type="text"
               value={risks.find((r) => r.id === formData.risk_id)?.title || `Risk #${formData.risk_id}`}
               disabled
-              className="w-full rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-sm text-slate-700"
+              className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm text-slate-700"
             />
           ) : (
             <MultiSelectDropdown
@@ -812,13 +812,13 @@ function ActionModal({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-800 mb-1">Title *</label>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Title *</label>
           <div className="flex gap-2">
             <input
               type="text"
               value={formData.title}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               required
             />
             {!action && (
@@ -836,17 +836,17 @@ function ActionModal({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-800 mb-1">Description</label>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
           <textarea
             value={formData.description}
             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
             rows={2}
           />
         </div>
 
         {aiError && (
-          <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
             {aiError}
           </div>
         )}
@@ -893,7 +893,7 @@ function ActionModal({
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-800 mb-1">Action Type</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Action Type</label>
             <MultiSelectDropdown
               title="Action Type"
               items={ACTION_TYPES.map((t) => ({ value: t.value, label: t.label }))}
@@ -907,7 +907,7 @@ function ActionModal({
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-800 mb-1">Priority</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Priority</label>
             <MultiSelectDropdown
               title="Priority"
               items={ACTION_PRIORITIES.map((p) => ({ value: p.value, label: p.label }))}
@@ -924,7 +924,7 @@ function ActionModal({
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-800 mb-1">Status</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
             <MultiSelectDropdown
               title="Status"
               items={ACTION_STATUSES.filter(s => s.value !== 'overdue').map((s) => ({ value: s.value, label: s.label }))}
@@ -938,19 +938,19 @@ function ActionModal({
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-800 mb-1">Due Date</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Due Date</label>
             <input
               type="date"
               value={formData.due_date || ''}
               onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
             />
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="flex items-center gap-1.5 text-sm font-medium text-gray-800 mb-1">
+            <label className="flex items-center gap-1.5 text-sm font-medium text-slate-700 mb-1">
               <UserCircle2 className="h-3.5 w-3.5 text-slate-500" />
               Assignee
             </label>
@@ -978,7 +978,7 @@ function ActionModal({
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-800 mb-1">Expected Residual Reduction (%)</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Expected Residual Reduction (%)</label>
             <input
               type="number"
               min="0"
@@ -988,18 +988,18 @@ function ActionModal({
                 ...formData,
                 expected_residual_reduction: e.target.value ? Number(e.target.value) : undefined
               })}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               placeholder="e.g., 25"
             />
           </div>
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-800 mb-1">Notes</label>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Notes</label>
           <textarea
             value={formData.notes}
             onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
             rows={2}
           />
         </div>
@@ -1008,7 +1008,7 @@ function ActionModal({
           <button
             type="button"
             onClick={onClose}
-            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
           >
             Cancel
           </button>
@@ -1066,7 +1066,7 @@ function CompleteActionModal({
     >
       <form id="complete-action-form" onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-800 mb-1">Actual Residual Reduction Achieved (%)</label>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Actual Residual Reduction Achieved (%)</label>
           <div className="mb-2 text-xs text-slate-500">
             Expected: {action.expected_residual_reduction ?? '—'}%
           </div>
@@ -1076,7 +1076,7 @@ function CompleteActionModal({
             max="100"
             value={actualReduction}
             onChange={(e) => setActualReduction(Number(e.target.value))}
-            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
           />
         </div>
 
@@ -1084,7 +1084,7 @@ function CompleteActionModal({
           <button
             type="button"
             onClick={onClose}
-            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
           >
             Cancel
           </button>

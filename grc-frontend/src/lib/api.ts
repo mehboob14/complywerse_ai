@@ -233,6 +233,11 @@ export const controlsApi = {
     apiClient.post(`/controls/framework-control/${frameworkControlId}/evidence`, data),
   unlinkFrameworkControlEvidence: (frameworkControlId: number, linkId: number) =>
     apiClient.delete(`/controls/framework-control/${frameworkControlId}/evidence/${linkId}`),
+  // Standalone per-control owner + implementation stage (no journey required).
+  updateFrameworkControlOwnership: (
+    frameworkControlId: number,
+    data: { status?: string; assigned_user_ids?: number[] },
+  ) => apiClient.patch(`/controls/framework-control/${frameworkControlId}/ownership`, data),
 };
 
 export const evidenceApi = {
@@ -373,6 +378,12 @@ export const governanceApi = {
     }),
   downloadDocumentFile: (documentId: number) =>
     apiClient.get(`/governance/documents/${documentId}/download-file`, {
+      responseType: 'blob',
+    }),
+  // Download any document: the uploaded file when present, else a PDF rendered
+  // from the document's markdown content. Works for content-only (AI-drafted) docs.
+  exportDocument: (documentId: number) =>
+    apiClient.get(`/governance/documents/${documentId}/export`, {
       responseType: 'blob',
     }),
   parsePolicy: (documentId: number) =>

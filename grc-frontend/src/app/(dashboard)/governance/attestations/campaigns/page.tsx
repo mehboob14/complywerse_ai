@@ -38,9 +38,9 @@ interface Campaign {
 }
 
 const STATUS_COLORS: Record<string, { bg: string; text: string; icon: React.ElementType }> = {
-  draft: { bg: 'bg-gray-100', text: 'text-gray-700', icon: FileCheck },
-  active: { bg: 'bg-emerald-100', text: 'text-emerald-700', icon: Play },
-  closed: { bg: 'bg-blue-100', text: 'text-blue-700', icon: CheckCircle },
+  draft: { bg: 'bg-slate-100', text: 'text-slate-700', icon: FileCheck },
+  active: { bg: 'bg-emerald-50', text: 'text-emerald-700', icon: Play },
+  closed: { bg: 'bg-slate-100', text: 'text-slate-600', icon: CheckCircle },
 };
 
 const ATTESTATION_TYPES = [
@@ -80,21 +80,12 @@ export default function AttestationCampaignsPage() {
     setFormAttestationText('');
   };
 
-  const { data: campaigns, isLoading } = useQuery({
+  const { data: campaigns, isLoading, isError } = useQuery({
     queryKey: ['attestation-campaigns', statusFilter],
     placeholderData: keepPreviousData,
     queryFn: async () => {
-      try {
-        const response = await attestationApi.getCampaigns({ status: statusFilter || undefined });
-        return response.data as Campaign[];
-      } catch {
-        return [
-          { id: 1, name: 'Q4 2025 Policy Attestation', description: 'Quarterly policy acknowledgment for all employees', status: 'active', campaign_type: 'policy_signoff', start_date: '2025-01-01', due_date: '2025-01-31', total_requests: 150, completed_requests: 108, completion_rate: 72, created_at: '2024-12-15', updated_at: '2025-01-20' },
-          { id: 2, name: 'Annual Code of Conduct', description: 'Annual compliance certification for all staff', status: 'active', campaign_type: 'annual_certification', start_date: '2025-01-01', due_date: '2025-01-31', total_requests: 200, completed_requests: 156, completion_rate: 78, created_at: '2024-12-20', updated_at: '2025-01-18' },
-          { id: 3, name: 'Q3 2025 SOX Attestation', description: 'SOX compliance attestation for finance team', status: 'closed', campaign_type: 'sox_302', start_date: '2024-10-01', due_date: '2024-10-31', total_requests: 50, completed_requests: 50, completion_rate: 100, created_at: '2024-09-15', updated_at: '2024-11-01' },
-          { id: 4, name: 'Conflict of Interest 2025', description: 'Annual COI disclosure', status: 'draft', campaign_type: 'policy_signoff', start_date: '2025-02-01', due_date: '2025-02-28', total_requests: 0, completed_requests: 0, completion_rate: 0, created_at: '2025-01-20', updated_at: '2025-01-20' },
-        ] as Campaign[];
-      }
+      const response = await attestationApi.getCampaigns({ status: statusFilter || undefined });
+      return response.data as Campaign[];
     },
   });
 
@@ -173,11 +164,21 @@ export default function AttestationCampaignsPage() {
     },
   });
 
-  const filteredCampaigns = (campaigns || []).filter(campaign => {
+  const allCampaigns = campaigns || [];
+  const filteredCampaigns = allCampaigns.filter(campaign => {
     const matchesSearch = campaign.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          (campaign.description?.toLowerCase() || '').includes(searchTerm.toLowerCase());
     return matchesSearch;
   });
+
+  // KPI strip — derived from already-fetched campaigns
+  const totalCampaigns = allCampaigns.length;
+  const activeCampaigns = allCampaigns.filter(c => c.status === 'active').length;
+  const draftCampaigns = allCampaigns.filter(c => c.status === 'draft').length;
+  const pendingRequestsTotal = allCampaigns.reduce(
+    (sum, c) => sum + Math.max((c.total_requests || 0) - (c.completed_requests || 0), 0),
+    0,
+  );
 
   const handleDocumentSelect = (docId: number) => {
     setFormLinkedDocId(docId);
@@ -242,10 +243,65 @@ export default function AttestationCampaignsPage() {
     <div className="space-y-4 sm:space-y-6">
       <div className="page-header">
         <div>
-          <h1 className="text-lg sm:text-xl font-semibold text-black">Attestation Campaigns</h1>
-          <p className="mt-1 text-gray-600">Manage attestation and certification campaigns</p>
+          <h1 className="text-lg sm:text-xl font-semibold text-slate-900">Attestation Campaigns</h1>
+          <p className="mt-1 text-slate-600">Manage attestation and certification campaigns</p>
         </div>
       </div>
+
+      {/* KPI / status strip */}
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+        <div className="card p-3">
+          <div className="flex items-center gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded bg-primary-50">
+              <ClipboardCheck className="h-4 w-4 text-primary-600" strokeWidth={1.75} />
+            </div>
+            <div>
+              <p className="text-xl font-bold text-slate-900">{totalCampaigns}</p>
+              <p className="text-xs text-slate-500">Total Campaigns</p>
+            </div>
+          </div>
+        </div>
+        <div className="card p-3">
+          <div className="flex items-center gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded bg-emerald-50">
+              <Play className="h-4 w-4 text-emerald-600" strokeWidth={1.75} />
+            </div>
+            <div>
+              <p className="text-xl font-bold text-slate-900">{activeCampaigns}</p>
+              <p className="text-xs text-slate-500">Active</p>
+            </div>
+          </div>
+        </div>
+        <div className="card p-3">
+          <div className="flex items-center gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded bg-slate-100">
+              <FileCheck className="h-4 w-4 text-slate-600" strokeWidth={1.75} />
+            </div>
+            <div>
+              <p className="text-xl font-bold text-slate-900">{draftCampaigns}</p>
+              <p className="text-xs text-slate-500">Draft</p>
+            </div>
+          </div>
+        </div>
+        <div className="card p-3">
+          <div className="flex items-center gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded bg-amber-50">
+              <Clock className="h-4 w-4 text-amber-600" strokeWidth={1.75} />
+            </div>
+            <div>
+              <p className="text-xl font-bold text-slate-900">{pendingRequestsTotal}</p>
+              <p className="text-xs text-slate-500">Pending Requests</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {isError && (
+        <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 flex items-center gap-2 text-sm text-rose-700">
+          <XCircle className="h-4 w-4 flex-shrink-0" strokeWidth={1.75} />
+          Unable to load campaigns. Please retry.
+        </div>
+      )}
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <MultiSelectDropdown
@@ -272,7 +328,7 @@ export default function AttestationCampaignsPage() {
           onClick={() => setIsModalOpen(true)}
           className="btn-primary flex items-center gap-2 whitespace-nowrap"
         >
-          <Plus className="h-4 w-4" />
+          <Plus className="h-4 w-4" strokeWidth={1.75} />
           New Campaign
         </button>
         )}

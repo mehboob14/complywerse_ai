@@ -131,7 +131,7 @@ function PanelCard({ title, icon, right, children }: { title: string; icon: Reac
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="mb-3 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-50 ring-1 ring-blue-100">{icon}</div>
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary-50 ring-1 ring-primary-100">{icon}</div>
           <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-700">{title}</h3>
         </div>
         {right}
@@ -180,7 +180,7 @@ function PostureOverview({ data }: { data: DashboardData }) {
     <div className="space-y-3">
       <div className="grid gap-3 lg:grid-cols-2">
         {/* Overview gauge */}
-        <PanelCard title="Overview" icon={<Gauge className="h-3.5 w-3.5 text-blue-600" />}>
+        <PanelCard title="Overview" icon={<Gauge className="h-3.5 w-3.5 text-primary-600" strokeWidth={1.75} />}>
           <div className="flex items-center gap-4">
             <div className="relative h-[150px] w-[150px] shrink-0">
               <ResponsiveContainer width="100%" height="100%">
@@ -206,7 +206,7 @@ function PostureOverview({ data }: { data: DashboardData }) {
         </PanelCard>
 
         {/* Status donut */}
-        <PanelCard title="Status" icon={<PieIcon className="h-3.5 w-3.5 text-blue-600" />}>
+        <PanelCard title="Status" icon={<PieIcon className="h-3.5 w-3.5 text-primary-600" strokeWidth={1.75} />}>
           {donutTotal > 0 ? (
             <div className="grid items-center gap-3 sm:grid-cols-[170px_1fr]">
               <div className="relative h-[160px]">
@@ -242,7 +242,7 @@ function PostureOverview({ data }: { data: DashboardData }) {
       {/* Compliance Trend with time-range selector */}
       <PanelCard
         title="Compliance Trend"
-        icon={<TrendingUp className="h-3.5 w-3.5 text-blue-600" />}
+        icon={<TrendingUp className="h-3.5 w-3.5 text-primary-600" strokeWidth={1.75} />}
         right={
           <div className="flex items-center gap-2">
             <select value={rangeIdx} onChange={(e) => setRangeIdx(Number(e.target.value))}
@@ -270,7 +270,7 @@ function PostureOverview({ data }: { data: DashboardData }) {
               <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: '#64748b' }} unit="%" />
               <Tooltip formatter={(v: any, n: any) => [`${v}%`, n === 'completion' ? 'Compliant' : 'Readiness']} />
               <Area type="monotone" dataKey="completion" stroke="#22c55e" strokeWidth={2} fill="url(#cdComp)" />
-              <Area type="monotone" dataKey="readiness" stroke="#3b82f6" strokeWidth={2} fill="none" />
+              <Area type="monotone" dataKey="readiness" stroke="#1ed4b0" strokeWidth={2} fill="none" />
             </AreaChart>
           </ResponsiveContainer>
         ) : (
@@ -286,8 +286,8 @@ function PostureOverview({ data }: { data: DashboardData }) {
 // ─── Per-Framework Cards with Mini-Gauges ───────────────────────────────
 function FrameworkCard({ f }: { f: FrameworkRow }) {
   const pct = f.readiness_pct;
-  const color = pct >= 75 ? '#10b981' : pct >= 50 ? '#3b82f6' : pct >= 25 ? '#f59e0b' : '#f43f5e';
-  const textColor = pct >= 75 ? 'text-emerald-700' : pct >= 50 ? 'text-blue-700' : pct >= 25 ? 'text-amber-700' : 'text-rose-700';
+  const color = pct >= 75 ? '#10b981' : pct >= 50 ? '#1ed4b0' : pct >= 25 ? '#f59e0b' : '#f43f5e';
+  const textColor = pct >= 75 ? 'text-emerald-700' : pct >= 50 ? 'text-primary-700' : pct >= 25 ? 'text-amber-700' : 'text-rose-700';
 
   const gaugeData = [{ value: pct, fill: color }];
   const target = f.target_date ? new Date(f.target_date) : null;
@@ -298,7 +298,7 @@ function FrameworkCard({ f }: { f: FrameworkRow }) {
   return (
     <Link
       href={`/frameworks/${f.journey_id}`}
-      className="group flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm transition-all hover:border-blue-300 hover:shadow-md"
+      className="group flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm transition-all hover:border-primary-300 hover:shadow-md"
     >
       {/* Mini radial gauge */}
       <div className="relative h-[58px] w-[58px] shrink-0">
@@ -322,14 +322,14 @@ function FrameworkCard({ f }: { f: FrameworkRow }) {
       {/* Detail column */}
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
-          <span className="truncate text-sm font-semibold text-slate-900 group-hover:text-blue-700">
+          <span className="truncate text-sm font-semibold text-slate-900 group-hover:text-primary-700">
             {f.framework_name}
           </span>
           {f.classification && (
             <span className={`rounded border px-1 py-px text-[9px] font-medium uppercase ${
               f.classification === 'certification'
                 ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                : 'border-blue-200 bg-blue-50 text-blue-700'
+                : 'border-primary-200 bg-primary-50 text-primary-700'
             }`}>
               {f.classification === 'certification' ? 'Cert' : 'Comp'}
             </span>
@@ -351,7 +351,7 @@ function FrameworkCard({ f }: { f: FrameworkRow }) {
           {f.total > 0 && (
             <>
               {f.implemented > 0 && <div className="h-full bg-emerald-500" style={{ width: `${(f.implemented / f.total) * 100}%` }} />}
-              {f.in_progress > 0 && <div className="h-full bg-blue-500" style={{ width: `${(f.in_progress / f.total) * 100}%` }} />}
+              {f.in_progress > 0 && <div className="h-full bg-primary-500" style={{ width: `${(f.in_progress / f.total) * 100}%` }} />}
               {f.not_started > 0 && <div className="h-full bg-slate-300" style={{ width: `${(f.not_started / f.total) * 100}%` }} />}
               {f.not_applicable > 0 && <div className="h-full bg-slate-100" style={{ width: `${(f.not_applicable / f.total) * 100}%` }} />}
             </>
@@ -359,16 +359,16 @@ function FrameworkCard({ f }: { f: FrameworkRow }) {
         </div>
 
         <div className="flex items-center gap-2 text-[10px] text-slate-500">
-          <span className="inline-flex items-center gap-0.5"><CheckCircle2 className="h-2.5 w-2.5 text-emerald-500" />{f.implemented}</span>
-          <span className="inline-flex items-center gap-0.5"><Clock className="h-2.5 w-2.5 text-blue-500" />{f.in_progress}</span>
-          <span className="inline-flex items-center gap-0.5"><Target className="h-2.5 w-2.5 text-slate-400" />{f.not_started}</span>
+          <span className="inline-flex items-center gap-0.5"><CheckCircle2 className="h-2.5 w-2.5 text-emerald-500" strokeWidth={1.75} />{f.implemented}</span>
+          <span className="inline-flex items-center gap-0.5"><Clock className="h-2.5 w-2.5 text-primary-500" strokeWidth={1.75} />{f.in_progress}</span>
+          <span className="inline-flex items-center gap-0.5"><Target className="h-2.5 w-2.5 text-slate-400" strokeWidth={1.75} />{f.not_started}</span>
           <span className="ml-auto inline-flex items-center text-slate-400">
             {f.total} ctrls
           </span>
         </div>
       </div>
 
-      <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-blue-500 shrink-0 transition-colors" />
+      <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-primary-500 shrink-0 transition-colors" strokeWidth={1.75} />
     </Link>
   );
 }
@@ -378,8 +378,8 @@ function PerFrameworkSection({ data }: { data: DashboardData }) {
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-50 ring-1 ring-indigo-100">
-            <Award className="h-3.5 w-3.5 text-indigo-600" />
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary-50 ring-1 ring-primary-100">
+            <Award className="h-3.5 w-3.5 text-primary-600" strokeWidth={1.75} />
           </div>
           <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-700">
             Active Framework Journeys
@@ -515,7 +515,7 @@ function ActivityTimeline({ data }: { data: DashboardData }) {
                     : a.type === 'implemented' ? BadgeCheck : Activity;
                   const iconTone = isApproved ? 'bg-emerald-100 text-emerald-700'
                     : isRejected ? 'bg-rose-100 text-rose-700'
-                    : a.type === 'implemented' ? 'bg-blue-100 text-blue-700'
+                    : a.type === 'implemented' ? 'bg-primary-100 text-primary-700'
                     : 'bg-slate-100 text-slate-600';
                   return (
                     <li key={`${g.label}-${i}`} className="flex items-start gap-2">
@@ -526,7 +526,7 @@ function ActivityTimeline({ data }: { data: DashboardData }) {
                         <div className="flex items-center gap-1 flex-wrap">
                           <Link
                             href={`/frameworks/${a.journey_id}`}
-                            className="text-[11px] font-medium text-slate-900 hover:text-blue-600 truncate"
+                            className="text-[11px] font-medium text-slate-900 hover:text-primary-600 truncate"
                           >
                             {a.control_code || 'Control'}
                           </Link>

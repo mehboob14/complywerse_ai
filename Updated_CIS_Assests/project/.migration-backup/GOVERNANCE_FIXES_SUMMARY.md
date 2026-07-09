@@ -113,7 +113,7 @@ AI_INTEGRATIONS_OPENAI_BASE_URL = os.environ.get("OPENAI_BASE_URL", "https://api
 Ensure `.env` file has:
 
 ```dotenv
-OPENAI_API_KEY=sk-proj-your-api-key-here
+OPENAI_API_KEY=<your-openai-api-key>
 OPENAI_BASE_URL=https://api.openai.com/v1  # Optional, defaults if not set
 ```
 

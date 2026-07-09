@@ -70,7 +70,7 @@ export default function VulnerabilitiesTab({ frameworkId }: { frameworkId: strin
               </td>
               <td className="px-4 py-2 align-top"><StatusPill value={v.status} /></td>
               <td className="px-4 py-2 align-top text-right">
-                <Link href={`/vulnerabilities/${v.id}`} target="_blank" className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline">
+                <Link href={`/vulnerabilities/${v.id}`} target="_blank" className="inline-flex items-center gap-1 text-xs text-primary-700 hover:underline">
                   Open <ExternalLink className="h-3 w-3" />
                 </Link>
               </td>

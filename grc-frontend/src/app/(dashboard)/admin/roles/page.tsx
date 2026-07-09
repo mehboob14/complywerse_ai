@@ -247,10 +247,10 @@ export default function RolesManagementPage() {
       header: 'Role',
       accessor: (role: AdminRole) => (
         <div>
-          <div className="font-medium text-black flex items-center gap-2">
+          <div className="font-medium text-slate-900 flex items-center gap-2">
             {role.name}
             {role.is_system_role && (
-              <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-xs">
+              <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-xs">
                 System
               </span>
             )}
@@ -308,7 +308,7 @@ export default function RolesManagementPage() {
             <IfPermission required="admin:roles:delete">
               <button
                 onClick={() => handleDelete(role)}
-                className="rounded p-1.5 text-slate-500 hover:bg-red-50 hover:text-red-600 transition-colors"
+                className="rounded p-1.5 text-slate-500 hover:bg-rose-50 hover:text-rose-600 transition-colors"
                 title="Delete role"
                 aria-label="Delete role"
               >
@@ -340,7 +340,7 @@ export default function RolesManagementPage() {
     <div className="space-y-4 sm:space-y-6">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="min-w-0">
-          <h1 className="text-lg sm:text-xl font-semibold text-black tracking-tight">Role Management</h1>
+          <h1 className="text-lg sm:text-xl font-semibold text-slate-900 tracking-tight">Role Management</h1>
           <p className="mt-1 text-sm text-slate-600">Create and manage roles with granular permissions</p>
         </div>
         <IfPermission required="admin:roles:create">
@@ -356,7 +356,7 @@ export default function RolesManagementPage() {
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-500/50 rounded-lg p-4 text-red-600">
+        <div className="bg-rose-50 border border-rose-200 rounded-lg p-4 text-rose-700">
           {error}
           <button onClick={() => setError(null)} className="ml-4 underline">
             Dismiss
@@ -480,8 +480,8 @@ export default function RolesManagementPage() {
                                         key={action}
                                         className={`flex items-center space-x-2 px-2.5 py-1 rounded cursor-pointer transition-colors ${
                                           isSelected
-                                            ? 'bg-primary-500/30 border border-primary-500'
-                                            : 'bg-slate-200 border border-slate-300 hover:border-slate-400'
+                                            ? 'bg-primary-50 border border-primary-500'
+                                            : 'bg-slate-100 border border-slate-300 hover:border-slate-400'
                                         }`}
                                       >
                                         <input
@@ -493,7 +493,7 @@ export default function RolesManagementPage() {
                                         />
                                         <span
                                           className={`text-xs ${
-                                            isSelected ? 'text-primary-500' : 'text-slate-600'
+                                            isSelected ? 'text-primary-700' : 'text-slate-600'
                                           }`}
                                         >
                                           {action.replace('_', ' ')}
@@ -528,7 +528,7 @@ export default function RolesManagementPage() {
                     <button
                       type="submit"
                       disabled={saving}
-                      className="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white rounded text-sm disabled:opacity-50"
+                      className="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-[color:var(--color-on-base,#0a0a0a)] rounded text-sm disabled:opacity-50"
                     >
                       {saving ? 'Saving...' : editingRole ? 'Update Role' : 'Create Role'}
                     </button>
@@ -554,7 +554,7 @@ export default function RolesManagementPage() {
           <div className="relative z-10 w-full max-w-xl rounded-2xl bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3">
               <div className="min-w-0">
-                <h2 className="text-base font-semibold text-black flex items-center gap-2">
+                <h2 className="text-base font-semibold text-slate-900 flex items-center gap-2">
                   <Users size={16} className="text-slate-600" />
                   Members of <span className="text-primary-700">{membersForRole.role_name}</span>
                 </h2>
@@ -587,7 +587,7 @@ export default function RolesManagementPage() {
                   {membersForRole.members.map((m) => (
                     <li key={m.user_role_id} className="flex items-center justify-between py-2.5">
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-black">
+                        <p className="truncate text-sm font-medium text-slate-900">
                           {m.display_name || m.username}
                           {!m.is_active && (
                             <span className="ml-2 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium uppercase text-slate-600">

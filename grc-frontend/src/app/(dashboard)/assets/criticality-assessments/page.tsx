@@ -37,6 +37,7 @@ import { ApprovalBar, StatusPill, type ApprovalCapableItem } from './_components
 import { ActivityPanel } from './_components/ActivityPanel';
 import { CommentsPanel } from './_components/CommentsPanel';
 import { EvidencePanel } from './_components/EvidencePanel';
+import { useToast } from '@/components/ui/ToastProvider';
 
 // ── Drawer tab discriminator (only used when editing an existing item) ──
 type DrawerTab = 'fields' | 'comments' | 'evidence' | 'activity';
@@ -168,7 +169,7 @@ export default function CriticalityAssessmentsPage() {
                 title={tab.hint}
                 className={`inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                   active
-                    ? 'border-blue-600 text-blue-700'
+                    ? 'border-primary-600 text-primary-700'
                     : 'border-transparent text-slate-500 hover:text-slate-800'
                 }`}
               >
@@ -241,7 +242,7 @@ function BulkImportButton() {
                 <select
                   value={kind}
                   onChange={(e) => setKind(e.target.value as 'isca' | 'iaca')}
-                  className="block w-full text-sm rounded-md border border-slate-300 bg-white text-slate-900 px-2 py-1.5 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  className="block w-full text-sm rounded-md border border-slate-300 bg-white text-slate-900 px-2 py-1.5 focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
                 >
                   <option value="isca">Information System</option>
                   <option value="iaca">Infrastructure Asset</option>
@@ -279,7 +280,7 @@ function BulkImportButton() {
                 type="button"
                 disabled={!file || importM.isPending}
                 onClick={() => importM.mutate()}
-                className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 rounded-md bg-primary-600 px-3 py-1.5 text-sm font-medium text-[#0a0a0a] hover:bg-primary-700 disabled:opacity-50"
               >
                 {importM.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
                 {importM.isPending ? 'Importing…' : 'Import'}
@@ -297,7 +298,7 @@ function BulkImportButton() {
 function BandBadge({ level }: { level: CriticalityBand | null | undefined }) {
   if (!level) {
     return (
-      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border bg-gray-50 text-gray-500 border-gray-200">
+      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border bg-slate-50 text-slate-500 border-slate-200">
         Not scored
       </span>
     );
@@ -379,16 +380,16 @@ function IscaPanel({
         <button
           type="button"
           onClick={() => setShowCreate(true)}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#0a0a0a] bg-primary-600 rounded-md hover:bg-primary-700"
         >
           <Plus className="h-3.5 w-3.5" />
           New ISCA item
         </button>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+      <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
         <table className="min-w-full text-sm">
-          <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
+          <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
             <tr>
               <th className="px-3 py-2">Information System</th>
               <th className="px-3 py-2">Linked Asset</th>
@@ -399,41 +400,41 @@ function IscaPanel({
               <th className="px-3 py-2 text-right">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-slate-100">
             {listQ.isLoading ? (
               <tr>
-                <td colSpan={7} className="px-3 py-6 text-center text-xs text-gray-500">
+                <td colSpan={7} className="px-3 py-6 text-center text-xs text-slate-500">
                   Loading…
                 </td>
               </tr>
             ) : items.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-3 py-6 text-center text-xs text-gray-500">
+                <td colSpan={7} className="px-3 py-6 text-center text-xs text-slate-500">
                   No items yet. Click <em>New ISCA item</em> to add one.
                 </td>
               </tr>
             ) : (
               items.map((r) => (
-                <tr key={r.id} className="hover:bg-gray-50">
+                <tr key={r.id} className="hover:bg-slate-50">
                   <td className="px-3 py-2 align-top">
-                    <p className="text-sm font-medium text-gray-900">{r.name}</p>
+                    <p className="text-sm font-medium text-slate-900">{r.name}</p>
                     {r.address && (
-                      <p className="text-[11px] text-gray-500 truncate max-w-[260px]" title={r.address}>
+                      <p className="text-[11px] text-slate-500 truncate max-w-[260px]" title={r.address}>
                         {r.address}
                       </p>
                     )}
                   </td>
-                  <td className="px-3 py-2 align-top text-xs text-gray-700">
-                    {r.linked_asset_name || <span className="text-gray-400">—</span>}
+                  <td className="px-3 py-2 align-top text-xs text-slate-700">
+                    {r.linked_asset_name || <span className="text-slate-400">—</span>}
                   </td>
-                  <td className="px-3 py-2 align-top text-xs text-gray-700">
-                    {r.business_owner_user_name || r.business_owner_name || <span className="text-gray-400">—</span>}
+                  <td className="px-3 py-2 align-top text-xs text-slate-700">
+                    {r.business_owner_user_name || r.business_owner_name || <span className="text-slate-400">—</span>}
                   </td>
-                  <td className="px-3 py-2 align-top text-xs text-gray-700">
-                    {r.assessor_user_name || r.assessor_name || <span className="text-gray-400">—</span>}
+                  <td className="px-3 py-2 align-top text-xs text-slate-700">
+                    {r.assessor_user_name || r.assessor_name || <span className="text-slate-400">—</span>}
                   </td>
-                  <td className="px-3 py-2 align-top text-right text-sm font-mono text-gray-900">
-                    {r.total_score ?? <span className="text-gray-400">—</span>}
+                  <td className="px-3 py-2 align-top text-right text-sm font-mono text-slate-900">
+                    {r.total_score ?? <span className="text-slate-400">—</span>}
                   </td>
                   <td className="px-3 py-2 align-top">
                     <BandBadge level={r.criticality_level || null} />
@@ -442,7 +443,7 @@ function IscaPanel({
                     <button
                       type="button"
                       onClick={() => setEditing(r)}
-                      className="text-xs text-blue-600 hover:underline"
+                      className="text-xs text-primary-700 hover:underline"
                     >
                       Edit
                     </button>
@@ -453,7 +454,7 @@ function IscaPanel({
                           deleteM.mutate(r.id);
                         }
                       }}
-                      className="text-xs text-red-600 hover:underline"
+                      className="text-xs text-rose-600 hover:underline"
                     >
                       Delete
                     </button>
@@ -553,16 +554,16 @@ function IacaPanel({
         <button
           type="button"
           onClick={() => setShowCreate(true)}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#0a0a0a] bg-primary-600 rounded-md hover:bg-primary-700"
         >
           <Plus className="h-3.5 w-3.5" />
           New IACA item
         </button>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+      <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
         <table className="min-w-full text-sm">
-          <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
+          <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
             <tr>
               <th className="px-3 py-2">Infrastructure Asset</th>
               <th className="px-3 py-2">Linked Asset</th>
@@ -573,37 +574,37 @@ function IacaPanel({
               <th className="px-3 py-2 text-right">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-slate-100">
             {listQ.isLoading ? (
               <tr>
-                <td colSpan={7} className="px-3 py-6 text-center text-xs text-gray-500">
+                <td colSpan={7} className="px-3 py-6 text-center text-xs text-slate-500">
                   Loading…
                 </td>
               </tr>
             ) : items.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-3 py-6 text-center text-xs text-gray-500">
+                <td colSpan={7} className="px-3 py-6 text-center text-xs text-slate-500">
                   No items yet. Click <em>New IACA item</em> to add one.
                 </td>
               </tr>
             ) : (
               items.map((r) => (
-                <tr key={r.id} className="hover:bg-gray-50">
+                <tr key={r.id} className="hover:bg-slate-50">
                   <td className="px-3 py-2 align-top">
-                    <p className="text-sm font-medium text-gray-900">{r.name}</p>
-                    {r.make_model && <p className="text-[11px] text-gray-500">{r.make_model}</p>}
+                    <p className="text-sm font-medium text-slate-900">{r.name}</p>
+                    {r.make_model && <p className="text-[11px] text-slate-500">{r.make_model}</p>}
                   </td>
-                  <td className="px-3 py-2 align-top text-xs text-gray-700">
-                    {r.linked_asset_name || <span className="text-gray-400">—</span>}
+                  <td className="px-3 py-2 align-top text-xs text-slate-700">
+                    {r.linked_asset_name || <span className="text-slate-400">—</span>}
                   </td>
-                  <td className="px-3 py-2 align-top text-xs text-gray-700">
-                    {r.location || <span className="text-gray-400">—</span>}
+                  <td className="px-3 py-2 align-top text-xs text-slate-700">
+                    {r.location || <span className="text-slate-400">—</span>}
                   </td>
-                  <td className="px-3 py-2 align-top text-xs text-gray-700">
-                    {r.custodian_user_name || r.custodian_name || <span className="text-gray-400">—</span>}
+                  <td className="px-3 py-2 align-top text-xs text-slate-700">
+                    {r.custodian_user_name || r.custodian_name || <span className="text-slate-400">—</span>}
                   </td>
-                  <td className="px-3 py-2 align-top text-right text-sm font-mono text-gray-900">
-                    {r.total_score != null ? r.total_score.toFixed(2) : <span className="text-gray-400">—</span>}
+                  <td className="px-3 py-2 align-top text-right text-sm font-mono text-slate-900">
+                    {r.total_score != null ? r.total_score.toFixed(2) : <span className="text-slate-400">—</span>}
                   </td>
                   <td className="px-3 py-2 align-top">
                     <BandBadge level={r.criticality_level || null} />
@@ -612,7 +613,7 @@ function IacaPanel({
                     <button
                       type="button"
                       onClick={() => setEditing(r)}
-                      className="text-xs text-blue-600 hover:underline"
+                      className="text-xs text-primary-700 hover:underline"
                     >
                       Edit
                     </button>
@@ -623,7 +624,7 @@ function IacaPanel({
                           deleteM.mutate(r.id);
                         }
                       }}
-                      className="text-xs text-red-600 hover:underline"
+                      className="text-xs text-rose-600 hover:underline"
                     >
                       Delete
                     </button>
@@ -705,7 +706,7 @@ function UserPicker({
         onChange(next);
         onPick?.(next == null ? null : users.find((u) => u.id === next) ?? null);
       }}
-      className="block w-full text-sm rounded-md border border-gray-300 bg-white text-slate-900 px-2 py-1.5 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+      className="block w-full text-sm rounded-md border border-slate-300 bg-white text-slate-900 px-2 py-1.5 focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
     >
       <option value="">{placeholder}</option>
       {users.map((u) => (
@@ -781,24 +782,24 @@ function AssetPicker({
         onClick={() => setOpen((o) => !o)}
         className={`w-full flex items-center gap-2 rounded-md border bg-white px-2.5 py-1.5 text-sm transition-colors ${
           open
-            ? 'border-blue-500 ring-1 ring-blue-500'
-            : 'border-gray-300 hover:border-gray-400'
+            ? 'border-primary-500 ring-1 ring-primary-500'
+            : 'border-slate-300 hover:border-slate-400'
         }`}
       >
         {selected ? (
           <span className="min-w-0 flex-1 flex items-center gap-1.5 text-left">
-            <Server className="h-3.5 w-3.5 text-blue-600 shrink-0" />
-            <span className="truncate text-gray-900">{selected.name}</span>
+            <Server className="h-3.5 w-3.5 text-primary-600 shrink-0" />
+            <span className="truncate text-slate-900">{selected.name}</span>
             {selected.asset_type && (
-              <span className="text-[10px] text-gray-400 uppercase shrink-0">{selected.asset_type}</span>
+              <span className="text-[10px] text-slate-400 uppercase shrink-0">{selected.asset_type}</span>
             )}
             {selected.criticality && (
-              <span className="text-[10px] text-gray-500 uppercase shrink-0">· {selected.criticality}</span>
+              <span className="text-[10px] text-slate-500 uppercase shrink-0">· {selected.criticality}</span>
             )}
           </span>
         ) : (
-          <span className="min-w-0 flex-1 flex items-center gap-1.5 text-left text-gray-500">
-            <Server className="h-3.5 w-3.5 text-gray-400 shrink-0" />
+          <span className="min-w-0 flex-1 flex items-center gap-1.5 text-left text-slate-500">
+            <Server className="h-3.5 w-3.5 text-slate-400 shrink-0" />
             Select linked IT asset…
           </span>
         )}
@@ -809,21 +810,21 @@ function AssetPicker({
               e.stopPropagation();
               selectAsset(null);
             }}
-            className="shrink-0 inline-flex items-center justify-center h-4 w-4 rounded text-gray-400 hover:text-gray-700 hover:bg-gray-100"
+            className="shrink-0 inline-flex items-center justify-center h-4 w-4 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100"
             title="Clear linked asset"
           >
             <X className="h-3 w-3" />
           </button>
         )}
         <ChevronDown
-          className={`h-3.5 w-3.5 text-gray-400 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`}
+          className={`h-3.5 w-3.5 text-slate-400 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`}
         />
       </button>
 
       {open && (
-        <div className="absolute left-0 right-0 top-full mt-1 z-30 rounded-lg border border-gray-200 bg-white shadow-lg overflow-hidden">
-          <div className="relative border-b border-gray-100">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+        <div className="absolute left-0 right-0 top-full mt-1 z-30 rounded-lg border border-slate-200 bg-white shadow-lg overflow-hidden">
+          <div className="relative border-b border-slate-100">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
             <input
               ref={inputRef}
               type="text"
@@ -839,20 +840,20 @@ function AssetPicker({
               type="button"
               onClick={() => selectAsset(null)}
               className={`w-full flex items-center gap-2 px-3 py-1.5 text-left text-xs transition-colors ${
-                value == null ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50'
+                value == null ? 'bg-primary-50 text-primary-700' : 'text-slate-600 hover:bg-slate-50'
               }`}
             >
-              <X className="h-3 w-3 text-gray-400" />
+              <X className="h-3 w-3 text-slate-400" />
               No linked asset
-              {value == null && <Check className="ml-auto h-3 w-3 text-blue-600" />}
+              {value == null && <Check className="ml-auto h-3 w-3 text-primary-600" />}
             </button>
 
             {assetsQ.isLoading ? (
-              <div className="flex items-center justify-center py-6 text-xs text-gray-400">
+              <div className="flex items-center justify-center py-6 text-xs text-slate-400">
                 <Loader2 className="h-4 w-4 animate-spin" />
               </div>
             ) : assets.length === 0 ? (
-              <p className="px-3 py-3 text-xs text-gray-500 text-center">
+              <p className="px-3 py-3 text-xs text-slate-500 text-center">
                 {search.trim()
                   ? `No assets matching "${search.trim()}"`
                   : 'No IT assets in this tenant yet.'}
@@ -866,25 +867,25 @@ function AssetPicker({
                     type="button"
                     onClick={() => selectAsset(a)}
                     className={`w-full flex items-center gap-2 px-3 py-1.5 text-left text-xs transition-colors ${
-                      isSelected ? 'bg-blue-50 text-blue-800' : 'text-gray-700 hover:bg-gray-50'
+                      isSelected ? 'bg-primary-50 text-primary-800' : 'text-slate-700 hover:bg-slate-50'
                     }`}
                   >
-                    <Server className={`h-3 w-3 shrink-0 ${isSelected ? 'text-blue-600' : 'text-gray-400'}`} />
+                    <Server className={`h-3 w-3 shrink-0 ${isSelected ? 'text-primary-600' : 'text-slate-400'}`} />
                     <span className="truncate font-medium">{a.name}</span>
                     {a.asset_type && (
-                      <span className="text-[10px] text-gray-400 uppercase shrink-0">{a.asset_type}</span>
+                      <span className="text-[10px] text-slate-400 uppercase shrink-0">{a.asset_type}</span>
                     )}
                     {a.criticality && (
-                      <span className="text-[10px] text-gray-500 uppercase shrink-0">· {a.criticality}</span>
+                      <span className="text-[10px] text-slate-500 uppercase shrink-0">· {a.criticality}</span>
                     )}
-                    {isSelected && <Check className="ml-auto h-3 w-3 text-blue-600 shrink-0" />}
+                    {isSelected && <Check className="ml-auto h-3 w-3 text-primary-600 shrink-0" />}
                   </button>
                 );
               })
             )}
           </div>
           {assets.length === 200 && (
-            <p className="px-3 py-1.5 text-[10px] text-gray-400 border-t border-gray-100 bg-gray-50">
+            <p className="px-3 py-1.5 text-[10px] text-slate-400 border-t border-slate-100 bg-slate-50">
               Showing first 200 results — refine your search to narrow.
             </p>
           )}
@@ -898,9 +899,9 @@ function AssetPicker({
 
 function FieldLabel({ children, hint }: { children: React.ReactNode; hint?: string }) {
   return (
-    <label className="block text-[11px] font-medium text-gray-700 mb-1">
+    <label className="block text-[11px] font-medium text-slate-700 mb-1">
       {children}
-      {hint && <span className="ml-1 text-[10px] text-gray-400 font-normal">{hint}</span>}
+      {hint && <span className="ml-1 text-[10px] text-slate-400 font-normal">{hint}</span>}
     </label>
   );
 }
@@ -919,7 +920,7 @@ function TextField({
       value={value == null ? '' : String(value)}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
-      className="block w-full text-sm rounded-md border border-gray-300 bg-white text-slate-900 px-2 py-1.5 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+      className="block w-full text-sm rounded-md border border-slate-300 bg-white text-slate-900 px-2 py-1.5 focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
     />
   );
 }
@@ -941,7 +942,7 @@ function ScoreField({
         onChange={(e) =>
           onChange(e.target.value === '' ? null : Number(e.target.value))
         }
-        className="block w-full text-sm rounded-md border border-gray-300 bg-white text-slate-900 px-2 py-1.5 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+        className="block w-full text-sm rounded-md border border-slate-300 bg-white text-slate-900 px-2 py-1.5 focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
       >
         <option value="">—</option>
         {criterion.options.map((o) => (
@@ -949,7 +950,7 @@ function ScoreField({
         ))}
       </select>
       {criterion.description && (
-        <p className="mt-0.5 text-[10px] text-gray-500">{criterion.description}</p>
+        <p className="mt-0.5 text-[10px] text-slate-500">{criterion.description}</p>
       )}
     </div>
   );
@@ -957,8 +958,8 @@ function ScoreField({
 
 function Section({ title, icon: Icon, children }: { title: string; icon: typeof FileText; children: React.ReactNode }) {
   return (
-    <fieldset className="border border-gray-200 rounded-lg p-4">
-      <legend className="px-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500 inline-flex items-center gap-1.5">
+    <fieldset className="border border-slate-200 rounded-lg p-4">
+      <legend className="px-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 inline-flex items-center gap-1.5">
         <Icon className="h-3.5 w-3.5" />
         {title}
       </legend>
@@ -1106,9 +1107,9 @@ function IscaDrawer({
       saveHidden={isEditing && tab !== 'fields'}
       headerExtra={isEditing ? <StatusPill status={live.approval_status || 'draft'} /> : null}
       footerExtra={
-        <div className="text-[11px] text-gray-600 flex items-center gap-3 flex-wrap">
+        <div className="text-[11px] text-slate-600 flex items-center gap-3 flex-wrap">
           <span>
-            Total: <span className="font-mono font-semibold text-gray-900">{total ?? '—'}</span>
+            Total: <span className="font-mono font-semibold text-slate-900">{total ?? '—'}</span>
           </span>
           <BandBadge level={band} />
           {isEditing && initial.id && <FooterActions kind="isca" item={live as IscaItem} />}
@@ -1158,7 +1159,7 @@ function IscaDrawer({
                 rows={2}
                 value={draft.description ?? ''}
                 onChange={(e) => setDraft({ ...draft, description: e.target.value })}
-                className="block w-full text-sm rounded-md border border-gray-300 bg-white text-slate-900 px-2 py-1.5 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                className="block w-full text-sm rounded-md border border-slate-300 bg-white text-slate-900 px-2 py-1.5 focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
               />
             </div>
             <div>
@@ -1221,7 +1222,7 @@ function IscaDrawer({
                 value={draft.comments ?? ''}
                 onChange={(e) => setDraft({ ...draft, comments: e.target.value })}
                 placeholder="Additional comments or justification for scores…"
-                className="block w-full text-sm rounded-md border border-gray-300 bg-white text-slate-900 px-2 py-1.5 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                className="block w-full text-sm rounded-md border border-slate-300 bg-white text-slate-900 px-2 py-1.5 focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
               />
             </div>
           </Section>
@@ -1305,9 +1306,9 @@ function IacaDrawer({
       saveHidden={isEditing && tab !== 'fields'}
       headerExtra={isEditing ? <StatusPill status={live.approval_status || 'draft'} /> : null}
       footerExtra={
-        <div className="text-[11px] text-gray-600 flex items-center gap-3 flex-wrap">
+        <div className="text-[11px] text-slate-600 flex items-center gap-3 flex-wrap">
           <span>
-            Total: <span className="font-mono font-semibold text-gray-900">{total != null ? total.toFixed(2) : '—'}</span>
+            Total: <span className="font-mono font-semibold text-slate-900">{total != null ? total.toFixed(2) : '—'}</span>
           </span>
           <BandBadge level={band} />
           {isEditing && initial.id && <FooterActions kind="iaca" item={live as IacaItem} />}
@@ -1359,7 +1360,7 @@ function IacaDrawer({
             rows={2}
             value={draft.description ?? ''}
             onChange={(e) => setDraft({ ...draft, description: e.target.value })}
-            className="block w-full text-sm rounded-md border border-gray-300 bg-white text-slate-900 px-2 py-1.5 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            className="block w-full text-sm rounded-md border border-slate-300 bg-white text-slate-900 px-2 py-1.5 focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
           />
         </div>
         <div>
@@ -1383,7 +1384,7 @@ function IacaDrawer({
             value={draft.associated_ips ?? ''}
             onChange={(e) => setDraft({ ...draft, associated_ips: e.target.value })}
             placeholder="Internal + external IPs and management URLs"
-            className="block w-full text-sm rounded-md border border-gray-300 bg-white text-slate-900 px-2 py-1.5 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            className="block w-full text-sm rounded-md border border-slate-300 bg-white text-slate-900 px-2 py-1.5 focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
           />
         </div>
         <div>
@@ -1391,7 +1392,7 @@ function IacaDrawer({
           <select
             value={draft.fault_tolerance ?? ''}
             onChange={(e) => setDraft({ ...draft, fault_tolerance: e.target.value || null })}
-            className="block w-full text-sm rounded-md border border-gray-300 bg-white text-slate-900 px-2 py-1.5 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            className="block w-full text-sm rounded-md border border-slate-300 bg-white text-slate-900 px-2 py-1.5 focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
           >
             <option value="">—</option>
             <option value="yes">Yes</option>
@@ -1459,7 +1460,7 @@ function IacaDrawer({
             value={draft.comments ?? ''}
             onChange={(e) => setDraft({ ...draft, comments: e.target.value })}
             placeholder="Additional comments or justification for scores…"
-            className="block w-full text-sm rounded-md border border-gray-300 bg-white text-slate-900 px-2 py-1.5 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            className="block w-full text-sm rounded-md border border-slate-300 bg-white text-slate-900 px-2 py-1.5 focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
           />
         </div>
       </Section>
@@ -1512,7 +1513,7 @@ function DrawerTabBar({
     { key: 'activity', label: 'Audit Log', icon: Activity },
   ];
   return (
-    <div className="border-b border-gray-200 -mx-5 px-5">
+    <div className="border-b border-slate-200 -mx-5 px-5">
       <nav className="flex gap-1 -mb-px">
         {tabs.map(({ key, label, icon: Icon, count }) => {
           const active = tab === key;
@@ -1523,7 +1524,7 @@ function DrawerTabBar({
               onClick={() => onChange(key)}
               className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 transition-colors ${
                 active
-                  ? 'border-blue-600 text-blue-700'
+                  ? 'border-primary-600 text-primary-700'
                   : 'border-transparent text-slate-500 hover:text-slate-800'
               }`}
             >
@@ -1549,6 +1550,7 @@ function FooterActions({
   item: IscaItem | IacaItem;
 }) {
   const qc = useQueryClient();
+  const { toast } = useToast();
   const status = item.approval_status || 'draft';
   const band = item.criticality_level;
   const canPromote = status === 'approved'
@@ -1573,7 +1575,7 @@ function FooterActions({
     onSuccess: (r) => {
       qc.invalidateQueries({ queryKey: ['criticality.activity', kind, item.id] });
       if (r?.data?.task_id) {
-        alert(`Follow-up task #${r.data.task_id} created.`);
+        toast({ title: 'Follow-up task created', message: `Task #${r.data.task_id} created.`, type: 'success' });
       }
     },
   });
@@ -1589,7 +1591,7 @@ function FooterActions({
       a.click();
       URL.revokeObjectURL(url);
     } catch {
-      alert('Export failed.');
+      toast({ title: 'Export failed', message: 'Could not download the .xlsx export.', type: 'error' });
     }
   };
 
@@ -1609,7 +1611,7 @@ function FooterActions({
           disabled={!canPromote || promoteM.isPending}
           title={canPromote ? 'Promote to Risk Register' : 'Approve & high/mission_critical needed'}
           onClick={() => promoteM.mutate()}
-          className="inline-flex items-center gap-1 rounded-md border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="inline-flex items-center gap-1 rounded-md border border-primary-200 bg-primary-50 px-2 py-0.5 text-[11px] font-medium text-primary-700 hover:bg-primary-100 disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <ShieldCheck className="h-3 w-3" />
           Promote to Risk
@@ -1620,7 +1622,7 @@ function FooterActions({
         disabled={!canFollowUp || followUpM.isPending}
         title={canFollowUp ? 'Create a Critical Task' : 'Approve & high/mission_critical needed'}
         onClick={() => followUpM.mutate()}
-        className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-40 disabled:cursor-not-allowed"
+        className="inline-flex items-center gap-1 rounded-md border border-primary-200 bg-primary-50 px-2 py-0.5 text-[11px] font-medium text-primary-700 hover:bg-primary-100 disabled:opacity-40 disabled:cursor-not-allowed"
       >
         <ExternalLink className="h-3 w-3" />
         Follow-up task
@@ -1714,7 +1716,7 @@ function Drawer({
                 onClick={onSubmit}
                 disabled={isPending || saveDisabled}
                 title={saveDisabled ? 'Locked: assessment is under review' : undefined}
-                className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-[#0a0a0a] hover:bg-primary-700 disabled:opacity-50"
               >
                 {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                 {isPending ? 'Saving…' : 'Save'}

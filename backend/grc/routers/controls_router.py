@@ -17,7 +17,7 @@ from ..models import (
     NormalizedControl, ControlMapping, GRCRequiredEvidence,
     FrameworkControl, Framework, GRCUser, get_db,
     ParsedFrameworkControl, UploadedFramework, Evidence, EvidenceControlMapping,
-    Risk, RiskFrameworkControlLink,
+    Risk, RiskFrameworkControlLink, ControlImplementation, FrameworkControlOwnership,
 )
 from ..schemas import (
     NormalizedControlCreate, NormalizedControlUpdate, NormalizedControlResponse,
@@ -877,9 +877,48 @@ def get_framework_controls_status_summary(
             control_status[str(pcid)] = {
                 "status": st,
                 "assignee_name": name_by_id.get(aid) if aid else None,
+                "assigned_user_ids": [aid] if aid else [],
                 "implementation_date": impl.implementation_date.isoformat() if impl.implementation_date else None,
                 "verified_date": impl.verified_date.isoformat() if impl.verified_date else None,
             }
+
+    # Standalone per-control ownership (Controls-workbench assignment). This is
+    # the authoritative source here and OVERRIDES any journey-derived status.
+    if control_ids:
+        own_rows = db.query(FrameworkControlOwnership).filter(
+            FrameworkControlOwnership.parsed_control_id.in_(control_ids)
+        ).all()
+        if own_rows:
+            tracked = True
+            own_ids: set = set()
+            for o in own_rows:
+                ids = o.assigned_user_ids or []
+                if ids:
+                    own_ids.add(ids[0])
+            own_names: dict = {}
+            if own_ids:
+                for u in db.query(GRCUser.id, GRCUser.display_name, GRCUser.username).filter(
+                    GRCUser.id.in_(own_ids)
+                ).all():
+                    own_names[u.id] = u.display_name or u.username
+            for o in own_rows:
+                ids = o.assigned_user_ids or []
+                primary = ids[0] if ids else None
+                control_status[str(o.parsed_control_id)] = {
+                    "status": o.status or "not_started",
+                    "assignee_name": own_names.get(primary) if primary else None,
+                    "assigned_user_ids": ids,
+                    "implementation_date": o.implementation_date.isoformat() if o.implementation_date else None,
+                    "verified_date": o.verified_date.isoformat() if o.verified_date else None,
+                }
+        # Recompute the pipeline counts from the merged per-control statuses so
+        # the aggregate reflects standalone assignments too.
+        for _k in by_status:
+            by_status[_k] = 0
+        for _cs in control_status.values():
+            _st = _cs.get("status") or "not_started"
+            if _st in by_status:
+                by_status[_st] += 1
 
     return {
         "total": total,
@@ -939,6 +978,83 @@ def _impl_is_more_advanced(candidate: "ControlImplementation",
             return True
         return cand_i > cur_i
     return False
+
+
+class _ControlOwnershipUpdate(BaseModel):
+    """Body for standalone control ownership; either field may be sent alone."""
+    status: Optional[str] = None                     # not_started|in_progress|implemented|verified|not_applicable
+    assigned_user_ids: Optional[List[int]] = None    # ordered; [] clears the owner
+
+
+_OWNERSHIP_STATUSES = {"not_started", "in_progress", "implemented", "verified", "not_applicable"}
+
+
+@router.patch("/framework-control/{framework_control_id}/ownership")
+def update_framework_control_ownership(
+    framework_control_id: int,
+    payload: _ControlOwnershipUpdate,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Set the owner and/or implementation stage directly on a control — no
+    certification journey required. Upserts a FrameworkControlOwnership row that
+    the status-summary then surfaces (overriding any journey-derived status)."""
+    user_tenants = get_user_tenants(current_user, db)
+    control = get_framework_control_or_404(framework_control_id, user_tenants, db)
+
+    record = db.query(FrameworkControlOwnership).filter(
+        FrameworkControlOwnership.parsed_control_id == control.id
+    ).first()
+    if record is None:
+        record = FrameworkControlOwnership(parsed_control_id=control.id, status="not_started", assigned_user_ids=[])
+        db.add(record)
+
+    if payload.status is not None:
+        if payload.status not in _OWNERSHIP_STATUSES:
+            raise HTTPException(status_code=400, detail=f"Invalid status '{payload.status}'.")
+        record.status = payload.status
+        if payload.status == "implemented" and not record.implementation_date:
+            record.implementation_date = datetime.utcnow()
+        if payload.status == "verified":
+            if not record.implementation_date:
+                record.implementation_date = datetime.utcnow()
+            if not record.verified_date:
+                record.verified_date = datetime.utcnow()
+
+    if payload.assigned_user_ids is not None:
+        seen: set = set()
+        clean: List[int] = []
+        for uid in payload.assigned_user_ids:
+            if uid is None or uid in seen:
+                continue
+            seen.add(uid)
+            clean.append(int(uid))
+        if clean:
+            valid = {row.id for row in db.query(GRCUser.id).filter(
+                GRCUser.id.in_(clean), GRCUser.is_active == True
+            ).all()}
+            clean = [uid for uid in clean if uid in valid]
+        record.assigned_user_ids = clean
+
+    db.commit()
+    db.refresh(record)
+
+    ids = record.assigned_user_ids or []
+    primary = ids[0] if ids else None
+    assignee_name = None
+    if primary:
+        u = db.query(GRCUser.display_name, GRCUser.username).filter(GRCUser.id == primary).first()
+        if u:
+            assignee_name = u.display_name or u.username
+
+    return {
+        "parsed_control_id": control.id,
+        "status": record.status,
+        "assigned_user_ids": ids,
+        "assignee_name": assignee_name,
+        "implementation_date": record.implementation_date.isoformat() if record.implementation_date else None,
+        "verified_date": record.verified_date.isoformat() if record.verified_date else None,
+    }
 
 
 @router.get("/framework-control/{framework_control_id}", response_model=dict)

@@ -116,7 +116,7 @@ export default function FrameworkOverviewPage() {
       <div className="flex h-64 flex-col items-center justify-center text-rose-600">
         <AlertTriangle className="mb-2 h-8 w-8" />
         <p>Failed to load framework overview</p>
-        <Link href="/frameworks" className="mt-4 text-blue-600 hover:underline">
+        <Link href="/frameworks" className="mt-4 text-primary-700 hover:underline">
           Return to Frameworks
         </Link>
       </div>
@@ -138,16 +138,16 @@ export default function FrameworkOverviewPage() {
         </Link>
       </div>
 
-      <div className="card border-gray-200">
+      <div className="card border-slate-200">
         <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
           <div className="flex items-start gap-4">
             <div className={`rounded-xl p-3 ${
-              isCertification ? 'bg-emerald-50' : 'bg-blue-50'
+              isCertification ? 'bg-emerald-50' : 'bg-primary-50'
             }`}>
               {isCertification ? (
-                <Award className="h-8 w-8 text-emerald-600" />
+                <Award className="h-8 w-8 text-emerald-600" strokeWidth={1.75} />
               ) : (
-                <FileText className="h-8 w-8 text-blue-600" />
+                <FileText className="h-8 w-8 text-primary-600" strokeWidth={1.75} />
               )}
             </div>
             <div>
@@ -155,9 +155,9 @@ export default function FrameworkOverviewPage() {
               <p className="cw-text-muted">Version {framework.version}</p>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-sm font-medium ${
-                  isCertification 
-                    ? 'bg-emerald-50 text-emerald-600' 
-                    : 'bg-blue-50 text-blue-600'
+                  isCertification
+                    ? 'bg-emerald-50 text-emerald-600'
+                    : 'bg-primary-50 text-primary-700'
                 }`}>
                   {isCertification ? '🏆 Certification Framework' : '📋 Compliance Framework'}
                 </span>
@@ -212,7 +212,7 @@ export default function FrameworkOverviewPage() {
       </div>
 
       {framework.classification_reasoning && (
-        <div className="card border-gray-200">
+        <div className="card border-slate-200">
           <button
             onClick={() => setShowReasoning(!showReasoning)}
             className="flex w-full items-center justify-between text-left"
@@ -236,7 +236,7 @@ export default function FrameworkOverviewPage() {
 
       {isCertification && (
         <>
-          <div className="card border-gray-200">
+          <div className="card border-slate-200">
             <h2 className="text-lg font-semibold cw-text mb-4 flex items-center gap-2">
               <RefreshCw className="h-5 w-5 text-emerald-600" />
               Certification Lifecycle
@@ -254,7 +254,7 @@ export default function FrameworkOverviewPage() {
                       <p className="text-xs cw-text-muted mt-1">{phase.description}</p>
                     </div>
                     {index < lifecyclePhases.length - 1 && (
-                      <div className="hidden md:block absolute top-1/2 -right-2 transform -translate-y-1/2 text-gray-400">
+                      <div className="hidden md:block absolute top-1/2 -right-2 transform -translate-y-1/2 text-slate-400">
                         →
                       </div>
                     )}
@@ -265,7 +265,7 @@ export default function FrameworkOverviewPage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="card border-gray-200">
+            <div className="card border-slate-200">
                         <h2 className="text-lg font-semibold cw-text mb-4 flex items-center gap-2">
                 <ClipboardCheck className="h-5 w-5 text-emerald-600" />
                 Required Artifacts
@@ -278,7 +278,7 @@ export default function FrameworkOverviewPage() {
                     }))
                   : defaultArtifacts
                 ).map((artifact: any, index: number) => (
-                  <div key={index} className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 border border-gray-200">
+                  <div key={index} className="flex items-center gap-3 p-3 rounded-lg bg-slate-50 border border-slate-200">
                     <CheckCircle className="h-5 w-5 text-emerald-600 flex-shrink-0" />
                     <div>
                       <span className="cw-text font-medium">{artifact.name}</span>
@@ -291,20 +291,20 @@ export default function FrameworkOverviewPage() {
               </div>
             </div>
 
-            <div className="card border-gray-200">
+            <div className="card border-slate-200">
               <h2 className="text-lg font-semibold cw-text mb-4 flex items-center gap-2">
                 <Clock className="h-5 w-5 text-emerald-600" />
                 Certification Details
               </h2>
               <div className="space-y-4">
                 {framework.certification_validity_period && (
-                  <div className="p-3 rounded-lg bg-gray-50 border border-gray-200">
+                  <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
                     <p className="text-sm cw-text-muted">Validity Period</p>
                     <p className="cw-text font-medium">{framework.certification_validity_period}</p>
                   </div>
                 )}
                 {framework.certification_levels && framework.certification_levels.length > 0 && (
-                  <div className="p-3 rounded-lg bg-gray-50 border border-gray-200">
+                  <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
                     <p className="text-sm cw-text-muted mb-2">Certification Levels</p>
                     <div className="flex flex-wrap gap-2">
                       {framework.certification_levels.map((level: any, index: number) => (
@@ -315,7 +315,7 @@ export default function FrameworkOverviewPage() {
                     </div>
                   </div>
                 )}
-                <div className="p-3 rounded-lg bg-gray-50 border border-gray-200">
+                <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
                   <p className="text-sm cw-text-muted">Total Controls</p>
                   <p className="cw-text font-medium">{framework.controls_count} controls to implement</p>
                 </div>
@@ -328,9 +328,9 @@ export default function FrameworkOverviewPage() {
       {isCompliance && (
         <>
           {framework.framework_purpose && (
-            <div className="card border-gray-200 bg-gradient-to-br from-white to-blue-50">
+            <div className="card border-slate-200 bg-primary-50">
               <h2 className="text-lg font-semibold cw-text mb-3 flex items-center gap-2">
-                <Target className="h-5 w-5 text-blue-600" />
+                <Target className="h-5 w-5 text-primary-600" strokeWidth={1.75} />
                 Framework Purpose
               </h2>
               <p className="cw-text leading-relaxed">{framework.framework_purpose}</p>
@@ -338,28 +338,28 @@ export default function FrameworkOverviewPage() {
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="card border-gray-200">
+            <div className="card border-slate-200">
               <h2 className="text-lg font-semibold cw-text mb-4 flex items-center gap-2">
-                <BookOpen className="h-5 w-5 text-blue-600" />
+                <BookOpen className="h-5 w-5 text-primary-600" strokeWidth={1.75} />
                 Scope & Audience
               </h2>
               <div className="space-y-4">
                 {framework.framework_scope && (
-                  <div className="p-3 rounded-lg bg-gray-50 border border-gray-200">
+                  <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
                     <p className="text-sm cw-text-muted">Scope</p>
                     <p className="cw-text">{framework.framework_scope}</p>
                   </div>
                 )}
                 {framework.target_audience && (
-                  <div className="p-3 rounded-lg bg-gray-50 border border-gray-200">
+                  <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
                     <p className="text-sm cw-text-muted">Target Audience</p>
                     <p className="cw-text flex items-center gap-2">
-                      <Users className="h-4 w-4 text-blue-600" />
+                      <Users className="h-4 w-4 text-primary-600" strokeWidth={1.75} />
                       {framework.target_audience}
                     </p>
                   </div>
                 )}
-                <div className="p-3 rounded-lg bg-gray-50 border border-gray-200">
+                <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
                   <p className="text-sm cw-text-muted">Total Controls</p>
                   <p className="cw-text font-medium">{framework.controls_count} controls to implement</p>
                 </div>
@@ -367,15 +367,15 @@ export default function FrameworkOverviewPage() {
             </div>
 
             {framework.framework_objectives && framework.framework_objectives.length > 0 && (
-              <div className="card border-gray-200">
+              <div className="card border-slate-200">
                 <h2 className="text-lg font-semibold cw-text mb-4 flex items-center gap-2">
-                  <CheckCircle className="h-5 w-5 text-blue-600" />
+                  <CheckCircle className="h-5 w-5 text-primary-600" strokeWidth={1.75} />
                   Framework Objectives
                 </h2>
                 <ul className="space-y-2">
                   {framework.framework_objectives.map((objective: string, index: number) => (
                     <li key={index} className="flex items-start gap-2 cw-text">
-                      <CheckCircle className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                      <CheckCircle className="h-4 w-4 text-primary-600 mt-0.5 flex-shrink-0" strokeWidth={1.75} />
                       <span>{objective}</span>
                     </li>
                   ))}
@@ -385,9 +385,9 @@ export default function FrameworkOverviewPage() {
           </div>
 
           {framework.adoption_approach && (
-            <div className="card border-gray-200">
+            <div className="card border-slate-200">
               <h2 className="text-lg font-semibold cw-text mb-4 flex items-center gap-2">
-                <RefreshCw className="h-5 w-5 text-blue-600" />
+                <RefreshCw className="h-5 w-5 text-primary-600" strokeWidth={1.75} />
                 Adoption Approach
               </h2>
               <div className="space-y-3">
@@ -397,8 +397,8 @@ export default function FrameworkOverviewPage() {
                     ? Object.entries(framework.adoption_approach).map(([key, value]) => `${key}: ${value}`)
                     : [String(framework.adoption_approach)]
                 ).map((step: any, index: number) => (
-                  <div key={index} className="flex items-start gap-4 p-4 rounded-lg bg-gray-50 border border-gray-200">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-50 text-blue-600 font-bold flex-shrink-0">
+                  <div key={index} className="flex items-start gap-4 p-4 rounded-lg bg-slate-50 border border-slate-200">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-50 text-primary-700 font-bold flex-shrink-0">
                       {index + 1}
                     </div>
                     <p className="cw-text pt-1">{typeof step === 'string' ? step : JSON.stringify(step)}</p>
@@ -409,7 +409,7 @@ export default function FrameworkOverviewPage() {
           )}
 
           {framework.penalty_for_non_compliance && (
-            <div className="card border-rose-200 bg-gradient-to-br from-white to-rose-50">
+            <div className="card border-rose-200 bg-rose-50">
               <div className="flex items-start gap-4">
                 <div className="rounded-full bg-rose-50 p-3">
                   <AlertTriangle className="h-6 w-6 text-rose-600" />
@@ -425,8 +425,8 @@ export default function FrameworkOverviewPage() {
       )}
 
       {!isCertification && !isCompliance && (
-        <div className="card border-gray-200 text-center py-12">
-          <FileStack className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+        <div className="card border-slate-200 text-center py-12">
+          <FileStack className="h-12 w-12 text-slate-400 mx-auto mb-4" strokeWidth={1.75} />
           <h2 className="text-lg font-medium cw-text">Framework Not Yet Classified</h2>
           <p className="cw-text-muted mt-2">
             This framework has not been classified. Return to the frameworks page to classify it.

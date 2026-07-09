@@ -138,14 +138,14 @@ suggestPoliciesForFramework: (data: { framework_ids: number[] }) =>
 
 ```dotenv
 # Required for AI features
-OPENAI_API_KEY=sk-proj-...
+OPENAI_API_KEY=<your-openai-api-key>
 OPENAI_BASE_URL=https://api.openai.com/v1  # Optional, defaults to OpenAI public API
 
 # Database
 DATABASE_URL=sqlite:///./grc_tenant.db
 
 # Session Management
-SESSION_SECRET=my-super-secret-key-at-least-32-characters-for-jwt-signing
+SESSION_SECRET=<your-session-secret>
 ```
 
 ---

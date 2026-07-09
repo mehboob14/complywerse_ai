@@ -199,8 +199,8 @@ export default function CloudConnectorsAdminPage() {
           Integrations admin tab where their management lives. */}
       <div className="bg-white border border-slate-200 rounded-xl shadow-card">
         <div className="p-6 border-b border-slate-200">
-          <h2 className="text-lg font-semibold text-black flex items-center gap-2">
-            <Cloud size={16} className="text-slate-600" />
+          <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+            <Cloud size={16} className="text-slate-600" strokeWidth={1.75} />
             Supported integrations
           </h2>
           <p className="text-xs text-slate-500 mt-1">
@@ -226,7 +226,7 @@ export default function CloudConnectorsAdminPage() {
                     window.location.href = '/admin#integrations';
                   }
                 }}
-                className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 text-left hover:border-blue-300 hover:bg-blue-50/30 transition"
+                className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 text-left hover:border-primary-300 hover:bg-primary-50/30 transition"
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded ${p.iconBg}`}>
@@ -259,8 +259,8 @@ export default function CloudConnectorsAdminPage() {
 
       <div className="bg-white border border-slate-200 rounded-xl shadow-card">
         <div className="p-6 border-b border-slate-200 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-black flex items-center gap-2">
-            <Cloud size={16} className="text-slate-600" />
+          <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+            <Cloud size={16} className="text-slate-600" strokeWidth={1.75} />
             Configured cloud connectors
           </h2>
           <div className="flex gap-2">
@@ -281,7 +281,7 @@ export default function CloudConnectorsAdminPage() {
             </button>
             <button
               onClick={() => { setPresetProvider(null); setShowAdd(true); }}
-              className="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm flex items-center gap-1.5"
+              className="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-[#0a0a0a] rounded-lg text-sm flex items-center gap-1.5"
             >
               <Plus size={14} />
               Add Connector
@@ -327,7 +327,7 @@ export default function CloudConnectorsAdminPage() {
       {legacyScannerRows.length > 0 && (
         <div className="bg-white border border-slate-200 rounded-xl shadow-card">
           <div className="p-6 border-b border-slate-200 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-black flex items-center gap-2">
+            <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
               <Activity size={16} className="text-slate-600" />
               Scanner connections (legacy)
             </h2>
@@ -495,7 +495,7 @@ function ConnectorRow({
           <button
             onClick={onSync}
             disabled={isSyncing || !connector.is_active}
-            className="px-2 py-1 border border-blue-300 bg-blue-50 text-blue-700 rounded text-xs hover:bg-blue-100 disabled:opacity-50 inline-flex items-center gap-1"
+            className="px-2 py-1 border border-primary-300 bg-primary-50 text-primary-700 rounded text-xs hover:bg-primary-100 disabled:opacity-50 inline-flex items-center gap-1"
             title="Sync now"
           >
             {isSyncing ? <Loader2 size={11} className="animate-spin" /> : <RefreshCw size={11} />}
@@ -713,7 +713,7 @@ function AddConnectorModal({
             type="submit"
             form="add-connector-form"
             disabled={saving}
-            className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm flex items-center gap-1.5 disabled:opacity-50"
+            className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-[#0a0a0a] rounded-lg text-sm flex items-center gap-1.5 disabled:opacity-50"
           >
             {saving && <Loader2 size={13} className="animate-spin" />}
             Create connector
@@ -756,7 +756,7 @@ function SetupGuide({ setup }: { setup?: {
         <p className="text-xs text-slate-700">{setup.security_summary}</p>
         <a
           href={setup.redirect}
-          className="inline-flex items-center gap-1.5 text-xs rounded-md border border-blue-300 bg-blue-50 px-3 py-1.5 text-blue-700 hover:bg-blue-100"
+          className="inline-flex items-center gap-1.5 text-xs rounded-md border border-primary-300 bg-primary-50 px-3 py-1.5 text-primary-700 hover:bg-primary-100"
         >
           Manage in Integrations →
         </a>
@@ -809,7 +809,7 @@ function SetupGuide({ setup }: { setup?: {
           <ol className="space-y-2">
             {setup.steps.map((s, i) => (
               <li key={i} className="flex gap-2">
-                <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-700 text-[10px] font-semibold">
+                <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-primary-100 text-primary-700 text-[10px] font-semibold">
                   {i + 1}
                 </span>
                 <div className="flex-1 min-w-0">
@@ -836,7 +836,7 @@ function SetupGuide({ setup }: { setup?: {
                 <button
                   type="button"
                   onClick={() => copyToClipboard(b.value)}
-                  className="text-[10px] text-blue-600 hover:underline inline-flex items-center gap-0.5"
+                  className="text-[10px] text-primary-600 hover:underline inline-flex items-center gap-0.5"
                 >
                   <Copy size={10} />
                   Copy

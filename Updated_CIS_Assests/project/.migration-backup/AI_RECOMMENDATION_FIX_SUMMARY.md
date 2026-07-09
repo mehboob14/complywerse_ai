@@ -104,7 +104,7 @@ logger.error(traceback.format_exc())
 OPENAI_MODEL=gpt-4o-mini
 
 # AI Integrations (alternate configuration names for compatibility)
-AI_INTEGRATIONS_OPENAI_API_KEY=sk-proj-...
+AI_INTEGRATIONS_OPENAI_API_KEY=<your-openai-api-key>
 ```
 
 ### 4. Improved Error Handling
@@ -258,11 +258,11 @@ ai_recommendation_generated_at DATETIME  -- Timestamp
 
 ```env
 # Essential
-OPENAI_API_KEY=sk-proj-...
+OPENAI_API_KEY=<your-openai-api-key>
 
 # Optional but Recommended
 OPENAI_MODEL=gpt-4o-mini  # Default if not set
-AI_INTEGRATIONS_OPENAI_API_KEY=sk-proj-...  # For compatibility
+AI_INTEGRATIONS_OPENAI_API_KEY=<your-openai-api-key>  # For compatibility
 AI_INTEGRATIONS_OPENAI_BASE_URL=https://api.openai.com/v1  # Custom endpoint
 ```
 

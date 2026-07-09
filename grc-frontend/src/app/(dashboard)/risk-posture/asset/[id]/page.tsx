@@ -82,22 +82,24 @@ type PreviewResp = {
   after_effective?: { best_score: number; per_vuln: Array<{ vuln_id: number; cve_id?: string | null; score: number; band: string }> };
 };
 
+// Sanctioned severity ramp: low=emerald, medium/moderate=amber, high=orange,
+// critical=rose — a genuine multi-value scale, preserved semantically.
 const BAND_COLOR: Record<string, string> = {
-  low: 'bg-green-100 text-green-800 border-green-200',
-  medium: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-  moderate: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-  high: 'bg-orange-100 text-orange-800 border-orange-200',
-  critical: 'bg-red-100 text-red-800 border-red-200',
-  unknown: 'bg-gray-100 text-gray-700 border-gray-200',
+  low: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  medium: 'bg-amber-50 text-amber-700 border-amber-200',
+  moderate: 'bg-amber-50 text-amber-700 border-amber-200',
+  high: 'bg-orange-50 text-orange-700 border-orange-200',
+  critical: 'bg-rose-50 text-rose-700 border-rose-200',
+  unknown: 'bg-slate-100 text-slate-700 border-slate-200',
 };
 
 const RING: Record<string, string> = {
-  low: 'text-green-600',
-  medium: 'text-yellow-600',
-  moderate: 'text-yellow-600',
+  low: 'text-emerald-600',
+  medium: 'text-amber-600',
+  moderate: 'text-amber-600',
   high: 'text-orange-600',
-  critical: 'text-red-600',
-  unknown: 'text-gray-400',
+  critical: 'text-rose-600',
+  unknown: 'text-slate-400',
 };
 
 const REGULATED_DATA: Array<{ value: string; label: string; mult: string }> = [
@@ -224,12 +226,12 @@ export default function RiskPostureAssetPage() {
     },
   });
 
-  if (postureQ.isLoading || assetQ.isLoading) return <div className="p-6 text-sm text-gray-500">Loading risk breakdown…</div>;
+  if (postureQ.isLoading || assetQ.isLoading) return <div className="p-6 text-sm text-slate-500">Loading risk breakdown…</div>;
   if (postureQ.isError || !postureQ.data || assetQ.isError || !assetQ.data) {
     return (
       <div className="p-6">
-        <Link href="/risk-posture" className="text-sm text-blue-600 hover:underline">← Back to Risk Posture</Link>
-        <div className="mt-4 text-sm text-red-600">Failed to load asset.</div>
+        <Link href="/risk-posture" className="text-sm text-primary-700 hover:underline">← Back to Risk Posture</Link>
+        <div className="mt-4 text-sm text-rose-600">Failed to load asset.</div>
       </div>
     );
   }
@@ -250,33 +252,33 @@ export default function RiskPostureAssetPage() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
-      <Link href="/risk-posture" className="text-sm text-blue-600 hover:underline">← Back to Risk Posture</Link>
+      <Link href="/risk-posture" className="text-sm text-primary-700 hover:underline">← Back to Risk Posture</Link>
 
       {/* Header */}
-      <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-5">
+      <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-5">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div className="min-w-0">
-            <div className="text-xs uppercase tracking-wide text-gray-500">{asset.asset_type || 'Asset'}</div>
-            <h1 className="text-2xl font-semibold text-gray-900">{asset.name}</h1>
-            <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-gray-600">
-              {asset.host_name && <span className="font-mono text-xs bg-gray-100 px-2 py-0.5 rounded">{asset.host_name}</span>}
-              {asset.ip_address && <span className="font-mono text-xs bg-gray-100 px-2 py-0.5 rounded">{asset.ip_address}</span>}
+            <div className="text-xs uppercase tracking-wide text-slate-500">{asset.asset_type || 'Asset'}</div>
+            <h1 className="text-2xl font-semibold text-slate-900">{asset.name}</h1>
+            <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-slate-600">
+              {asset.host_name && <span className="font-mono text-xs bg-slate-100 px-2 py-0.5 rounded">{asset.host_name}</span>}
+              {asset.ip_address && <span className="font-mono text-xs bg-slate-100 px-2 py-0.5 rounded">{asset.ip_address}</span>}
               {asset.owner_name && <span>Owner: {asset.owner_name}</span>}
               {asset.criticality && <span className="capitalize">Criticality: {asset.criticality}</span>}
             </div>
           </div>
           <div className="text-center">
-            <div className={`text-5xl font-bold ${RING[bandLabel] ?? 'text-gray-900'}`}>{score == null ? '—' : score}</div>
-            <div className="text-xs text-gray-500">/ 100 risk score</div>
+            <div className={`text-5xl font-bold ${RING[bandLabel] ?? 'text-slate-900'}`}>{score == null ? '—' : score}</div>
+            <div className="text-xs text-slate-500">/ 100 risk score</div>
             <span className={`mt-2 inline-block px-3 py-1 rounded-full text-xs font-medium uppercase ${bandPill(bandLabel)}`}>
               {bandLabel} — {band.description}
             </span>
-            <div className="text-[10px] text-gray-500 mt-2">
+            <div className="text-[10px] text-slate-500 mt-2">
               Data quality:{' '}
               <strong className={
-                data_quality >= 75 ? 'text-green-700'
-                : data_quality >= 50 ? 'text-yellow-700'
-                : data_quality >= 25 ? 'text-orange-700' : 'text-red-700'
+                data_quality >= 75 ? 'text-emerald-700'
+                : data_quality >= 50 ? 'text-amber-700'
+                : data_quality >= 25 ? 'text-orange-700' : 'text-rose-700'
               }>{data_quality}%</strong>
               {' '}({known_dimensions.length}/5 dimensions)
             </div>
@@ -290,14 +292,15 @@ export default function RiskPostureAssetPage() {
         const effective = composite?.effective_score;
         const hostScore = composite?.host_score;
         const weakest = composite?.weakest;
+        // Compliance score scale (higher = better): emerald / amber / rose.
         const scoreColor = (s: number | null | undefined) =>
-          s == null ? 'text-gray-400' :
-          s >= 80 ? 'text-green-700' :
-          s >= 60 ? 'text-yellow-700' : 'text-red-700';
+          s == null ? 'text-slate-400' :
+          s >= 80 ? 'text-emerald-700' :
+          s >= 60 ? 'text-amber-700' : 'text-rose-700';
 
         return (
-          <div className="rounded-lg border border-teal-200 bg-teal-50/50 shadow-sm overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-3 bg-teal-600 text-white">
+          <div className="rounded-lg border border-primary-200 bg-primary-50/50 shadow-sm overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-3 bg-primary-600 text-[#0a0a0a]">
               <div>
                 <div className="text-xs uppercase tracking-wider font-semibold opacity-80">IP Group — {asset.ip_address}</div>
                 <div className="text-sm font-semibold">{group.length} assets share this host · composite CIS compliance</div>
@@ -313,7 +316,7 @@ export default function RiskPostureAssetPage() {
             <div className="px-5 py-4">
               {/* Formula explanation */}
               {composite && (
-                <div className="mb-3 text-xs text-teal-800 bg-teal-100 rounded-md px-3 py-2">
+                <div className="mb-3 text-xs text-primary-800 bg-primary-100 rounded-md px-3 py-2">
                   <strong>Formula:</strong> 60% × host OS score + 40% × criticality-weighted app average
                   {composite.penalty && (
                     <span className="ml-2 text-amber-800">· −10 pts penalty (one app &lt; 50%)</span>
@@ -333,25 +336,25 @@ export default function RiskPostureAssetPage() {
                       key={g.id}
                       className={`flex items-center justify-between rounded-md border px-3 py-2 text-sm ${
                         g.is_self
-                          ? 'border-teal-400 bg-white font-medium'
-                          : 'border-teal-100 bg-white/60'
+                          ? 'border-primary-400 bg-white font-medium'
+                          : 'border-primary-100 bg-white/60'
                       }`}
                     >
                       <div className="flex items-center gap-2 min-w-0">
                         <span className={`inline-block w-2 h-2 rounded-full flex-shrink-0 ${
-                          g.score == null ? 'bg-gray-300' :
-                          g.score >= 80 ? 'bg-green-500' :
-                          g.score >= 60 ? 'bg-yellow-500' : 'bg-red-500'
+                          g.score == null ? 'bg-slate-300' :
+                          g.score >= 80 ? 'bg-emerald-500' :
+                          g.score >= 60 ? 'bg-amber-500' : 'bg-rose-500'
                         }`} />
-                        <span className="truncate text-gray-800">{g.name.split(' @')[0]}</span>
-                        {g.is_self && <span className="text-[10px] bg-teal-100 text-teal-700 rounded px-1.5 py-0.5 font-semibold">this asset</span>}
+                        <span className="truncate text-slate-800">{g.name.split(' @')[0]}</span>
+                        {g.is_self && <span className="text-[10px] bg-primary-100 text-primary-700 rounded px-1.5 py-0.5 font-semibold">this asset</span>}
                         {isHost && <span className="text-[10px] bg-slate-100 text-slate-600 rounded px-1.5 py-0.5">host OS</span>}
                         {g.criticality && (
                           <span className={`text-[10px] rounded px-1.5 py-0.5 capitalize ${
-                            g.criticality === 'critical' ? 'bg-red-100 text-red-700' :
+                            g.criticality === 'critical' ? 'bg-rose-100 text-rose-700' :
                             g.criticality === 'high' ? 'bg-orange-100 text-orange-700' :
-                            g.criticality === 'medium' ? 'bg-yellow-100 text-yellow-700' :
-                            'bg-gray-100 text-gray-600'
+                            g.criticality === 'medium' ? 'bg-amber-100 text-amber-700' :
+                            'bg-slate-100 text-slate-600'
                           }`}>{g.criticality}</span>
                         )}
                       </div>
@@ -359,10 +362,10 @@ export default function RiskPostureAssetPage() {
                         {g.score != null ? (
                           <span className={`font-mono font-semibold ${scoreColor(g.score)}`}>{g.score}%</span>
                         ) : (
-                          <span className="text-xs text-gray-400">not scanned</span>
+                          <span className="text-xs text-slate-400">not scanned</span>
                         )}
                         {!g.is_self && (
-                          <Link href={`/risk-posture/asset/${g.id}`} className="text-xs text-teal-700 hover:underline">
+                          <Link href={`/risk-posture/asset/${g.id}`} className="text-xs text-primary-700 hover:underline">
                             posture →
                           </Link>
                         )}
@@ -379,29 +382,29 @@ export default function RiskPostureAssetPage() {
       {/* Business Impact + Live Preview — split pane */}
       <div className="grid gap-4 lg:grid-cols-2">
         {/* LEFT: Business Impact form */}
-        <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-5">
+        <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-5">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-gray-800">Business Impact — {asset.name}</h2>
-            <span className="text-[10px] uppercase tracking-wide text-gray-400">drives the formula</span>
+            <h2 className="text-sm font-semibold text-slate-800">Business Impact — {asset.name}</h2>
+            <span className="text-[10px] uppercase tracking-wide text-slate-400">drives the formula</span>
           </div>
-          <p className="text-xs text-gray-500 mb-4">
+          <p className="text-xs text-slate-500 mb-4">
             Saves to the asset; recompute fires automatically. Change values to preview the new score before saving.
           </p>
 
           {/* Customer / Internet */}
           <div className="grid grid-cols-2 gap-3 mb-3">
-            <label className="flex items-center justify-between rounded-md border border-gray-200 p-2.5">
+            <label className="flex items-center justify-between rounded-md border border-slate-200 p-2.5">
               <span className="text-xs">
-                <div className="font-medium text-gray-800">Customer-facing</div>
-                <div className="text-gray-500">External customers use it (1.2×)</div>
+                <div className="font-medium text-slate-800">Customer-facing</div>
+                <div className="text-slate-500">External customers use it (1.2×)</div>
               </span>
               <input type="checkbox" className="h-4 w-4" checked={form.is_customer_facing}
                 onChange={(e) => setForm({ ...form, is_customer_facing: e.target.checked })} />
             </label>
-            <label className="flex items-center justify-between rounded-md border border-gray-200 p-2.5">
+            <label className="flex items-center justify-between rounded-md border border-slate-200 p-2.5">
               <span className="text-xs">
-                <div className="font-medium text-gray-800">Internet-facing</div>
-                <div className="text-gray-500">Reachable from public internet (1.3×)</div>
+                <div className="font-medium text-slate-800">Internet-facing</div>
+                <div className="text-slate-500">Reachable from public internet (1.3×)</div>
               </span>
               <input type="checkbox" className="h-4 w-4" checked={form.is_internet_facing}
                 onChange={(e) => setForm({ ...form, is_internet_facing: e.target.checked })} />
@@ -410,9 +413,9 @@ export default function RiskPostureAssetPage() {
 
           {/* Regulated data */}
           <div className="mb-3">
-            <label className="block text-xs font-medium text-gray-700 mb-1">Regulated data</label>
+            <label className="block text-xs font-medium text-slate-700 mb-1">Regulated data</label>
             <select
-              className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+              className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm"
               value={form.regulated_data_type}
               onChange={(e) => setForm({ ...form, regulated_data_type: e.target.value })}
             >
@@ -424,14 +427,14 @@ export default function RiskPostureAssetPage() {
 
           {/* Operational dependency — radio with meanings */}
           <div className="mb-3">
-            <label className="block text-xs font-medium text-gray-700 mb-1">Operational dependency</label>
-            <p className="text-[11px] italic text-gray-500 mb-2">How much does the bank suffer when this asset goes down?</p>
+            <label className="block text-xs font-medium text-slate-700 mb-1">Operational dependency</label>
+            <p className="text-[11px] italic text-slate-500 mb-2">How much does the bank suffer when this asset goes down?</p>
             <div className="space-y-1.5">
               {OP_DEP.map(o => (
                 <label
                   key={o.value}
                   className={`flex cursor-pointer items-start gap-2 rounded-md border p-2 text-xs ${
-                    form.operational_dependency === o.value ? 'border-blue-300 bg-blue-50' : 'border-gray-200 hover:bg-gray-50'
+                    form.operational_dependency === o.value ? 'border-primary-300 bg-primary-50' : 'border-slate-200 hover:bg-slate-50'
                   }`}
                 >
                   <input
@@ -442,8 +445,8 @@ export default function RiskPostureAssetPage() {
                     onChange={() => setForm({ ...form, operational_dependency: o.value })}
                   />
                   <span>
-                    <span className="font-medium text-gray-800">{o.label} <span className="text-gray-400">({o.mult})</span></span>
-                    <span className="block text-gray-600">{o.meaning}</span>
+                    <span className="font-medium text-slate-800">{o.label} <span className="text-slate-400">({o.mult})</span></span>
+                    <span className="block text-slate-600">{o.meaning}</span>
                   </span>
                 </label>
               ))}
@@ -459,10 +462,10 @@ export default function RiskPostureAssetPage() {
                 availability_rating: 'Availability',
               } as const;
               return (
-                <div key={k} className="rounded-md border border-gray-200 p-2">
-                  <div className="flex items-center justify-between text-[11px] text-gray-500">
+                <div key={k} className="rounded-md border border-slate-200 p-2">
+                  <div className="flex items-center justify-between text-[11px] text-slate-500">
                     <span className="uppercase tracking-wide">{labels[k]}</span>
-                    <span className="font-semibold text-gray-800">{form[k]}/5</span>
+                    <span className="font-semibold text-slate-800">{form[k]}/5</span>
                   </div>
                   <input
                     type="range" min={1} max={5} step={1}
@@ -477,27 +480,27 @@ export default function RiskPostureAssetPage() {
 
           {/* Notes */}
           <div className="mb-3">
-            <label className="block text-xs font-medium text-gray-700 mb-1">Notes (audit trail)</label>
+            <label className="block text-xs font-medium text-slate-700 mb-1">Notes (audit trail)</label>
             <textarea
               rows={2}
-              className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+              className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm"
               placeholder="Bank teller PoS, regulated under SBP framework, etc."
               value={form.business_impact_notes}
               onChange={(e) => setForm({ ...form, business_impact_notes: e.target.value })}
             />
           </div>
 
-          <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-            <div className="text-[11px] text-gray-500">
+          <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+            <div className="text-[11px] text-slate-500">
               {isDirty ? <span className="text-amber-700">● unsaved changes</span> : <span>no changes</span>}
             </div>
             <div className="flex items-center gap-2">
-              {saveMut.isError && <span className="text-xs text-red-600">Save failed</span>}
-              {saveMut.isSuccess && !isDirty && <span className="text-xs text-green-600">Saved</span>}
+              {saveMut.isError && <span className="text-xs text-rose-600">Save failed</span>}
+              {saveMut.isSuccess && !isDirty && <span className="text-xs text-emerald-600">Saved</span>}
               <button
                 disabled={!isDirty || saveMut.isPending}
                 onClick={() => saveMut.mutate()}
-                className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40"
+                className="rounded-md bg-primary-600 px-3 py-1.5 text-xs font-medium text-[#0a0a0a] hover:bg-primary-700 disabled:opacity-40"
               >
                 {saveMut.isPending ? 'Saving…' : 'Save changes'}
               </button>
@@ -506,35 +509,35 @@ export default function RiskPostureAssetPage() {
         </div>
 
         {/* RIGHT: Live preview */}
-        <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-5">
+        <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-5">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-gray-800">Live preview</h2>
-            <span className="text-[10px] uppercase tracking-wide text-gray-400">no data is written until Save</span>
+            <h2 className="text-sm font-semibold text-slate-800">Live preview</h2>
+            <span className="text-[10px] uppercase tracking-wide text-slate-400">no data is written until Save</span>
           </div>
 
           {/* Current state — always shown */}
-          <div className="rounded-md border border-gray-200 p-3">
-            <div className="text-xs font-medium uppercase tracking-wide text-gray-500 mb-2">Current asset risk</div>
+          <div className="rounded-md border border-slate-200 p-3">
+            <div className="text-xs font-medium uppercase tracking-wide text-slate-500 mb-2">Current asset risk</div>
             <ScoreRow label="CIS gap" value={1 - (components.cis.pass_rate ?? 0) / 100} known={components.cis.known} />
             <ScoreRow label="CIA" value={components.cia.score} known={components.cia.known} />
             <ScoreRow label="Business" value={components.vuln?.effective_risk?.best_score ?? null} known={!!components.vuln?.effective_risk} />
-            <div className="border-t border-gray-100 mt-2 pt-2 flex items-center justify-between">
-              <span className="text-xs font-medium text-gray-700">overall</span>
-              <span className={`text-sm font-semibold ${RING[bandLabel] ?? 'text-gray-900'}`}>
+            <div className="border-t border-slate-100 mt-2 pt-2 flex items-center justify-between">
+              <span className="text-xs font-medium text-slate-700">overall</span>
+              <span className={`text-sm font-semibold ${RING[bandLabel] ?? 'text-slate-900'}`}>
                 {score == null ? '—' : `${score} / 100`}
               </span>
             </div>
           </div>
 
           {/* After your changes */}
-          <div className="mt-3 rounded-md border border-blue-100 bg-blue-50/50 p-3">
-            <div className="text-xs font-medium uppercase tracking-wide text-blue-700 mb-2">After your changes</div>
+          <div className="mt-3 rounded-md border border-primary-100 bg-primary-50/50 p-3">
+            <div className="text-xs font-medium uppercase tracking-wide text-primary-700 mb-2">After your changes</div>
             {!isDirty ? (
-              <p className="text-xs text-gray-500">Change a value on the left to see how the risk score moves before saving.</p>
+              <p className="text-xs text-slate-500">Change a value on the left to see how the risk score moves before saving.</p>
             ) : previewQ.isLoading ? (
-              <p className="text-xs text-gray-500">Computing preview…</p>
+              <p className="text-xs text-slate-500">Computing preview…</p>
             ) : previewQ.isError || !previewQ.data ? (
-              <p className="text-xs text-red-600">Preview unavailable.</p>
+              <p className="text-xs text-rose-600">Preview unavailable.</p>
             ) : (
               <>
                 <ScoreRow
@@ -543,18 +546,18 @@ export default function RiskPostureAssetPage() {
                   known={!!previewQ.data.after_effective}
                   highlight
                 />
-                <div className="border-t border-blue-100 mt-2 pt-2 flex items-center justify-between">
-                  <span className="text-xs font-medium text-gray-700">overall</span>
+                <div className="border-t border-primary-100 mt-2 pt-2 flex items-center justify-between">
+                  <span className="text-xs font-medium text-slate-700">overall</span>
                   <div className="flex items-center gap-2">
-                    <span className={`text-sm font-semibold ${RING[previewQ.data.after.band.label] ?? 'text-gray-900'}`}>
+                    <span className={`text-sm font-semibold ${RING[previewQ.data.after.band.label] ?? 'text-slate-900'}`}>
                       {previewQ.data.after.score} / 100
                     </span>
                     <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium uppercase ${bandPill(previewQ.data.after.band.label)}`}>
                       {previewQ.data.after.band.label}
                     </span>
                     <span className={`text-xs font-medium ${
-                      previewQ.data.delta > 0 ? 'text-red-700' :
-                      previewQ.data.delta < 0 ? 'text-green-700' : 'text-gray-500'
+                      previewQ.data.delta > 0 ? 'text-rose-700' :
+                      previewQ.data.delta < 0 ? 'text-emerald-700' : 'text-slate-500'
                     }`}>
                       ({previewQ.data.delta > 0 ? '▲ +' : previewQ.data.delta < 0 ? '▼ ' : ''}{previewQ.data.delta.toFixed(2)})
                     </span>
@@ -563,18 +566,18 @@ export default function RiskPostureAssetPage() {
 
                 {/* Per-vuln re-score list */}
                 {previewQ.data.before_effective?.per_vuln && previewQ.data.after_effective?.per_vuln && (
-                  <div className="mt-3 border-t border-blue-100 pt-2">
-                    <div className="text-[11px] uppercase tracking-wide text-blue-700 mb-1.5">Vulnerabilities re-scored</div>
+                  <div className="mt-3 border-t border-primary-100 pt-2">
+                    <div className="text-[11px] uppercase tracking-wide text-primary-700 mb-1.5">Vulnerabilities re-scored</div>
                     <div className="space-y-1">
                       {previewQ.data.before_effective.per_vuln.map((b) => {
                         const a = previewQ.data!.after_effective!.per_vuln.find(x => x.vuln_id === b.vuln_id);
                         if (!a) return null;
                         const d = a.score - b.score;
                         const arrow = d > 0.005 ? '▲' : d < -0.005 ? '▼' : '·';
-                        const cls = d > 0.005 ? 'text-red-700' : d < -0.005 ? 'text-green-700' : 'text-gray-500';
+                        const cls = d > 0.005 ? 'text-rose-700' : d < -0.005 ? 'text-emerald-700' : 'text-slate-500';
                         return (
                           <div key={b.vuln_id} className="flex items-center justify-between text-xs">
-                            <span className="font-mono text-gray-700">{b.cve_id || `VULN-${b.vuln_id}`}</span>
+                            <span className="font-mono text-slate-700">{b.cve_id || `VULN-${b.vuln_id}`}</span>
                             <span className={`font-mono ${cls}`}>
                               {(b.score * 10).toFixed(1)} → {(a.score * 10).toFixed(1)} {arrow}
                             </span>
@@ -590,10 +593,11 @@ export default function RiskPostureAssetPage() {
         </div>
       </div>
 
-      {/* Stacked contributions */}
-      <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-5">
-        <h2 className="text-sm font-semibold text-gray-700 mb-3">Score breakdown — which dimension contributed how much</h2>
-        <div className="flex h-6 w-full rounded-md overflow-hidden bg-gray-100">
+      {/* Stacked contributions — 5-series categorical data-viz (CIS / Vuln /
+          CIA / Ctrl / Risk); dimension palette preserved to match the legend. */}
+      <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-5">
+        <h2 className="text-sm font-semibold text-slate-700 mb-3">Score breakdown — which dimension contributed how much</h2>
+        <div className="flex h-6 w-full rounded-md overflow-hidden bg-slate-100">
           <div className="bg-red-400 flex items-center justify-center text-[10px] text-white font-medium" style={{ width: `${contributions.cis}%` }} title={`CIS contributes ${contributions.cis} of ${score} points`}>
             {contributions.cis > 4 && contributions.cis}
           </div>
@@ -610,7 +614,7 @@ export default function RiskPostureAssetPage() {
             {contributions.risk > 4 && contributions.risk}
           </div>
         </div>
-        <div className="flex flex-wrap gap-4 mt-3 text-xs text-gray-700">
+        <div className="flex flex-wrap gap-4 mt-3 text-xs text-slate-700">
           <span className={`flex items-center gap-1.5 ${!components.cis.known ? 'opacity-40' : ''}`}>
             <span className="inline-block w-2 h-2 bg-red-400 rounded-sm" /> CIS gap ({Math.round(weights.cis * 100)}%) → {contributions.cis} pts {!components.cis.known && '(no data)'}
           </span>
@@ -636,27 +640,27 @@ export default function RiskPostureAssetPage() {
 
       {/* Existing 5 dimension panels */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-5">
+        <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-5">
           <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-semibold text-gray-800">
+            <h3 className="text-sm font-semibold text-slate-800">
               <span className="inline-block w-2 h-2 bg-red-400 rounded-sm mr-2" />
               CIS Benchmark
             </h3>
-            <Link href={`/compliance/plugins/asset/${asset.id}`} className="text-xs text-blue-600 hover:underline">
+            <Link href={`/compliance/plugins/asset/${asset.id}`} className="text-xs text-primary-700 hover:underline">
               View CIS details →
             </Link>
           </div>
           {components.cis.total === 0 ? (
-            <p className="text-xs text-gray-500">No approved CIS rules in the library yet. Upload a CIS PDF in Plugin Automation to start scoring this dimension.</p>
+            <p className="text-xs text-slate-500">No approved CIS rules in the library yet. Upload a CIS PDF in Plugin Automation to start scoring this dimension.</p>
           ) : components.cis.pass_rate == null ? (
-            <p className="text-xs text-gray-500">No scans yet for this asset.</p>
+            <p className="text-xs text-slate-500">No scans yet for this asset.</p>
           ) : (
             <>
               <div className="flex items-end gap-3">
-                <div className="text-3xl font-semibold text-gray-900">{components.cis.pass_rate}%</div>
-                <div className="text-xs text-gray-500 pb-1">pass rate</div>
+                <div className="text-3xl font-semibold text-slate-900">{components.cis.pass_rate}%</div>
+                <div className="text-xs text-slate-500 pb-1">pass rate</div>
               </div>
-              <div className="text-xs text-gray-600 mt-2 space-y-0.5">
+              <div className="text-xs text-slate-600 mt-2 space-y-0.5">
                 <div>✅ Passed: <strong>{components.cis.passed}</strong></div>
                 <div>❌ Failed: <strong>{components.cis.failed}</strong></div>
                 {components.cis.never_scanned ? <div>⏳ Never scanned: <strong>{components.cis.never_scanned}</strong> (counted toward gap)</div> : null}
@@ -666,35 +670,35 @@ export default function RiskPostureAssetPage() {
           )}
         </div>
 
-        <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-5">
+        <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-5">
           <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-semibold text-gray-800">
+            <h3 className="text-sm font-semibold text-slate-800">
               <span className="inline-block w-2 h-2 bg-orange-400 rounded-sm mr-2" />
               Vulnerabilities
             </h3>
-            <Link href="/vulnerabilities" className="text-xs text-blue-600 hover:underline">View all vulns →</Link>
+            <Link href="/vulnerabilities" className="text-xs text-primary-700 hover:underline">View all vulns →</Link>
           </div>
           <div className="flex items-end gap-3">
-            <div className="text-3xl font-semibold text-gray-900">{components.vuln.active_count}</div>
-            <div className="text-xs text-gray-500 pb-1">
+            <div className="text-3xl font-semibold text-slate-900">{components.vuln.active_count}</div>
+            <div className="text-xs text-slate-500 pb-1">
               active
               {components.vuln.total_linked > components.vuln.active_count && (
-                <span className="text-gray-400"> ({components.vuln.total_linked} total linked)</span>
+                <span className="text-slate-400"> ({components.vuln.total_linked} total linked)</span>
               )}
             </div>
           </div>
-          <div className="text-xs text-gray-600 mt-2 space-y-0.5">
+          <div className="text-xs text-slate-600 mt-2 space-y-0.5">
             <div>🔴 Critical: <strong>{components.vuln.by_severity.critical}</strong></div>
             <div>🟠 High: <strong>{components.vuln.by_severity.high}</strong></div>
             <div>🟡 Medium: <strong>{components.vuln.by_severity.medium}</strong></div>
             <div>🟢 Low: <strong>{components.vuln.by_severity.low}</strong></div>
-            <div className="pt-1 text-gray-400">Severity-weighted points: {components.vuln.raw_points}</div>
+            <div className="pt-1 text-slate-400">Severity-weighted points: {components.vuln.raw_points}</div>
           </div>
         </div>
 
-        <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-5">
+        <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-5">
           <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-semibold text-gray-800">
+            <h3 className="text-sm font-semibold text-slate-800">
               <span className="inline-block w-2 h-2 bg-purple-400 rounded-sm mr-2" />
               CIA Criticality
             </h3>
@@ -704,34 +708,34 @@ export default function RiskPostureAssetPage() {
           ) : (
             <div className="grid grid-cols-3 gap-2 mt-2">
               <div className="text-center">
-                <div className="text-2xl font-semibold text-gray-900">{components.cia.confidentiality ?? '–'}</div>
-                <div className="text-[10px] uppercase tracking-wide text-gray-500">Confidentiality</div>
+                <div className="text-2xl font-semibold text-slate-900">{components.cia.confidentiality ?? '–'}</div>
+                <div className="text-[10px] uppercase tracking-wide text-slate-500">Confidentiality</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-semibold text-gray-900">{components.cia.integrity ?? '–'}</div>
-                <div className="text-[10px] uppercase tracking-wide text-gray-500">Integrity</div>
+                <div className="text-2xl font-semibold text-slate-900">{components.cia.integrity ?? '–'}</div>
+                <div className="text-[10px] uppercase tracking-wide text-slate-500">Integrity</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-semibold text-gray-900">{components.cia.availability ?? '–'}</div>
-                <div className="text-[10px] uppercase tracking-wide text-gray-500">Availability</div>
+                <div className="text-2xl font-semibold text-slate-900">{components.cia.availability ?? '–'}</div>
+                <div className="text-[10px] uppercase tracking-wide text-slate-500">Availability</div>
               </div>
             </div>
           )}
         </div>
 
-        <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-5">
+        <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-5">
           <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-semibold text-gray-800">
+            <h3 className="text-sm font-semibold text-slate-800">
               <span className="inline-block w-2 h-2 bg-blue-400 rounded-sm mr-2" />
               Control Coverage
             </h3>
-            <Link href={`/assets/${asset.id}`} className="text-xs text-blue-600 hover:underline">Link controls →</Link>
+            <Link href={`/assets/${asset.id}`} className="text-xs text-primary-700 hover:underline">Link controls →</Link>
           </div>
           <div className="flex items-end gap-3">
-            <div className="text-3xl font-semibold text-gray-900">{components.ctrl.coverage_pct}%</div>
-            <div className="text-xs text-gray-500 pb-1">covered</div>
+            <div className="text-3xl font-semibold text-slate-900">{components.ctrl.coverage_pct}%</div>
+            <div className="text-xs text-slate-500 pb-1">covered</div>
           </div>
-          <div className="text-xs text-gray-600 mt-2">
+          <div className="text-xs text-slate-600 mt-2">
             <strong>{components.ctrl.linked_count}</strong> of target <strong>{components.ctrl.target}</strong> controls linked.
           </div>
         </div>
@@ -783,27 +787,28 @@ function TriagedVulnSection({ perVuln, asset }: { perVuln: PerVulnRow[]; asset: 
       .sort((a, b) => Math.abs(b.cvss - b.eff) - Math.abs(a.cvss - a.eff)),
     [perVuln, cvssRank, effRank]);
 
+  // Sanctioned severity ramp: critical=rose, high=orange, medium=amber, low=emerald.
   const sevColor = (sev?: string | null) => {
     switch ((sev || '').toLowerCase()) {
-      case 'critical': return 'bg-red-100 text-red-800';
+      case 'critical': return 'bg-rose-100 text-rose-800';
       case 'high': return 'bg-orange-100 text-orange-800';
-      case 'medium': return 'bg-yellow-100 text-yellow-800';
-      case 'low': return 'bg-green-100 text-green-800';
-      default: return 'bg-gray-100 text-gray-700';
+      case 'medium': return 'bg-amber-100 text-amber-800';
+      case 'low': return 'bg-emerald-100 text-emerald-800';
+      default: return 'bg-slate-100 text-slate-700';
     }
   };
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-5">
+    <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-5">
       {/* Human-in-the-loop control bar */}
-      <div className="mb-4 rounded-lg border-2 border-blue-200 bg-blue-50/60 p-3">
+      <div className="mb-4 rounded-lg border-2 border-primary-200 bg-primary-50/60 p-3">
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div>
-            <div className="text-xs uppercase tracking-wider font-semibold text-blue-700">You choose the lens</div>
-            <div className="text-sm font-semibold text-gray-900">How do you want to triage this asset's vulnerabilities?</div>
+            <div className="text-xs uppercase tracking-wider font-semibold text-primary-700">You choose the lens</div>
+            <div className="text-sm font-semibold text-slate-900">How do you want to triage this asset's vulnerabilities?</div>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-[11px] text-gray-500 mr-1">Simulate:</span>
+            <span className="text-[11px] text-slate-500 mr-1">Simulate:</span>
             <label className="inline-flex items-center gap-1.5 cursor-pointer text-xs">
               <input
                 type="checkbox"
@@ -811,7 +816,7 @@ function TriagedVulnSection({ perVuln, asset }: { perVuln: PerVulnRow[]; asset: 
                 checked={hideExploitSignals}
                 onChange={(e) => setHideExploitSignals(e.target.checked)}
               />
-              <span className="text-gray-700">Pretend EPSS + KEV don't exist</span>
+              <span className="text-slate-700">Pretend EPSS + KEV don't exist</span>
             </label>
           </div>
         </div>
@@ -821,36 +826,36 @@ function TriagedVulnSection({ perVuln, asset }: { perVuln: PerVulnRow[]; asset: 
             onClick={() => setMode('scanner')}
             className={`text-left rounded-md border-2 px-3 py-2 ${
               mode === 'scanner'
-                ? 'border-gray-800 bg-white shadow-sm'
-                : 'border-gray-200 bg-white/50 hover:border-gray-300'
+                ? 'border-slate-800 bg-white shadow-sm'
+                : 'border-slate-200 bg-white/50 hover:border-slate-300'
             }`}
           >
-            <div className="text-xs font-semibold text-gray-900">Scanner view</div>
-            <div className="text-[11px] text-gray-500">Just what CVSS says — the old way.</div>
+            <div className="text-xs font-semibold text-slate-900">Scanner view</div>
+            <div className="text-[11px] text-slate-500">Just what CVSS says — the old way.</div>
           </button>
           <button
             type="button"
             onClick={() => setMode('effective')}
             className={`text-left rounded-md border-2 px-3 py-2 ${
               mode === 'effective'
-                ? 'border-blue-600 bg-white shadow-sm'
-                : 'border-gray-200 bg-white/50 hover:border-blue-300'
+                ? 'border-primary-600 bg-white shadow-sm'
+                : 'border-slate-200 bg-white/50 hover:border-primary-300'
             }`}
           >
-            <div className="text-xs font-semibold text-gray-900">Effective view <span className="text-[10px] text-blue-600 font-normal">(recommended)</span></div>
-            <div className="text-[11px] text-gray-500">CVSS + EPSS + KEV + business impact.</div>
+            <div className="text-xs font-semibold text-slate-900">Effective view <span className="text-[10px] text-primary-700 font-normal">(recommended)</span></div>
+            <div className="text-[11px] text-slate-500">CVSS + EPSS + KEV + business impact.</div>
           </button>
           <button
             type="button"
             onClick={() => setMode('compare')}
             className={`text-left rounded-md border-2 px-3 py-2 ${
               mode === 'compare'
-                ? 'border-amber-500 bg-white shadow-sm'
-                : 'border-gray-200 bg-white/50 hover:border-amber-300'
+                ? 'border-slate-600 bg-white shadow-sm'
+                : 'border-slate-200 bg-white/50 hover:border-slate-400'
             }`}
           >
-            <div className="text-xs font-semibold text-gray-900">Compare side-by-side</div>
-            <div className="text-[11px] text-gray-500">See both, with rerank arrows.</div>
+            <div className="text-xs font-semibold text-slate-900">Compare side-by-side</div>
+            <div className="text-[11px] text-slate-500">See both, with rerank arrows.</div>
           </button>
         </div>
         {hideExploitSignals && (
@@ -862,8 +867,8 @@ function TriagedVulnSection({ perVuln, asset }: { perVuln: PerVulnRow[]; asset: 
 
       {mode === 'compare' && (
       <div className="mb-4">
-        <h2 className="text-base font-semibold text-gray-900">Before vs After applying real-world exploit signals</h2>
-        <p className="mt-1 text-xs text-gray-500">
+        <h2 className="text-base font-semibold text-slate-900">Before vs After applying real-world exploit signals</h2>
+        <p className="mt-1 text-xs text-slate-500">
           Left = what the scanner alone says. Right = what you actually need to fix first once EPSS likelihood, CISA KEV, and business impact are factored in.
         </p>
       </div>
@@ -873,13 +878,13 @@ function TriagedVulnSection({ perVuln, asset }: { perVuln: PerVulnRow[]; asset: 
       {mode === 'compare' && (
       <div className="grid gap-4 lg:grid-cols-2 mb-4">
         {/* LEFT — CVSS only (the "Before" view) */}
-        <div className="rounded-lg border-2 border-gray-300 bg-gray-50 overflow-hidden">
-          <div className="bg-gray-200 px-4 py-2.5 border-b-2 border-gray-300">
-            <div className="text-[10px] uppercase tracking-wider font-bold text-gray-600">Before — Scanner CVSS only</div>
-            <div className="text-sm font-semibold text-gray-900">What the scanner alone says</div>
+        <div className="rounded-lg border-2 border-slate-300 bg-slate-50 overflow-hidden">
+          <div className="bg-slate-200 px-4 py-2.5 border-b-2 border-slate-300">
+            <div className="text-[10px] uppercase tracking-wider font-bold text-slate-600">Before — Scanner CVSS only</div>
+            <div className="text-sm font-semibold text-slate-900">What the scanner alone says</div>
           </div>
           <table className="w-full text-xs">
-            <thead className="bg-gray-100 text-gray-500">
+            <thead className="bg-slate-100 text-slate-500">
               <tr>
                 <th className="text-left px-3 py-1.5 font-medium">#</th>
                 <th className="text-left px-3 py-1.5 font-medium">Vulnerability</th>
@@ -888,11 +893,11 @@ function TriagedVulnSection({ perVuln, asset }: { perVuln: PerVulnRow[]; asset: 
             </thead>
             <tbody>
               {cvssSorted.map((v, i) => (
-                <tr key={v.vuln_id} className="border-t border-gray-200">
-                  <td className="px-3 py-2 font-mono font-semibold text-gray-700">#{i + 1}</td>
+                <tr key={v.vuln_id} className="border-t border-slate-200">
+                  <td className="px-3 py-2 font-mono font-semibold text-slate-700">#{i + 1}</td>
                   <td className="px-3 py-2">
-                    <div className="font-mono text-[11px] text-gray-700">{v.cve_id || `VULN-${v.vuln_id}`}</div>
-                    <div className="text-gray-500 truncate max-w-[14rem]">{v.title || 'Untitled'}</div>
+                    <div className="font-mono text-[11px] text-slate-700">{v.cve_id || `VULN-${v.vuln_id}`}</div>
+                    <div className="text-slate-500 truncate max-w-[14rem]">{v.title || 'Untitled'}</div>
                   </td>
                   <td className="px-3 py-2 text-right">
                     <span className={`inline-block rounded px-1.5 py-0.5 font-mono font-semibold ${sevColor(v.severity)}`}>
@@ -906,13 +911,13 @@ function TriagedVulnSection({ perVuln, asset }: { perVuln: PerVulnRow[]; asset: 
         </div>
 
         {/* RIGHT — Effective risk (the "After" view) */}
-        <div className="rounded-lg border-2 border-blue-400 bg-blue-50/40 overflow-hidden">
-          <div className="bg-blue-100 px-4 py-2.5 border-b-2 border-blue-300">
-            <div className="text-[10px] uppercase tracking-wider font-bold text-blue-700">After — Effective risk</div>
-            <div className="text-sm font-semibold text-gray-900">CVSS + EPSS + KEV + Business impact</div>
+        <div className="rounded-lg border-2 border-primary-400 bg-primary-50/40 overflow-hidden">
+          <div className="bg-primary-100 px-4 py-2.5 border-b-2 border-primary-300">
+            <div className="text-[10px] uppercase tracking-wider font-bold text-primary-700">After — Effective risk</div>
+            <div className="text-sm font-semibold text-slate-900">CVSS + EPSS + KEV + Business impact</div>
           </div>
           <table className="w-full text-xs">
-            <thead className="bg-blue-50 text-blue-700">
+            <thead className="bg-primary-50 text-primary-700">
               <tr>
                 <th className="text-left px-3 py-1.5 font-medium">#</th>
                 <th className="text-left px-3 py-1.5 font-medium">Vulnerability</th>
@@ -926,11 +931,11 @@ function TriagedVulnSection({ perVuln, asset }: { perVuln: PerVulnRow[]; asset: 
                 const oldRank = cvssRank.get(v.vuln_id) || 0;
                 const delta = oldRank - newRank; // positive = moved UP
                 return (
-                  <tr key={v.vuln_id} className="border-t border-blue-100">
-                    <td className="px-3 py-2 font-mono font-semibold text-blue-700">#{newRank}</td>
+                  <tr key={v.vuln_id} className="border-t border-primary-100">
+                    <td className="px-3 py-2 font-mono font-semibold text-primary-700">#{newRank}</td>
                     <td className="px-3 py-2">
-                      <div className="font-mono text-[11px] text-gray-700">{v.cve_id || `VULN-${v.vuln_id}`}</div>
-                      <div className="text-gray-500 truncate max-w-[14rem]">{v.title || 'Untitled'}</div>
+                      <div className="font-mono text-[11px] text-slate-700">{v.cve_id || `VULN-${v.vuln_id}`}</div>
+                      <div className="text-slate-500 truncate max-w-[14rem]">{v.title || 'Untitled'}</div>
                     </td>
                     <td className="px-3 py-2 text-right">
                       <span className={`inline-block rounded px-1.5 py-0.5 font-mono font-semibold ${sevColor(v.band)}`}>
@@ -939,13 +944,13 @@ function TriagedVulnSection({ perVuln, asset }: { perVuln: PerVulnRow[]; asset: 
                     </td>
                     <td className="px-3 py-2 text-right font-mono">
                       {delta === 0 ? (
-                        <span className="text-gray-400">·</span>
+                        <span className="text-slate-400">·</span>
                       ) : delta > 0 ? (
-                        <span className="text-green-700 font-semibold" title={`Moved up ${delta} from CVSS rank #${oldRank}`}>
+                        <span className="text-emerald-700 font-semibold" title={`Moved up ${delta} from CVSS rank #${oldRank}`}>
                           ▲ +{delta}
                         </span>
                       ) : (
-                        <span className="text-red-700 font-semibold" title={`Moved down ${-delta} from CVSS rank #${oldRank}`}>
+                        <span className="text-rose-700 font-semibold" title={`Moved down ${-delta} from CVSS rank #${oldRank}`}>
                           ▼ {delta}
                         </span>
                       )}
@@ -976,7 +981,7 @@ function TriagedVulnSection({ perVuln, asset }: { perVuln: PerVulnRow[]; asset: 
                 'mixed signals';
               return (
                 <li key={m.v.vuln_id}>
-                  <span className={moved > 0 ? 'text-green-800' : 'text-red-800'}>
+                  <span className={moved > 0 ? 'text-emerald-800' : 'text-rose-800'}>
                     {moved > 0 ? '▲' : '▼'} {Math.abs(moved)}
                   </span>{' '}
                   <span className="font-semibold">{m.v.cve_id || `VULN-${m.v.vuln_id}`}</span>{' '}
@@ -988,21 +993,21 @@ function TriagedVulnSection({ perVuln, asset }: { perVuln: PerVulnRow[]; asset: 
         </div>
       )}
       {mode === 'compare' && movers.length === 0 && (
-        <div className="rounded-md border border-gray-200 bg-gray-50 px-4 py-2.5 mb-4 text-xs text-gray-600">
+        <div className="rounded-md border border-slate-200 bg-slate-50 px-4 py-2.5 mb-4 text-xs text-slate-600">
           For these {perVuln.length} vulnerabilit{perVuln.length === 1 ? 'y' : 'ies'} the two lenses agree — same triage order either way.
         </div>
       )}
 
       {/* Detailed boxed breakdown — always sorted by Effective risk (the recommendation) */}
-      <div className="border-t border-gray-200 pt-4 mt-2">
+      <div className="border-t border-slate-200 pt-4 mt-2">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold text-gray-800">
+          <h3 className="text-sm font-semibold text-slate-800">
             Per-vulnerability detail —{' '}
             {mode === 'scanner' && 'sorted by Scanner CVSS'}
             {mode === 'effective' && `sorted by Effective risk${hideExploitSignals ? ' (no EPSS/KEV)' : ''}`}
             {mode === 'compare' && 'sorted by Effective risk (the recommendation)'}
           </h3>
-          <Link href={`/assets/${asset.id}?tab=vulnerabilities`} className="text-xs text-blue-600 hover:underline">
+          <Link href={`/assets/${asset.id}?tab=vulnerabilities`} className="text-xs text-primary-700 hover:underline">
             Manage vulnerability links →
           </Link>
         </div>
@@ -1012,19 +1017,19 @@ function TriagedVulnSection({ perVuln, asset }: { perVuln: PerVulnRow[]; asset: 
             const otherRank = mode === 'scanner' ? (effRank.get(v.vuln_id) || 0) : (cvssRank.get(v.vuln_id) || 0);
             const otherLabel = mode === 'scanner' ? 'Effective' : 'CVSS';
             const delta = otherRank - newRank;
-            const badgeBg = mode === 'scanner' ? 'bg-gray-700' : 'bg-blue-600';
+            const badgeBg = mode === 'scanner' ? 'bg-slate-700 text-white' : 'bg-primary-600 text-[#0a0a0a]';
             return (
               <div key={v.vuln_id}>
-                <div className="mb-1 flex items-center gap-2 text-[11px] text-gray-500">
-                  <span className={`rounded ${badgeBg} text-white font-semibold px-1.5 py-0.5 text-[10px]`}>
+                <div className="mb-1 flex items-center gap-2 text-[11px] text-slate-500">
+                  <span className={`rounded ${badgeBg} font-semibold px-1.5 py-0.5 text-[10px]`}>
                     #{newRank} by {mode === 'scanner' ? 'CVSS' : 'Effective'}
                   </span>
                   {delta === 0 ? (
-                    <span className="text-gray-400">same as {otherLabel} rank</span>
+                    <span className="text-slate-400">same as {otherLabel} rank</span>
                   ) : delta > 0 ? (
-                    <span className="text-green-700">▲ moved up {delta} from {otherLabel} rank #{otherRank}</span>
+                    <span className="text-emerald-700">▲ moved up {delta} from {otherLabel} rank #{otherRank}</span>
                   ) : (
-                    <span className="text-red-700">▼ moved down {-delta} from {otherLabel} rank #{otherRank}</span>
+                    <span className="text-rose-700">▼ moved down {-delta} from {otherLabel} rank #{otherRank}</span>
                   )}
                 </div>
                 <VulnBreakdownCard v={v} />
@@ -1040,8 +1045,8 @@ function TriagedVulnSection({ perVuln, asset }: { perVuln: PerVulnRow[]; asset: 
 function ScoreRow({ label, value, known, highlight }: { label: string; value: number | null | undefined; known: boolean; highlight?: boolean }) {
   return (
     <div className={`flex items-center justify-between py-0.5 ${highlight ? 'font-medium' : ''}`}>
-      <span className="text-xs text-gray-600">{label}</span>
-      <span className={`font-mono text-xs ${known ? 'text-gray-900' : 'text-gray-400'}`}>
+      <span className="text-xs text-slate-600">{label}</span>
+      <span className={`font-mono text-xs ${known ? 'text-slate-900' : 'text-slate-400'}`}>
         {!known || value == null ? '—' : value.toFixed(3)}
       </span>
     </div>
@@ -1055,11 +1060,11 @@ function VulnBreakdownCard({ v }: { v: NonNullable<Posture['components']['vuln']
   const epssPct = v.epss_score != null ? v.epss_score * 100 : null;
 
   return (
-    <div className="rounded-md border border-gray-200">
-      <div className={`flex items-center justify-between px-4 py-2 border-b border-gray-200 ${BAND_COLOR[v.band] || ''}`}>
+    <div className="rounded-md border border-slate-200">
+      <div className={`flex items-center justify-between px-4 py-2 border-b border-slate-200 ${BAND_COLOR[v.band] || ''}`}>
         <div className="flex items-center gap-3 text-sm">
           <span className="font-mono font-medium">{v.cve_id || `VULN-${v.vuln_id}`}</span>
-          <span className="text-gray-700">{v.title || 'Untitled'}</span>
+          <span className="text-slate-700">{v.title || 'Untitled'}</span>
         </div>
         <div className="text-sm font-semibold">
           {(v.score * 10).toFixed(1)} / 10 <span className="uppercase text-[10px]">{v.band}</span>
@@ -1073,7 +1078,7 @@ function VulnBreakdownCard({ v }: { v: NonNullable<Posture['components']['vuln']
         <Row k="Asset CIA max" v={`${Math.round(ciaNorm * 5)} / 5`} />
         <Row k="Business impact" v={`${v.business_impact_factor.toFixed(2)}× multiplier`} />
       </div>
-      <div className="px-4 pb-3 border-t border-dashed border-gray-200 pt-2 text-xs font-mono text-gray-700">
+      <div className="px-4 pb-3 border-t border-dashed border-slate-200 pt-2 text-xs font-mono text-slate-700">
         Weighted base:&nbsp;
         {wCvss}×{cvssOver10.toFixed(2)}/10 + {wEpss}×{(v.epss_score ?? 0).toFixed(2)} + {wKev}×{v.kev_flag ? '1' : '0'} +
         {' '}{wCia}×{(ciaNorm).toFixed(2)} + {wBiz}×{(v.business_impact_factor - 1).toFixed(2)}
@@ -1091,8 +1096,8 @@ function VulnBreakdownCard({ v }: { v: NonNullable<Posture['components']['vuln']
 function Row({ k, v }: { k: string; v: string }) {
   return (
     <div className="flex justify-between gap-3">
-      <span className="text-gray-500">{k}</span>
-      <span className="text-gray-900 text-right">{v}</span>
+      <span className="text-slate-500">{k}</span>
+      <span className="text-slate-900 text-right">{v}</span>
     </div>
   );
 }

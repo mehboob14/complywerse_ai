@@ -32,6 +32,114 @@ you know nothing extra needs to run on Ubuntu.
 
 ---
 
+## 2026-07-05 — Controls workbench: standalone per-control ownership (NEW TABLE, auto-applied) + code-only UI
+
+### What
+
+**One new table — `grc_framework_control_ownership`.** Model
+`FrameworkControlOwnership` in
+[`backend/grc/models/_17_framework_upload_parsing_models.py`](backend/grc/models/_17_framework_upload_parsing_models.py).
+One row per parsed framework control (per-tenant DB scopes it):
+
+```sql
+-- Auto-created by create_all; shown here for visibility only.
+CREATE TABLE grc_framework_control_ownership (
+    id                   SERIAL PRIMARY KEY,
+    parsed_control_id    INTEGER NOT NULL UNIQUE
+                             REFERENCES grc_parsed_framework_controls(id),
+    status               VARCHAR(50) DEFAULT 'not_started',
+        -- not_started | in_progress | implemented | verified | not_applicable
+    assigned_user_ids    JSON DEFAULT '[]',   -- ordered GRCUser ids; first = primary owner
+    implementation_date  TIMESTAMP,
+    verified_date        TIMESTAMP,
+    created_at           TIMESTAMP,
+    updated_at           TIMESTAMP
+);
+```
+
+**No changes to existing tables/columns.** Nothing added to
+`schema_migrations._COLUMN_ADDS`.
+
+Everything else in this session is **code-only** (no schema, no row
+migration — noted so you know nothing extra runs on Ubuntu):
+
+  * **New endpoint** `PATCH /controls/framework-control/{id}/ownership`
+    ([`backend/grc/routers/controls_router.py`](backend/grc/routers/controls_router.py))
+    — upserts owner + implementation stage directly on a control (no
+    certification journey required); validates control tenant + active users.
+  * **Status-summary merge** (same file, `get_framework_controls_status_summary`)
+    — now overlays the new ownership rows over journey-derived status and
+    returns `assigned_user_ids`. Reads the new table only.
+  * **Controls redesign** (frontend): `/controls` workbench now defaults to
+    PCI DSS, groups controls Framework→Domain (collapsible) with domain filter +
+    sort; `/controls/overview` is a per-framework dashboard (coverage / status /
+    evidence / owners) with no control list; owner picker + clickable stage
+    pipeline; recommended-evidence popup fixed.
+  * **AI recommendations auto-run + persist** (frontend): opening a control
+    auto-loads its saved recommendation from the EXISTING per-tenant
+    `/ai-recommendations` store, or generates + saves it once — no manual
+    button/save. **Uses the existing `grc_ai_recommendations` store table; no
+    new table.**
+  * **Shared `AnimatedModal` now portals to `<body>`** (fixes nested-modal
+    distortion) — every app modal. Governance nav trim, governance Documents
+    default route, mappings full-UI + upper-cased control codes, main-dashboard
+    legacy tabs hidden — all frontend-only.
+
+### Also arriving in this deploy (from the merged `feat/pdpl-ndmo-assessment` dev branch — auto-applied)
+
+If this server hasn't yet pulled the dev's post-2026-06-22 commits (access
+reviews, SLA/SoD, KPI dashboards), they ship in the same `git pull`. Their DB
+surface is **all auto-applied on restart** — verified against the pre-merge
+base:
+
+  * **7 new tables** (created by `create_all`): `grc_access_review_campaigns`,
+    `grc_access_review_items`, `grc_access_review_findings`,
+    `grc_access_review_escalations`, `grc_access_review_rule_config`,
+    `grc_compliance_sla_policy`, `grc_sod_rules`.
+  * **31 new `ADD COLUMN` entries** already registered in
+    `schema_migrations._COLUMN_ADDS` (compliance +23, identity +26 lines) — so
+    the new columns on existing tables are applied per-tenant by
+    `ensure_compliance_columns()` on restart, same path as the 2026-06-22 entry.
+
+Net for the whole deploy: **8 new tables + 31 new columns, 100% auto-applied**
+on backend restart. No manual SQL for any of it.
+
+### Why
+
+Operators had no way to assign a control owner or set its implementation
+stage from the Controls workbench — those were read-only because status/owner
+only existed inside a certification journey (so a framework with no journey
+showed every control "Unassigned" with no way to act). The new table stores
+ownership standalone, so any control is assignable in place.
+
+### How (on Ubuntu)
+
+```bash
+cd ~/grc-final/complywerse_ai && git pull
+sudo systemctl restart grc-backend.service      # create_all makes the new table per-tenant
+cd grc-frontend && npm run build && pm2 restart grc-frontend
+```
+
+The `grc_framework_control_ownership` table is created on the first request
+that opens each tenant's engine after the restart — nothing manual. It is
+also picked up by the orchestrator if you prefer:
+`python -m scripts.apply_all_db_changes_ubuntu` (phase 1 opens each tenant
+engine → `create_all` runs).
+
+### Risk
+
+Low. One new table, created only where missing (`create_all` checkfirst — a
+no-op where it already exists). No existing table/column/row is touched; the
+status-summary overlay is additive (falls back to journey status when no
+ownership row exists). The endpoint only writes the new table.
+
+### Auto-applied?
+
+**Yes** — schema (the one table) is created by `create_all` on next tenant
+access after the backend restart. No manual SQL, no seed, no backfill.
+
+---
+
 ## 2026-06-22 — PDPL/NDMO assessment + Control Library normalization merge (NEW TABLES + columns, auto-applied)
 
 ### What

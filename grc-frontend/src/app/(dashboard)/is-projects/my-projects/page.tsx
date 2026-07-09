@@ -20,24 +20,24 @@ import {
 const healthColor = (h: string) => {
   if (h === 'On Track') return 'bg-emerald-100 text-emerald-700 border-emerald-200';
   if (h === 'At Risk') return 'bg-amber-100 text-amber-700 border-amber-200';
-  return 'bg-red-100 text-red-700 border-red-200';
+  return 'bg-rose-100 text-rose-700 border-rose-200';
 };
 
 const healthDot = (h: string) => {
   if (h === 'On Track') return 'bg-emerald-500';
   if (h === 'At Risk') return 'bg-amber-500';
-  return 'bg-red-500';
+  return 'bg-rose-500';
 };
 
 const statusBadge = (s: string) => {
   const map: Record<string, string> = {
-    'Planning': 'bg-blue-50 text-blue-700 border-blue-200',
-    'In Progress': 'bg-indigo-50 text-indigo-700 border-indigo-200',
-    'On Hold': 'bg-yellow-50 text-yellow-700 border-yellow-200',
+    'Planning': 'bg-primary-50 text-primary-700 border-primary-200',
+    'In Progress': 'bg-primary-50 text-primary-700 border-primary-200',
+    'On Hold': 'bg-amber-50 text-amber-700 border-amber-200',
     'Completed': 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    'Cancelled': 'bg-gray-50 text-gray-500 border-gray-200',
+    'Cancelled': 'bg-slate-50 text-slate-500 border-slate-200',
   };
-  return map[s] || 'bg-gray-50 text-gray-600 border-gray-200';
+  return map[s] || 'bg-slate-50 text-slate-600 border-slate-200';
 };
 
 interface ISProject {
@@ -72,7 +72,7 @@ function ProjectCard({ project, label }: { project: ISProject; label?: string })
     >
       <div className="flex items-start justify-between mb-3">
         <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-[var(--color-text)] truncate group-hover:text-blue-700 transition-colors">{project.name}</h3>
+          <h3 className="font-semibold text-[var(--color-text)] truncate group-hover:text-primary-700 transition-colors">{project.name}</h3>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">{project.category} · {project.department || 'No dept'}</p>
         </div>
         <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium border ${healthColor(project.health)}`}>
@@ -83,7 +83,7 @@ function ProjectCard({ project, label }: { project: ISProject; label?: string })
       {project.description && <p className="text-xs text-[var(--color-muted)] line-clamp-2 mb-3">{project.description}</p>}
       <div className="flex items-center gap-2 mb-3">
         <span className={`px-2 py-0.5 rounded text-xs font-medium border ${statusBadge(project.status)}`}>{project.status}</span>
-        {label && <span className="px-2 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">{label}</span>}
+        {label && <span className="px-2 py-0.5 rounded text-xs font-medium bg-primary-50 text-primary-700 border border-primary-200">{label}</span>}
       </div>
       <div className="cw-progress-track w-full rounded-full h-1.5 mb-3">
         <div className="cw-progress-fill-success h-1.5 rounded-full transition-all" style={{ width: `${Math.min(project.completion_percentage, 100)}%` }} />
@@ -118,18 +118,18 @@ export default function MyProjectsPage() {
   return (
     <div className="space-y-4 sm:space-y-6 text-[var(--color-text)]">
       <div className="min-w-0">
-        <h1 className="text-lg sm:text-xl font-semibold text-black tracking-tight">My Projects</h1>
+        <h1 className="text-lg sm:text-xl font-semibold text-slate-900 tracking-tight">My Projects</h1>
         <p className="mt-1 text-sm text-slate-600">Projects you own or are a team member of</p>
       </div>
 
       {isLoading && (
         <div className="flex items-center justify-center py-20">
-          <Loader2 className="animate-spin text-blue-600" size={32} />
+          <Loader2 className="animate-spin text-primary-600" size={32} />
         </div>
       )}
 
       {error && (
-        <div className="flex items-center gap-2 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+        <div className="flex items-center gap-2 p-4 bg-rose-50 border border-rose-200 rounded-lg text-rose-700">
           <AlertCircle size={16} /> Failed to load projects
         </div>
       )}

@@ -174,7 +174,7 @@ export default function UsersManagementPage() {
       header: 'User',
       accessor: (user: AdminUser) => (
         <div>
-          <div className="font-medium text-black">{user.display_name}</div>
+          <div className="font-medium text-slate-900">{user.display_name}</div>
           <div className="text-sm text-slate-600">@{user.username}</div>
         </div>
       ),
@@ -207,8 +207,8 @@ export default function UsersManagementPage() {
         <span
           className={`px-2 py-1 rounded text-xs ${
             user.is_active
-              ? 'bg-green-50 text-green-700'
-              : 'bg-red-50 text-red-700'
+              ? 'bg-emerald-50 text-emerald-700'
+              : 'bg-rose-50 text-rose-700'
           }`}
         >
           {user.is_active ? 'Active' : 'Inactive'}
@@ -244,7 +244,7 @@ export default function UsersManagementPage() {
           <IfPermission required="admin:users:delete">
             <button
               onClick={() => handleDelete(user)}
-              className="rounded p-1.5 text-slate-500 hover:bg-red-50 hover:text-red-600 transition-colors"
+              className="rounded p-1.5 text-slate-500 hover:bg-rose-50 hover:text-rose-600 transition-colors"
               title="Delete user"
               aria-label="Delete user"
             >
@@ -276,7 +276,7 @@ export default function UsersManagementPage() {
     <div className="space-y-4 sm:space-y-6">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="min-w-0">
-          <h1 className="text-lg sm:text-xl font-semibold text-black tracking-tight">User Management</h1>
+          <h1 className="text-lg sm:text-xl font-semibold text-slate-900 tracking-tight">User Management</h1>
           <p className="mt-1 text-sm text-slate-600">Create and manage user accounts</p>
         </div>
         <IfPermission required="admin:users:create">
@@ -292,7 +292,7 @@ export default function UsersManagementPage() {
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-500/50 rounded-lg p-4 text-red-600">
+        <div className="bg-rose-50 border border-rose-200 rounded-lg p-4 text-rose-700">
           {error}
           <button onClick={() => setError(null)} className="ml-4 underline">
             Dismiss
@@ -493,7 +493,7 @@ export default function UsersManagementPage() {
                 <button
                   type="submit"
                   disabled={saving}
-                  className="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white rounded text-sm disabled:opacity-50"
+                  className="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-[color:var(--color-on-base,#0a0a0a)] rounded text-sm disabled:opacity-50"
                 >
                   {saving ? 'Saving...' : editingUser ? 'Update User' : 'Create User'}
                 </button>

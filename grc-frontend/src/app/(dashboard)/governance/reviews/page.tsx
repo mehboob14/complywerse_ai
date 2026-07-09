@@ -22,6 +22,7 @@ import {
   Eye,
 } from 'lucide-react';
 import { MultiSelectDropdown } from '@/components/ui';
+import AttestationsPage from '../attestations/page';
 
 interface ReviewDocument {
   id: number;
@@ -91,20 +92,20 @@ interface GovernanceActionsResponse {
 
 const DOCUMENT_TYPES = [
   { value: '', label: 'All Types' },
-  { value: 'policy', label: 'Policy', icon: BookOpen, color: 'text-purple-400', bgColor: 'bg-purple-500/20' },
-  { value: 'standard', label: 'Standard', icon: FileCheck, color: 'text-blue-400', bgColor: 'bg-blue-500/20' },
-  { value: 'procedure', label: 'Procedure', icon: ClipboardList, color: 'text-green-400', bgColor: 'bg-green-500/20' },
-  { value: 'guideline', label: 'Guideline', icon: Lightbulb, color: 'text-yellow-400', bgColor: 'bg-yellow-500/20' },
-  { value: 'charter', label: 'Charter', icon: Shield, color: 'text-cyan-400', bgColor: 'bg-cyan-500/20' },
-  { value: 'framework', label: 'Framework', icon: Layers, color: 'text-orange-400', bgColor: 'bg-orange-500/20' },
+  { value: 'policy', label: 'Policy', icon: BookOpen, color: 'text-purple-700', bgColor: 'bg-purple-50' },
+  { value: 'standard', label: 'Standard', icon: FileCheck, color: 'text-teal-700', bgColor: 'bg-teal-50' },
+  { value: 'procedure', label: 'Procedure', icon: ClipboardList, color: 'text-emerald-700', bgColor: 'bg-emerald-50' },
+  { value: 'guideline', label: 'Guideline', icon: Lightbulb, color: 'text-amber-700', bgColor: 'bg-amber-50' },
+  { value: 'charter', label: 'Charter', icon: Shield, color: 'text-primary-700', bgColor: 'bg-primary-50' },
+  { value: 'framework', label: 'Framework', icon: Layers, color: 'text-orange-700', bgColor: 'bg-orange-50' },
 ];
 
 const getTypeStyle = (type: string) => {
-  return DOCUMENT_TYPES.find(t => t.value === type) || { label: type, color: 'text-gray-600', bgColor: 'bg-slate-500/20', icon: FileText };
+  return DOCUMENT_TYPES.find(t => t.value === type) || { label: type, color: 'text-slate-600', bgColor: 'bg-slate-100', icon: FileText };
 };
 
-type TabType = 'overdue' | 'upcoming' | 'completed' | 'all';
-type ReviewsSection = 'documents' | 'actions';
+type TabType = 'overdue' | 'upcoming' | 'all';
+type ReviewsSection = 'documents' | 'actions' | 'attestations';
 
 const formatDate = (dateStr: string | null) => {
   if (!dateStr) return '-';
@@ -112,25 +113,25 @@ const formatDate = (dateStr: string | null) => {
 };
 
 const getDaysDisplay = (days: number | null, isOverdue: boolean) => {
-  if (days === null) return { text: '-', className: 'text-gray-600' };
+  if (days === null) return { text: '-', className: 'text-slate-500' };
 
   if (isOverdue || days < 0) {
     const absDays = Math.abs(days);
     return {
       text: `${absDays} day${absDays !== 1 ? 's' : ''} overdue`,
-      className: 'text-red-400 font-medium',
+      className: 'text-red-600 font-medium',
     };
   }
 
   if (days === 0) {
-    return { text: 'Due today', className: 'text-amber-400 font-medium' };
+    return { text: 'Due today', className: 'text-amber-600 font-medium' };
   }
 
   if (days <= 7) {
-    return { text: `${days} day${days !== 1 ? 's' : ''} left`, className: 'text-amber-400' };
+    return { text: `${days} day${days !== 1 ? 's' : ''} left`, className: 'text-amber-600' };
   }
 
-  return { text: `${days} days left`, className: 'text-green-400' };
+  return { text: `${days} days left`, className: 'text-emerald-600' };
 };
 
 const getActionTypeLabel = (actionType: string): string => {
@@ -149,31 +150,31 @@ const getActionTypeLabel = (actionType: string): string => {
 
 const getActionTypeColor = (actionType: string) => {
   const colorMap: Record<string, { bgColor: string; textColor: string; icon: any }> = {
-    'document_draft_created': { bgColor: 'bg-blue-500/20', textColor: 'text-blue-400', icon: FileText },
-    'document_uploaded': { bgColor: 'bg-blue-500/20', textColor: 'text-blue-400', icon: FileText },
-    'policy_statement_created': { bgColor: 'bg-purple-500/20', textColor: 'text-purple-400', icon: BookOpen },
-    'risk_acceptance': { bgColor: 'bg-red-500/20', textColor: 'text-red-400', icon: AlertTriangle },
-    'evidence_uploaded': { bgColor: 'bg-green-500/20', textColor: 'text-green-400', icon: CheckCircle },
-    'committee_action': { bgColor: 'bg-yellow-500/20', textColor: 'text-yellow-400', icon: ClipboardList },
-    'attestation_created': { bgColor: 'bg-cyan-500/20', textColor: 'text-cyan-400', icon: FileCheck },
-    'certification_submitted': { bgColor: 'bg-orange-500/20', textColor: 'text-orange-400', icon: Shield },
+    'document_draft_created': { bgColor: 'bg-teal-50', textColor: 'text-teal-700', icon: FileText },
+    'document_uploaded': { bgColor: 'bg-teal-50', textColor: 'text-teal-700', icon: FileText },
+    'policy_statement_created': { bgColor: 'bg-purple-50', textColor: 'text-purple-700', icon: BookOpen },
+    'risk_acceptance': { bgColor: 'bg-red-50', textColor: 'text-red-700', icon: AlertTriangle },
+    'evidence_uploaded': { bgColor: 'bg-emerald-50', textColor: 'text-emerald-700', icon: CheckCircle },
+    'committee_action': { bgColor: 'bg-amber-50', textColor: 'text-amber-700', icon: ClipboardList },
+    'attestation_created': { bgColor: 'bg-primary-50', textColor: 'text-primary-700', icon: FileCheck },
+    'certification_submitted': { bgColor: 'bg-orange-50', textColor: 'text-orange-700', icon: Shield },
   };
-  return colorMap[actionType] || { bgColor: 'bg-gray-500/20', textColor: 'text-gray-400', icon: FileText };
+  return colorMap[actionType] || { bgColor: 'bg-slate-100', textColor: 'text-slate-600', icon: FileText };
 };
 
 const getStatusColor = (status: string) => {
   const statusColors: Record<string, string> = {
-    'pending_review': 'bg-amber-500/20 text-amber-400 border-amber-500/50',
-    'in_review': 'bg-blue-500/20 text-blue-400 border-blue-500/50',
-    'approved': 'bg-green-500/20 text-green-400 border-green-500/50',
-    'rejected': 'bg-red-500/20 text-red-400 border-red-500/50',
-    'archived': 'bg-gray-500/20 text-gray-400 border-gray-500/50',
+    'pending_review': 'bg-amber-50 text-amber-700 border-amber-200',
+    'in_review': 'bg-teal-50 text-teal-700 border-teal-200',
+    'approved': 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    'rejected': 'bg-red-50 text-red-700 border-red-200',
+    'archived': 'bg-slate-100 text-slate-600 border-slate-200',
   };
-  return statusColors[status] || 'bg-gray-500/20 text-gray-400';
+  return statusColors[status] || 'bg-slate-100 text-slate-600 border-slate-200';
 };
 
 export default function GovernanceReviewsPage() {
-  const [reviewsSection, setReviewsSection] = useState<ReviewsSection>('actions');
+  const [reviewsSection, setReviewsSection] = useState<ReviewsSection>('documents');
   const [activeTab, setActiveTab] = useState<TabType>('overdue');
   const [typeFilter, setTypeFilter] = useState('');
   const [actionStatusFilter, setActionStatusFilter] = useState('pending_review');
@@ -248,6 +249,9 @@ export default function GovernanceReviewsPage() {
   });
 
   const handleCompleteReview = (documentId: number) => {
+    if (!window.confirm('Mark this document review as complete? This will reset its review cycle and next review date.')) {
+      return;
+    }
     setCompletingId(documentId);
     completeMutation.mutate(documentId);
   };
@@ -284,82 +288,105 @@ export default function GovernanceReviewsPage() {
   const tabs = [
     { key: 'overdue', label: 'Overdue', count: statistics?.overdue || 0 },
     { key: 'upcoming', label: 'Upcoming', count: statistics?.due_next_30_days || 0 },
-    { key: 'completed', label: 'Completed', count: 0 },
     { key: 'all', label: 'All', count: allDocuments.length },
   ];
+
+  const sectionBtn = (key: ReviewsSection, label: string, Icon: any, badge?: number) => (
+    <button
+      onClick={() => setReviewsSection(key)}
+      className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+        reviewsSection === key
+          ? 'border-primary-600 bg-primary-50 text-primary-700'
+          : 'border-slate-200 text-slate-700 hover:bg-slate-50'
+      }`}
+    >
+      <Icon className="h-3.5 w-3.5" strokeWidth={1.75} />
+      {label}
+      {badge != null && badge > 0 && (
+        <span className="rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] text-white">{badge}</span>
+      )}
+    </button>
+  );
+  const sectionButtons = (
+    <>
+      {sectionBtn('documents', 'Document Reviews', FileCheck)}
+      {sectionBtn('actions', 'Actions', Eye, pendingActionsCount)}
+      {sectionBtn('attestations', 'Attestations', ClipboardList)}
+    </>
+  );
+
+  if (reviewsSection === 'attestations') {
+    return (
+      <div className="space-y-4 sm:space-y-6">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-lg sm:text-xl font-semibold text-slate-900">Pending Approvals</h1>
+            <p className="text-xs sm:text-sm text-slate-500">Policy attestations &amp; certification campaigns</p>
+          </div>
+          <div className="flex flex-wrap gap-2">{sectionButtons}</div>
+        </div>
+        <AttestationsPage />
+      </div>
+    );
+  }
 
   if (reviewsSection === 'actions') {
     return (
       <div className="space-y-4 sm:space-y-6">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
-          <h1 className="text-lg sm:text-xl font-semibold text-black">My Reviews</h1>
-          <p className="text-xs sm:text-sm text-gray-600">Track and manage your submitted actions requiring review</p>
+          <h1 className="text-lg sm:text-xl font-semibold text-slate-900">Pending Approvals</h1>
+          <p className="text-xs sm:text-sm text-slate-500">Actions and documents awaiting your review and approval</p>
           </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setReviewsSection('actions')}
-              className="flex items-center gap-1.5 rounded-lg border border-blue-600 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700"
-            >
-              <Eye className="h-3.5 w-3.5" />
-              Actions {pendingActionsCount > 0 && <span className="rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] text-white">{pendingActionsCount}</span>}
-            </button>
-            <button
-              onClick={() => setReviewsSection('documents')}
-              className="flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
-            >
-              <FileCheck className="h-4 w-4" />
-              Documents
-            </button>
-          </div>
+          <div className="flex flex-wrap gap-2">{sectionButtons}</div>
         </div>
 
         <div className="grid gap-2.5 md:grid-cols-3">
-          <div className="rounded-lg border border-amber-200 bg-white p-3">
+          <div className="rounded-lg border border-slate-200 bg-white p-3">
             <div className="flex items-center gap-2.5">
               <div className="rounded bg-amber-50 p-1.5">
-                <Clock className="h-4 w-4 text-amber-500" />
+                <Clock className="h-4 w-4 text-amber-600" strokeWidth={1.75} />
               </div>
               <div>
-                <p className="text-xs text-gray-500">Pending Review</p>
-                <p className="text-xl font-bold text-amber-500">
-                  {actionsLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : pendingActionsCount}
+                <p className="text-xs text-slate-500">Pending Review</p>
+                <p className="text-xl font-bold text-amber-600">
+                  {actionsLoading ? <Loader2 className="h-6 w-6 animate-spin" strokeWidth={1.75} /> : pendingActionsCount}
                 </p>
               </div>
             </div>
           </div>
 
-          <div className="rounded-lg border border-blue-200 bg-white p-3">
+          <div className="rounded-lg border border-slate-200 bg-white p-3">
             <div className="flex items-center gap-2.5">
-              <div className="rounded bg-blue-50 p-1.5">
-                <Eye className="h-4 w-4 text-blue-500" />
+              <div className="rounded bg-primary-50 p-1.5">
+                <Eye className="h-4 w-4 text-primary-600" strokeWidth={1.75} />
               </div>
               <div>
-                <p className="text-xs text-gray-500">In Review</p>
-                <p className="text-xl font-bold text-blue-500">
-                  {actionsLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : governanceActions?.items?.filter(a => a.review_status === 'in_review').length || 0}
+                <p className="text-xs text-slate-500">In Review</p>
+                <p className="text-xl font-bold text-primary-600">
+                  {actionsLoading ? <Loader2 className="h-6 w-6 animate-spin" strokeWidth={1.75} /> : governanceActions?.items?.filter(a => a.review_status === 'in_review').length || 0}
                 </p>
               </div>
             </div>
           </div>
 
-          <div className="rounded-lg border border-green-200 bg-white p-3">
+          <div className="rounded-lg border border-slate-200 bg-white p-3">
             <div className="flex items-center gap-2.5">
-              <div className="rounded bg-green-50 p-1.5">
-                <CheckCircle2 className="h-4 w-4 text-green-600" />
+              <div className="rounded bg-emerald-50 p-1.5">
+                <CheckCircle2 className="h-4 w-4 text-emerald-600" strokeWidth={1.75} />
               </div>
               <div>
-                <p className="text-xs text-gray-500">Approved</p>
-                <p className="text-xl font-bold text-green-600">
-                  {actionsLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : governanceActions?.items?.filter(a => a.review_status === 'approved').length || 0}
+                <p className="text-xs text-slate-500">Approved</p>
+                <p className="text-xl font-bold text-emerald-600">
+                  {actionsLoading ? <Loader2 className="h-6 w-6 animate-spin" strokeWidth={1.75} /> : governanceActions?.items?.filter(a => a.review_status === 'approved').length || 0}
                 </p>
               </div>
             </div>
           </div>
         </div>
 
-        <div className="rounded-xl border border-gray-300 bg-white">
-          <div className="border-b-2 border-gray-200 px-3 sm:px-4">
+        <div className="rounded-xl border border-slate-200 bg-white">
+          <div className="border-b border-slate-200 px-3 sm:px-4">
             <nav className="flex gap-4 sm:gap-6 overflow-x-auto" aria-label="Action status">
               {['all', 'pending_review', 'in_review', 'approved', 'rejected'].map((status) => (
                 <button
@@ -367,8 +394,8 @@ export default function GovernanceReviewsPage() {
                   onClick={() => setActionStatusFilter(status)}
                   className={`whitespace-nowrap border-b-2 px-1 py-2.5 text-sm font-medium transition-colors ${
                     actionStatusFilter === status
-                      ? 'border-blue-600 text-blue-700'
-                      : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300'
+                      ? 'border-primary-600 text-primary-700'
+                      : 'border-transparent text-slate-600 hover:text-slate-900 hover:border-slate-300'
                   }`}
                 >
                   {status === 'all' ? 'All Actions' : status.replace(/_/g, ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
@@ -380,11 +407,11 @@ export default function GovernanceReviewsPage() {
           <div className="p-3">
             {actionsLoading ? (
               <div className="flex h-32 items-center justify-center">
-                <Loader2 className="h-5 w-5 animate-spin text-primary-400" />
+                <Loader2 className="h-5 w-5 animate-spin text-primary-500" strokeWidth={1.75} />
               </div>
             ) : !governanceActions?.items || governanceActions.items.length === 0 ? (
-              <div className="flex h-32 flex-col items-center justify-center gap-2 text-gray-400">
-                <CheckCircle className="h-7 w-7" />
+              <div className="flex h-32 flex-col items-center justify-center gap-2 text-slate-400">
+                <CheckCircle className="h-7 w-7" strokeWidth={1.75} />
                 <p className="text-xs">No governance actions found</p>
               </div>
             ) : (
@@ -397,28 +424,28 @@ export default function GovernanceReviewsPage() {
                   return (
                     <div
                       key={action.id}
-                      className={`rounded-lg border px-3 py-2 transition-colors hover:bg-gray-50 ${action.review_status === 'pending_review'
+                      className={`rounded-lg border px-3 py-2 transition-colors hover:bg-slate-50 ${action.review_status === 'pending_review'
                           ? 'border-amber-200 bg-amber-50/50'
-                          : 'border-gray-200 bg-white'
+                          : 'border-slate-200 bg-white'
                         }`}
                     >
                       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                         <div className="flex items-start gap-4 flex-1 min-w-0">
                           <div className={`rounded p-1.5 ${actionColor.bgColor}`}>
-                            <ActionIcon className={`h-4 w-4 ${actionColor.textColor}`} />
+                            <ActionIcon className={`h-4 w-4 ${actionColor.textColor}`} strokeWidth={1.75} />
                           </div>
 
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <h3 className="text-xs font-medium text-black">{action.action_description}</h3>
+                              <h3 className="text-xs font-medium text-slate-900">{action.action_description}</h3>
                               <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${statusColor}`}>
                                 {action.review_status.replace(/_/g, ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
                               </span>
                             </div>
 
-                            <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-500">
+                            <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-slate-500">
                               <span className={`inline-flex items-center gap-1 ${actionColor.textColor}`}>
-                                <ActionIcon className="h-3.5 w-3.5" />
+                                <ActionIcon className="h-3.5 w-3.5" strokeWidth={1.75} />
                                 {getActionTypeLabel(action.action_type)}
                               </span>
                               {action.action_user_name && (
@@ -431,12 +458,12 @@ export default function GovernanceReviewsPage() {
                         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
                           <div className="grid grid-cols-2 gap-2 text-xs">
                             <div>
-                              <p className="text-gray-400 text-[10px]">Action Date</p>
-                              <p className="text-gray-700">{formatDate(action.action_date)}</p>
+                              <p className="text-slate-400 text-[10px]">Action Date</p>
+                              <p className="text-slate-700">{formatDate(action.action_date)}</p>
                             </div>
                             <div>
-                              <p className="text-gray-400 text-[10px]">Entity Type</p>
-                              <p className="text-gray-700 capitalize">{action.entity_type.replace(/_/g, ' ')}</p>
+                              <p className="text-slate-400 text-[10px]">Entity Type</p>
+                              <p className="text-slate-700 capitalize">{action.entity_type.replace(/_/g, ' ')}</p>
                             </div>
                           </div>
                         </div>
@@ -456,94 +483,118 @@ export default function GovernanceReviewsPage() {
     <div className="space-y-4 sm:space-y-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-lg sm:text-xl font-semibold text-black">Document Reviews</h1>
-          <p className="text-xs sm:text-sm text-gray-600">Track and complete document review schedules</p>
+          <h1 className="text-lg sm:text-xl font-semibold text-slate-900">Document Reviews</h1>
+          <p className="text-xs sm:text-sm text-slate-500">Track and complete document review schedules</p>
         </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setReviewsSection('actions')}
-            className="flex items-center gap-2 rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-100"
-          >
-            <Eye className="h-4 w-4" />
-            Actions {pendingActionsCount > 0 && <span className="rounded-full bg-red-500 px-2 py-0.5 text-xs text-white">{pendingActionsCount}</span>}
-          </button>
-          <button
-            onClick={() => setReviewsSection('documents')}
-            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-black"
-          >
-            <FileCheck className="h-4 w-4" />
-            Documents
-          </button>
+        <div className="flex flex-wrap items-center gap-2">
+          {sectionButtons}
           <a
             href="/governance/reviews/calendar"
-            className="flex items-center gap-1.5 rounded border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+            className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors"
           >
-            <CalendarDays className="h-4 w-4" />
+            <CalendarDays className="h-4 w-4" strokeWidth={1.75} />
             Calendar View
           </a>
         </div>
       </div>
 
       <div className="grid gap-2.5 md:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-lg border border-gray-200 bg-white p-3">
+        <div className="rounded-lg border border-slate-200 bg-white p-3">
           <div className="flex items-center gap-2.5">
-            <div className="rounded bg-blue-50 p-1.5">
-              <Calendar className="h-4 w-4 text-blue-500" />
+            <div className="rounded bg-primary-50 p-1.5">
+              <Calendar className="h-4 w-4 text-primary-600" strokeWidth={1.75} />
             </div>
             <div>
-              <p className="text-xs text-gray-500">Upcoming (30 days)</p>
-              <p className="text-xl font-bold text-black">
-                {statsLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : statistics?.due_next_30_days || 0}
+              <p className="text-xs text-slate-500">Upcoming (30 days)</p>
+              <p className="text-xl font-bold text-slate-900">
+                {statsLoading ? <Loader2 className="h-6 w-6 animate-spin" strokeWidth={1.75} /> : statistics?.due_next_30_days || 0}
               </p>
             </div>
           </div>
         </div>
 
-        <div className="rounded-lg border border-red-200 bg-white p-3">
+        <div className="rounded-lg border border-slate-200 bg-white p-3">
           <div className="flex items-center gap-2.5">
             <div className="rounded bg-red-50 p-1.5">
-              <AlertTriangle className="h-4 w-4 text-red-500" />
+              <AlertTriangle className="h-4 w-4 text-red-600" strokeWidth={1.75} />
             </div>
             <div>
-              <p className="text-xs text-gray-500">Overdue Reviews</p>
-              <p className="text-xl font-bold text-red-500">
-                {statsLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : statistics?.overdue || 0}
+              <p className="text-xs text-slate-500">Overdue Reviews</p>
+              <p className="text-xl font-bold text-red-600">
+                {statsLoading ? <Loader2 className="h-6 w-6 animate-spin" strokeWidth={1.75} /> : statistics?.overdue || 0}
               </p>
             </div>
           </div>
         </div>
 
-        <div className="rounded-lg border border-gray-200 bg-white p-3">
+        <div className="rounded-lg border border-slate-200 bg-white p-3">
           <div className="flex items-center gap-2.5">
-            <div className="rounded bg-green-50 p-1.5">
-              <CheckCircle className="h-4 w-4 text-green-600" />
+            <div className="rounded bg-emerald-50 p-1.5">
+              <CheckCircle className="h-4 w-4 text-emerald-600" strokeWidth={1.75} />
             </div>
             <div>
-              <p className="text-xs text-gray-500">Completed This Month</p>
-              <p className="text-xl font-bold text-black">
-                {statsLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : statistics?.by_status?.on_track || 0}
+              <p className="text-xs text-slate-500">On Track</p>
+              <p className="text-xl font-bold text-slate-900">
+                {statsLoading ? <Loader2 className="h-6 w-6 animate-spin" strokeWidth={1.75} /> : statistics?.by_status?.on_track || 0}
               </p>
             </div>
           </div>
         </div>
 
-        <div className="rounded-lg border border-amber-200 bg-white p-3">
+        <div className="rounded-lg border border-slate-200 bg-white p-3">
           <div className="flex items-center gap-2.5">
             <div className="rounded bg-amber-50 p-1.5">
-              <Clock className="h-4 w-4 text-amber-500" />
+              <Clock className="h-4 w-4 text-amber-600" strokeWidth={1.75} />
             </div>
             <div>
-              <p className="text-xs text-gray-500">Due This Week</p>
-              <p className="text-xl font-bold text-amber-500">
-                {statsLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : statistics?.due_this_week || 0}
+              <p className="text-xs text-slate-500">Due This Week</p>
+              <p className="text-xl font-bold text-amber-600">
+                {statsLoading ? <Loader2 className="h-6 w-6 animate-spin" strokeWidth={1.75} /> : statistics?.due_this_week || 0}
               </p>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="rounded-xl border border-gray-300 bg-white">
-        <div className="flex flex-col gap-3 border-b-2 border-gray-200 px-3 sm:px-4 sm:flex-row sm:items-center sm:justify-between">
+      {statistics && Object.keys(statistics.by_doc_type).length > 0 && (
+        <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+          <div className="flex items-center gap-3 overflow-x-auto">
+            <span className="whitespace-nowrap text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+              By type
+            </span>
+            {Object.entries(statistics.by_doc_type).map(([docType, data]) => {
+              const typeStyle = getTypeStyle(docType);
+              const TypeIcon = typeStyle.icon || FileText;
+
+              return (
+                <div
+                  key={docType}
+                  className="flex items-center gap-2 whitespace-nowrap rounded-lg border border-slate-200 px-2.5 py-1"
+                >
+                  <span className={`rounded p-1 ${typeStyle.bgColor}`}>
+                    <TypeIcon className={`h-3 w-3 ${typeStyle.color}`} strokeWidth={1.75} />
+                  </span>
+                  <span className="text-xs font-medium text-slate-900">{typeStyle.label}</span>
+                  <span className="text-[11px] text-slate-500">{data.total} total</span>
+                  {data.overdue > 0 && (
+                    <span className="rounded-full bg-red-50 px-1.5 py-0.5 text-[10px] font-medium text-red-700">
+                      {data.overdue} overdue
+                    </span>
+                  )}
+                  {data.due_soon > 0 && (
+                    <span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+                      {data.due_soon} soon
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <div className="rounded-xl border border-slate-200 bg-white">
+        <div className="flex flex-col gap-3 border-b border-slate-200 px-3 sm:px-4 sm:flex-row sm:items-center sm:justify-between">
           <nav className="flex gap-4 sm:gap-6 overflow-x-auto" aria-label="Review tabs">
             {tabs.map((tab) => (
               <button
@@ -551,15 +602,15 @@ export default function GovernanceReviewsPage() {
                 onClick={() => setActiveTab(tab.key as TabType)}
                 className={`flex items-center gap-1.5 whitespace-nowrap border-b-2 px-1 py-2.5 text-sm font-medium transition-colors ${
                   activeTab === tab.key
-                    ? 'border-blue-600 text-blue-700'
-                    : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300'
+                    ? 'border-primary-600 text-primary-700'
+                    : 'border-transparent text-slate-600 hover:text-slate-900 hover:border-slate-300'
                 }`}
               >
                 {tab.label}
                 {tab.count > 0 && (
                   <span
-                    className={`rounded px-1.5 py-0.5 text-[10px] ${activeTab === tab.key ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'
-                    } ${tab.key === 'overdue' && activeTab !== tab.key ? 'bg-red-100 text-red-500' : ''}`}
+                    className={`rounded px-1.5 py-0.5 text-[10px] ${activeTab === tab.key ? 'bg-primary-50 text-primary-700' : 'bg-slate-100 text-slate-500'
+                    } ${tab.key === 'overdue' && activeTab !== tab.key ? 'bg-red-50 text-red-600' : ''}`}
                   >
                     {tab.count}
                   </span>
@@ -584,16 +635,11 @@ export default function GovernanceReviewsPage() {
         <div className="p-3">
           {isLoading ? (
             <div className="flex h-32 items-center justify-center">
-              <Loader2 className="h-5 w-5 animate-spin text-primary-400" />
-            </div>
-          ) : activeTab === 'completed' ? (
-            <div className="flex h-32 flex-col items-center justify-center gap-2 text-gray-400">
-              <CheckCircle className="h-7 w-7" />
-              <p className="text-xs">Completed reviews will appear here</p>
+              <Loader2 className="h-5 w-5 animate-spin text-primary-500" strokeWidth={1.75} />
             </div>
           ) : getDisplayedDocuments().length === 0 ? (
-            <div className="flex h-32 flex-col items-center justify-center gap-2 text-gray-400">
-              <CalendarDays className="h-7 w-7" />
+            <div className="flex h-32 flex-col items-center justify-center gap-2 text-slate-400">
+              <CalendarDays className="h-7 w-7" strokeWidth={1.75} />
               <p className="text-xs">No documents found for this filter</p>
             </div>
           ) : (
@@ -606,30 +652,30 @@ export default function GovernanceReviewsPage() {
                 return (
                   <div
                     key={doc.id}
-                    className={`rounded-lg border px-3 py-2 transition-colors hover:bg-gray-50 ${doc.is_overdue
+                    className={`rounded-lg border px-3 py-2 transition-colors hover:bg-slate-50 ${doc.is_overdue
                         ? 'border-red-200 bg-red-50/50'
-                        : 'border-gray-200 bg-white'
+                        : 'border-slate-200 bg-white'
                       }`}
                   >
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                       <div className="flex items-start gap-4 flex-1 min-w-0">
                         <div className={`rounded p-1.5 ${typeStyle.bgColor}`}>
-                          <TypeIcon className={`h-4 w-4 ${typeStyle.color}`} />
+                          <TypeIcon className={`h-4 w-4 ${typeStyle.color}`} strokeWidth={1.75} />
                         </div>
 
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <h3 className="text-xs font-medium text-black truncate">{doc.title}</h3>
+                            <h3 className="text-xs font-medium text-slate-900 truncate">{doc.title}</h3>
                             {doc.is_overdue && (
-                              <span className="rounded-full bg-red-500/20 px-2 py-0.5 text-xs font-medium text-red-400">
+                              <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700">
                                 Overdue
                               </span>
                             )}
                           </div>
 
-                          <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-600">
+                          <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-600">
                             <span className={`inline-flex items-center gap-1 ${typeStyle.color}`}>
-                              <TypeIcon className="h-3.5 w-3.5" />
+                              <TypeIcon className="h-3.5 w-3.5" strokeWidth={1.75} />
                               {typeStyle.label}
                             </span>
                             {doc.owner_name && (
@@ -645,35 +691,35 @@ export default function GovernanceReviewsPage() {
                       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
                         <div className="grid grid-cols-2 gap-4 text-sm">
                           <div>
-                            <p className="text-gray-700 text-xs">Next Review</p>
-                            <p className="text-gray-800">{formatDate(doc.next_review_date)}</p>
+                            <p className="text-slate-500 text-xs">Next Review</p>
+                            <p className="text-slate-800">{formatDate(doc.next_review_date)}</p>
                           </div>
                           <div>
-                            <p className="text-gray-700 text-xs">Status</p>
+                            <p className="text-slate-500 text-xs">Status</p>
                             <p className={daysDisplay.className}>{daysDisplay.text}</p>
                           </div>
                           <div>
-                            <p className="text-gray-700 text-xs">Last Reviewed</p>
-                            <p className="text-gray-800">{formatDate(doc.last_reviewed_at)}</p>
+                            <p className="text-slate-500 text-xs">Last Reviewed</p>
+                            <p className="text-slate-800">{formatDate(doc.last_reviewed_at)}</p>
                           </div>
                           <div>
-                            <p className="text-gray-700 text-xs">Cycle</p>
-                            <p className="text-gray-800">{doc.review_cycle_months} months</p>
+                            <p className="text-slate-500 text-xs">Cycle</p>
+                            <p className="text-slate-800">{doc.review_cycle_months} months</p>
                           </div>
                         </div>
 
                         {canEdit && <button
                           onClick={() => handleCompleteReview(doc.id)}
                           disabled={completingId === doc.id}
-                          className={`flex items-center gap-1 whitespace-nowrap rounded px-2.5 py-1 text-xs font-medium transition-colors ${doc.is_overdue
-                              ? 'border border-red-300 bg-red-50 text-red-700 hover:bg-red-100'
-                              : 'border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100'
+                          className={`flex items-center gap-1 whitespace-nowrap rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${doc.is_overdue
+                              ? 'border border-red-200 bg-red-50 text-red-700 hover:bg-red-100'
+                              : 'bg-primary-600 text-[color:var(--color-on-base,#0a0a0a)] hover:bg-primary-700'
                             } disabled:opacity-50`}
                         >
                           {completingId === doc.id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.75} />
                           ) : (
-                            <CheckCircle className="h-4 w-4" />
+                            <CheckCircle className="h-4 w-4" strokeWidth={1.75} />
                           )}
                           Complete Review
                         </button>}
@@ -687,50 +733,6 @@ export default function GovernanceReviewsPage() {
         </div>
       </div>
 
-      {statistics && Object.keys(statistics.by_doc_type).length > 0 && (
-        <div className="rounded-lg border border-gray-200 bg-white p-3">
-          <h3 className="mb-2 text-xs font-semibold text-black">Reviews by Document Type</h3>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {Object.entries(statistics.by_doc_type).map(([docType, data]) => {
-              const typeStyle = getTypeStyle(docType);
-              const TypeIcon = typeStyle.icon || FileText;
-
-              return (
-                <div
-                  key={docType}
-                  className="rounded-lg border border-gray-200 bg-white p-2.5"
-                >
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className={`rounded p-1 ${typeStyle.bgColor}`}>
-                      <TypeIcon className={`h-3 w-3 ${typeStyle.color}`} />
-                    </div>
-                    <span className="text-xs font-medium text-black">{typeStyle.label}</span>
-                  </div>
-
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] text-gray-500">Total</span>
-                      <span className="text-[10px] font-semibold text-black">{data.total}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] text-gray-500">Overdue</span>
-                      <span className={`text-[10px] font-semibold ${data.overdue > 0 ? 'text-red-500' : 'text-gray-500'}`}>
-                        {data.overdue}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] text-gray-500">Due Soon</span>
-                      <span className={`text-[10px] font-semibold ${data.due_soon > 0 ? 'text-amber-500' : 'text-gray-500'}`}>
-                        {data.due_soon}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

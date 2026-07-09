@@ -59,11 +59,11 @@ export function FrameworksTabs({ leadingAction }: { leadingAction?: React.ReactN
                 href={tab.href}
                 className={`relative inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
                   active
-                    ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-sm'
+                    ? 'bg-primary-600 text-[color:var(--color-on-base,#0a0a0a)] shadow-sm'
                     : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                 }`}
               >
-                <Icon className="h-3.5 w-3.5" />
+                <Icon className="h-3.5 w-3.5" strokeWidth={1.75} />
                 {tab.label}
               </Link>
             );
@@ -73,7 +73,7 @@ export function FrameworksTabs({ leadingAction }: { leadingAction?: React.ReactN
           href="/auditor-portal"
           className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:border-slate-300 hover:bg-slate-50 shadow-sm"
         >
-          <ExternalLink className="h-3.5 w-3.5" />
+          <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.75} />
           Auditor Portal
         </Link>
       </div>

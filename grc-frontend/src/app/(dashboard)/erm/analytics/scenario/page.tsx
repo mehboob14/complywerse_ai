@@ -89,9 +89,9 @@ function getPresetIcon(name: string) {
   if (n.includes('best')) return <Shield className="h-6 w-6 text-green-400" />;
   if (n.includes('worst')) return <AlertTriangle className="h-6 w-6 text-red-400" />;
   if (n.includes('economic') || n.includes('downturn')) return <TrendingDown className="h-6 w-6 text-orange-400" />;
-  if (n.includes('cyber')) return <Zap className="h-6 w-6 text-purple-400" />;
-  if (n.includes('regulatory') || n.includes('regulation')) return <Scale className="h-6 w-6 text-blue-400" />;
-  return <Globe className="h-6 w-6 text-slate-600" />;
+  if (n.includes('cyber')) return <Zap className="h-6 w-6 text-primary-600" strokeWidth={1.75} />;
+  if (n.includes('regulatory') || n.includes('regulation')) return <Scale className="h-6 w-6 text-slate-600" strokeWidth={1.75} />;
+  return <Globe className="h-6 w-6 text-slate-600" strokeWidth={1.75} />;
 }
 
 export default function ScenarioAnalysisPage() {
@@ -294,7 +294,7 @@ export default function ScenarioAnalysisPage() {
             onClick={() => setScoreType('inherent')}
             className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
               scoreType === 'inherent'
-                ? 'bg-primary-600 text-white'
+                ? 'bg-primary-600 text-[#0a0a0a] hover:bg-primary-700'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
@@ -304,7 +304,7 @@ export default function ScenarioAnalysisPage() {
             onClick={() => setScoreType('residual')}
             className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
               scoreType === 'residual'
-                ? 'bg-primary-600 text-white'
+                ? 'bg-primary-600 text-[#0a0a0a] hover:bg-primary-700'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
@@ -315,7 +315,7 @@ export default function ScenarioAnalysisPage() {
 
       <div className="rounded-xl border border-slate-200 bg-white p-4.5">
         <h3 className="text-slate-900 font-medium flex items-center gap-2 mb-4">
-          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-600 text-xs text-white font-bold">1</span>
+          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-600 text-xs text-[#0a0a0a] font-bold">1</span>
           Select Risks
         </h3>
         <div className="flex items-center gap-3 mb-3">
@@ -351,7 +351,7 @@ export default function ScenarioAnalysisPage() {
               return (
                 <label
                   key={risk.id}
-                  className="flex items-center gap-3 px-4 py-2.5 hover:bg-white/80 cursor-pointer border-b border-slate-800 last:border-0"
+                  className="flex items-center gap-3 px-4 py-2.5 hover:bg-white/80 cursor-pointer border-b border-slate-200 last:border-0"
                 >
                   <input
                     type="checkbox"
@@ -375,7 +375,7 @@ export default function ScenarioAnalysisPage() {
 
       <div className="rounded-xl border border-slate-200 bg-white p-4.5">
         <h3 className="text-slate-900 font-medium flex items-center gap-2 mb-4">
-          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-600 text-xs text-white font-bold">2</span>
+          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-600 text-xs text-[#0a0a0a] font-bold">2</span>
           Choose Approach
         </h3>
         <div className="flex items-center gap-2 mb-4">
@@ -383,7 +383,7 @@ export default function ScenarioAnalysisPage() {
             onClick={() => setApproach('preset')}
             className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
               approach === 'preset'
-                ? 'bg-primary-600 text-white'
+                ? 'bg-primary-600 text-[#0a0a0a] hover:bg-primary-700'
                 : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
             }`}
           >
@@ -397,7 +397,7 @@ export default function ScenarioAnalysisPage() {
             }}
             className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
               approach === 'custom'
-                ? 'bg-primary-600 text-white'
+                ? 'bg-primary-600 text-[#0a0a0a] hover:bg-primary-700'
                 : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
             }`}
           >
@@ -523,7 +523,7 @@ export default function ScenarioAnalysisPage() {
         <button
           onClick={handleRunAnalysis}
           disabled={!canRunAnalysis || analysisMutation.isPending}
-          className="flex items-center gap-2 rounded-lg bg-primary-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex items-center gap-2 rounded-lg bg-primary-600 px-6 py-2.5 text-sm font-medium text-[#0a0a0a] hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {analysisMutation.isPending ? (
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -596,7 +596,7 @@ export default function ScenarioAnalysisPage() {
             <button
               onClick={handleAIExplain}
               disabled={aiExplainMutation.isPending}
-              className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-purple-600 to-blue-600 px-4 py-2 text-sm font-medium text-slate-900 hover:from-purple-500 hover:to-blue-500 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-purple-500/20 transition-all"
+              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-[#0a0a0a] hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
               {aiExplainMutation.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -614,10 +614,10 @@ export default function ScenarioAnalysisPage() {
           )}
 
           {aiExplanation && (
-            <div className="rounded-xl border border-purple-500/30 bg-gradient-to-br from-purple-500/5 to-blue-500/5 p-4.5">
+            <div className="rounded-xl border border-primary-200 bg-primary-50 p-4.5">
               <div className="flex items-center gap-2 mb-4">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-r from-purple-600 to-blue-600">
-                  <Sparkles className="h-4 w-4 text-slate-900" />
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-600">
+                  <Sparkles className="h-4 w-4 text-[#0a0a0a]" strokeWidth={1.75} />
                 </div>
                 <div>
                   <h4 className="text-sm font-semibold text-slate-900">AI Business Impact Analysis</h4>

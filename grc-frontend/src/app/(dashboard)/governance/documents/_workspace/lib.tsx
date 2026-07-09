@@ -11,7 +11,7 @@
 
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { frameworksApi } from '@/lib/api';
+import apiClient from '@/lib/api';
 
 // ─── Shared document types ───────────────────────────────────────────────────
 export interface GovDoc {
@@ -284,11 +284,20 @@ export function OwnerChip({ name }: { name: string | null | undefined }) {
 }
 
 // ─── Framework id → name resolution + pills ──────────────────────────────────
-/** Cached lookup of framework id -> short label (short_code preferred, else name). */
+/**
+ * Cached lookup of framework id -> short label. A document's framework_ids /
+ * applicable_framework_ids are UploadedFramework ids (grc_uploaded_frameworks),
+ * NOT Framework-catalog ids — so resolve against the uploaded-frameworks list
+ * (GET /framework-upload/upload), else pills show a raw "#11" fallback.
+ */
 export function useFrameworkNames() {
   const { data } = useQuery({
-    queryKey: ['frameworks'],
-    queryFn: async () => (await frameworksApi.getAll()).data,
+    queryKey: ['uploaded-frameworks-name-map'],
+    queryFn: async () => {
+      const res = await apiClient.get('/framework-upload/upload', { params: { limit: 1000 } });
+      const d = res.data as unknown;
+      return (Array.isArray(d) ? d : ((d as { items?: unknown[]; frameworks?: unknown[] })?.items ?? (d as { frameworks?: unknown[] })?.frameworks ?? [])) as Array<{ id: string | number; name: string; short_code?: string | null }>;
+    },
     staleTime: 10 * 60 * 1000,
   });
   const nameMap = useMemo(() => {

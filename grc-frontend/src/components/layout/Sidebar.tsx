@@ -123,7 +123,7 @@ const navigation: NavEntry[] = [
         items: [
           { name: 'Risk Register', href: '/erm/risks', icon: AlertTriangle, requiredPermissions: ['erm:risks:*'] },
           { name: 'Risk Assessments', href: '/erm/risk-assessments', icon: ClipboardList, requiredPermissions: ['risks:risk_assessment:*', 'erm:rcsa:*'] },
-          { name: 'RCSA', href: '/risks/rcsa', icon: ClipboardList, requiredPermissions: ['erm:rcsa:*'] },
+          { name: 'RCSA', href: '/erm/rcsa', icon: ClipboardList, requiredPermissions: ['erm:rcsa:*'] },
           { name: 'Vendor Risk', href: '/vendor-risk', icon: Shield, requiredPermissions: ['erm:risks:*'] },
           // moved out of Advanced Analytics into the sidebar
           { name: 'Scenario Analysis', href: '/erm/analytics/scenario', icon: Target, requiredPermissions: ['erm:risks:*'] },

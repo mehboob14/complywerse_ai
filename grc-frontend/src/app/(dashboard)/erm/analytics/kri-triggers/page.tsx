@@ -109,8 +109,8 @@ export default function KRITriggersPage() {
         <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-5">
           <div className="rounded-xl border border-slate-200 bg-white p-4">
             <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-blue-500/20 p-2">
-                <Activity className="h-5 w-5 text-blue-400" />
+              <div className="rounded-lg bg-primary-50 p-2">
+                <Activity className="h-5 w-5 text-primary-600" strokeWidth={1.75} />
               </div>
               <div>
                 <p className="text-sm text-slate-600">Total KRIs Monitored</p>
@@ -335,11 +335,11 @@ function AlertCard({ alert }: { alert: KRIAlert }) {
       </div>
 
       {alert.recommended_action && (
-        <div className="rounded-lg bg-indigo-500/10 border border-indigo-500/20 p-3">
+        <div className="rounded-lg bg-primary-50 border border-primary-200 p-3">
           <div className="flex items-start gap-2">
-            <Zap className="h-4 w-4 text-indigo-400 mt-0.5 shrink-0" />
+            <Zap className="h-4 w-4 text-primary-600 mt-0.5 shrink-0" strokeWidth={1.75} />
             <div>
-              <p className="text-xs font-medium text-indigo-400 mb-1">Recommended Action</p>
+              <p className="text-xs font-medium text-primary-700 mb-1">Recommended Action</p>
               <p className="text-sm text-slate-700">{alert.recommended_action}</p>
             </div>
           </div>

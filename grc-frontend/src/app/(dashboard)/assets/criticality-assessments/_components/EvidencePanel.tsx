@@ -14,11 +14,13 @@ import apiClient, {
   type CriticalityEvidenceRow,
   type CriticalityKind,
 } from '@/lib/api';
+import { useToast } from '@/components/ui/ToastProvider';
 
 export function EvidencePanel({
   kind, itemId,
 }: { kind: CriticalityKind; itemId: number }) {
   const qc = useQueryClient();
+  const { toast } = useToast();
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [description, setDescription] = useState('');
@@ -64,7 +66,7 @@ export function EvidencePanel({
       a.click();
       URL.revokeObjectURL(objectUrl);
     } catch {
-      alert('Download failed.');
+      toast({ title: 'Download failed', message: 'Could not download this evidence file.', type: 'error' });
     }
   };
 
@@ -82,7 +84,7 @@ export function EvidencePanel({
             className="text-xs"
           />
           {pendingFile && (
-            <span className="text-[11px] text-gray-600 truncate">
+            <span className="text-[11px] text-slate-600 truncate">
               {pendingFile.name} ({Math.round(pendingFile.size / 1024)} KB)
             </span>
           )}
@@ -92,7 +94,7 @@ export function EvidencePanel({
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           placeholder="Optional description — what does this evidence prove?"
-          className="block w-full text-sm rounded-md border border-slate-300 bg-white text-slate-900 px-2 py-1.5 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+          className="block w-full text-sm rounded-md border border-slate-300 bg-white text-slate-900 px-2 py-1.5 focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
         />
         <div className="flex justify-end">
           <button

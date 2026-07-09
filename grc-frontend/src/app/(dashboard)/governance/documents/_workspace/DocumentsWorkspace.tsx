@@ -13,7 +13,7 @@ import { useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { FolderTree, Table2, KanbanSquare, Plus, Sparkles, LayoutTemplate, Search } from 'lucide-react';
 import { MultiSelectDropdown, RightSlidePanel, useToast, PageLoader } from '@/components/ui';
-import { assetsApi } from '@/lib/api';
+import { assetsApi, governanceApi } from '@/lib/api';
 import type { GovDoc, GovDocNode } from './lib';
 import { DOC_TYPE_STYLE, STAGE_ORDER, statusLabel } from './lib';
 import {
@@ -36,6 +36,8 @@ export interface DocumentsWorkspaceProps {
   onNewDocument: () => void;
   onAIDraft: () => void;
   onTemplates: () => void;
+  /** Open the pre-filled edit modal for an existing document (hosted in page.tsx). */
+  onEditDocument?: (doc: GovDoc) => void;
 }
 
 const TYPE_OPTIONS = Object.keys(DOC_TYPE_STYLE).map((k) => ({ value: k, label: DOC_TYPE_STYLE[k].label }));
@@ -71,7 +73,7 @@ function findPath(nodes: GovDocNode[], id: number, trail: GovDocNode[] = []): Go
   return null;
 }
 
-export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDocument, onAIDraft, onTemplates }: DocumentsWorkspaceProps) {
+export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDocument, onAIDraft, onTemplates, onEditDocument }: DocumentsWorkspaceProps) {
   const router = useRouter();
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -198,6 +200,43 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
 
   const onApproveFromRail = (docId: number) => runBulk(() => signOffDocument(docId), 'Signed off');
 
+  // ── register row actions ──
+  const onEditDoc = (doc: GovDoc) => (onEditDocument ? onEditDocument(doc) : openDoc(doc.id));
+  const triggerDownload = (data: BlobPart, fileName: string) => {
+    const url = URL.createObjectURL(new Blob([data]));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+  const onDownloadDoc = async (doc: GovDoc) => {
+    const pdfName = `${(doc.title || 'document').replace(/[^\w.\- ]+/g, '_').trim() || 'document'}.pdf`;
+    try {
+      // /export serves the uploaded file when present, else a PDF of the markdown
+      // content — so every document (incl. content-only AI drafts) is downloadable.
+      const res = await governanceApi.exportDocument(doc.id);
+      triggerDownload(res.data as BlobPart, doc.has_file && doc.file_name ? doc.file_name : pdfName);
+    } catch {
+      // Fallback (e.g. /export not live yet) — file-backed docs still work via download-file.
+      if (doc.has_file) {
+        try {
+          const r = await governanceApi.downloadDocumentFile(doc.id);
+          triggerDownload(r.data as BlobPart, doc.file_name || `document-${doc.id}`);
+          return;
+        } catch { /* fall through to error toast */ }
+      }
+      toast({ title: 'Download failed', message: 'Could not export this document.', type: 'error' });
+    }
+  };
+  const onDeleteDoc = async (doc: GovDoc) => {
+    if (!window.confirm(`Delete "${doc.title}"? This cannot be undone.`)) return;
+    try { await governanceApi.deleteDocument(doc.id); toast({ title: 'Document deleted', type: 'success' }); refreshAll(); }
+    catch { toast({ title: 'Delete failed', type: 'error' }); }
+  };
+
   // ── toolbar bits ──
   const VIEWS: { key: ViewMode; label: string; icon: typeof FolderTree }[] = [
     { key: 'tree', label: 'Tree', icon: FolderTree },
@@ -218,45 +257,51 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
 
   return (
     <div className="governance-light space-y-4">
-      {/* Toolbar */}
-      <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-        <div className="flex flex-1 flex-wrap items-center gap-2">
-          <div className="relative min-w-[220px] flex-1 sm:max-w-xs">
-            <Search strokeWidth={1.75} className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by title, code, owner or control…"
-              className="w-full rounded-lg border border-slate-300 bg-white py-1.5 pl-8 pr-3 text-sm text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-            />
-          </div>
-          <MultiSelectDropdown title="Type" items={TYPE_OPTIONS} selectedValues={typeFilter ? [typeFilter] : []} onApply={(v) => setTypeFilter(v[0] || '')} multiSelect={false} autoApply placeholder="Type: All" size="md" />
-          <MultiSelectDropdown title="Status" items={STATUS_OPTIONS} selectedValues={statusFilter ? [statusFilter] : []} onApply={(v) => setStatusFilter(v[0] || '')} multiSelect={false} autoApply placeholder="Status: All" size="md" />
-          <MultiSelectDropdown title="Owner" items={ownerOptions} selectedValues={ownerFilter ? [ownerFilter] : []} onApply={(v) => setOwnerFilter(v[0] || '')} multiSelect={false} autoApply forceSearch placeholder="Owner: All" size="md" />
+      {/* Toolbar — ALWAYS a single row. Search flexes with the screen; filters and
+          actions stay put (shrink-0). On very narrow screens the row scrolls
+          horizontally rather than wrapping. Secondary buttons collapse to icons. */}
+      <div className="flex items-center gap-2 overflow-x-auto scrollbar-thin">
+        <div className="relative w-40 shrink-0 sm:w-52 xl:w-72">
+          <Search strokeWidth={1.75} className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by title, code, owner or control…"
+            className="w-full rounded-lg border border-slate-300 bg-white py-1.5 pl-8 pr-3 text-sm text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+          />
         </div>
-        <div className="flex items-center gap-2">
-          <div className="inline-flex items-center rounded-lg border border-slate-200 bg-slate-100 p-0.5">
+        <div className="shrink-0">
+          <MultiSelectDropdown title="Type" items={TYPE_OPTIONS} selectedValues={typeFilter ? [typeFilter] : []} onApply={(v) => setTypeFilter(v[0] || '')} multiSelect={false} autoApply placeholder="All" size="md" />
+        </div>
+        <div className="shrink-0">
+          <MultiSelectDropdown title="Status" items={STATUS_OPTIONS} selectedValues={statusFilter ? [statusFilter] : []} onApply={(v) => setStatusFilter(v[0] || '')} multiSelect={false} autoApply placeholder="All" size="md" />
+        </div>
+        <div className="shrink-0">
+          <MultiSelectDropdown title="Owner" items={ownerOptions} selectedValues={ownerFilter ? [ownerFilter] : []} onApply={(v) => setOwnerFilter(v[0] || '')} multiSelect={false} autoApply forceSearch placeholder="All" size="md" />
+        </div>
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          <div className="inline-flex shrink-0 items-center rounded-lg border border-slate-200 bg-slate-100 p-0.5">
             {VIEWS.map((v) => {
               const Icon = v.icon;
               const active = view === v.key;
               return (
-                <button key={v.key} onClick={() => setView(v.key)}
+                <button key={v.key} onClick={() => setView(v.key)} title={v.label}
                   className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-sm font-medium transition-colors ${active ? 'bg-white text-primary-700 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>
-                  <Icon strokeWidth={1.75} className="h-4 w-4" /> {v.label}
+                  <Icon strokeWidth={1.75} className="h-4 w-4" /> <span className="hidden sm:inline">{v.label}</span>
                 </button>
               );
             })}
           </div>
           {canCreate && (
             <>
-              <button onClick={onTemplates} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
-                <LayoutTemplate strokeWidth={1.75} className="h-4 w-4" /> Templates
+              <button onClick={onTemplates} title="Templates" className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
+                <LayoutTemplate strokeWidth={1.75} className="h-4 w-4" /> <span className="hidden xl:inline">Templates</span>
               </button>
-              <button onClick={onAIDraft} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
-                <Sparkles strokeWidth={1.75} className="h-4 w-4 text-primary-600" /> AI Draft
+              <button onClick={onAIDraft} title="AI Draft" className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
+                <Sparkles strokeWidth={1.75} className="h-4 w-4 text-primary-600" /> <span className="hidden xl:inline">AI Draft</span>
               </button>
-              <button onClick={onNewDocument} className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-700">
-                <Plus strokeWidth={1.75} className="h-4 w-4" /> New Document
+              <button onClick={onNewDocument} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-700">
+                <Plus strokeWidth={1.75} className="h-4 w-4" /> <span className="hidden sm:inline">New Document</span><span className="sm:hidden">New</span>
               </button>
             </>
           )}
@@ -289,16 +334,19 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
           ) : view === 'table' ? (
             <RegisterTable
               docs={filteredDocs}
-              coverageMap={coverageMap}
               totalCount={summary?.total_documents ?? allDocs.length}
               updatedLabel={updatedLabel}
               onOpenDoc={openDoc}
+              onEdit={onEditDoc}
+              onDownload={onDownloadDoc}
+              onDelete={onDeleteDoc}
               onBulkApprove={onBulkApprove}
               onBulkPublish={onBulkPublish}
               onBulkArchive={onBulkArchive}
               onBulkAssignOwner={(ids) => setAssignOwnerFor(ids)}
               onBulkSetReviewDate={(ids) => setReviewDateFor(ids)}
               canEdit={canEdit}
+              canDelete={canEdit}
             />
           ) : (
             <LifecycleBoard docs={filteredDocs} onOpenDoc={openDoc} />

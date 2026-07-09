@@ -164,7 +164,7 @@ export default function CweOverridesPage() {
             {groupKeys.map((cwe) => (
               <div key={cwe} className="border border-slate-200 rounded-lg p-3">
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="inline-flex items-center rounded-full bg-blue-50 border border-blue-200 px-2 py-0.5 text-[10px] font-bold text-blue-700 uppercase tracking-wider">
+                  <span className="inline-flex items-center rounded-full bg-primary-50 border border-primary-200 px-2 py-0.5 text-[10px] font-bold text-primary-700 uppercase tracking-wider">
                     {cwe.startsWith('__') ? 'BASELINE' : cwe}
                   </span>
                   <span className="text-xs text-slate-600">{cweLabel(cwe)}</span>
@@ -199,7 +199,7 @@ export default function CweOverridesPage() {
                         <td className="px-2 py-1.5">
                           <button
                             onClick={() => deleteMutation.mutate(o.id)}
-                            className="text-slate-400 hover:text-red-600"
+                            className="text-slate-400 hover:text-rose-600"
                             disabled={deleteMutation.isPending}
                             title="Remove this override"
                           >
@@ -219,7 +219,7 @@ export default function CweOverridesPage() {
       {/* Preview panel */}
       <div className="cw-card p-4">
         <h2 className="text-sm font-semibold text-slate-900 flex items-center gap-1.5 mb-2">
-          <Eye size={14} className="text-blue-600" />
+          <Eye size={14} className="text-primary-600" />
           Effective Resolution Preview
         </h2>
         <p className="text-xs text-slate-500 mb-3">
@@ -234,7 +234,7 @@ export default function CweOverridesPage() {
               value={previewCwe}
               onChange={(e) => setPreviewCwe(e.target.value)}
               placeholder="e.g. CWE-89"
-              className="rounded border border-slate-200 bg-white px-3 py-1.5 text-sm font-mono text-slate-900 focus:border-blue-500 focus:outline-none"
+              className="rounded border border-slate-200 bg-white px-3 py-1.5 text-sm font-mono text-slate-900 focus:border-primary-500 focus:outline-none"
             />
           </div>
           <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
@@ -242,7 +242,7 @@ export default function CweOverridesPage() {
               type="checkbox"
               checked={previewHasCve}
               onChange={(e) => setPreviewHasCve(e.target.checked)}
-              className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+              className="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
             />
             Vuln has a CVE
           </label>
@@ -251,7 +251,7 @@ export default function CweOverridesPage() {
               type="checkbox"
               checked={previewIsKev}
               onChange={(e) => setPreviewIsKev(e.target.checked)}
-              className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+              className="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
             />
             KEV-flagged
           </label>
@@ -276,8 +276,8 @@ export default function CweOverridesPage() {
                 </ul>
               )}
             </div>
-            <div className="border-2 border-blue-200 rounded-lg p-3 bg-blue-50/30">
-              <p className="text-[10px] uppercase tracking-wider text-blue-700 font-semibold mb-1.5">
+            <div className="border-2 border-primary-200 rounded-lg p-3 bg-primary-50">
+              <p className="text-[10px] uppercase tracking-wider text-primary-700 font-semibold mb-1.5">
                 Effective (after your overrides) ({preview.effective_identifiers.length})
               </p>
               {preview.effective_identifiers.length === 0 ? (
@@ -360,7 +360,7 @@ function AddOverrideModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="cw-card w-full max-w-lg p-5 shadow-xl">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-semibold text-slate-900">Add CWE Override</h3>
@@ -377,7 +377,7 @@ function AddOverrideModal({
               value={cweId}
               onChange={(e) => setCweId(e.target.value)}
               placeholder="CWE-89  |  __vuln_mgmt__  |  __kev__"
-              className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm font-mono text-slate-900 focus:border-blue-500 focus:outline-none"
+              className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm font-mono text-slate-900 focus:border-primary-500 focus:outline-none"
             />
             <p className="text-[10px] text-slate-500 mt-1">
               Use <code className="bg-slate-100 px-1 rounded">__vuln_mgmt__</code> or{' '}
@@ -421,7 +421,7 @@ function AddOverrideModal({
                 value={prefix}
                 onChange={(e) => setPrefix(e.target.value)}
                 placeholder="e.g. SAMA  |  HITRUST  |  ISO27001"
-                className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm font-mono text-slate-900 focus:border-blue-500 focus:outline-none"
+                className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm font-mono text-slate-900 focus:border-primary-500 focus:outline-none"
               />
               <p className="text-[10px] text-slate-500 mt-1">Loose substring match on the framework name.</p>
             </div>
@@ -432,7 +432,7 @@ function AddOverrideModal({
                 value={pattern}
                 onChange={(e) => setPattern(e.target.value)}
                 placeholder="e.g. 4.2.1  |  A.8.28"
-                className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm font-mono text-slate-900 focus:border-blue-500 focus:outline-none"
+                className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm font-mono text-slate-900 focus:border-primary-500 focus:outline-none"
               />
               <p className="text-[10px] text-slate-500 mt-1">Substring match on the control code.</p>
             </div>
@@ -445,12 +445,12 @@ function AddOverrideModal({
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="e.g. SAMA 4.2.1 explicitly covers SQL injection in the secure-development section — added per our 2026 compliance review."
-              className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+              className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
             />
           </div>
 
           {errorMsg && (
-            <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 flex items-start gap-2">
+            <div className="rounded border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 flex items-start gap-2">
               <AlertCircle size={13} className="flex-shrink-0 mt-0.5" />
               <div>{errorMsg}</div>
             </div>

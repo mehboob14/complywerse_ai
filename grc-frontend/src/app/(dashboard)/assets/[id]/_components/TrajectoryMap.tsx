@@ -18,7 +18,6 @@ import {
   ReactFlow,
   Background,
   Controls,
-  MiniMap,
   ReactFlowProvider,
   type Node,
   type Edge,
@@ -432,16 +431,6 @@ export function TrajectoryMap({ assetId }: Props) {
               showInteractive={false}
               position="bottom-right"
               style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8 }}
-            />
-            <MiniMap
-              nodeColor={(n) =>
-                n.type === 'asset' ? '#3b82f6'
-                : n.type === 'vuln' ? '#fb923c'
-                : '#f43f5e'
-              }
-              pannable
-              zoomable
-              style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8 }}
             />
           </ReactFlow>
         </ReactFlowProvider>

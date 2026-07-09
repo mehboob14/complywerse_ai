@@ -476,9 +476,30 @@ class AssessmentRemediation(Base):
     assessment_item = relationship("AssessmentItem", back_populates="remediation_actions")
     owner = relationship("GRCUser", foreign_keys=[owner_id])
     creator = relationship("GRCUser", foreign_keys=[created_by])
-    
+
     __table_args__ = (
         Index("ix_remediation_item", "assessment_item_id"),
         Index("ix_remediation_status", "status"),
     )
+
+
+class FrameworkControlOwnership(Base):
+    """Standalone per-control owner + implementation status, independent of any
+    certification journey. Lets the Controls workbench assign an owner and set the
+    implementation stage directly on a parsed framework control (one record per
+    control; the per-tenant DB scopes it). Surfaced via the framework-controls
+    status-summary, where it OVERRIDES journey-derived status when present.
+    """
+    __tablename__ = "grc_framework_control_ownership"
+
+    id = Column(Integer, primary_key=True, index=True)
+    parsed_control_id = Column(Integer, ForeignKey("grc_parsed_framework_controls.id"), nullable=False, unique=True, index=True)
+    status = Column(String(50), default="not_started")  # not_started|in_progress|implemented|verified|not_applicable
+    assigned_user_ids = Column(JSON, default=list)       # ordered GRCUser ids; first = primary owner
+    implementation_date = Column(DateTime, nullable=True)
+    verified_date = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    parsed_control = relationship("ParsedFrameworkControl")
 

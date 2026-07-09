@@ -28,13 +28,15 @@ interface DashboardPayload extends IssueAnalyticsPayload {
 function KpiCard({
   icon: Icon, label, value, accent, hint,
 }: { icon: React.ElementType; label: string; value: string | number; accent: 'blue' | 'emerald' | 'amber' | 'rose' | 'slate' | 'indigo'; hint?: string }) {
+  // Brand-accent tones (blue/indigo) flattened to the teal primary; the
+  // sanctioned ramp tones (emerald/amber/rose/slate) are kept as-is.
   const tones: Record<string, { bg: string; text: string; ring: string }> = {
-    blue:    { bg: 'bg-blue-50',    text: 'text-blue-700',    ring: 'ring-blue-100' },
+    blue:    { bg: 'bg-primary-50', text: 'text-primary-700', ring: 'ring-primary-100' },
     emerald: { bg: 'bg-emerald-50', text: 'text-emerald-700', ring: 'ring-emerald-100' },
     amber:   { bg: 'bg-amber-50',   text: 'text-amber-700',   ring: 'ring-amber-100' },
     rose:    { bg: 'bg-rose-50',    text: 'text-rose-700',    ring: 'ring-rose-100' },
     slate:   { bg: 'bg-slate-50',   text: 'text-slate-700',   ring: 'ring-slate-100' },
-    indigo:  { bg: 'bg-indigo-50',  text: 'text-indigo-700',  ring: 'ring-indigo-100' },
+    indigo:  { bg: 'bg-primary-50', text: 'text-primary-700', ring: 'ring-primary-100' },
   };
   const t = tones[accent];
   return (
@@ -122,7 +124,7 @@ export function ClosureTracker() {
                 <XAxis dataKey="label" tick={{ fontSize: 10 }} stroke="#94a3b8" />
                 <YAxis tick={{ fontSize: 10 }} stroke="#94a3b8" allowDecimals={false} />
                 <Tooltip contentStyle={{ fontSize: 11, borderRadius: 6, border: '1px solid #e2e8f0' }} />
-                <Bar dataKey="count" radius={[4, 4, 0, 0]} fill="#3b82f6" />
+                <Bar dataKey="count" radius={[4, 4, 0, 0]} fill="#1ed4b0" />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -136,7 +138,7 @@ export function ClosureTracker() {
               {by_severity.map((s) => {
                 const max = Math.max(...by_severity.map((x) => x.count), 1);
                 const pct = (s.count / max) * 100;
-                const color = s.severity === 'critical' ? '#f43f5e' : s.severity === 'high' ? '#fb923c' : s.severity === 'medium' ? '#f59e0b' : s.severity === 'low' ? '#3b82f6' : '#94a3b8';
+                const color = s.severity === 'critical' ? '#f43f5e' : s.severity === 'high' ? '#fb923c' : s.severity === 'medium' ? '#f59e0b' : s.severity === 'low' ? '#10b981' : '#94a3b8';
                 return (
                   <div key={s.severity}>
                     <div className="flex items-center justify-between text-[11px]">
@@ -189,7 +191,7 @@ export function ClosureTracker() {
                   <span className="rounded bg-slate-100 px-1 text-[9px] font-medium uppercase text-slate-600 shrink-0 self-center">
                     {a.type.replace(/_/g, ' ')}
                   </span>
-                  <Link href={`/issues/${a.issue_id}`} className="font-semibold text-slate-800 hover:text-blue-700 shrink-0">{a.code}</Link>
+                  <Link href={`/issues/${a.issue_id}`} className="font-semibold text-slate-800 hover:text-primary-700 shrink-0">{a.code}</Link>
                   <span className="truncate text-slate-600">{a.title}</span>
                   <span className="ml-auto text-[10px] text-slate-400 shrink-0">{new Date(a.when).toLocaleDateString()}</span>
                 </li>

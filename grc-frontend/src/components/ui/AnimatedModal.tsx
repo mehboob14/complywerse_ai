@@ -10,6 +10,7 @@
  * shadow from the modal set — no gradients.
  */
 import { useEffect, useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
 const MAX_W: Record<string, string> = {
@@ -75,9 +76,13 @@ export function AnimatedModal({
     };
   }, [render, onClose]);
 
-  if (!render) return null;
+  // Rendered inline in the tree, this fixed-position overlay is at the mercy of
+  // any ancestor that establishes a containing block (transform/filter/sticky
+  // scroll contexts) — which distorts it. Portal to <body> so it is always
+  // viewport-anchored regardless of where it is mounted.
+  if (!render || typeof document === 'undefined') return null;
 
-  return (
+  return createPortal(
     <div
       className={`fixed inset-0 z-[60] flex items-center justify-center p-4 transition-opacity duration-200 ${show ? 'opacity-100' : 'opacity-0'}`}
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
@@ -117,7 +122,8 @@ export function AnimatedModal({
         <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">{children}</div>
         {footer && <div className="border-t border-slate-100 bg-slate-50 px-5 py-3">{footer}</div>}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

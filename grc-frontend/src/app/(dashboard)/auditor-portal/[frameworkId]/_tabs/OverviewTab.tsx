@@ -139,15 +139,14 @@ function ModuleTile({
   label: string;
   value: number;
   secondary?: string;
-  tone: 'rose' | 'amber' | 'emerald' | 'blue' | 'purple' | 'slate';
+  tone: 'rose' | 'amber' | 'emerald' | 'primary' | 'slate';
   onClick?: () => void;
 }) {
   const tones: Record<string, { bg: string; border: string; iconBg: string; iconColor: string; accent: string }> = {
     rose:    { bg: 'bg-rose-50',    border: 'border-rose-200',    iconBg: 'bg-rose-100',    iconColor: 'text-rose-700',    accent: 'bg-rose-500' },
     amber:   { bg: 'bg-amber-50',   border: 'border-amber-200',   iconBg: 'bg-amber-100',   iconColor: 'text-amber-700',   accent: 'bg-amber-500' },
     emerald: { bg: 'bg-emerald-50', border: 'border-emerald-200', iconBg: 'bg-emerald-100', iconColor: 'text-emerald-700', accent: 'bg-emerald-500' },
-    blue:    { bg: 'bg-blue-50',    border: 'border-blue-200',    iconBg: 'bg-blue-100',    iconColor: 'text-blue-700',    accent: 'bg-blue-500' },
-    purple:  { bg: 'bg-purple-50',  border: 'border-purple-200',  iconBg: 'bg-purple-100',  iconColor: 'text-purple-700',  accent: 'bg-purple-500' },
+    primary: { bg: 'bg-primary-50', border: 'border-primary-200', iconBg: 'bg-primary-100', iconColor: 'text-primary-700', accent: 'bg-primary-500' },
     slate:   { bg: 'bg-slate-50',   border: 'border-slate-200',   iconBg: 'bg-slate-100',   iconColor: 'text-slate-700',   accent: 'bg-slate-400' },
   };
   const t = tones[tone];
@@ -199,7 +198,7 @@ export default function OverviewTab({ frameworkId, onJumpTab }: Props) {
     <div className="space-y-6">
       {/* HERO — three gauges side by side. This is the page's anchor:
           one glance answers "how much of this framework is signed off?". */}
-      <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white via-slate-50 to-blue-50/30 p-6">
+      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-6">
         <div className="flex items-center justify-between gap-4 flex-wrap mb-5">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{data.framework.short_code || 'Framework'} audit posture</p>
@@ -221,8 +220,8 @@ export default function OverviewTab({ frameworkId, onJumpTab }: Props) {
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 place-items-center">
           <Gauge value={coveragePct} label="Scope coverage" sublabel={`${data.controls.in_scope} / ${data.controls.total}`} color="#10b981" />
-          <Gauge value={evidenceApprovalPct} label="Evidence approval rate" sublabel={`${data.evidence.approved} / ${data.evidence.total}`} color="#3b82f6" />
-          <Gauge value={implPct} label="Implementation complete" sublabel={`${implCompleted} / ${implTotal}`} color="#8b5cf6" />
+          <Gauge value={evidenceApprovalPct} label="Evidence approval rate" sublabel={`${data.evidence.approved} / ${data.evidence.total}`} color="#1ed4b0" />
+          <Gauge value={implPct} label="Implementation complete" sublabel={`${implCompleted} / ${implTotal}`} color="#17b898" />
         </div>
       </div>
 
@@ -238,7 +237,7 @@ export default function OverviewTab({ frameworkId, onJumpTab }: Props) {
           {onJumpTab && (
             <button
               onClick={() => onJumpTab('controls')}
-              className="text-xs text-blue-600 hover:underline font-medium"
+              className="text-xs text-primary-700 hover:underline font-medium"
             >
               Open controls →
             </button>
@@ -267,7 +266,7 @@ export default function OverviewTab({ frameworkId, onJumpTab }: Props) {
           {onJumpTab && (
             <button
               onClick={() => onJumpTab('evidence')}
-              className="text-xs text-blue-600 hover:underline font-medium"
+              className="text-xs text-primary-700 hover:underline font-medium"
             >
               Open evidence →
             </button>
@@ -304,12 +303,12 @@ export default function OverviewTab({ frameworkId, onJumpTab }: Props) {
       <div>
         <p className="text-sm font-semibold text-slate-900 mb-2">Linked artifacts</p>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-          <ModuleTile icon={FileText}       label="Documents"        value={data.documents.total}                              tone="blue"    onClick={onJumpTab ? () => onJumpTab('documents') : undefined} />
+          <ModuleTile icon={FileText}       label="Documents"        value={data.documents.total}                              tone="primary" onClick={onJumpTab ? () => onJumpTab('documents') : undefined} />
           <ModuleTile icon={AlertTriangle}  label="Risks"            value={data.risks.total}                                  tone="amber"   onClick={onJumpTab ? () => onJumpTab('risks') : undefined} />
-          <ModuleTile icon={Server}         label="In-scope assets"  value={data.assets.in_scope}                              tone="blue"    onClick={onJumpTab ? () => onJumpTab('assets') : undefined} />
+          <ModuleTile icon={Server}         label="In-scope assets"  value={data.assets.in_scope}                              tone="primary" onClick={onJumpTab ? () => onJumpTab('assets') : undefined} />
           <ModuleTile icon={Bug}            label="Open vulns"       value={data.vulnerabilities.open_on_in_scope_assets}      secondary="on in-scope assets" tone="rose"  onClick={onJumpTab ? () => onJumpTab('vulnerabilities') : undefined} />
           <ModuleTile icon={Briefcase}      label="Active vendors"   value={data.vendors.active}                               tone="slate"   onClick={onJumpTab ? () => onJumpTab('vendors') : undefined} />
-          <ModuleTile icon={ShieldCheck}    label="Exceptions"       value={data.exceptions.controls_marked_not_applicable + data.exceptions.policy_exceptions_active} secondary={`${data.exceptions.controls_marked_not_applicable} N/A + ${data.exceptions.policy_exceptions_active} policy`} tone="purple"  onClick={onJumpTab ? () => onJumpTab('exceptions') : undefined} />
+          <ModuleTile icon={ShieldCheck}    label="Exceptions"       value={data.exceptions.controls_marked_not_applicable + data.exceptions.policy_exceptions_active} secondary={`${data.exceptions.controls_marked_not_applicable} N/A + ${data.exceptions.policy_exceptions_active} policy`} tone="slate"   onClick={onJumpTab ? () => onJumpTab('exceptions') : undefined} />
         </div>
       </div>
 
@@ -328,7 +327,7 @@ export default function OverviewTab({ frameworkId, onJumpTab }: Props) {
                   key={status}
                   className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${
                     isDone ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                    : isWip ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                    : isWip ? 'bg-primary-50 text-primary-700 border border-primary-200'
                     : 'bg-slate-100 text-slate-700 border border-slate-200'
                   }`}
                 >

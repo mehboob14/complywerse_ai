@@ -64,16 +64,16 @@ export default function ADDiscoverPage() {
 
   if (!permsLoading && !canManage) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+      <div className="min-h-screen bg-slate-50">
         <div className="max-w-2xl mx-auto px-4 py-16">
           <div className="bg-white rounded-xl shadow-lg border border-slate-200 p-8 text-center">
             <div className="text-5xl mb-3">🔒</div>
-            <h1 className="text-xl font-semibold text-gray-900 mb-2">AD Discovery is locked</h1>
-            <p className="text-sm text-gray-600 mb-4">
+            <h1 className="text-xl font-semibold text-slate-900 mb-2">AD Discovery is locked</h1>
+            <p className="text-sm text-slate-600 mb-4">
               Bulk-onboarding via Active Directory requires the
               {' '}<strong>compliance:agents:manage</strong> permission.
             </p>
-            <button onClick={() => router.push('/dashboard')} className="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700">
+            <button onClick={() => router.push('/dashboard')} className="px-4 py-2 bg-primary-600 text-[color:var(--color-on-base,#0a0a0a)] text-sm rounded-md hover:bg-primary-700">
               ← Back to dashboard
             </button>
           </div>
@@ -182,19 +182,19 @@ export default function ADDiscoverPage() {
 
   if (result) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-emerald-50 py-12">
+      <div className="min-h-screen bg-slate-50 py-12">
         <div className="max-w-2xl mx-auto px-4">
-          <div className="bg-white rounded-xl shadow-md border-2 border-green-200 p-8 text-center">
+          <div className="bg-white rounded-xl shadow-md border-2 border-emerald-200 p-8 text-center">
             <div className="text-5xl mb-3">✅</div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-3">Onboarded</h1>
+            <h1 className="text-2xl font-bold text-slate-900 mb-3">Onboarded</h1>
             <div className="grid grid-cols-3 gap-4 my-6">
               <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
                 <div className="text-3xl font-bold text-emerald-700">{result.created_assets}</div>
                 <div className="mt-1 text-xs text-emerald-800">new asset rows</div>
               </div>
-              <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
-                <div className="text-3xl font-bold text-blue-700">{result.created_connections}</div>
-                <div className="mt-1 text-xs text-blue-800">new connections</div>
+              <div className="rounded-lg border border-primary-200 bg-primary-50 p-4">
+                <div className="text-3xl font-bold text-primary-700">{result.created_connections}</div>
+                <div className="mt-1 text-xs text-primary-800">new connections</div>
               </div>
               <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
                 <div className="text-3xl font-bold text-slate-700">{result.skipped?.length || 0}</div>
@@ -207,7 +207,7 @@ export default function ADDiscoverPage() {
               </p>
             )}
             <div className="flex gap-3 justify-center">
-              <button onClick={() => router.push('/assets')} className="px-5 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700">
+              <button onClick={() => router.push('/assets')} className="px-5 py-2 bg-primary-600 text-[color:var(--color-on-base,#0a0a0a)] rounded-lg text-sm font-medium hover:bg-primary-700">
                 View IT Assets →
               </button>
               <button onClick={() => router.push('/risk-posture')} className="px-5 py-2 bg-slate-100 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-200">
@@ -221,24 +221,24 @@ export default function ADDiscoverPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 py-8">
+    <div className="min-h-screen bg-slate-50 py-8">
       <div className="max-w-5xl mx-auto px-4 space-y-6">
         <div>
           <button onClick={() => router.back()} className="text-sm text-slate-600 hover:text-slate-900 mb-2">← Back</button>
-          <h1 className="text-3xl font-bold text-gray-900">Active Directory discovery</h1>
-          <p className="mt-2 text-gray-600 max-w-2xl">
+          <h1 className="text-3xl font-bold text-slate-900">Active Directory discovery</h1>
+          <p className="mt-2 text-slate-600 max-w-2xl">
             Bind to AD with one service account, enumerate every domain-joined computer, then onboard them in bulk.
             <strong> No IPs, no CIDR scan</strong> — AD already knows every machine.
           </p>
         </div>
 
         {/* Demo mode banner — for walking through the flow without a real DC */}
-        <div className="rounded-xl border border-violet-200 bg-gradient-to-br from-violet-50 to-purple-50 p-4">
+        <div className="rounded-xl border border-primary-200 bg-primary-50 p-4">
           <div className="flex items-start gap-3">
             <span className="text-2xl flex-shrink-0">✨</span>
             <div className="flex-1">
-              <h3 className="text-sm font-semibold text-violet-900">No AD server handy? Try it with demo data</h3>
-              <p className="mt-1 text-xs text-violet-800">
+              <h3 className="text-sm font-semibold text-primary-900">No AD server handy? Try it with demo data</h3>
+              <p className="mt-1 text-xs text-primary-800">
                 We'll return 8 realistic-looking fake hosts (DC-01, WEB-PROD-01, FILE-SRV-01, etc.) so you can walk
                 through the rest of the flow — selecting, onboarding, then seeing the assets appear in IT Assets.
                 Onboarding still writes <strong>real DB rows in your tenant</strong> (with placeholder credentials),
@@ -248,7 +248,7 @@ export default function ADDiscoverPage() {
                 type="button"
                 onClick={() => discover(null, true)}
                 disabled={discovering}
-                className="mt-3 inline-flex items-center gap-2 rounded-md bg-violet-600 px-4 py-2 text-xs font-semibold text-white hover:bg-violet-700 disabled:opacity-50"
+                className="mt-3 inline-flex items-center gap-2 rounded-md bg-primary-600 px-4 py-2 text-xs font-semibold text-[color:var(--color-on-base,#0a0a0a)] hover:bg-primary-700 disabled:opacity-50"
               >
                 {discovering ? 'Loading demo…' : '✨ Try with demo data'}
               </button>
@@ -259,7 +259,7 @@ export default function ADDiscoverPage() {
         {/* Step 1: AD bind credentials */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
           <h2 className="text-base font-semibold text-slate-900 mb-1 flex items-center gap-2">
-            <span className="w-6 h-6 rounded bg-blue-100 text-blue-700 inline-flex items-center justify-center text-xs font-bold">1</span>
+            <span className="w-6 h-6 rounded bg-primary-100 text-primary-700 inline-flex items-center justify-center text-xs font-bold">1</span>
             Connect to Active Directory
           </h2>
           <p className="text-xs text-slate-500 mb-4">
@@ -315,13 +315,13 @@ export default function ADDiscoverPage() {
               </div>
             </div>
             {discoverError && (
-              <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">{discoverError}</div>
+              <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">{discoverError}</div>
             )}
             <div className="flex justify-end">
               <button
                 type="submit"
                 disabled={discovering}
-                className="rounded-md bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                className="rounded-md bg-primary-600 px-5 py-2 text-sm font-semibold text-[color:var(--color-on-base,#0a0a0a)] hover:bg-primary-700 disabled:opacity-50"
               >
                 {discovering ? 'Discovering…' : 'Discover computers'}
               </button>
@@ -333,7 +333,7 @@ export default function ADDiscoverPage() {
         {discovered && (
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
             <h2 className="text-base font-semibold text-slate-900 mb-1 flex items-center gap-2">
-              <span className="w-6 h-6 rounded bg-blue-100 text-blue-700 inline-flex items-center justify-center text-xs font-bold">2</span>
+              <span className="w-6 h-6 rounded bg-primary-100 text-primary-700 inline-flex items-center justify-center text-xs font-bold">2</span>
               Discovered {discovered.total} computer{discovered.total === 1 ? '' : 's'}
               {discovered.truncated && <span className="text-xs text-amber-700 font-normal">(truncated at 5000)</span>}
             </h2>
@@ -350,7 +350,7 @@ export default function ADDiscoverPage() {
               <div className="text-xs text-slate-600">
                 <strong>{selectedHosts.size}</strong> of {filteredComputers.length} selected
               </div>
-              <button onClick={selectAllVisible} className="text-xs text-blue-700 hover:underline">Select all visible</button>
+              <button onClick={selectAllVisible} className="text-xs text-primary-700 hover:underline">Select all visible</button>
               <button onClick={clearSelection} className="text-xs text-slate-600 hover:underline">Clear</button>
             </div>
 
@@ -374,7 +374,7 @@ export default function ADDiscoverPage() {
                             type="checkbox"
                             checked={selectedHosts.has(host)}
                             onChange={() => toggleHost(host)}
-                            className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                            className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
                           />
                         </td>
                         <td className="px-3 py-2 font-mono text-xs text-slate-900">{c.cn}</td>
@@ -388,9 +388,9 @@ export default function ADDiscoverPage() {
             </div>
 
             {/* Step 3: scan credential + onboard */}
-            <div className="mt-5 rounded-lg border border-indigo-200 bg-indigo-50/50 p-4">
-              <h3 className="text-sm font-semibold text-indigo-900 mb-1">
-                <span className="w-6 h-6 rounded bg-indigo-100 text-indigo-700 inline-flex items-center justify-center text-xs font-bold mr-2">3</span>
+            <div className="mt-5 rounded-lg border border-primary-200 bg-primary-50/50 p-4">
+              <h3 className="text-sm font-semibold text-primary-900 mb-1">
+                <span className="w-6 h-6 rounded bg-primary-100 text-primary-700 inline-flex items-center justify-center text-xs font-bold mr-2">3</span>
                 Shared WinRM credential for all selected hosts
               </h3>
               <label className="flex items-center gap-2 mt-3 text-xs">
@@ -422,13 +422,13 @@ export default function ADDiscoverPage() {
                 </div>
               )}
               {onboardError && (
-                <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">{onboardError}</div>
+                <div className="mt-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">{onboardError}</div>
               )}
               <div className="mt-4 flex justify-end">
                 <button
                   onClick={onboard}
                   disabled={onboarding || selectedHosts.size === 0}
-                  className="rounded-md bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+                  className="rounded-md bg-primary-600 px-5 py-2 text-sm font-semibold text-[color:var(--color-on-base,#0a0a0a)] hover:bg-primary-700 disabled:opacity-50"
                 >
                   {onboarding ? 'Onboarding…' : `Onboard ${selectedHosts.size} selected`}
                 </button>

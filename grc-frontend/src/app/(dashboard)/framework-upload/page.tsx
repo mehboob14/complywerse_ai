@@ -318,7 +318,7 @@ export default function FrameworkUploadPage() {
               ? 'border-primary-500 bg-primary-50 shadow-lg shadow-primary-500/10'
               : selectedFile
               ? 'border-emerald-500 bg-emerald-50'
-              : 'border-slate-300 hover:border-primary-500/50 hover:bg-white/50'
+              : 'border-slate-300 hover:border-primary-500/50 hover:bg-slate-50'
           }`}
         >
           <input
@@ -333,11 +333,11 @@ export default function FrameworkUploadPage() {
               <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-xl bg-emerald-50">
                 <File className="h-8 w-8 text-emerald-600" />
               </div>
-              <p className="text-lg font-medium text-black">{selectedFile.name}</p>
+              <p className="text-lg font-medium text-slate-900">{selectedFile.name}</p>
               <p className="mt-1 text-sm text-slate-600">{formatFileSize(selectedFile.size)}</p>
               <button
                 onClick={(e) => { e.stopPropagation(); setSelectedFile(null); }}
-                className="mt-3 text-sm font-medium text-rose-600 hover:text-rose-300 transition-colors"
+                className="mt-3 text-sm font-medium text-rose-600 hover:text-rose-700 transition-colors"
               >
                 Remove file
               </button>
@@ -351,7 +351,7 @@ export default function FrameworkUploadPage() {
                   isDragging ? 'text-primary-600' : 'text-slate-600 group-hover:text-primary-600'
                 }`} />
               </div>
-              <p className="text-lg font-medium text-black">
+              <p className="text-lg font-medium text-slate-900">
                 {isDragging ? 'Drop your file here' : 'Drag and drop a file here'}
               </p>
               <p className="mt-1 text-sm text-slate-600">or click to browse</p>
@@ -478,13 +478,13 @@ export default function FrameworkUploadPage() {
             </p>
           </div>
         ) : (
-          <div className="divide-y divide-slate-700/50">
+          <div className="divide-y divide-slate-200">
             {frameworks.map((framework) => (
-              <div key={framework.id} className="p-4 transition-colors hover:bg-white/30 first:rounded-t-lg last:rounded-b-lg">
+              <div key={framework.id} className="p-4 transition-colors hover:bg-slate-50 first:rounded-t-lg last:rounded-b-lg">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                   <div className="flex-1 min-w-0">
                     <div className="flex flex-wrap items-center gap-2 mb-2">
-                      <h3 className="text-base font-semibold text-black truncate">{framework.name}</h3>
+                      <h3 className="text-base font-semibold text-slate-900 truncate">{framework.name}</h3>
                       {getStatusBadge(framework.upload_status)}
                       {framework.framework_type && (
                         <span className="badge-neutral">
@@ -525,7 +525,7 @@ export default function FrameworkUploadPage() {
                     {framework.upload_status === 'parsed' && framework.parsed_controls_count > 0 && !framework.published_framework_id && (
                       <button
                         onClick={() => openPublishModal(framework)}
-                        className="btn bg-indigo-600 px-3 py-1.5 text-sm text-black hover:bg-indigo-500 focus:ring-indigo-500"
+                        className="btn bg-primary-600 px-3 py-1.5 text-sm text-[#0a0a0a] hover:bg-primary-700 focus:ring-primary-500"
                       >
                         <Send className="h-4 w-4" />
                         Publish to Frameworks
@@ -543,7 +543,7 @@ export default function FrameworkUploadPage() {
                       <button
                         onClick={() => extractTextMutation.mutate(framework.id)}
                         disabled={extractTextMutation.isPending}
-                        className="btn bg-cyan-600 px-3 py-1.5 text-sm text-black hover:bg-cyan-500 focus:ring-cyan-500 disabled:opacity-50"
+                        className="btn-secondary btn-sm disabled:opacity-50"
                       >
                         {extractTextMutation.isPending ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
@@ -579,7 +579,7 @@ export default function FrameworkUploadPage() {
                     <button
                       onClick={() => handleDelete(framework)}
                       disabled={deleteMutation.isPending || !canDelete}
-                      className="btn-secondary btn-sm hover:bg-rose-600 hover:border-rose-600 hover:text-slate-900"
+                      className="btn-secondary btn-sm hover:bg-rose-600 hover:border-rose-600 hover:text-white"
                     >
                       <Trash2 className="h-4 w-4" />
                       Delete
@@ -617,11 +617,11 @@ export default function FrameworkUploadPage() {
       </div>
 
       {publishModalOpen && frameworkToPublish && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
           <div className="w-full max-w-lg rounded-xl bg-white border border-slate-200 shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
               <div>
-                <h3 className="text-lg font-semibold text-black">Publish to Frameworks</h3>
+                <h3 className="text-lg font-semibold text-slate-900">Publish to Frameworks</h3>
                 <p className="text-sm text-slate-600 mt-0.5">Add "{frameworkToPublish.name}" to the main frameworks library</p>
               </div>
               <button
@@ -704,7 +704,7 @@ export default function FrameworkUploadPage() {
               </div>
               
               <div className="rounded-lg bg-slate-50/50 border border-slate-200 p-4 mt-4">
-                <h4 className="text-sm font-medium text-black mb-2">What will be created:</h4>
+                <h4 className="text-sm font-medium text-slate-900 mb-2">What will be created:</h4>
                 <ul className="text-sm text-slate-600 space-y-1">
                   <li>• New framework entry in the Frameworks section</li>
                   <li>• {frameworkToPublish.parsed_controls_count} controls organized by domain/category</li>

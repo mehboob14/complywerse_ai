@@ -33,9 +33,9 @@ interface ExceptionRequest {
 }
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  pending_approval: { bg: 'bg-yellow-50', text: 'text-yellow-700', label: 'Pending Approval' },
-  approved: { bg: 'bg-green-50', text: 'text-green-700', label: 'Approved' },
-  rejected: { bg: 'bg-red-50', text: 'text-red-700', label: 'Rejected' },
+  pending_approval: { bg: 'bg-amber-50', text: 'text-amber-700', label: 'Pending Approval' },
+  approved: { bg: 'bg-emerald-50', text: 'text-emerald-700', label: 'Approved' },
+  rejected: { bg: 'bg-rose-50', text: 'text-rose-700', label: 'Rejected' },
   revoked: { bg: 'bg-slate-50', text: 'text-slate-700', label: 'Revoked' },
   withdrawn: { bg: 'bg-slate-50', text: 'text-slate-500', label: 'Withdrawn' },
 };
@@ -114,7 +114,7 @@ export default function ExceptionsPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="animate-spin text-blue-600" size={32} />
+        <Loader2 className="animate-spin text-primary-600" size={32} />
       </div>
     );
   }
@@ -122,7 +122,7 @@ export default function ExceptionsPage() {
   if (isError) {
     return (
       <div className="flex flex-col items-center justify-center h-64 text-slate-500">
-        <AlertTriangle size={32} className="text-red-400 mb-2" />
+        <AlertTriangle size={32} className="text-rose-400 mb-2" strokeWidth={1.75} />
         <p className="text-sm">Failed to load exceptions. Please try again later.</p>
       </div>
     );
@@ -144,7 +144,7 @@ export default function ExceptionsPage() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-3 py-1.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="px-3 py-1.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
           >
             <option value="">All Status</option>
             <option value="pending_approval">Pending Approval</option>
@@ -157,23 +157,23 @@ export default function ExceptionsPage() {
       </div>
 
       <div className="grid grid-cols-3 gap-4">
-        <div className="bg-yellow-50 rounded-xl border border-yellow-200 p-4 text-center">
-          <div className="text-2xl font-bold text-yellow-700">
+        <div className="bg-amber-50 rounded-xl border border-amber-200 p-4 text-center">
+          <div className="text-2xl font-bold text-amber-700">
             {exceptions.filter(e => e.status === 'pending_approval').length}
           </div>
-          <div className="text-xs text-yellow-600">Pending Review</div>
+          <div className="text-xs text-amber-600">Pending Review</div>
         </div>
-        <div className="bg-green-50 rounded-xl border border-green-200 p-4 text-center">
-          <div className="text-2xl font-bold text-green-700">
+        <div className="bg-emerald-50 rounded-xl border border-emerald-200 p-4 text-center">
+          <div className="text-2xl font-bold text-emerald-700">
             {exceptions.filter(e => e.status === 'approved').length}
           </div>
-          <div className="text-xs text-green-600">Approved</div>
+          <div className="text-xs text-emerald-600">Approved</div>
         </div>
-        <div className="bg-red-50 rounded-xl border border-red-200 p-4 text-center">
-          <div className="text-2xl font-bold text-red-700">
+        <div className="bg-rose-50 rounded-xl border border-rose-200 p-4 text-center">
+          <div className="text-2xl font-bold text-rose-700">
             {exceptions.filter(e => e.status === 'rejected').length}
           </div>
-          <div className="text-xs text-red-600">Rejected</div>
+          <div className="text-xs text-rose-600">Rejected</div>
         </div>
       </div>
 
@@ -204,15 +204,15 @@ export default function ExceptionsPage() {
                     {exc.expires_at && <span>Expires: {new Date(exc.expires_at).toLocaleDateString()}</span>}
                     {exc.push_status && (
                       <span className={
-                        exc.push_status === 'pushed' ? 'text-green-600' :
-                        exc.push_status === 'local_only' ? 'text-yellow-600' :
-                        'text-red-600'
+                        exc.push_status === 'pushed' ? 'text-emerald-600' :
+                        exc.push_status === 'local_only' ? 'text-amber-600' :
+                        'text-rose-600'
                       }>
                         Push: {exc.push_status === 'pushed' ? 'Synced to Scanner' : exc.push_status === 'local_only' ? 'Local Only' : exc.push_status}
                       </span>
                     )}
                     {exc.nexpose_exception_id && (
-                      <span className="text-blue-600 flex items-center gap-1">
+                      <span className="text-primary-600 flex items-center gap-1">
                         <ExternalLink size={10} /> Nexpose: {exc.nexpose_exception_id}
                       </span>
                     )}
@@ -230,20 +230,20 @@ export default function ExceptionsPage() {
                         value={reviewNotes[exc.id] || ''}
                         onChange={(e) => setReviewNotes({ ...reviewNotes, [exc.id]: e.target.value })}
                         placeholder="Optional review notes..."
-                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                       />
                     </div>
                     <button
                       onClick={() => approveMutation.mutate({ id: exc.id, notes: reviewNotes[exc.id] || '' })}
                       disabled={approveMutation.isPending}
-                      className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50"
+                      className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-50"
                     >
                       <CheckCircle size={16} /> Approve
                     </button>
                     <button
                       onClick={() => rejectMutation.mutate({ id: exc.id, notes: reviewNotes[exc.id] || '' })}
                       disabled={rejectMutation.isPending}
-                      className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50"
+                      className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-rose-600 rounded-lg hover:bg-rose-700 disabled:opacity-50"
                     >
                       <XCircle size={16} /> Reject
                     </button>
@@ -260,7 +260,7 @@ export default function ExceptionsPage() {
                       value={reviewNotes[exc.id] || ''}
                       onChange={(e) => setReviewNotes({ ...reviewNotes, [exc.id]: e.target.value })}
                       placeholder="Reason for revoking this exception..."
-                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                     />
                   </div>
                   <button

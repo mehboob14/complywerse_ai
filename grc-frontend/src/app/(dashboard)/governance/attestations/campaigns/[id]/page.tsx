@@ -82,9 +82,9 @@ interface Campaign {
 }
 
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
-  draft: { bg: 'bg-gray-100', text: 'text-gray-700' },
+  draft: { bg: 'bg-slate-100', text: 'text-slate-700' },
   active: { bg: 'bg-emerald-100', text: 'text-emerald-700' },
-  closed: { bg: 'bg-blue-100', text: 'text-blue-700' },
+  closed: { bg: 'bg-blue-100', text: 'text-primary-700' },
 };
 
 const REQUEST_STATUS_COLORS: Record<string, { bg: string; text: string; icon: React.ElementType }> = {
@@ -323,14 +323,14 @@ export default function CampaignDetailPage() {
   if (error || !campaign) {
     return (
       <div className="space-y-8">
-        <Link href="/governance/attestations/campaigns" className="inline-flex items-center gap-2 text-gray-600 hover:text-black transition-colors">
+        <Link href="/governance/attestations/campaigns" className="inline-flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors">
           <ArrowLeft className="h-4 w-4" />
           Back to Campaigns
         </Link>
         <div className="card p-12 text-center">
           <AlertCircle className="h-12 w-12 text-rose-500 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-black mb-2">Campaign Not Found</h2>
-          <p className="text-gray-500 mb-6">The campaign you&apos;re looking for doesn&apos;t exist or you don&apos;t have access to it.</p>
+          <h2 className="text-xl font-semibold text-slate-900 mb-2">Campaign Not Found</h2>
+          <p className="text-slate-500 mb-6">The campaign you&apos;re looking for doesn&apos;t exist or you don&apos;t have access to it.</p>
           <Link href="/governance/attestations/campaigns" className="btn-primary inline-flex items-center gap-2">
             <ArrowLeft className="h-4 w-4" />
             Go Back
@@ -349,17 +349,17 @@ export default function CampaignDetailPage() {
     <div className="space-y-4 sm:space-y-6">
       <div className="page-header">
         <div className="flex items-center gap-4 mb-4">
-          <Link href="/governance/attestations/campaigns" className="text-gray-500 hover:text-black">
+          <Link href="/governance/attestations/campaigns" className="text-slate-500 hover:text-slate-900">
             <ArrowLeft className="h-5 w-5" />
           </Link>
           <div className="flex-1">
             <div className="flex items-center gap-3">
-              <h1 className="text-lg sm:text-xl font-semibold text-black">{campaign.name}</h1>
+              <h1 className="text-lg sm:text-xl font-semibold text-slate-900">{campaign.name}</h1>
               <span className={`text-xs px-2 py-0.5 rounded-full ${statusStyle.bg} ${statusStyle.text}`}>
                 {campaign.status}
               </span>
             </div>
-            <p className="text-gray-500 mt-1">{campaign.description || `${campaign.campaign_type?.replace(/_/g, ' ') ?? ''} attestation`}</p>
+            <p className="text-slate-500 mt-1">{campaign.description || `${campaign.campaign_type?.replace(/_/g, ' ') ?? ''} attestation`}</p>
           </div>
           <div className="flex items-center gap-2">
             {/* Edit button — available for draft and active */}
@@ -416,25 +416,25 @@ export default function CampaignDetailPage() {
 
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 mt-6">
           <div className="card p-4">
-            <p className="text-gray-500 text-sm">Type</p>
-            <p className="text-black font-medium capitalize">{campaign.campaign_type?.replace(/_/g, ' ') ?? '-'}</p>
+            <p className="text-slate-500 text-sm">Type</p>
+            <p className="text-slate-900 font-medium capitalize">{campaign.campaign_type?.replace(/_/g, ' ') ?? '-'}</p>
           </div>
           <div className="card p-4">
-            <p className="text-gray-500 text-sm">Due Date</p>
-            <p className="text-black font-medium text-sm">
+            <p className="text-slate-500 text-sm">Due Date</p>
+            <p className="text-slate-900 font-medium text-sm">
               {campaign.due_date ? new Date(campaign.due_date).toLocaleDateString() : '-'}
             </p>
           </div>
           <div className="card p-4">
-            <p className="text-gray-500 text-sm">Total Requests</p>
-            <p className="text-black font-medium">{campaign.total_requests}</p>
+            <p className="text-slate-500 text-sm">Total Requests</p>
+            <p className="text-slate-900 font-medium">{campaign.total_requests}</p>
           </div>
           <div className="card p-4">
-            <p className="text-gray-500 text-sm">Completed</p>
+            <p className="text-slate-500 text-sm">Completed</p>
             <p className="text-emerald-600 font-medium">{campaign.completed_requests}</p>
           </div>
           <div className="card p-4">
-            <p className="text-gray-500 text-sm">Progress</p>
+            <p className="text-slate-500 text-sm">Progress</p>
             <div className="flex items-center gap-2">
               <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
                 <div
@@ -442,7 +442,7 @@ export default function CampaignDetailPage() {
                   style={{ width: `${campaign.completion_rate}%` }}
                 />
               </div>
-              <span className="text-black font-medium text-sm">{campaign.completion_rate.toFixed(0)}%</span>
+              <span className="text-slate-900 font-medium text-sm">{campaign.completion_rate.toFixed(0)}%</span>
             </div>
           </div>
         </div>
@@ -451,7 +451,7 @@ export default function CampaignDetailPage() {
       {/* Attestation Statement */}
       <div className="card p-6">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-medium text-black flex items-center gap-2">
+          <h3 className="text-lg font-medium text-slate-900 flex items-center gap-2">
             <FileCheck className="h-5 w-5 text-primary-400" />
             Attestation Statement
           </h3>
@@ -460,7 +460,7 @@ export default function CampaignDetailPage() {
           <div className="flex items-center justify-between p-3 mb-3 bg-primary-50 rounded-lg border border-primary-200">
             <div className="flex items-center gap-2">
               <FileText className="h-4 w-4 text-primary-500" />
-              <span className="text-sm text-gray-700">{campaign.linked_document_title}</span>
+              <span className="text-sm text-slate-700">{campaign.linked_document_title}</span>
             </div>
             <Link
               href={`/governance/documents/${campaign.linked_document_id}`}
@@ -472,8 +472,8 @@ export default function CampaignDetailPage() {
             </Link>
           </div>
         )}
-        <div className="bg-slate-50 rounded-lg p-4 border border-gray-200">
-          <p className="text-gray-700">{campaign.attestation_text || 'No attestation text specified.'}</p>
+        <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
+          <p className="text-slate-700">{campaign.attestation_text || 'No attestation text specified.'}</p>
         </div>
         {campaign.requires_evidence && (
           <p className="text-sm text-amber-600 mt-2 flex items-center gap-1.5">
@@ -487,11 +487,11 @@ export default function CampaignDetailPage() {
       <div className="card p-6">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h3 className="text-lg font-medium text-black flex items-center gap-2">
+            <h3 className="text-lg font-medium text-slate-900 flex items-center gap-2">
               <Shield className="h-5 w-5 text-primary-400" />
               Escalation Setup
             </h3>
-            <p className="text-sm text-gray-500 mt-0.5">
+            <p className="text-sm text-slate-500 mt-0.5">
               Define who gets notified when attestations are overdue
             </p>
           </div>
@@ -510,20 +510,20 @@ export default function CampaignDetailPage() {
         {chains.length > 0 ? (
           <div className="space-y-2 mb-4">
             {chains.map((chain) => (
-              <div key={chain.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-gray-200">
+              <div key={chain.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
                 <div className="flex items-center gap-3">
                   <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-500/10 text-xs font-bold text-primary-600">
                     {chain.tier}
                   </span>
                   <div>
-                    <p className="text-sm font-medium text-black">
+                    <p className="text-sm font-medium text-slate-900">
                       {chain.tier_name || `Tier ${chain.tier}`}
                       {' → '}
-                      <span className="font-normal text-gray-600">
+                      <span className="font-normal text-slate-600">
                         {chain.approver_name || chain.role_name || 'Unknown'}
                       </span>
                     </p>
-                    <p className="text-xs text-gray-400">
+                    <p className="text-xs text-slate-400">
                       Escalate after {chain.escalation_delay_days} day{chain.escalation_delay_days !== 1 ? 's' : ''} overdue
                     </p>
                   </div>
@@ -535,7 +535,7 @@ export default function CampaignDetailPage() {
                         deleteChainMutation.mutate(chain.id);
                       }
                     }}
-                    className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded"
+                    className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
@@ -545,17 +545,17 @@ export default function CampaignDetailPage() {
           </div>
         ) : (
           !isAddingChain && (
-            <p className="text-sm text-gray-400 mb-4">No escalation tiers configured. Add a tier to define who gets notified when attestations are overdue.</p>
+            <p className="text-sm text-slate-400 mb-4">No escalation tiers configured. Add a tier to define who gets notified when attestations are overdue.</p>
           )
         )}
 
         {/* Add tier inline form */}
         {isAddingChain && (
-          <form onSubmit={handleAddChain} className="p-4 bg-slate-50 rounded-lg border border-gray-200 space-y-3">
-            <p className="text-sm font-medium text-black">Tier {chains.length + 1}</p>
+          <form onSubmit={handleAddChain} className="p-4 bg-slate-50 rounded-lg border border-slate-200 space-y-3">
+            <p className="text-sm font-medium text-slate-900">Tier {chains.length + 1}</p>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Escalate To</label>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Escalate To</label>
                 <select
                   className="input w-full text-sm"
                   value={chainTargetType}
@@ -566,7 +566,7 @@ export default function CampaignDetailPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Delay (days after due)</label>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Delay (days after due)</label>
                 <input
                   type="number"
                   min={1}
@@ -578,7 +578,7 @@ export default function CampaignDetailPage() {
               </div>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">
+              <label className="block text-xs font-medium text-slate-600 mb-1">
                 {chainTargetType === 'role' ? 'Role' : 'User'} <span className="text-rose-500">*</span>
               </label>
               <select
@@ -607,7 +607,7 @@ export default function CampaignDetailPage() {
 
         {/* Notification timing summary */}
         {(campaign.escalation_enabled || campaign.reminder_days_before) && (
-          <div className="mt-3 flex items-center gap-4 text-xs text-gray-500 pt-3 border-t border-gray-200">
+          <div className="mt-3 flex items-center gap-4 text-xs text-slate-500 pt-3 border-t border-slate-200">
             {campaign.reminder_days_before && (
               <span className="flex items-center gap-1">
                 <Calendar className="h-3 w-3" />
@@ -627,7 +627,7 @@ export default function CampaignDetailPage() {
       {/* Attestation Requests Table */}
       <div className="card p-6">
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-medium text-black flex items-center gap-2">
+          <h3 className="text-lg font-medium text-slate-900 flex items-center gap-2">
             <Users className="h-5 w-5 text-primary-400" />
             Attestation Requests ({filteredRequests.length})
           </h3>
@@ -659,27 +659,27 @@ export default function CampaignDetailPage() {
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-gray-200">
+              <tr className="border-b border-slate-200">
                 <th className="text-left py-3 px-4">
                   <input
                     type="checkbox"
                     checked={selectedRequests.length === filteredRequests.length && filteredRequests.length > 0}
                     onChange={(e) => handleSelectAll(e.target.checked)}
-                    className="rounded border-gray-300 text-primary-500 focus:ring-primary-500"
+                    className="rounded border-slate-300 text-primary-500 focus:ring-primary-500"
                   />
                 </th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">User</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">Type</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">Status</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">Completed</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">Evidence</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">Actions</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">User</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Type</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Status</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Completed</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Evidence</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Actions</th>
               </tr>
             </thead>
             <tbody>
               {filteredRequests.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-8 text-center text-gray-400 text-sm">
+                  <td colSpan={7} className="py-8 text-center text-slate-400 text-sm">
                     {campaign.status === 'draft' ? 'Activate the campaign to generate attestation requests.' : 'No requests match the current filter.'}
                   </td>
                 </tr>
@@ -689,25 +689,25 @@ export default function CampaignDetailPage() {
                   const StatusIcon = rstyle.icon;
 
                   return (
-                    <tr key={request.id} className="border-b border-gray-100 hover:bg-slate-50">
+                    <tr key={request.id} className="border-b border-slate-100 hover:bg-slate-50">
                       <td className="py-3 px-4">
                         <input
                           type="checkbox"
                           checked={selectedRequests.includes(request.id)}
                           onChange={(e) => handleSelectRequest(request.id, e.target.checked)}
-                          className="rounded border-gray-300 text-primary-500 focus:ring-primary-500"
+                          className="rounded border-slate-300 text-primary-500 focus:ring-primary-500"
                         />
                       </td>
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-2">
-                          <User className="h-4 w-4 text-gray-400" />
+                          <User className="h-4 w-4 text-slate-400" />
                           <div>
-                            <p className="text-black font-medium">{request.user_name}</p>
-                            <p className="text-xs text-gray-500">{request.user_email}</p>
+                            <p className="text-slate-900 font-medium">{request.user_name}</p>
+                            <p className="text-xs text-slate-500">{request.user_email}</p>
                           </div>
                         </div>
                       </td>
-                      <td className="py-3 px-4 text-gray-600 text-sm capitalize">
+                      <td className="py-3 px-4 text-slate-600 text-sm capitalize">
                         {request.attestation_type?.replace(/_/g, ' ') ?? '-'}
                       </td>
                       <td className="py-3 px-4">
@@ -716,14 +716,14 @@ export default function CampaignDetailPage() {
                           {request.status}
                         </span>
                       </td>
-                      <td className="py-3 px-4 text-sm text-gray-500">
+                      <td className="py-3 px-4 text-sm text-slate-500">
                         {request.completed_at ? new Date(request.completed_at).toLocaleDateString() : '-'}
                       </td>
                       <td className="py-3 px-4">
                         {request.evidence_id ? (
                           <span className="text-emerald-600 text-sm">Yes</span>
                         ) : (
-                          <span className="text-gray-400 text-sm">No</span>
+                          <span className="text-slate-400 text-sm">No</span>
                         )}
                       </td>
                       <td className="py-3 px-4">
@@ -732,7 +732,7 @@ export default function CampaignDetailPage() {
                             <>
                               <button
                                 onClick={() => sendReminderMutation.mutate(request.id)}
-                                className="p-1.5 text-gray-500 hover:text-primary-600 hover:bg-primary-50 rounded"
+                                className="p-1.5 text-slate-500 hover:text-primary-600 hover:bg-primary-50 rounded"
                                 title="Send Reminder"
                               >
                                 <Send className="h-4 w-4" />
@@ -743,7 +743,7 @@ export default function CampaignDetailPage() {
                                     escalateMutation.mutate(request.id);
                                   }
                                 }}
-                                className="p-1.5 text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded"
+                                className="p-1.5 text-slate-500 hover:text-amber-600 hover:bg-amber-50 rounded"
                                 title="Escalate"
                               >
                                 <AlertTriangle className="h-4 w-4" />
@@ -764,7 +764,7 @@ export default function CampaignDetailPage() {
       {/* Bottom summary cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="card p-6">
-          <h3 className="text-lg font-medium text-black mb-4 flex items-center gap-2">
+          <h3 className="text-lg font-medium text-slate-900 mb-4 flex items-center gap-2">
             <BarChart3 className="h-5 w-5 text-primary-400" />
             Status Summary
           </h3>
@@ -776,7 +776,7 @@ export default function CampaignDetailPage() {
                 <div key={st} className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <StatusIcon className={`h-4 w-4 ${style.text}`} />
-                    <span className="text-gray-700 capitalize">{st}</span>
+                    <span className="text-slate-700 capitalize">{st}</span>
                   </div>
                   <span className={`font-medium ${style.text}`}>{count}</span>
                 </div>
@@ -786,19 +786,19 @@ export default function CampaignDetailPage() {
         </div>
 
         <div className="card p-6">
-          <h3 className="text-lg font-medium text-black mb-4 flex items-center gap-2">
+          <h3 className="text-lg font-medium text-slate-900 mb-4 flex items-center gap-2">
             <AlertCircle className="h-5 w-5 text-amber-500" />
             Pending Actions
           </h3>
           {pendingRequests.length > 0 ? (
             <div className="space-y-3">
               {pendingRequests.slice(0, 5).map((request) => (
-                <div key={request.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-gray-200">
+                <div key={request.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
                   <div className="flex items-center gap-3">
-                    <User className="h-4 w-4 text-gray-400" />
+                    <User className="h-4 w-4 text-slate-400" />
                     <div>
-                      <p className="text-black text-sm">{request.user_name}</p>
-                      <p className="text-xs text-gray-500">{request.user_email}</p>
+                      <p className="text-slate-900 text-sm">{request.user_name}</p>
+                      <p className="text-xs text-slate-500">{request.user_email}</p>
                     </div>
                   </div>
                   <span className={`text-xs px-2 py-1 rounded-full ${REQUEST_STATUS_COLORS[request.status]?.bg} ${REQUEST_STATUS_COLORS[request.status]?.text}`}>
@@ -807,11 +807,11 @@ export default function CampaignDetailPage() {
                 </div>
               ))}
               {pendingRequests.length > 5 && (
-                <p className="text-sm text-gray-500 text-center">+ {pendingRequests.length - 5} more</p>
+                <p className="text-sm text-slate-500 text-center">+ {pendingRequests.length - 5} more</p>
               )}
             </div>
           ) : (
-            <p className="text-gray-500 text-center py-4">All attestations completed</p>
+            <p className="text-slate-500 text-center py-4">All attestations completed</p>
           )}
         </div>
       </div>
@@ -825,7 +825,7 @@ export default function CampaignDetailPage() {
       >
         <form onSubmit={handleEditSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Campaign Name <span className="text-rose-500">*</span></label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Campaign Name <span className="text-rose-500">*</span></label>
             <input
               type="text"
               className="input w-full"
@@ -835,7 +835,7 @@ export default function CampaignDetailPage() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
             <textarea
               className="input w-full"
               rows={2}
@@ -844,7 +844,7 @@ export default function CampaignDetailPage() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Attestation Text</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Attestation Text</label>
             <textarea
               className="input w-full"
               rows={3}
@@ -853,7 +853,7 @@ export default function CampaignDetailPage() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Due Date</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Due Date</label>
             <input
               type="date"
               className="input w-full"
@@ -863,11 +863,11 @@ export default function CampaignDetailPage() {
           </div>
 
           {/* Notification & Escalation settings */}
-          <div className="p-3 bg-slate-50 rounded-lg border border-gray-200 space-y-3">
-            <p className="text-sm font-medium text-gray-700">Notification & Escalation</p>
+          <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-3">
+            <p className="text-sm font-medium text-slate-700">Notification & Escalation</p>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Reminder (days before due)</label>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Reminder (days before due)</label>
                 <input
                   type="number"
                   min={1}
@@ -878,7 +878,7 @@ export default function CampaignDetailPage() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Auto-escalate (days after due)</label>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Auto-escalate (days after due)</label>
                 <input
                   type="number"
                   min={1}
@@ -894,9 +894,9 @@ export default function CampaignDetailPage() {
                 type="checkbox"
                 checked={editEscalationEnabled}
                 onChange={(e) => setEditEscalationEnabled(e.target.checked)}
-                className="rounded border-gray-300 text-primary-500 focus:ring-primary-500"
+                className="rounded border-slate-300 text-primary-500 focus:ring-primary-500"
               />
-              <span className="text-sm text-gray-700">Enable automatic escalation</span>
+              <span className="text-sm text-slate-700">Enable automatic escalation</span>
             </label>
           </div>
 
@@ -905,9 +905,9 @@ export default function CampaignDetailPage() {
               type="checkbox"
               checked={editRequiresEvidence}
               onChange={(e) => setEditRequiresEvidence(e.target.checked)}
-              className="rounded border-gray-300 text-primary-500 focus:ring-primary-500"
+              className="rounded border-slate-300 text-primary-500 focus:ring-primary-500"
             />
-            <span className="text-sm text-gray-700">Require evidence upload</span>
+            <span className="text-sm text-slate-700">Require evidence upload</span>
           </label>
 
           {updateMutation.isError && (

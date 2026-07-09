@@ -95,7 +95,7 @@ export default function EvidenceTab({ frameworkId }: { frameworkId: string }) {
       case 'approved': return 'bg-emerald-50 text-emerald-700 border-emerald-200';
       case 'rejected': return 'bg-rose-50 text-rose-700 border-rose-200';
       case 'pending': return 'bg-amber-50 text-amber-700 border-amber-200';
-      default: return 'bg-gray-50 text-gray-700 border-gray-200';
+      default: return 'bg-slate-50 text-slate-700 border-slate-200';
     }
   };
 
@@ -165,7 +165,7 @@ export default function EvidenceTab({ frameworkId }: { frameworkId: string }) {
             onClick={() => setStatusFilter(s)}
             className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
               statusFilter === s
-                ? 'bg-blue-600 text-white'
+                ? 'bg-primary-600 text-[#0a0a0a] hover:bg-primary-700'
                 : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'
             }`}
           >
@@ -238,7 +238,7 @@ export default function EvidenceTab({ frameworkId }: { frameworkId: string }) {
                   )}
                   <button
                     onClick={() => setSelectedEvidence(ev)}
-                    className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+                    className="flex items-center gap-2 rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-medium text-[#0a0a0a] hover:bg-primary-700"
                   >
                     <CheckCircle2 className="h-3.5 w-3.5" />
                     Review
@@ -262,7 +262,7 @@ export default function EvidenceTab({ frameworkId }: { frameworkId: string }) {
 
       {/* Review modal */}
       {selectedEvidence && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="w-full max-w-2xl rounded-xl bg-white border border-slate-200 p-6 shadow-xl">
             <h2 className="text-lg font-bold text-slate-900">Review evidence</h2>
             <div className="mt-3 space-y-3">
@@ -281,7 +281,7 @@ export default function EvidenceTab({ frameworkId }: { frameworkId: string }) {
                   value={reviewNotes}
                   onChange={(e) => setReviewNotes(e.target.value)}
                   rows={4}
-                  className="mt-1 w-full rounded-lg border border-slate-300 p-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  className="mt-1 w-full rounded-lg border border-slate-300 p-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
                   placeholder="Add your review notes…"
                 />
               </div>

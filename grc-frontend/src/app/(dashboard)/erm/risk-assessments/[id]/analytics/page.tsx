@@ -20,23 +20,23 @@ import {
 import { ermApi } from '@/lib/api';
 
 const RATING_COLORS: Record<string, string> = {
-  critical: '#dc2626',
+  critical: '#e11d48',
   high: '#f97316',
-  medium: '#eab308',
+  medium: '#f59e0b',
   low: '#10b981',
 };
 
 const TREATMENT_COLORS: Record<string, string> = {
   accept: '#94a3b8',
-  mitigate: '#3b82f6',
-  transfer: '#a855f7',
-  avoid: '#ef4444',
+  mitigate: '#1ed4b0',
+  transfer: '#64748b',
+  avoid: '#e11d48',
 };
 
 const EFFECTIVENESS_COLORS: Record<string, string> = {
   effective: '#10b981',
   partially_effective: '#f59e0b',
-  ineffective: '#ef4444',
+  ineffective: '#e11d48',
   unrated: '#94a3b8',
 };
 
@@ -52,7 +52,7 @@ export default function AssessmentAnalyticsPage() {
 
   if (breakdownQuery.isLoading) {
     return (
-      <div className="flex items-center gap-2 py-12 text-gray-500">
+      <div className="flex items-center gap-2 py-12 text-slate-500">
         <Loader2 className="h-5 w-5 animate-spin" />
         Loading analytics…
       </div>
@@ -61,7 +61,7 @@ export default function AssessmentAnalyticsPage() {
 
   const data = breakdownQuery.data;
   if (!data) {
-    return <div className="py-12 text-center text-sm text-gray-500">No data available.</div>;
+    return <div className="py-12 text-center text-sm text-slate-500">No data available.</div>;
   }
 
   const ratingData = Object.entries(data.by_rating).map(([k, v]) => ({ name: k, value: v, key: k }));
@@ -82,27 +82,27 @@ export default function AssessmentAnalyticsPage() {
       <div>
         <Link
           href={`/erm/risk-assessments/${assessmentId}`}
-          className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700"
+          className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700"
         >
-          <ArrowLeft className="h-4 w-4" />
+          <ArrowLeft className="h-4 w-4" strokeWidth={1.75} />
           Back to Assessment
         </Link>
-        <h1 className="mt-1 text-2xl font-semibold text-gray-900">{data.assessment_name}</h1>
-        <p className="text-sm text-gray-500">
-          Status: <span className="font-medium text-gray-700">{data.status}</span> ·{' '}
+        <h1 className="mt-1 text-2xl font-semibold text-slate-900">{data.assessment_name}</h1>
+        <p className="text-sm text-slate-500">
+          Status: <span className="font-medium text-slate-700">{data.status}</span> ·{' '}
           {data.total_risks} risks assessed
         </p>
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Kpi label="Total risks" value={data.total_risks} accent="bg-gray-100 text-gray-700" />
+        <Kpi label="Total risks" value={data.total_risks} accent="bg-slate-100 text-slate-700" />
         <Kpi label="Avg inherent" value={data.avg_inherent_score} accent="bg-orange-50 text-orange-700" />
-        <Kpi label="Avg residual" value={data.avg_residual_score} accent="bg-blue-50 text-blue-700" />
+        <Kpi label="Avg residual" value={data.avg_residual_score} accent="bg-primary-50 text-primary-700" />
         <Kpi label="Score reduction" value={data.score_reduction} accent="bg-emerald-50 text-emerald-700" />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Section title="Risk rating distribution" icon={<Activity className="h-4 w-4 text-gray-500" />}>
+        <Section title="Risk rating distribution" icon={<Activity className="h-4 w-4 text-slate-500" strokeWidth={1.75} />}>
           {ratingData.every((d) => d.value === 0) ? (
             <Empty />
           ) : (
@@ -122,7 +122,7 @@ export default function AssessmentAnalyticsPage() {
           )}
         </Section>
 
-        <Section title="Treatment decisions" icon={<Scale className="h-4 w-4 text-gray-500" />}>
+        <Section title="Treatment decisions" icon={<Scale className="h-4 w-4 text-slate-500" strokeWidth={1.75} />}>
           {treatmentData.every((d) => d.value === 0) ? (
             <Empty />
           ) : (
@@ -142,7 +142,7 @@ export default function AssessmentAnalyticsPage() {
           )}
         </Section>
 
-        <Section title="Control effectiveness" icon={<ShieldCheck className="h-4 w-4 text-gray-500" />}>
+        <Section title="Control effectiveness" icon={<ShieldCheck className="h-4 w-4 text-slate-500" strokeWidth={1.75} />}>
           {effData.every((d) => d.value === 0) ? (
             <Empty />
           ) : (
@@ -192,9 +192,9 @@ export default function AssessmentAnalyticsPage() {
 
 function Kpi({ label, value, accent }: { label: string; value: number; accent: string }) {
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
+    <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
       <div className={`inline-flex rounded-md px-2 py-0.5 text-xs font-medium ${accent}`}>{label}</div>
-      <div className="mt-1 text-2xl font-semibold text-gray-900">{value}</div>
+      <div className="mt-1 text-2xl font-semibold text-slate-900">{value}</div>
     </div>
   );
 }
@@ -209,10 +209,10 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
       <header className="mb-3 flex items-center gap-2">
         {icon}
-        <h2 className="text-sm font-semibold text-gray-900">{title}</h2>
+        <h2 className="text-sm font-semibold text-slate-900">{title}</h2>
       </header>
       {children}
     </div>
@@ -220,5 +220,5 @@ function Section({
 }
 
 function Empty() {
-  return <div className="py-8 text-center text-sm text-gray-500">No data yet.</div>;
+  return <div className="py-8 text-center text-sm text-slate-500">No data yet.</div>;
 }

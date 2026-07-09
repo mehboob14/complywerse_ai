@@ -99,25 +99,25 @@ interface CriticalTaskDetail {
 }
 
 const PRIORITY_COLORS: Record<string, string> = {
-  Critical: 'bg-red-50 text-red-700 border-red-200',
+  Critical: 'bg-rose-50 text-rose-700 border-rose-200',
   High: 'bg-orange-50 text-orange-700 border-orange-200',
   Medium: 'bg-amber-50 text-amber-700 border-amber-200',
   Low: 'bg-emerald-50 text-emerald-700 border-emerald-200',
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  Open: 'bg-blue-50 text-blue-700 border-blue-200',
+  Open: 'bg-slate-50 text-slate-700 border-slate-200',
   'In Progress': 'bg-amber-50 text-amber-700 border-amber-200',
-  'Under Review': 'bg-purple-50 text-purple-700 border-purple-200',
+  'Under Review': 'bg-primary-50 text-primary-700 border-primary-200',
   Completed: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  Verified: 'bg-green-50 text-green-700 border-green-200',
-  Reopened: 'bg-red-50 text-red-700 border-red-200',
+  Verified: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  Reopened: 'bg-rose-50 text-rose-700 border-rose-200',
 };
 
 const SLA_COLORS: Record<string, string> = {
   'On Track': 'text-emerald-700 bg-emerald-50 border-emerald-200',
   'At Risk': 'text-amber-700 bg-amber-50 border-amber-200',
-  Breached: 'text-red-700 bg-red-50 border-red-200',
+  Breached: 'text-rose-700 bg-rose-50 border-rose-200',
   Completed: 'text-slate-600 bg-slate-100 border-slate-200',
   'No SLA': 'text-slate-600 bg-slate-100 border-slate-200',
 };
@@ -355,7 +355,7 @@ export default function TaskDetailPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Loader2 className="animate-spin text-blue-600" size={32} />
+        <Loader2 className="animate-spin text-primary-600" size={32} />
       </div>
     );
   }
@@ -364,7 +364,7 @@ export default function TaskDetailPage() {
     return (
       <div className="text-center py-20">
         <p className="text-[var(--color-muted)]">Task not found</p>
-        <Link href="/tasks" className="text-blue-600 hover:text-blue-700 mt-2 inline-block">Back to Task Board</Link>
+        <Link href="/tasks" className="text-primary-700 hover:text-primary-800 mt-2 inline-block">Back to Task Board</Link>
       </div>
     );
   }
@@ -389,15 +389,15 @@ export default function TaskDetailPage() {
           </div>
           <p className="text-sm text-[var(--color-muted)] mt-1">
             Task #{task.id} · {task.source} · {task.category}
-            {task.source_module && <span className="text-blue-600/70"> · via {task.source_module}</span>}
-            {task.escalation_level > 0 && <span className="text-red-600"> · Escalation Level {task.escalation_level}</span>}
+            {task.source_module && <span className="text-primary-700/70"> · via {task.source_module}</span>}
+            {task.escalation_level > 0 && <span className="text-rose-600"> · Escalation Level {task.escalation_level}</span>}
           </p>
           {/* v2 Issue Management — when this task was promoted from a CAPA
               action, show a chip linking back to the parent Issue. */}
           {(task as { linked_issue_id?: number | null }).linked_issue_id && (
             <a
               href={`/issues/${(task as { linked_issue_id?: number }).linked_issue_id}`}
-              className="mt-2 inline-flex items-center gap-1 rounded border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-700 hover:bg-indigo-100"
+              className="mt-2 inline-flex items-center gap-1 rounded border border-primary-200 bg-primary-50 px-2 py-0.5 text-[11px] font-medium text-primary-700 hover:bg-primary-100"
               title="This Critical Task was promoted from a CAPA action — status syncs from here back to the Issue"
             >
               Linked Issue #{(task as { linked_issue_id?: number }).linked_issue_id} ↗
@@ -406,11 +406,11 @@ export default function TaskDetailPage() {
         </div>
         <div className="flex items-center gap-2">
           <button onClick={handleAiRootCause} disabled={aiLoading === 'root-cause'}
-            className="flex items-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50 px-3 py-1.5 text-sm text-purple-700 hover:bg-purple-100 disabled:opacity-50">
+            className="flex items-center gap-1.5 rounded-lg border border-primary-200 bg-primary-50 px-3 py-1.5 text-sm text-primary-700 hover:bg-primary-100 disabled:opacity-50">
             {aiLoading === 'root-cause' ? <Loader2 className="animate-spin" size={14} /> : <Sparkles size={14} />} Root Cause
           </button>
           <button onClick={handleAiDescription} disabled={aiLoading === 'description'}
-            className="flex items-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50 px-3 py-1.5 text-sm text-purple-700 hover:bg-purple-100 disabled:opacity-50">
+            className="flex items-center gap-1.5 rounded-lg border border-primary-200 bg-primary-50 px-3 py-1.5 text-sm text-primary-700 hover:bg-primary-100 disabled:opacity-50">
             {aiLoading === 'description' ? <Loader2 className="animate-spin" size={14} /> : <FileText size={14} />} AI Description
           </button>
           {canEdit && <button onClick={startEdit} className="cw-btn-secondary flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm">
@@ -469,7 +469,7 @@ export default function TaskDetailPage() {
             <h3 className="text-sm font-medium text-amber-700 flex items-center gap-2"><Shield size={14} /> Approval Workflow</h3>
             <span className={`text-xs px-2 py-0.5 rounded-full border ${
               task.approval_status === 'Approved' ? 'border-emerald-200 text-emerald-700 bg-emerald-50' :
-              task.approval_status === 'Rejected' ? 'border-red-200 text-red-700 bg-red-50' :
+              task.approval_status === 'Rejected' ? 'border-rose-200 text-rose-700 bg-rose-50' :
               task.approval_status === 'Pending' ? 'border-amber-200 text-amber-700 bg-amber-50' :
               'border-[var(--color-border)] text-[var(--color-muted)] bg-[var(--color-subtle)]'
             }`}>{task.approval_status || 'Not Requested'}</span>
@@ -499,7 +499,7 @@ export default function TaskDetailPage() {
                 </button>
                 <button onClick={() => approvalMutation.mutate({ action: 'reject', comment: approvalComment })}
                   disabled={approvalMutation.isPending}
-                  className="flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-sm text-white hover:bg-red-700 disabled:opacity-50">
+                  className="flex items-center gap-1.5 rounded-lg bg-rose-600 px-3 py-1.5 text-sm text-white hover:bg-rose-700 disabled:opacity-50">
                   <ShieldX size={14} /> Reject
                 </button>
               </>
@@ -509,9 +509,9 @@ export default function TaskDetailPage() {
       )}
 
       {task.recurrence_pattern && (
-        <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 flex items-center gap-3">
-          <RefreshCw size={16} className="text-blue-600" />
-          <span className="text-sm text-blue-700">
+        <div className="rounded-lg border border-primary-200 bg-primary-50 p-4 flex items-center gap-3">
+          <RefreshCw size={16} className="text-primary-700" />
+          <span className="text-sm text-primary-700">
             Recurring: every {task.recurrence_interval || 1} {task.recurrence_pattern}(s)
           </span>
         </div>
@@ -522,7 +522,7 @@ export default function TaskDetailPage() {
           {(['details', 'subtasks', 'comments', 'evidence', 'history'] as const).map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)}
               className={`pb-3 text-sm font-medium transition-colors border-b-2 ${
-                activeTab === tab ? 'border-blue-600 text-blue-700' : 'border-transparent text-[var(--color-muted)] hover:text-[var(--color-text)]'
+                activeTab === tab ? 'border-primary-600 text-primary-700' : 'border-transparent text-[var(--color-muted)] hover:text-[var(--color-text)]'
               }`}>
               {tab === 'details' ? 'Details' : tab === 'subtasks' ? `Sub-tasks (${task.sub_tasks?.length || 0})` :
                tab === 'comments' ? `Comments (${task.comments?.length || 0})` : tab === 'evidence' ? 'Evidence' : 'History'}
@@ -601,7 +601,7 @@ export default function TaskDetailPage() {
                   </span>
                   {st.assigned_owner && <span className="text-xs text-[var(--color-muted)]">{st.assigned_owner.display_name || st.assigned_owner.username}</span>}
                   {st.due_date && <span className="text-xs text-[var(--color-muted)]">{new Date(st.due_date).toLocaleDateString()}</span>}
-                  {canDelete && <button onClick={() => subTaskDeleteMutation.mutate(st.id)} className="text-[var(--color-muted)] hover:text-red-600">
+                  {canDelete && <button onClick={() => subTaskDeleteMutation.mutate(st.id)} className="text-[var(--color-muted)] hover:text-rose-600">
                     <Trash2 size={14} />
                   </button>}
                 </div>
@@ -659,7 +659,7 @@ export default function TaskDetailPage() {
             <div className="space-y-3">
               {task.history.map((h: TaskHistoryEntry) => (
                 <div key={h.id} className="flex items-start gap-3 text-sm">
-                  <div className="mt-1 w-2 h-2 rounded-full bg-blue-500 shrink-0" />
+                  <div className="mt-1 w-2 h-2 rounded-full bg-primary-500 shrink-0" />
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-[var(--color-text)]">{h.action}</span>
@@ -667,9 +667,9 @@ export default function TaskDetailPage() {
                     </div>
                     {(h.old_value || h.new_value) && (
                       <p className="text-xs text-[var(--color-muted)] mt-0.5">
-                        {h.old_value && <span className="line-through text-red-400/70">{h.old_value}</span>}
+                        {h.old_value && <span className="line-through text-rose-600/80">{h.old_value}</span>}
                         {h.old_value && h.new_value && <span className="mx-1">→</span>}
-                        {h.new_value && <span className="text-emerald-400/70">{h.new_value}</span>}
+                        {h.new_value && <span className="text-emerald-700">{h.new_value}</span>}
                       </p>
                     )}
                     <p className="text-xs text-[var(--color-muted)] mt-0.5">
@@ -684,9 +684,9 @@ export default function TaskDetailPage() {
       )}
 
       {aiRootCause && (
-        <div className="rounded-lg border border-purple-200 bg-purple-50 p-6 space-y-4">
+        <div className="rounded-lg border border-primary-200 bg-primary-50 p-6 space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-purple-700 flex items-center gap-2"><Sparkles size={14} /> AI Root Cause Analysis</h3>
+            <h3 className="text-sm font-semibold text-primary-700 flex items-center gap-2"><Sparkles size={14} /> AI Root Cause Analysis</h3>
             <button onClick={() => setAiRootCause(null)} className="text-[var(--color-muted)] hover:text-[var(--color-text)]"><X size={16} /></button>
           </div>
           {(aiRootCause.summary as string) && (
@@ -698,7 +698,7 @@ export default function TaskDetailPage() {
               <ul className="space-y-1">
                 {(aiRootCause.root_causes as Array<Record<string, unknown>>).map((c, i: number) => (
                   <li key={i} className="text-sm text-[var(--color-text)] flex items-start gap-2">
-                    <span className="text-purple-600 mt-0.5">•</span>
+                    <span className="text-primary-600 mt-0.5">•</span>
                     <span>{typeof c === 'string' ? c : (c.cause as string || JSON.stringify(c))}{c.category ? ` (${c.category})` : ''}</span>
                   </li>
                 ))}
@@ -722,9 +722,9 @@ export default function TaskDetailPage() {
       )}
 
       {aiDescription && (
-        <div className="rounded-lg border border-purple-200 bg-purple-50 p-6 space-y-4">
+        <div className="rounded-lg border border-primary-200 bg-primary-50 p-6 space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-purple-700 flex items-center gap-2"><FileText size={14} /> AI Generated Description</h3>
+            <h3 className="text-sm font-semibold text-primary-700 flex items-center gap-2"><FileText size={14} /> AI Generated Description</h3>
             <button onClick={() => setAiDescription(null)} className="text-[var(--color-muted)] hover:text-[var(--color-text)]"><X size={16} /></button>
           </div>
           {(aiDescription.summary as string) && (
@@ -757,7 +757,7 @@ export default function TaskDetailPage() {
               <ul className="space-y-1">
                 {(aiDescription.suggested_sub_tasks as string[]).map((s: string, i: number) => (
                   <li key={i} className="text-sm text-[var(--color-text)] flex items-start gap-2">
-                    <span className="text-blue-600 mt-0.5">○</span> {s}
+                    <span className="text-primary-600 mt-0.5">○</span> {s}
                   </li>
                 ))}
               </ul>
@@ -768,7 +768,7 @@ export default function TaskDetailPage() {
               updateMutation.mutate({ description: aiDescription.detailed_description as string });
               setAiDescription(null);
             }
-          }} className="flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-1.5 text-sm text-white hover:bg-purple-700">
+          }} className="flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-sm text-[#0a0a0a] hover:bg-primary-700">
             Apply Description to Task
           </button>
         </div>

@@ -64,35 +64,35 @@ interface TaskListResponse {
 }
 
 const PRIORITY_COLORS: Record<string, string> = {
-  Critical: 'bg-red-500/20 text-red-400 border-red-500/30',
-  High: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
-  Medium: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
-  Low: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+  Critical: 'bg-rose-50 text-rose-700 border-rose-200',
+  High: 'bg-orange-50 text-orange-700 border-orange-200',
+  Medium: 'bg-amber-50 text-amber-700 border-amber-200',
+  Low: 'bg-emerald-50 text-emerald-700 border-emerald-200',
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  Open: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-  'In Progress': 'bg-amber-500/20 text-amber-400 border-amber-500/30',
-  'Under Review': 'bg-purple-500/20 text-purple-400 border-purple-500/30',
-  Completed: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
-  Verified: 'bg-green-500/20 text-green-400 border-green-500/30',
-  Reopened: 'bg-red-500/20 text-red-400 border-red-500/30',
+  Open: 'bg-slate-50 text-slate-700 border-slate-200',
+  'In Progress': 'bg-amber-50 text-amber-700 border-amber-200',
+  'Under Review': 'bg-primary-50 text-primary-700 border-primary-200',
+  Completed: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  Verified: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  Reopened: 'bg-rose-50 text-rose-700 border-rose-200',
 };
 
 const KANBAN_BORDER_COLORS: Record<string, string> = {
-  Open: 'border-t-blue-500',
+  Open: 'border-t-slate-400',
   'In Progress': 'border-t-amber-500',
-  'Under Review': 'border-t-purple-500',
+  'Under Review': 'border-t-primary-500',
   Completed: 'border-t-emerald-500',
-  Verified: 'border-t-green-500',
-  Reopened: 'border-t-red-500',
+  Verified: 'border-t-emerald-500',
+  Reopened: 'border-t-rose-500',
 };
 
 const SLA_COLORS: Record<string, string> = {
-  'On Track': 'text-emerald-400',
-  'At Risk': 'text-amber-400',
-  Breached: 'text-red-400',
-  Completed: 'text-slate-400',
+  'On Track': 'text-emerald-600',
+  'At Risk': 'text-amber-600',
+  Breached: 'text-rose-600',
+  Completed: 'text-slate-500',
   'No SLA': 'text-slate-500',
 };
 
@@ -542,7 +542,7 @@ export default function TaskBoardPage() {
 
   return (
     <div className="-m-4 lg:-m-5 text-[var(--color-text)]">
-      <div className="border-b border-gray-200 px-3 sm:px-6 pt-3 overflow-x-auto">
+      <div className="border-b border-slate-200 px-3 sm:px-6 pt-3 overflow-x-auto">
         <div className="flex items-center gap-0 min-w-max">
           {taskTabs.map(({ id, label, icon: Icon }) => {
             const isActive = activeTab === id;
@@ -553,8 +553,8 @@ export default function TaskBoardPage() {
                 onClick={() => setActiveTab(id)}
                 className={`inline-flex items-center gap-1.5 px-3 sm:px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px whitespace-nowrap ${
                   isActive
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    ? 'border-primary-600 text-primary-700'
+                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
                 }`}
               >
                 <Icon size={14} />
@@ -570,22 +570,22 @@ export default function TaskBoardPage() {
         <>
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div className="min-w-0">
-              <h1 className="text-lg sm:text-xl font-semibold text-black tracking-tight">Task Board</h1>
+              <h1 className="text-lg sm:text-xl font-semibold text-slate-900 tracking-tight">Task Board</h1>
               <p className="mt-1 text-sm text-slate-600">Centralized critical task management — {total} tasks</p>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
               <div className="flex items-center rounded-full border border-[var(--color-border)] bg-white overflow-hidden">
                 <button onClick={() => setViewMode('table')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${viewMode === 'table' ? 'bg-blue-600 text-white' : 'text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-slate-50'}`}>
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${viewMode === 'table' ? 'bg-primary-600 text-[#0a0a0a] hover:bg-primary-700' : 'text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-slate-50'}`}>
                   <LayoutList size={14} /> <span className="hidden sm:inline">Table</span>
                 </button>
                 <button onClick={() => setViewMode('kanban')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${viewMode === 'kanban' ? 'bg-blue-600 text-white' : 'text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-slate-50'}`}>
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${viewMode === 'kanban' ? 'bg-primary-600 text-[#0a0a0a] hover:bg-primary-700' : 'text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-slate-50'}`}>
                   <Columns3 size={14} /> <span className="hidden sm:inline">Kanban</span>
                 </button>
               </div>
               <button onClick={handleAiReprioritize} disabled={aiLoading}
-                className="flex items-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50 px-2.5 sm:px-3 py-2 text-xs sm:text-sm font-medium text-purple-700 hover:bg-purple-100 transition-colors disabled:opacity-50">
+                className="flex items-center gap-1.5 rounded-lg border border-primary-200 bg-primary-50 px-2.5 sm:px-3 py-2 text-xs sm:text-sm font-medium text-primary-700 hover:bg-primary-100 transition-colors disabled:opacity-50">
                 {aiLoading ? <Loader2 className="animate-spin" size={14} /> : <Sparkles size={14} />}
                 <span className="hidden md:inline">AI Reprioritize</span>
                 <span className="md:hidden">AI</span>
@@ -670,7 +670,7 @@ export default function TaskBoardPage() {
               size="md"
             />
             {Object.keys(filters).length > 0 && (
-              <button onClick={() => setFilters({})} className="text-sm text-red-600 hover:text-red-700 ml-1">Clear</button>
+              <button onClick={() => setFilters({})} className="text-sm text-rose-600 hover:text-rose-700 ml-1">Clear</button>
             )}
 
             {selectedTasks.length > 0 && (
@@ -706,7 +706,7 @@ export default function TaskBoardPage() {
                       </select>
                       <button disabled={!bulkAssignId}
                         onClick={() => bulkMutation.mutate({ task_ids: selectedTasks, action: 'assign', assigned_owner_id: Number(bulkAssignId) })}
-                        className="rounded bg-blue-600 px-2 py-1 text-xs text-white hover:bg-blue-700 disabled:opacity-40">
+                        className="rounded bg-primary-600 px-2 py-1 text-xs text-[#0a0a0a] hover:bg-primary-700 disabled:opacity-40">
                         Go
                       </button>
                     </div>
@@ -720,7 +720,7 @@ export default function TaskBoardPage() {
         <div className="cw-card overflow-hidden">
           {isLoading ? (
             <div className="flex items-center justify-center py-20">
-              <Loader2 className="animate-spin text-blue-600" size={32} />
+              <Loader2 className="animate-spin text-primary-600" size={32} />
             </div>
           ) : tasks.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-[var(--color-muted)]">
@@ -761,12 +761,12 @@ export default function TaskBoardPage() {
                         onChange={() => toggleSelect(task.id)} className="rounded border-[var(--color-border)]" />
                     </td>
                     <td className="px-4 py-3">
-                      <Link href={`/tasks/${task.id}`} className="text-sm font-medium text-[var(--color-text)] hover:text-blue-600 transition-colors">
+                      <Link href={`/tasks/${task.id}`} className="text-sm font-medium text-[var(--color-text)] hover:text-primary-700 transition-colors">
                         {task.title}
                       </Link>
                       <div className="flex items-center gap-2 mt-0.5">
                         {task.category && <span className="text-xs text-[var(--color-muted)]">{task.category}</span>}
-                        {task.source_module && <span className="text-xs text-blue-600/70">via {task.source_module}</span>}
+                        {task.source_module && <span className="text-xs text-primary-700/70">via {task.source_module}</span>}
                       </div>
                     </td>
                     <td className="px-4 py-3"><span className="text-xs text-[var(--color-muted)]">{task.source}</span></td>
@@ -805,7 +805,7 @@ export default function TaskBoardPage() {
         <div className="grid grid-cols-6 gap-3 overflow-x-auto">
           {isLoading ? (
             <div className="col-span-6 flex items-center justify-center py-20">
-              <Loader2 className="animate-spin text-blue-600" size={32} />
+              <Loader2 className="animate-spin text-primary-600" size={32} />
             </div>
           ) : (
             STATUSES.map(status => (
@@ -879,17 +879,17 @@ export default function TaskBoardPage() {
       >
         <div className="space-y-3">
           {/* Linked entities + AI generate */}
-          <div className="rounded-lg border border-purple-200 bg-purple-50/40 p-3 space-y-2">
+          <div className="rounded-lg border border-primary-200 bg-primary-50 p-3 space-y-2">
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <div className="flex items-center gap-2">
-                <Sparkles size={14} className="text-purple-700" />
+                <Sparkles size={14} className="text-primary-700" />
                 <span className="text-xs font-semibold text-slate-700">Link Source (optional)</span>
               </div>
               <button
                 type="button"
                 onClick={handleAiGenerateFromContext}
                 disabled={aiContextLoading}
-                className="inline-flex items-center gap-1.5 rounded-md bg-purple-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-purple-700 disabled:opacity-50 transition-colors"
+                className="inline-flex items-center gap-1.5 rounded-md bg-primary-600 px-2.5 py-1 text-xs font-medium text-[#0a0a0a] hover:bg-primary-700 disabled:opacity-50 transition-colors"
               >
                 {aiContextLoading ? <Loader2 className="animate-spin" size={12} /> : <Sparkles size={12} />}
                 AI Generate
@@ -1032,7 +1032,7 @@ export default function TaskBoardPage() {
               type="text"
               value={newTask.title}
               onChange={e => setNewTask(f => ({ ...f, title: e.target.value }))}
-              className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+              className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
               placeholder="Task title"
               required
             />
@@ -1053,7 +1053,7 @@ export default function TaskBoardPage() {
             <textarea
               value={newTask.description}
               onChange={e => setNewTask(f => ({ ...f, description: e.target.value }))}
-              className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+              className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
               rows={3}
               placeholder="Task description"
             />
@@ -1065,7 +1065,7 @@ export default function TaskBoardPage() {
               <select
                 value={newTask.source}
                 onChange={e => setNewTask(f => ({ ...f, source: e.target.value }))}
-                className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
               >
                 {SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
@@ -1075,7 +1075,7 @@ export default function TaskBoardPage() {
               <select
                 value={newTask.priority}
                 onChange={e => setNewTask(f => ({ ...f, priority: e.target.value }))}
-                className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
               >
                 {PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
               </select>
@@ -1085,7 +1085,7 @@ export default function TaskBoardPage() {
               <select
                 value={newTask.category}
                 onChange={e => setNewTask(f => ({ ...f, category: e.target.value }))}
-                className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
               >
                 {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
@@ -1095,7 +1095,7 @@ export default function TaskBoardPage() {
               <select
                 value={newTask.severity}
                 onChange={e => setNewTask(f => ({ ...f, severity: e.target.value }))}
-                className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
               >
                 <option value="">None</option>
                 <option value="Critical">Critical</option><option value="High">High</option>
@@ -1150,7 +1150,7 @@ export default function TaskBoardPage() {
                 type="date"
                 value={newTask.due_date}
                 onChange={e => setNewTask(f => ({ ...f, due_date: e.target.value }))}
-                className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
               />
             </div>
             <div>
@@ -1193,7 +1193,7 @@ export default function TaskBoardPage() {
                 <select
                   value={newTask.recurrence_pattern}
                   onChange={e => setNewTask(f => ({ ...f, recurrence_pattern: e.target.value }))}
-                  className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                  className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
                 >
                   <option value="">None</option>
                   <option value="daily">Daily</option>
@@ -1210,7 +1210,7 @@ export default function TaskBoardPage() {
                     min="1"
                     value={newTask.recurrence_interval}
                     onChange={e => setNewTask(f => ({ ...f, recurrence_interval: e.target.value }))}
-                    className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                    className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
                     placeholder="Every N periods"
                   />
                 </div>
@@ -1234,7 +1234,7 @@ export default function TaskBoardPage() {
             <textarea
               value={newTask.evidence_notes}
               onChange={e => setNewTask(f => ({ ...f, evidence_notes: e.target.value }))}
-              className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+              className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
               rows={2}
               placeholder="Supporting evidence or notes"
             />
@@ -1258,7 +1258,7 @@ export default function TaskBoardPage() {
                   <div key={t.id as number} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4 hover:bg-[var(--color-subtle)] transition-colors">
                     <div className="flex items-center justify-between mb-2">
                       <h3 className="text-sm font-medium text-[var(--color-text)]">{t.name as string}</h3>
-                      <span className={`text-xs px-2 py-0.5 rounded-full border ${t.is_system ? 'border-blue-200 text-blue-700 bg-blue-50' : 'border-[var(--color-border)] text-[var(--color-muted)] bg-[var(--color-subtle)]'}`}>
+                      <span className={`text-xs px-2 py-0.5 rounded-full border ${t.is_system ? 'border-primary-200 text-primary-700 bg-primary-50' : 'border-[var(--color-border)] text-[var(--color-muted)] bg-[var(--color-subtle)]'}`}>
                         {t.is_system ? 'System' : 'Custom'}
                       </span>
                     </div>
@@ -1286,7 +1286,7 @@ export default function TaskBoardPage() {
             <div className="fixed inset-0 z-50 flex items-center justify-center cw-overlay p-4">
               <div className="cw-modal-panel rounded-xl shadow-xl w-full max-w-2xl max-h-[80vh] overflow-y-auto p-6">
                 <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-lg font-semibold text-[var(--color-text)] flex items-center gap-2"><Sparkles size={18} className="text-purple-600" /> AI Priority Suggestions</h2>
+                  <h2 className="text-lg font-semibold text-[var(--color-text)] flex items-center gap-2"><Sparkles size={18} className="text-primary-600" /> AI Priority Suggestions</h2>
                   <button onClick={() => setShowAiResult(false)} className="text-[var(--color-muted)] hover:text-[var(--color-text)]"><X size={20} /></button>
                 </div>
                 {(aiResult.suggestions as Record<string, unknown>[])?.length === 0 ? (
@@ -1328,7 +1328,7 @@ export default function TaskBoardPage() {
                         setShowAiResult(false);
                         setAiResult(null);
                       }}
-                        className="rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700 transition-colors">
+                        className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-[#0a0a0a] hover:bg-primary-700 transition-colors">
                         Apply All Changes
                       </button>
                     </div>

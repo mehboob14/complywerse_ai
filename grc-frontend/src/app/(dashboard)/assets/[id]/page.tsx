@@ -9,11 +9,18 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { apiClient, assetsApi, compliancePluginsApi, criticalityApi, ermApi, evidenceApi, vulnManagementApi } from '@/lib/api';
 import type { IacaItem, IscaItem } from '@/lib/api';
 import type { ITAsset } from '@/types';
-import { SearchInput, InlineLinkPicker, PageLoader } from '@/components/ui';
+import { SearchInput, InlineLinkPicker, PageLoader, MultiSelectDropdown } from '@/components/ui';
+
+// Common compliance standards for the asset "Compliance Scope" picker (users can
+// still search + the asset's existing tags are always merged in).
+const COMPLIANCE_FRAMEWORKS = [
+  'PCI-DSS', 'HIPAA', 'ISO 27001', 'ISO 27002', 'SOC 2', 'GDPR', 'CCPA', 'PDPL',
+  'NIST CSF', 'NIST 800-53', 'SAMA CSF', 'NCA ECC', 'NCA CCC', 'CIS Controls', 'SOX', 'FedRAMP',
+];
 import {
   ArrowLeft, Loader2, AlertCircle, Shield, DollarSign,
   Target, TrendingUp, FileCheck, AlertTriangle,
-  ClipboardList, ClipboardCheck, Plus, X, Trash2, Edit, RefreshCw,
+  ClipboardList, Plus, X, Trash2, Edit, RefreshCw,
   AppWindow, HardDrive, Database, Cloud, Building2,
   Lock, ShieldCheck, MapPin, User, Bug, Network,
   Gauge, PackageSearch, Sparkles, Layers, Filter,
@@ -58,75 +65,7 @@ const ASSET_TYPE_LABELS: Record<string, string> = {
   third_party: 'Third-Party System',
 };
 
-type TabType = 'details' | 'compliance' | 'controls' | 'evidence' | 'assessments' | 'risks' | 'vulnerabilities' | 'criticality' | 'trajectory' | 'mapping-recommendations';
-
-// Map an assessment_format to its /assessments/<framework> route key.
-function assetAssessmentFramework(fmt: string): string {
-  const m: Record<string, string> = {
-    asvs_checklist: 'asvs',
-    mobile_app_security: 'cs_mobile',
-    owasp_v4_testing_checklist: 'owasp_testing',
-    pdpl_assessment_toolkit: 'pdpl',
-    nca_container: 'nca',
-    digital_ops_maturity: 'digital_ops_maturity',
-    ubl_audit_master_tracking: 'internal_audit',
-    xlsx_maturity: 'maturity',
-  };
-  if (m[fmt]) return m[fmt];
-  if (fmt?.startsWith('cis')) return 'cis';
-  return 'standard';
-}
-
-interface AssetAssessmentRow {
-  id: number; name: string; assessment_format: string; status: string;
-  total_items: number; complied_count: number; not_complied_count: number; validity_pct: number;
-}
-
-// Reverse view: the assessments scoped to this asset (from linked_asset_ids),
-// with their validity/status. Rendered in the asset detail 'Assessments' tab.
-function AssetAssessments({ assetId, onOpen }: { assetId: number; onOpen: (fmt: string) => void }) {
-  const { data, isLoading } = useQuery({
-    queryKey: ['asset-assessments', assetId],
-    queryFn: async () => (await apiClient.get(`/compliance/assessments/by-asset/${assetId}`)).data as { assessments: AssetAssessmentRow[] },
-  });
-  const items = data?.assessments ?? [];
-  const color = (p: number) => (p >= 80 ? '#059669' : p >= 50 ? '#d97706' : '#dc2626');
-
-  return (
-    <div className="space-y-4">
-      {/* Assessments scoped to this asset */}
-      {isLoading ? (
-        <div className="py-8 text-center text-sm text-slate-400">Loading…</div>
-      ) : items.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-slate-200 py-10 text-center">
-          <ClipboardCheck className="mx-auto mb-2 h-8 w-8 text-slate-300" />
-          <p className="text-sm font-medium text-slate-600">No assessments scoped to this asset yet.</p>
-          <p className="mt-1 text-xs text-slate-400">Add this asset under an assessment&apos;s &quot;Assets in scope&quot; and it will appear here.</p>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          <h3 className="mb-1 text-sm font-semibold text-slate-700">Assessments covering this asset</h3>
-          {items.map((a) => (
-            <button key={a.id} onClick={() => onOpen(a.assessment_format)} className="flex w-full items-center gap-4 rounded-lg border border-slate-200 bg-white px-4 py-3 text-left transition hover:border-slate-300 hover:bg-slate-50">
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-semibold text-slate-800">{a.name}</div>
-                <div className="text-xs text-slate-400">{a.assessment_format} · {a.total_items} items · {a.status}</div>
-              </div>
-              <div className="w-44 shrink-0">
-                <div className="flex items-center gap-2">
-                  <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full" style={{ width: `${a.validity_pct}%`, background: color(a.validity_pct) }} /></div>
-                  <span className="w-9 text-right text-xs font-bold" style={{ color: color(a.validity_pct) }}>{a.validity_pct}%</span>
-                </div>
-                <div className="mt-0.5 text-right text-[10px] text-slate-400">{a.complied_count} pass · {a.not_complied_count} fail</div>
-              </div>
-              <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" />
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
+type TabType = 'details' | 'compliance' | 'controls' | 'evidence' | 'risks' | 'vulnerabilities' | 'criticality' | 'trajectory' | 'mapping-recommendations';
 
 interface LinkedControl {
   id: number;
@@ -286,7 +225,10 @@ export default function AssetDetailPage() {
   const { hasPermission } = usePermissions();
   const canEdit = hasPermission('assets:asset_inventory:edit');
   const canDelete = hasPermission('assets:asset_inventory:delete');
-  const [activeTab, setActiveTab] = useState<TabType>('details');
+  // D1 layout: the right column starts on the promoted Trajectory graph — the
+  // asset's core risk narrative — rather than the old Details tab (which is now
+  // dissolved into the pinned left context rail).
+  const [activeTab, setActiveTab] = useState<TabType>('trajectory');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showLifecycleModal, setShowLifecycleModal] = useState(false);
@@ -461,28 +403,17 @@ export default function AssetDetailPage() {
   };
 
   const getStatusBadge = (status: string) => {
-    const colors: Record<string, string> = {
-      active: 'bg-green-50 text-green-700 border-green-200',
-      inactive: 'bg-yellow-50 text-yellow-700 border-yellow-200',
-      decommissioned: 'bg-slate-100 text-slate-600 border-slate-200',
-    };
     return (
-      <span className={`rounded-full border px-3 py-1 text-sm font-medium ${colors[status] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
-        {status.charAt(0).toUpperCase() + status.slice(1)}
+      <span className={`rounded-full border px-2.5 py-1 text-xs font-medium capitalize ${STATUS_TONES[status] || 'border-slate-200 bg-slate-100 text-slate-600'}`}>
+        {status}
       </span>
     );
   };
 
   const getCriticalityBadge = (criticality: string) => {
-    const colors: Record<string, string> = {
-      critical: 'bg-red-50 text-red-600 border-red-200',
-      high: 'bg-orange-50 text-orange-600 border-orange-200',
-      medium: 'bg-yellow-50 text-yellow-700 border-yellow-200',
-      low: 'bg-green-50 text-green-600 border-green-200',
-    };
     return (
-      <span className={`rounded-full border px-3 py-1 text-sm font-medium ${colors[criticality] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
-        {criticality.charAt(0).toUpperCase() + criticality.slice(1)}
+      <span className={`rounded-full border px-2.5 py-1 text-xs font-medium capitalize ${CRITICALITY_TONES[criticality] || 'border-slate-200 bg-slate-100 text-slate-600'}`}>
+        {criticality}
       </span>
     );
   };
@@ -558,349 +489,197 @@ export default function AssetDetailPage() {
     return asset.name;
   })();
 
-  const tabs: { id: TabType; label: string; icon: React.ElementType }[] = [
-    { id: 'details', label: 'Details', icon: ClipboardList },
-    // CIS Module Updated drop — Compliance tab. Position #2 to match
-    // Hassan's reference layout. Holds AI Classification (OS profile),
-    // Matched benchmark count, Benchmark resolution chain, scan
-    // controls + run history.
-    { id: 'compliance', label: 'Compliance', icon: Cpu },
-    { id: 'controls', label: 'Controls', icon: Shield },
-    { id: 'evidence', label: 'Evidence', icon: FileCheck },
-    { id: 'assessments', label: 'Assessments', icon: ClipboardCheck },
+  // Right-column work sections. The old top tab-strip is replaced by an
+  // in-column secondary nav so the LEFT context rail never scrolls away.
+  // Trajectory is PROMOTED to first — it's the asset's core risk narrative.
+  const sections: { id: TabType; label: string; icon: React.ElementType }[] = [
+    { id: 'trajectory', label: 'Trajectory', icon: Network },
     { id: 'vulnerabilities', label: 'Vulnerabilities', icon: Bug },
     { id: 'risks', label: 'Risks', icon: AlertTriangle },
+    { id: 'controls', label: 'Controls', icon: Shield },
+    { id: 'evidence', label: 'Evidence', icon: FileCheck },
+    // CIS Module Updated drop — Compliance / room scan (HostApplicationsPanel + ComplianceTab).
+    { id: 'compliance', label: 'Compliance', icon: Cpu },
     { id: 'criticality', label: 'Criticality Assessments', icon: ShieldCheck },
     { id: 'mapping-recommendations', label: 'Mapping Recommendations', icon: Sparkles },
-    // Trajectory tab hidden from sidebar — render code below is intact
-    // so re-enabling is a one-line uncomment.
-    // { id: 'trajectory', label: 'Trajectory', icon: Network },
   ];
 
   return (
-    <div className="assets-light space-y-4">
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-center">
-          <div className="flex items-center gap-4">
+    <div className="assets-light risk-workspace -m-4 space-y-4 lg:-m-5">
+      {/* Header bar — identity + status pills. Actions live in the left rail. */}
+      <div className="border-b border-slate-200 px-4 py-3 sm:px-6">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+          <div className="flex items-start gap-3">
             <Link
               href="/assets"
-              className="rounded-lg border border-slate-200 p-2 text-slate-500 hover:bg-slate-50 hover:text-slate-900"
+              className="mt-0.5 rounded-md p-1.5 text-slate-600 hover:bg-slate-50 hover:text-slate-800"
+              title="Back to Assets"
             >
-              <ArrowLeft className="h-5 w-5" />
+              <ArrowLeft className="h-4 w-4" strokeWidth={1.75} />
             </Link>
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
-                {getAssetIcon(asset.asset_type)}
-              </div>
-              <div>
-                <h1 className="text-lg font-semibold text-slate-900">{displayName}</h1>
-                <p className="text-xs text-slate-600">{asset.description || 'No description'}</p>
-              </div>
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-50 text-primary-600">
+              {getAssetIcon(asset.asset_type)}
+            </div>
+            <div>
+              <h1 className="text-lg font-semibold text-slate-800">{displayName}</h1>
+              <p className="text-xs text-slate-600">{asset.description || 'No description'}</p>
             </div>
           </div>
-          <div className="flex flex-1 flex-wrap items-center gap-2 xl:justify-end">
-            <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs text-blue-700">
+          <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600">
               {ASSET_TYPE_LABELS[asset.asset_type] || asset.asset_type}
             </span>
             {getStatusBadge(asset.status)}
             {getCriticalityBadge(asset.criticality)}
           </div>
-          <div className="flex flex-wrap items-center gap-2 xl:justify-end">
-            {canEdit && (
-              <button
-                onClick={() => setShowEditModal(true)}
-                className="flex items-center gap-2 rounded-lg border border-slate-300 bg-slate-50 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-100"
-                title="Edit Asset"
-              >
-                <Edit className="h-4 w-4" />
-                Edit
-              </button>
-            )}
-            {canEdit && (
-              <button
-                onClick={() => setShowLifecycleModal(true)}
-                className="flex items-center gap-2 rounded-lg border border-slate-300 bg-slate-50 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-100"
-                title="Change lifecycle state — decommissioning auto-closes linked vulns"
-              >
-                <TrendingUp className="h-4 w-4" />
-                Lifecycle
-              </button>
-            )}
-            {/* Spec cross-links: every asset should be one click away from
-                its CIS scan history and its composite risk posture. The
-                backend endpoints already key off ITAsset.id; these just
-                make the navigation discoverable. */}
-            <Link
-              href={`/compliance-plugins/asset/${assetId}`}
-              className="flex items-center gap-2 rounded-lg border border-slate-300 bg-slate-50 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-100"
-              title="View this asset's CIS plugin runs (Plugin Automation → per-asset)"
-            >
-              <PackageSearch className="h-4 w-4" />
-              CIS scans
-            </Link>
-            <Link
-              href={`/risk-posture/asset/${assetId}`}
-              className="flex items-center gap-2 rounded-lg border border-slate-300 bg-slate-50 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-100"
-              title="View this asset's composite risk posture (5-dimension breakdown)"
-            >
-              <Gauge className="h-4 w-4" />
-              Risk posture
-            </Link>
-            <button
-              onClick={() => assessRiskMutation.mutate()}
-              disabled={assessRiskMutation.isPending}
-              className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-700 disabled:opacity-50"
-              title="Assess Risk"
-            >
-              {assessRiskMutation.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4" />
-              )}
-              Assess Risk
-            </button>
-            <CreateIssueButton
-              sourceType="asset"
-              sourceId={assetId}
-              presetFields={{
-                title: `Issue on ${asset.name}`,
-                category: 'operations',
-                issue_type: 'incident',
-              }}
-            />
-            {canDelete && (
-              <button
-                onClick={() => setShowDeleteConfirm(true)}
-                className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs text-red-600 hover:bg-red-100"
-                title="Delete Asset"
-              >
-                <Trash2 className="h-4 w-4" />
-                Delete
-              </button>
-            )}
-          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <div className="mb-3 flex items-center gap-2 text-slate-600">
-            <Lock className="h-4 w-4" />
-            <span className="text-sm font-medium">CIA Ratings</span>
-          </div>
-          <div className="space-y-2">
-            <CIARatingBar rating={asset.confidentiality_rating || 0} label="Confidentiality" color="bg-blue-500" />
-            <CIARatingBar rating={asset.integrity_rating || 0} label="Integrity" color="bg-green-500" />
-            <CIARatingBar rating={asset.availability_rating || 0} label="Availability" color="bg-yellow-500" />
+      {/* D1 split: pinned left context column + scrolling right work column.
+          Every tab component is reused unchanged — only its placement changed. */}
+      <div className="mx-4 grid grid-cols-1 gap-4 pb-4 sm:mx-6 lg:grid-cols-12">
+        {/* ── LEFT: authoritative context — stays on screen ─────────────── */}
+        <div className="lg:col-span-5">
+          <div className="space-y-3 lg:sticky lg:top-4">
+            <AssetContextRail
+              asset={asset}
+              displayName={displayName}
+              assetId={assetId}
+              coverage={coverage}
+              ipPeers={ipPeers}
+              latestAssessment={latestAssessment}
+              canEdit={canEdit}
+              canDelete={canDelete}
+              onEdit={() => setShowEditModal(true)}
+              onLifecycle={() => setShowLifecycleModal(true)}
+              onDelete={() => setShowDeleteConfirm(true)}
+              onAssessRisk={() => assessRiskMutation.mutate()}
+              isAssessing={assessRiskMutation.isPending}
+              getAssetIcon={getAssetIcon}
+              formatDate={formatDate}
+            />
           </div>
         </div>
 
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <div className="mb-3 flex items-center gap-2 text-slate-600">
-            <Target className="h-4 w-4" />
-            <span className="text-sm font-medium">Control Coverage</span>
+        {/* ── RIGHT: scrolling work column ──────────────────────────────── */}
+        <div className="space-y-4 lg:col-span-7">
+          {/* Lightweight in-column section switcher */}
+          <div className="cw-card rounded-xl px-2 py-2">
+            <nav className="flex flex-wrap gap-1">
+              {sections.map((s) => {
+                const Icon = s.icon;
+                const active = activeTab === s.id;
+                return (
+                  <button
+                    key={s.id}
+                    onClick={() => setActiveTab(s.id)}
+                    className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                      active
+                        ? 'bg-primary-50 text-primary-700'
+                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-800'
+                    }`}
+                  >
+                    <Icon className="h-3.5 w-3.5" strokeWidth={1.75} />
+                    {s.label}
+                  </button>
+                );
+              })}
+            </nav>
           </div>
-          <div className="text-3xl font-bold text-blue-600">
-            {coverage?.coverage_percentage ?? asset.coverage_percentage ?? 0}%
-          </div>
-          <div className="mt-2">
-            <div className="h-2 w-full rounded-full bg-slate-200">
-              <div 
-                className="h-2 rounded-full bg-blue-500 transition-all"
-                style={{ width: `${coverage?.coverage_percentage ?? asset.coverage_percentage ?? 0}%` }}
-              />
-            </div>
-          </div>
-          <p className="mt-2 text-sm text-slate-500">
-            {(asset.linked_controls?.length || 0) + (asset.linked_internal_controls?.length || 0) + (asset.linked_framework_controls?.length || 0)} controls linked
-          </p>
-        </div>
 
-        {/* CIS Compliance tile (Updated_CIS_Assests migration). Shows the
-            IP-group effective score when the asset is part of a host group,
-            falls back to its own score otherwise, and surfaces the weakest
-            link in the group. Links through to the per-asset risk posture
-            page where the breakdown is fully expanded. */}
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <div className="mb-3 flex items-center gap-2 text-slate-600">
-            <TrendingUp className="h-4 w-4" />
-            <span className="text-sm font-medium">CIS Compliance</span>
-          </div>
-          {(() => {
-            const composite = ipPeers?.composite;
-            const ownScore = ipPeers?.group?.find((g) => g.is_self)?.score;
-            const effective = composite?.effective_score;
-            const hostScore = composite?.host_score;
-            const displayScore = effective ?? ownScore;
-            if (displayScore == null) {
-              return (
-                <>
-                  <div className="text-3xl font-bold text-slate-500">—</div>
-                  <p className="mt-1 text-xs text-slate-500">Not yet scanned</p>
-                  <Link href={`/risk-posture/asset/${assetId}`} className="mt-2 block text-xs text-blue-600 hover:underline">
-                    Open risk posture →
-                  </Link>
-                </>
-              );
-            }
-            const color = displayScore >= 80 ? 'text-green-600' : displayScore >= 60 ? 'text-yellow-600' : 'text-red-600';
-            return (
-              <>
-                <div className={`text-3xl font-bold ${color}`}>{displayScore.toFixed(1)}%</div>
-                {effective != null && hostScore != null && (
-                  <p className="mt-1 text-xs text-slate-500">
-                    Group effective · host {hostScore}%
-                  </p>
-                )}
-                {composite?.weakest && composite.weakest.id !== assetId && (
-                  <p className="mt-0.5 text-xs text-amber-600">
-                    Weakest: {composite.weakest.name.split(' ')[0]} {composite.weakest.score}%
-                  </p>
-                )}
-                <Link href={`/risk-posture/asset/${assetId}`} className="mt-2 block text-xs text-blue-600 hover:underline">
-                  Full risk posture →
-                </Link>
-              </>
-            );
-          })()}
-        </div>
-
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <div className="mb-3 flex items-center gap-2 text-slate-600">
-            <TrendingUp className="h-4 w-4" />
-            <span className="text-sm font-medium">Risk Score</span>
-          </div>
-          {latestAssessment ? (
-            <>
-              <div className={`text-3xl font-bold ${
-                latestAssessment.risk_score >= 7 ? 'text-red-600' :
-                latestAssessment.risk_score >= 4 ? 'text-yellow-600' : 'text-green-600'
-              }`}>
-                {latestAssessment.risk_score.toFixed(1)}
+          <div className="cw-card rounded-xl p-4 sm:p-5">
+            {activeTab === 'trajectory' && (
+              <div className="space-y-2">
+                <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+                  <Network className="h-4 w-4 text-primary-600" strokeWidth={1.75} />
+                  Risk trajectory
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Asset → Vulnerability → Risk. Click a node to trace its sub-chain.
+                </p>
+                <TrajectoryMap assetId={assetId} />
               </div>
-              <p className="mt-2 text-sm text-slate-500">
-                Last assessed: {formatDate(latestAssessment.assessment_date)}
-              </p>
-            </>
-          ) : (
-            <>
-              <div className="text-3xl font-bold text-slate-500">-</div>
-              <p className="mt-2 text-sm text-slate-500">No assessment yet</p>
-            </>
-          )}
-        </div>
-      </div>
-
-      <div className="border-b border-slate-200 px-1">
-        <nav className="flex gap-1 overflow-x-auto">
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 border-b-2 px-3 py-2 text-xs font-medium transition-colors ${
-                  activeTab === tab.id
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-slate-500 hover:text-slate-900'
-                }`}
-              >
-                <Icon className="h-4 w-4" />
-                {tab.label}
-              </button>
-            );
-          })}
-        </nav>
-      </div>
-
-      <div className="rounded-lg border border-slate-200 bg-white p-4">
-        {activeTab === 'details' && (
-          <DetailsTab asset={asset} />
-        )}
-        {activeTab === 'compliance' && (
-          <RoomScanProvider>
-            <div className="space-y-4">
-              <HostApplicationsPanel assetId={assetId} />
-              <ComplianceTab asset={asset} />
-            </div>
-          </RoomScanProvider>
-        )}
-        {activeTab === 'controls' && (
-          <ControlsTab
-            asset={asset}
-            allControls={(allControls || []).map((c) => ({
-              id: c.id,
-              internal_id: c.control_id,
-              name: c.name,
-              category: c.category,
-            }))}
-            controlsLoading={controlsLoading}
-            onLinkControl={(controlId) => linkControlMutation.mutate({
-              internal_control_id: controlId,
-              coverage_status: 'partial',
-            })}
-            isLinkingControl={linkControlMutation.isPending}
-            onUnlinkInternalControl={(linkId) => unlinkInternalControlMutation.mutate(linkId)}
-            onUnlinkFrameworkControl={(linkId) => unlinkFrameworkControlMutation.mutate(linkId)}
-            isUnlinkingInternal={unlinkInternalControlMutation.isPending}
-            isUnlinkingFramework={unlinkFrameworkControlMutation.isPending}
-          />
-        )}
-        {activeTab === 'assessments' && (
-          <AssetAssessments assetId={assetId} onOpen={(fmt) => router.push(`/assessments/${assetAssessmentFramework(fmt)}`)} />
-        )}
-        {activeTab === 'evidence' && (
-          <EvidenceTab
-            asset={asset}
-            allEvidence={allEvidence || []}
-            evidenceLoading={evidenceLoading}
-            onLinkEvidence={(evidenceId) => linkEvidenceMutation.mutate({
-              evidence_id: evidenceId,
-              relationship_type: 'supports',
-            })}
-            isLinking={linkEvidenceMutation.isPending}
-            onUnlinkEvidence={(linkId) => unlinkEvidenceMutation.mutate(linkId)}
-            isUnlinking={unlinkEvidenceMutation.isPending}
-          />
-        )}
-        {activeTab === 'vulnerabilities' && (
-          <VulnerabilitiesTab
-            asset={asset}
-            allVulnerabilities={allVulnerabilities || []}
-            vulnsLoading={vulnsLoading}
-            onLinkVulnerability={(vulnId) => linkVulnerabilityMutation.mutate(vulnId)}
-            isLinking={linkVulnerabilityMutation.isPending}
-            onUnlinkVulnerability={(vulnId) => unlinkVulnerabilityMutation.mutate(vulnId)}
-            isUnlinking={unlinkVulnerabilityMutation.isPending}
-          />
-        )}
-        {activeTab === 'risks' && (
-          <div className="space-y-3">
-            {/* v2: surface Issues that have been raised against this asset
-                directly above the existing Risks list — gives the operator
-                a single "what's broken" view alongside risk scoring. */}
-            <RelatedIssuesPanel
-              sourceType="asset"
-              sourceId={assetId}
-              title="Linked Issues"
-              createFields={{
-                title: `Issue on ${asset.name}`,
-                category: 'operations',
-                issue_type: 'incident',
-              }}
-            />
-            <RisksTab asset={asset} />
+            )}
+            {activeTab === 'compliance' && (
+              <RoomScanProvider>
+                <div className="space-y-4">
+                  <HostApplicationsPanel assetId={assetId} />
+                  <ComplianceTab asset={asset} />
+                </div>
+              </RoomScanProvider>
+            )}
+            {activeTab === 'controls' && (
+              <ControlsTab
+                asset={asset}
+                allControls={(allControls || []).map((c) => ({
+                  id: c.id,
+                  internal_id: c.control_id,
+                  name: c.name,
+                  category: c.category,
+                }))}
+                controlsLoading={controlsLoading}
+                onLinkControl={(controlId) => linkControlMutation.mutate({
+                  internal_control_id: controlId,
+                  coverage_status: 'partial',
+                })}
+                isLinkingControl={linkControlMutation.isPending}
+                onUnlinkInternalControl={(linkId) => unlinkInternalControlMutation.mutate(linkId)}
+                onUnlinkFrameworkControl={(linkId) => unlinkFrameworkControlMutation.mutate(linkId)}
+                isUnlinkingInternal={unlinkInternalControlMutation.isPending}
+                isUnlinkingFramework={unlinkFrameworkControlMutation.isPending}
+              />
+            )}
+            {activeTab === 'evidence' && (
+              <EvidenceTab
+                asset={asset}
+                allEvidence={allEvidence || []}
+                evidenceLoading={evidenceLoading}
+                onLinkEvidence={(evidenceId) => linkEvidenceMutation.mutate({
+                  evidence_id: evidenceId,
+                  relationship_type: 'supports',
+                })}
+                isLinking={linkEvidenceMutation.isPending}
+                onUnlinkEvidence={(linkId) => unlinkEvidenceMutation.mutate(linkId)}
+                isUnlinking={unlinkEvidenceMutation.isPending}
+              />
+            )}
+            {activeTab === 'vulnerabilities' && (
+              <VulnerabilitiesTab
+                asset={asset}
+                allVulnerabilities={allVulnerabilities || []}
+                vulnsLoading={vulnsLoading}
+                onLinkVulnerability={(vulnId) => linkVulnerabilityMutation.mutate(vulnId)}
+                isLinking={linkVulnerabilityMutation.isPending}
+                onUnlinkVulnerability={(vulnId) => unlinkVulnerabilityMutation.mutate(vulnId)}
+                isUnlinking={unlinkVulnerabilityMutation.isPending}
+              />
+            )}
+            {activeTab === 'risks' && (
+              <div className="space-y-3">
+                {/* v2: surface Issues that have been raised against this asset
+                    directly above the existing Risks list — gives the operator
+                    a single "what's broken" view alongside risk scoring. */}
+                <RelatedIssuesPanel
+                  sourceType="asset"
+                  sourceId={assetId}
+                  title="Linked Issues"
+                  createFields={{
+                    title: `Issue on ${asset.name}`,
+                    category: 'operations',
+                    issue_type: 'incident',
+                  }}
+                />
+                <RisksTab asset={asset} />
+              </div>
+            )}
+            {activeTab === 'criticality' && (
+              <CriticalityAssessmentsTab assetId={assetId} />
+            )}
+            {activeTab === 'mapping-recommendations' && (
+              <MappingRecommendationsTab assetId={assetId} />
+            )}
           </div>
-        )}
-        {activeTab === 'criticality' && (
-          <CriticalityAssessmentsTab assetId={assetId} />
-        )}
-        {activeTab === 'trajectory' && (
-          <TrajectoryMap assetId={assetId} />
-        )}
-        {activeTab === 'mapping-recommendations' && (
-          <MappingRecommendationsTab assetId={assetId} />
-        )}
+        </div>
       </div>
 
       {showDeleteConfirm && (
@@ -938,6 +717,308 @@ export default function AssetDetailPage() {
         />
       )}
     </div>
+  );
+}
+
+// ── D1 left rail ─────────────────────────────────────────────────────────────
+// The single authoritative context card stack. Everything that used to live in
+// the page header + KPI band + the Details tab's identity cards now pins here
+// on the left so it never scrolls away while the operator works the right column.
+// Reuses the module-level ScoreBadge / StaleIndicator helpers unchanged.
+
+function RailStatRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-3 py-1.5">
+      <span className="text-xs text-slate-500">{label}</span>
+      <span className="text-sm font-medium text-slate-800 text-right">{children}</span>
+    </div>
+  );
+}
+
+function RailCIABar({ rating, label, tone }: { rating: number; label: string; tone: string }) {
+  const value = rating || 0;
+  return (
+    <div className="flex items-center gap-2">
+      <span className="w-24 text-xs text-slate-500">{label}</span>
+      <div className="flex gap-1">
+        {[1, 2, 3, 4, 5].map((i) => (
+          <div key={i} className={`h-3.5 w-5 rounded ${i <= value ? tone : 'bg-slate-200'}`} />
+        ))}
+      </div>
+      <span className="ml-auto text-xs text-slate-600">{value}/5</span>
+    </div>
+  );
+}
+
+function AssetContextRail({
+  asset,
+  displayName,
+  assetId,
+  coverage,
+  ipPeers,
+  latestAssessment,
+  canEdit,
+  canDelete,
+  onEdit,
+  onLifecycle,
+  onDelete,
+  onAssessRisk,
+  isAssessing,
+  getAssetIcon,
+  formatDate,
+}: {
+  asset: AssetDetailData;
+  displayName: string;
+  assetId: number;
+  coverage: { coverage_percentage?: number } | undefined;
+  ipPeers: {
+    composite?: {
+      effective_score?: number | null;
+      host_score?: number | null;
+      weakest?: { id: number; name: string; score: number } | null;
+    };
+    group?: Array<{ id: number; is_self: boolean; score?: number | null }>;
+  } | undefined;
+  latestAssessment: RiskAssessment | null;
+  canEdit: boolean;
+  canDelete: boolean;
+  onEdit: () => void;
+  onLifecycle: () => void;
+  onDelete: () => void;
+  onAssessRisk: () => void;
+  isAssessing: boolean;
+  getAssetIcon: (type: string) => React.ReactNode;
+  formatDate: (d: string) => string;
+}) {
+  const lifecycle = (asset.lifecycle_state || 'active').toLowerCase();
+  const lifecycleCls = LIFECYCLE_STYLES[lifecycle] || LIFECYCLE_STYLES.active;
+  const classificationCls = asset.data_classification
+    ? DATA_CLASSIFICATION_STYLES[asset.data_classification.toLowerCase()] || DATA_CLASSIFICATION_STYLES.internal
+    : null;
+
+  const coveragePct = coverage?.coverage_percentage ?? asset.coverage_percentage ?? 0;
+  const totalControls =
+    (asset.linked_controls?.length || 0) +
+    (asset.linked_internal_controls?.length || 0) +
+    (asset.linked_framework_controls?.length || 0);
+
+  // CIS composite — same resolution as the old KPI tile.
+  const composite = ipPeers?.composite;
+  const ownScore = ipPeers?.group?.find((g) => g.is_self)?.score;
+  const cisScore = composite?.effective_score ?? ownScore;
+  const cisColor = cisScore == null
+    ? 'text-slate-400'
+    : cisScore >= 80 ? 'text-emerald-700' : cisScore >= 60 ? 'text-amber-700' : 'text-rose-700';
+
+  const riskScore = latestAssessment?.risk_score ?? null;
+  const riskColor = riskScore == null
+    ? 'text-slate-400'
+    : riskScore >= 7 ? 'text-rose-700' : riskScore >= 4 ? 'text-amber-700' : 'text-emerald-700';
+
+  return (
+    <>
+      {/* Actions — top of the rail */}
+      <div className="cw-card flex flex-wrap items-center gap-2 rounded-xl p-3">
+        {canEdit && (
+          <button
+            onClick={onEdit}
+            className="flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-700 hover:bg-slate-50"
+            title="Edit Asset"
+          >
+            <Edit className="h-3.5 w-3.5" strokeWidth={1.75} /> Edit
+          </button>
+        )}
+        {canEdit && (
+          <button
+            onClick={onLifecycle}
+            className="flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-700 hover:bg-slate-50"
+            title="Change lifecycle state — decommissioning auto-closes linked vulns"
+          >
+            <TrendingUp className="h-3.5 w-3.5" strokeWidth={1.75} /> Lifecycle
+          </button>
+        )}
+        <button
+          onClick={onAssessRisk}
+          disabled={isAssessing}
+          className="flex items-center gap-1.5 rounded-md bg-primary-600 px-2.5 py-1.5 text-xs text-white hover:bg-primary-700 disabled:opacity-50"
+          title="Assess Risk"
+        >
+          {isAssessing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" strokeWidth={1.75} />}
+          Assess Risk
+        </button>
+        <CreateIssueButton
+          sourceType="asset"
+          sourceId={assetId}
+          presetFields={{
+            title: `Issue on ${asset.name}`,
+            category: 'operations',
+            issue_type: 'incident',
+          }}
+        />
+        {/* Spec cross-links: one click to CIS scan history + composite risk posture. */}
+        <Link
+          href={`/compliance-plugins/asset/${assetId}`}
+          className="flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-700 hover:bg-slate-50"
+          title="View this asset's CIS plugin runs (Plugin Automation → per-asset)"
+        >
+          <PackageSearch className="h-3.5 w-3.5" strokeWidth={1.75} /> CIS scans
+        </Link>
+        <Link
+          href={`/risk-posture/asset/${assetId}`}
+          className="flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-700 hover:bg-slate-50"
+          title="View this asset's composite risk posture (5-dimension breakdown)"
+        >
+          <Gauge className="h-3.5 w-3.5" strokeWidth={1.75} /> Risk posture
+        </Link>
+        {canDelete && (
+          <button
+            onClick={onDelete}
+            className="flex items-center gap-1.5 rounded-md border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-xs text-rose-600 hover:bg-rose-100"
+            title="Delete Asset"
+          >
+            <Trash2 className="h-3.5 w-3.5" strokeWidth={1.75} /> Delete
+          </button>
+        )}
+      </div>
+
+      {/* Identity + posture pills */}
+      <div className="cw-card rounded-xl p-4">
+        <div className="flex items-start gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-50 text-primary-600">
+            {getAssetIcon(asset.asset_type)}
+          </div>
+          <div className="min-w-0">
+            <h2 className="truncate text-base font-semibold text-slate-800">{displayName}</h2>
+            <p className="text-xs text-slate-500">{ASSET_TYPE_LABELS[asset.asset_type] || asset.asset_type}</p>
+          </div>
+        </div>
+        {asset.description && (
+          <p className="mt-2 text-xs leading-relaxed text-slate-600">{asset.description}</p>
+        )}
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium capitalize ${CRITICALITY_TONES[asset.criticality] || 'border-slate-200 bg-slate-50 text-slate-600'}`}>
+            {asset.criticality}
+          </span>
+          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium capitalize ${STATUS_TONES[asset.status] || 'border-slate-200 bg-slate-50 text-slate-600'}`}>
+            {asset.status}
+          </span>
+          {asset.internet_facing ? (
+            <span className="inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[11px] font-medium text-rose-700">
+              Internet-facing
+            </span>
+          ) : (
+            <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+              Internal only
+            </span>
+          )}
+          {asset.data_classification && classificationCls && (
+            <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium capitalize ${classificationCls}`}>
+              {asset.data_classification}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* CIA ratings */}
+      <div className="cw-card rounded-xl p-4">
+        <div className="mb-3 flex items-center gap-1.5 text-xs font-medium text-slate-500">
+          <Lock className="h-3.5 w-3.5" strokeWidth={1.75} /> CIA Ratings
+        </div>
+        <div className="space-y-2">
+          <RailCIABar rating={asset.confidentiality_rating || 0} label="Confidentiality" tone="bg-primary-500" />
+          <RailCIABar rating={asset.integrity_rating || 0} label="Integrity" tone="bg-emerald-500" />
+          <RailCIABar rating={asset.availability_rating || 0} label="Availability" tone="bg-amber-500" />
+        </div>
+      </div>
+
+      {/* Posture stats — Coverage / CIS composite / Risk score */}
+      <div className="cw-card rounded-xl p-4">
+        <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-slate-500">
+          <Target className="h-3.5 w-3.5" strokeWidth={1.75} /> Posture
+        </div>
+        <div className="divide-y divide-slate-100">
+          <RailStatRow label="Control coverage">
+            <span className="text-slate-800">{coveragePct}%</span>
+            <span className="ml-1 text-xs font-normal text-slate-400">· {totalControls} linked</span>
+          </RailStatRow>
+          <RailStatRow label="CIS composite">
+            {cisScore == null ? (
+              <span className="text-slate-400">Not scanned</span>
+            ) : (
+              <span className={cisColor}>{cisScore.toFixed(1)}%</span>
+            )}
+          </RailStatRow>
+          <RailStatRow label="Risk score">
+            {riskScore == null ? (
+              <span className="text-slate-400">No assessment</span>
+            ) : (
+              <span className={riskColor}>{riskScore.toFixed(1)}</span>
+            )}
+          </RailStatRow>
+          <RailStatRow label="Derived criticality">
+            <ScoreBadge score={asset.criticality_score} />
+          </RailStatRow>
+        </div>
+        {latestAssessment && (
+          <p className="mt-2 text-[11px] text-slate-400">
+            Last assessed {formatDate(latestAssessment.assessment_date)}
+          </p>
+        )}
+      </div>
+
+      {/* Ownership chain */}
+      <div className="cw-card rounded-xl p-4">
+        <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-slate-500">
+          <User className="h-3.5 w-3.5" strokeWidth={1.75} /> Ownership
+        </div>
+        <div className="divide-y divide-slate-100">
+          <RailStatRow label="Primary owner">
+            {asset.primary_owner_name || (asset.primary_owner_id ? `User #${asset.primary_owner_id}` : asset.owner_name) || <span className="text-slate-400 font-normal">Not assigned</span>}
+          </RailStatRow>
+          <RailStatRow label="Secondary owner">
+            {asset.secondary_owner_name || (asset.secondary_owner_id ? `User #${asset.secondary_owner_id}` : <span className="text-slate-400 font-normal">Not assigned</span>)}
+          </RailStatRow>
+          <RailStatRow label="Business owner">
+            {asset.business_owner_name || (asset.business_owner_id ? `User #${asset.business_owner_id}` : <span className="text-slate-400 font-normal">Not assigned</span>)}
+          </RailStatRow>
+          <RailStatRow label="Owning team">
+            {asset.owning_team || <span className="text-slate-400 font-normal">Not assigned</span>}
+          </RailStatRow>
+          <RailStatRow label="Escalation">
+            {asset.escalation_contact_name || (asset.escalation_contact_id ? `User #${asset.escalation_contact_id}` : <span className="text-slate-400 font-normal">Not assigned</span>)}
+          </RailStatRow>
+        </div>
+      </div>
+
+      {/* Lifecycle & operational context */}
+      <div className="cw-card rounded-xl p-4">
+        <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-slate-500">
+          <TrendingUp className="h-3.5 w-3.5" strokeWidth={1.75} /> Lifecycle & context
+        </div>
+        <div className="divide-y divide-slate-100">
+          <RailStatRow label="Lifecycle state">
+            <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium capitalize ${lifecycleCls}`}>
+              {asset.lifecycle_state || 'active'}
+            </span>
+          </RailStatRow>
+          <RailStatRow label="Data classification">
+            {asset.data_classification && classificationCls ? (
+              <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium capitalize ${classificationCls}`}>
+                {asset.data_classification}
+              </span>
+            ) : (
+              <span className="text-slate-400 font-normal">Not set</span>
+            )}
+          </RailStatRow>
+          <RailStatRow label="Network segment">
+            {asset.network_segment || <span className="text-slate-400 font-normal">Not set</span>}
+          </RailStatRow>
+          <RailStatRow label="Last observed">
+            <StaleIndicator lastSeenAt={asset.last_seen_at} />
+          </RailStatRow>
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -1063,13 +1144,13 @@ function EditAssetModal({
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
       {/*
         Layout: fixed-height column with sticky header + sticky footer.
         Body scrolls internally — the modal NEVER overflows the viewport,
         so the title and action buttons stay reachable on small screens.
       */}
-      <div className="w-full max-w-4xl flex flex-col max-h-[90vh] rounded-lg border border-slate-200 bg-white shadow-xl">
+      <div className="flex max-h-[92vh] w-full max-w-6xl flex-col rounded-xl border border-slate-200 bg-white shadow-lg">
         <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between flex-shrink-0">
           <h2 className="text-base font-semibold text-slate-900">Edit Asset</h2>
           <button onClick={onClose} className="text-slate-500 hover:text-slate-900">
@@ -1269,14 +1350,26 @@ function EditAssetModal({
               </div>
 
               <div className="md:col-span-2">
-                <label className="block text-xs font-medium text-slate-600">
-                  Compliance Scope <span className="text-slate-400">(comma-separated, e.g. PCI-DSS, HIPAA)</span>
-                </label>
-                <input
-                  value={form.compliance_scope_text}
-                  onChange={(e) => setForm({ ...form, compliance_scope_text: e.target.value })}
-                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
-                />
+                <label className="mb-1 block text-xs font-medium text-slate-600">Compliance Scope</label>
+                {(() => {
+                  const selected = form.compliance_scope_text.split(',').map((s) => s.trim()).filter(Boolean);
+                  const items = Array.from(new Set([...COMPLIANCE_FRAMEWORKS, ...selected])).map((f) => ({ value: f, label: f }));
+                  return (
+                    <MultiSelectDropdown
+                      title="Frameworks"
+                      items={items}
+                      selectedValues={selected}
+                      onApply={(vals) => setForm({ ...form, compliance_scope_text: vals.join(', ') })}
+                      multiSelect
+                      forceSearch
+                      triggerVariant="input"
+                      triggerClassName="w-full"
+                      placeholder="Select applicable frameworks…"
+                      searchPlaceholder="Search frameworks"
+                      size="md"
+                    />
+                  );
+                })()}
               </div>
             </div>
           </div>
@@ -1378,6 +1471,21 @@ function EditAssetModal({
 }
 
 // ── Phase 5 helpers ──────────────────────────────────────────────────────────
+
+// Shared light status-tone scale — one place for criticality / severity /
+// status pills so the whole page reads with one colour language.
+const CRITICALITY_TONES: Record<string, string> = {
+  critical: 'border-rose-200 bg-rose-50 text-rose-700',
+  high: 'border-orange-200 bg-orange-50 text-orange-700',
+  medium: 'border-amber-200 bg-amber-50 text-amber-700',
+  low: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+};
+
+const STATUS_TONES: Record<string, string> = {
+  active: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+  inactive: 'border-amber-200 bg-amber-50 text-amber-700',
+  decommissioned: 'border-slate-200 bg-slate-100 text-slate-600',
+};
 
 const LIFECYCLE_STYLES: Record<string, string> = {
   planned: 'border-slate-200 bg-slate-50 text-slate-600',
@@ -1728,7 +1836,7 @@ function ControlsTab({
   return (
     <div className="space-y-6">
       {/* Header card — coverage summary + Link Control CTA */}
-      <div className="rounded-xl border border-slate-200 bg-gradient-to-br from-blue-50 to-indigo-50 p-4">
+      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
             <h3 className="flex items-center gap-2 text-base font-semibold text-slate-900">
@@ -2158,7 +2266,7 @@ function RisksTab({ asset }: { asset: AssetDetailData }) {
                 </div>
               </div>
               <Link 
-                href={`/risks/${risk.risk_id}`}
+                href={`/erm/risks/${risk.risk_id}`}
                 className="text-sm text-blue-600 hover:underline"
               >
                 View Details
@@ -2358,33 +2466,10 @@ function MappingRecommendationsTab({ assetId }: { assetId: number }) {
         </div>
       )}
 
-      <div className="rounded-lg border border-slate-200 bg-white p-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-              <Sparkles className="h-4 w-4 text-amber-500" />
-              Auto-suggested framework controls
-            </h3>
-            <p className="mt-1 text-xs text-slate-600">
-              Scanned {data?.total_controls_scanned ?? 0} controls across {frameworkOptions.length} framework{frameworkOptions.length === 1 ? '' : 's'}.{' '}
-              {data?.total_already_linked ?? 0} already linked.
-            </p>
-          </div>
-          <div className="text-right text-xs text-slate-500">
-            <span className="rounded bg-slate-100 px-2 py-0.5">No LLM · regex-only</span>
-          </div>
-        </div>
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {profileChip('OS', profile.os_family)}
-          {profileChip('Type', profile.asset_type)}
-          {profileChip('Vendor', profile.vendor)}
-          {profileChip('Criticality', profile.criticality)}
-          {profile.internet_facing ? profileChip('Exposure', 'internet-facing') : null}
-          {profileChip('Segment', profile.network_segment)}
-          {profileChip('Data class', profile.data_classification)}
-          {profileChip('Business function', profile.business_function)}
-        </div>
-      </div>
+      <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+        <Sparkles className="h-4 w-4 text-amber-500" />
+        Auto-suggested framework controls
+      </h3>
 
       <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
         <div className="flex flex-wrap items-center gap-3">
@@ -2456,54 +2541,10 @@ function MappingRecommendationsTab({ assetId }: { assetId: number }) {
       </div>
 
       {recs.length === 0 ? (
-        (() => {
-          // Surface exactly which signal categories couldn't fire because the
-          // backing asset attribute is empty — so the operator sees a concrete
-          // checklist instead of generic advice.
-          const missing = PROFILE_FIELDS_FOR_SIGNALS.filter((f) => {
-            const v = profile[f.key];
-            return v == null || v === '' || (Array.isArray(v) && v.length === 0);
-          });
-          const allLinked = !!data?.total_already_linked
-            && (data?.total_controls_scanned ?? 0) > 0;
-          return (
-            <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 py-10 px-4 text-center">
-              <ShieldCheck className="mb-3 h-10 w-10 text-slate-400" />
-              <h4 className="text-base font-medium text-slate-900">No new recommendations</h4>
-              <p className="mt-1 text-sm text-slate-600 max-w-xl">
-                {allLinked
-                  ? 'All matched controls are already linked. Toggle "Include already-linked" above to see them.'
-                  : 'No framework controls scored above the current threshold. The matcher only fires signals when the asset has the relevant attribute set.'}
-              </p>
-              {!allLinked && missing.length > 0 && (
-                <div className="mt-4 w-full max-w-xl rounded-md border border-slate-200 bg-white p-3 text-left">
-                  <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                    Profile fields to fill in
-                  </div>
-                  <ul className="mt-2 space-y-1.5">
-                    {missing.map((f) => (
-                      <li key={f.key} className="flex items-start gap-2 text-xs">
-                        <span className="mt-0.5 inline-block h-1.5 w-1.5 flex-shrink-0 rounded-full bg-amber-400" />
-                        <div>
-                          <span className="font-medium text-slate-800">{f.label}</span>
-                          <span className="text-slate-600"> — unlocks {f.explain}</span>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                  <p className="mt-3 text-[11px] text-slate-500">
-                    Edit the asset from the Details tab to fill these in — every signal that fires adds its weight to the score.
-                  </p>
-                </div>
-              )}
-              {!allLinked && missing.length === 0 && (
-                <p className="mt-3 text-xs text-slate-500">
-                  Profile looks complete. Try lowering Min score, or check whether seeded frameworks contain controls relevant to this asset type.
-                </p>
-              )}
-            </div>
-          );
-        })()
+        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 py-10 px-4 text-center">
+          <ShieldCheck className="mb-3 h-10 w-10 text-slate-400" />
+          <h4 className="text-base font-medium text-slate-900">No recommendations</h4>
+        </div>
       ) : (
         (['high', 'medium', 'low'] as const).map((band) => {
           const list = groups[band];
@@ -3362,7 +3403,7 @@ function ComplianceTab({ asset }: { asset: AssetDetailData }) {
         const peers: any[] = selfIpPeersQ.data?.group ?? [];
         const hostInGroup = peers.find((g: any) => g.is_host_os && !g.is_self);
         return (
-          <div className="rounded-xl border border-purple-200 bg-gradient-to-br from-purple-50 to-indigo-50 p-4">
+          <div className="rounded-xl border border-purple-200 bg-purple-50 p-4">
             <div className="flex items-start gap-3">
               <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-purple-100 text-purple-700">
                 <Network className="h-4.5 w-4.5" />
@@ -3420,7 +3461,7 @@ function ComplianceTab({ asset }: { asset: AssetDetailData }) {
         );
       })()}
       {selfIpPeersQ.data && !selfIsConnected && !isBrowserAsset && (
-        <div className="rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 p-4">
+        <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
           <div className="flex items-start gap-3">
             <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-700">
               <Network className="h-4.5 w-4.5" />
@@ -3516,7 +3557,7 @@ function ComplianceTab({ asset }: { asset: AssetDetailData }) {
           </dl>
         </div>
 
-        <div className="rounded-lg border border-slate-200 bg-gradient-to-br from-indigo-50 to-blue-50 p-4">
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
           <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
             <ClipboardList className="h-4 w-4 text-indigo-600" /> Matched benchmark
           </h3>
@@ -3805,7 +3846,7 @@ function ComplianceTab({ asset }: { asset: AssetDetailData }) {
               </div>
               <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
                 <div
-                  className="h-full rounded-full bg-gradient-to-r from-blue-500 to-emerald-500 transition-all duration-300"
+                  className="h-full rounded-full bg-emerald-500 transition-all duration-300"
                   style={{ width: `${pct}%` }}
                 />
               </div>
@@ -3826,9 +3867,6 @@ function ComplianceTab({ asset }: { asset: AssetDetailData }) {
         fmtDuration={fmtDuration}
         formatTime={formatTime}
       />
-      <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-[11px] text-slate-600">
-        Compliverse onboards assets through the bank's CMDB API — we don't probe the network. Once an asset is here, the AI classifier above picks the right CIS rules and they execute automatically on the next agent tick (or scheduled cron).
-      </div>
     </div>
   );
 }
@@ -4120,7 +4158,7 @@ function ScanSessions({
                   <span className="ml-auto font-mono text-slate-600">Pass rate: <strong>{passRate}%</strong></span>
                 </div>
                 <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-                  <div className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400" style={{ width: passRate + '%' }} />
+                  <div className="h-full bg-emerald-500" style={{ width: passRate + '%' }} />
                 </div>
               </div>
             </button>

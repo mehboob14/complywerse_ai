@@ -32,7 +32,9 @@ import {
   Flame,
 } from 'lucide-react';
 
-const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#14b8a6'];
+// Categorical data-viz palette for the status/category charts — leads with the
+// teal brand color, remaining hues kept distinct so multiple series stay legible.
+const COLORS = ['#1ed4b0', '#10b981', '#f59e0b', '#f43f5e', '#0ea5e9', '#f97316', '#14b8a6', '#64748b'];
 
 export default function PortfolioDashboardPage() {
   const router = useRouter();
@@ -64,14 +66,14 @@ export default function PortfolioDashboardPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Loader2 className="animate-spin text-blue-600" size={32} />
+        <Loader2 className="animate-spin text-primary-600" size={32} />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="flex items-center gap-2 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+      <div className="flex items-center gap-2 p-4 bg-rose-50 border border-rose-200 rounded-lg text-rose-700">
         <AlertCircle size={16} /> Failed to load dashboard
       </div>
     );
@@ -100,7 +102,7 @@ export default function PortfolioDashboardPage() {
   return (
     <div className="space-y-4 sm:space-y-6 text-[var(--color-text)]">
       <div className="min-w-0">
-        <h1 className="text-lg sm:text-xl font-semibold text-black tracking-tight">Overview</h1>
+        <h1 className="text-lg sm:text-xl font-semibold text-slate-900 tracking-tight">Overview</h1>
         <p className="mt-1 text-sm text-slate-600">Executive overview of all information security projects</p>
       </div>
 
@@ -127,11 +129,11 @@ export default function PortfolioDashboardPage() {
           <p className="text-2xl font-bold text-amber-600">{healthCounts['At Risk']}</p>
         </div>
         <div className="cw-card p-4">
-          <div className="flex items-center gap-2 text-red-600 mb-2">
+          <div className="flex items-center gap-2 text-rose-600 mb-2">
             <Target size={16} />
             <span className="text-xs font-medium">Off Track</span>
           </div>
-          <p className="text-2xl font-bold text-red-600">{healthCounts['Off Track']}</p>
+          <p className="text-2xl font-bold text-rose-600">{healthCounts['Off Track']}</p>
         </div>
       </div>
 
@@ -198,7 +200,7 @@ export default function PortfolioDashboardPage() {
             <p className="text-3xl font-bold text-[var(--color-text)]">{budget.utilization}%</p>
             <p className="text-xs text-[var(--color-muted)] mt-1">of total budget used</p>
             <div className="cw-progress-track w-full rounded-full h-3 mt-4">
-              <div className={`h-3 rounded-full transition-all ${budget.utilization > 90 ? 'bg-red-500' : budget.utilization > 70 ? 'bg-amber-500' : 'bg-emerald-500'}`} style={{ width: `${Math.min(budget.utilization, 100)}%` }} />
+              <div className={`h-3 rounded-full transition-all ${budget.utilization > 90 ? 'bg-rose-500' : budget.utilization > 70 ? 'bg-amber-500' : 'bg-emerald-500'}`} style={{ width: `${Math.min(budget.utilization, 100)}%` }} />
             </div>
             <div className="flex justify-between mt-3 text-xs text-[var(--color-muted)]">
               <span>Actual: {formatCurrency(budget.total_actual)}</span>
@@ -223,8 +225,8 @@ export default function PortfolioDashboardPage() {
                   onClick={() => router.push(`/is-projects/${m.project_id}`)}
                   className="flex items-center gap-3 p-3 rounded-lg hover:bg-[var(--color-subtle)] cursor-pointer transition-colors"
                 >
-                  <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
-                    <Clock size={14} className="text-blue-600" />
+                  <div className="w-8 h-8 rounded-lg bg-primary-50 flex items-center justify-center flex-shrink-0">
+                    <Clock size={14} className="text-primary-600" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-[var(--color-text)] truncate">{m.name}</p>
@@ -238,7 +240,7 @@ export default function PortfolioDashboardPage() {
         </div>
 
         <div className="cw-card p-5">
-          <h3 className="text-sm font-semibold text-[var(--color-text)] mb-4 flex items-center gap-2 text-red-600">
+          <h3 className="text-sm font-semibold text-[var(--color-text)] mb-4 flex items-center gap-2 text-rose-600">
             <AlertTriangle size={16} /> Overdue Milestones
           </h3>
           {overdueMilestones.length === 0 ? (
@@ -249,16 +251,16 @@ export default function PortfolioDashboardPage() {
                 <div
                   key={m.id}
                   onClick={() => router.push(`/is-projects/${m.project_id}`)}
-                  className="flex items-center gap-3 p-3 rounded-lg hover:bg-red-50 cursor-pointer transition-colors border border-red-100"
+                  className="flex items-center gap-3 p-3 rounded-lg hover:bg-rose-50 cursor-pointer transition-colors border border-rose-100"
                 >
-                  <div className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center flex-shrink-0">
-                    <AlertTriangle size={14} className="text-red-600" />
+                  <div className="w-8 h-8 rounded-lg bg-rose-50 flex items-center justify-center flex-shrink-0">
+                    <AlertTriangle size={14} className="text-rose-600" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-[var(--color-text)] truncate">{m.name}</p>
                     <p className="text-xs text-[var(--color-muted)]">{m.project_name}</p>
                   </div>
-                  <span className="text-xs text-red-600 flex-shrink-0">Due {formatDate(m.target_date)}</span>
+                  <span className="text-xs text-rose-600 flex-shrink-0">Due {formatDate(m.target_date)}</span>
                 </div>
               ))}
             </div>
@@ -269,14 +271,14 @@ export default function PortfolioDashboardPage() {
       {enhanced && (
         <>
           <div className="cw-card p-5">
-            <h3 className="text-sm font-semibold text-[var(--color-text)] mb-4 flex items-center gap-2"><TrendingUp size={16} className="text-indigo-500" /> Project Health Trend</h3>
+            <h3 className="text-sm font-semibold text-[var(--color-text)] mb-4 flex items-center gap-2"><TrendingUp size={16} className="text-primary-600" /> Project Health Trend</h3>
             {(() => {
               const hd = (enhanced.health_distribution || {}) as Record<string, number>;
               const total = Object.values(hd).reduce((a: number, b: number) => a + b, 0) || 1;
               const healthColors: Record<string, { bar: string; bg: string; text: string }> = {
                 'On Track': { bar: 'bg-emerald-500', bg: 'bg-emerald-50', text: 'text-emerald-700' },
                 'At Risk': { bar: 'bg-amber-500', bg: 'bg-amber-50', text: 'text-amber-700' },
-                'Off Track': { bar: 'bg-red-500', bg: 'bg-red-50', text: 'text-red-700' },
+                'Off Track': { bar: 'bg-rose-500', bg: 'bg-rose-50', text: 'text-rose-700' },
               };
               const healthScore = Math.round(((hd['On Track'] || 0) / total) * 100);
               const trend = (healthTrend?.trend || []) as Array<{date: string; on_track: number; at_risk: number; off_track: number; total: number; health_score: number}>;
@@ -286,7 +288,7 @@ export default function PortfolioDashboardPage() {
                   <div>
                     <div className="flex items-center justify-between mb-3">
                       <span className="text-xs text-[var(--color-muted)]">Health Score</span>
-                      <span className={`text-2xl font-bold ${healthScore >= 70 ? 'text-emerald-600' : healthScore >= 40 ? 'text-amber-600' : 'text-red-600'}`}>{healthScore}%</span>
+                      <span className={`text-2xl font-bold ${healthScore >= 70 ? 'text-emerald-600' : healthScore >= 40 ? 'text-amber-600' : 'text-rose-600'}`}>{healthScore}%</span>
                     </div>
                     <div className="h-4 rounded-full overflow-hidden flex cw-progress-track">
                       {['On Track', 'At Risk', 'Off Track'].map(h => hd[h] ? (
@@ -318,7 +320,7 @@ export default function PortfolioDashboardPage() {
                                 <div className="w-full flex flex-col justify-end" style={{ height: '100%' }}>
                                   <div className="bg-emerald-500 rounded-t-sm" style={{ height: `${(point.on_track / maxTotal) * 100}%`, minHeight: point.on_track ? '2px' : '0' }} />
                                   <div className="bg-amber-500" style={{ height: `${(point.at_risk / maxTotal) * 100}%`, minHeight: point.at_risk ? '2px' : '0' }} />
-                                  <div className="bg-red-500 rounded-b-sm" style={{ height: `${(point.off_track / maxTotal) * 100}%`, minHeight: point.off_track ? '2px' : '0' }} />
+                                  <div className="bg-rose-500 rounded-b-sm" style={{ height: `${(point.off_track / maxTotal) * 100}%`, minHeight: point.off_track ? '2px' : '0' }} />
                                 </div>
                               </div>
                             );
@@ -333,7 +335,7 @@ export default function PortfolioDashboardPage() {
                     <div className="flex items-center gap-4 mt-4 text-xs text-[var(--color-muted)]">
                       <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 bg-emerald-500 rounded-sm inline-block" /> On Track</span>
                       <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 bg-amber-500 rounded-sm inline-block" /> At Risk</span>
-                      <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 bg-red-500 rounded-sm inline-block" /> Off Track</span>
+                      <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 bg-rose-500 rounded-sm inline-block" /> Off Track</span>
                     </div>
                   </div>
                 </div>
@@ -343,7 +345,7 @@ export default function PortfolioDashboardPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
             <div className="cw-card p-5">
-              <h3 className="text-sm font-semibold text-[var(--color-text)] mb-4 flex items-center gap-2"><Flame size={16} className="text-orange-500" /> Budget Burn Rate</h3>
+              <h3 className="text-sm font-semibold text-[var(--color-text)] mb-4 flex items-center gap-2"><Flame size={16} className="text-primary-600" /> Budget Burn Rate</h3>
               {(enhanced.budget_overview || []).length === 0 ? (
                 <p className="text-sm text-[var(--color-muted)] text-center py-6">No budget data</p>
               ) : (
@@ -352,10 +354,10 @@ export default function PortfolioDashboardPage() {
                     <div key={item.project_id} className="cursor-pointer hover:bg-[var(--color-subtle)] rounded-lg p-2 -mx-2 transition-colors" onClick={() => router.push(`/is-projects/${item.project_id}`)}>
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-xs text-[var(--color-text)] truncate flex-1">{item.project_name}</span>
-                        <span className={`text-xs font-medium ${item.burn_rate_pct > 100 ? 'text-red-600' : item.burn_rate_pct > 80 ? 'text-amber-600' : 'text-emerald-600'}`}>{item.burn_rate_pct}%</span>
+                        <span className={`text-xs font-medium ${item.burn_rate_pct > 100 ? 'text-rose-600' : item.burn_rate_pct > 80 ? 'text-amber-600' : 'text-emerald-600'}`}>{item.burn_rate_pct}%</span>
                       </div>
                       <div className="cw-progress-track w-full rounded-full h-1.5">
-                        <div className={`h-1.5 rounded-full transition-all ${item.burn_rate_pct > 100 ? 'bg-red-500' : item.burn_rate_pct > 80 ? 'bg-amber-500' : 'bg-emerald-500'}`} style={{ width: `${Math.min(item.burn_rate_pct, 100)}%` }} />
+                        <div className={`h-1.5 rounded-full transition-all ${item.burn_rate_pct > 100 ? 'bg-rose-500' : item.burn_rate_pct > 80 ? 'bg-amber-500' : 'bg-emerald-500'}`} style={{ width: `${Math.min(item.burn_rate_pct, 100)}%` }} />
                       </div>
                     </div>
                   ))}
@@ -364,7 +366,7 @@ export default function PortfolioDashboardPage() {
             </div>
 
             <div className="cw-card p-5">
-              <h3 className="text-sm font-semibold text-[var(--color-text)] mb-4 flex items-center gap-2"><Users size={16} className="text-indigo-500" /> Resource Utilization Heatmap</h3>
+              <h3 className="text-sm font-semibold text-[var(--color-text)] mb-4 flex items-center gap-2"><Users size={16} className="text-primary-600" /> Resource Utilization Heatmap</h3>
               {(enhanced.team_utilization || []).length === 0 ? (
                 <p className="text-sm text-[var(--color-muted)] text-center py-6">No team data</p>
               ) : (() => {
@@ -387,7 +389,7 @@ export default function PortfolioDashboardPage() {
                       <tbody>
                         {members.map(member => {
                           const loadPct = Math.min(member.total_projects * 25, 100);
-                          const loadColor = loadPct >= 100 ? 'bg-red-500' : loadPct >= 75 ? 'bg-amber-500' : loadPct >= 50 ? 'bg-blue-500' : 'bg-emerald-500';
+                          const loadColor = loadPct >= 100 ? 'bg-rose-500' : loadPct >= 75 ? 'bg-amber-500' : loadPct >= 50 ? 'bg-primary-500' : 'bg-emerald-500';
                           return (
                             <tr key={member.name} className="border-t border-[var(--color-border)]">
                               <td className="py-1.5 px-1 text-[var(--color-text)] font-medium truncate max-w-[100px] sticky left-0 bg-[var(--color-surface)]">{member.name}</td>
@@ -400,7 +402,7 @@ export default function PortfolioDashboardPage() {
                                         <span className="text-white text-[9px] font-bold">{assignment.role.charAt(0)}</span>
                                       </div>
                                     ) : (
-                                      <div className="w-6 h-6 mx-auto rounded bg-gray-100" />
+                                      <div className="w-6 h-6 mx-auto rounded bg-slate-100" />
                                     )}
                                   </td>
                                 );
@@ -420,9 +422,9 @@ export default function PortfolioDashboardPage() {
                     </table>
                     <div className="flex items-center gap-3 mt-3 text-[10px] text-[var(--color-muted)]">
                       <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 bg-emerald-500 rounded-sm" /> Low</span>
-                      <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 bg-blue-500 rounded-sm" /> Medium</span>
+                      <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 bg-primary-500 rounded-sm" /> Medium</span>
                       <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 bg-amber-500 rounded-sm" /> High</span>
-                      <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 bg-red-500 rounded-sm" /> Overloaded</span>
+                      <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 bg-rose-500 rounded-sm" /> Overloaded</span>
                     </div>
                   </div>
                 );
@@ -430,7 +432,7 @@ export default function PortfolioDashboardPage() {
             </div>
 
             <div className="cw-card p-5">
-              <h3 className="text-sm font-semibold text-[var(--color-text)] mb-4 flex items-center gap-2"><Shield size={16} className="text-blue-500" /> Regulatory Alignment Matrix</h3>
+              <h3 className="text-sm font-semibold text-[var(--color-text)] mb-4 flex items-center gap-2"><Shield size={16} className="text-primary-600" /> Regulatory Alignment Matrix</h3>
               {Object.keys(enhanced.framework_alignment || {}).length === 0 ? (
                 <p className="text-sm text-[var(--color-muted)] text-center py-6">No framework data</p>
               ) : (() => {
@@ -448,8 +450,8 @@ export default function PortfolioDashboardPage() {
                   const sl = s.toLowerCase();
                   if (sl.includes('compliant') || sl.includes('met') || sl.includes('complete')) return 'bg-emerald-500';
                   if (sl.includes('partial') || sl.includes('progress')) return 'bg-amber-400';
-                  if (sl.includes('gap') || sl.includes('non') || sl.includes('fail')) return 'bg-red-500';
-                  return 'bg-blue-400';
+                  if (sl.includes('gap') || sl.includes('non') || sl.includes('fail')) return 'bg-rose-500';
+                  return 'bg-primary-400';
                 };
                 return (
                   <div className="overflow-x-auto">
@@ -475,8 +477,8 @@ export default function PortfolioDashboardPage() {
                                     <span className="text-white text-[9px] font-bold">{info.frameworks[fw].charAt(0).toUpperCase()}</span>
                                   </div>
                                 ) : (
-                                  <div className="w-6 h-6 mx-auto rounded bg-gray-100 flex items-center justify-center">
-                                    <span className="text-gray-400 text-[9px]">—</span>
+                                  <div className="w-6 h-6 mx-auto rounded bg-slate-100 flex items-center justify-center">
+                                    <span className="text-slate-400 text-[9px]">—</span>
                                   </div>
                                 )}
                               </td>
@@ -488,8 +490,8 @@ export default function PortfolioDashboardPage() {
                     <div className="flex items-center gap-3 mt-3 text-[10px] text-[var(--color-muted)]">
                       <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 bg-emerald-500 rounded-sm" /> Compliant</span>
                       <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 bg-amber-400 rounded-sm" /> Partial</span>
-                      <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 bg-red-500 rounded-sm" /> Gap</span>
-                      <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 bg-blue-400 rounded-sm" /> Mapped</span>
+                      <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 bg-rose-500 rounded-sm" /> Gap</span>
+                      <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 bg-primary-400 rounded-sm" /> Mapped</span>
                     </div>
                   </div>
                 );

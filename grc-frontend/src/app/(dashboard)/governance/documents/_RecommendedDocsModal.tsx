@@ -2,14 +2,18 @@
 
 // DocumentTemplatesModal (file kept for back-compat — was RecommendedDocsModal)
 // ─────────────────────────────────────────────────────────────────────────
-// Three-tab picker for seeding a new governance document:
+// Source-rail + gallery picker for seeding a new governance document:
 //   1. Standard Templates — the curated RECOMMENDED_DOCS catalogue
 //   2. NCA Templates      — the on-disk NCA Saudi document templates
-//   3. Artifact Templates — per-framework compliance artifact catalogue
+//   3. Reference Laws     — authoritative laws to AI-draft from
+//   4. Artifact Templates — per-framework compliance artifact catalogue
 //
-// Every tab funnels its pick through a single `onPick` so the parent page
+// Every source funnels its pick through a single `onPick` so the parent page
 // (governance/documents) only has to wire ONE handler. The pick discriminates
 // on `.kind` so the parent can decide how to seed the AI Draft modal.
+//
+// Presentation follows the platform charter: one teal brand (primary-*),
+// flat (no gradients), hairline slate borders, semantic-only status chips.
 
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -63,14 +67,20 @@ interface LegacyProps {
   onPickAny?: (pick: DocumentTemplatePick) => void;
 }
 
-// ─── Tab definitions ────────────────────────────────────────────────────
+// ─── Source (rail) definitions ──────────────────────────────────────────
 type TabKey = 'standard' | 'nca' | 'laws' | 'artifacts';
 
-const TABS: Array<{ key: TabKey; label: string; icon: typeof BookMarked; hint: string }> = [
-  { key: 'standard', label: 'Standard Templates', icon: BookMarked, hint: 'Pre-curated GRC artefacts.' },
-  { key: 'nca', label: 'NCA Templates', icon: FileText, hint: 'NCA Saudi reference documents.' },
-  { key: 'laws', label: 'Reference Laws', icon: Scale, hint: 'Laws & regulations to draft from.' },
-  { key: 'artifacts', label: 'Artifact Templates', icon: Layers, hint: 'Compliance framework artifacts.' },
+const TABS: Array<{
+  key: TabKey;
+  label: string;
+  railLabel: string;
+  icon: typeof BookMarked;
+  action: 'editor' | 'ai';
+}> = [
+  { key: 'standard', label: 'Standard Templates', railLabel: 'Standard', icon: BookMarked, action: 'editor' },
+  { key: 'nca', label: 'NCA Templates', railLabel: 'NCA Saudi', icon: FileText, action: 'editor' },
+  { key: 'laws', label: 'Reference Laws', railLabel: 'Reference Laws', icon: Scale, action: 'ai' },
+  { key: 'artifacts', label: 'Artifact Templates', railLabel: 'Artifact Templates', icon: Layers, action: 'editor' },
 ];
 
 // ─── Shared types ───────────────────────────────────────────────────────
@@ -115,16 +125,9 @@ interface ArtifactItem {
   content_format?: string | null;
 }
 
-const DOC_TYPE_BADGE: Record<string, string> = {
-  policy: 'bg-rose-50 text-rose-700 border-rose-200',
-  standard: 'bg-blue-50 text-blue-700 border-blue-200',
-  procedure: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  guideline: 'bg-amber-50 text-amber-700 border-amber-200',
-  program: 'bg-violet-50 text-violet-700 border-violet-200',
-  checklist: 'bg-slate-50 text-slate-700 border-slate-200',
-  form: 'bg-gray-50 text-gray-700 border-gray-200',
-  report: 'bg-cyan-50 text-cyan-700 border-cyan-200',
-};
+// Charter: document type is neutral categorical metadata — one slate token,
+// not a rainbow. Semantic colour is reserved for real status (Ready / Mandatory).
+const DOC_TYPE_BADGE = 'bg-slate-100 text-slate-600 border-slate-200';
 
 // Map NCA template category / artifact_type → AI-draft modal's doc_type
 // (which only accepts policy | standard | procedure | guideline).
@@ -163,38 +166,44 @@ export default function RecommendedDocsModal({ onClose, onPick, onPickAny }: Leg
     if (pick.kind === 'recommended') onPick(pick.doc);
   };
 
+  const activeLabel = TABS.find((t) => t.key === activeTab)?.label ?? 'templates';
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-3 sm:p-6">
-      <div className="w-full max-w-6xl max-h-[92vh] overflow-hidden rounded-2xl bg-white shadow-2xl flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-3 sm:p-6 animate-fade-in">
+      <div className="flex w-full max-w-5xl max-h-[94vh] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
         {/* Header */}
-        <div className="border-b border-gray-200 bg-gradient-to-r from-indigo-50 via-violet-50 to-blue-50 px-6 py-4 flex items-start gap-4">
-          <div className="hidden sm:flex h-11 w-11 items-center justify-center rounded-xl bg-white shadow-sm">
-            <BookMarked className="h-5 w-5 text-indigo-600" />
+        <div className="flex items-start gap-3.5 border-b border-slate-200 px-5 py-4">
+          <div className="hidden sm:flex h-11 w-11 items-center justify-center rounded-xl bg-primary-50 shrink-0">
+            <BookMarked className="h-5 w-5 text-primary-700" strokeWidth={1.75} />
           </div>
           <div className="flex-1 min-w-0">
-            <h2 className="text-base sm:text-lg font-semibold text-gray-900 flex items-center gap-2">
+            <h2 className="text-base sm:text-lg font-semibold text-slate-900 flex items-center gap-2">
               Document Templates
-              <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700">
+              <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-primary-50 text-primary-700">
                 <Sparkles className="h-3 w-3" />
                 AI-ready
               </span>
             </h2>
-            <p className="mt-0.5 text-xs sm:text-sm text-gray-600 max-w-2xl">
+            <p className="mt-0.5 text-xs sm:text-sm text-slate-500 max-w-2xl">
               Standard, NCA Saudi and per-framework artifact templates open in the editor ready to edit and save; reference laws open the AI Draft flow.
             </p>
           </div>
           <button
             onClick={onClose}
-            className="rounded-lg p-1 text-gray-500 hover:bg-white/60 hover:text-gray-900"
+            className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 shrink-0"
             aria-label="Close"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        {/* Tab nav */}
-        <div className="border-b border-gray-200 bg-white px-4 sm:px-6">
-          <nav className="flex gap-1 overflow-x-auto">
+        {/* Split — source rail + gallery */}
+        <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
+          {/* Source rail */}
+          <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-slate-200 bg-slate-50 p-2 sm:w-[210px] sm:flex-col sm:gap-0.5 sm:overflow-x-visible sm:overflow-y-auto sm:border-b-0 sm:border-r sm:p-3">
+            <p className="hidden sm:block px-2 pb-2 pt-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+              Template source
+            </p>
             {TABS.map((tab) => {
               const Icon = tab.icon;
               const active = activeTab === tab.key;
@@ -203,63 +212,81 @@ export default function RecommendedDocsModal({ onClose, onPick, onPickAny }: Leg
                   key={tab.key}
                   type="button"
                   onClick={() => { setActiveTab(tab.key); setSearch(''); }}
-                  className={`relative inline-flex items-center gap-1.5 whitespace-nowrap px-3 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-                    active
-                      ? 'border-indigo-600 text-indigo-700'
-                      : 'border-transparent text-gray-500 hover:text-gray-800'
+                  className={`flex shrink-0 items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors min-w-[150px] sm:w-full sm:min-w-0 sm:shrink ${
+                    active ? 'bg-white shadow-sm ring-1 ring-primary-200' : 'hover:bg-white'
                   }`}
                 >
-                  <Icon className="h-4 w-4" />
-                  {tab.label}
+                  <span
+                    className={`flex h-8 w-8 items-center justify-center rounded-lg shrink-0 ${
+                      active ? 'bg-primary-50 text-primary-700' : 'bg-slate-100 text-slate-500'
+                    }`}
+                  >
+                    <Icon className="h-4 w-4" strokeWidth={1.75} />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className={`block truncate text-[13px] font-semibold ${active ? 'text-primary-700' : 'text-slate-800'}`}>
+                      {tab.railLabel}
+                    </span>
+                    <span
+                      className={`mt-0.5 inline-flex items-center gap-0.5 rounded px-1 text-[9px] font-semibold uppercase tracking-wide ${
+                        tab.action === 'ai' ? 'bg-primary-50 text-primary-700' : 'bg-slate-100 text-slate-500'
+                      }`}
+                    >
+                      {tab.action === 'ai' ? <><Sparkles className="h-2.5 w-2.5" />AI Draft</> : 'Editor'}
+                    </span>
+                  </span>
                 </button>
               );
             })}
-          </nav>
-        </div>
+          </div>
 
-        {/* Search row */}
-        <div className="px-4 sm:px-6 py-2.5 border-b border-gray-100 bg-white">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder={`Search ${TABS.find((t) => t.key === activeTab)?.label.toLowerCase()}…`}
-              className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-gray-300 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-              autoFocus
-            />
+          {/* Main column */}
+          <div className="flex min-w-0 flex-1 flex-col">
+            {/* Search */}
+            <div className="px-4 sm:px-5 py-2.5 border-b border-slate-100 bg-white">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder={`Search ${activeLabel.toLowerCase()}…`}
+                  className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-slate-300 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            {/* Body */}
+            <div className="overflow-y-auto px-4 sm:px-5 py-4 flex-1 bg-slate-50">
+              {activeTab === 'standard' && (
+                <StandardTab search={search} onPick={(doc) => emit({ kind: 'recommended', doc })} />
+              )}
+              {activeTab === 'nca' && (
+                <NcaTab search={search} onPick={(template) => emit({ kind: 'nca', template })} />
+              )}
+              {activeTab === 'laws' && (
+                <ReferenceLawsTab search={search} onPick={(law) => emit({ kind: 'reference-law', law })} />
+              )}
+              {activeTab === 'artifacts' && (
+                <ArtifactsTab
+                  search={search}
+                  onPick={(item, frameworkName) => emit({ kind: 'artifact', item, frameworkName })}
+                />
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Body */}
-        <div className="overflow-y-auto px-4 sm:px-6 py-4 flex-1">
-          {activeTab === 'standard' && (
-            <StandardTab search={search} onPick={(doc) => emit({ kind: 'recommended', doc })} />
-          )}
-          {activeTab === 'nca' && (
-            <NcaTab search={search} onPick={(template) => emit({ kind: 'nca', template })} />
-          )}
-          {activeTab === 'laws' && (
-            <ReferenceLawsTab search={search} onPick={(law) => emit({ kind: 'reference-law', law })} />
-          )}
-          {activeTab === 'artifacts' && (
-            <ArtifactsTab
-              search={search}
-              onPick={(item, frameworkName) => emit({ kind: 'artifact', item, frameworkName })}
-            />
-          )}
-        </div>
-
         {/* Footer */}
-        <div className="border-t border-gray-200 px-6 py-3 bg-gray-50 flex items-center justify-between gap-3">
-          <p className="text-[11px] text-gray-500">
-            Standard, NCA and artifact templates open in the editor ready to edit and save; reference laws open the AI Draft modal.
+        <div className="border-t border-slate-200 px-5 py-3 bg-white flex items-center justify-between gap-3">
+          <p className="text-[11px] text-slate-400">
+            Editor sources open ready to edit &amp; save; reference laws open the AI Draft modal.
           </p>
           <button
             type="button"
             onClick={onClose}
-            className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-100"
+            className="px-3.5 py-1.5 text-sm rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 font-medium"
           >
             Cancel
           </button>
@@ -306,12 +333,14 @@ function StandardTab({ search, onPick }: { search: string; onPick: (doc: Recomme
 
   return (
     <div>
-      <div className="mb-3 flex items-center gap-1.5 overflow-x-auto pb-1">
+      <div className="mb-4 flex items-center gap-1.5 overflow-x-auto pb-1">
         <button
           type="button"
           onClick={() => setActiveCategory(ALL)}
           className={`whitespace-nowrap px-2.5 py-1 text-xs font-medium rounded-full border transition-colors ${
-            activeCategory === ALL ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+            activeCategory === ALL
+              ? 'bg-primary-50 text-primary-700 border-primary-200'
+              : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
           }`}
         >
           All ({RECOMMENDED_DOCS.length})
@@ -322,7 +351,9 @@ function StandardTab({ search, onPick }: { search: string; onPick: (doc: Recomme
             type="button"
             onClick={() => setActiveCategory(c.id)}
             className={`whitespace-nowrap px-2.5 py-1 text-xs font-medium rounded-full border transition-colors ${
-              activeCategory === c.id ? 'bg-indigo-600 text-white border-indigo-600' : `${c.tint} hover:opacity-80`
+              activeCategory === c.id
+                ? 'bg-primary-50 text-primary-700 border-primary-200'
+                : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
             }`}
           >
             {c.id} ({countByCategory.get(c.id) ?? 0})
@@ -334,53 +365,50 @@ function StandardTab({ search, onPick }: { search: string; onPick: (doc: Recomme
         <EmptyState message="No documents match your search." />
       ) : (
         <div className="space-y-5">
-          {Array.from(groupedByCategory.entries()).map(([cat, docs]) => {
-            const tint = RECOMMENDED_CATEGORIES.find((c) => c.id === cat)?.tint ?? 'bg-gray-50 text-gray-700 border-gray-200';
-            return (
-              <section key={cat}>
-                <div className="flex items-center gap-2 mb-2">
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border ${tint}`}>
-                    {cat}
-                  </span>
-                  <span className="text-xs text-gray-400">{docs.length}</span>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {docs.map((d) => {
-                    const Icon = d.icon;
-                    return (
-                      <button
-                        key={d.title}
-                        type="button"
-                        onClick={() => onPick(d)}
-                        className="group relative flex flex-col text-left rounded-xl border border-gray-200 bg-white p-4 hover:border-indigo-400 hover:shadow-md transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      >
-                        <div className="flex items-start gap-3">
-                          <div className={`shrink-0 rounded-lg p-2 ${tint}`}>
-                            <Icon className="h-5 w-5" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <h3 className="text-sm font-semibold text-gray-900 group-hover:text-indigo-700 leading-snug">
-                              {d.title}
-                            </h3>
-                            <p className="mt-0.5 text-xs text-gray-500 line-clamp-2">{d.blurb}</p>
-                          </div>
+          {Array.from(groupedByCategory.entries()).map(([cat, docs]) => (
+            <section key={cat}>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-600">
+                  {cat}
+                </span>
+                <span className="text-xs text-slate-400">{docs.length}</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {docs.map((d) => {
+                  const Icon = d.icon;
+                  return (
+                    <button
+                      key={d.title}
+                      type="button"
+                      onClick={() => onPick(d)}
+                      className="group relative flex flex-col text-left rounded-xl border border-slate-200 bg-white p-4 hover:border-primary-300 hover:shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="shrink-0 rounded-lg p-2 bg-slate-50 border border-slate-200 text-slate-500">
+                          <Icon className="h-5 w-5" strokeWidth={1.75} />
                         </div>
-                        <div className="mt-3 flex items-center justify-between gap-2">
-                          <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium uppercase tracking-wide border ${DOC_TYPE_BADGE[d.doc_type] ?? 'bg-gray-50 text-gray-700 border-gray-200'}`}>
-                            {d.doc_type}
-                          </span>
-                          <span className="text-[10px] text-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity inline-flex items-center gap-1">
-                            <Sparkles className="h-3 w-3" />
-                            Pre-fill AI draft
-                          </span>
+                        <div className="min-w-0 flex-1">
+                          <h3 className="text-sm font-semibold text-slate-900 group-hover:text-primary-700 leading-snug">
+                            {d.title}
+                          </h3>
+                          <p className="mt-0.5 text-xs text-slate-500 line-clamp-2">{d.blurb}</p>
                         </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </section>
-            );
-          })}
+                      </div>
+                      <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium uppercase tracking-wide border ${DOC_TYPE_BADGE}`}>
+                          {d.doc_type}
+                        </span>
+                        <span className="text-[10px] font-medium text-slate-400 group-hover:text-primary-700 inline-flex items-center gap-1 transition-colors">
+                          Opens in editor
+                          <ChevronRight className="h-3 w-3" />
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          ))}
         </div>
       )}
     </div>
@@ -427,7 +455,7 @@ function NcaTab({ search, onPick }: { search: string; onPick: (template: NcaTemp
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-16">
-        <Loader2 className="h-6 w-6 animate-spin text-indigo-500" />
+        <Loader2 className="h-6 w-6 animate-spin text-primary-500" />
       </div>
     );
   }
@@ -445,32 +473,34 @@ function NcaTab({ search, onPick }: { search: string; onPick: (template: NcaTemp
   return (
     <>
       <div className="space-y-5">
-        <p className="text-[11px] text-gray-500">
+        <p className="text-[11px] text-slate-500">
           {data.total} reference documents from the NCA Saudi catalogue. Preview opens a full rendered view — headings, tables, and lists are styled exactly like the document viewer.
         </p>
         {Array.from(groupedByCategory.entries()).map(([cat, items]) => (
           <section key={cat}>
             <div className="flex items-center gap-2 mb-2">
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border bg-blue-50 text-blue-700 border-blue-200">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-600">
                 {cat}
               </span>
-              <span className="text-xs text-gray-400">{items.length}</span>
+              <span className="text-xs text-slate-400">{items.length}</span>
             </div>
             <div className="space-y-1.5">
               {items.map((t) => (
                 <div
                   key={t.id}
-                  className="rounded-lg border border-gray-200 bg-white overflow-hidden flex items-center gap-3 p-3 hover:bg-gray-50"
+                  className="rounded-lg border border-slate-200 bg-white overflow-hidden flex items-center gap-3 p-3 hover:bg-slate-50"
                 >
-                  <FileText className="h-4 w-4 text-blue-600 shrink-0" />
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-50 border border-slate-200 text-slate-500 shrink-0">
+                    <FileText className="h-4 w-4" strokeWidth={1.75} />
+                  </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-gray-900 truncate">{t.title}</p>
-                    <p className="text-[11px] text-gray-500 truncate">{t.filename}</p>
+                    <p className="text-sm font-medium text-slate-900 truncate">{t.title}</p>
+                    <p className="text-[11px] text-slate-400 truncate">{t.filename}</p>
                   </div>
                   <button
                     type="button"
                     onClick={() => setPreviewTemplate(t)}
-                    className="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-white px-2 py-1 text-[11px] font-medium text-gray-700 hover:bg-gray-50"
+                    className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-600 hover:bg-slate-50"
                   >
                     <Eye className="h-3 w-3" />
                     Preview
@@ -485,10 +515,10 @@ function NcaTab({ search, onPick }: { search: string; onPick: (template: NcaTemp
                       });
                       onPick(t);
                     }}
-                    className="inline-flex items-center gap-1 rounded-md border border-indigo-200 bg-indigo-50 px-2 py-1 text-[11px] font-medium text-indigo-700 hover:bg-indigo-100"
+                    className="inline-flex items-center gap-1 rounded-md border border-primary-200 bg-primary-50 px-2 py-1 text-[11px] font-medium text-primary-700 hover:bg-primary-100"
                   >
                     <FileText className="h-3 w-3" />
-                    Use &amp; edit
+                    Use template
                   </button>
                 </div>
               ))}
@@ -535,26 +565,26 @@ function NcaPreviewPopup({
   });
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 sm:p-6">
-      <div className="w-full max-w-5xl max-h-[94vh] overflow-hidden rounded-2xl bg-white shadow-2xl flex flex-col">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-3 sm:p-6 animate-fade-in">
+      <div className="w-full max-w-5xl max-h-[94vh] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl flex flex-col">
         {/* Header */}
-        <div className="border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50 px-5 py-3 flex items-start gap-3">
-          <div className="hidden sm:flex h-10 w-10 items-center justify-center rounded-xl bg-white shadow-sm shrink-0">
-            <FileText className="h-5 w-5 text-blue-600" />
+        <div className="border-b border-slate-200 px-5 py-3.5 flex items-start gap-3">
+          <div className="hidden sm:flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50 shrink-0">
+            <FileText className="h-5 w-5 text-primary-700" strokeWidth={1.75} />
           </div>
           <div className="flex-1 min-w-0">
-            <h2 className="text-sm sm:text-base font-semibold text-gray-900 truncate" title={template.title}>
+            <h2 className="text-sm sm:text-base font-semibold text-slate-900 truncate" title={template.title}>
               {template.title}
             </h2>
-            <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-gray-600">
-              <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
+            <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 font-medium">
                 {template.category}
               </span>
-              <span className="text-gray-400">·</span>
+              <span className="text-slate-300">·</span>
               <span className="truncate">{template.filename}</span>
               {data && (
                 <>
-                  <span className="text-gray-400">·</span>
+                  <span className="text-slate-300">·</span>
                   <span>{data.word_count.toLocaleString()} words</span>
                 </>
               )}
@@ -562,7 +592,7 @@ function NcaPreviewPopup({
           </div>
           <a
             href={`/api/governance/nca-templates/${template.id}/download`}
-            className="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-white px-2 py-1 text-[11px] font-medium text-gray-700 hover:bg-gray-50 shrink-0"
+            className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-600 hover:bg-slate-50 shrink-0"
             title="Download the original .docx / .xlsx"
             target="_blank"
             rel="noopener noreferrer"
@@ -573,14 +603,14 @@ function NcaPreviewPopup({
           <button
             type="button"
             onClick={() => onDraft(template)}
-            className="inline-flex items-center gap-1 rounded-md border border-indigo-200 bg-indigo-50 px-2 py-1 text-[11px] font-medium text-indigo-700 hover:bg-indigo-100 shrink-0"
+            className="inline-flex items-center gap-1 rounded-md border border-primary-200 bg-primary-50 px-2 py-1 text-[11px] font-medium text-primary-700 hover:bg-primary-100 shrink-0"
           >
             <FileText className="h-3 w-3" />
-            Use &amp; edit
+            Use template
           </button>
           <button
             onClick={onClose}
-            className="rounded-lg p-1 text-gray-500 hover:bg-white/60 hover:text-gray-900 shrink-0"
+            className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 shrink-0"
             aria-label="Close preview"
           >
             <X className="h-5 w-5" />
@@ -591,7 +621,7 @@ function NcaPreviewPopup({
         <div className="overflow-y-auto px-5 sm:px-8 py-5 flex-1 bg-white">
           {isLoading ? (
             <div className="flex items-center justify-center py-20">
-              <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
+              <Loader2 className="h-6 w-6 animate-spin text-primary-500" />
             </div>
           ) : error || !data ? (
             <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 flex items-center gap-2">
@@ -599,7 +629,7 @@ function NcaPreviewPopup({
               Failed to load template content.
             </div>
           ) : !data.content?.trim() ? (
-            <p className="text-sm text-gray-500">This template is empty.</p>
+            <p className="text-sm text-slate-500">This template is empty.</p>
           ) : (
             // Render via the shared component so headings, tables, lists,
             // and AI-distortion repairs all match the regular document
@@ -609,12 +639,12 @@ function NcaPreviewPopup({
         </div>
 
         {/* Footer */}
-        <div className="border-t border-gray-200 bg-gray-50 px-5 py-2.5 flex items-center justify-between text-[11px] text-gray-500">
+        <div className="border-t border-slate-200 bg-white px-5 py-2.5 flex items-center justify-between text-[11px] text-slate-500">
           <span>Source: NCA Saudi reference catalogue.</span>
           <button
             type="button"
             onClick={onClose}
-            className="px-3 py-1 rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-100"
+            className="px-3 py-1 rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
           >
             Close
           </button>
@@ -655,7 +685,7 @@ function ReferenceLawsTab({ search, onPick }: { search: string; onPick: (law: Re
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-16">
-        <Loader2 className="h-6 w-6 animate-spin text-indigo-500" />
+        <Loader2 className="h-6 w-6 animate-spin text-primary-500" />
       </div>
     );
   }
@@ -674,7 +704,7 @@ function ReferenceLawsTab({ search, onPick }: { search: string; onPick: (law: Re
   return (
     <>
       <div className="space-y-3">
-        <p className="text-[11px] text-gray-500">
+        <p className="text-[11px] text-slate-500">
           {data.total} authoritative law{data.total === 1 ? '' : 's'} / regulation{data.total === 1 ? '' : 's'}. Drafting generates a
           new tenant-specific document (policy, charter, procedure…) that complies with — and cites — the law&apos;s articles.
         </p>
@@ -682,15 +712,15 @@ function ReferenceLawsTab({ search, onPick }: { search: string; onPick: (law: Re
           {filtered.map((law) => (
             <div
               key={law.id}
-              className="relative flex flex-col rounded-xl border border-gray-200 bg-white p-4 transition-all hover:border-indigo-400 hover:shadow-md"
+              className="relative flex flex-col rounded-xl border border-slate-200 bg-white p-4 transition-all hover:border-primary-300 hover:shadow-sm"
             >
               <div className="flex items-start gap-3">
-                <div className="shrink-0 rounded-lg p-2 bg-indigo-50 text-indigo-700 border border-indigo-200">
-                  <Scale className="h-5 w-5" />
+                <div className="shrink-0 rounded-lg p-2 bg-primary-50 text-primary-700 border border-primary-100">
+                  <Scale className="h-5 w-5" strokeWidth={1.75} />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <h3 className="text-sm font-semibold text-gray-900 leading-snug">{law.name}</h3>
-                  <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-gray-600">
+                  <h3 className="text-sm font-semibold text-slate-900 leading-snug">{law.name}</h3>
+                  <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
                     {law.jurisdiction && (
                       <span className="inline-flex items-center gap-1">
                         <Globe className="h-3 w-3" /> {law.jurisdiction}
@@ -698,7 +728,7 @@ function ReferenceLawsTab({ search, onPick }: { search: string; onPick: (law: Re
                     )}
                     {law.authority && (
                       <>
-                        <span className="text-gray-300">·</span>
+                        <span className="text-slate-300">·</span>
                         <span className="inline-flex items-center gap-1">
                           <Building2 className="h-3 w-3" /> {law.authority}
                         </span>
@@ -706,14 +736,14 @@ function ReferenceLawsTab({ search, onPick }: { search: string; onPick: (law: Re
                     )}
                   </div>
                   {law.description && (
-                    <p className="mt-1.5 text-[12px] leading-relaxed text-gray-700 line-clamp-3">{law.description}</p>
+                    <p className="mt-1.5 text-[12px] leading-relaxed text-slate-600 line-clamp-3">{law.description}</p>
                   )}
                 </div>
               </div>
 
               <div className="mt-3 flex flex-wrap items-center gap-1.5">
                 {typeof law.article_count === 'number' && law.article_count > 0 && (
-                  <span className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium bg-slate-50 text-slate-700 border-slate-200">
+                  <span className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium bg-slate-100 text-slate-600 border-slate-200">
                     <Hash className="h-2.5 w-2.5" /> {law.article_count} articles
                   </span>
                 )}
@@ -723,17 +753,17 @@ function ReferenceLawsTab({ search, onPick }: { search: string; onPick: (law: Re
                   </span>
                 )}
                 {(law.tags || []).slice(0, 3).map((t) => (
-                  <span key={t} className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium bg-indigo-50 text-indigo-700 border-indigo-200">
+                  <span key={t} className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium bg-slate-100 text-slate-600 border-slate-200">
                     <Tag className="h-2.5 w-2.5" /> {t}
                   </span>
                 ))}
               </div>
 
-              <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-end gap-1.5">
+              <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-end gap-1.5">
                 <button
                   type="button"
                   onClick={() => setPreviewLaw(law)}
-                  className="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-white px-2 py-1 text-[11px] font-medium text-gray-700 hover:bg-gray-50"
+                  className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-600 hover:bg-slate-50"
                 >
                   <Eye className="h-3 w-3" />
                   Preview
@@ -748,10 +778,10 @@ function ReferenceLawsTab({ search, onPick }: { search: string; onPick: (law: Re
                     });
                     onPick(law);
                   }}
-                  className="inline-flex items-center gap-1 rounded-md border border-indigo-200 bg-indigo-50 px-2 py-1 text-[11px] font-medium text-indigo-700 hover:bg-indigo-100"
+                  className="inline-flex items-center gap-1 rounded-md border border-primary-200 bg-primary-50 px-2 py-1 text-[11px] font-medium text-primary-700 hover:bg-primary-100"
                 >
                   <Sparkles className="h-3 w-3" />
-                  Draft from law
+                  AI Draft
                   <ChevronRight className="h-3 w-3" />
                 </button>
               </div>
@@ -798,27 +828,27 @@ function ReferenceLawPreviewPopup({
   });
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 sm:p-6">
-      <div className="w-full max-w-5xl max-h-[94vh] overflow-hidden rounded-2xl bg-white shadow-2xl flex flex-col">
-        <div className="border-b border-gray-200 bg-gradient-to-r from-indigo-50 to-violet-50 px-5 py-3 flex items-start gap-3">
-          <div className="hidden sm:flex h-10 w-10 items-center justify-center rounded-xl bg-white shadow-sm shrink-0">
-            <Scale className="h-5 w-5 text-indigo-600" />
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-3 sm:p-6 animate-fade-in">
+      <div className="w-full max-w-5xl max-h-[94vh] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl flex flex-col">
+        <div className="border-b border-slate-200 px-5 py-3.5 flex items-start gap-3">
+          <div className="hidden sm:flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50 shrink-0">
+            <Scale className="h-5 w-5 text-primary-700" strokeWidth={1.75} />
           </div>
           <div className="flex-1 min-w-0">
-            <h2 className="text-sm sm:text-base font-semibold text-gray-900 truncate" title={law.name}>
+            <h2 className="text-sm sm:text-base font-semibold text-slate-900 truncate" title={law.name}>
               {law.name}
             </h2>
-            <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-gray-600">
+            <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
               {law.jurisdiction && <span>{law.jurisdiction}</span>}
               {law.authority && (
                 <>
-                  <span className="text-gray-400">·</span>
+                  <span className="text-slate-300">·</span>
                   <span className="truncate">{law.authority}</span>
                 </>
               )}
               {data && (
                 <>
-                  <span className="text-gray-400">·</span>
+                  <span className="text-slate-300">·</span>
                   <span>{data.word_count.toLocaleString()} words</span>
                 </>
               )}
@@ -827,14 +857,14 @@ function ReferenceLawPreviewPopup({
           <button
             type="button"
             onClick={() => onDraft(law)}
-            className="inline-flex items-center gap-1 rounded-md border border-indigo-200 bg-indigo-50 px-2 py-1 text-[11px] font-medium text-indigo-700 hover:bg-indigo-100 shrink-0"
+            className="inline-flex items-center gap-1 rounded-md border border-primary-200 bg-primary-50 px-2 py-1 text-[11px] font-medium text-primary-700 hover:bg-primary-100 shrink-0"
           >
             <Sparkles className="h-3 w-3" />
-            Draft from law
+            AI Draft
           </button>
           <button
             onClick={onClose}
-            className="rounded-lg p-1 text-gray-500 hover:bg-white/60 hover:text-gray-900 shrink-0"
+            className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 shrink-0"
             aria-label="Close preview"
           >
             <X className="h-5 w-5" />
@@ -844,7 +874,7 @@ function ReferenceLawPreviewPopup({
         <div className="overflow-y-auto px-5 sm:px-8 py-5 flex-1 bg-white">
           {isLoading ? (
             <div className="flex items-center justify-center py-20">
-              <Loader2 className="h-6 w-6 animate-spin text-indigo-500" />
+              <Loader2 className="h-6 w-6 animate-spin text-primary-500" />
             </div>
           ) : error || !data ? (
             <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 flex items-center gap-2">
@@ -852,18 +882,18 @@ function ReferenceLawPreviewPopup({
               Failed to load law text.
             </div>
           ) : !data.content?.trim() ? (
-            <p className="text-sm text-gray-500">This reference law has no text.</p>
+            <p className="text-sm text-slate-500">This reference law has no text.</p>
           ) : (
             <GovernanceDocumentMarkdown content={data.content} />
           )}
         </div>
 
-        <div className="border-t border-gray-200 bg-gray-50 px-5 py-2.5 flex items-center justify-between text-[11px] text-gray-500">
+        <div className="border-t border-slate-200 bg-white px-5 py-2.5 flex items-center justify-between text-[11px] text-slate-500">
           <span>Authoritative reference — the AI draft must comply with and cite these articles.</span>
           <button
             type="button"
             onClick={onClose}
-            className="px-3 py-1 rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-100"
+            className="px-3 py-1 rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
           >
             Close
           </button>
@@ -1020,7 +1050,7 @@ function ArtifactsTab({
   if (allCatalogsQuery.isLoading) {
     return (
       <div className="flex items-center justify-center py-16">
-        <Loader2 className="h-6 w-6 animate-spin text-indigo-500" />
+        <Loader2 className="h-6 w-6 animate-spin text-primary-500" />
       </div>
     );
   }
@@ -1035,12 +1065,12 @@ function ArtifactsTab({
     <>
       <div className="space-y-3">
         <div className="flex items-start justify-between gap-2">
-          <p className="text-[11px] text-gray-500">
+          <p className="text-[11px] text-slate-500">
             Every compliance framework&apos;s artifacts, grouped by framework and ordered so
             generated (Ready) ones surface first. Drafting auto-links the new document back
             to its source framework when you have a journey for it.
           </p>
-          <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+          <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-slate-100 border border-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
             <Layers className="h-3 w-3" />
             {filtered.reduce((s, g) => s + g.items.length, 0)} artifacts · {filtered.length} frameworks
             {(() => {
@@ -1060,7 +1090,7 @@ function ArtifactsTab({
             return (
               <section
                 key={group.framework}
-                className="rounded-xl border border-gray-200 bg-white overflow-hidden"
+                className="rounded-xl border border-slate-200 bg-white overflow-hidden"
               >
                 <button
                   type="button"
@@ -1069,15 +1099,15 @@ function ArtifactsTab({
                       (prev === null ? idx === 0 : prev === group.framework) ? '' : group.framework,
                     )
                   }
-                  className="w-full flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-emerald-50/40 to-white hover:from-emerald-50 transition-colors"
+                  className="w-full flex items-center gap-2 px-3 py-2.5 bg-white hover:bg-slate-50 transition-colors"
                 >
                   <ChevronRight
-                    className={`h-3.5 w-3.5 text-gray-500 transition-transform ${isOpen ? 'rotate-90' : ''}`}
+                    className={`h-3.5 w-3.5 text-slate-400 transition-transform ${isOpen ? 'rotate-90' : ''}`}
                   />
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border bg-emerald-50 text-emerald-700 border-emerald-200">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-primary-50 text-primary-700">
                     {group.framework}
                   </span>
-                  <span className="text-[11px] text-gray-500">{group.items.length} artifacts</span>
+                  <span className="text-[11px] text-slate-500">{group.items.length} artifacts</span>
                   {(() => {
                     const ready = group.items.filter((i) => i.has_content).length;
                     return ready > 0 ? (
@@ -1088,14 +1118,14 @@ function ArtifactsTab({
                     ) : null;
                   })()}
                   {group.frameworkUploadedId && (
-                    <span className="ml-auto text-[10px] text-emerald-700 font-medium inline-flex items-center gap-1">
+                    <span className="ml-auto text-[10px] text-primary-700 font-medium inline-flex items-center gap-1">
                       <Sparkles className="h-2.5 w-2.5" />
                       Auto-links framework
                     </span>
                   )}
                 </button>
                 {isOpen && (
-                  <div className="border-t border-gray-100 p-3 grid grid-cols-1 lg:grid-cols-2 gap-3 bg-gray-50/40">
+                  <div className="border-t border-slate-100 p-3 grid grid-cols-1 lg:grid-cols-2 gap-3 bg-slate-50">
                     {group.items.map((item) => {
                       const docType = ARTIFACT_DOC_TYPE_MAP(item.artifact_type);
                       return (
@@ -1170,41 +1200,32 @@ function ArtifactCard({
 }) {
   void frameworkName;
   const hasDescription = !!(item.description && item.description.trim().length > 0);
-  const chips: Array<{ icon: typeof Tag; label: string; tone: string }> = [];
-  if (item.artifact_type) {
-    chips.push({ icon: Tag, label: item.artifact_type, tone: 'bg-slate-50 text-slate-700 border-slate-200' });
-  }
-  if (item.stage) {
-    chips.push({ icon: ListChecks, label: item.stage, tone: 'bg-violet-50 text-violet-700 border-violet-200' });
-  }
-  if (item.control_ref) {
-    chips.push({ icon: Hash, label: `Control ${item.control_ref}`, tone: 'bg-blue-50 text-blue-700 border-blue-200' });
-  }
-  if (item.format) {
-    chips.push({ icon: FileText, label: item.format, tone: 'bg-amber-50 text-amber-700 border-amber-200' });
-  }
-  if (item.owner) {
-    chips.push({ icon: Info, label: item.owner, tone: 'bg-gray-50 text-gray-700 border-gray-200' });
-  }
+  // Charter: metadata chips are neutral slate markers — no rainbow.
+  const chips: Array<{ icon: typeof Tag; label: string }> = [];
+  if (item.artifact_type) chips.push({ icon: Tag, label: item.artifact_type });
+  if (item.stage) chips.push({ icon: ListChecks, label: item.stage });
+  if (item.control_ref) chips.push({ icon: Hash, label: `Control ${item.control_ref}` });
+  if (item.format) chips.push({ icon: FileText, label: item.format });
+  if (item.owner) chips.push({ icon: Info, label: item.owner });
 
   return (
-    <div className="relative flex flex-col rounded-xl border border-gray-200 bg-white p-4 transition-all hover:border-emerald-400 hover:shadow-md">
+    <div className="relative flex flex-col rounded-xl border border-slate-200 bg-white p-4 transition-all hover:border-primary-300 hover:shadow-sm">
       {/* Header row — icon + title + artifact_id pill */}
       <div className="flex items-start gap-3">
-        <div className="shrink-0 rounded-lg p-2 bg-emerald-50 text-emerald-700 border border-emerald-200">
-          <Layers className="h-5 w-5" />
+        <div className="shrink-0 rounded-lg p-2 bg-slate-50 text-slate-500 border border-slate-200">
+          <Layers className="h-5 w-5" strokeWidth={1.75} />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
-            <h3 className="text-sm font-semibold text-gray-900 leading-snug">
+            <h3 className="text-sm font-semibold text-slate-900 leading-snug">
               {item.name}
             </h3>
-            <span className="shrink-0 font-mono text-[10px] text-gray-500 bg-gray-50 border border-gray-200 px-1.5 py-0.5 rounded">
+            <span className="shrink-0 font-mono text-[10px] text-slate-500 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded">
               {item.artifact_id}
             </span>
           </div>
           {/* Full description — no line-clamp; this was the missing context. */}
-          <p className={`mt-1 text-[12px] leading-relaxed ${hasDescription ? 'text-gray-700' : 'text-gray-400 italic'}`}>
+          <p className={`mt-1 text-[12px] leading-relaxed ${hasDescription ? 'text-slate-600' : 'text-slate-400 italic'}`}>
             {hasDescription
               ? item.description
               : `No catalogue description for this artifact. AI Draft will work from the title and ${docType} scaffold.`}
@@ -1220,7 +1241,7 @@ function ArtifactCard({
             return (
               <span
                 key={`${chip.label}-${i}`}
-                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${chip.tone}`}
+                className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600"
               >
                 <Icon className="h-2.5 w-2.5" />
                 {chip.label}
@@ -1231,9 +1252,9 @@ function ArtifactCard({
       )}
 
       {/* Action row */}
-      <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between gap-2">
+      <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5">
-          <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium uppercase tracking-wide border ${DOC_TYPE_BADGE[docType] ?? 'bg-gray-50 text-gray-700 border-gray-200'}`}>
+          <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium uppercase tracking-wide border ${DOC_TYPE_BADGE}`}>
             {docType}
           </span>
           {item.mandatory && (
@@ -1255,7 +1276,7 @@ function ArtifactCard({
           <button
             type="button"
             onClick={onDetails}
-            className="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-white px-2 py-1 text-[11px] font-medium text-gray-700 hover:bg-gray-50"
+            className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-600 hover:bg-slate-50"
           >
             <Eye className="h-3 w-3" />
             View
@@ -1263,10 +1284,10 @@ function ArtifactCard({
           <button
             type="button"
             onClick={onDraft}
-            className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-700 hover:bg-emerald-100"
+            className="inline-flex items-center gap-1 rounded-md border border-primary-200 bg-primary-50 px-2 py-1 text-[11px] font-medium text-primary-700 hover:bg-primary-100"
           >
-            <Sparkles className="h-3 w-3" />
-            Draft
+            <FileText className="h-3 w-3" />
+            Use template
             <ChevronRight className="h-3 w-3" />
           </button>
         </div>
@@ -1287,6 +1308,7 @@ function ArtifactDetailsPopup({
   onClose: () => void;
   onDraft: () => void;
 }) {
+  const { toast } = useToast();
   const docType = ARTIFACT_DOC_TYPE_MAP(item.artifact_type);
   const rows: Array<{ label: string; value: string | null | undefined }> = [
     { label: 'Framework', value: frameworkName },
@@ -1330,7 +1352,7 @@ function ArtifactDetailsPopup({
       document.body.appendChild(a); a.click(); a.remove();
       window.URL.revokeObjectURL(url);
     } catch {
-      alert('Download failed — has this artifact been generated yet?');
+      toast({ type: 'error', title: 'Download failed', message: 'Has this artifact been generated yet?' });
     } finally {
       setDownloading(null);
     }
@@ -1338,24 +1360,24 @@ function ArtifactDetailsPopup({
   const genBadge =
     genMode === 'table' ? { t: 'Spreadsheet template', c: 'bg-emerald-50 text-emerald-700' }
       : genMode === 'guide' ? { t: 'Collection guide', c: 'bg-amber-50 text-amber-700' }
-        : { t: 'Document', c: 'bg-blue-50 text-blue-700' };
+        : { t: 'Document', c: 'bg-primary-50 text-primary-700' };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 sm:p-6">
-      <div className="w-full max-w-2xl max-h-[88vh] overflow-hidden rounded-2xl bg-white shadow-2xl flex flex-col">
-        <div className="border-b border-gray-200 bg-gradient-to-r from-emerald-50 to-blue-50 px-5 py-3 flex items-start gap-3">
-          <div className="hidden sm:flex h-10 w-10 items-center justify-center rounded-xl bg-white shadow-sm shrink-0">
-            <Layers className="h-5 w-5 text-emerald-600" />
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-3 sm:p-6 animate-fade-in">
+      <div className="w-full max-w-2xl max-h-[88vh] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl flex flex-col">
+        <div className="border-b border-slate-200 px-5 py-3.5 flex items-start gap-3">
+          <div className="hidden sm:flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50 shrink-0">
+            <Layers className="h-5 w-5 text-primary-700" strokeWidth={1.75} />
           </div>
           <div className="flex-1 min-w-0">
-            <h2 className="text-sm sm:text-base font-semibold text-gray-900 leading-snug">{item.name}</h2>
-            <p className="mt-0.5 text-[11px] text-gray-600">
+            <h2 className="text-sm sm:text-base font-semibold text-slate-900 leading-snug">{item.name}</h2>
+            <p className="mt-0.5 text-[11px] text-slate-500">
               {frameworkName} · {item.artifact_type}
             </p>
           </div>
           <button
             onClick={onClose}
-            className="rounded-lg p-1 text-gray-500 hover:bg-white/60 hover:text-gray-900 shrink-0"
+            className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 shrink-0"
             aria-label="Close"
           >
             <X className="h-5 w-5" />
@@ -1364,20 +1386,20 @@ function ArtifactDetailsPopup({
 
         <div className="overflow-y-auto px-5 py-4 flex-1 space-y-4">
           <section>
-            <h3 className="text-[10px] uppercase tracking-wider font-semibold text-gray-500 mb-1">Description</h3>
-            <p className="text-sm leading-relaxed text-gray-800 whitespace-pre-wrap">
+            <h3 className="text-[10px] uppercase tracking-wider font-semibold text-slate-400 mb-1">Description</h3>
+            <p className="text-sm leading-relaxed text-slate-800 whitespace-pre-wrap">
               {item.description?.trim() || 'No catalogue description provided.'}
             </p>
           </section>
           <section>
-            <h3 className="text-[10px] uppercase tracking-wider font-semibold text-gray-500 mb-2">Metadata</h3>
+            <h3 className="text-[10px] uppercase tracking-wider font-semibold text-slate-400 mb-2">Metadata</h3>
             <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-xs">
               {rows
                 .filter((r) => r.value !== null && r.value !== undefined && String(r.value).trim().length > 0)
                 .map((r) => (
                   <div key={r.label} className="flex items-start gap-2">
-                    <dt className="w-32 shrink-0 text-gray-500">{r.label}</dt>
-                    <dd className="font-medium text-gray-900 break-words">{r.value}</dd>
+                    <dt className="w-32 shrink-0 text-slate-500">{r.label}</dt>
+                    <dd className="font-medium text-slate-900 break-words">{r.value}</dd>
                   </div>
                 ))}
             </dl>
@@ -1387,14 +1409,14 @@ function ArtifactDetailsPopup({
           <section>
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                <h3 className="text-[10px] uppercase tracking-wider font-semibold text-gray-500">Generated content</h3>
+                <h3 className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">Generated content</h3>
                 {gen?.found && <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${genBadge.c}`}>{genBadge.t}</span>}
               </div>
               {gen?.found && (
                 <div className="flex items-center gap-1">
                   {dlFormats.map((f) => (
                     <button key={f} type="button" onClick={() => handleDownload(f)} disabled={!!downloading}
-                      className="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-white px-2 py-0.5 text-[10px] font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                      className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50">
                       {downloading === f ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
                       {f.toUpperCase()}
                     </button>
@@ -1403,40 +1425,40 @@ function ArtifactDetailsPopup({
               )}
             </div>
             {genLoading ? (
-              <div className="flex items-center justify-center gap-2 py-6 text-xs text-gray-400">
+              <div className="flex items-center justify-center gap-2 py-6 text-xs text-slate-400">
                 <Loader2 className="h-4 w-4 animate-spin" /> Loading generated content…
               </div>
             ) : gen?.found && gen.content ? (
-              <div className="max-h-[42vh] overflow-y-auto rounded-lg border border-gray-200 bg-white p-3">
+              <div className="max-h-[42vh] overflow-y-auto rounded-lg border border-slate-200 bg-white p-3">
                 <GovernanceDocumentMarkdown content={gen.content} />
               </div>
             ) : (
-              <p className="rounded-lg border border-dashed border-gray-300 bg-gray-50 px-3 py-4 text-center text-xs italic text-gray-400">
+              <p className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-4 text-center text-xs italic text-slate-400">
                 Not generated yet — run the artifact-content generator for this framework, then it appears here.
               </p>
             )}
           </section>
         </div>
 
-        <div className="border-t border-gray-200 bg-gray-50 px-5 py-2.5 flex items-center justify-between gap-3">
-          <span className="text-[11px] text-gray-500">
-            Drafting opens AI Draft pre-filled with this brief.
+        <div className="border-t border-slate-200 bg-white px-5 py-2.5 flex items-center justify-between gap-3">
+          <span className="text-[11px] text-slate-500">
+            Opens the template in the editor, ready to edit &amp; save.
           </span>
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={onClose}
-              className="px-3 py-1 rounded-md border border-gray-300 bg-white text-sm text-gray-700 hover:bg-gray-100"
+              className="px-3 py-1 rounded-md border border-slate-200 bg-white text-sm text-slate-700 hover:bg-slate-50"
             >
               Close
             </button>
             <button
               type="button"
               onClick={onDraft}
-              className="inline-flex items-center gap-1 px-3 py-1 rounded-md border border-emerald-200 bg-emerald-50 text-sm font-medium text-emerald-700 hover:bg-emerald-100"
+              className="inline-flex items-center gap-1 px-3 py-1 rounded-md border border-primary-200 bg-primary-50 text-sm font-medium text-primary-700 hover:bg-primary-100"
             >
-              <Sparkles className="h-3.5 w-3.5" />
-              Draft this artifact
+              <FileText className="h-3.5 w-3.5" />
+              Use template
             </button>
           </div>
         </div>
@@ -1449,8 +1471,8 @@ function ArtifactDetailsPopup({
 function EmptyState({ message }: { message: string }) {
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center">
-      <Search className="h-10 w-10 text-gray-300" />
-      <p className="mt-3 text-sm text-gray-500">{message}</p>
+      <Search className="h-10 w-10 text-slate-300" />
+      <p className="mt-3 text-sm text-slate-500">{message}</p>
     </div>
   );
 }

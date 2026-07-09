@@ -10,6 +10,7 @@ import { useToast } from '@/components/ui/ToastProvider';
 import { SearchInput, MultiSelectDropdown, PageLoader, RightSlidePanel } from '@/components/ui';
 import RichTextEditor from '../_RichTextEditor';
 import { SignOffControlTab } from '../_SignoffControl';
+import GovernanceMappingsPage from '../../mappings/page';
 import DocumentAnnotationPanel from '@/components/evidence/DocumentAnnotationPanel';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -65,44 +66,46 @@ import {
 import NcaCompareModal from '@/components/governance/NcaCompareModal';
 import { GovernanceDocumentMarkdown } from '@/components/governance/GovernanceDocumentMarkdown';
 
+// Charter: single-hue light status pills (bg-{tone}-50 text-{tone}-700); neutral
+// slate for doc-type markers (icon carries the distinction, not a rainbow).
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  draft: { bg: 'bg-gray-100', text: 'text-gray-700', label: 'Draft' },
-  pending_review: { bg: 'bg-yellow-100', text: 'text-yellow-700', label: 'Pending Review' },
-  pending_approval: { bg: 'bg-amber-100', text: 'text-amber-700', label: 'Pending Approval' },
-  approved: { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Approved' },
-  published: { bg: 'bg-green-100', text: 'text-green-700', label: 'Published' },
-  expired: { bg: 'bg-red-100', text: 'text-red-700', label: 'Expired' },
-  archived: { bg: 'bg-gray-200', text: 'text-gray-700', label: 'Archived' },
+  draft: { bg: 'bg-slate-100', text: 'text-slate-600', label: 'Draft' },
+  pending_review: { bg: 'bg-amber-50', text: 'text-amber-700', label: 'Pending Review' },
+  pending_approval: { bg: 'bg-amber-50', text: 'text-amber-700', label: 'Pending Approval' },
+  approved: { bg: 'bg-primary-50', text: 'text-primary-700', label: 'Approved' },
+  published: { bg: 'bg-emerald-50', text: 'text-emerald-700', label: 'Published' },
+  expired: { bg: 'bg-rose-50', text: 'text-rose-700', label: 'Expired' },
+  archived: { bg: 'bg-slate-100', text: 'text-slate-500', label: 'Archived' },
 };
 
 const COMPLIANCE_STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  fully_compliant: { bg: 'bg-green-100', text: 'text-gray-800', label: 'Fully Compliant' },
-  partially_compliant: { bg: 'bg-blue-100', text: 'text-gray-800', label: 'Partially Compliant' },
-  not_addressed: { bg: 'bg-red-100', text: 'text-gray-800', label: 'Not Addressed' },
-  not_applicable: { bg: 'bg-gray-100', text: 'text-gray-800', label: 'Not Applicable' },
+  fully_compliant: { bg: 'bg-emerald-50', text: 'text-emerald-700', label: 'Fully Compliant' },
+  partially_compliant: { bg: 'bg-amber-50', text: 'text-amber-700', label: 'Partially Compliant' },
+  not_addressed: { bg: 'bg-rose-50', text: 'text-rose-700', label: 'Not Addressed' },
+  not_applicable: { bg: 'bg-slate-100', text: 'text-slate-600', label: 'Not Applicable' },
 };
 
 const RISK_SEVERITY_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  critical: { bg: 'bg-red-100', text: 'text-gray-800', label: 'Critical' },
-  high: { bg: 'bg-orange-100', text: 'text-gray-800', label: 'High' },
-  medium: { bg: 'bg-yellow-100', text: 'text-gray-800', label: 'Medium' },
-  low: { bg: 'bg-green-100', text: 'text-gray-800', label: 'Low' },
+  critical: { bg: 'bg-rose-50', text: 'text-rose-700', label: 'Critical' },
+  high: { bg: 'bg-orange-50', text: 'text-orange-700', label: 'High' },
+  medium: { bg: 'bg-amber-50', text: 'text-amber-700', label: 'Medium' },
+  low: { bg: 'bg-emerald-50', text: 'text-emerald-700', label: 'Low' },
 };
 
 const REMEDIATION_STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  open: { bg: 'bg-red-100', text: 'text-gray-800', label: 'Open' },
-  in_progress: { bg: 'bg-yellow-100', text: 'text-gray-800', label: 'In Progress' },
-  closed: { bg: 'bg-green-100', text: 'text-gray-800', label: 'Closed' },
-  accepted_risk: { bg: 'bg-purple-100', text: 'text-gray-800', label: 'Accepted Risk' },
+  open: { bg: 'bg-rose-50', text: 'text-rose-700', label: 'Open' },
+  in_progress: { bg: 'bg-amber-50', text: 'text-amber-700', label: 'In Progress' },
+  closed: { bg: 'bg-emerald-50', text: 'text-emerald-700', label: 'Closed' },
+  accepted_risk: { bg: 'bg-primary-50', text: 'text-primary-700', label: 'Accepted Risk' },
 };
 
 const DOC_TYPE_STYLES: Record<string, { icon: any; color: string; bgColor: string; label: string }> = {
-  policy: { icon: BookOpen, color: 'text-purple-700', bgColor: 'bg-purple-100', label: 'Policy' },
-  standard: { icon: FileCheck, color: 'text-blue-700', bgColor: 'bg-blue-100', label: 'Standard' },
-  procedure: { icon: ClipboardList, color: 'text-green-700', bgColor: 'bg-green-100', label: 'Procedure' },
-  guideline: { icon: Lightbulb, color: 'text-yellow-700', bgColor: 'bg-yellow-100', label: 'Guideline' },
-  charter: { icon: Shield, color: 'text-cyan-700', bgColor: 'bg-cyan-100', label: 'Charter' },
-  framework: { icon: Layers, color: 'text-orange-700', bgColor: 'bg-orange-100', label: 'Framework' },
+  policy: { icon: BookOpen, color: 'text-slate-600', bgColor: 'bg-slate-100', label: 'Policy' },
+  standard: { icon: FileCheck, color: 'text-slate-600', bgColor: 'bg-slate-100', label: 'Standard' },
+  procedure: { icon: ClipboardList, color: 'text-slate-600', bgColor: 'bg-slate-100', label: 'Procedure' },
+  guideline: { icon: Lightbulb, color: 'text-slate-600', bgColor: 'bg-slate-100', label: 'Guideline' },
+  charter: { icon: Shield, color: 'text-slate-600', bgColor: 'bg-slate-100', label: 'Charter' },
+  framework: { icon: Layers, color: 'text-slate-600', bgColor: 'bg-slate-100', label: 'Framework' },
 };
 
 const formatDate = (dateStr: string | null | undefined) => {
@@ -891,14 +894,14 @@ export default function PolicyDetailPage() {
     );
   }
 
-  const docStatus = STATUS_STYLES[document.status] || { bg: 'bg-slate-500/20', text: 'text-gray-600', label: document.status };
-  const docType = DOC_TYPE_STYLES[document.doc_type] || { icon: FileText, color: 'text-gray-600', bgColor: 'bg-slate-500/20', label: document.doc_type };
+  const docStatus = STATUS_STYLES[document.status] || { bg: 'bg-slate-500/20', text: 'text-slate-600', label: document.status };
+  const docType = DOC_TYPE_STYLES[document.doc_type] || { icon: FileText, color: 'text-slate-600', bgColor: 'bg-slate-500/20', label: document.doc_type };
   const TypeIcon = docType.icon;
 
   const tabs: { key: TabKey; label: string; icon: any }[] = [
     { key: 'viewer', label: 'Document Viewer', icon: Eye },
     { key: 'statements', label: 'Statements', icon: ClipboardList },
-    { key: 'controls', label: 'Controls', icon: Shield },
+    { key: 'controls', label: 'Mappings', icon: Link2 },
     { key: 'gap-analysis', label: 'Gap Analysis', icon: BarChart3 },
     { key: 'sign-off', label: 'Sign-off & Control', icon: ShieldCheck },
     { key: 'discussion', label: 'Discussion', icon: MessageSquare },
@@ -912,20 +915,20 @@ export default function PolicyDetailPage() {
         <div className="flex items-start gap-4">
           <button
             onClick={() => router.push('/governance/documents')}
-            className="mt-1 rounded-lg border border-gray-300 bg-white p-2 text-gray-600 hover:text-black hover:bg-gray-100 transition-colors"
+            className="mt-1 rounded-lg border border-slate-300 bg-white p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors"
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
           <div>
             <div className="flex items-center gap-3 mb-1">
-              <h1 className="text-lg font-semibold text-black">{document.title}</h1>
+              <h1 className="text-lg font-semibold text-slate-900">{document.title}</h1>
             </div>
-            <div className="flex items-center gap-3 text-sm text-gray-600">
+            <div className="flex items-center gap-3 text-sm text-slate-600">
               {document.document_code && <span className="font-mono">{document.document_code}</span>}
-              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${docStatus.bg} text-gray-800`}>
+              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${docStatus.bg} ${docStatus.text}`}>
                 {docStatus.label}
               </span>
-              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${docType.bgColor} text-gray-800`}>
+              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${docType.bgColor} ${docType.color}`}>
                 {docType.label}
               </span>
             </div>
@@ -936,7 +939,7 @@ export default function PolicyDetailPage() {
             <button
               onClick={() => submitForReviewMutation.mutate()}
               disabled={submitForReviewMutation.isPending}
-              className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
+              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-slate-900 hover:bg-primary-700 disabled:opacity-50"
             >
               {submitForReviewMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               Submit for Review
@@ -945,7 +948,7 @@ export default function PolicyDetailPage() {
           {(document.status === 'pending_review' || document.status === 'pending_approval') && (
             <button
               onClick={() => router.push('/governance/workflows')}
-              className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-blue-700 hover:bg-blue-100 transition-colors"
+              className="flex items-center gap-2 rounded-lg border border-primary-200 bg-primary-50 px-4 py-2 text-primary-700 hover:bg-primary-100 transition-colors"
             >
               <Clock className="h-4 w-4" />
               Open Approvals
@@ -963,14 +966,14 @@ export default function PolicyDetailPage() {
           )}
           <button
             onClick={handleDownload}
-            className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-800 hover:text-black hover:bg-gray-100 transition-colors"
+            className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-slate-700 hover:text-slate-900 hover:bg-slate-100 transition-colors"
           >
             <Download className="h-4 w-4" />
             {document.has_file ? 'Download File' : 'Download Draft'}
           </button>
           <button
             onClick={handleEditOpen}
-            className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-800 hover:text-black hover:bg-gray-100 transition-colors"
+            className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-slate-700 hover:text-slate-900 hover:bg-slate-100 transition-colors"
           >
             <Pencil className="h-4 w-4" />
             Edit Details
@@ -979,24 +982,24 @@ export default function PolicyDetailPage() {
       </div>
 
       {showEditForm && (
-        <div className="rounded-xl border border-gray-300 bg-white p-5">
-          <h3 className="text-lg font-semibold text-black mb-4">Edit Document Details</h3>
+        <div className="rounded-xl border border-slate-300 bg-white p-5">
+          <h3 className="text-lg font-semibold text-slate-900 mb-4">Edit Document Details</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-800 mb-1">Title</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Title</label>
               <input
                 type="text"
                 value={editForm.title}
                 onChange={(e) => setEditForm(prev => ({ ...prev, title: e.target.value }))}
-                className="w-full rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
+                className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900 focus:border-primary-500 focus:outline-none"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-800 mb-1">Classification</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Classification</label>
               <select
                 value={editForm.classification}
                 onChange={(e) => setEditForm(prev => ({ ...prev, classification: e.target.value }))}
-                className="w-full rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
+                className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900 focus:border-primary-500 focus:outline-none"
               >
                 <option value="public">Public</option>
                 <option value="internal">Internal</option>
@@ -1005,20 +1008,20 @@ export default function PolicyDetailPage() {
               </select>
             </div>
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-800 mb-1">Description</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
               <textarea
                 value={editForm.description}
                 onChange={(e) => setEditForm(prev => ({ ...prev, description: e.target.value }))}
                 rows={3}
-                className="w-full rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
+                className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900 focus:border-primary-500 focus:outline-none"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-800 mb-1">Document Type</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Document Type</label>
               <select
                 value={editForm.doc_type}
                 onChange={(e) => setEditForm(prev => ({ ...prev, doc_type: e.target.value }))}
-                className="w-full rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
+                className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900 focus:border-primary-500 focus:outline-none"
               >
                 <option value="policy">Policy</option>
                 <option value="standard">Standard</option>
@@ -1029,17 +1032,17 @@ export default function PolicyDetailPage() {
               </select>
             </div>
           </div>
-          <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-gray-300">
+          <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-slate-300">
             <button
               onClick={() => setShowEditForm(false)}
-              className="px-4 py-2 text-sm font-medium text-gray-800 hover:text-black rounded-lg hover:bg-gray-100"
+              className="px-4 py-2 text-sm font-medium text-slate-700 hover:text-slate-900 rounded-lg hover:bg-slate-100"
             >
               Cancel
             </button>
             <button
               onClick={handleEditSave}
               disabled={updateDocumentMutation.isPending}
-              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-black hover:bg-primary-700 disabled:opacity-50"
+              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-slate-900 hover:bg-primary-700 disabled:opacity-50"
             >
               {updateDocumentMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               Save Changes
@@ -1049,7 +1052,7 @@ export default function PolicyDetailPage() {
       )}
 
       {/* Tab Navigation */}
-      <div className="border-b border-gray-300">
+      <div className="border-b border-slate-300">
         <nav className="flex gap-1">
           {tabs.map(tab => {
             const TabIcon = tab.icon;
@@ -1060,8 +1063,8 @@ export default function PolicyDetailPage() {
                 onClick={() => setActiveTab(tab.key)}
                 className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
                   isActive
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-gray-600 hover:text-black hover:border-gray-300'
+                    ? 'border-primary-600 text-primary-700'
+                    : 'border-transparent text-slate-600 hover:text-slate-900 hover:border-slate-300'
                 }`}
               >
                 <TabIcon className="h-4 w-4" />
@@ -1103,11 +1106,11 @@ export default function PolicyDetailPage() {
       {activeTab === 'gap-analysis' && (
         <div className="space-y-4">
           {/* Side-by-Side Document Compare Panel */}
-          <div className="rounded-xl border border-blue-200 bg-blue-50/40 p-4">
+          <div className="rounded-xl border border-primary-200 bg-primary-50/40 p-4">
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <div className="flex items-center gap-3 min-w-0">
-                <div className="rounded-lg bg-blue-100 p-2 flex-shrink-0">
-                  <GitCompare className="h-5 w-5 text-blue-700" />
+                <div className="rounded-lg bg-primary-100 p-2 flex-shrink-0">
+                  <GitCompare className="h-5 w-5 text-primary-700" />
                 </div>
                 <div className="min-w-0">
                   <h3 className="text-sm font-semibold text-slate-900">Compare with Other Document</h3>
@@ -1116,7 +1119,7 @@ export default function PolicyDetailPage() {
               </div>
               <button
                 onClick={() => setShowNcaCompareModal(true)}
-                className="flex items-center gap-2 rounded-lg bg-blue-600 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+                className="flex items-center gap-2 rounded-lg bg-primary-600 px-3.5 py-1.5 text-sm font-medium text-slate-900 hover:bg-primary-700 transition-colors"
               >
                 <GitCompare className="h-3.5 w-3.5" />
                 Compare with Other Document
@@ -1211,13 +1214,13 @@ export default function PolicyDetailPage() {
           <ComplianceSummarySection summary={complianceSummary} loading={summaryLoading} />
 
           {/* Gap Findings Table */}
-          <div className="rounded-xl border border-gray-300 bg-white overflow-hidden">
-            <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between border-b border-gray-300">
-              <h3 className="text-lg font-semibold text-black">Gap Findings & Remediation Tracker</h3>
+          <div className="rounded-xl border border-slate-300 bg-white overflow-hidden">
+            <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between border-b border-slate-300">
+              <h3 className="text-lg font-semibold text-slate-900">Gap Findings & Remediation Tracker</h3>
               <div className="flex items-center gap-2">
                 <button
                   onClick={handleExportCSV}
-                  className="flex items-center gap-2 rounded-lg border border-gray-300 bg-gray-100 px-3 py-1.5 text-sm text-gray-800 hover:text-black hover:bg-gray-100 transition-colors"
+                  className="flex items-center gap-2 rounded-lg border border-slate-300 bg-slate-100 px-3 py-1.5 text-sm text-slate-700 hover:text-slate-900 hover:bg-slate-100 transition-colors"
                 >
                   <Download className="h-4 w-4" />
                   Export CSV
@@ -1226,7 +1229,7 @@ export default function PolicyDetailPage() {
             </div>
 
             {/* Filters */}
-            <div className="flex flex-wrap items-center gap-2 p-4 border-b border-gray-300 bg-white/30">
+            <div className="flex flex-wrap items-center gap-2 p-4 border-b border-slate-300 bg-white/30">
               <MultiSelectDropdown
                 title="Framework"
                 items={(complianceSummary?.frameworks || complianceSummary?.framework_summaries || []).map((fw: any) => ({
@@ -1277,7 +1280,7 @@ export default function PolicyDetailPage() {
                 <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
               </div>
             ) : findings.length === 0 ? (
-              <div className="flex h-48 flex-col items-center justify-center gap-3 text-gray-600">
+              <div className="flex h-48 flex-col items-center justify-center gap-3 text-slate-600">
                 <BarChart3 className="h-12 w-12" />
                 <p>No gap findings yet</p>
                 <p className="text-sm">Run a gap analysis to generate findings</p>
@@ -1292,23 +1295,23 @@ export default function PolicyDetailPage() {
                         <SortHeader field="clause_reference" current={gapFilters.sort_by} order={gapFilters.sort_order} onSort={handleGapSort}>Framework Clause</SortHeader>
                         <SortHeader field="policy_section_reference" current={gapFilters.sort_by} order={gapFilters.sort_order} onSort={handleGapSort}>Policy Ref</SortHeader>
                         <SortHeader field="compliance_status" current={gapFilters.sort_by} order={gapFilters.sort_order} onSort={handleGapSort}>Compliance</SortHeader>
-                        <th className="px-3 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600">Gap Description</th>
+                        <th className="px-3 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600">Gap Description</th>
                         <SortHeader field="risk_severity" current={gapFilters.sort_by} order={gapFilters.sort_order} onSort={handleGapSort}>Risk</SortHeader>
-                        <th className="px-3 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600">Recommendation</th>
-                        <th className="px-3 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600">Owner</th>
+                        <th className="px-3 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600">Recommendation</th>
+                        <th className="px-3 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600">Owner</th>
                         <SortHeader field="target_remediation_date" current={gapFilters.sort_by} order={gapFilters.sort_order} onSort={handleGapSort}>Target Date</SortHeader>
                         <SortHeader field="remediation_status" current={gapFilters.sort_by} order={gapFilters.sort_order} onSort={handleGapSort}>Status</SortHeader>
-                        <th className="px-3 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600">Evidence</th>
+                        <th className="px-3 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600">Evidence</th>
                         <SortHeader field="updated_at" current={gapFilters.sort_by} order={gapFilters.sort_order} onSort={handleGapSort}>Updated</SortHeader>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-200">
+                    <tbody className="divide-y divide-slate-200">
                       {findings.map((finding: any) => {
                         const isExpanded = expandedRows.has(finding.id);
                         const isEditing = editingRow === finding.id;
-                        const cs = COMPLIANCE_STATUS_STYLES[finding.compliance_status] || { bg: 'bg-slate-500/20', text: 'text-gray-600', label: finding.compliance_status };
-                        const rs = RISK_SEVERITY_STYLES[finding.risk_severity] || { bg: 'bg-slate-500/20', text: 'text-gray-600', label: finding.risk_severity };
-                        const rms = REMEDIATION_STATUS_STYLES[finding.remediation_status] || { bg: 'bg-slate-500/20', text: 'text-gray-600', label: finding.remediation_status };
+                        const cs = COMPLIANCE_STATUS_STYLES[finding.compliance_status] || { bg: 'bg-slate-500/20', text: 'text-slate-600', label: finding.compliance_status };
+                        const rs = RISK_SEVERITY_STYLES[finding.risk_severity] || { bg: 'bg-slate-500/20', text: 'text-slate-600', label: finding.risk_severity };
+                        const rms = REMEDIATION_STATUS_STYLES[finding.remediation_status] || { bg: 'bg-slate-500/20', text: 'text-slate-600', label: finding.remediation_status };
 
                         return (
                           <GapFindingRow
@@ -1366,25 +1369,25 @@ export default function PolicyDetailPage() {
 
                 {/* Pagination */}
                 {totalPages > 1 && (
-                  <div className="flex items-center justify-between p-4 border-t border-gray-300">
-                    <span className="text-sm text-gray-600">
+                  <div className="flex items-center justify-between p-4 border-t border-slate-300">
+                    <span className="text-sm text-slate-600">
                       Showing {gapFilters.skip + 1}-{Math.min(gapFilters.skip + gapFilters.limit, totalFindings)} of {totalFindings}
                     </span>
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => setGapFilters(prev => ({ ...prev, skip: Math.max(0, prev.skip - prev.limit) }))}
                         disabled={currentPage === 0}
-                        className="rounded-lg border border-gray-300 p-2 text-gray-600 hover:text-black disabled:opacity-30 disabled:cursor-not-allowed"
+                        className="rounded-lg border border-slate-300 p-2 text-slate-600 hover:text-slate-900 disabled:opacity-30 disabled:cursor-not-allowed"
                       >
                         <ChevronLeft className="h-4 w-4" />
                       </button>
-                      <span className="text-sm text-gray-800">
+                      <span className="text-sm text-slate-700">
                         Page {currentPage + 1} of {totalPages}
                       </span>
                       <button
                         onClick={() => setGapFilters(prev => ({ ...prev, skip: prev.skip + prev.limit }))}
                         disabled={currentPage >= totalPages - 1}
-                        className="rounded-lg border border-gray-300 p-2 text-gray-600 hover:text-black disabled:opacity-30 disabled:cursor-not-allowed"
+                        className="rounded-lg border border-slate-300 p-2 text-slate-600 hover:text-slate-900 disabled:opacity-30 disabled:cursor-not-allowed"
                       >
                         <ChevronRight className="h-4 w-4" />
                       </button>
@@ -1402,9 +1405,9 @@ export default function PolicyDetailPage() {
       )}
 
       {activeTab === 'discussion' && (
-        <div className="rounded-xl border border-gray-300 bg-white p-4">
-          <h3 className="text-sm font-semibold text-black mb-1">Discussion</h3>
-          <p className="text-xs text-gray-500 mb-3">All participants (preparer, reviewers, approvers) can comment here.</p>
+        <div className="rounded-xl border border-slate-300 bg-white p-4">
+          <h3 className="text-sm font-semibold text-slate-900 mb-1">Discussion</h3>
+          <p className="text-xs text-slate-500 mb-3">All participants (preparer, reviewers, approvers) can comment here.</p>
           <DocumentAnnotationPanel documentId={id} />
         </div>
       )}
@@ -1423,11 +1426,11 @@ export default function PolicyDetailPage() {
           so the change is auditable. */}
       {addressGapFinding && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="w-full max-w-6xl mx-4 max-h-[92vh] flex flex-col rounded-xl border border-gray-300 bg-white shadow-2xl">
-            <div className="flex items-start justify-between gap-4 px-6 py-4 border-b border-gray-200">
+          <div className="w-full max-w-6xl mx-4 max-h-[92vh] flex flex-col rounded-xl border border-slate-300 bg-white shadow-2xl">
+            <div className="flex items-start justify-between gap-4 px-6 py-4 border-b border-slate-200">
               <div className="min-w-0">
-                <h3 className="text-lg font-semibold text-black flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-blue-600" />
+                <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-primary-700" />
                   Address Gap
                   {addressGapMode === 'replace' && (
                     <span className="ml-2 inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
@@ -1440,11 +1443,11 @@ export default function PolicyDetailPage() {
                     </span>
                   )}
                 </h3>
-                <p className="text-xs text-gray-600 mt-0.5 truncate">
+                <p className="text-xs text-slate-600 mt-0.5 truncate">
                   {addressGapFinding.framework_name && (
                     <span className="font-medium">{addressGapFinding.framework_name} · </span>
                   )}
-                  <span className="font-mono text-gray-800">{addressGapFinding.clause_reference || '—'}</span>
+                  <span className="font-mono text-slate-700">{addressGapFinding.clause_reference || '—'}</span>
                   {addressGapFinding.clause_title && <> · {addressGapFinding.clause_title}</>}
                 </p>
               </div>
@@ -1457,7 +1460,7 @@ export default function PolicyDetailPage() {
                   setAddressGapHeading('');
                   setAddressGapReason('');
                 }}
-                className="p-2 text-gray-600 hover:text-black rounded-lg hover:bg-gray-100 flex-shrink-0"
+                className="p-2 text-slate-600 hover:text-slate-900 rounded-lg hover:bg-slate-100 flex-shrink-0"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -1471,14 +1474,14 @@ export default function PolicyDetailPage() {
                 </div>
               )}
               {addressGapFinding.remediation_recommendation && (
-                <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
-                  <label className="text-xs font-medium uppercase tracking-wider text-blue-800 block mb-1">AI Remediation Recommendation</label>
-                  <p className="text-sm text-blue-900">{addressGapFinding.remediation_recommendation}</p>
+                <div className="rounded-lg border border-primary-200 bg-primary-50 p-3">
+                  <label className="text-xs font-medium uppercase tracking-wider text-primary-700 block mb-1">AI Remediation Recommendation</label>
+                  <p className="text-sm text-slate-900">{addressGapFinding.remediation_recommendation}</p>
                 </div>
               )}
 
               <div className="flex items-center justify-between">
-                <div className="text-xs text-gray-500">
+                <div className="text-xs text-slate-500">
                   {addressGapMode === 'replace'
                     ? 'AI matched an existing clause in the document. Review the proposed replacement on the right.'
                     : 'AI proposed a new clause to append to the document.'}
@@ -1487,7 +1490,7 @@ export default function PolicyDetailPage() {
                   type="button"
                   onClick={() => generateGapFixMutation.mutate(addressGapFinding.id)}
                   disabled={generateGapFixMutation.isPending}
-                  className="flex items-center gap-1.5 rounded-md border border-blue-300 bg-white px-2.5 py-1 text-xs font-medium text-blue-700 hover:bg-blue-50 disabled:opacity-50"
+                  className="flex items-center gap-1.5 rounded-md border border-primary-300 bg-white px-2.5 py-1 text-xs font-medium text-primary-700 hover:bg-primary-50 disabled:opacity-50"
                   title={addressGapDraft ? 'Re-draft with AI' : 'Draft clause text with AI'}
                 >
                   {generateGapFixMutation.isPending ? (
@@ -1504,80 +1507,80 @@ export default function PolicyDetailPage() {
               {addressGapMode === 'replace' ? (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   <div>
-                    <label className="text-sm font-medium text-gray-800 block mb-1.5">
-                      Current text in document <span className="text-xs font-normal text-gray-500">(read-only)</span>
+                    <label className="text-sm font-medium text-slate-700 block mb-1.5">
+                      Current text in document <span className="text-xs font-normal text-slate-500">(read-only)</span>
                     </label>
                     <textarea
                       value={addressGapOriginal}
                       readOnly
                       rows={14}
-                      className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-700 resize-y font-mono"
+                      className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-700 resize-y font-mono"
                     />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-800 block mb-1.5">
-                      Proposed replacement <span className="text-xs font-normal text-gray-500">(editable)</span>
+                    <label className="text-sm font-medium text-slate-700 block mb-1.5">
+                      Proposed replacement <span className="text-xs font-normal text-slate-500">(editable)</span>
                     </label>
                     <textarea
                       value={addressGapDraft}
                       onChange={(e) => setAddressGapDraft(e.target.value)}
                       rows={14}
                       placeholder='Click "Generate with AI" to draft a replacement, or write your own.'
-                      className="w-full rounded-lg border border-emerald-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 resize-y"
+                      className="w-full rounded-lg border border-emerald-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 resize-y"
                     />
                   </div>
                 </div>
               ) : (
                 <div>
-                  <label className="text-sm font-medium text-gray-800 block mb-1.5">
-                    Proposed new clause <span className="text-xs font-normal text-gray-500">(editable)</span>
+                  <label className="text-sm font-medium text-slate-700 block mb-1.5">
+                    Proposed new clause <span className="text-xs font-normal text-slate-500">(editable)</span>
                   </label>
                   <textarea
                     value={addressGapDraft}
                     onChange={(e) => setAddressGapDraft(e.target.value)}
                     rows={12}
                     placeholder='Click "Generate with AI" to draft a clause that closes this gap, or write your own.'
-                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 resize-y"
                   />
                 </div>
               )}
 
               {addressGapMode === 'append' && (
                 <div>
-                  <label className="text-sm font-medium text-gray-800 block mb-1.5">
-                    Section heading <span className="text-xs font-normal text-gray-500">(optional — defaults to framework + clause)</span>
+                  <label className="text-sm font-medium text-slate-700 block mb-1.5">
+                    Section heading <span className="text-xs font-normal text-slate-500">(optional — defaults to framework + clause)</span>
                   </label>
                   <input
                     type="text"
                     value={addressGapHeading}
                     onChange={(e) => setAddressGapHeading(e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                   />
-                  <p className="text-xs text-gray-500 mt-1">
-                    The clause will be appended under <code className="font-mono text-gray-700">## {addressGapHeading || 'Compliance Update'}</code>.
+                  <p className="text-xs text-slate-500 mt-1">
+                    The clause will be appended under <code className="font-mono text-slate-700">## {addressGapHeading || 'Compliance Update'}</code>.
                   </p>
                 </div>
               )}
 
               <div>
-                <label className="text-sm font-medium text-gray-800 block mb-1.5">
-                  Change reason <span className="text-xs font-normal text-gray-500">(optional — saved to version history)</span>
+                <label className="text-sm font-medium text-slate-700 block mb-1.5">
+                  Change reason <span className="text-xs font-normal text-slate-500">(optional — saved to version history)</span>
                 </label>
                 <input
                   type="text"
                   value={addressGapReason}
                   onChange={(e) => setAddressGapReason(e.target.value)}
                   placeholder='e.g. "Closing PCI-DSS Req 1.2 gap during Q1 audit prep"'
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 />
               </div>
 
-              <p className="text-xs text-gray-500 italic">
+              <p className="text-xs text-slate-500 italic">
                 Applying creates a new document version. The current content is preserved in version history before the change.
               </p>
             </div>
 
-            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200">
+            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-200">
               <button
                 onClick={() => {
                   setAddressGapFinding(null);
@@ -1587,7 +1590,7 @@ export default function PolicyDetailPage() {
                   setAddressGapHeading('');
                   setAddressGapReason('');
                 }}
-                className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
               >
                 Cancel
               </button>
@@ -1607,7 +1610,7 @@ export default function PolicyDetailPage() {
                   || applyGapFixMutation.isPending
                   || (addressGapMode === 'replace' && !addressGapOriginal.trim())
                 }
-                className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-slate-900 hover:bg-primary-700 disabled:opacity-50"
               >
                 {applyGapFixMutation.isPending ? (
                   <><Loader2 className="h-4 w-4 animate-spin" /> Applying…</>
@@ -1623,15 +1626,15 @@ export default function PolicyDetailPage() {
       {/* Gap Analysis Framework Selection Modal */}
       {showGapModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-xl border border-gray-300 bg-white p-6 shadow-2xl mx-4">
+          <div className="w-full max-w-lg rounded-xl border border-slate-300 bg-white p-6 shadow-2xl mx-4">
             <div className="flex items-center justify-between mb-6">
               <div>
-                <h3 className="text-lg font-semibold text-black">Run Gap Analysis</h3>
-                <p className="text-sm text-gray-600">Select frameworks to analyze against</p>
+                <h3 className="text-lg font-semibold text-slate-900">Run Gap Analysis</h3>
+                <p className="text-sm text-slate-600">Select frameworks to analyze against</p>
               </div>
               <button
                 onClick={() => { setShowGapModal(false); setSelectedFrameworkIds([]); setGapFrameworkSearch(''); }}
-                className="p-2 text-gray-600 hover:text-black rounded-lg hover:bg-white"
+                className="p-2 text-slate-600 hover:text-slate-900 rounded-lg hover:bg-white"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -1643,18 +1646,18 @@ export default function PolicyDetailPage() {
                 name, short_code, framework_type, regulator, and version. */}
             {uploadedFrameworks && uploadedFrameworks.length > 0 && (
               <div className="relative mb-3">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
                 <input
                   type="text"
                   value={gapFrameworkSearch}
                   onChange={(e) => setGapFrameworkSearch(e.target.value)}
                   placeholder="Search frameworks by name, code, or regulator…"
-                  className="w-full rounded-lg border border-gray-300 bg-white pl-9 pr-9 py-2 text-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/20"
+                  className="w-full rounded-lg border border-slate-300 bg-white pl-9 pr-9 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
                 />
                 {gapFrameworkSearch && (
                   <button
                     onClick={() => setGapFrameworkSearch('')}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-gray-400 hover:text-gray-700"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:text-slate-700"
                     title="Clear search"
                   >
                     <X className="h-3.5 w-3.5" />
@@ -1669,7 +1672,7 @@ export default function PolicyDetailPage() {
                   <Loader2 className="h-6 w-6 animate-spin text-primary-400" />
                 </div>
               ) : uploadedFrameworks.length === 0 ? (
-                <p className="text-sm text-gray-600 text-center py-4">No frameworks uploaded yet</p>
+                <p className="text-sm text-slate-600 text-center py-4">No frameworks uploaded yet</p>
               ) : (() => {
                 // Apply the search filter to the framework list. We compute
                 // the visible subset here so both the Select-All checkbox
@@ -1691,7 +1694,7 @@ export default function PolicyDetailPage() {
 
                 if (visible.length === 0) {
                   return (
-                    <p className="text-sm text-gray-600 text-center py-4">
+                    <p className="text-sm text-slate-600 text-center py-4">
                       No frameworks match &ldquo;{gapFrameworkSearch}&rdquo;.
                     </p>
                   );
@@ -1712,36 +1715,36 @@ export default function PolicyDetailPage() {
 
                 return (
                   <>
-                    <label className="flex items-center gap-3 rounded-lg border border-gray-300 bg-white p-3 cursor-pointer hover:bg-gray-100 transition-colors">
+                    <label className="flex items-center gap-3 rounded-lg border border-slate-300 bg-white p-3 cursor-pointer hover:bg-slate-100 transition-colors">
                       <input
                         type="checkbox"
                         checked={allVisibleSelected}
                         onChange={handleToggleVisible}
-                        className="h-4 w-4 rounded border-gray-300 bg-gray-100 text-primary-500 focus:ring-primary-500"
+                        className="h-4 w-4 rounded border-slate-300 bg-slate-100 text-primary-500 focus:ring-primary-500"
                       />
-                      <span className="font-medium text-black">
+                      <span className="font-medium text-slate-900">
                         {term ? `Select all matching (${visible.length})` : `Select All (${uploadedFrameworks.length})`}
                       </span>
                     </label>
                     {visible.map((fw: any) => (
                       <label
                         key={fw.id}
-                        className="flex items-center gap-3 rounded-lg border border-gray-300/50 bg-white/50 p-3 cursor-pointer hover:bg-gray-100/50 transition-colors"
+                        className="flex items-center gap-3 rounded-lg border border-slate-300/50 bg-white/50 p-3 cursor-pointer hover:bg-slate-100/50 transition-colors"
                       >
                         <input
                           type="checkbox"
                           checked={selectedFrameworkIds.includes(fw.id)}
                           onChange={() => toggleFramework(fw.id)}
-                          className="h-4 w-4 rounded border-gray-300 bg-gray-100 text-primary-500 focus:ring-primary-500"
+                          className="h-4 w-4 rounded border-slate-300 bg-slate-100 text-primary-500 focus:ring-primary-500"
                         />
                         <div className="flex-1">
                           <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium text-black">{fw.name || `Framework ${fw.id}`}</span>
+                            <span className="text-sm font-medium text-slate-900">{fw.name || `Framework ${fw.id}`}</span>
                             {(fw.short_code || fw.framework_type) && (
-                              <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs font-mono text-gray-800">{fw.short_code || fw.framework_type}</span>
+                              <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs font-mono text-slate-700">{fw.short_code || fw.framework_type}</span>
                             )}
                           </div>
-                          <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-600">
+                          <div className="flex items-center gap-3 mt-0.5 text-xs text-slate-600">
                             {fw.version && <span>v{fw.version}</span>}
                             {(fw.control_count != null || fw.parsed_controls_count != null) && <span>{fw.control_count ?? fw.parsed_controls_count} controls</span>}
                             {(fw.regulator || fw.source_organization) && <span>{fw.regulator || fw.source_organization}</span>}
@@ -1754,17 +1757,17 @@ export default function PolicyDetailPage() {
               })()}
             </div>
 
-            <div className="flex justify-end gap-3 pt-4 border-t border-gray-300">
+            <div className="flex justify-end gap-3 pt-4 border-t border-slate-300">
               <button
                 onClick={() => { setShowGapModal(false); setSelectedFrameworkIds([]); setGapFrameworkSearch(''); }}
-                className="px-4 py-2 text-sm font-medium text-gray-800 hover:text-black rounded-lg hover:bg-white"
+                className="px-4 py-2 text-sm font-medium text-slate-700 hover:text-slate-900 rounded-lg hover:bg-white"
               >
                 Cancel
               </button>
               <button
                 onClick={handleRunAnalysis}
                 disabled={runGapAnalysisMutation.isPending}
-                className="flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-black hover:bg-purple-700 disabled:opacity-50"
+                className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-slate-900 hover:bg-primary-700 disabled:opacity-50"
               >
                 {runGapAnalysisMutation.isPending ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -1801,7 +1804,7 @@ function SortHeader({ field, current, order, onSort, children }: {
 }) {
   return (
     <th
-      className="px-3 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600 cursor-pointer hover:text-black transition-colors"
+      className="px-3 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600 cursor-pointer hover:text-slate-900 transition-colors"
       onClick={() => onSort(field)}
     >
       <div className="flex items-center gap-1">
@@ -1813,15 +1816,15 @@ function SortHeader({ field, current, order, onSort, children }: {
 }
 
 const REVIEW_STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  pending: { bg: 'bg-gray-100', text: 'text-gray-700', label: 'Pending' },
-  in_progress: { bg: 'bg-blue-100', text: 'text-blue-700', label: 'In Progress' },
+  pending: { bg: 'bg-slate-100', text: 'text-slate-700', label: 'Pending' },
+  in_progress: { bg: 'bg-primary-100', text: 'text-primary-700', label: 'In Progress' },
   completed: { bg: 'bg-green-100', text: 'text-green-700', label: 'Completed' },
   overdue: { bg: 'bg-red-100', text: 'text-red-700', label: 'Overdue' },
 };
 
 const OUTCOME_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  no_changes: { bg: 'bg-gray-100', text: 'text-gray-700', label: 'No Changes' },
-  minor_update: { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Minor Update' },
+  no_changes: { bg: 'bg-slate-100', text: 'text-slate-700', label: 'No Changes' },
+  minor_update: { bg: 'bg-primary-100', text: 'text-primary-700', label: 'Minor Update' },
   major_revision: { bg: 'bg-orange-100', text: 'text-orange-700', label: 'Major Revision' },
   retired: { bg: 'bg-red-100', text: 'text-red-700', label: 'Retired' },
 };
@@ -1873,17 +1876,17 @@ function ReviewHistoryTab({ documentId, document: doc }: { documentId: number; d
 
   return (
     <div className="space-y-6">
-      <div className="rounded-xl border border-gray-300 bg-gradient-to-r from-blue-50 to-cyan-50 p-6">
+      <div className="rounded-xl border border-slate-300 bg-primary-50 p-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-blue-500/20 p-2.5">
-              <Clock className="h-6 w-6 text-blue-400" />
+            <div className="rounded-lg bg-primary-50 p-2.5">
+              <Clock className="h-6 w-6 text-primary-700" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-black">Policy Review Lifecycle</h3>
+              <h3 className="text-lg font-semibold text-slate-900">Policy Review Lifecycle</h3>
               <div className="flex items-center gap-3 mt-1">
                 {doc?.next_review_date ? (
-                  <span className={`text-sm ${isOverdue ? 'text-red-400' : 'text-gray-600'}`}>
+                  <span className={`text-sm ${isOverdue ? 'text-red-400' : 'text-slate-600'}`}>
                     {isOverdue ? (
                       <span className="flex items-center gap-1"><AlertTriangle className="h-3.5 w-3.5" /> Overdue — was due {formatDate(doc.next_review_date)}</span>
                     ) : (
@@ -1891,10 +1894,10 @@ function ReviewHistoryTab({ documentId, document: doc }: { documentId: number; d
                     )}
                   </span>
                 ) : (
-                  <span className="text-sm text-gray-700">No review date scheduled</span>
+                  <span className="text-sm text-slate-700">No review date scheduled</span>
                 )}
                 {doc?.review_cycle_months && (
-                  <span className="text-xs text-gray-700">({doc.review_cycle_months}-month cycle)</span>
+                  <span className="text-xs text-slate-700">({doc.review_cycle_months}-month cycle)</span>
                 )}
               </div>
             </div>
@@ -1904,7 +1907,7 @@ function ReviewHistoryTab({ documentId, document: doc }: { documentId: number; d
               <button
                 onClick={() => startReviewMutation.mutate()}
                 disabled={startReviewMutation.isPending}
-                className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 font-medium text-black hover:bg-blue-700 transition-colors disabled:opacity-50"
+                className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-slate-900 hover:bg-primary-700 transition-colors disabled:opacity-50"
               >
                 {startReviewMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
                 Start Review
@@ -1913,7 +1916,7 @@ function ReviewHistoryTab({ documentId, document: doc }: { documentId: number; d
             {hasInProgressReview && (
               <button
                 onClick={() => setShowCompleteForm(!showCompleteForm)}
-                className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 font-medium text-black hover:bg-green-700 transition-colors"
+                className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 font-medium text-slate-900 hover:bg-green-700 transition-colors"
               >
                 <CheckCircle className="h-4 w-4" />
                 Complete Review
@@ -1923,14 +1926,14 @@ function ReviewHistoryTab({ documentId, document: doc }: { documentId: number; d
         </div>
 
         {showCompleteForm && (
-          <div className="mt-4 rounded-lg border border-gray-300 bg-white p-4 space-y-3">
-            <h4 className="text-sm font-medium text-black">Complete Review</h4>
+          <div className="mt-4 rounded-lg border border-slate-300 bg-white p-4 space-y-3">
+            <h4 className="text-sm font-medium text-slate-900">Complete Review</h4>
             <div>
-              <label className="block text-xs text-gray-600 mb-1">Outcome</label>
+              <label className="block text-xs text-slate-600 mb-1">Outcome</label>
               <select
                 value={completeForm.outcome}
                 onChange={(e) => setCompleteForm(prev => ({ ...prev, outcome: e.target.value }))}
-                className="w-full rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none"
+                className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
               >
                 <option value="no_changes">No Changes Needed</option>
                 <option value="minor_update">Minor Update</option>
@@ -1939,36 +1942,36 @@ function ReviewHistoryTab({ documentId, document: doc }: { documentId: number; d
               </select>
             </div>
             <div>
-              <label className="block text-xs text-gray-600 mb-1">Review Notes</label>
+              <label className="block text-xs text-slate-600 mb-1">Review Notes</label>
               <textarea
                 value={completeForm.review_notes}
                 onChange={(e) => setCompleteForm(prev => ({ ...prev, review_notes: e.target.value }))}
                 rows={2}
                 placeholder="Notes about the review..."
-                className="w-full rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-sm text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none resize-none"
+                className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none resize-none"
               />
             </div>
             <div>
-              <label className="block text-xs text-gray-600 mb-1">Changes Made</label>
+              <label className="block text-xs text-slate-600 mb-1">Changes Made</label>
               <textarea
                 value={completeForm.changes_made}
                 onChange={(e) => setCompleteForm(prev => ({ ...prev, changes_made: e.target.value }))}
                 rows={2}
                 placeholder="Summary of changes made (if any)..."
-                className="w-full rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-sm text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none resize-none"
+                className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none resize-none"
               />
             </div>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => completeReviewMutation.mutate(completeForm)}
                 disabled={completeReviewMutation.isPending}
-                className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-black hover:bg-green-700 disabled:opacity-50"
+                className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-slate-900 hover:bg-green-700 disabled:opacity-50"
               >
                 {completeReviewMutation.isPending ? 'Submitting...' : 'Submit Review'}
               </button>
               <button
                 onClick={() => setShowCompleteForm(false)}
-                className="rounded-lg border border-gray-300 bg-gray-100 px-4 py-2 text-sm text-gray-800 hover:text-black hover:bg-gray-100"
+                className="rounded-lg border border-slate-300 bg-slate-100 px-4 py-2 text-sm text-slate-700 hover:text-slate-900 hover:bg-slate-100"
               >
                 Cancel
               </button>
@@ -1977,14 +1980,14 @@ function ReviewHistoryTab({ documentId, document: doc }: { documentId: number; d
         )}
       </div>
 
-      <div className="rounded-xl border border-gray-300 bg-white overflow-hidden">
-        <div className="border-b border-gray-300 bg-white/50 px-6 py-3">
-          <h3 className="font-medium text-black">Review History</h3>
+      <div className="rounded-xl border border-slate-300 bg-white overflow-hidden">
+        <div className="border-b border-slate-300 bg-white/50 px-6 py-3">
+          <h3 className="font-medium text-slate-900">Review History</h3>
         </div>
         {isLoading ? (
           <PageLoader size="sm" className="h-32" />
         ) : !reviewHistory || reviewHistory.length === 0 ? (
-          <div className="flex h-32 flex-col items-center justify-center gap-2 text-gray-600">
+          <div className="flex h-32 flex-col items-center justify-center gap-2 text-slate-600">
             <Clock className="h-8 w-8" />
             <p className="text-sm">No review history yet</p>
           </div>
@@ -1992,22 +1995,22 @@ function ReviewHistoryTab({ documentId, document: doc }: { documentId: number; d
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-gray-300 bg-white/30">
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600">Type</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600">Status</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600">Outcome</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600">Started</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600">Completed</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600">Notes</th>
+                <tr className="border-b border-slate-300 bg-white/30">
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600">Type</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600">Status</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600">Outcome</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600">Started</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600">Completed</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600">Notes</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-700">
                 {reviewHistory.map((review: any) => {
-                  const statusStyle = REVIEW_STATUS_STYLES[review.review_status] || { bg: 'bg-slate-500/20', text: 'text-gray-600', label: review.review_status };
-                  const outcomeStyle = review.outcome ? (OUTCOME_STYLES[review.outcome] || { bg: 'bg-slate-500/20', text: 'text-gray-600', label: review.outcome }) : null;
+                  const statusStyle = REVIEW_STATUS_STYLES[review.review_status] || { bg: 'bg-slate-500/20', text: 'text-slate-600', label: review.review_status };
+                  const outcomeStyle = review.outcome ? (OUTCOME_STYLES[review.outcome] || { bg: 'bg-slate-500/20', text: 'text-slate-600', label: review.outcome }) : null;
                   return (
-                    <tr key={review.id} className="hover:bg-gray-100/30">
-                      <td className="px-4 py-3 text-sm text-gray-800 capitalize">{(review.review_type || 'periodic').replace('_', ' ')}</td>
+                    <tr key={review.id} className="hover:bg-slate-100/30">
+                      <td className="px-4 py-3 text-sm text-slate-700 capitalize">{(review.review_type || 'periodic').replace('_', ' ')}</td>
                       <td className="px-4 py-3">
                         <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusStyle.bg} ${statusStyle.text}`}>
                           {statusStyle.label}
@@ -2018,11 +2021,11 @@ function ReviewHistoryTab({ documentId, document: doc }: { documentId: number; d
                           <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${outcomeStyle.bg} ${outcomeStyle.text}`}>
                             {outcomeStyle.label}
                           </span>
-                        ) : <span className="text-xs text-gray-700">—</span>}
+                        ) : <span className="text-xs text-slate-700">—</span>}
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-600">{formatDate(review.started_at)}</td>
-                      <td className="px-4 py-3 text-sm text-gray-600">{formatDate(review.completed_at)}</td>
-                      <td className="px-4 py-3 text-sm text-gray-600 max-w-xs truncate">{review.review_notes || '—'}</td>
+                      <td className="px-4 py-3 text-sm text-slate-600">{formatDate(review.started_at)}</td>
+                      <td className="px-4 py-3 text-sm text-slate-600">{formatDate(review.completed_at)}</td>
+                      <td className="px-4 py-3 text-sm text-slate-600 max-w-xs truncate">{review.review_notes || '—'}</td>
                     </tr>
                   );
                 })}
@@ -2065,11 +2068,11 @@ function DocumentVersionHistoryPanel({
   });
 
   const changeColors: Record<string, string> = {
-    baseline: 'bg-gray-100 text-gray-600',
+    baseline: 'bg-slate-100 text-slate-600',
     major: 'bg-rose-100 text-rose-700',
-    minor: 'bg-blue-100 text-blue-700',
+    minor: 'bg-primary-100 text-primary-700',
     patch: 'bg-emerald-100 text-emerald-700',
-    signoff: 'bg-violet-100 text-violet-700',
+    signoff: 'bg-primary-50 text-primary-700',
   };
 
   return (
@@ -2077,23 +2080,23 @@ function DocumentVersionHistoryPanel({
       {isLoading ? (
         <div className="flex h-40 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-primary-400" /></div>
       ) : versions.length === 0 ? (
-        <p className="text-sm text-gray-500 py-6 text-center">No version history yet. Edits to the document content will appear here.</p>
+        <p className="text-sm text-slate-500 py-6 text-center">No version history yet. Edits to the document content will appear here.</p>
       ) : (
         <div className="space-y-3">
-          <p className="text-xs text-gray-500">{versions.length} version{versions.length !== 1 ? 's' : ''} · newest first. Restore reverts the content to that version (creating a new version, so nothing is lost).</p>
+          <p className="text-xs text-slate-500">{versions.length} version{versions.length !== 1 ? 's' : ''} · newest first. Restore reverts the content to that version (creating a new version, so nothing is lost).</p>
           {versions.map((v) => {
             const isCurrent = v.id === currentRow?.id;
             return (
-              <div key={v.id} className="rounded-lg border border-gray-200 bg-white p-3">
+              <div key={v.id} className="rounded-lg border border-slate-200 bg-white p-3">
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold text-black">v{v.version_number}</span>
-                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium capitalize ${changeColors[v.change_type] || 'bg-gray-100 text-gray-600'}`}>{v.change_type}</span>
+                    <span className="text-sm font-semibold text-slate-900">v{v.version_number}</span>
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium capitalize ${changeColors[v.change_type] || 'bg-slate-100 text-slate-600'}`}>{v.change_type}</span>
                     {isCurrent && <span className="rounded-full bg-primary-100 px-2 py-0.5 text-[10px] font-medium text-primary-700">current</span>}
                   </div>
                   <div className="flex items-center gap-1.5">
                     {!isCurrent && currentRow && (
-                      <button onClick={() => setCompareId(compareId === v.id ? null : v.id)} className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-2 py-1 text-[11px] text-gray-700 hover:bg-gray-50">
+                      <button onClick={() => setCompareId(compareId === v.id ? null : v.id)} className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50">
                         <GitCompare className="h-3 w-3" /> {compareId === v.id ? 'Hide diff' : 'Diff'}
                       </button>
                     )}
@@ -2104,21 +2107,21 @@ function DocumentVersionHistoryPanel({
                     )}
                   </div>
                 </div>
-                <div className="mt-1.5 flex items-center gap-2 text-[11px] text-gray-500">
+                <div className="mt-1.5 flex items-center gap-2 text-[11px] text-slate-500">
                   <User className="h-3 w-3" />{v.creator_name || 'Unknown'}
                   <Clock className="h-3 w-3 ml-1" />{v.created_at ? new Date(v.created_at).toLocaleString() : ''}
                 </div>
-                {v.change_reason && <p className="mt-1 text-xs text-gray-600 italic">“{v.change_reason}”</p>}
+                {v.change_reason && <p className="mt-1 text-xs text-slate-600 italic">“{v.change_reason}”</p>}
                 {compareId === v.id && (
-                  <div className="mt-2 rounded-md bg-gray-50 border border-gray-200 p-2">
+                  <div className="mt-2 rounded-md bg-slate-50 border border-slate-200 p-2">
                     {diffQuery.isLoading ? (
-                      <p className="text-[11px] text-gray-400">Computing diff…</p>
+                      <p className="text-[11px] text-slate-400">Computing diff…</p>
                     ) : diffQuery.data ? (
-                      <pre className="max-h-64 overflow-auto whitespace-pre-wrap text-[11px] font-mono text-gray-700">
+                      <pre className="max-h-64 overflow-auto whitespace-pre-wrap text-[11px] font-mono text-slate-700">
                         {(diffQuery.data.diff || diffQuery.data.text_diff || `+${diffQuery.data.additions ?? 0} additions · -${diffQuery.data.deletions ?? 0} deletions`)}
                       </pre>
                     ) : (
-                      <p className="text-[11px] text-gray-400">No differences.</p>
+                      <p className="text-[11px] text-slate-400">No differences.</p>
                     )}
                   </div>
                 )}
@@ -2170,27 +2173,27 @@ function DocumentSignoffPanel({
   return (
     <RightSlidePanel isOpen={isOpen} onClose={onClose} title="Sign-off & Document Control" widthClassName="w-[560px]">
       <div className="space-y-5">
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-slate-500">
           Fill in approver details and document-control fields. These replace the placeholders in the
           Approval Signoff and Document Description tables — recorded as a new version in the audit trail.
         </p>
 
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Approval Signoff</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Approval Signoff</p>
           <div className="space-y-3">
             {rows.map((r, i) => (
-              <div key={i} className="rounded-lg border border-gray-200 p-3 space-y-2">
+              <div key={i} className="rounded-lg border border-slate-200 p-3 space-y-2">
                 <input
                   value={r.role}
                   onChange={(e) => setRow(i, { role: e.target.value })}
                   placeholder="Role (e.g. Approved by)"
-                  className="w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-sm font-medium"
+                  className="w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-sm font-medium"
                 />
                 <div className="grid grid-cols-2 gap-2">
-                  <input value={r.name} onChange={(e) => setRow(i, { name: e.target.value })} placeholder="Name" className="rounded-md border border-gray-300 px-2.5 py-1.5 text-sm" />
-                  <input value={r.designation} onChange={(e) => setRow(i, { designation: e.target.value })} placeholder="Designation" className="rounded-md border border-gray-300 px-2.5 py-1.5 text-sm" />
+                  <input value={r.name} onChange={(e) => setRow(i, { name: e.target.value })} placeholder="Name" className="rounded-md border border-slate-300 px-2.5 py-1.5 text-sm" />
+                  <input value={r.designation} onChange={(e) => setRow(i, { designation: e.target.value })} placeholder="Designation" className="rounded-md border border-slate-300 px-2.5 py-1.5 text-sm" />
                 </div>
-                <input type="date" value={r.date} onChange={(e) => setRow(i, { date: e.target.value })} className="w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-sm" />
+                <input type="date" value={r.date} onChange={(e) => setRow(i, { date: e.target.value })} className="w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-sm" />
               </div>
             ))}
             <button
@@ -2204,29 +2207,29 @@ function DocumentSignoffPanel({
         </div>
 
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Document Control</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Document Control</p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <div>
-              <label className="block text-[11px] text-gray-500 mb-0.5">Effective date</label>
-              <input type="date" value={effectiveDate} onChange={(e) => setEffectiveDate(e.target.value)} className="w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-sm" />
+              <label className="block text-[11px] text-slate-500 mb-0.5">Effective date</label>
+              <input type="date" value={effectiveDate} onChange={(e) => setEffectiveDate(e.target.value)} className="w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-sm" />
             </div>
             <div>
-              <label className="block text-[11px] text-gray-500 mb-0.5">Version</label>
-              <input value={version} onChange={(e) => setVersion(e.target.value)} placeholder="1.1" className="w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-sm" />
+              <label className="block text-[11px] text-slate-500 mb-0.5">Version</label>
+              <input value={version} onChange={(e) => setVersion(e.target.value)} placeholder="1.1" className="w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-sm" />
             </div>
             <div>
-              <label className="block text-[11px] text-gray-500 mb-0.5">Next review</label>
-              <input type="date" value={nextReview} onChange={(e) => setNextReview(e.target.value)} className="w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-sm" />
+              <label className="block text-[11px] text-slate-500 mb-0.5">Next review</label>
+              <input type="date" value={nextReview} onChange={(e) => setNextReview(e.target.value)} className="w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-sm" />
             </div>
           </div>
-          <label className="mt-3 flex items-center gap-2 text-xs text-gray-700">
-            <input type="checkbox" checked={markApproved} onChange={(e) => setMarkApproved(e.target.checked)} className="rounded border-gray-300" />
+          <label className="mt-3 flex items-center gap-2 text-xs text-slate-700">
+            <input type="checkbox" checked={markApproved} onChange={(e) => setMarkApproved(e.target.checked)} className="rounded border-slate-300" />
             Also mark the document as approved (records approver + timestamp)
           </label>
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t border-gray-100 pt-4">
-          <button onClick={onClose} className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Cancel</button>
+        <div className="flex items-center justify-end gap-2 border-t border-slate-100 pt-4">
+          <button onClick={onClose} className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">Cancel</button>
           <button
             onClick={() => mutation.mutate()}
             disabled={mutation.isPending}
@@ -2248,7 +2251,7 @@ function DocumentDetailsPanel({ doc, docType, isOpen, onClose }: any) {
     <RightSlidePanel isOpen={isOpen} onClose={onClose} title="Document Details" widthClassName="w-[420px]">
       <div className="space-y-4">
         <div>
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Metadata</h3>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Metadata</h3>
           <div className="space-y-2.5">
             <MetadataRow label="Type" value={docType.label} />
             <MetadataRow label="Classification" value={doc.classification || '-'} />
@@ -2262,17 +2265,17 @@ function DocumentDetailsPanel({ doc, docType, isOpen, onClose }: any) {
           </div>
         </div>
         {doc.description && (
-          <div className="border-t border-gray-100 pt-4">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Description</h3>
-            <p className="text-sm text-gray-800">{doc.description}</p>
+          <div className="border-t border-slate-100 pt-4">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Description</h3>
+            <p className="text-sm text-slate-700">{doc.description}</p>
           </div>
         )}
         {doc.tags?.length > 0 && (
-          <div className="border-t border-gray-100 pt-4">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Tags</h3>
+          <div className="border-t border-slate-100 pt-4">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Tags</h3>
             <div className="flex flex-wrap gap-2">
               {doc.tags.map((tag: string) => (
-                <span key={tag} className="rounded-full bg-gray-200 px-2.5 py-0.5 text-xs text-black">{tag}</span>
+                <span key={tag} className="rounded-full bg-slate-200 px-2.5 py-0.5 text-xs text-slate-900">{tag}</span>
               ))}
             </div>
           </div>
@@ -2414,10 +2417,10 @@ function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, docType }:
             color: #2563eb !important; -webkit-text-fill-color: #2563eb !important;
           }
         `}} />
-        <div className="document-viewer-html text-[15px] leading-7 text-gray-900" dangerouslySetInnerHTML={{ __html: renderedHtml }} />
+        <div className="document-viewer-html text-[15px] leading-7 text-slate-900" dangerouslySetInnerHTML={{ __html: renderedHtml }} />
       </>
     ) : (
-      <div className="flex h-48 flex-col items-center justify-center gap-3 text-gray-600">
+      <div className="flex h-48 flex-col items-center justify-center gap-3 text-slate-600">
         <FileText className="h-12 w-12" />
         <p>No viewable content available</p>
         {doc.has_file && <p className="text-sm">Download the file to view its contents</p>}
@@ -2429,16 +2432,16 @@ function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, docType }:
     <div className="space-y-3">
       <RichTextEditor value={editContent} onChange={setEditContent} minHeight={460} />
       <div>
-        <label className="block text-xs font-medium text-gray-700 mb-1">Change reason <span className="font-normal text-gray-400">(recorded in the audit trail)</span></label>
+        <label className="block text-xs font-medium text-slate-700 mb-1">Change reason <span className="font-normal text-slate-400">(recorded in the audit trail)</span></label>
         <input
           value={editReason}
           onChange={(e) => setEditReason(e.target.value)}
           placeholder="What did you change and why…"
-          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
         />
       </div>
-      <div className="sticky bottom-0 flex items-center justify-end gap-2 border-t border-gray-100 bg-white pt-3">
-        <button onClick={() => setEditing(false)} className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Cancel</button>
+      <div className="sticky bottom-0 flex items-center justify-end gap-2 border-t border-slate-100 bg-white pt-3">
+        <button onClick={() => setEditing(false)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">Cancel</button>
         <button
           onClick={() => saveContentMutation.mutate()}
           disabled={saveContentMutation.isPending || editContent === rawContent}
@@ -2455,15 +2458,15 @@ function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, docType }:
       {/* Full-document popup — scrollable read/edit surface */}
       {showFullViewer && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="flex h-[90vh] w-full max-w-5xl flex-col rounded-xl border border-gray-300 bg-white shadow-2xl">
-            <div className="flex shrink-0 items-center justify-between gap-2 border-b border-gray-200 px-5 py-3">
-              <h3 className="min-w-0 truncate font-semibold text-black">{doc?.title || 'Document'}</h3>
+          <div className="flex h-[90vh] w-full max-w-5xl flex-col rounded-xl border border-slate-300 bg-white shadow-2xl">
+            <div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-200 px-5 py-3">
+              <h3 className="min-w-0 truncate font-semibold text-slate-900">{doc?.title || 'Document'}</h3>
               <div className="flex items-center gap-1.5">
-                <button onClick={() => setShowDetails(true)} className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"><Info className="h-3.5 w-3.5" /> Details</button>
-                <button onClick={() => setShowHistory(true)} className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"><History className="h-3.5 w-3.5" /> History</button>
-                {canEdit && <button onClick={() => setShowSignoff(true)} className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"><CheckCircle className="h-3.5 w-3.5" /> Sign-off</button>}
-                {canEdit && !editing && <button onClick={startEdit} className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"><Pencil className="h-3.5 w-3.5" /> Edit</button>}
-                <button onClick={closeFullViewer} className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100"><X className="h-5 w-5" /></button>
+                <button onClick={() => setShowDetails(true)} className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50"><Info className="h-3.5 w-3.5" /> Details</button>
+                <button onClick={() => setShowHistory(true)} className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50"><History className="h-3.5 w-3.5" /> History</button>
+                {canEdit && <button onClick={() => setShowSignoff(true)} className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50"><CheckCircle className="h-3.5 w-3.5" /> Sign-off</button>}
+                {canEdit && !editing && <button onClick={startEdit} className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50"><Pencil className="h-3.5 w-3.5" /> Edit</button>}
+                <button onClick={closeFullViewer} className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100"><X className="h-5 w-5" /></button>
               </div>
             </div>
             <div className="flex-1 overflow-y-auto px-6 py-5">
@@ -2495,23 +2498,23 @@ function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, docType }:
         />
       )}
       <DocumentDetailsPanel doc={doc} docType={docType} isOpen={showDetails} onClose={() => setShowDetails(false)} />
-      <div className="rounded-xl border border-gray-300 bg-white overflow-hidden">
-        <div className="border-b border-gray-300 bg-white/50 px-6 py-3 flex items-center justify-between gap-2">
-          <h3 className="font-medium text-black">Document Content</h3>
+      <div className="rounded-xl border border-slate-300 bg-white overflow-hidden">
+        <div className="border-b border-slate-300 bg-white/50 px-6 py-3 flex items-center justify-between gap-2">
+          <h3 className="font-medium text-slate-900">Document Content</h3>
           <div className="flex items-center gap-1.5">
-            <button onClick={() => setShowDetails(true)} className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50">
+            <button onClick={() => setShowDetails(true)} className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50">
               <Info className="h-3.5 w-3.5" /> Details
             </button>
-            <button onClick={() => setShowHistory(true)} className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50">
+            <button onClick={() => setShowHistory(true)} className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50">
               <History className="h-3.5 w-3.5" /> History
             </button>
             {canEdit && (
-              <button onClick={() => setShowSignoff(true)} className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50">
+              <button onClick={() => setShowSignoff(true)} className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50">
                 <CheckCircle className="h-3.5 w-3.5" /> Sign-off
               </button>
             )}
             {canEdit && (
-              <button onClick={openEditor} className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50">
+              <button onClick={openEditor} className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50">
                 <Pencil className="h-3.5 w-3.5" /> Edit
               </button>
             )}
@@ -2526,10 +2529,10 @@ function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, docType }:
             {renderReadBody()}
             <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-white to-transparent" />
           </div>
-          <div className="mt-2 flex justify-center border-t border-gray-100 pt-3">
+          <div className="mt-2 flex justify-center border-t border-slate-100 pt-3">
             <button
               onClick={() => setShowFullViewer(true)}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
               <Maximize2 className="h-4 w-4" /> Read full document
             </button>
@@ -2543,25 +2546,25 @@ function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, docType }:
 function MetadataRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex justify-between text-sm">
-      <span className="text-gray-600">{label}</span>
-      <span className="text-black capitalize">{value}</span>
+      <span className="text-slate-600">{label}</span>
+      <span className="text-slate-900 capitalize">{value}</span>
     </div>
   );
 }
 
 const CATEGORY_COLORS: Record<string, { bg: string; text: string; border: string }> = {
-  security: { bg: 'bg-blue-100', text: 'text-gray-800', border: 'border-blue-300' },
-  privacy: { bg: 'bg-purple-100', text: 'text-gray-800', border: 'border-purple-300' },
-  governance: { bg: 'bg-emerald-100', text: 'text-gray-800', border: 'border-emerald-300' },
-  compliance: { bg: 'bg-cyan-100', text: 'text-gray-800', border: 'border-cyan-300' },
-  operational: { bg: 'bg-orange-100', text: 'text-gray-800', border: 'border-orange-300' },
-  risk_management: { bg: 'bg-amber-100', text: 'text-gray-800', border: 'border-amber-300' },
-  hr: { bg: 'bg-gray-100', text: 'text-gray-800', border: 'border-gray-300' },
-  it: { bg: 'bg-indigo-100', text: 'text-gray-800', border: 'border-indigo-300' },
-  financial: { bg: 'bg-yellow-100', text: 'text-gray-800', border: 'border-yellow-300' },
-  legal: { bg: 'bg-slate-100', text: 'text-gray-800', border: 'border-slate-300' },
-  environmental: { bg: 'bg-teal-100', text: 'text-gray-800', border: 'border-teal-300' },
-  quality: { bg: 'bg-rose-100', text: 'text-gray-800', border: 'border-rose-300' },
+  security: { bg: 'bg-primary-100', text: 'text-slate-700', border: 'border-primary-300' },
+  privacy: { bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-primary-300' },
+  governance: { bg: 'bg-emerald-100', text: 'text-slate-700', border: 'border-emerald-300' },
+  compliance: { bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-200' },
+  operational: { bg: 'bg-orange-100', text: 'text-slate-700', border: 'border-orange-300' },
+  risk_management: { bg: 'bg-amber-100', text: 'text-slate-700', border: 'border-amber-300' },
+  hr: { bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-300' },
+  it: { bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-200' },
+  financial: { bg: 'bg-yellow-100', text: 'text-slate-700', border: 'border-yellow-300' },
+  legal: { bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-300' },
+  environmental: { bg: 'bg-teal-100', text: 'text-slate-700', border: 'border-teal-300' },
+  quality: { bg: 'bg-rose-100', text: 'text-slate-700', border: 'border-rose-300' },
 };
 
 const CATEGORY_ABBREVIATIONS: Record<string, string> = { hr: 'HR', it: 'IT' };
@@ -2747,32 +2750,32 @@ function StatementsTab({ statements, statementsLoading, parsePolicyMutation, isP
             </h4>
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Statement Text *</label>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Statement Text *</label>
                 <textarea
                   value={addForm.statement_text}
                   onChange={(e) => setAddForm(prev => ({ ...prev, statement_text: e.target.value }))}
                   rows={3}
-                  className="w-full rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none"
+                  className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
                   placeholder="Enter the policy statement text..."
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Summary</label>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Summary</label>
                 <input
                   type="text"
                   value={addForm.statement_summary}
                   onChange={(e) => setAddForm(prev => ({ ...prev, statement_summary: e.target.value }))}
-                  className="w-full rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none"
+                  className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
                   placeholder="Brief summary..."
                 />
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Category</label>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Category</label>
                   <select
                     value={addForm.category}
                     onChange={(e) => setAddForm(prev => ({ ...prev, category: e.target.value }))}
-                    className="w-full rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none"
+                    className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
                   >
                     {Object.keys(CATEGORY_COLORS).map(c => (
                       <option key={c} value={c}>{formatCategory(c)}</option>
@@ -2780,11 +2783,11 @@ function StatementsTab({ statements, statementsLoading, parsePolicyMutation, isP
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Priority</label>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Priority</label>
                   <select
                     value={addForm.priority}
                     onChange={(e) => setAddForm(prev => ({ ...prev, priority: e.target.value }))}
-                    className="w-full rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none"
+                    className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
                   >
                     <option value="critical">Critical</option>
                     <option value="high">High</option>
@@ -2793,12 +2796,12 @@ function StatementsTab({ statements, statementsLoading, parsePolicyMutation, isP
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Source Section</label>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Source Section</label>
                   <input
                     type="text"
                     value={addForm.source_section}
                     onChange={(e) => setAddForm(prev => ({ ...prev, source_section: e.target.value }))}
-                    className="w-full rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none"
+                    className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
                     placeholder="e.g. Section 4.1"
                   />
                 </div>
@@ -2808,16 +2811,16 @@ function StatementsTab({ statements, statementsLoading, parsePolicyMutation, isP
                       type="checkbox"
                       checked={addForm.is_mandatory}
                       onChange={(e) => setAddForm(prev => ({ ...prev, is_mandatory: e.target.checked }))}
-                      className="h-4 w-4 rounded border-gray-300 bg-gray-100 text-primary-500"
+                      className="h-4 w-4 rounded border-slate-300 bg-slate-100 text-primary-500"
                     />
-                    <span className="text-sm text-gray-800">Mandatory</span>
+                    <span className="text-sm text-slate-700">Mandatory</span>
                   </label>
                 </div>
               </div>
-              <div className="flex justify-end gap-2 pt-2 border-t border-gray-300">
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-300">
                 <button
                   onClick={() => setShowAddForm(false)}
-                  className="px-3 py-1.5 text-sm text-gray-600 hover:text-black rounded-lg hover:bg-gray-100"
+                  className="px-3 py-1.5 text-sm text-slate-600 hover:text-slate-900 rounded-lg hover:bg-slate-100"
                 >
                   Cancel
                 </button>
@@ -2827,7 +2830,7 @@ function StatementsTab({ statements, statementsLoading, parsePolicyMutation, isP
                     addMutation.mutate(addForm);
                   }}
                   disabled={addMutation.isPending || !addForm.statement_text.trim()}
-                  className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-1.5 text-sm font-medium text-black hover:bg-green-700 disabled:opacity-50"
+                  className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-1.5 text-sm font-medium text-slate-900 hover:bg-green-700 disabled:opacity-50"
                 >
                   {addMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                   Add Statement
@@ -2837,9 +2840,9 @@ function StatementsTab({ statements, statementsLoading, parsePolicyMutation, isP
           </div>
         )}
 
-        <div className="rounded-xl border border-gray-300 bg-white p-8 text-center">
-          <ClipboardList className="h-12 w-12 text-gray-700 mx-auto mb-3" />
-          <p className="text-gray-600 mb-4">No policy statements have been parsed yet</p>
+        <div className="rounded-xl border border-slate-300 bg-white p-8 text-center">
+          <ClipboardList className="h-12 w-12 text-slate-700 mx-auto mb-3" />
+          <p className="text-slate-600 mb-4">No policy statements have been parsed yet</p>
           <div className="flex items-center gap-3 justify-center">
             <button
               onClick={() => parsePolicyMutation.mutate()}
@@ -2855,7 +2858,7 @@ function StatementsTab({ statements, statementsLoading, parsePolicyMutation, isP
             </button>
             <button
               onClick={() => setShowAddForm(true)}
-              className="flex items-center gap-2 rounded-lg border border-gray-300 bg-gray-100 px-4 py-2 font-medium text-black hover:bg-gray-100"
+              className="flex items-center gap-2 rounded-lg border border-slate-300 bg-slate-100 px-4 py-2 font-medium text-slate-900 hover:bg-slate-100"
             >
               <Plus className="h-4 w-4" />
               Add Manually
@@ -2897,10 +2900,10 @@ function StatementsTab({ statements, statementsLoading, parsePolicyMutation, isP
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3 flex-wrap">
-          <h3 className="text-lg font-semibold text-black">{stmts.length} Policy Statement{stmts.length !== 1 ? 's' : ''}</h3>
+          <h3 className="text-lg font-semibold text-slate-900">{stmts.length} Policy Statement{stmts.length !== 1 ? 's' : ''}</h3>
           <div className="flex items-center gap-1.5 flex-wrap">
             {categoryKeys.map(cat => {
-              const colors = CATEGORY_COLORS[cat] || { bg: 'bg-slate-500/20', text: 'text-gray-600', border: 'border-slate-500/30' };
+              const colors = CATEGORY_COLORS[cat] || { bg: 'bg-slate-500/20', text: 'text-slate-600', border: 'border-slate-500/30' };
               return (
                 <span key={cat} className={`rounded-full px-2 py-0.5 text-xs font-medium ${colors.bg} ${colors.text}`}>
                   {formatCategory(cat)}: {grouped[cat].length}
@@ -2925,7 +2928,7 @@ function StatementsTab({ statements, statementsLoading, parsePolicyMutation, isP
                 window.document.body.removeChild(a);
               } catch (e) { console.error('Export failed:', e); }
             }}
-            className="flex items-center gap-2 rounded-lg border border-gray-300 bg-gray-100 px-3 py-1.5 text-sm text-gray-800 hover:text-black hover:bg-gray-100 transition-colors"
+            className="flex items-center gap-2 rounded-lg border border-slate-300 bg-slate-100 px-3 py-1.5 text-sm text-slate-700 hover:text-slate-900 hover:bg-slate-100 transition-colors"
           >
             <Download className="h-4 w-4" />
             Export Statements (CSV)
@@ -2981,32 +2984,32 @@ function StatementsTab({ statements, statementsLoading, parsePolicyMutation, isP
           </h4>
           <div className="space-y-3">
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Statement Text *</label>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Statement Text *</label>
               <textarea
                 value={addForm.statement_text}
                 onChange={(e) => setAddForm(prev => ({ ...prev, statement_text: e.target.value }))}
                 rows={3}
-                className="w-full rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none"
+                className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
                 placeholder="Enter the policy statement text..."
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Summary</label>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Summary</label>
               <input
                 type="text"
                 value={addForm.statement_summary}
                 onChange={(e) => setAddForm(prev => ({ ...prev, statement_summary: e.target.value }))}
-                className="w-full rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none"
+                className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
                 placeholder="Brief summary..."
               />
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Category</label>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Category</label>
                 <select
                   value={addForm.category}
                   onChange={(e) => setAddForm(prev => ({ ...prev, category: e.target.value }))}
-                  className="w-full rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none"
+                  className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
                 >
                   {Object.keys(CATEGORY_COLORS).map(c => (
                     <option key={c} value={c}>{formatCategory(c)}</option>
@@ -3014,11 +3017,11 @@ function StatementsTab({ statements, statementsLoading, parsePolicyMutation, isP
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Priority</label>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Priority</label>
                 <select
                   value={addForm.priority}
                   onChange={(e) => setAddForm(prev => ({ ...prev, priority: e.target.value }))}
-                  className="w-full rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none"
+                  className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
                 >
                   <option value="critical">Critical</option>
                   <option value="high">High</option>
@@ -3027,12 +3030,12 @@ function StatementsTab({ statements, statementsLoading, parsePolicyMutation, isP
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Source Section</label>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Source Section</label>
                 <input
                   type="text"
                   value={addForm.source_section}
                   onChange={(e) => setAddForm(prev => ({ ...prev, source_section: e.target.value }))}
-                  className="w-full rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none"
+                  className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
                   placeholder="e.g. Section 4.1"
                 />
               </div>
@@ -3042,16 +3045,16 @@ function StatementsTab({ statements, statementsLoading, parsePolicyMutation, isP
                     type="checkbox"
                     checked={addForm.is_mandatory}
                     onChange={(e) => setAddForm(prev => ({ ...prev, is_mandatory: e.target.checked }))}
-                    className="h-4 w-4 rounded border-gray-300 bg-gray-100 text-primary-500"
+                    className="h-4 w-4 rounded border-slate-300 bg-slate-100 text-primary-500"
                   />
-                  <span className="text-sm text-gray-800">Mandatory</span>
+                  <span className="text-sm text-slate-700">Mandatory</span>
                 </label>
               </div>
             </div>
-            <div className="flex justify-end gap-2 pt-2 border-t border-gray-300">
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-300">
               <button
                 onClick={() => setShowAddForm(false)}
-                className="px-3 py-1.5 text-sm text-gray-600 hover:text-black rounded-lg hover:bg-gray-100"
+                className="px-3 py-1.5 text-sm text-slate-600 hover:text-slate-900 rounded-lg hover:bg-slate-100"
               >
                 Cancel
               </button>
@@ -3061,7 +3064,7 @@ function StatementsTab({ statements, statementsLoading, parsePolicyMutation, isP
                   addMutation.mutate(addForm);
                 }}
                 disabled={addMutation.isPending || !addForm.statement_text.trim()}
-                className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-1.5 text-sm font-medium text-black hover:bg-green-700 disabled:opacity-50"
+                className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-1.5 text-sm font-medium text-slate-900 hover:bg-green-700 disabled:opacity-50"
               >
                 {addMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                 Add Statement
@@ -3078,7 +3081,7 @@ function StatementsTab({ statements, statementsLoading, parsePolicyMutation, isP
               <AlertTriangle className="h-5 w-5 text-amber-400" />
               <div>
                 <h4 className="text-sm font-semibold text-amber-400">Re-parse Review Required</h4>
-                <p className="text-xs text-gray-600 mt-0.5">{proposalsData.total} proposed changes ({proposalsData.update_count} updates, {proposalsData.new_count} new)</p>
+                <p className="text-xs text-slate-600 mt-0.5">{proposalsData.total} proposed changes ({proposalsData.update_count} updates, {proposalsData.new_count} new)</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -3088,7 +3091,7 @@ function StatementsTab({ statements, statementsLoading, parsePolicyMutation, isP
                   applyProposalsMutation.mutate(decisions);
                 }}
                 disabled={applyProposalsMutation.isPending}
-                className="flex items-center gap-1 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-black hover:bg-green-700 disabled:opacity-50"
+                className="flex items-center gap-1 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-slate-900 hover:bg-green-700 disabled:opacity-50"
               >
                 <Check className="h-3 w-3" /> Accept All
               </button>
@@ -3098,7 +3101,7 @@ function StatementsTab({ statements, statementsLoading, parsePolicyMutation, isP
                   applyProposalsMutation.mutate(decisions);
                 }}
                 disabled={applyProposalsMutation.isPending}
-                className="flex items-center gap-1 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-black hover:bg-red-700 disabled:opacity-50"
+                className="flex items-center gap-1 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-slate-900 hover:bg-red-700 disabled:opacity-50"
               >
                 <X className="h-3 w-3" /> Reject All
               </button>
@@ -3106,14 +3109,14 @@ function StatementsTab({ statements, statementsLoading, parsePolicyMutation, isP
           </div>
           <div className="space-y-3 max-h-96 overflow-y-auto">
             {proposalsData.proposals.filter((p: any) => p.status === 'pending').map((proposal: any, idx: number) => (
-              <div key={idx} className="rounded-lg border border-gray-300 bg-white p-4">
+              <div key={idx} className="rounded-lg border border-slate-300 bg-white p-4">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
                     <span className={`rounded px-2 py-0.5 text-xs font-medium ${proposal.type === 'update' ? 'bg-amber-500/20 text-amber-400' : 'bg-green-500/20 text-green-400'}`}>
                       {proposal.type === 'update' ? 'Update Existing' : 'New Statement'}
                     </span>
                     {proposal.similarity_score > 0 && (
-                      <span className="text-xs text-gray-700">{Math.round(proposal.similarity_score * 100)}% match</span>
+                      <span className="text-xs text-slate-700">{Math.round(proposal.similarity_score * 100)}% match</span>
                     )}
                   </div>
                   <div className="flex items-center gap-1">
@@ -3139,16 +3142,16 @@ function StatementsTab({ statements, statementsLoading, parsePolicyMutation, isP
                   <div className="grid grid-cols-2 gap-3 mb-2">
                     <div className="rounded bg-red-500/5 border border-red-500/20 p-2">
                       <span className="text-xs text-red-400 font-medium">Current</span>
-                      <p className="text-xs text-gray-600 mt-1 line-clamp-3">{proposal.existing_text}</p>
+                      <p className="text-xs text-slate-600 mt-1 line-clamp-3">{proposal.existing_text}</p>
                     </div>
                     <div className="rounded bg-green-500/5 border border-green-500/20 p-2">
                       <span className="text-xs text-green-400 font-medium">Proposed</span>
-                      <p className="text-xs text-gray-600 mt-1 line-clamp-3">{proposal.new_statement?.statement_text}</p>
+                      <p className="text-xs text-slate-600 mt-1 line-clamp-3">{proposal.new_statement?.statement_text}</p>
                     </div>
                   </div>
                 )}
                 {proposal.type === 'new' && (
-                  <p className="text-xs text-gray-600 line-clamp-3">{proposal.new_statement?.statement_text}</p>
+                  <p className="text-xs text-slate-600 line-clamp-3">{proposal.new_statement?.statement_text}</p>
                 )}
               </div>
             ))}
@@ -3157,7 +3160,7 @@ function StatementsTab({ statements, statementsLoading, parsePolicyMutation, isP
       )}
 
       {categoryKeys.map(cat => {
-        const colors = CATEGORY_COLORS[cat] || { bg: 'bg-slate-500/20', text: 'text-gray-600', border: 'border-slate-500/30' };
+        const colors = CATEGORY_COLORS[cat] || { bg: 'bg-slate-500/20', text: 'text-slate-600', border: 'border-slate-500/30' };
         const isExpanded = expandedCategories.has(cat);
         const catStmts = grouped[cat];
 
@@ -3165,19 +3168,19 @@ function StatementsTab({ statements, statementsLoading, parsePolicyMutation, isP
           <div key={cat} className={`rounded-xl border ${colors.border} bg-white overflow-hidden`}>
             <button
               onClick={() => toggleCategory(cat)}
-              className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-100/50 transition-colors"
+              className="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-100/50 transition-colors"
             >
               <div className="flex items-center gap-3">
                 <span className={`rounded-lg px-2.5 py-1 text-xs font-semibold ${colors.bg} ${colors.text}`}>
                   {formatCategory(cat)}
                 </span>
-                <span className="text-sm text-gray-800">{catStmts.length} statement{catStmts.length !== 1 ? 's' : ''}</span>
+                <span className="text-sm text-slate-700">{catStmts.length} statement{catStmts.length !== 1 ? 's' : ''}</span>
               </div>
-              {isExpanded ? <ChevronUp className="h-4 w-4 text-gray-600" /> : <ChevronDown className="h-4 w-4 text-gray-600" />}
+              {isExpanded ? <ChevronUp className="h-4 w-4 text-slate-600" /> : <ChevronDown className="h-4 w-4 text-slate-600" />}
             </button>
 
             {isExpanded && (
-              <div className="border-t border-gray-300 divide-y divide-gray-200">
+              <div className="border-t border-slate-300 divide-y divide-slate-200">
                 {catStmts.map((stmt: any, idx: number) => {
                   const isEditingThis = editingStmtId === stmt.id;
                   const isDeleting = deleteConfirm === stmt.id;
@@ -3187,30 +3190,30 @@ function StatementsTab({ statements, statementsLoading, parsePolicyMutation, isP
                       {isEditingThis ? (
                         <div className="space-y-3">
                           <div>
-                            <label className="block text-xs font-medium text-gray-600 mb-1">Statement Text</label>
+                            <label className="block text-xs font-medium text-slate-600 mb-1">Statement Text</label>
                             <textarea
                               value={editStmtForm.statement_text}
                               onChange={(e) => setEditStmtForm(prev => ({ ...prev, statement_text: e.target.value }))}
                               rows={3}
-                              className="w-full rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none"
+                              className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
                             />
                           </div>
                           <div>
-                            <label className="block text-xs font-medium text-gray-600 mb-1">Summary</label>
+                            <label className="block text-xs font-medium text-slate-600 mb-1">Summary</label>
                             <input
                               type="text"
                               value={editStmtForm.statement_summary}
                               onChange={(e) => setEditStmtForm(prev => ({ ...prev, statement_summary: e.target.value }))}
-                              className="w-full rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none"
+                              className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
                             />
                           </div>
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                             <div>
-                              <label className="block text-xs font-medium text-gray-600 mb-1">Category</label>
+                              <label className="block text-xs font-medium text-slate-600 mb-1">Category</label>
                               <select
                                 value={editStmtForm.category}
                                 onChange={(e) => setEditStmtForm(prev => ({ ...prev, category: e.target.value }))}
-                                className="w-full rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none"
+                                className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
                               >
                                 {Object.keys(CATEGORY_COLORS).map(c => (
                                   <option key={c} value={c}>{formatCategory(c)}</option>
@@ -3218,11 +3221,11 @@ function StatementsTab({ statements, statementsLoading, parsePolicyMutation, isP
                               </select>
                             </div>
                             <div>
-                              <label className="block text-xs font-medium text-gray-600 mb-1">Priority</label>
+                              <label className="block text-xs font-medium text-slate-600 mb-1">Priority</label>
                               <select
                                 value={editStmtForm.priority}
                                 onChange={(e) => setEditStmtForm(prev => ({ ...prev, priority: e.target.value }))}
-                                className="w-full rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none"
+                                className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
                               >
                                 <option value="critical">Critical</option>
                                 <option value="high">High</option>
@@ -3231,12 +3234,12 @@ function StatementsTab({ statements, statementsLoading, parsePolicyMutation, isP
                               </select>
                             </div>
                             <div>
-                              <label className="block text-xs font-medium text-gray-600 mb-1">Source Section</label>
+                              <label className="block text-xs font-medium text-slate-600 mb-1">Source Section</label>
                               <input
                                 type="text"
                                 value={editStmtForm.source_section}
                                 onChange={(e) => setEditStmtForm(prev => ({ ...prev, source_section: e.target.value }))}
-                                className="w-full rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none"
+                                className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
                               />
                             </div>
                             <div className="flex items-end">
@@ -3245,18 +3248,18 @@ function StatementsTab({ statements, statementsLoading, parsePolicyMutation, isP
                                   type="checkbox"
                                   checked={editStmtForm.is_mandatory}
                                   onChange={(e) => setEditStmtForm(prev => ({ ...prev, is_mandatory: e.target.checked }))}
-                                  className="h-4 w-4 rounded border-gray-300 bg-gray-100 text-primary-500"
+                                  className="h-4 w-4 rounded border-slate-300 bg-slate-100 text-primary-500"
                                 />
-                                <span className="text-sm text-gray-800">Mandatory</span>
+                                <span className="text-sm text-slate-700">Mandatory</span>
                               </label>
                             </div>
                           </div>
                           <div className="flex justify-end gap-2 pt-2">
-                            <button onClick={() => setEditingStmtId(null)} className="px-3 py-1.5 text-sm text-gray-600 hover:text-black rounded-lg hover:bg-gray-100">Cancel</button>
+                            <button onClick={() => setEditingStmtId(null)} className="px-3 py-1.5 text-sm text-slate-600 hover:text-slate-900 rounded-lg hover:bg-slate-100">Cancel</button>
                             <button
                               onClick={() => updateMutation.mutate({ stmtId: stmt.id, data: editStmtForm })}
                               disabled={updateMutation.isPending}
-                              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-1.5 text-sm font-medium text-black hover:bg-primary-700 disabled:opacity-50"
+                              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-1.5 text-sm font-medium text-slate-900 hover:bg-primary-700 disabled:opacity-50"
                             >
                               {updateMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
                               Save
@@ -3268,12 +3271,12 @@ function StatementsTab({ statements, statementsLoading, parsePolicyMutation, isP
                           <div className="flex items-start justify-between mb-2">
                             <div className="flex items-center gap-2">
                               {stmt.statement_code && (
-                                <span className="rounded bg-primary-500/20 px-2 py-0.5 text-xs font-mono text-primary-400">
+                                <span className="rounded bg-primary-50 px-2 py-0.5 text-xs font-mono text-primary-400">
                                   {stmt.statement_code}
                                 </span>
                               )}
                               {stmt.source_section && (
-                                <span className="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
+                                <span className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
                                   {stmt.source_section}
                                 </span>
                               )}
@@ -3293,20 +3296,20 @@ function StatementsTab({ statements, statementsLoading, parsePolicyMutation, isP
                                 </span>
                               )}
                               {(stmt.ai_confidence != null || stmt.confidence_score != null) && (
-                                <span className="text-xs text-gray-600">
+                                <span className="text-xs text-slate-600">
                                   {Math.round((stmt.ai_confidence ?? stmt.confidence_score) * 100)}% confidence
                                 </span>
                               )}
                               <button
                                 onClick={() => setVersionHistoryStmtId(stmt.id)}
-                                className="p-1 text-gray-700 hover:text-purple-400 rounded hover:bg-gray-100 transition-colors"
+                                className="p-1 text-slate-700 hover:text-primary-700 rounded hover:bg-slate-100 transition-colors"
                                 title="Version history"
                               >
                                 <History className="h-3.5 w-3.5" />
                               </button>
                               <button
                                 onClick={() => startEdit(stmt)}
-                                className="p-1 text-gray-700 hover:text-blue-400 rounded hover:bg-gray-100 transition-colors"
+                                className="p-1 text-slate-700 hover:text-primary-700 rounded hover:bg-slate-100 transition-colors"
                                 title="Edit statement"
                               >
                                 <Pencil className="h-3.5 w-3.5" />
@@ -3316,13 +3319,13 @@ function StatementsTab({ statements, statementsLoading, parsePolicyMutation, isP
                                   <button
                                     onClick={() => deleteMutation.mutate(stmt.id)}
                                     disabled={deleteMutation.isPending}
-                                    className="px-2 py-0.5 text-xs bg-red-600 text-black rounded hover:bg-red-700 disabled:opacity-50"
+                                    className="px-2 py-0.5 text-xs bg-red-600 text-slate-900 rounded hover:bg-red-700 disabled:opacity-50"
                                   >
                                     {deleteMutation.isPending ? '...' : 'Confirm'}
                                   </button>
                                   <button
                                     onClick={() => setDeleteConfirm(null)}
-                                    className="px-2 py-0.5 text-xs text-gray-600 rounded hover:bg-gray-100"
+                                    className="px-2 py-0.5 text-xs text-slate-600 rounded hover:bg-slate-100"
                                   >
                                     Cancel
                                   </button>
@@ -3330,7 +3333,7 @@ function StatementsTab({ statements, statementsLoading, parsePolicyMutation, isP
                               ) : (
                                 <button
                                   onClick={() => setDeleteConfirm(stmt.id)}
-                                  className="p-1 text-gray-700 hover:text-red-400 rounded hover:bg-gray-100 transition-colors"
+                                  className="p-1 text-slate-700 hover:text-red-400 rounded hover:bg-slate-100 transition-colors"
                                   title="Delete statement"
                                 >
                                   <Trash2 className="h-3.5 w-3.5" />
@@ -3338,9 +3341,9 @@ function StatementsTab({ statements, statementsLoading, parsePolicyMutation, isP
                               )}
                             </div>
                           </div>
-                          <p className="text-sm text-gray-800">{stmt.statement_text || stmt.text}</p>
+                          <p className="text-sm text-slate-700">{stmt.statement_text || stmt.text}</p>
                           {stmt.statement_summary && (
-                            <p className="text-xs text-gray-700 mt-1 italic">{stmt.statement_summary}</p>
+                            <p className="text-xs text-slate-700 mt-1 italic">{stmt.statement_summary}</p>
                           )}
                         </>
                       )}
@@ -3355,25 +3358,25 @@ function StatementsTab({ statements, statementsLoading, parsePolicyMutation, isP
 
       {versionHistoryStmtId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="w-full max-w-4xl max-h-[85vh] overflow-y-auto rounded-2xl border border-gray-300 bg-white shadow-2xl">
-            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-300 bg-white px-6 py-4">
+          <div className="w-full max-w-4xl max-h-[85vh] overflow-y-auto rounded-2xl border border-slate-300 bg-white shadow-2xl">
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-300 bg-white px-6 py-4">
               <div className="flex items-center gap-3">
-                <History className="h-5 w-5 text-purple-400" />
-                <h3 className="text-lg font-semibold text-black">Version History</h3>
+                <History className="h-5 w-5 text-primary-700" />
+                <h3 className="text-lg font-semibold text-slate-900">Version History</h3>
                 {versionData?.total_versions != null && (
-                  <span className="rounded-full bg-purple-500/20 px-2.5 py-0.5 text-xs font-medium text-purple-400">
+                  <span className="rounded-full bg-primary-50 px-2.5 py-0.5 text-xs font-medium text-primary-700">
                     {versionData.total_versions} version{versionData.total_versions !== 1 ? 's' : ''}
                   </span>
                 )}
               </div>
-              <button onClick={() => { setVersionHistoryStmtId(null); setCompareVersions(null); }} className="p-1.5 text-gray-600 hover:text-black rounded-lg hover:bg-gray-100">
+              <button onClick={() => { setVersionHistoryStmtId(null); setCompareVersions(null); }} className="p-1.5 text-slate-600 hover:text-slate-900 rounded-lg hover:bg-slate-100">
                 <X className="h-5 w-5" />
               </button>
             </div>
             <div className="p-6 space-y-4">
               {versionsLoading ? (
                 <div className="flex h-32 items-center justify-center">
-                  <Loader2 className="h-8 w-8 animate-spin text-purple-400" />
+                  <Loader2 className="h-8 w-8 animate-spin text-primary-700" />
                 </div>
               ) : versionData?.versions?.length > 0 ? (
                 <>
@@ -3381,18 +3384,18 @@ function StatementsTab({ statements, statementsLoading, parsePolicyMutation, isP
                     {versionData.versions.map((v: any, idx: number) => {
                       const isLatest = idx === 0;
                       const changeColors: Record<string, string> = {
-                        initial_parse: 'bg-purple-500/20 text-purple-400',
-                        manual_edit: 'bg-blue-500/20 text-blue-400',
+                        initial_parse: 'bg-primary-50 text-primary-700',
+                        manual_edit: 'bg-primary-50 text-primary-700',
                         ai_reparse: 'bg-amber-500/20 text-amber-400',
-                        rollback: 'bg-cyan-500/20 text-cyan-400',
+                        rollback: 'bg-slate-100 text-slate-600',
                         manual_add: 'bg-green-500/20 text-green-400',
                       };
                       return (
-                        <div key={v.id} className={`rounded-xl border ${isLatest ? 'border-purple-500/40 bg-purple-500/5' : 'border-gray-300 bg-white'} p-4`}>
+                        <div key={v.id} className={`rounded-xl border ${isLatest ? 'border-primary-200 bg-primary-50' : 'border-slate-300 bg-white'} p-4`}>
                           <div className="flex items-center justify-between mb-2">
                             <div className="flex items-center gap-2">
-                              <span className="rounded bg-gray-100 px-2 py-0.5 text-xs font-mono text-gray-800">v{v.version_number}</span>
-                              <span className={`rounded px-2 py-0.5 text-xs font-medium ${changeColors[v.change_type] || 'bg-slate-500/20 text-gray-600'}`}>
+                              <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-mono text-slate-700">v{v.version_number}</span>
+                              <span className={`rounded px-2 py-0.5 text-xs font-medium ${changeColors[v.change_type] || 'bg-slate-500/20 text-slate-600'}`}>
                                 {v.change_type?.replace(/_/g, ' ')}
                               </span>
                               {isLatest && <span className="rounded bg-green-500/20 px-2 py-0.5 text-xs text-green-400">current</span>}
@@ -3402,7 +3405,7 @@ function StatementsTab({ statements, statementsLoading, parsePolicyMutation, isP
                                 <>
                                   <button
                                     onClick={() => setCompareVersions({ a: v.id, b: versionData.versions[0].id })}
-                                    className="flex items-center gap-1 rounded-lg border border-gray-300 bg-gray-100 px-2.5 py-1 text-xs text-gray-800 hover:text-black hover:bg-gray-100"
+                                    className="flex items-center gap-1 rounded-lg border border-slate-300 bg-slate-100 px-2.5 py-1 text-xs text-slate-700 hover:text-slate-900 hover:bg-slate-100"
                                   >
                                     <GitCompare className="h-3 w-3" />
                                     Compare
@@ -3410,7 +3413,7 @@ function StatementsTab({ statements, statementsLoading, parsePolicyMutation, isP
                                   <button
                                     onClick={() => rollbackMutation.mutate({ stmtId: versionHistoryStmtId, versionId: v.id })}
                                     disabled={rollbackMutation.isPending}
-                                    className="flex items-center gap-1 rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-2.5 py-1 text-xs text-cyan-400 hover:bg-cyan-500/20 disabled:opacity-50"
+                                    className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs text-slate-600 hover:bg-slate-100 disabled:opacity-50"
                                   >
                                     <RotateCcw className="h-3 w-3" />
                                     {rollbackMutation.isPending ? 'Rolling back...' : 'Rollback'}
@@ -3419,8 +3422,8 @@ function StatementsTab({ statements, statementsLoading, parsePolicyMutation, isP
                               )}
                             </div>
                           </div>
-                          <p className="text-sm text-gray-800 whitespace-pre-wrap break-words">{v.statement_text}</p>
-                          <div className="flex items-center gap-3 mt-2 text-xs text-gray-700">
+                          <p className="text-sm text-slate-700 whitespace-pre-wrap break-words">{v.statement_text}</p>
+                          <div className="flex items-center gap-3 mt-2 text-xs text-slate-700">
                             {v.changed_by_name && <span className="flex items-center gap-1"><User className="h-3 w-3" /> {v.changed_by_name}</span>}
                             {v.changed_at && <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {new Date(v.changed_at).toLocaleString()}</span>}
                             {v.change_reason && <span className="italic">&quot;{v.change_reason}&quot;</span>}
@@ -3430,37 +3433,37 @@ function StatementsTab({ statements, statementsLoading, parsePolicyMutation, isP
                     })}
                   </div>
                   {compareVersions && diffData && (
-                    <div className="mt-6 rounded-xl border border-purple-500/30 bg-white p-5">
-                      <h4 className="text-sm font-semibold text-purple-400 mb-3 flex items-center gap-2">
+                    <div className="mt-6 rounded-xl border border-primary-200 bg-white p-5">
+                      <h4 className="text-sm font-semibold text-primary-700 mb-3 flex items-center gap-2">
                         <GitCompare className="h-4 w-4" />
                         Version Comparison
                       </h4>
                       {diffData.field_changes?.length > 0 ? (
                         <div className="space-y-2">
                           {diffData.field_changes.map((change: any, i: number) => (
-                            <div key={i} className="rounded-lg border border-gray-300 bg-white p-3">
-                              <span className="text-xs font-semibold text-gray-600 uppercase">{change.field.replace(/_/g, ' ')}</span>
+                            <div key={i} className="rounded-lg border border-slate-300 bg-white p-3">
+                              <span className="text-xs font-semibold text-slate-600 uppercase">{change.field.replace(/_/g, ' ')}</span>
                               <div className="grid grid-cols-2 gap-3 mt-1">
                                 <div className="rounded bg-red-500/10 border border-red-500/20 p-2">
                                   <span className="text-xs text-red-400">v{diffData.version_a.version_number}</span>
-                                  <p className="text-sm text-gray-800 mt-1 whitespace-pre-wrap break-words">{change.version_a_value || '(empty)'}</p>
+                                  <p className="text-sm text-slate-700 mt-1 whitespace-pre-wrap break-words">{change.version_a_value || '(empty)'}</p>
                                 </div>
                                 <div className="rounded bg-green-500/10 border border-green-500/20 p-2">
                                   <span className="text-xs text-green-400">v{diffData.version_b.version_number}</span>
-                                  <p className="text-sm text-gray-800 mt-1 whitespace-pre-wrap break-words">{change.version_b_value || '(empty)'}</p>
+                                  <p className="text-sm text-slate-700 mt-1 whitespace-pre-wrap break-words">{change.version_b_value || '(empty)'}</p>
                                 </div>
                               </div>
                             </div>
                           ))}
                         </div>
                       ) : (
-                        <p className="text-sm text-gray-600">No differences found between these versions.</p>
+                        <p className="text-sm text-slate-600">No differences found between these versions.</p>
                       )}
                     </div>
                   )}
                 </>
               ) : (
-                <p className="text-sm text-gray-600 text-center py-8">No version history available for this statement.</p>
+                <p className="text-sm text-slate-600 text-center py-8">No version history available for this statement.</p>
               )}
             </div>
           </div>
@@ -3489,7 +3492,7 @@ function ControlCoveragePanel({ documentId }: { documentId: number }) {
 
   if (isLoading) {
     return (
-      <div className="rounded-xl border border-gray-200 bg-white p-4 flex items-center gap-2 text-sm text-gray-500">
+      <div className="rounded-xl border border-slate-200 bg-white p-4 flex items-center gap-2 text-sm text-slate-500">
         <Loader2 className="h-4 w-4 animate-spin" /> Computing framework control coverage…
       </div>
     );
@@ -3498,8 +3501,8 @@ function ControlCoveragePanel({ documentId }: { documentId: number }) {
   const recommended = data?.recommended_controls || [];
   if (frameworks.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-600">
-        <p className="font-medium text-gray-700 mb-0.5">No applicable frameworks set</p>
+      <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-600">
+        <p className="font-medium text-slate-700 mb-0.5">No applicable frameworks set</p>
         Edit this document and pick its <span className="font-medium">Applicable Frameworks</span> to see which
         of their controls this document covers — and which are missing (the audit gap).
       </div>
@@ -3512,25 +3515,25 @@ function ControlCoveragePanel({ documentId }: { documentId: number }) {
     <div className="space-y-3">
       <div className="flex items-center gap-2">
         <ShieldCheck className="h-4 w-4 text-primary-500" />
-        <h3 className="text-sm font-semibold text-black">Framework Control Coverage</h3>
-        <span className="text-xs text-gray-500">
+        <h3 className="text-sm font-semibold text-slate-900">Framework Control Coverage</h3>
+        <span className="text-xs text-slate-500">
           {data?.totals.mapped ?? 0} mapped · {data?.totals.missing ?? 0} missing across {frameworks.length} framework{frameworks.length !== 1 ? 's' : ''}
         </span>
       </div>
       {frameworks.map((fw) => {
         const isOpen = openFw === fw.framework_id;
         return (
-          <div key={fw.framework_id} className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+          <div key={fw.framework_id} className="rounded-xl border border-slate-200 bg-white overflow-hidden">
             <button
               type="button"
               onClick={() => setOpenFw(isOpen ? null : fw.framework_id)}
-              className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50"
+              className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-50"
             >
-              <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+              <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-black truncate">{fw.framework_name}</p>
+                <p className="text-sm font-medium text-slate-900 truncate">{fw.framework_name}</p>
                 <div className="mt-1.5 flex items-center gap-2">
-                  <div className="h-1.5 flex-1 max-w-[220px] rounded-full bg-gray-100 overflow-hidden">
+                  <div className="h-1.5 flex-1 max-w-[220px] rounded-full bg-slate-100 overflow-hidden">
                     <div className="h-full rounded-full" style={{ width: `${fw.coverage_pct}%`, backgroundColor: barColor(fw.coverage_pct) }} />
                   </div>
                   <span className="text-xs font-medium" style={{ color: barColor(fw.coverage_pct) }}>{fw.coverage_pct}%</span>
@@ -3538,11 +3541,11 @@ function ControlCoveragePanel({ documentId }: { documentId: number }) {
               </div>
               <div className="flex items-center gap-3 text-xs">
                 <span className="text-emerald-600 font-medium">{fw.mapped_count} mapped</span>
-                <span className={`font-medium ${fw.missing_count > 0 ? 'text-rose-600' : 'text-gray-400'}`}>{fw.missing_count} missing</span>
+                <span className={`font-medium ${fw.missing_count > 0 ? 'text-rose-600' : 'text-slate-400'}`}>{fw.missing_count} missing</span>
               </div>
             </button>
             {isOpen && (
-              <div className="border-t border-gray-100 px-4 py-3">
+              <div className="border-t border-slate-100 px-4 py-3">
                 {fw.missing_controls.length === 0 ? (
                   <p className="text-xs text-emerald-700 flex items-center gap-1">
                     <CheckCircle className="h-3.5 w-3.5" /> Every control of this framework is covered by a statement in this document.
@@ -3555,10 +3558,10 @@ function ControlCoveragePanel({ documentId }: { documentId: number }) {
                     <div className="max-h-64 overflow-y-auto space-y-1.5">
                       {fw.missing_controls.map((c) => (
                         <div key={c.id} className="flex items-start gap-2 rounded-md bg-rose-50/60 border border-rose-100 px-2.5 py-1.5">
-                          <span className="font-mono text-[10px] text-rose-600 mt-0.5 shrink-0">{c.reference}</span>
+                          <span className="font-mono text-[10px] text-rose-600 mt-0.5 shrink-0">{(c.reference ?? '').toUpperCase()}</span>
                           <div className="min-w-0">
-                            <p className="text-xs text-gray-800 truncate">{c.title}</p>
-                            {c.domain && <p className="text-[10px] text-gray-400">{c.domain}</p>}
+                            <p className="text-xs text-slate-700 truncate">{c.title}</p>
+                            {c.domain && <p className="text-[10px] text-slate-400">{c.domain}</p>}
                           </div>
                         </div>
                       ))}
@@ -3571,12 +3574,12 @@ function ControlCoveragePanel({ documentId }: { documentId: number }) {
         );
       })}
       {recommended.length > 0 && (
-        <div className="rounded-xl border border-gray-200 bg-white px-4 py-3">
-          <p className="text-xs font-semibold text-gray-700 mb-2">{recommended.length} AI-recommended control{recommended.length !== 1 ? 's' : ''} (not yet confirmed)</p>
+        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+          <p className="text-xs font-semibold text-slate-700 mb-2">{recommended.length} AI-recommended control{recommended.length !== 1 ? 's' : ''} (not yet confirmed)</p>
           <div className="flex flex-wrap gap-1.5">
             {recommended.slice(0, 24).map((r: any, i: number) => (
-              <span key={i} className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[11px] text-blue-700" title={r.control_title || ''}>
-                {r.clause_reference || r.control_code}
+              <span key={i} className="inline-flex items-center gap-1 rounded-full border border-primary-200 bg-primary-50 px-2 py-0.5 text-[11px] text-primary-700" title={r.control_title || ''}>
+                {(r.clause_reference || r.control_code || '').toUpperCase()}
               </span>
             ))}
           </div>
@@ -3586,63 +3589,14 @@ function ControlCoveragePanel({ documentId }: { documentId: number }) {
   );
 }
 
-function ControlsTab({ mappings, mappingsLoading, documentId }: any) {
-  if (mappingsLoading) {
-    return (
-      <div className="flex h-48 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
-      </div>
-    );
-  }
-
-  const links = mappings?.control_links || [];
-
+function ControlsTab({ documentId }: any) {
+  // Coverage/gap panel + the full Policy-Control Mappings surface, scoped
+  // (auto-selected) to this document — same functionality as the standalone
+  // Mappings page, embedded here so it lives with the document.
   return (
     <div className="space-y-4">
       <ControlCoveragePanel documentId={documentId} />
-
-      {links.length === 0 ? (
-        <div className="rounded-xl border border-gray-300 bg-white p-8 text-center">
-          <Shield className="h-12 w-12 text-gray-700 mx-auto mb-3" />
-          <p className="text-gray-600 mb-4">No controls linked to this document</p>
-          <a
-            href="/governance/mappings"
-            className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-black hover:bg-primary-700 transition-colors"
-          >
-            <Link2 className="h-4 w-4" />
-            Go to Mappings
-          </a>
-        </div>
-      ) : (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-black">{links.length} Linked Control{links.length !== 1 ? 's' : ''}</h3>
-        <a
-          href="/governance/mappings"
-          className="flex items-center gap-1 text-sm text-primary-400 hover:text-primary-300"
-        >
-          Manage Mappings
-          <ExternalLink className="h-3.5 w-3.5" />
-        </a>
-      </div>
-      {links.map((link: any) => (
-        <div key={link.id} className="rounded-xl border border-gray-300 bg-white/50 p-4 hover:bg-white transition-colors">
-          <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-emerald-500/20 p-2">
-              <Shield className="h-4 w-4 text-emerald-400" />
-            </div>
-            <div className="flex-1">
-              <p className="font-medium text-black">{link.control_code}</p>
-              <p className="text-sm text-gray-600">{link.control_name}</p>
-            </div>
-            <span className="rounded-full bg-primary-500/20 px-2.5 py-0.5 text-xs text-primary-400 capitalize">
-              {(link.link_type || '').replace('_', ' ')}
-            </span>
-          </div>
-        </div>
-      ))}
-    </div>
-      )}
+      <GovernanceMappingsPage initialDocumentId={documentId} />
     </div>
   );
 }
@@ -3658,7 +3612,7 @@ function ComplianceSummarySection({ summary, loading }: { summary: any; loading:
   }
 
   return (
-    <div className="rounded-xl border border-gray-300 bg-white p-5">
+    <div className="rounded-xl border border-slate-300 bg-white p-5">
       <div className="space-y-4">
         {frameworks.map((fw: any, idx: number) => {
           const pct = fw.compliance_percentage ?? fw.compliance_score ?? 0;
@@ -3667,13 +3621,13 @@ function ComplianceSummarySection({ summary, loading }: { summary: any; loading:
           return (
             <div key={fw.framework_id || idx}>
               <div className="flex items-center justify-between mb-1.5">
-                <span className="text-sm font-medium text-gray-800">{fw.framework_name || fw.name || `Framework ${fw.framework_id}`}</span>
+                <span className="text-sm font-medium text-slate-700">{fw.framework_name || fw.name || `Framework ${fw.framework_id}`}</span>
                 <span className={`text-sm font-bold ${textColor}`}>{Math.round(pct)}%</span>
               </div>
-              <div className="h-2.5 rounded-full bg-gray-100 overflow-hidden">
+              <div className="h-2.5 rounded-full bg-slate-100 overflow-hidden">
                 <div className={`h-full rounded-full ${color} transition-all duration-500`} style={{ width: `${pct}%` }} />
               </div>
-              <div className="flex items-center gap-4 mt-1 text-xs text-gray-600">
+              <div className="flex items-center gap-4 mt-1 text-xs text-slate-600">
                 {fw.total_clauses != null && <span>{fw.total_clauses} clauses</span>}
                 {fw.compliant_count != null && <span className="text-green-400">{fw.compliant_count} compliant</span>}
                 {fw.gaps_count != null && <span className="text-red-400">{fw.gaps_count} gaps</span>}
@@ -3696,111 +3650,111 @@ function GapFindingRow({
 }: any) {
   return (
     <>
-      <tr className="bg-white hover:bg-gray-50 transition-colors cursor-pointer border-b border-gray-200" onClick={onToggleExpand}>
+      <tr className="bg-white hover:bg-slate-50 transition-colors cursor-pointer border-b border-slate-200" onClick={onToggleExpand}>
         <td className="px-2 py-2">
-          {isExpanded ? <ChevronUp className="h-3.5 w-3.5 text-gray-500" /> : <ChevronDown className="h-3.5 w-3.5 text-gray-500" />}
+          {isExpanded ? <ChevronUp className="h-3.5 w-3.5 text-slate-500" /> : <ChevronDown className="h-3.5 w-3.5 text-slate-500" />}
         </td>
         <td className="px-3 py-2">
-          <div className="text-xs text-gray-800 font-mono">{finding.clause_reference || '-'}</div>
+          <div className="text-xs text-slate-700 font-mono">{finding.clause_reference || '-'}</div>
           {finding.clause_title && (
-            <div className="text-xs text-gray-500 mt-0.5 max-w-[180px] truncate">{finding.clause_title}</div>
+            <div className="text-xs text-slate-500 mt-0.5 max-w-[180px] truncate">{finding.clause_title}</div>
           )}
         </td>
         <td className="px-3 py-2">
-          <div className="text-xs text-gray-800 max-w-[140px] truncate">{finding.policy_section_reference || '-'}</div>
+          <div className="text-xs text-slate-700 max-w-[140px] truncate">{finding.policy_section_reference || '-'}</div>
         </td>
         <td className="px-3 py-2">
           <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${cs.bg} ${cs.text}`}>
             {cs.label}
           </span>
           {finding.is_overridden && (
-            <span className="ml-1 text-xs text-gray-500" title="Overridden">✓</span>
+            <span className="ml-1 text-xs text-slate-500" title="Overridden">✓</span>
           )}
         </td>
-        <td className="px-3 py-2 text-xs text-gray-800 max-w-[160px] truncate">{finding.gap_description || '-'}</td>
+        <td className="px-3 py-2 text-xs text-slate-700 max-w-[160px] truncate">{finding.gap_description || '-'}</td>
         <td className="px-3 py-2">
           <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${rs.bg} ${rs.text}`}>
             {rs.label}
           </span>
         </td>
-        <td className="px-3 py-2 text-xs text-gray-800 max-w-[140px] truncate">{finding.remediation_recommendation || '-'}</td>
+        <td className="px-3 py-2 text-xs text-slate-700 max-w-[140px] truncate">{finding.remediation_recommendation || '-'}</td>
         <td className="px-3 py-2 text-xs">
           {finding.assigned_owner_name || finding.assigned_owner?.display_name ? (
-            <span className="text-gray-800">{finding.assigned_owner_name || finding.assigned_owner?.display_name}</span>
+            <span className="text-slate-700">{finding.assigned_owner_name || finding.assigned_owner?.display_name}</span>
           ) : (
-            <span className="text-gray-400 italic">Unassigned</span>
+            <span className="text-slate-400 italic">Unassigned</span>
           )}
         </td>
-        <td className="px-3 py-2 text-xs text-gray-800">{formatDate(finding.target_remediation_date)}</td>
+        <td className="px-3 py-2 text-xs text-slate-700">{formatDate(finding.target_remediation_date)}</td>
         <td className="px-3 py-2">
           <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${rms.bg} ${rms.text}`}>
             {rms.label}
           </span>
         </td>
         <td className="px-3 py-2">
-          <span className="inline-flex items-center justify-center rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-800">
+          <span className="inline-flex items-center justify-center rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-700">
             {finding.evidence_count || finding.evidence?.length || 0}
           </span>
         </td>
-        <td className="px-3 py-2 text-xs text-gray-500">{formatDate(finding.updated_at)}</td>
+        <td className="px-3 py-2 text-xs text-slate-500">{formatDate(finding.updated_at)}</td>
       </tr>
 
       {isExpanded && (
-        <tr className="bg-gray-50 border-b border-gray-200">
+        <tr className="bg-slate-50 border-b border-slate-200">
           <td colSpan={12} className="px-6 py-4">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Details Section */}
               <div className="space-y-4">
                 {finding.clause_requirement_text && (
-                  <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
-                    <label className="text-xs font-medium uppercase tracking-wider text-blue-700 block mb-1">Framework Clause Requirement</label>
-                    <p className="text-sm text-gray-800">{finding.clause_requirement_text}</p>
+                  <div className="rounded-lg border border-primary-200 bg-primary-50 p-3">
+                    <label className="text-xs font-medium uppercase tracking-wider text-primary-700 block mb-1">Framework Clause Requirement</label>
+                    <p className="text-sm text-slate-700">{finding.clause_requirement_text}</p>
                   </div>
                 )}
                 {finding.policy_section_text && (
                   <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
                     <label className="text-xs font-medium uppercase tracking-wider text-emerald-700 block mb-1">Matching Policy Text</label>
-                    <p className="text-sm text-gray-800">{finding.policy_section_text}</p>
+                    <p className="text-sm text-slate-700">{finding.policy_section_text}</p>
                   </div>
                 )}
                 {finding.gap_description && (
                   <div>
-                    <label className="text-xs font-medium uppercase tracking-wider text-gray-600 block mb-1">Full Gap Description</label>
-                    <p className="text-sm text-gray-800">{finding.gap_description}</p>
+                    <label className="text-xs font-medium uppercase tracking-wider text-slate-600 block mb-1">Full Gap Description</label>
+                    <p className="text-sm text-slate-700">{finding.gap_description}</p>
                   </div>
                 )}
                 {finding.ai_reasoning && (
-                  <div className="rounded-lg border border-purple-200 bg-purple-50 p-3">
-                    <label className="text-xs font-medium uppercase tracking-wider text-purple-700 block mb-1">AI Reasoning</label>
-                    <p className="text-sm text-gray-800">{finding.ai_reasoning}</p>
+                  <div className="rounded-lg border border-primary-200 bg-primary-50 p-3">
+                    <label className="text-xs font-medium uppercase tracking-wider text-primary-700 block mb-1">AI Reasoning</label>
+                    <p className="text-sm text-slate-700">{finding.ai_reasoning}</p>
                   </div>
                 )}
                 {finding.confidence_score != null && (
                   <div>
-                    <label className="text-xs font-medium uppercase tracking-wider text-gray-600 block mb-1">Confidence Score</label>
+                    <label className="text-xs font-medium uppercase tracking-wider text-slate-600 block mb-1">Confidence Score</label>
                     <div className="flex items-center gap-2">
-                      <div className="h-2 flex-1 rounded-full bg-gray-200 overflow-hidden">
+                      <div className="h-2 flex-1 rounded-full bg-slate-200 overflow-hidden">
                         <div className="h-full rounded-full bg-primary-500" style={{ width: `${finding.confidence_score * 100}%` }} />
                       </div>
-                      <span className="text-sm text-gray-800">{Math.round(finding.confidence_score * 100)}%</span>
+                      <span className="text-sm text-slate-700">{Math.round(finding.confidence_score * 100)}%</span>
                     </div>
                   </div>
                 )}
                 {finding.missing_requirement && (
                   <div>
-                    <label className="text-xs font-medium uppercase tracking-wider text-gray-600 block mb-1">Missing Requirement</label>
-                    <p className="text-sm text-gray-800">{finding.missing_requirement}</p>
+                    <label className="text-xs font-medium uppercase tracking-wider text-slate-600 block mb-1">Missing Requirement</label>
+                    <p className="text-sm text-slate-700">{finding.missing_requirement}</p>
                   </div>
                 )}
                 {finding.remediation_recommendation && (
                   <div>
-                    <label className="text-xs font-medium uppercase tracking-wider text-gray-600 block mb-1">Remediation Recommendation</label>
-                    <p className="text-sm text-gray-800">{finding.remediation_recommendation}</p>
+                    <label className="text-xs font-medium uppercase tracking-wider text-slate-600 block mb-1">Remediation Recommendation</label>
+                    <p className="text-sm text-slate-700">{finding.remediation_recommendation}</p>
                   </div>
                 )}
                 {/* Impact Types */}
                 <div>
-                  <label className="text-xs font-medium uppercase tracking-wider text-gray-600 block mb-2">Impact Types</label>
+                  <label className="text-xs font-medium uppercase tracking-wider text-slate-600 block mb-2">Impact Types</label>
                   <div className="flex flex-wrap gap-3">
                     {['regulatory', 'operational', 'financial', 'reputational'].map(impact => {
                       const isActive = finding[`${impact}_impact`] || finding.impact_types?.includes(impact);
@@ -3809,9 +3763,9 @@ function GapFindingRow({
                           {isActive ? (
                             <Check className="h-4 w-4 text-green-600" />
                           ) : (
-                            <Minus className="h-4 w-4 text-gray-400" />
+                            <Minus className="h-4 w-4 text-slate-400" />
                           )}
-                          <span className={`text-sm capitalize ${isActive ? 'text-gray-800' : 'text-gray-500'}`}>{impact}</span>
+                          <span className={`text-sm capitalize ${isActive ? 'text-slate-700' : 'text-slate-500'}`}>{impact}</span>
                         </div>
                       );
                     })}
@@ -3821,7 +3775,7 @@ function GapFindingRow({
 
               {/* Actions Section */}
               <div className="space-y-3">
-                <label className="text-xs font-medium uppercase tracking-wider text-gray-600 block">Actions</label>
+                <label className="text-xs font-medium uppercase tracking-wider text-slate-600 block">Actions</label>
                 <div className="flex flex-wrap gap-2">
                   {onAddressGap
                     && (finding.compliance_status === 'not_addressed' || finding.compliance_status === 'partially_compliant')
@@ -3830,7 +3784,7 @@ function GapFindingRow({
                     && (
                       <button
                         onClick={(e) => { e.stopPropagation(); onAddressGap(finding); }}
-                        className="flex items-center gap-1.5 rounded-lg border border-blue-300 bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-100"
+                        className="flex items-center gap-1.5 rounded-lg border border-primary-300 bg-primary-50 px-3 py-1.5 text-sm font-medium text-primary-700 hover:bg-primary-100"
                         title="Draft a clause with AI and apply it to the document"
                       >
                         <Sparkles className="h-3.5 w-3.5" /> Address Gap
@@ -3843,32 +3797,32 @@ function GapFindingRow({
                   )}
                   <button
                     onClick={(e) => { e.stopPropagation(); onSetEditAction(editAction === 'assign-owner' ? null : 'assign-owner'); }}
-                    className="flex items-center gap-1.5 rounded-lg border border-gray-300 bg-gray-100 px-3 py-1.5 text-sm text-gray-800 hover:text-black hover:bg-gray-200"
+                    className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-slate-100 px-3 py-1.5 text-sm text-slate-700 hover:text-slate-900 hover:bg-slate-200"
                   >
                     <User className="h-3.5 w-3.5" /> Assign Owner
                   </button>
                   <button
                     onClick={(e) => { e.stopPropagation(); onSetEditAction(editAction === 'set-date' ? null : 'set-date'); }}
-                    className="flex items-center gap-1.5 rounded-lg border border-gray-300 bg-gray-100 px-3 py-1.5 text-sm text-gray-800 hover:text-black hover:bg-gray-200"
+                    className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-slate-100 px-3 py-1.5 text-sm text-slate-700 hover:text-slate-900 hover:bg-slate-200"
                   >
                     <Calendar className="h-3.5 w-3.5" /> Set Target Date
                   </button>
                   <button
                     onClick={(e) => { e.stopPropagation(); onSetEditAction(editAction === 'update-status' ? null : 'update-status'); }}
-                    className="flex items-center gap-1.5 rounded-lg border border-gray-300 bg-gray-100 px-3 py-1.5 text-sm text-gray-800 hover:text-black hover:bg-gray-200"
+                    className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-slate-100 px-3 py-1.5 text-sm text-slate-700 hover:text-slate-900 hover:bg-slate-200"
                   >
                     <Edit3 className="h-3.5 w-3.5" /> Update Status
                   </button>
                   <button
                     onClick={(e) => { e.stopPropagation(); onSetEditAction(editAction === 'override' ? null : 'override'); }}
-                    className="flex items-center gap-1.5 rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-sm text-gray-800 hover:bg-purple-100"
+                    className="flex items-center gap-1.5 rounded-lg border border-primary-300 bg-primary-50 px-3 py-1.5 text-sm text-slate-700 hover:bg-primary-100"
                   >
-                    <ShieldCheck className="h-3.5 w-3.5 text-purple-600" /> Override
+                    <ShieldCheck className="h-3.5 w-3.5 text-primary-700" /> Override
                   </button>
                   {finding.compliance_status !== 'fully_compliant' && finding.compliance_status !== 'not_applicable' && (
                     <button
                       onClick={(e) => { e.stopPropagation(); onSetEditAction(editAction === 'accept-risk' ? null : 'accept-risk'); }}
-                      className="flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-sm text-gray-800 hover:bg-amber-100"
+                      className="flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-sm text-slate-700 hover:bg-amber-100"
                     >
                       <ShieldAlert className="h-3.5 w-3.5 text-amber-600" /> Accept Risk
                     </button>
@@ -3877,12 +3831,12 @@ function GapFindingRow({
 
                 {/* Inline Forms */}
                 {isEditing && editAction === 'assign-owner' && (
-                  <div className="rounded-lg border border-gray-300 bg-white p-3 space-y-3" onClick={(e) => e.stopPropagation()}>
-                    <label className="text-sm font-medium text-gray-800">Select Owner</label>
+                  <div className="rounded-lg border border-slate-300 bg-white p-3 space-y-3" onClick={(e) => e.stopPropagation()}>
+                    <label className="text-sm font-medium text-slate-700">Select Owner</label>
                     <select
                       value={assignOwnerForm || ''}
                       onChange={(e) => setAssignOwnerForm(e.target.value ? Number(e.target.value) : null)}
-                      className="w-full rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none"
+                      className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
                     >
                       <option value="">Select user...</option>
                       {tenantUsers?.map((u: any) => (
@@ -3894,7 +3848,7 @@ function GapFindingRow({
                     <button
                       onClick={(e) => { e.stopPropagation(); onUpdateFinding(finding.id, { assigned_owner_id: assignOwnerForm }); }}
                       disabled={!assignOwnerForm || isPending}
-                      className="rounded-lg bg-primary-600 px-3 py-1.5 text-sm font-medium text-black hover:bg-primary-700 disabled:opacity-50"
+                      className="rounded-lg bg-primary-600 px-3 py-1.5 text-sm font-medium text-slate-900 hover:bg-primary-700 disabled:opacity-50"
                     >
                       {isPending ? 'Saving...' : 'Save'}
                     </button>
@@ -3902,18 +3856,18 @@ function GapFindingRow({
                 )}
 
                 {isEditing && editAction === 'set-date' && (
-                  <div className="rounded-lg border border-gray-300 bg-white p-3 space-y-3" onClick={(e) => e.stopPropagation()}>
-                    <label className="text-sm font-medium text-gray-800">Target Remediation Date</label>
+                  <div className="rounded-lg border border-slate-300 bg-white p-3 space-y-3" onClick={(e) => e.stopPropagation()}>
+                    <label className="text-sm font-medium text-slate-700">Target Remediation Date</label>
                     <input
                       type="date"
                       value={targetDateForm}
                       onChange={(e) => setTargetDateForm(e.target.value)}
-                      className="w-full rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none"
+                      className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
                     />
                     <button
                       onClick={(e) => { e.stopPropagation(); onUpdateFinding(finding.id, { target_remediation_date: targetDateForm }); }}
                       disabled={!targetDateForm || isPending}
-                      className="rounded-lg bg-primary-600 px-3 py-1.5 text-sm font-medium text-black hover:bg-primary-700 disabled:opacity-50"
+                      className="rounded-lg bg-primary-600 px-3 py-1.5 text-sm font-medium text-slate-900 hover:bg-primary-700 disabled:opacity-50"
                     >
                       {isPending ? 'Saving...' : 'Save'}
                     </button>
@@ -3921,12 +3875,12 @@ function GapFindingRow({
                 )}
 
                 {isEditing && editAction === 'update-status' && (
-                  <div className="rounded-lg border border-gray-300 bg-white p-3 space-y-3" onClick={(e) => e.stopPropagation()}>
-                    <label className="text-sm font-medium text-gray-800">Remediation Status</label>
+                  <div className="rounded-lg border border-slate-300 bg-white p-3 space-y-3" onClick={(e) => e.stopPropagation()}>
+                    <label className="text-sm font-medium text-slate-700">Remediation Status</label>
                     <select
                       value={statusUpdateForm}
                       onChange={(e) => setStatusUpdateForm(e.target.value)}
-                      className="w-full rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none"
+                      className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
                     >
                       <option value="">Select status...</option>
                       {Object.entries(REMEDIATION_STATUS_STYLES).map(([val, s]) => (
@@ -3936,7 +3890,7 @@ function GapFindingRow({
                     <button
                       onClick={(e) => { e.stopPropagation(); onUpdateFinding(finding.id, { remediation_status: statusUpdateForm }); }}
                       disabled={!statusUpdateForm || isPending}
-                      className="rounded-lg bg-primary-600 px-3 py-1.5 text-sm font-medium text-black hover:bg-primary-700 disabled:opacity-50"
+                      className="rounded-lg bg-primary-600 px-3 py-1.5 text-sm font-medium text-slate-900 hover:bg-primary-700 disabled:opacity-50"
                     >
                       {isPending ? 'Saving...' : 'Save'}
                     </button>
@@ -3944,12 +3898,12 @@ function GapFindingRow({
                 )}
 
                 {isEditing && editAction === 'override' && (
-                  <div className="rounded-lg border border-purple-300 bg-purple-50 p-3 space-y-3" onClick={(e) => e.stopPropagation()}>
-                    <label className="text-sm font-medium text-gray-800">Override Compliance Status</label>
+                  <div className="rounded-lg border border-primary-300 bg-primary-50 p-3 space-y-3" onClick={(e) => e.stopPropagation()}>
+                    <label className="text-sm font-medium text-slate-700">Override Compliance Status</label>
                     <select
                       value={overrideForm.status}
                       onChange={(e) => setOverrideForm((prev: any) => ({ ...prev, status: e.target.value }))}
-                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none"
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
                     >
                       {Object.entries(COMPLIANCE_STATUS_STYLES).map(([val, s]) => (
                         <option key={val} value={val}>{s.label}</option>
@@ -3960,12 +3914,12 @@ function GapFindingRow({
                       onChange={(e) => setOverrideForm((prev: any) => ({ ...prev, justification: e.target.value }))}
                       placeholder="Justification (required)"
                       rows={3}
-                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-primary-500 focus:outline-none resize-none"
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none resize-none"
                     />
                     <button
                       onClick={(e) => { e.stopPropagation(); onOverride(finding.id, { override_status: overrideForm.status, override_justification: overrideForm.justification }); }}
                       disabled={!overrideForm.justification.trim() || isPending}
-                      className="rounded-lg bg-purple-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-purple-700 disabled:opacity-50"
+                      className="rounded-lg bg-primary-600 px-3 py-1.5 text-sm font-medium text-slate-900 hover:bg-primary-700 disabled:opacity-50"
                     >
                       {isPending ? 'Applying...' : 'Apply Override'}
                     </button>
@@ -3974,21 +3928,21 @@ function GapFindingRow({
 
                 {isEditing && editAction === 'accept-risk' && (
                   <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 space-y-3" onClick={(e) => e.stopPropagation()}>
-                    <label className="text-sm font-medium text-gray-800">Accept Risk</label>
+                    <label className="text-sm font-medium text-slate-700">Accept Risk</label>
                     <textarea
                       value={acceptRiskForm.justification}
                       onChange={(e) => setAcceptRiskForm((prev: any) => ({ ...prev, justification: e.target.value }))}
                       placeholder="Justification (required)"
                       rows={3}
-                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-primary-500 focus:outline-none resize-none"
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none resize-none"
                     />
                     <div>
-                      <label className="text-xs text-gray-600 block mb-1">Expiry Date (optional)</label>
+                      <label className="text-xs text-slate-600 block mb-1">Expiry Date (optional)</label>
                       <input
                         type="date"
                         value={acceptRiskForm.expiry_date}
                         onChange={(e) => setAcceptRiskForm((prev: any) => ({ ...prev, expiry_date: e.target.value }))}
-                        className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none"
+                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
                       />
                     </div>
                     <button

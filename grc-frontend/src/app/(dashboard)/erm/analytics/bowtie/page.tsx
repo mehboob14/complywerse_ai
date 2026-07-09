@@ -74,7 +74,7 @@ export default function BowTieAnalysisPage() {
           </Link>
           <div>
             <h1 className="text-lg sm:text-xl font-semibold text-slate-900 flex items-center gap-2.5">
-              <GitBranch className="h-6 w-6 text-blue-400" />
+              <GitBranch className="h-6 w-6 text-primary-600" strokeWidth={1.75} />
               Bow-Tie Risk Analysis
             </h1>
             <p className="text-sm text-slate-600 mt-1">
@@ -160,23 +160,23 @@ export default function BowTieAnalysisPage() {
               </div>
 
               <div className="flex flex-col justify-center gap-2.5 w-[172px] flex-shrink-0">
-                <h3 className="text-sm font-semibold text-blue-400 uppercase tracking-wider mb-1 flex items-center gap-2">
-                  <Shield className="h-4 w-4" />
+                <h3 className="text-sm font-semibold text-primary-700 uppercase tracking-wider mb-1 flex items-center gap-2">
+                  <Shield className="h-4 w-4" strokeWidth={1.75} />
                   Preventive
                 </h3>
                 {bowTieData.preventive_controls?.length > 0 ? (
                   bowTieData.preventive_controls.map((ctrl: any) => (
                     <div
                       key={ctrl.id}
-                      className="rounded-lg border border-blue-500/30 bg-blue-500/10 p-3"
+                      className="rounded-lg border border-primary-200 bg-primary-50 p-3"
                     >
-                      <p className="text-sm font-medium text-blue-300">{ctrl.name}</p>
+                      <p className="text-sm font-medium text-primary-700">{ctrl.name}</p>
                       <div className="mt-1 flex items-center gap-2">
                         {ctrl.code && (
-                          <span className="text-xs text-blue-400/70">{ctrl.code}</span>
+                          <span className="text-xs text-primary-600/70">{ctrl.code}</span>
                         )}
                         {ctrl.effectiveness && (
-                          <span className="rounded-full bg-blue-500/20 px-2 py-0.5 text-xs text-blue-300">
+                          <span className="rounded-full bg-primary-100 px-2 py-0.5 text-xs text-primary-700">
                             {ctrl.effectiveness}%
                           </span>
                         )}
@@ -189,11 +189,11 @@ export default function BowTieAnalysisPage() {
               </div>
 
               <div className="flex flex-col justify-center flex-shrink-0">
-                <div className="h-full w-1 bg-gradient-to-b from-blue-500/50 via-blue-500 to-blue-500/50 rounded-full mx-2" />
+                <div className="h-full w-1 bg-primary-500 rounded-full mx-2" />
               </div>
 
               <div className="flex flex-col justify-center flex-shrink-0 w-[210px]">
-                <div className="rounded-xl border-2 border-amber-500 bg-gradient-to-br from-amber-500/20 to-orange-500/10 p-4 text-center shadow-lg shadow-amber-500/10">
+                <div className="rounded-xl border-2 border-amber-500 bg-amber-50 p-4 text-center shadow-sm">
                   <AlertTriangle className="h-7 w-7 text-amber-400 mx-auto mb-2" />
                   <h3 className="text-base font-semibold text-slate-900">{bowTieData.risk_title}</h3>
                   {bowTieData.risk_category && (
@@ -215,7 +215,7 @@ export default function BowTieAnalysisPage() {
               </div>
 
               <div className="flex flex-col justify-center flex-shrink-0">
-                <div className="h-full w-1 bg-gradient-to-b from-green-500/50 via-green-500 to-green-500/50 rounded-full mx-2" />
+                <div className="h-full w-1 bg-emerald-500 rounded-full mx-2" />
               </div>
 
               <div className="flex flex-col justify-center gap-2.5 w-[172px] flex-shrink-0">
@@ -296,7 +296,7 @@ export default function BowTieAnalysisPage() {
                 <span className="text-xs text-slate-600">Threats / Causes</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="h-3 w-3 rounded-full bg-blue-500/50 border border-blue-500" />
+                <div className="h-3 w-3 rounded-full bg-primary-500/50 border border-primary-500" />
                 <span className="text-xs text-slate-600">Preventive Controls</span>
               </div>
               <div className="flex items-center gap-2">
@@ -345,9 +345,9 @@ export default function BowTieAnalysisPage() {
                   <p className="text-2xl font-bold text-green-400 mt-1">{bowTieData.residual_score ?? '—'}</p>
                 </div>
                 <div className="rounded-lg bg-slate-100/50 p-3 text-center">
-                  <TrendingDown className="h-5 w-5 text-blue-400 mx-auto mb-1" />
+                  <TrendingDown className="h-5 w-5 text-primary-600 mx-auto mb-1" strokeWidth={1.75} />
                   <p className="text-xs text-slate-600">Reduction</p>
-                  <p className="text-2xl font-bold text-blue-400 mt-1">{scoreReduction}</p>
+                  <p className="text-2xl font-bold text-primary-600 mt-1">{scoreReduction}</p>
                   <p className="text-xs text-slate-500">({scoreReductionPct}%)</p>
                 </div>
               </div>
@@ -359,7 +359,7 @@ export default function BowTieAnalysisPage() {
                 </div>
                 <div className="h-2 rounded-full bg-slate-100">
                   <div
-                    className="h-2 rounded-full bg-gradient-to-r from-blue-500 to-green-500 transition-all duration-500"
+                    className="h-2 rounded-full bg-primary-500 transition-all duration-500"
                     style={{ width: `${Math.min(scoreReductionPct, 100)}%` }}
                   />
                 </div>
@@ -372,7 +372,7 @@ export default function BowTieAnalysisPage() {
                 </div>
                 <div>
                   <p className="text-xs text-slate-600">Preventive</p>
-                  <p className="text-lg font-semibold text-blue-400">{bowTieData.preventive_controls?.length ?? 0}</p>
+                  <p className="text-lg font-semibold text-primary-700">{bowTieData.preventive_controls?.length ?? 0}</p>
                 </div>
                 <div>
                   <p className="text-xs text-slate-600">Mitigating</p>
@@ -389,13 +389,13 @@ export default function BowTieAnalysisPage() {
           <div className="rounded-xl border border-slate-200 bg-white p-4.5">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
-                <Brain className="h-5 w-5 text-purple-400" />
+                <Brain className="h-5 w-5 text-primary-600" strokeWidth={1.75} />
                 AI Analysis
               </h3>
               <button
                 onClick={() => selectedRiskId && narrativeMutation.mutate(selectedRiskId)}
                 disabled={narrativeMutation.isPending}
-                className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-purple-600 to-blue-600 px-3.5 py-2 text-sm font-medium text-slate-900 shadow-lg shadow-purple-500/25 hover:from-purple-500 hover:to-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 rounded-lg bg-primary-600 px-3.5 py-2 text-sm font-medium text-[#0a0a0a] hover:bg-primary-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {narrativeMutation.isPending ? (
                   <>
@@ -413,8 +413,8 @@ export default function BowTieAnalysisPage() {
 
             {!aiNarrative && !narrativeMutation.isPending && !narrativeMutation.isError && (
               <div className="flex flex-col items-center justify-center py-12 text-center">
-                <div className="rounded-full bg-gradient-to-br from-purple-500/20 to-blue-500/20 p-4 mb-4">
-                  <Sparkles className="h-8 w-8 text-purple-400" />
+                <div className="rounded-full bg-primary-50 p-4 mb-4">
+                  <Sparkles className="h-8 w-8 text-primary-600" strokeWidth={1.75} />
                 </div>
                 <p className="text-slate-600 max-w-md">
                   Click &quot;Generate AI Narrative&quot; to get a comprehensive plain-English explanation of the
@@ -431,17 +431,17 @@ export default function BowTieAnalysisPage() {
 
             {aiNarrative && (
               <div className="relative">
-                <div className="absolute left-0 top-0 bottom-0 w-1 rounded-full bg-gradient-to-b from-purple-500 to-blue-500" />
+                <div className="absolute left-0 top-0 bottom-0 w-1 rounded-full bg-primary-500" />
                 <div className="pl-6 prose prose-invert prose-sm max-w-none">
                   {aiNarrative.split('\n').map((line, i) => {
                     if (line.startsWith('## ')) {
                       return <h2 key={i} className="text-lg font-bold text-slate-900 mt-4 mb-2">{line.replace('## ', '')}</h2>;
                     }
                     if (line.startsWith('### ')) {
-                      return <h3 key={i} className="text-base font-semibold text-purple-300 mt-4 mb-2">{line.replace('### ', '')}</h3>;
+                      return <h3 key={i} className="text-base font-semibold text-primary-700 mt-4 mb-2">{line.replace('### ', '')}</h3>;
                     }
                     if (line.startsWith('**') && line.endsWith('**')) {
-                      return <h3 key={i} className="text-base font-semibold text-purple-300 mt-4 mb-2">{line.replace(/\*\*/g, '')}</h3>;
+                      return <h3 key={i} className="text-base font-semibold text-primary-700 mt-4 mb-2">{line.replace(/\*\*/g, '')}</h3>;
                     }
                     if (line.match(/^\d+\.\s/)) {
                       return <p key={i} className="text-sm text-slate-700 ml-4 mb-1">{line}</p>;

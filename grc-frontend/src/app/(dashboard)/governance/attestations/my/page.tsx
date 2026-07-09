@@ -89,12 +89,12 @@ export default function MyAttestationsPage() {
     <div className="space-y-4 sm:space-y-6">
       <div className="page-header">
         <div className="flex items-center gap-3 mb-1">
-          <Link href="/governance/attestations" className="text-gray-500 hover:text-black">
-            <ArrowLeft className="h-4 w-4" />
+          <Link href="/governance/attestations" className="text-slate-500 hover:text-slate-900">
+            <ArrowLeft className="h-4 w-4" strokeWidth={1.75} />
           </Link>
           <div>
-            <h1 className="text-lg sm:text-xl font-semibold text-black">My Attestations</h1>
-            <p className="mt-1 text-gray-600">Your pending and completed attestation requests</p>
+            <h1 className="text-lg sm:text-xl font-semibold text-slate-900">My Attestations</h1>
+            <p className="mt-1 text-slate-600">Your pending and completed attestation requests</p>
           </div>
         </div>
       </div>
@@ -103,47 +103,47 @@ export default function MyAttestationsPage() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="card p-4 flex items-center gap-4">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-50 flex-shrink-0">
-            <Clock className="h-5 w-5 text-amber-600" />
+            <Clock className="h-5 w-5 text-amber-600" strokeWidth={1.75} />
           </div>
           <div>
-            <p className="text-2xl font-bold text-black">{pending.length}</p>
-            <p className="text-sm text-gray-500">Pending</p>
+            <p className="text-2xl font-bold text-slate-900">{pending.length}</p>
+            <p className="text-sm text-slate-500">Pending</p>
           </div>
         </div>
         <div className="card p-4 flex items-center gap-4">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-rose-50 flex-shrink-0">
-            <AlertCircle className="h-5 w-5 text-rose-600" />
+            <AlertCircle className="h-5 w-5 text-rose-600" strokeWidth={1.75} />
           </div>
           <div>
             <p className="text-2xl font-bold text-rose-600">{overdue.length}</p>
-            <p className="text-sm text-gray-500">Overdue</p>
+            <p className="text-sm text-slate-500">Overdue</p>
           </div>
         </div>
         <div className="card p-4 flex items-center gap-4">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50 flex-shrink-0">
-            <CheckCircle className="h-5 w-5 text-emerald-600" />
+            <CheckCircle className="h-5 w-5 text-emerald-600" strokeWidth={1.75} />
           </div>
           <div>
             <p className="text-2xl font-bold text-emerald-600">{thisMonthCompleted.length}</p>
-            <p className="text-sm text-gray-500">Completed this month</p>
+            <p className="text-sm text-slate-500">Completed this month</p>
           </div>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-gray-200">
+      <div className="border-b border-slate-200">
         <div className="flex gap-6">
           <button
             onClick={() => setActiveTab('pending')}
             className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
               activeTab === 'pending'
                 ? 'border-primary-500 text-primary-600'
-                : 'border-transparent text-gray-500 hover:text-black'
+                : 'border-transparent text-slate-500 hover:text-slate-900'
             }`}
           >
             Pending & Overdue
             {pending.length > 0 && (
-              <span className="ml-2 px-1.5 py-0.5 text-xs bg-amber-100 text-amber-700 rounded-full">
+              <span className="ml-2 px-1.5 py-0.5 text-xs bg-amber-50 text-amber-700 rounded-full">
                 {pending.length}
               </span>
             )}
@@ -153,12 +153,12 @@ export default function MyAttestationsPage() {
             className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
               activeTab === 'history'
                 ? 'border-primary-500 text-primary-600'
-                : 'border-transparent text-gray-500 hover:text-black'
+                : 'border-transparent text-slate-500 hover:text-slate-900'
             }`}
           >
             Completed History
             {completed.length > 0 && (
-              <span className="ml-2 px-1.5 py-0.5 text-xs bg-gray-100 text-gray-600 rounded-full">
+              <span className="ml-2 px-1.5 py-0.5 text-xs bg-slate-100 text-slate-600 rounded-full">
                 {completed.length}
               </span>
             )}
@@ -171,9 +171,9 @@ export default function MyAttestationsPage() {
         <div className="space-y-3">
           {pending.length === 0 ? (
             <div className="card p-10 text-center">
-              <CheckCircle className="h-10 w-10 text-emerald-400 mx-auto mb-3" />
-              <p className="text-black font-medium">All caught up!</p>
-              <p className="text-gray-500 text-sm mt-1">You have no pending attestations.</p>
+              <CheckCircle className="h-10 w-10 text-emerald-400 mx-auto mb-3" strokeWidth={1.75} />
+              <p className="text-slate-900 font-medium">All caught up!</p>
+              <p className="text-slate-500 text-sm mt-1">You have no pending attestations.</p>
             </div>
           ) : (
             pending.map((a) => {
@@ -187,17 +187,17 @@ export default function MyAttestationsPage() {
                 >
                   <div className="flex items-start gap-3 min-w-0">
                     <div className={`flex h-8 w-8 items-center justify-center rounded-lg flex-shrink-0 ${
-                      isOverdue ? 'bg-rose-100' : 'bg-primary-500/10'
+                      isOverdue ? 'bg-rose-50' : 'bg-primary-50'
                     }`}>
-                      <ClipboardCheck className={`h-4 w-4 ${isOverdue ? 'text-rose-500' : 'text-primary-500'}`} />
+                      <ClipboardCheck className={`h-4 w-4 ${isOverdue ? 'text-rose-600' : 'text-primary-600'}`} strokeWidth={1.75} />
                     </div>
                     <div className="min-w-0">
-                      <p className="text-black font-medium text-sm truncate">{a.campaign_name}</p>
+                      <p className="text-slate-900 font-medium text-sm truncate">{a.campaign_name}</p>
                       <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                        <span className="text-xs text-gray-500">{TYPE_LABELS[a.attestation_type] || a.attestation_type?.replace(/_/g, ' ')}</span>
+                        <span className="text-xs text-slate-500">{TYPE_LABELS[a.attestation_type] || a.attestation_type?.replace(/_/g, ' ')}</span>
                         {a.due_date && (
-                          <span className={`flex items-center gap-1 text-xs ${isOverdue ? 'text-rose-600 font-medium' : 'text-gray-400'}`}>
-                            <Calendar className="h-3 w-3" />
+                          <span className={`flex items-center gap-1 text-xs ${isOverdue ? 'text-rose-600 font-medium' : 'text-slate-400'}`}>
+                            <Calendar className="h-3 w-3" strokeWidth={1.75} />
                             {isOverdue ? 'Was due: ' : 'Due: '}
                             {new Date(a.due_date).toLocaleDateString()}
                           </span>
@@ -212,7 +212,7 @@ export default function MyAttestationsPage() {
                     }`}
                   >
                     Complete Now
-                    <ArrowRight className="h-3.5 w-3.5" />
+                    <ArrowRight className="h-3.5 w-3.5" strokeWidth={1.75} />
                   </Link>
                 </div>
               );
@@ -226,32 +226,32 @@ export default function MyAttestationsPage() {
         <div className="card overflow-hidden">
           {completed.length === 0 ? (
             <div className="p-10 text-center">
-              <FileCheck className="h-10 w-10 text-gray-300 mx-auto mb-3" />
-              <p className="text-gray-500 text-sm">No completed attestations yet.</p>
+              <FileCheck className="h-10 w-10 text-slate-300 mx-auto mb-3" strokeWidth={1.75} />
+              <p className="text-slate-500 text-sm">No completed attestations yet.</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="border-b border-gray-200 bg-slate-50">
-                    <th className="text-left py-3 px-4 text-xs font-medium text-gray-600">Campaign</th>
-                    <th className="text-left py-3 px-4 text-xs font-medium text-gray-600">Type</th>
-                    <th className="text-left py-3 px-4 text-xs font-medium text-gray-600">Completed</th>
-                    <th className="text-left py-3 px-4 text-xs font-medium text-gray-600">Evidence</th>
+                  <tr className="border-b border-slate-200 bg-slate-50">
+                    <th className="text-left py-3 px-4 text-xs font-medium text-slate-600">Campaign</th>
+                    <th className="text-left py-3 px-4 text-xs font-medium text-slate-600">Type</th>
+                    <th className="text-left py-3 px-4 text-xs font-medium text-slate-600">Completed</th>
+                    <th className="text-left py-3 px-4 text-xs font-medium text-slate-600">Evidence</th>
                   </tr>
                 </thead>
                 <tbody>
                   {completed.map((a) => (
-                    <tr key={a.id} className="border-b border-gray-100 hover:bg-slate-50">
+                    <tr key={a.id} className="border-b border-slate-100 hover:bg-slate-50">
                       <td className="py-3 px-4">
-                        <p className="text-black text-sm font-medium">{a.campaign_name}</p>
+                        <p className="text-slate-900 text-sm font-medium">{a.campaign_name}</p>
                       </td>
                       <td className="py-3 px-4">
-                        <span className="text-xs text-gray-500">{TYPE_LABELS[a.attestation_type] || a.attestation_type?.replace(/_/g, ' ')}</span>
+                        <span className="text-xs text-slate-500">{TYPE_LABELS[a.attestation_type] || a.attestation_type?.replace(/_/g, ' ')}</span>
                       </td>
                       <td className="py-3 px-4">
-                        <div className="flex items-center gap-1 text-sm text-gray-600">
-                          <CheckCircle className="h-3.5 w-3.5 text-emerald-500" />
+                        <div className="flex items-center gap-1 text-sm text-slate-600">
+                          <CheckCircle className="h-3.5 w-3.5 text-emerald-500" strokeWidth={1.75} />
                           {a.completed_at ? new Date(a.completed_at).toLocaleDateString() : '-'}
                         </div>
                       </td>
@@ -259,7 +259,7 @@ export default function MyAttestationsPage() {
                         {a.evidence_id ? (
                           <span className="text-xs text-emerald-600 font-medium">Attached</span>
                         ) : (
-                          <span className="text-xs text-gray-400">—</span>
+                          <span className="text-xs text-slate-400">—</span>
                         )}
                       </td>
                     </tr>

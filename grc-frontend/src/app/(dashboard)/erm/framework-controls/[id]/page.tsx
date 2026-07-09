@@ -74,10 +74,10 @@ interface EvidenceResponse {
 }
 
 const SEVERITY_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  critical: { bg: 'bg-red-50 border-red-200',     text: 'text-red-700',    label: 'Critical' },
+  critical: { bg: 'bg-rose-50 border-rose-200',     text: 'text-rose-700',    label: 'Critical' },
   high:     { bg: 'bg-orange-50 border-orange-200', text: 'text-orange-700', label: 'High' },
-  medium:   { bg: 'bg-yellow-50 border-yellow-200', text: 'text-yellow-700', label: 'Medium' },
-  low:      { bg: 'bg-blue-50 border-blue-200',   text: 'text-blue-700',   label: 'Low' },
+  medium:   { bg: 'bg-amber-50 border-amber-200', text: 'text-amber-700', label: 'Medium' },
+  low:      { bg: 'bg-emerald-50 border-emerald-200',   text: 'text-emerald-700',   label: 'Low' },
   info:     { bg: 'bg-slate-50 border-slate-200', text: 'text-slate-600',  label: 'Info' },
 };
 
@@ -124,7 +124,7 @@ export default function FrameworkControlDetailPage() {
   if (!Number.isFinite(controlId) || controlId <= 0) {
     return (
       <div className="p-6">
-        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+        <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
           Invalid control id.
         </div>
       </div>
@@ -134,7 +134,7 @@ export default function FrameworkControlDetailPage() {
   if (error) {
     return (
       <div className="p-6">
-        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+        <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
           Failed to load framework control. The control may not exist or you may not have access.
         </div>
       </div>
@@ -220,7 +220,7 @@ export default function FrameworkControlDetailPage() {
               type="checkbox"
               checked={includeResolved}
               onChange={(e) => setIncludeResolved(e.target.checked)}
-              className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+              className="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
             />
             Include resolved
           </label>
@@ -239,7 +239,7 @@ export default function FrameworkControlDetailPage() {
             <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">
               Actively Exploited
             </p>
-            <p className={`text-xl font-bold mt-1 ${summary.kev_count > 0 ? 'text-red-700' : 'text-slate-400'}`}>
+            <p className={`text-xl font-bold mt-1 ${summary.kev_count > 0 ? 'text-rose-700' : 'text-slate-400'}`}>
               {summary.kev_count}
             </p>
             <p className="text-[10px] text-slate-400 mt-0.5">CISA KEV-listed</p>
@@ -320,12 +320,12 @@ export default function FrameworkControlDetailPage() {
                         <td className="px-3 py-2 text-sm">
                           <Link
                             href={`/vulnerabilities/${it.id}`}
-                            className="text-slate-900 hover:text-blue-600 hover:underline font-medium"
+                            className="text-slate-900 hover:text-primary-600 hover:underline font-medium"
                           >
                             {it.title}
                           </Link>
                           {it.kev_flag && (
-                            <span className="ml-2 inline-flex items-center rounded-full bg-red-50 px-1.5 py-0 text-[9px] font-bold text-red-700 border border-red-200">
+                            <span className="ml-2 inline-flex items-center rounded-full bg-rose-50 px-1.5 py-0 text-[9px] font-bold text-rose-700 border border-rose-200">
                               KEV
                             </span>
                           )}
@@ -348,7 +348,7 @@ export default function FrameworkControlDetailPage() {
                         <td className="px-3 py-2 text-xs">
                           {isAuto ? (
                             <span
-                              className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700"
+                              className="inline-flex items-center gap-1 rounded-full border border-primary-200 bg-primary-50 px-2 py-0.5 text-[10px] font-semibold text-primary-700"
                               title={`Auto-mapped from ${it.auto_cwe || 'vulnerability-management rules'}`}
                             >
                               <Sparkles size={9} />
@@ -374,7 +374,7 @@ export default function FrameworkControlDetailPage() {
                         <td className="px-3 py-2 text-right">
                           <Link
                             href={`/vulnerabilities/${it.id}`}
-                            className="text-slate-400 hover:text-blue-600"
+                            className="text-slate-400 hover:text-primary-600"
                             title="Open vulnerability"
                           >
                             <ExternalLink size={14} />

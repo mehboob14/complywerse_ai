@@ -26,10 +26,10 @@ type StatusFilter = 'all' | 'draft' | 'review' | 'approved' | 'archived';
 type CategoryFilter = 'all' | 'policies' | 'procedures' | 'standards' | 'guidelines';
 
 const CATEGORIES = [
-  { value: 'policies', label: 'Policies', color: 'bg-blue-500' },
-  { value: 'procedures', label: 'Procedures', color: 'bg-green-500' },
-  { value: 'standards', label: 'Standards', color: 'bg-primary-500' },
-  { value: 'guidelines', label: 'Guidelines', color: 'bg-orange-500' },
+  { value: 'policies', label: 'Policies', color: 'bg-primary-500' },
+  { value: 'procedures', label: 'Procedures', color: 'bg-emerald-500' },
+  { value: 'standards', label: 'Standards', color: 'bg-slate-500' },
+  { value: 'guidelines', label: 'Guidelines', color: 'bg-amber-500' },
 ];
 
 export default function DocumentsPage() {
@@ -60,13 +60,13 @@ export default function DocumentsPage() {
     switch (status) {
       case 'approved':
         return (
-          <span className="flex items-center gap-1 rounded-full bg-green-900/50 px-2 py-0.5 text-xs text-green-600">
+          <span className="flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700">
             <CheckCircle size={12} /> Approved
           </span>
         );
       case 'review':
         return (
-          <span className="flex items-center gap-1 rounded-full bg-yellow-900/50 px-2 py-0.5 text-xs text-yellow-600">
+          <span className="flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs text-amber-700">
             <Clock size={12} /> In Review
           </span>
         );
@@ -88,7 +88,7 @@ export default function DocumentsPage() {
   const getCategoryBadge = (docType: string) => {
     const category = CATEGORIES.find(c => c.value === docType);
     return (
-      <span className={`rounded px-2 py-0.5 text-xs text-black ${category?.color || 'bg-slate-600'}`}>
+      <span className={`rounded px-2 py-0.5 text-xs text-white ${category?.color || 'bg-slate-600'}`}>
         {category?.label || docType || 'Other'}
       </span>
     );
@@ -115,8 +115,8 @@ export default function DocumentsPage() {
 
   if (error) {
     return (
-      <div className="flex h-64 flex-col items-center justify-center text-red-600">
-        <AlertCircle className="mb-2 h-8 w-8" />
+      <div className="flex h-64 flex-col items-center justify-center text-rose-600">
+        <AlertCircle className="mb-2 h-8 w-8" strokeWidth={1.75} />
         <p>Failed to load documents</p>
       </div>
     );
@@ -126,14 +126,14 @@ export default function DocumentsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-black">Document Library</h1>
+          <h1 className="text-2xl font-bold text-slate-900">Document Library</h1>
           <p className="text-slate-600">Manage policies, procedures, and documentation</p>
         </div>
         <button
           onClick={() => setIsUploadModalOpen(true)}
-          className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-white hover:bg-primary-700"
+          className="btn-primary"
         >
-          <Upload size={18} />
+          <Upload size={18} strokeWidth={1.75} />
           Upload Document
         </button>
       </div>
@@ -146,7 +146,7 @@ export default function DocumentsPage() {
             placeholder="Search documents..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-4 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none"
+            className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-4 text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none"
           />
         </div>
 
@@ -155,7 +155,7 @@ export default function DocumentsPage() {
           <select
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value as CategoryFilter)}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 focus:border-primary-500 focus:outline-none"
           >
             <option value="all">All Categories</option>
             {CATEGORIES.map(cat => (
@@ -169,7 +169,7 @@ export default function DocumentsPage() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 focus:border-primary-500 focus:outline-none"
           >
             <option value="all">All Status</option>
             <option value="draft">Draft</option>
@@ -191,14 +191,14 @@ export default function DocumentsPage() {
               <th className="px-4 py-3 text-right text-sm font-medium text-slate-600">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-700">
+          <tbody className="divide-y divide-slate-200">
             {filteredDocuments?.map((doc: Document) => (
-              <tr key={doc.id} className="bg-white/50 hover:bg-slate-50">
+              <tr key={doc.id} className="bg-white hover:bg-slate-50">
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-3">
-                    <FileText className="h-5 w-5 text-primary-600" />
+                    <FileText className="h-5 w-5 text-primary-600" strokeWidth={1.75} />
                     <div>
-                      <p className="font-medium text-black">{doc.title}</p>
+                      <p className="font-medium text-slate-900">{doc.title}</p>
                       <p className="text-sm text-slate-600 line-clamp-1">{doc.description}</p>
                     </div>
                   </div>
@@ -229,8 +229,8 @@ export default function DocumentsPage() {
 
       {(!filteredDocuments || filteredDocuments.length === 0) && (
         <div className="card flex flex-col items-center justify-center py-12 text-center">
-          <FileText className="mb-4 h-12 w-12 text-slate-600" />
-          <h3 className="text-lg font-medium text-black">No documents found</h3>
+          <FileText className="mb-4 h-12 w-12 text-slate-600" strokeWidth={1.75} />
+          <h3 className="text-lg font-medium text-slate-900">No documents found</h3>
           <p className="mt-1 text-slate-600">Upload your first document to get started</p>
         </div>
       )}
@@ -283,9 +283,9 @@ function UploadModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-md rounded-lg bg-white p-6">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-black">Upload Document</h2>
+          <h2 className="text-lg font-semibold text-slate-900">Upload Document</h2>
           <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
-            <X size={20} />
+            <X size={20} strokeWidth={1.75} />
           </button>
         </div>
 
@@ -296,7 +296,7 @@ function UploadModal({
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 focus:border-primary-500 focus:outline-none"
               required
             />
           </div>
@@ -306,7 +306,7 @@ function UploadModal({
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 focus:border-primary-500 focus:outline-none"
               rows={3}
             />
           </div>
@@ -316,7 +316,7 @@ function UploadModal({
             <select
               value={documentType}
               onChange={(e) => setDocumentType(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 focus:border-primary-500 focus:outline-none"
             >
               {CATEGORIES.map(cat => (
                 <option key={cat.value} value={cat.value}>{cat.label}</option>
@@ -328,8 +328,8 @@ function UploadModal({
             <label className="block text-sm font-medium text-slate-600">File</label>
             <div className="mt-1 flex items-center justify-center rounded-lg border-2 border-dashed border-slate-300 p-6">
               <div className="text-center">
-                <Upload className="mx-auto h-8 w-8 text-slate-600" />
-                <label className="mt-2 block cursor-pointer text-sm text-primary-600 hover:text-primary-300">
+                <Upload className="mx-auto h-8 w-8 text-slate-600" strokeWidth={1.75} />
+                <label className="mt-2 block cursor-pointer text-sm text-primary-600 hover:text-primary-700">
                   <span>Choose a file</span>
                   <input
                     type="file"
@@ -353,7 +353,7 @@ function UploadModal({
             <button
               type="submit"
               disabled={isLoading || !file}
-              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700 disabled:opacity-50"
+              className="btn-primary disabled:opacity-50"
             >
               {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
               Upload
@@ -376,27 +376,27 @@ function VersionHistoryModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-md rounded-lg bg-white p-6">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-black">Version History</h2>
+          <h2 className="text-lg font-semibold text-slate-900">Version History</h2>
           <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
-            <X size={20} />
+            <X size={20} strokeWidth={1.75} />
           </button>
         </div>
 
         <div className="space-y-3">
           {document.versions?.length ? (
             document.versions.map((version) => (
-              <div 
+              <div
                 key={version.id}
-                className="flex items-center justify-between rounded-lg bg-slate-200/50 p-3"
+                className="flex items-center justify-between rounded-lg bg-slate-50 p-3"
               >
                 <div>
-                  <p className="font-medium text-black">v{version.version_number}</p>
+                  <p className="font-medium text-slate-900">v{version.version_number}</p>
                   <p className="text-sm text-slate-600">{version.changes_summary || 'No changes noted'}</p>
                   <p className="text-xs text-slate-500">
                     {new Date(version.created_at).toLocaleString()}
                   </p>
                 </div>
-                <button className="rounded p-1 text-slate-600 hover:bg-slate-600 hover:text-slate-900">
+                <button className="rounded p-1 text-slate-600 hover:bg-slate-100 hover:text-slate-900">
                   <Download size={16} />
                 </button>
               </div>

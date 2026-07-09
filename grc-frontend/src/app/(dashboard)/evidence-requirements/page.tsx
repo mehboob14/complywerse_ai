@@ -114,8 +114,8 @@ const EVIDENCE_TYPE_OPTIONS = [
 const getStatusBadge = (status: string) => {
   const styles: Record<string, string> = {
     draft: 'bg-slate-50 text-slate-700',
-    submitted: 'bg-blue-50 text-blue-700',
-    pending_review: 'bg-primary-50 text-primary-700',
+    submitted: 'bg-primary-50 text-primary-700',
+    pending_review: 'bg-amber-50 text-amber-700',
     approved: 'bg-emerald-50 text-emerald-700',
     rejected: 'bg-rose-50 text-rose-700',
   };
@@ -147,16 +147,18 @@ const getPriorityBadge = (priority: string) => {
 };
 
 const getTypeBadge = (type: string) => {
+  // Categorical evidence-type scale (data-viz): kept distinct, normalized to
+  // light pills. Dark chips flattened; raw green/yellow mapped to emerald/amber.
   const styles: Record<string, string> = {
-    policy: 'bg-indigo-500/20 text-indigo-400',
+    policy: 'bg-indigo-50 text-indigo-700',
     procedure: 'bg-cyan-50 text-cyan-700',
     configuration: 'bg-orange-50 text-orange-700',
-    log: 'bg-yellow-50 text-yellow-700',
+    log: 'bg-amber-50 text-amber-700',
     report: 'bg-blue-50 text-blue-700',
-    contract: 'bg-pink-500/20 text-pink-400',
-    register: 'bg-teal-500/20 text-teal-400',
+    contract: 'bg-pink-50 text-pink-700',
+    register: 'bg-primary-50 text-primary-700',
     attestation: 'bg-primary-50 text-primary-700',
-    training: 'bg-green-50 text-green-700',
+    training: 'bg-emerald-50 text-emerald-700',
     screenshot: 'bg-slate-50 text-slate-700',
   };
   return (
@@ -306,8 +308,8 @@ export default function EvidenceRequirementsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-black flex items-center gap-2">
-          <FileCheck className="h-6 w-6 text-primary-600" />
+        <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+          <FileCheck className="h-6 w-6 text-primary-600" strokeWidth={1.75} />
           Evidence Requirements
         </h1>
         <p className="text-slate-600">AI-generated evidence requirements for compliance controls</p>
@@ -323,7 +325,7 @@ export default function EvidenceRequirementsPage() {
                 setSelectedFramework(e.target.value ? Number(e.target.value) : null);
                 setExpandedRow(null);
               }}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
+              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 focus:border-primary-500 focus:outline-none"
             >
               <option value="">Select Framework</option>
               {frameworks?.map((fw) => (
@@ -339,7 +341,7 @@ export default function EvidenceRequirementsPage() {
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 focus:border-primary-500 focus:outline-none"
               >
                 {STATUS_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -349,7 +351,7 @@ export default function EvidenceRequirementsPage() {
               <select
                 value={priorityFilter}
                 onChange={(e) => setPriorityFilter(e.target.value)}
-                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 focus:border-primary-500 focus:outline-none"
               >
                 {PRIORITY_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -359,7 +361,7 @@ export default function EvidenceRequirementsPage() {
               <select
                 value={typeFilter}
                 onChange={(e) => setTypeFilter(e.target.value)}
-                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 focus:border-primary-500 focus:outline-none"
               >
                 {EVIDENCE_TYPE_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -377,7 +379,7 @@ export default function EvidenceRequirementsPage() {
               placeholder="Search by control ID or title..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-4 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none sm:w-80"
+              className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-4 text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none sm:w-80"
             />
           </div>
         )}
@@ -391,7 +393,7 @@ export default function EvidenceRequirementsPage() {
                 <List className="h-5 w-5 text-primary-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-black">{totalRequirements}</p>
+                <p className="text-2xl font-bold text-slate-900">{totalRequirements}</p>
                 <p className="text-sm text-slate-600">Total Requirements</p>
               </div>
             </div>
@@ -402,7 +404,7 @@ export default function EvidenceRequirementsPage() {
                 <FileText className="h-5 w-5 text-slate-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-black">{draftCount}</p>
+                <p className="text-2xl font-bold text-slate-900">{draftCount}</p>
                 <p className="text-sm text-slate-600">Draft</p>
               </div>
             </div>
@@ -413,7 +415,7 @@ export default function EvidenceRequirementsPage() {
                 <Clock className="h-5 w-5 text-primary-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-black">{pendingReviewCount}</p>
+                <p className="text-2xl font-bold text-slate-900">{pendingReviewCount}</p>
                 <p className="text-sm text-slate-600">Pending Review</p>
               </div>
             </div>
@@ -424,7 +426,7 @@ export default function EvidenceRequirementsPage() {
                 <CheckCircle className="h-5 w-5 text-emerald-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-black">{approvedCount}</p>
+                <p className="text-2xl font-bold text-slate-900">{approvedCount}</p>
                 <p className="text-sm text-slate-600">Approved</p>
               </div>
             </div>
@@ -434,8 +436,8 @@ export default function EvidenceRequirementsPage() {
 
       {!selectedFramework && (
         <div className="card flex flex-col items-center justify-center py-16 text-center">
-          <FileCheck className="mb-4 h-16 w-16 text-slate-600" />
-          <h3 className="text-lg font-medium text-black mb-2">Select a Framework</h3>
+          <FileCheck className="mb-4 h-16 w-16 text-slate-400" strokeWidth={1.75} />
+          <h3 className="text-lg font-medium text-slate-900 mb-2">Select a Framework</h3>
           <p className="text-slate-600 max-w-md">
             Choose a framework from the dropdown above to view its AI-generated evidence requirements.
             Evidence requirements help you understand what documentation is needed for each control.
@@ -450,16 +452,16 @@ export default function EvidenceRequirementsPage() {
       )}
 
       {selectedFramework && error && (
-        <div className="flex h-64 flex-col items-center justify-center text-red-600">
-          <AlertCircle className="mb-2 h-8 w-8" />
+        <div className="flex h-64 flex-col items-center justify-center text-rose-600">
+          <AlertCircle className="mb-2 h-8 w-8" strokeWidth={1.75} />
           <p>Failed to load evidence requirements</p>
         </div>
       )}
 
       {selectedFramework && requirementsData && filteredRequirements.length === 0 && (
         <div className="card flex flex-col items-center justify-center py-16 text-center">
-          <Sparkles className="mb-4 h-16 w-16 text-slate-600" />
-          <h3 className="text-lg font-medium text-black mb-2">No Evidence Requirements</h3>
+          <Sparkles className="mb-4 h-16 w-16 text-slate-400" strokeWidth={1.75} />
+          <h3 className="text-lg font-medium text-slate-900 mb-2">No Evidence Requirements</h3>
           <p className="text-slate-600 max-w-md">
             {searchTerm || statusFilter || priorityFilter || typeFilter
               ? 'No requirements match your current filters. Try adjusting them.'
@@ -482,7 +484,7 @@ export default function EvidenceRequirementsPage() {
                 <th className="px-4 py-3 text-right text-sm font-medium text-slate-600">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-700">
+            <tbody className="divide-y divide-slate-200">
               {filteredRequirements.map((req) => {
                 const control = controlMap[req.parsed_control_id];
                 const isExpanded = expandedRow === req.id;
@@ -490,7 +492,7 @@ export default function EvidenceRequirementsPage() {
                   <>
                     <tr
                       key={req.id}
-                      className="bg-white/50 hover:bg-slate-50 cursor-pointer"
+                      className="bg-white hover:bg-slate-50 cursor-pointer"
                       onClick={() => setExpandedRow(isExpanded ? null : req.id)}
                     >
                       <td className="px-4 py-3">
@@ -501,7 +503,7 @@ export default function EvidenceRequirementsPage() {
                             <ChevronRight className="h-4 w-4 text-slate-600 flex-shrink-0" />
                           )}
                           <div className="min-w-0">
-                            <p className="font-mono text-sm text-black truncate">
+                            <p className="font-mono text-sm text-slate-900 truncate">
                               {control?.original_reference || control?.control_id || `Control #${req.parsed_control_id}`}
                             </p>
                             <p className="text-xs text-slate-600 truncate max-w-[200px]">
@@ -512,7 +514,7 @@ export default function EvidenceRequirementsPage() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
-                          <p className="text-sm text-black line-clamp-1">{req.evidence_title}</p>
+                          <p className="text-sm text-slate-900 line-clamp-1">{req.evidence_title}</p>
                           {req.is_mandatory && (
                             <span className="flex-shrink-0 rounded bg-rose-50 px-1.5 py-0.5 text-[10px] font-medium text-rose-600">
                               Required
@@ -538,7 +540,7 @@ export default function EvidenceRequirementsPage() {
                             <button
                               onClick={() => submitMutation.mutate(req.id)}
                               disabled={submitMutation.isPending}
-                              className="flex items-center gap-1 rounded bg-blue-600 px-2 py-1 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                              className="flex items-center gap-1 rounded bg-primary-600 px-2 py-1 text-xs font-medium text-[#0a0a0a] hover:bg-primary-700 disabled:opacity-50"
                             >
                               <Send className="h-3 w-3" />
                               Submit
@@ -548,7 +550,7 @@ export default function EvidenceRequirementsPage() {
                             <button
                               onClick={() => reviewMutation.mutate(req.id)}
                               disabled={reviewMutation.isPending}
-                              className="flex items-center gap-1 rounded bg-primary-600 px-2 py-1 text-xs font-medium text-white hover:bg-primary-700 disabled:opacity-50"
+                              className="flex items-center gap-1 rounded bg-primary-600 px-2 py-1 text-xs font-medium text-[#0a0a0a] hover:bg-primary-700 disabled:opacity-50"
                             >
                               <Eye className="h-3 w-3" />
                               Review
@@ -588,15 +590,15 @@ export default function EvidenceRequirementsPage() {
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                               <div>
                                 <h4 className="text-sm font-medium text-slate-600 mb-1">Evidence Type</h4>
-                                <p className="text-sm text-black capitalize">{req.evidence_type}</p>
+                                <p className="text-sm text-slate-900 capitalize">{req.evidence_type}</p>
                               </div>
                               <div>
                                 <h4 className="text-sm font-medium text-slate-600 mb-1">Collection Frequency</h4>
-                                <p className="text-sm text-black">{req.collection_frequency || 'Not specified'}</p>
+                                <p className="text-sm text-slate-900">{req.collection_frequency || 'Not specified'}</p>
                               </div>
                               <div>
                                 <h4 className="text-sm font-medium text-slate-600 mb-1">Retention Period</h4>
-                                <p className="text-sm text-black">{req.retention_period || 'Not specified'}</p>
+                                <p className="text-sm text-slate-900">{req.retention_period || 'Not specified'}</p>
                               </div>
                               <div>
                                 <h4 className="text-sm font-medium text-slate-600 mb-1">AI Confidence</h4>
@@ -616,7 +618,7 @@ export default function EvidenceRequirementsPage() {
                               {req.evidence_format && (
                                 <div>
                                   <h4 className="text-sm font-medium text-slate-600 mb-1">Evidence Format</h4>
-                                  <p className="text-sm text-black">{(() => {
+                                  <p className="text-sm text-slate-900">{(() => {
                                     const fmt = req.evidence_format.toString().toLowerCase().replace(/^\./, '');
                                     return ['pdf', 'doc', 'docx', 'docs', 'xls', 'xlsx'].includes(fmt)
                                       ? 'Document'
@@ -697,8 +699,8 @@ export default function EvidenceRequirementsPage() {
                             )}
 
                             {req.rejection_reason && (
-                              <div className="rounded-lg bg-rose-500/10 border border-rose-500/20 p-3">
-                                <h4 className="text-sm font-medium text-rose-600 mb-1 flex items-center gap-2">
+                              <div className="rounded-lg bg-rose-50 border border-rose-200 p-3">
+                                <h4 className="text-sm font-medium text-rose-700 mb-1 flex items-center gap-2">
                                   <AlertTriangle className="h-4 w-4" />
                                   Rejection Reason
                                 </h4>
@@ -739,10 +741,10 @@ export default function EvidenceRequirementsPage() {
       )}
 
       {showRejectModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50">
           <div className="w-full max-w-md mx-4 rounded-xl bg-white border border-slate-200 shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-200 p-4">
-              <h2 className="text-lg font-semibold text-black flex items-center gap-2">
+              <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
                 <ThumbsDown className="h-5 w-5 text-rose-600" />
                 Reject Evidence Requirement
               </h2>
@@ -765,7 +767,7 @@ export default function EvidenceRequirementsPage() {
                 onChange={(e) => setRejectionReason(e.target.value)}
                 placeholder="Please provide a reason for rejecting this evidence requirement..."
                 rows={4}
-                className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none resize-none"
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none resize-none"
               />
             </div>
             <div className="flex justify-end gap-3 border-t border-slate-200 p-4">
@@ -774,7 +776,7 @@ export default function EvidenceRequirementsPage() {
                   setShowRejectModal(null);
                   setRejectionReason('');
                 }}
-                className="rounded-lg bg-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-600"
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
               >
                 Cancel
               </button>

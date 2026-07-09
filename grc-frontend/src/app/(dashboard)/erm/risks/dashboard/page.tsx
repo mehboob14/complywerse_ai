@@ -36,11 +36,11 @@ import { ermApi } from '@/lib/api';
 // the risk list.
 // ---------------------------------------------------------------------------
 const STATUS_COLORS: Record<string, string> = {
-  open: '#3b82f6',
+  open: '#0d9488',
   in_treatment: '#f59e0b',
-  mitigated: '#22c55e',
-  accepted: '#a855f7',
-  closed: '#6b7280',
+  mitigated: '#10b981',
+  accepted: '#64748b',
+  closed: '#94a3b8',
 };
 const STATUS_LABELS: Record<string, string> = {
   open: 'Open',
@@ -62,15 +62,15 @@ const SOURCE_LABELS: Record<string, string> = {
   unknown: 'Unspecified',
 };
 const SOURCE_COLORS = [
-  '#6366f1', '#3b82f6', '#22c55e', '#f59e0b',
-  '#a855f7', '#ec4899', '#14b8a6', '#ef4444', '#94a3b8',
+  '#0d9488', '#0ea5e9', '#10b981', '#f59e0b',
+  '#f97316', '#e11d48', '#14b8a6', '#64748b', '#94a3b8',
 ];
 
 // Severity band colours — match the dot-plot legend used elsewhere in ERM.
 const SEVERITY_COLORS: Record<string, string> = {
-  critical: '#dc2626',
+  critical: '#e11d48',
   high: '#f97316',
-  medium: '#eab308',
+  medium: '#f59e0b',
   low: '#10b981',
 };
 const SEVERITY_LABELS: Record<string, string> = {
@@ -178,7 +178,7 @@ export default function RiskRegisterDashboardPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center gap-2 py-12 text-gray-500">
+      <div className="flex items-center gap-2 py-12 text-slate-500">
         <Loader2 className="h-5 w-5 animate-spin" />
         Loading risk register dashboard…
       </div>
@@ -195,8 +195,8 @@ export default function RiskRegisterDashboardPage() {
               a separate "view all risks" link. */}
           <RiskViewSwitcher active="dashboard" />
           <div>
-            <h1 className="text-lg sm:text-xl font-semibold text-gray-900">Risk Register — Dashboard</h1>
-            <p className="text-sm text-gray-500">
+            <h1 className="text-lg sm:text-xl font-semibold text-slate-900">Risk Register — Dashboard</h1>
+            <p className="text-sm text-slate-500">
               Per-register breakdown, severity mix, provenance and assignee workload. Use the filters below to drill in.
             </p>
           </div>
@@ -211,7 +211,7 @@ export default function RiskRegisterDashboardPage() {
           </Link>
           <Link
             href="/erm/risks/list?new=1"
-            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
+            className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-3 py-2 text-sm font-medium text-[#0a0a0a] hover:bg-primary-700"
           >
             <Plus size={16} />
             Add risk
@@ -220,7 +220,7 @@ export default function RiskRegisterDashboardPage() {
       </div>
 
       {/* ============== Filters ============== */}
-      <div className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
+      <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
         <div className="grid gap-3 md:grid-cols-3">
           <FilterDropdown
             label="Register type"
@@ -253,7 +253,7 @@ export default function RiskRegisterDashboardPage() {
                 setSourceFilter('');
               }}
               disabled={!hasFilters}
-              className="ml-auto text-xs font-medium text-blue-600 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
+              className="ml-auto text-xs font-medium text-primary-600 hover:text-primary-700 disabled:cursor-not-allowed disabled:opacity-40"
             >
               Reset filters
             </button>
@@ -263,20 +263,20 @@ export default function RiskRegisterDashboardPage() {
 
       {/* ============== KPI strip — reactive to filters ============== */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-7">
-        <Kpi label={registerFilter ? 'In register' : 'All risks'} value={totals.total} accent="bg-gray-100 text-gray-700" emphasis />
-        <Kpi label="Open" value={totals.open} accent="bg-blue-50 text-blue-700" />
+        <Kpi label={registerFilter ? 'In register' : 'All risks'} value={totals.total} accent="bg-slate-100 text-slate-700" emphasis />
+        <Kpi label="Open" value={totals.open} accent="bg-primary-50 text-primary-700" />
         <Kpi label="In treatment" value={totals.in_treatment} accent="bg-amber-50 text-amber-700" />
         <Kpi label="Mitigated" value={totals.mitigated} accent="bg-emerald-50 text-emerald-700" />
-        <Kpi label="Accepted" value={totals.accepted} accent="bg-purple-50 text-purple-700" />
-        <Kpi label="Closed" value={totals.closed} accent="bg-gray-100 text-gray-700" />
-        <Kpi label="Assignees" value={totals.assignees.size} accent="bg-indigo-50 text-indigo-700" />
+        <Kpi label="Accepted" value={totals.accepted} accent="bg-slate-100 text-slate-700" />
+        <Kpi label="Closed" value={totals.closed} accent="bg-slate-100 text-slate-700" />
+        <Kpi label="Assignees" value={totals.assignees.size} accent="bg-primary-50 text-primary-700" />
       </div>
 
       {/* ============== Severity overview ============== */}
       <div className="grid gap-4 lg:grid-cols-2">
         <Section
           title="Risk severity mix"
-          icon={<AlertTriangle className="h-4 w-4 text-rose-500" />}
+          icon={<AlertTriangle className="h-4 w-4 text-rose-500" strokeWidth={1.75} />}
         >
           {severityDonut.every((d) => d.value === 0) ? (
             <Empty hint="No risks scored yet." />
@@ -318,7 +318,7 @@ export default function RiskRegisterDashboardPage() {
       {detailRegister && (
         <Section
           title={`${detailRegister.register_type} — detail`}
-          icon={<Layers className="h-4 w-4 text-blue-500" />}
+          icon={<Layers className="h-4 w-4 text-primary-500" />}
         >
           <RegisterDetail register={detailRegister} />
         </Section>
@@ -352,7 +352,7 @@ export default function RiskRegisterDashboardPage() {
       {/* ============== Per-register cards (when no register filter) ============== */}
       {!registerFilter && filteredRegisters.length > 0 && (
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold text-gray-900">Register breakdown</h2>
+          <h2 className="text-sm font-semibold text-slate-900">Register breakdown</h2>
           <div className="grid gap-3 lg:grid-cols-2">
             {filteredRegisters.map((r) => (
               <button
@@ -372,7 +372,7 @@ export default function RiskRegisterDashboardPage() {
       {/* ============== Source provenance ============== */}
       <Section
         title={sourceFilter ? `Source: ${SOURCE_LABELS[sourceFilter] || sourceFilter}` : 'Where do these risks come from?'}
-        icon={<Database className="h-4 w-4 text-violet-500" />}
+        icon={<Database className="h-4 w-4 text-primary-500" />}
       >
         {sourcePieData.length === 0 ? (
           <Empty hint="No risks tagged with a source yet." />
@@ -407,7 +407,7 @@ export default function RiskRegisterDashboardPage() {
                   key={s.source_type}
                   type="button"
                   onClick={() => setSourceFilter(s.source_type)}
-                  className="flex w-full items-center justify-between rounded-md border border-gray-200 px-3 py-2 text-sm hover:bg-slate-50"
+                  className="flex w-full items-center justify-between rounded-md border border-slate-200 px-3 py-2 text-sm hover:bg-slate-50"
                   title="Filter dashboard by this source"
                 >
                   <div className="flex items-center gap-2">
@@ -415,11 +415,11 @@ export default function RiskRegisterDashboardPage() {
                       className="inline-block h-2.5 w-2.5 rounded-full"
                       style={{ background: SOURCE_COLORS[i % SOURCE_COLORS.length] }}
                     />
-                    <span className="font-medium text-gray-800">
+                    <span className="font-medium text-slate-800">
                       {SOURCE_LABELS[s.source_type] || s.source_type}
                     </span>
                   </div>
-                  <span className="font-mono text-xs text-gray-600">{s.total}</span>
+                  <span className="font-mono text-xs text-slate-600">{s.total}</span>
                 </button>
               ))}
             </div>
@@ -463,9 +463,9 @@ function Kpi({
   emphasis?: boolean;
 }) {
   return (
-    <div className={`rounded-lg border ${emphasis ? 'border-blue-200 bg-blue-50/50' : 'border-gray-200 bg-white'} p-3 shadow-sm`}>
+    <div className={`rounded-lg border ${emphasis ? 'border-primary-200 bg-primary-50/50' : 'border-slate-200 bg-white'} p-3 shadow-sm`}>
       <div className={`inline-flex rounded-md px-2 py-0.5 text-xs font-medium ${accent}`}>{label}</div>
-      <div className={`mt-1 text-2xl font-semibold ${emphasis ? 'text-blue-900' : 'text-gray-900'}`}>{value}</div>
+      <div className={`mt-1 text-2xl font-semibold ${emphasis ? 'text-primary-900' : 'text-slate-900'}`}>{value}</div>
     </div>
   );
 }
@@ -480,10 +480,10 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
       <header className="mb-3 flex items-center gap-2">
         {icon}
-        <h2 className="text-sm font-semibold text-gray-900">{title}</h2>
+        <h2 className="text-sm font-semibold text-slate-900">{title}</h2>
       </header>
       {children}
     </div>
@@ -491,7 +491,7 @@ function Section({
 }
 
 function Empty({ hint }: { hint: string }) {
-  return <div className="py-8 text-center text-sm text-gray-500">{hint}</div>;
+  return <div className="py-8 text-center text-sm text-slate-500">{hint}</div>;
 }
 
 function FilterDropdown({
@@ -514,7 +514,7 @@ function FilterDropdown({
         {label}
       </label>
       <select
-        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
         value={value}
         onChange={(e) => onChange(e.target.value)}
       >
@@ -560,8 +560,8 @@ function DonutWithCentre({
         </PieChart>
       </ResponsiveContainer>
       <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-        <div className="text-2xl font-semibold text-gray-900">{total}</div>
-        <div className="text-[10px] uppercase tracking-wide text-gray-500">total scored</div>
+        <div className="text-2xl font-semibold text-slate-900">{total}</div>
+        <div className="text-[10px] uppercase tracking-wide text-slate-500">total scored</div>
       </div>
     </div>
   );
@@ -571,31 +571,31 @@ function RegisterCard({ register: r }: { register: RegisterDatum }) {
   const ownerData = r.top_owners.map((o) => ({ name: o.owner, count: o.count }));
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm hover:border-blue-300 transition-colors">
+    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm hover:border-primary-300 transition-colors">
       <div className="flex items-start justify-between">
         <div>
-          <div className="text-base font-semibold text-gray-900">{r.register_type}</div>
-          <div className="mt-0.5 text-xs text-gray-500">
+          <div className="text-base font-semibold text-slate-900">{r.register_type}</div>
+          <div className="mt-0.5 text-xs text-slate-500">
             {r.total} risk{r.total === 1 ? '' : 's'} · avg residual {r.avg_residual_score}
           </div>
         </div>
-        <div className="flex items-center gap-1 rounded-md bg-purple-50 px-2 py-1 text-xs font-medium text-purple-700">
+        <div className="flex items-center gap-1 rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">
           <Users className="h-3 w-3" />
           {r.contributors}
         </div>
       </div>
 
       <div className="mt-3 grid grid-cols-5 gap-1.5 text-center">
-        <StatusPill label="Open"      value={r.by_status.open}         color="bg-blue-50 text-blue-700" />
+        <StatusPill label="Open"      value={r.by_status.open}         color="bg-primary-50 text-primary-700" />
         <StatusPill label="In treat." value={r.by_status.in_treatment} color="bg-amber-50 text-amber-700" />
         <StatusPill label="Mitigated" value={r.by_status.mitigated}    color="bg-emerald-50 text-emerald-700" />
-        <StatusPill label="Accepted"  value={r.by_status.accepted}     color="bg-purple-50 text-purple-700" />
-        <StatusPill label="Closed"    value={r.by_status.closed}       color="bg-gray-100 text-gray-700" />
+        <StatusPill label="Accepted"  value={r.by_status.accepted}     color="bg-slate-100 text-slate-700" />
+        <StatusPill label="Closed"    value={r.by_status.closed}       color="bg-slate-100 text-slate-700" />
       </div>
 
       {ownerData.length > 0 && (
         <div className="mt-4">
-          <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-500">
+          <div className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-500">
             Top assignees
           </div>
           <div className="h-28">
@@ -604,7 +604,7 @@ function RegisterCard({ register: r }: { register: RegisterDatum }) {
                 <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} />
                 <YAxis dataKey="name" type="category" width={120} tick={{ fontSize: 11 }} />
                 <Tooltip />
-                <Bar dataKey="count" fill="#6366f1" />
+                <Bar dataKey="count" fill="#0d9488" />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -652,19 +652,19 @@ function RegisterDetail({ register: r }: { register: RegisterDatum }) {
     <div className="space-y-4">
       {/* Headline numbers */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Kpi label="Total"           value={r.total}              accent="bg-gray-100 text-gray-700" />
-        <Kpi label="Contributors"    value={r.contributors}       accent="bg-purple-50 text-purple-700" />
-        <Kpi label="Avg residual"    value={r.avg_residual_score} accent="bg-blue-50 text-blue-700" />
+        <Kpi label="Total"           value={r.total}              accent="bg-slate-100 text-slate-700" />
+        <Kpi label="Contributors"    value={r.contributors}       accent="bg-primary-50 text-primary-700" />
+        <Kpi label="Avg residual"    value={r.avg_residual_score} accent="bg-primary-50 text-primary-700" />
         <Kpi label="Critical risks"  value={r.by_score_range.critical} accent="bg-rose-50 text-rose-700" />
       </div>
 
       {/* Status stacked bar — single visual, immediately readable */}
       <div>
         <div className="mb-1 flex items-center justify-between text-xs">
-          <div className="font-medium text-gray-700">Status mix</div>
-          <div className="text-gray-500">{statusTotal} total</div>
+          <div className="font-medium text-slate-700">Status mix</div>
+          <div className="text-slate-500">{statusTotal} total</div>
         </div>
-        <div className="flex h-6 w-full overflow-hidden rounded-md border border-gray-200">
+        <div className="flex h-6 w-full overflow-hidden rounded-md border border-slate-200">
           {statusEntries.map((e) =>
             e.value > 0 ? (
               <div
@@ -680,8 +680,8 @@ function RegisterDetail({ register: r }: { register: RegisterDatum }) {
           {statusEntries.map((e) => (
             <div key={e.key} className="flex items-center gap-1">
               <span className="inline-block h-2 w-2 rounded-sm" style={{ background: e.color }} />
-              <span className="text-gray-600">{e.label}</span>
-              <span className="font-mono text-gray-500">{e.value}</span>
+              <span className="text-slate-600">{e.label}</span>
+              <span className="font-mono text-slate-500">{e.value}</span>
             </div>
           ))}
         </div>
@@ -690,7 +690,7 @@ function RegisterDetail({ register: r }: { register: RegisterDatum }) {
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Severity donut */}
         <div>
-          <div className="mb-1 text-xs font-medium text-gray-700">Severity distribution</div>
+          <div className="mb-1 text-xs font-medium text-slate-700">Severity distribution</div>
           {severityTotal === 0 ? (
             <Empty hint="No scored risks in this register yet." />
           ) : (
@@ -700,7 +700,7 @@ function RegisterDetail({ register: r }: { register: RegisterDatum }) {
 
         {/* Category bar */}
         <div>
-          <div className="mb-1 text-xs font-medium text-gray-700">Categories</div>
+          <div className="mb-1 text-xs font-medium text-slate-700">Categories</div>
           {categoryData.length === 0 ? (
             <Empty hint="No risk categories on file." />
           ) : (
@@ -722,7 +722,7 @@ function RegisterDetail({ register: r }: { register: RegisterDatum }) {
       {/* Top owners */}
       {r.top_owners.length > 0 && (
         <div>
-          <div className="mb-1 flex items-center gap-1.5 text-xs font-medium text-gray-700">
+          <div className="mb-1 flex items-center gap-1.5 text-xs font-medium text-slate-700">
             <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
             Top assignees in this register
           </div>
@@ -737,7 +737,7 @@ function RegisterDetail({ register: r }: { register: RegisterDatum }) {
                 <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} />
                 <YAxis dataKey="name" type="category" width={140} tick={{ fontSize: 11 }} />
                 <Tooltip />
-                <Bar dataKey="count" fill="#6366f1" />
+                <Bar dataKey="count" fill="#0d9488" />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -747,7 +747,7 @@ function RegisterDetail({ register: r }: { register: RegisterDatum }) {
       <div className="pt-1 text-right">
         <Link
           href={`/erm/risks/list?register_type=${encodeURIComponent(r.register_type)}`}
-          className="text-xs font-medium text-blue-600 hover:text-blue-700"
+          className="text-xs font-medium text-primary-600 hover:text-primary-700"
         >
           Open all {r.total} {r.register_type} risk{r.total === 1 ? '' : 's'} →
         </Link>
@@ -769,17 +769,17 @@ function SourceDetail({ source: s }: { source: SourceDatum }) {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-        <Kpi label="Total in source" value={s.total} accent="bg-gray-100 text-gray-700" emphasis />
+        <Kpi label="Total in source" value={s.total} accent="bg-slate-100 text-slate-700" emphasis />
         <Kpi label="Active (open + in treat.)" value={s.by_status.open + s.by_status.in_treatment} accent="bg-amber-50 text-amber-700" />
         <Kpi label="Closed / accepted" value={s.by_status.closed + s.by_status.accepted} accent="bg-emerald-50 text-emerald-700" />
       </div>
 
       <div>
         <div className="mb-1 flex items-center justify-between text-xs">
-          <div className="font-medium text-gray-700">Status mix</div>
-          <div className="text-gray-500">{statusTotal} total</div>
+          <div className="font-medium text-slate-700">Status mix</div>
+          <div className="text-slate-500">{statusTotal} total</div>
         </div>
-        <div className="flex h-6 w-full overflow-hidden rounded-md border border-gray-200">
+        <div className="flex h-6 w-full overflow-hidden rounded-md border border-slate-200">
           {statusEntries.map((e) =>
             e.value > 0 ? (
               <div
@@ -795,8 +795,8 @@ function SourceDetail({ source: s }: { source: SourceDatum }) {
           {statusEntries.map((e) => (
             <div key={e.key} className="flex items-center gap-1">
               <span className="inline-block h-2 w-2 rounded-sm" style={{ background: e.color }} />
-              <span className="text-gray-600">{e.label}</span>
-              <span className="font-mono text-gray-500">{e.value}</span>
+              <span className="text-slate-600">{e.label}</span>
+              <span className="font-mono text-slate-500">{e.value}</span>
             </div>
           ))}
         </div>

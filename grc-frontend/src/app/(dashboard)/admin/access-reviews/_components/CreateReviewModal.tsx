@@ -33,7 +33,7 @@ export function CreateReviewModal({ onClose, onCreated }: { onClose: () => void;
     );
 
   return (
-    <div onClick={onClose} className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-6 backdrop-blur-[1px]">
+    <div onClick={onClose} className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-6">
       <div onClick={(e) => e.stopPropagation()} className="max-h-full w-[560px] max-w-full overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5">
           <div>

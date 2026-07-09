@@ -254,7 +254,7 @@ export default function FrameworkRiskAssessmentDetailPage() {
   if (isLoading || !assessment) {
     return (
       <div className="flex items-center justify-center py-16">
-        <Loader2 className="animate-spin text-blue-600" size={32} />
+        <Loader2 className="animate-spin text-primary-600" size={32} />
       </div>
     );
   }
@@ -561,7 +561,7 @@ export default function FrameworkRiskAssessmentDetailPage() {
 
               <div className="flex flex-wrap items-center gap-2">
                 {question.linked_risk_id ? (
-                  <div className="inline-flex items-center gap-2 rounded-lg border border-green-300 bg-green-50 px-3 py-2 text-xs text-green-700">
+                  <div className="inline-flex items-center gap-2 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
                     Moved to Risk Register: #{question.linked_risk_id}
                     <Link className="underline" href={`/erm/risks`}>Open Register</Link>
                   </div>
@@ -586,7 +586,7 @@ export default function FrameworkRiskAssessmentDetailPage() {
                 )}
               </div>
               {movingQuestionId === question.id && moveToRiskRegisterMutation.isError && (
-                <div className="text-xs text-red-600">
+                <div className="text-xs text-rose-600">
                   {(moveToRiskRegisterMutation.error as any)?.response?.data?.detail || 'Failed to move question to risk register.'}
                 </div>
               )}
@@ -780,24 +780,24 @@ function MethodologyQuestionCard({
     Object.values(aiResult.recommended_scores).some((v) => v !== null && v !== undefined);
 
   return (
-    <div className="rounded-lg border border-blue-200 bg-blue-50/50 p-4 space-y-3">
+    <div className="rounded-lg border border-primary-200 bg-primary-50/50 p-4 space-y-3">
       <div className="flex flex-wrap items-center gap-2 text-xs">
-        <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 font-semibold text-blue-800">
+        <span className="inline-flex items-center gap-1 rounded-full bg-primary-100 px-2 py-0.5 font-semibold text-primary-800">
           <BookOpen size={11} /> {methodology.display_name}
         </span>
         {phase && (
-          <span className="rounded-full bg-white px-2 py-0.5 font-medium text-blue-700 border border-blue-200">
+          <span className="rounded-full bg-white px-2 py-0.5 font-medium text-primary-700 border border-primary-200">
             Phase {phase.order}: {phase.name}
           </span>
         )}
         {question.clause_reference && (
-          <span className="rounded-full bg-white px-2 py-0.5 font-mono text-blue-700 border border-blue-200">
+          <span className="rounded-full bg-white px-2 py-0.5 font-mono text-primary-700 border border-primary-200">
             {question.clause_reference}
           </span>
         )}
         <div className="ml-auto flex items-center gap-2">
           <button
-            className="inline-flex items-center gap-1.5 rounded-md bg-violet-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-violet-700 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-md bg-primary-600 px-2.5 py-1 text-xs font-medium text-[#0a0a0a] hover:bg-primary-700 disabled:opacity-50"
             onClick={runAISuggest}
             disabled={aiLoading}
             title="Ask AI to suggest values for the fields below"
@@ -809,27 +809,27 @@ function MethodologyQuestionCard({
       </div>
 
       {aiError && (
-        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+        <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
           {aiError}
         </div>
       )}
 
       {aiOpen && aiResult && (
-        <div className="rounded-lg border border-violet-200 bg-violet-50/70 p-3 space-y-3">
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-3">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-violet-900">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-900">
               <Wand2 size={12} /> AI suggestions
             </div>
             <div className="flex items-center gap-1">
               <button
-                className="inline-flex items-center gap-1 rounded-md bg-violet-600 px-2 py-1 text-[11px] font-medium text-white hover:bg-violet-700"
+                className="inline-flex items-center gap-1 rounded-md bg-primary-600 px-2 py-1 text-[11px] font-medium text-[#0a0a0a] hover:bg-primary-700"
                 onClick={applyAllSuggestions}
               >
                 <Check size={10} /> Apply all to fields
               </button>
               {hasRecommendedScores && (
                 <button
-                  className="inline-flex items-center gap-1 rounded-md border border-violet-300 bg-white px-2 py-1 text-[11px] font-medium text-violet-700 hover:bg-violet-100"
+                  className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-100"
                   onClick={applyRecommendedScores}
                   title="Apply the suggested likelihood / impact ratings to the risk-rating section below"
                 >
@@ -837,7 +837,7 @@ function MethodologyQuestionCard({
                 </button>
               )}
               <button
-                className="inline-flex items-center gap-1 rounded-md border border-violet-300 bg-white px-2 py-1 text-[11px] text-violet-700 hover:bg-violet-100"
+                className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-100"
                 onClick={() => setAiOpen(false)}
               >
                 <X size={10} /> Hide
@@ -846,8 +846,8 @@ function MethodologyQuestionCard({
           </div>
 
           {aiResult.recommendations && (
-            <div className="rounded-md bg-white px-3 py-2 text-xs text-violet-900">
-              <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-violet-700">
+            <div className="rounded-md bg-white px-3 py-2 text-xs text-slate-900">
+              <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-slate-700">
                 Assessor guidance
               </div>
               <div>{aiResult.recommendations}</div>
@@ -862,18 +862,18 @@ function MethodologyQuestionCard({
               return (
                 <div
                   key={f.key}
-                  className="rounded-md border border-violet-200 bg-white px-3 py-2"
+                  className="rounded-md border border-slate-200 bg-white px-3 py-2"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1">
-                      <div className="text-[11px] font-semibold text-violet-900">{f.label}</div>
-                      <div className="mt-0.5 text-xs text-violet-900/90 whitespace-pre-wrap">
-                        {trimmed || <span className="italic text-violet-500">No suggestion</span>}
+                      <div className="text-[11px] font-semibold text-slate-900">{f.label}</div>
+                      <div className="mt-0.5 text-xs text-slate-700 whitespace-pre-wrap">
+                        {trimmed || <span className="italic text-slate-400">No suggestion</span>}
                       </div>
                     </div>
                     {trimmed && (
                       <button
-                        className="inline-flex shrink-0 items-center gap-1 rounded-md bg-violet-600 px-2 py-1 text-[11px] font-medium text-white hover:bg-violet-700"
+                        className="inline-flex shrink-0 items-center gap-1 rounded-md bg-primary-600 px-2 py-1 text-[11px] font-medium text-[#0a0a0a] hover:bg-primary-700"
                         onClick={() => applySuggestion(f.key)}
                       >
                         <Check size={10} /> Apply
@@ -886,8 +886,8 @@ function MethodologyQuestionCard({
           </div>
 
           {hasRecommendedScores && (
-            <div className="rounded-md bg-white px-3 py-2 text-xs text-violet-900">
-              <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-violet-700">
+            <div className="rounded-md bg-white px-3 py-2 text-xs text-slate-900">
+              <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-slate-700">
                 Suggested ratings (1–5)
               </div>
               <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
@@ -912,11 +912,11 @@ function MethodologyQuestionCard({
           )}
 
           {aiResult.rationale && (
-            <div className="text-[11px] italic text-violet-700">{aiResult.rationale}</div>
+            <div className="text-[11px] italic text-slate-600">{aiResult.rationale}</div>
           )}
 
           <div>
-            <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-violet-700">
+            <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-slate-700">
               Re-run with extra context (optional)
             </label>
             <div className="flex items-center gap-2">
@@ -927,7 +927,7 @@ function MethodologyQuestionCard({
                 onChange={(e) => setContextHint(e.target.value)}
               />
               <button
-                className="inline-flex items-center gap-1 rounded-md bg-violet-600 px-2 py-1 text-[11px] font-medium text-white hover:bg-violet-700 disabled:opacity-50"
+                className="inline-flex items-center gap-1 rounded-md bg-primary-600 px-2 py-1 text-[11px] font-medium text-[#0a0a0a] hover:bg-primary-700 disabled:opacity-50"
                 onClick={runAISuggest}
                 disabled={aiLoading}
               >
@@ -942,9 +942,9 @@ function MethodologyQuestionCard({
       <div className="grid gap-3 md:grid-cols-2">
         {fields.map((f) => (
           <div key={f.key} className={f.field_type === 'textarea' ? 'md:col-span-2' : ''}>
-            <label className="mb-1 block text-xs font-medium text-blue-900">
+            <label className="mb-1 block text-xs font-medium text-slate-900">
               {f.label}
-              {f.required && <span className="ml-0.5 text-red-500">*</span>}
+              {f.required && <span className="ml-0.5 text-rose-500">*</span>}
             </label>
             {f.field_type === 'textarea' ? (
               <textarea
@@ -975,7 +975,7 @@ function MethodologyQuestionCard({
                 onChange={(e) => setDraft((d) => ({ ...d, [f.key]: e.target.value }))}
               />
             )}
-            {f.help_text && <div className="mt-1 text-[10px] text-blue-700/80">{f.help_text}</div>}
+            {f.help_text && <div className="mt-1 text-[10px] text-slate-500">{f.help_text}</div>}
           </div>
         ))}
       </div>

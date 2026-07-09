@@ -39,7 +39,8 @@ import {
   LineChart,
   Line,
 } from 'recharts';
-import { RightSlidePanel, SearchInput, MultiSelectDropdown } from '@/components/ui';
+import { RightSlidePanel, SearchInput, MultiSelectDropdown, DataTable, type ColumnDef } from '@/components/ui';
+import { RowActionsMenu, type RowAction } from '../documents/_workspace/RowActionsMenu';
 
 /**
  * Textarea that grows to fit its content so long (often AI-generated) field
@@ -97,20 +98,21 @@ const PRIORITY_OPTIONS = [
   { value: 'critical', label: 'Critical' },
 ];
 
+// Charter: single-hue light status/priority pills (bg-{tone}-50 text-{tone}-700).
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  draft: { bg: 'bg-gray-100', text: 'text-black', label: 'Draft' },
-  pending_approval: { bg: 'bg-yellow-100', text: 'text-black', label: 'Pending Approval' },
-  approved: { bg: 'bg-green-100', text: 'text-black', label: 'Approved' },
-  rejected: { bg: 'bg-red-100', text: 'text-black', label: 'Rejected' },
-  expired: { bg: 'bg-orange-100', text: 'text-black', label: 'Expired' },
-  revoked: { bg: 'bg-gray-200', text: 'text-black', label: 'Revoked' },
+  draft: { bg: 'bg-slate-100', text: 'text-slate-600', label: 'Draft' },
+  pending_approval: { bg: 'bg-amber-50', text: 'text-amber-700', label: 'Pending Approval' },
+  approved: { bg: 'bg-emerald-50', text: 'text-emerald-700', label: 'Approved' },
+  rejected: { bg: 'bg-rose-50', text: 'text-rose-700', label: 'Rejected' },
+  expired: { bg: 'bg-orange-50', text: 'text-orange-700', label: 'Expired' },
+  revoked: { bg: 'bg-slate-100', text: 'text-slate-500', label: 'Revoked' },
 };
 
 const PRIORITY_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  low: { bg: 'bg-gray-100', text: 'text-black', label: 'Low' },
-  medium: { bg: 'bg-blue-100', text: 'text-black', label: 'Medium' },
-  high: { bg: 'bg-amber-100', text: 'text-black', label: 'High' },
-  critical: { bg: 'bg-red-100', text: 'text-black', label: 'Critical' },
+  low: { bg: 'bg-slate-100', text: 'text-slate-600', label: 'Low' },
+  medium: { bg: 'bg-amber-50', text: 'text-amber-700', label: 'Medium' },
+  high: { bg: 'bg-orange-50', text: 'text-orange-700', label: 'High' },
+  critical: { bg: 'bg-rose-50', text: 'text-rose-700', label: 'Critical' },
 };
 
 interface ExceptionItem {
@@ -194,6 +196,41 @@ interface ExceptionCandidate {
 function formatDate(dateStr: string | null | undefined) {
   if (!dateStr) return '-';
   return new Date(dateStr).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+// ── Register cell primitives (charter — shared look with the Documents register) ──
+function StatusPill({ status }: { status: string }) {
+  const s = STATUS_STYLES[status] || STATUS_STYLES.draft;
+  return (
+    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${s.bg} ${s.text}`}>
+      {s.label}
+    </span>
+  );
+}
+
+function PriorityPill({ priority }: { priority: string }) {
+  const p = PRIORITY_STYLES[priority] || PRIORITY_STYLES.medium;
+  return (
+    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${p.bg} ${p.text}`}>
+      {p.label}
+    </span>
+  );
+}
+
+function RequesterCell({ name }: { name?: string }) {
+  const label = (name && name.trim()) || 'Unassigned';
+  const initials =
+    label === 'Unassigned'
+      ? '—'
+      : label.split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
+  return (
+    <span className="inline-flex items-center gap-2 text-sm text-slate-700">
+      <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold text-slate-500">
+        {initials}
+      </span>
+      <span className="truncate">{label}</span>
+    </span>
+  );
 }
 
 export default function PolicyExceptionsPage() {
@@ -395,7 +432,7 @@ export default function PolicyExceptionsPage() {
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['policy-exceptions'] });
       setViewingException(null);
-      if (result?.risk_id) router.push(`/risks/${result.risk_id}`);
+      if (result?.risk_id) router.push(`/erm/risks/${result.risk_id}`);
     },
   });
 
@@ -611,19 +648,59 @@ export default function PolicyExceptionsPage() {
     { name: 'rest', value: 100 - postureScore, fill: '#e5e7eb' },
   ];
   const AGING_LABEL: Record<string, string> = { '0_30': '0–30d', '31_60': '31–60d', '61_90': '61–90d', '90_plus': '90d+', overdue: 'Overdue' };
-  const AGING_COLOR: Record<string, string> = { '0_30': '#3b82f6', '31_60': '#6366f1', '61_90': '#f59e0b', '90_plus': '#f97316', overdue: '#ef4444' };
+  const AGING_COLOR: Record<string, string> = { '0_30': '#1ed4b0', '31_60': '#3ddfc2', '61_90': '#f59e0b', '90_plus': '#fb923c', overdue: '#f43f5e' };
   const agingData = ['0_30', '31_60', '61_90', '90_plus', 'overdue'].map((k) => ({
     name: AGING_LABEL[k], value: (analytics?.aging_buckets?.[k] as number) || 0, fill: AGING_COLOR[k],
   }));
   const trendData = (postureTrend || []).map((p) => ({ date: p.date.slice(5), value: p.value ?? 0 }));
+
+  // Per-row actions (⋯ menu) — same lifecycle logic as before, now surfaced
+  // through the shared RowActionsMenu used by the Documents register.
+  const rowActions = (exc: ExceptionItem): RowAction[] => [
+    { key: 'view', label: 'View details', icon: Eye, onClick: () => setViewingException(exc) },
+    { key: 'edit', label: 'Edit', icon: Edit2, onClick: () => openEditModal(exc), hidden: exc.status !== 'draft' },
+    { key: 'submit', label: 'Submit for approval', icon: Send, onClick: () => submitMutation.mutate(exc.id), hidden: exc.status !== 'draft' },
+    { key: 'approve', label: 'Approve', icon: Check, onClick: () => setApproveModal(exc), hidden: exc.status !== 'pending_approval' },
+    { key: 'reject', label: 'Reject', icon: XCircle, onClick: () => setRejectModal(exc), variant: 'danger', hidden: exc.status !== 'pending_approval' },
+    { key: 'revoke', label: 'Revoke', icon: Ban, onClick: () => setRevokeModal(exc), hidden: exc.status !== 'approved' },
+    {
+      key: 'delete',
+      label: 'Delete',
+      icon: Trash2,
+      variant: 'danger',
+      onClick: () => {
+        if (confirm('Are you sure you want to delete this exception?')) deleteMutation.mutate(exc.id);
+      },
+    },
+  ];
+
+  const columns: ColumnDef<ExceptionItem>[] = [
+    { id: 'title', header: 'Title', accessor: 'title', sortable: true, minWidth: '240px', render: (e) => <span className="font-medium text-slate-900">{e.title}</span> },
+    { id: 'policy', header: 'Policy', minWidth: '160px', render: (e) => <span className="text-slate-600">{e.document_title || e.policy_name || '—'}</span> },
+    { id: 'status', header: 'Status', accessor: 'status', sortable: true, minWidth: '140px', render: (e) => <StatusPill status={e.status} /> },
+    { id: 'priority', header: 'Priority', accessor: 'priority', sortable: true, minWidth: '110px', render: (e) => <PriorityPill priority={e.priority} /> },
+    { id: 'requester', header: 'Requested by', minWidth: '160px', render: (e) => <RequesterCell name={e.requester_name || e.requested_by_name} /> },
+    { id: 'created', header: 'Requested', accessor: 'created_at', sortable: true, minWidth: '120px', render: (e) => <span className="text-slate-600">{formatDate(e.created_at)}</span> },
+    { id: 'expiry', header: 'Expiry', accessor: 'expiry_date', sortable: true, minWidth: '120px', render: (e) => <span className="text-slate-600">{formatDate(e.expiry_date)}</span> },
+    {
+      id: 'actions',
+      header: '',
+      minWidth: '56px',
+      render: (e) => (
+        <div onClick={(ev) => ev.stopPropagation()}>
+          <RowActionsMenu actions={rowActions(e)} />
+        </div>
+      ),
+    },
+  ];
 
   return (
     <div className="governance-exceptions space-y-4 sm:space-y-6 p-4 sm:p-5">
       {/* Header row */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-lg sm:text-xl font-semibold text-black">Policy Exception Management</h1>
-          <p className="text-xs sm:text-sm text-gray-600 mt-0.5">Request, review, and manage policy exceptions</p>
+          <h1 className="text-lg sm:text-xl font-semibold text-slate-900">Policy Exception Management</h1>
+          <p className="text-xs sm:text-sm text-slate-500 mt-0.5">Request, review, and manage policy exceptions</p>
         </div>
       </div>
 
@@ -634,57 +711,12 @@ export default function PolicyExceptionsPage() {
         </div>
       )}
 
-      {/* Charts row */}
+      {/* Summary row — status mix · aging · closure timeliness (single row of 3) */}
       {allExceptions.length > 0 && (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {/* Speedometer — Priority Risk Level */}
-          <div className="rounded-lg border border-gray-200 bg-white p-3">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-2">Risk Posture <span className="normal-case text-gray-400">· asset-weighted (CIA × criticality)</span></p>
-            <div className="flex items-center gap-4">
-              <div className="relative h-[110px] w-[170px] flex-shrink-0">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={postureGaugeData}
-                      cx="50%"
-                      cy="88%"
-                      startAngle={180}
-                      endAngle={0}
-                      innerRadius={44}
-                      outerRadius={62}
-                      dataKey="value"
-                      stroke="none"
-                    >
-                      {gaugeData.map((entry, i) => (
-                        <Cell key={i} fill={entry.fill} />
-                      ))}
-                    </Pie>
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="absolute inset-0 flex flex-col items-center justify-end pb-1 pointer-events-none">
-                  <span className="text-lg font-bold" style={{ color: postureColor }}>{postureScore}</span>
-                  <span className="text-[9px] text-gray-500 leading-tight">/100 posture{analytics?.overdue ? ` · ${analytics.overdue} overdue` : ''}</span>
-                </div>
-              </div>
-              <div className="space-y-1.5 flex-1">
-                {(['critical','high','medium','low'] as const).map((p) => (
-                  <div key={p} className="flex items-center gap-2 text-xs">
-                    <span className={`inline-flex w-14 justify-center rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                      p === 'critical' ? 'bg-red-100 text-red-700'
-                      : p === 'high' ? 'bg-amber-100 text-amber-700'
-                      : p === 'medium' ? 'bg-blue-100 text-blue-700'
-                      : 'bg-gray-100 text-gray-600'
-                    }`}>{p.charAt(0).toUpperCase() + p.slice(1)}</span>
-                    <span className="font-semibold text-black">{priorityCount[p] || 0}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Pie chart — Status distribution */}
-          <div className="rounded-lg border border-gray-200 bg-white p-3">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-2">Status Distribution</p>
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+          {/* Status distribution */}
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-card">
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Status Distribution</p>
             <div className="flex items-center gap-3">
               <div className="h-[110px] w-[110px] flex-shrink-0">
                 <ResponsiveContainer width="100%" height="100%">
@@ -694,36 +726,32 @@ export default function PolicyExceptionsPage() {
                         <Cell key={i} fill={entry.color} />
                       ))}
                     </Pie>
-                    <Tooltip contentStyle={{ fontSize: 11, borderRadius: 6, border: '1px solid #e5e7eb' }} />
+                    <Tooltip contentStyle={{ fontSize: 11, borderRadius: 6, border: '1px solid #e2e8f0' }} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
-              <div className="space-y-1.5 flex-1">
+              <div className="flex-1 space-y-1.5">
                 {statusChartData.map((s) => (
                   <div key={s.name} className="flex items-center gap-2 text-xs">
                     <span className="h-2.5 w-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: s.color }} />
-                    <span className="flex-1 text-gray-600">{s.name}</span>
-                    <span className="font-semibold text-black">{s.value}</span>
+                    <span className="flex-1 text-slate-500">{s.name}</span>
+                    <span className="font-semibold text-slate-900">{s.value}</span>
                   </div>
                 ))}
               </div>
             </div>
           </div>
-        </div>
-      )}
 
-      {/* Improved analytics row — aging · posture trend · closure timeliness (items 17 & 18) */}
-      {analytics && analytics.total > 0 && (
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-          <div className="rounded-lg border border-gray-200 bg-white p-3">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-2">Open Exception Aging</p>
+          {/* Open exception aging */}
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-card">
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Open Exception Aging</p>
             <div className="h-[130px]">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={agingData} margin={{ top: 4, right: 6, left: -18, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis dataKey="name" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} allowDecimals={false} />
-                  <Tooltip contentStyle={{ fontSize: 11, borderRadius: 6 }} />
+                  <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} allowDecimals={false} />
+                  <Tooltip contentStyle={{ fontSize: 11, borderRadius: 6, border: '1px solid #e2e8f0' }} />
                   <Bar dataKey="value" radius={[3, 3, 0, 0]}>
                     {agingData.map((d, i) => <Cell key={i} fill={d.fill} />)}
                   </Bar>
@@ -732,47 +760,168 @@ export default function PolicyExceptionsPage() {
             </div>
           </div>
 
-          <div className="rounded-lg border border-gray-200 bg-white p-3">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-2">Risk Posture Trend <span className="normal-case text-gray-400">· 0–100</span></p>
-            {trendData.length > 1 ? (
-              <div className="h-[130px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={trendData} margin={{ top: 4, right: 6, left: -18, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="date" tick={{ fontSize: 9 }} axisLine={false} tickLine={false} minTickGap={20} />
-                    <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
-                    <Tooltip contentStyle={{ fontSize: 11, borderRadius: 6 }} />
-                    <Line type="monotone" dataKey="value" stroke={postureColor} strokeWidth={2} dot={false} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            ) : (
-              <div className="flex h-[130px] items-center justify-center text-center text-[11px] text-gray-400">
-                Trend builds daily as snapshots accumulate.
-              </div>
-            )}
-          </div>
-
-          <div className="rounded-lg border border-gray-200 bg-white p-3">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-2">Closure Timeliness</p>
+          {/* Closure timeliness */}
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-card">
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Closure Timeliness</p>
             <div className="flex items-center gap-4">
               <div className="flex flex-col items-center">
-                <span className="text-2xl font-bold" style={{ color: (analytics.closed_on_time_pct ?? 100) >= 80 ? '#10b981' : (analytics.closed_on_time_pct ?? 0) >= 50 ? '#f59e0b' : '#ef4444' }}>
-                  {analytics.closed_on_time_pct != null ? `${analytics.closed_on_time_pct}%` : '—'}
+                <span className="text-2xl font-bold" style={{ color: (analytics?.closed_on_time_pct ?? 100) >= 80 ? '#059669' : (analytics?.closed_on_time_pct ?? 0) >= 50 ? '#d97706' : '#e11d48' }}>
+                  {analytics?.closed_on_time_pct != null ? `${analytics.closed_on_time_pct}%` : '—'}
                 </span>
-                <span className="text-[10px] text-gray-500">closed on time</span>
+                <span className="text-[10px] text-slate-500">closed on time</span>
               </div>
               <div className="flex-1 space-y-1.5 text-xs">
-                <div className="flex items-center justify-between"><span className="text-gray-500">Open</span><span className="font-semibold text-black">{analytics.open}</span></div>
-                <div className="flex items-center justify-between"><span className="text-gray-500">Overdue</span><span className={`font-semibold ${analytics.overdue ? 'text-red-600' : 'text-black'}`}>{analytics.overdue}</span></div>
-                <div className="flex items-center justify-between"><span className="text-gray-500">Resolved</span><span className="font-semibold text-black">{analytics.resolved}</span></div>
+                <div className="flex items-center justify-between"><span className="text-slate-500">Open</span><span className="font-semibold text-slate-900">{analytics?.open ?? 0}</span></div>
+                <div className="flex items-center justify-between"><span className="text-slate-500">Overdue</span><span className={`font-semibold ${analytics?.overdue ? 'text-rose-600' : 'text-slate-900'}`}>{analytics?.overdue ?? 0}</span></div>
+                <div className="flex items-center justify-between"><span className="text-slate-500">Resolved</span><span className="font-semibold text-slate-900">{analytics?.resolved ?? 0}</span></div>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Search + Filters + Button row */}
+      {/* ── Find & generate exceptions (moved ABOVE the search bar) ─────────────
+          1) Search any sentence/keyword across policy CONTENT (+ parsed clauses)
+          2) AI-driven suggestions of exceptions that could be raised across policies
+          Both pre-fill the existing "New Exception" modal — nothing else changes. */}
+      <div className="rounded-xl border border-slate-200 bg-white shadow-card">
+        <button
+          onClick={toggleDiscover}
+          className="flex w-full items-center justify-between px-3 py-2.5 text-left"
+        >
+          <span className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+            <Sparkles className="h-4 w-4 text-primary-600" />
+            Find &amp; generate exceptions
+            <span className="hidden sm:inline text-[11px] font-normal text-slate-400">
+              search policy content · AI suggestions
+            </span>
+          </span>
+          <span className="text-xs text-slate-400">{discoverOpen ? 'Hide' : 'Show'}</span>
+        </button>
+
+        {discoverOpen && (
+          <div className="grid grid-cols-1 gap-4 border-t border-slate-100 p-3 lg:grid-cols-2">
+            {/* Feature 1 — search across policy content */}
+            <div>
+              <p className="mb-1.5 text-xs font-semibold text-slate-700">Search across policy content</p>
+              <div className="flex gap-1.5">
+                <input
+                  value={policyQuery}
+                  onChange={(e) => setPolicyQuery(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') runPolicySearch(); }}
+                  placeholder="Search any sentence or keyword across policies…"
+                  className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-xs focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                />
+                <button
+                  onClick={runPolicySearch}
+                  disabled={searchingPolicies || !policyQuery.trim()}
+                  className="btn-primary flex items-center gap-1 px-2.5 py-1.5 text-xs disabled:opacity-50"
+                >
+                  {searchingPolicies ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
+                  Search
+                </button>
+              </div>
+              <div className="mt-2 max-h-64 space-y-1.5 overflow-y-auto">
+                {searchedOnce && !searchingPolicies && policyResults.length === 0 && (
+                  <p className="px-1 py-2 text-xs text-slate-400">No policies matched “{policyQuery}”.</p>
+                )}
+                {policyResults.map((r, i) => (
+                  <div key={`${r.document_id}-${r.statement_id ?? 'doc'}-${i}`} className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-semibold text-slate-900">{r.document_title || `Policy #${r.document_id}`}</p>
+                        <p className="text-[10px] uppercase tracking-wide text-slate-400">
+                          {r.doc_type || 'policy'}{r.document_code ? ` · ${r.document_code}` : ''}{r.match_field === 'policy_statement' ? ' · clause' : ''}
+                        </p>
+                      </div>
+                      {canCreate && (
+                        <button
+                          onClick={() => openCreateForDocument(r.document_id)}
+                          className="flex flex-shrink-0 items-center gap-1 rounded-md border border-primary-200 px-1.5 py-0.5 text-[10px] font-medium text-primary-700 hover:bg-primary-50"
+                        >
+                          <Plus className="h-3 w-3" /> Exception
+                        </button>
+                      )}
+                    </div>
+                    {r.snippet && <p className="mt-1 text-[11px] leading-snug text-slate-600">{r.snippet}</p>}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Feature 2 — AI-suggested candidate exceptions */}
+            <div>
+              <div className="mb-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-semibold text-slate-700">
+                    AI-suggested exceptions {candidatePolicyId === 'all' ? 'across policies' : 'for the selected policy'}
+                  </p>
+                  <button
+                    onClick={() => loadCandidates()}
+                    disabled={loadingCandidates}
+                    className="flex flex-shrink-0 items-center gap-1 rounded-md border border-primary-200 px-2 py-1 text-[11px] font-medium text-primary-700 hover:bg-primary-50 disabled:opacity-50"
+                  >
+                    {loadingCandidates ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                    {candidates.length ? 'Refresh' : 'Suggest'}
+                  </button>
+                </div>
+                {/* Pick a policy → AI immediately shows possible exceptions for
+                    that exact document. 'All policies' scans across the board. */}
+                <select
+                  value={String(candidatePolicyId)}
+                  onChange={(e) => onSelectCandidatePolicy(e.target.value)}
+                  className="mt-1.5 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-xs focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                >
+                  <option value="all">All policies (scan across every policy)</option>
+                  {(documents || []).map((d: GovernancePolicyOption) => (
+                    <option key={d.id} value={d.id}>
+                      {d.document_code ? `${d.document_code} · ` : ''}{d.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="max-h-64 space-y-1.5 overflow-y-auto">
+                {loadingCandidates && (
+                  <div className="flex items-center gap-2 px-1 py-3 text-xs text-slate-500">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> {candidatePolicyId === 'all' ? 'Analyzing your policies…' : 'Analyzing this policy…'}
+                  </div>
+                )}
+                {!loadingCandidates && candidates.length === 0 && (
+                  <p className="px-1 py-2 text-xs text-slate-400">
+                    {candidatePolicyId === 'all'
+                      ? 'Select a policy above to see exceptions for that exact policy, or “Suggest” to scan across all policies.'
+                      : 'No AI-suggested exceptions found for this policy — click “Suggest” to retry.'}
+                  </p>
+                )}
+                {candidates.map((c, i) => (
+                  <div key={`${c.document_id}-${i}`} className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-slate-900">{c.suggested_title}</p>
+                        <p className="text-[10px] text-slate-400">{c.document_title || `Policy #${c.document_id}`} · {c.suggested_priority}</p>
+                      </div>
+                      {canCreate && (
+                        <button
+                          onClick={() => openCreateForDocument(c.document_id, { title: c.suggested_title, justification: c.rationale, priority: c.suggested_priority })}
+                          className="flex flex-shrink-0 items-center gap-1 rounded-md border border-primary-200 px-1.5 py-0.5 text-[10px] font-medium text-primary-700 hover:bg-primary-50"
+                        >
+                          <Plus className="h-3 w-3" /> Use
+                        </button>
+                      )}
+                    </div>
+                    {c.rationale && <p className="mt-1 text-[11px] leading-snug text-slate-600">{c.rationale}</p>}
+                  </div>
+                ))}
+                {candidateSource === 'template' && candidates.length > 0 && (
+                  <p className="px-1 text-[10px] italic text-slate-400">Generated from policy metadata (configure an AI key for richer, content-aware suggestions).</p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Search + Filters + New Exception row (same buttons as before) */}
       <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2">
         <div className="flex-1 min-w-[180px]">
           <SearchInput
@@ -809,278 +958,28 @@ export default function PolicyExceptionsPage() {
         )}
       </div>
 
-      {/* ── Discover & generate exceptions ─────────────────────────────────────
-          1) Search any sentence/keyword across policy CONTENT (+ parsed clauses)
-          2) AI-driven suggestions of exceptions that could be raised across policies
-          Both pre-fill the existing "New Exception" modal — nothing else changes. */}
-      <div className="rounded-lg border border-gray-200 bg-white">
-        <button
-          onClick={toggleDiscover}
-          className="flex w-full items-center justify-between px-3 py-2.5 text-left"
-        >
-          <span className="flex items-center gap-2 text-sm font-semibold text-black">
-            <Sparkles className="h-4 w-4 text-indigo-600" />
-            Find &amp; generate exceptions
-            <span className="hidden sm:inline text-[11px] font-normal text-gray-400">
-              search policy content · AI suggestions
-            </span>
-          </span>
-          <span className="text-xs text-gray-400">{discoverOpen ? 'Hide' : 'Show'}</span>
-        </button>
-
-        {discoverOpen && (
-          <div className="grid grid-cols-1 gap-4 border-t border-gray-100 p-3 lg:grid-cols-2">
-            {/* Feature 1 — search across policy content */}
-            <div>
-              <p className="mb-1.5 text-xs font-semibold text-gray-700">Search across policy content</p>
-              <div className="flex gap-1.5">
-                <input
-                  value={policyQuery}
-                  onChange={(e) => setPolicyQuery(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') runPolicySearch(); }}
-                  placeholder="Search any sentence or keyword across policies…"
-                  className="w-full rounded border border-gray-300 px-2 py-1.5 text-xs focus:border-indigo-400 focus:outline-none"
-                />
-                <button
-                  onClick={runPolicySearch}
-                  disabled={searchingPolicies || !policyQuery.trim()}
-                  className="btn-primary flex items-center gap-1 px-2.5 py-1.5 text-xs disabled:opacity-50"
-                >
-                  {searchingPolicies ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
-                  Search
-                </button>
-              </div>
-              <div className="mt-2 max-h-64 space-y-1.5 overflow-y-auto">
-                {searchedOnce && !searchingPolicies && policyResults.length === 0 && (
-                  <p className="px-1 py-2 text-xs text-gray-400">No policies matched “{policyQuery}”.</p>
-                )}
-                {policyResults.map((r, i) => (
-                  <div key={`${r.document_id}-${r.statement_id ?? 'doc'}-${i}`} className="rounded border border-gray-100 bg-gray-50 p-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="truncate text-xs font-semibold text-black">{r.document_title || `Policy #${r.document_id}`}</p>
-                        <p className="text-[10px] uppercase tracking-wide text-gray-400">
-                          {r.doc_type || 'policy'}{r.document_code ? ` · ${r.document_code}` : ''}{r.match_field === 'policy_statement' ? ' · clause' : ''}
-                        </p>
-                      </div>
-                      {canCreate && (
-                        <button
-                          onClick={() => openCreateForDocument(r.document_id)}
-                          className="flex flex-shrink-0 items-center gap-1 rounded border border-indigo-200 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700 hover:bg-indigo-50"
-                        >
-                          <Plus className="h-3 w-3" /> Exception
-                        </button>
-                      )}
-                    </div>
-                    {r.snippet && <p className="mt-1 text-[11px] leading-snug text-gray-600">{r.snippet}</p>}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Feature 2 — AI-suggested candidate exceptions */}
-            <div>
-              <div className="mb-1.5">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs font-semibold text-gray-700">
-                    AI-suggested exceptions {candidatePolicyId === 'all' ? 'across policies' : 'for the selected policy'}
-                  </p>
-                  <button
-                    onClick={() => loadCandidates()}
-                    disabled={loadingCandidates}
-                    className="flex flex-shrink-0 items-center gap-1 rounded border border-indigo-200 px-2 py-1 text-[11px] font-medium text-indigo-700 hover:bg-indigo-50 disabled:opacity-50"
-                  >
-                    {loadingCandidates ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
-                    {candidates.length ? 'Refresh' : 'Suggest'}
-                  </button>
-                </div>
-                {/* Pick a policy → AI immediately shows possible exceptions for
-                    that exact document. 'All policies' scans across the board. */}
-                <select
-                  value={String(candidatePolicyId)}
-                  onChange={(e) => onSelectCandidatePolicy(e.target.value)}
-                  className="mt-1.5 w-full rounded border border-gray-300 px-2 py-1.5 text-xs focus:border-indigo-400 focus:outline-none"
-                >
-                  <option value="all">All policies (scan across every policy)</option>
-                  {(documents || []).map((d: GovernancePolicyOption) => (
-                    <option key={d.id} value={d.id}>
-                      {d.document_code ? `${d.document_code} · ` : ''}{d.title}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="max-h-64 space-y-1.5 overflow-y-auto">
-                {loadingCandidates && (
-                  <div className="flex items-center gap-2 px-1 py-3 text-xs text-gray-500">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> {candidatePolicyId === 'all' ? 'Analyzing your policies…' : 'Analyzing this policy…'}
-                  </div>
-                )}
-                {!loadingCandidates && candidates.length === 0 && (
-                  <p className="px-1 py-2 text-xs text-gray-400">
-                    {candidatePolicyId === 'all'
-                      ? 'Select a policy above to see exceptions for that exact policy, or “Suggest” to scan across all policies.'
-                      : 'No AI-suggested exceptions found for this policy — click “Suggest” to retry.'}
-                  </p>
-                )}
-                {candidates.map((c, i) => (
-                  <div key={`${c.document_id}-${i}`} className="rounded border border-gray-100 bg-gray-50 p-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="text-xs font-semibold text-black">{c.suggested_title}</p>
-                        <p className="text-[10px] text-gray-400">{c.document_title || `Policy #${c.document_id}`} · {c.suggested_priority}</p>
-                      </div>
-                      {canCreate && (
-                        <button
-                          onClick={() => openCreateForDocument(c.document_id, { title: c.suggested_title, justification: c.rationale, priority: c.suggested_priority })}
-                          className="flex flex-shrink-0 items-center gap-1 rounded border border-indigo-200 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700 hover:bg-indigo-50"
-                        >
-                          <Plus className="h-3 w-3" /> Use
-                        </button>
-                      )}
-                    </div>
-                    {c.rationale && <p className="mt-1 text-[11px] leading-snug text-gray-600">{c.rationale}</p>}
-                  </div>
-                ))}
-                {candidateSource === 'template' && candidates.length > 0 && (
-                  <p className="px-1 text-[10px] italic text-gray-400">Generated from policy metadata (configure an AI key for richer, content-aware suggestions).</p>
-                )}
-              </div>
-            </div>
+      {/* Exception Register — same DataTable register UI as Governance Documents */}
+      <section className="space-y-3">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">Exception Register</h2>
+            <p className="text-sm text-slate-500">{exceptionList.length} shown · {allExceptions.length} total</p>
           </div>
-        )}
-      </div>
-
-      <div className="table-container">
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Title</th>
-              <th>Policy</th>
-              <th>Status</th>
-              <th>Priority</th>
-              <th>Requested By</th>
-              <th>Requested Date</th>
-              <th>Expiry Date</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {isLoading ? (
-              <tr>
-                <td colSpan={8} className="text-center py-4">
-                  <Loader2 className="h-4 w-4 animate-spin mx-auto text-primary-400" />
-                </td>
-              </tr>
-            ) : exceptionList.length === 0 ? (
-              <tr>
-                <td colSpan={8} className="text-center py-8">
-                  <Shield className="h-7 w-7 text-gray-400 mx-auto mb-2" />
-                  <p className="text-xs text-gray-600">No exceptions found</p>
-                  <p className="text-[10px] text-gray-500 mt-0.5">Create a new exception request to get started</p>
-                </td>
-              </tr>
-            ) : (
-              exceptionList.map((exc) => {
-                const statusStyle = STATUS_STYLES[exc.status] || STATUS_STYLES.draft;
-                const priorityStyle = PRIORITY_STYLES[exc.priority] || PRIORITY_STYLES.medium;
-
-                return (
-                  <tr key={exc.id} className="hover:bg-gray-50">
-                    <td>
-                      <span className="font-medium text-black">{exc.title}</span>
-                    </td>
-                    <td className="text-gray-700">
-                      {exc.document_title || exc.policy_name || '-'}
-                    </td>
-                    <td>
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusStyle.bg} ${statusStyle.text}`}>
-                        {statusStyle.label}
-                      </span>
-                    </td>
-                    <td>
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${priorityStyle.bg} ${priorityStyle.text}`}>
-                        {priorityStyle.label}
-                      </span>
-                    </td>
-                    <td className="text-gray-700">{exc.requester_name || exc.requested_by_name || '-'}</td>
-                    <td className="text-gray-700">{formatDate(exc.created_at)}</td>
-                    <td className="text-gray-700">{formatDate(exc.expiry_date)}</td>
-                    <td>
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => setViewingException(exc)}
-                          className="btn-ghost btn-sm"
-                          title="View Details"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </button>
-                        {exc.status === 'draft' && (
-                          <>
-                            <button
-                              onClick={() => openEditModal(exc)}
-                              className="btn-ghost btn-sm"
-                              title="Edit"
-                            >
-                              <Edit2 className="h-4 w-4" />
-                            </button>
-                            <button
-                              onClick={() => submitMutation.mutate(exc.id)}
-                              disabled={submitMutation.isPending}
-                              className="btn-ghost btn-sm"
-                              title="Submit for Approval"
-                            >
-                              <Send className="h-4 w-4" />
-                            </button>
-                          </>
-                        )}
-                        {exc.status === 'pending_approval' && (
-                          <>
-                            <button
-                              onClick={() => setApproveModal(exc)}
-                              className="btn-ghost btn-sm text-green-700 hover:text-green-800 hover:bg-green-50"
-                              title="Approve"
-                            >
-                              <Check className="h-4 w-4" />
-                            </button>
-                            <button
-                              onClick={() => setRejectModal(exc)}
-                              className="btn-ghost btn-sm text-red-700 hover:text-red-800 hover:bg-red-50"
-                              title="Reject"
-                            >
-                              <XCircle className="h-4 w-4" />
-                            </button>
-                          </>
-                        )}
-                        {exc.status === 'approved' && (
-                          <button
-                            onClick={() => setRevokeModal(exc)}
-                            className="btn-ghost btn-sm"
-                            title="Revoke"
-                          >
-                            <Ban className="h-4 w-4" />
-                          </button>
-                        )}
-                        <button
-                          onClick={() => {
-                            if (confirm('Are you sure you want to delete this exception?')) {
-                              deleteMutation.mutate(exc.id);
-                            }
-                          }}
-                          disabled={deleteMutation.isPending}
-                          className="btn-ghost btn-sm text-red-600 hover:text-red-700 hover:bg-red-50"
-                          title="Delete"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
+        </div>
+        <DataTable<ExceptionItem>
+          data={exceptionList}
+          columns={columns}
+          loading={isLoading}
+          searchable={false}
+          exportable
+          exportFilename="policy-exceptions"
+          pageSize={15}
+          stickyHeader
+          onRowClick={(exc) => setViewingException(exc)}
+          emptyMessage="No exceptions found. Create a new exception request to get started."
+          emptyIcon={Shield}
+        />
+      </section>
 
    <RightSlidePanel
   isOpen={showCreateModal || !!editingException}
@@ -1147,24 +1046,24 @@ export default function PolicyExceptionsPage() {
     )}
 
     {showCreateModal && !editingException && suggestContentMutation.isPending && (
-      <div className="rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 px-4 py-3 flex items-center gap-3">
+      <div className="rounded-xl border border-primary-200 bg-primary-50 px-4 py-3 flex items-center gap-3">
         <div className="relative flex-shrink-0">
-          <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center">
-            <Sparkles className="h-5 w-5 text-blue-600 animate-pulse" />
+          <div className="h-8 w-8 rounded-full bg-primary-100 flex items-center justify-center">
+            <Sparkles className="h-5 w-5 text-primary-700 animate-pulse" />
           </div>
           <span className="absolute -bottom-0.5 -right-0.5 flex h-3 w-3">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500"></span>
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-3 w-3 bg-primary-500"></span>
           </span>
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-blue-900">AI is working...</p>
-          <p className="text-xs text-blue-700 mt-0.5">Generating suggested justification and potential risks...</p>
+          <p className="text-sm font-medium text-slate-900">AI is working...</p>
+          <p className="text-xs text-slate-600 mt-0.5">Generating suggested justification and potential risks...</p>
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
-          <span className="w-2 h-2 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '0ms' }}></span>
-          <span className="w-2 h-2 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '150ms' }}></span>
-          <span className="w-2 h-2 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '300ms' }}></span>
+          <span className="w-2 h-2 rounded-full bg-primary-400 animate-bounce" style={{ animationDelay: '0ms' }}></span>
+          <span className="w-2 h-2 rounded-full bg-primary-400 animate-bounce" style={{ animationDelay: '150ms' }}></span>
+          <span className="w-2 h-2 rounded-full bg-primary-400 animate-bounce" style={{ animationDelay: '300ms' }}></span>
         </div>
       </div>
     )}
@@ -1351,7 +1250,7 @@ export default function PolicyExceptionsPage() {
           {viewingException.promoted_risk_id ? (
             <button
               type="button"
-              onClick={() => { const id = viewingException.promoted_risk_id; setViewingException(null); if (id) router.push(`/risks/${id}`); }}
+              onClick={() => { const id = viewingException.promoted_risk_id; setViewingException(null); if (id) router.push(`/erm/risks/${id}`); }}
               className="inline-flex items-center gap-1 text-xs font-medium text-green-700 hover:text-green-800"
             >
               <ExternalLink className="h-3.5 w-3.5" /> In risk register — assess

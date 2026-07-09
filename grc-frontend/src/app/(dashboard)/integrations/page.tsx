@@ -34,15 +34,17 @@ import {
   Legend,
 } from 'recharts';
 
+// Sanctioned severity ramp (data-viz): critical=rose, high=orange, medium=amber,
+// low=emerald, info=slate.
 const SEVERITY_COLORS: Record<string, string> = {
-  critical: '#dc2626',
+  critical: '#e11d48',
   high: '#ea580c',
-  medium: '#ca8a04',
-  low: '#2563eb',
+  medium: '#f59e0b',
+  low: '#10b981',
   info: '#64748b',
 };
 
-const PIE_COLORS = ['#dc2626', '#ea580c', '#ca8a04', '#2563eb', '#64748b'];
+const PIE_COLORS = ['#e11d48', '#ea580c', '#f59e0b', '#10b981', '#64748b'];
 
 export default function IntegrationsDashboardPage() {
   const [connectionFilter, setConnectionFilter] = useState<number | undefined>();
@@ -89,7 +91,7 @@ export default function IntegrationsDashboardPage() {
   });
 
   const batchRecalc = useMutation({
-    mutationFn: () => integrationsApi.batchRecalculate({ connection_id: connectionFilter }),
+    mutationFn: () => integrationsApi.batchRecalculateScores({ connection_id: connectionFilter }),
   });
 
   const assignSLA = useMutation({
@@ -111,7 +113,7 @@ export default function IntegrationsDashboardPage() {
   if (loadingOverview) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="animate-spin text-blue-600" size={32} />
+        <Loader2 className="animate-spin text-primary-600" size={32} />
       </div>
     );
   }
@@ -119,7 +121,7 @@ export default function IntegrationsDashboardPage() {
   if (overviewError) {
     return (
       <div className="flex flex-col items-center justify-center h-64 text-slate-500">
-        <AlertTriangle size={32} className="text-red-400 mb-2" />
+        <AlertTriangle size={32} className="text-rose-400 mb-2" strokeWidth={1.75} />
         <p className="text-sm">Failed to load integration analytics. Please try again later.</p>
       </div>
     );
@@ -146,7 +148,7 @@ export default function IntegrationsDashboardPage() {
           <button
             onClick={() => batchRecalc.mutate()}
             disabled={batchRecalc.isPending}
-            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-[#0a0a0a] bg-primary-600 rounded-lg hover:bg-primary-700"
           >
             <RefreshCw size={16} className={batchRecalc.isPending ? 'animate-spin' : ''} />
             {batchRecalc.isPending ? 'Recalculating...' : 'Recalculate Scores'}
@@ -159,16 +161,16 @@ export default function IntegrationsDashboardPage() {
       <IntegrationPlatformsCard />
 
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-        <StatCard label="Total Vulns" value={ov?.total_vulnerabilities || 0} icon={Shield} color="blue" />
-        <StatCard label="Open" value={ov?.open_vulnerabilities || 0} icon={AlertTriangle} color="red" />
-        <StatCard label="Closed" value={ov?.closed_vulnerabilities || 0} icon={Target} color="green" />
+        <StatCard label="Total Vulns" value={ov?.total_vulnerabilities || 0} icon={Shield} color="primary" />
+        <StatCard label="Open" value={ov?.open_vulnerabilities || 0} icon={AlertTriangle} color="rose" />
+        <StatCard label="Closed" value={ov?.closed_vulnerabilities || 0} icon={Target} color="emerald" />
         <StatCard label="Overdue" value={ov?.overdue_vulnerabilities || 0} icon={Clock} color="orange" />
         <StatCard label="Assets" value={ov?.total_assets || 0} icon={Server} color="slate" />
         <StatCard
           label="SLA Rate"
           value={`${slaData?.compliance_rate || 0}%`}
           icon={TrendingUp}
-          color={slaData?.compliance_rate >= 80 ? 'green' : slaData?.compliance_rate >= 50 ? 'yellow' : 'red'}
+          color={slaData?.compliance_rate >= 80 ? 'emerald' : slaData?.compliance_rate >= 50 ? 'amber' : 'rose'}
         />
       </div>
 
@@ -200,8 +202,8 @@ export default function IntegrationsDashboardPage() {
               <YAxis tick={{ fontSize: 11 }} />
               <Tooltip />
               <Legend />
-              <Line type="monotone" dataKey="new" stroke="#dc2626" name="New" dot={false} />
-              <Line type="monotone" dataKey="closed" stroke="#16a34a" name="Closed" dot={false} />
+              <Line type="monotone" dataKey="new" stroke="#e11d48" name="New" dot={false} />
+              <Line type="monotone" dataKey="closed" stroke="#059669" name="Closed" dot={false} />
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -210,7 +212,7 @@ export default function IntegrationsDashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="bg-white rounded-xl border border-slate-200 p-5">
           <h3 className="text-sm font-semibold text-slate-700 mb-4">Mean Time to Remediate</h3>
-          <div className="text-3xl font-bold text-blue-600 mb-1">{mttrData?.overall_mttr_days || 0} days</div>
+          <div className="text-3xl font-bold text-primary-600 mb-1">{mttrData?.overall_mttr_days || 0} days</div>
           <p className="text-xs text-slate-500 mb-4">Overall average</p>
           <div className="space-y-2">
             {Object.entries(mttrData?.by_severity || {}).map(([sev, data]: [string, any]) => (
@@ -224,25 +226,25 @@ export default function IntegrationsDashboardPage() {
 
         <div className="bg-white rounded-xl border border-slate-200 p-5">
           <h3 className="text-sm font-semibold text-slate-700 mb-4">SLA Compliance</h3>
-          <div className="text-3xl font-bold text-green-600 mb-1">{slaData?.compliance_rate || 0}%</div>
+          <div className="text-3xl font-bold text-emerald-600 mb-1">{slaData?.compliance_rate || 0}%</div>
           <p className="text-xs text-slate-500 mb-4">On-time closure rate</p>
           <div className="space-y-2 text-sm">
-            <div className="flex justify-between"><span className="text-slate-500">On-time closed</span><span className="font-medium text-green-600">{slaData?.on_time_closed || 0}</span></div>
-            <div className="flex justify-between"><span className="text-slate-500">Late closed</span><span className="font-medium text-orange-600">{slaData?.late_closed || 0}</span></div>
-            <div className="flex justify-between"><span className="text-slate-500">Currently overdue</span><span className="font-medium text-red-600">{slaData?.currently_overdue || 0}</span></div>
-            <div className="flex justify-between"><span className="text-slate-500">Within SLA</span><span className="font-medium text-blue-600">{slaData?.within_sla || 0}</span></div>
+            <div className="flex justify-between"><span className="text-slate-500">On-time closed</span><span className="font-medium text-emerald-600">{slaData?.on_time_closed || 0}</span></div>
+            <div className="flex justify-between"><span className="text-slate-500">Late closed</span><span className="font-medium text-amber-600">{slaData?.late_closed || 0}</span></div>
+            <div className="flex justify-between"><span className="text-slate-500">Currently overdue</span><span className="font-medium text-rose-600">{slaData?.currently_overdue || 0}</span></div>
+            <div className="flex justify-between"><span className="text-slate-500">Within SLA</span><span className="font-medium text-slate-700">{slaData?.within_sla || 0}</span></div>
           </div>
         </div>
 
         <div className="bg-white rounded-xl border border-slate-200 p-5">
           <h3 className="text-sm font-semibold text-slate-700 mb-4">Scanner Coverage</h3>
-          <div className="text-3xl font-bold text-blue-600 mb-1">{coverageData?.coverage_percentage || 0}%</div>
+          <div className="text-3xl font-bold text-primary-600 mb-1">{coverageData?.coverage_percentage || 0}%</div>
           <p className="text-xs text-slate-500 mb-4">Assets covered by scanner</p>
           <div className="space-y-2 text-sm">
             <div className="flex justify-between"><span className="text-slate-500">Total assets</span><span className="font-medium">{coverageData?.total_assets || 0}</span></div>
             <div className="flex justify-between"><span className="text-slate-500">Scanner assets</span><span className="font-medium">{coverageData?.scanner_assets || 0}</span></div>
-            <div className="flex justify-between"><span className="text-slate-500">Assessed</span><span className="font-medium text-green-600">{coverageData?.assessed_assets || 0}</span></div>
-            <div className="flex justify-between"><span className="text-slate-500">Stale (&gt;30 days)</span><span className="font-medium text-orange-600">{coverageData?.stale_assets || 0}</span></div>
+            <div className="flex justify-between"><span className="text-slate-500">Assessed</span><span className="font-medium text-emerald-600">{coverageData?.assessed_assets || 0}</span></div>
+            <div className="flex justify-between"><span className="text-slate-500">Stale (&gt;30 days)</span><span className="font-medium text-amber-600">{coverageData?.stale_assets || 0}</span></div>
           </div>
         </div>
       </div>
@@ -251,7 +253,7 @@ export default function IntegrationsDashboardPage() {
         <div className="bg-white rounded-xl border border-slate-200 p-5">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-semibold text-slate-700">Top Affected Assets</h3>
-            <Link href="/assets" className="text-xs text-blue-600 hover:underline flex items-center gap-1">
+            <Link href="/assets" className="text-xs text-primary-600 hover:underline flex items-center gap-1">
               View all <ChevronRight size={12} />
             </Link>
           </div>
@@ -271,7 +273,7 @@ export default function IntegrationsDashboardPage() {
                     <td className="py-2">
                       <div className="font-medium text-slate-800">{a.name || 'Unnamed Asset'}</div>
                     </td>
-                    <td className="text-right text-red-600 font-medium">{a.critical_vulns}</td>
+                    <td className="text-right text-rose-600 font-medium">{a.critical_vulns}</td>
                     <td className="text-right text-orange-600 font-medium">{a.severe_vulns}</td>
                     <td className="text-right font-semibold text-slate-700">{a.total_vulns}</td>
                   </tr>
@@ -287,7 +289,7 @@ export default function IntegrationsDashboardPage() {
         <div className="bg-white rounded-xl border border-slate-200 p-5">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-semibold text-slate-700">Connection Status</h3>
-            <Link href="/integrations/connections" className="text-xs text-blue-600 hover:underline flex items-center gap-1">
+            <Link href="/integrations/connections" className="text-xs text-primary-600 hover:underline flex items-center gap-1">
               Manage <ChevronRight size={12} />
             </Link>
           </div>
@@ -303,9 +305,9 @@ export default function IntegrationsDashboardPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <span className={`inline-block w-2 h-2 rounded-full ${
-                    c.status === 'connected' ? 'bg-green-500' :
-                    c.status === 'error' ? 'bg-red-500' :
-                    c.status === 'deactivated' ? 'bg-slate-400' : 'bg-yellow-500'
+                    c.status === 'connected' ? 'bg-emerald-500' :
+                    c.status === 'error' ? 'bg-rose-500' :
+                    c.status === 'deactivated' ? 'bg-slate-400' : 'bg-amber-500'
                   }`} />
                   <span className="text-xs text-slate-500 capitalize">{c.status}</span>
                 </div>
@@ -314,7 +316,7 @@ export default function IntegrationsDashboardPage() {
             {(connections as any[]).length === 0 && (
               <div className="text-center py-8 text-slate-400 text-sm">
                 No connections configured.{' '}
-                <Link href="/integrations/connections" className="text-blue-600 hover:underline">Add one</Link>
+                <Link href="/integrations/connections" className="text-primary-600 hover:underline">Add one</Link>
               </div>
             )}
           </div>
@@ -326,11 +328,11 @@ export default function IntegrationsDashboardPage() {
 
 function StatCard({ label, value, icon: Icon, color }: { label: string; value: string | number; icon: any; color: string }) {
   const colorMap: Record<string, string> = {
-    blue: 'text-blue-600',
-    red: 'text-red-600',
-    green: 'text-green-600',
+    primary: 'text-primary-600',
+    rose: 'text-rose-600',
+    emerald: 'text-emerald-600',
     orange: 'text-orange-600',
-    yellow: 'text-yellow-600',
+    amber: 'text-amber-600',
     slate: 'text-slate-600',
   };
   return (

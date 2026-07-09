@@ -33,9 +33,9 @@ const STATUS_LABEL: Record<string, string> = {
 
 const STATUS_TONE: Record<string, string> = {
   draft: 'bg-slate-100 text-slate-700 border-slate-200',
-  submitted: 'bg-blue-50 text-blue-700 border-blue-200',
+  submitted: 'bg-primary-50 text-primary-700 border-primary-200',
   business_owner_review: 'bg-amber-50 text-amber-700 border-amber-200',
-  ciso_review: 'bg-violet-50 text-violet-700 border-violet-200',
+  ciso_review: 'bg-amber-50 text-amber-700 border-amber-200',
   approved: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   rejected: 'bg-rose-50 text-rose-700 border-rose-200',
   returned: 'bg-orange-50 text-orange-700 border-orange-200',
@@ -152,7 +152,7 @@ export function ApprovalBar({
             type="button"
             disabled={!!actionPending}
             onClick={() => handle('submit', () => submitM.mutateAsync())}
-            className="inline-flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+            className="inline-flex items-center gap-1 rounded-md bg-primary-600 px-3 py-1.5 text-xs font-medium text-[#0a0a0a] hover:bg-primary-700 disabled:opacity-50"
           >
             <Send className="h-3.5 w-3.5" />
             Submit for review
