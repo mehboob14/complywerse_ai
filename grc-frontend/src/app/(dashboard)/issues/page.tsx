@@ -3,7 +3,8 @@
 export const dynamic = 'force-dynamic';
 
 import { useState } from 'react';
-import { ListChecks, ClipboardList, Building2, BarChart3, Sliders, Settings2, Plus, Zap } from 'lucide-react';
+import { LayoutDashboard, ListChecks, ClipboardList, Building2, BarChart3, Sliders, Settings2, Plus, Zap } from 'lucide-react';
+import IssuesOverviewCards from '@/components/dashboard/IssuesOverviewCards';
 import { IssueList } from './_components/IssueList';
 import { CAPABoard } from './_components/CAPABoard';
 import { ClosureTracker } from './_components/ClosureTracker';
@@ -12,9 +13,10 @@ import { ClassificationMatrixEditor } from './_components/ClassificationMatrixEd
 import { IssueForm } from './_components/IssueForm';
 import { AutomationFlags } from './_components/AutomationFlags';
 
-type TabId = 'log' | 'capa' | 'contract' | 'closure' | 'severity_matrix' | 'classification_matrix' | 'automation';
+type TabId = 'overview' | 'log' | 'capa' | 'contract' | 'closure' | 'severity_matrix' | 'classification_matrix' | 'automation';
 
 const TABS: Array<{ id: TabId; label: string; icon: React.ElementType }> = [
+  { id: 'overview',              label: 'Overview',               icon: LayoutDashboard },
   { id: 'log',                   label: 'Enterprise Log',         icon: ListChecks },
   { id: 'capa',                  label: 'CAPA Actions',           icon: ClipboardList },
   { id: 'contract',              label: 'Contract Compliance',    icon: Building2 },
@@ -25,7 +27,7 @@ const TABS: Array<{ id: TabId; label: string; icon: React.ElementType }> = [
 ];
 
 export default function IssuesPage() {
-  const [tab, setTab] = useState<TabId>('log');
+  const [tab, setTab] = useState<TabId>('overview');
   const [showForm, setShowForm] = useState(false);
 
   return (
@@ -72,6 +74,7 @@ export default function IssuesPage() {
       </nav>
 
       {/* Body */}
+      {tab === 'overview' && <IssuesOverviewCards />}
       {tab === 'log' && <IssueList />}
       {tab === 'capa' && <CAPABoard />}
       {tab === 'contract' && <IssueList defaultFilters={{ category: 'contract' }} />}

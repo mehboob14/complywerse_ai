@@ -568,7 +568,7 @@ def score_risk_register(doc, items, policy, now, weights=None):
         _cm("rated", "Risk-rated", w["rated"], len(rated), total, "risks with a severity rating / all risks"),
         _cm("treated", "Treated", w["treated"], treated, total, "risks resolved / all risks"),
         _cm("severe_treated", "Severe risks treated", w["severe_treated"], severe_treated, len(severe),
-            "high/critical risks resolved / all high/critical risks", empty=100),
+            "high/critical risks resolved / all high/critical risks", empty=None),
     ]
     content_score = _weighted(metrics)
     if total == 0:
@@ -634,7 +634,7 @@ def score_nca_risk(doc, items, policy, now, weights=None):
         _cm("rated", "Risk-rated", w["rated"], len(rated), total, "risks with a severity rating / all risks"),
         _cm("treated", "Treated", w["treated"], treated, total, "risks resolved / all risks"),
         _cm("severe_controlled", "Severe risks controlled", w["severe_controlled"], severe_ctrl, len(severe),
-            "high/critical risks resolved or reduced below severe / all high/critical", empty=100),
+            "high/critical risks resolved or reduced below severe / all high/critical", empty=None),
         {"key": "residual_reduction", "label": "Residual reduction", "weight": w["residual_reduction"],
          "score": reduction, "numerator": (si - sr) if both else None, "denominator": si if both else None,
          "target": TARGET, "formula": "(total inherent - total residual) / total inherent, over treated risks"},
@@ -699,7 +699,7 @@ def score_nca_vuln(doc, items, policy, now, weights=None):
         _cm("remediated", "Remediated", w["remediated"], resolved, total,
             "vulnerabilities resolved / all"),
         _cm("severe_remediated", "Critical/High remediated", w["severe_remediated"], severe_res, len(severe),
-            "high-severity (CVSS >= 7) vulnerabilities resolved / all high-severity", empty=100),
+            "high-severity (CVSS >= 7) vulnerabilities resolved / all high-severity", empty=None),
     ]
     content_score = _weighted(metrics)
     if total == 0:
@@ -764,7 +764,7 @@ def score_dpia(doc, items, policy, now, weights=None):
          "denominator": round(si, 1) if both else None, "target": TARGET,
          "formula": "(total inherent L×I - total residual L×I) / total inherent"},
         _cm("high_controlled", "High risks controlled", w["high_controlled"], high_ctrl, len(severe),
-            "inherent high/critical risks reduced below high or resolved / all inherent high/critical", empty=100),
+            "inherent high/critical risks reduced below high or resolved / all inherent high/critical", empty=None),
     ]
     content_score = _weighted(metrics)
     if total_r == 0:
@@ -872,6 +872,12 @@ FAMILY = {
     "pdpl_assessment_toolkit": "maturity",
     "dpia_pia": "risk", "nca_risk_register": "risk", "nca_vuln_register": "risk",
     "nca_audit_register": "tracking",
+    # PDF-uploaded control checklists — previously unmapped, so they hit the
+    # `fam is None` path and were silently dropped from the board. Scored as
+    # checklists (pass/fail control items) so they're represented, not invisible.
+    "cis_windows_server_2012_r2_pdf": "checklist",
+    "nca_cloud_cybersecurity_controls_pdf": "checklist",
+    "nca_data_cybersecurity_controls_pdf": "checklist",
 }
 # KPI Report is a reporting tool, not a scored assessment (user decision);
 # Internal Audit + container + generic are also not part of this module.
@@ -882,7 +888,9 @@ CATEGORY = {
     "cti_maturity": "Cyber Security", "incident_maturity": "Cyber Security",
     "itsecops_maturity": "Cyber Security",
     "nca_dcc_tool": "NCA", "nca_vuln_register": "NCA", "nca_audit_register": "NCA", "nca_risk_register": "NCA",
-    "digital_ops_maturity": "Digital Operations",
+    "nca_cloud_cybersecurity_controls_pdf": "NCA", "nca_data_cybersecurity_controls_pdf": "NCA",
+    "cis_windows_server_2012_r2_pdf": "Cyber Security",
+    "digital_ops_maturity": "Digital Operations", "xlsx_maturity": "Digital Operations",
     "dpia_pia": "Privacy & Data", "pdpl_assessment_toolkit": "Privacy & Data",
 }
 # What each family calls its items (terminology cleanup — user request).

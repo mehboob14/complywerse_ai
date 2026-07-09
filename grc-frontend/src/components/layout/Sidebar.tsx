@@ -25,6 +25,7 @@ import {
   Bug,
   Clock,
   Layers,
+  Workflow,
   Globe,
   Calendar,
   CheckCircle,
@@ -102,7 +103,8 @@ const navigation: NavEntry[] = [
     icon: Landmark,
     requiredModules: ['governance'],
     items: [
-      { name: 'Document Management', href: '/governance', icon: ScrollText, requiredPermissions: ['governance:policies:*'] },
+      { name: 'Overview', href: '/governance', icon: LayoutDashboard, requiredPermissions: ['governance:policies:*'] },
+      { name: 'Document Management', href: '/governance/documents', icon: ScrollText, requiredPermissions: ['governance:policies:*'] },
       { name: 'Committees', href: '/governance/committees', icon: Users, requiredPermissions: ['governance:committees:*'] },
       { name: 'KRIs', href: '/erm/kris', icon: Activity, requiredPermissions: ['erm:kris:*'] },
       { name: 'KPI Report', href: '/assessments/cs_kpi', icon: Target, requiredPermissions: ['compliance:assessments:*'] },
@@ -114,13 +116,21 @@ const navigation: NavEntry[] = [
     icon: ShieldAlert,
     requiredModules: ['risks', 'erm'],
     items: [
-      { name: 'ERM Overview', href: '/erm', icon: BarChart3, requiredPermissions: ['erm:risks:*'] },
-      { name: 'Risk Assessments', href: '/erm/risk-assessments', icon: ClipboardList, requiredPermissions: ['risks:risk_assessment:*', 'erm:rcsa:*'] },
-      { name: 'Risk Register', href: '/erm/risks', icon: AlertTriangle, requiredPermissions: ['erm:risks:*'] },
-      { name: 'Vendor Risk', href: '/vendor-risk', icon: Shield, requiredPermissions: ['erm:risks:*'] },
-      { name: 'RCSA', href: '/risks/rcsa', icon: ClipboardList, requiredPermissions: ['erm:rcsa:*'] },
-      { name: 'Internal Controls', href: '/erm/internal-controls', icon: Target, requiredPermissions: ['erm:internal_controls:*'] },
-      { name: 'Advanced Analytics', href: '/erm/analytics', icon: BarChart3, requiredPermissions: ['erm:risks:*'] },
+      { name: 'Overview', href: '/erm', icon: LayoutDashboard, requiredPermissions: ['erm:risks:*'] },
+      {
+        name: 'Operational Risk',
+        icon: Layers,
+        items: [
+          { name: 'Risk Register', href: '/erm/risks', icon: AlertTriangle, requiredPermissions: ['erm:risks:*'] },
+          { name: 'Risk Assessments', href: '/erm/risk-assessments', icon: ClipboardList, requiredPermissions: ['risks:risk_assessment:*', 'erm:rcsa:*'] },
+          { name: 'RCSA', href: '/risks/rcsa', icon: ClipboardList, requiredPermissions: ['erm:rcsa:*'] },
+          { name: 'Vendor Risk', href: '/vendor-risk', icon: Shield, requiredPermissions: ['erm:risks:*'] },
+          // moved out of Advanced Analytics into the sidebar
+          { name: 'Scenario Analysis', href: '/erm/analytics/scenario', icon: Target, requiredPermissions: ['erm:risks:*'] },
+          { name: 'Bow-Tie Analysis', href: '/erm/analytics/bowtie', icon: Workflow, requiredPermissions: ['erm:risks:*'] },
+          { name: 'Advanced Analytics', href: '/erm/analytics', icon: BarChart3, requiredPermissions: ['erm:risks:*'] },
+        ],
+      },
     ],
   },
   {
@@ -130,9 +140,7 @@ const navigation: NavEntry[] = [
     items: [
       { name: 'Overview', href: '/compliance', icon: LayoutDashboard, requiredPermissions: ['compliance:frameworks:*', 'controls:control_library:*', 'evidence:evidence_library:*'] },
       { name: 'Frameworks', href: '/frameworks', icon: Layers, requiredPermissions: ['compliance:frameworks:*'] },
-      { name: 'Controls', href: '/controls', icon: Shield, requiredPermissions: ['controls:control_library:*'] },
       { name: 'Evidence Management', href: '/evidence', icon: FileText, requiredPermissions: ['evidence:evidence_library:*', 'evidence:evidence_upload:*'] },
-      { name: 'Control Library', href: '/control-library', icon: Library, requiredPermissions: ['controls:control_library:*'] },
       { name: 'Regulatory Changes', href: '/governance/regulatory-changes', icon: GitPullRequest, requiredPermissions: ['governance:regulatory_changes:*'] },
       { name: 'Regulatory Feeds', href: '/governance/regulatory-feeds', icon: Rss, requiredPermissions: ['governance:regulatory_changes:*'] },
       {
@@ -171,6 +179,15 @@ const navigation: NavEntry[] = [
     ],
   },
   {
+    name: 'Control Testing & Assurance',
+    icon: CheckCircle,
+    items: [
+      { name: 'Assurance Overview', href: '/control-library/assurance', icon: LayoutDashboard, requiredPermissions: ['controls:control_library:*'] },
+      { name: 'Control Catalog',    href: '/controls',                   icon: Layers,          requiredPermissions: ['controls:control_library:*'] },
+      { name: 'Normalized Library', href: '/control-library',            icon: Library,         requiredPermissions: ['controls:control_library:*'] },
+    ],
+  },
+  {
     name: 'Issue & Incident Management',
     icon: AlertCircle,
     items: [
@@ -183,7 +200,7 @@ const navigation: NavEntry[] = [
     icon: ShieldCheck,
     items: [
       { name: 'IT Asset Inventory',        href: '/assets',                        icon: Server,        requiredPermissions: ['dashboard:assets*'] },
-      { name: 'Compliance & Scans',        href: '/compliance-overview',           icon: BarChart3,     requiredPermissions: ['compliance:scan:execute', 'erm:risks:*', 'compliance:agents:manage'] },
+      { name: 'CIS Benchmark',             href: '/compliance-overview',           icon: ShieldCheck,   requiredPermissions: ['compliance:scan:execute', 'erm:risks:*', 'compliance:agents:manage'] },
       { name: 'Criticality Assessments',   href: '/assets/criticality-assessments', icon: ClipboardCheck, requiredPermissions: ['assets:criticality_assessments:view'] },
       { name: 'Vulnerabilities',           href: '/vulnerabilities',               icon: Bug,           requiredPermissions: ['vulnerabilities:vulnerability_register:*'], requiredModules: ['vulnerabilities'] },
       { name: 'Access Reviews',            href: '/admin/access-reviews',          icon: Users,         requiredPermissions: ['compliance:frameworks:*'] },
@@ -248,7 +265,7 @@ function NavSubGroup({ group, activeHref }: { group: NavGroup; activeHref?: stri
         )}
       >
         {Icon && <Icon size={16} strokeWidth={1.75} className={clsx('flex-shrink-0', hasActive ? 'text-[var(--color-base)]' : 'text-[var(--sidebar-icon)]')} />}
-        <span className="flex-1 truncate text-left">{group.name}</span>
+        <span className="flex-1 text-left leading-tight break-words">{group.name}</span>
         <ChevronDown size={13} className={clsx('flex-shrink-0 text-[var(--sidebar-icon)] transition-transform duration-200', !open && '-rotate-90')} />
       </button>
       <div className={clsx('grid transition-[grid-template-rows] duration-300 ease-out', open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')}>
@@ -270,7 +287,7 @@ function NavSubGroup({ group, activeHref }: { group: NavGroup; activeHref?: stri
                   )}
                 >
                   <item.icon size={15} strokeWidth={1.75} className={clsx('flex-shrink-0', childActive ? 'text-[var(--color-base)]' : 'text-[var(--sidebar-icon)]')} />
-                  <span className="truncate">{item.name}</span>
+                  <span className="leading-tight break-words">{item.name}</span>
                 </Link>
               );
             })}
@@ -305,7 +322,7 @@ function NavItemLink({ item, collapsed }: { item: NavItem; collapsed: boolean })
           isActive ? 'text-[var(--color-base)]' : 'text-[var(--sidebar-icon)] group-hover:text-[var(--color-text)]'
         )}
       />
-      {!collapsed && <span className="truncate">{item.name}</span>}
+      {!collapsed && <span className="leading-tight break-words">{item.name}</span>}
     </Link>
   );
 }
@@ -380,7 +397,7 @@ function NavGroupSection({ group, collapsed }: { group: NavGroup; collapsed: boo
               hasActiveChild ? 'text-[var(--color-base)]' : 'text-[var(--sidebar-icon)] group-hover:text-[var(--color-text)]')}
           />
         )}
-        <span className="flex-1 text-left truncate">{group.name}</span>
+        <span className="flex-1 text-left leading-tight break-words">{group.name}</span>
         <ChevronDown
           size={15}
           className={clsx('flex-shrink-0 text-[var(--sidebar-icon)] transition-transform duration-200', !isOpen && '-rotate-90')}
@@ -423,7 +440,7 @@ function NavGroupSection({ group, collapsed }: { group: NavGroup; collapsed: boo
                     className={clsx('flex-shrink-0',
                       childActive ? 'text-[var(--color-base)]' : 'text-[var(--sidebar-icon)] group-hover:text-[var(--color-text)]')}
                   />
-                  <span className="truncate">{item.name}</span>
+                  <span className="leading-tight break-words">{item.name}</span>
                 </Link>
               );
             })}

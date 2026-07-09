@@ -116,6 +116,23 @@ export default function DpiaAssessmentTab() {
     } finally { setUploading(false); if (fileRef.current) fileRef.current.value = ''; }
   };
 
+  // In-app editing: persist a change to one item's remarks (screening answer,
+  // risk rating, …) via the existing item-update endpoint, then refetch so the
+  // verdict / heat-map / score recompute. The Excel upload path is unchanged.
+  const saveItem = useMutation({
+    mutationFn: async ({ itemId, remarks }: { itemId: number; remarks: string }) =>
+      apiClient.put(`/compliance/assessments/items/${itemId}`, null, { params: { remarks } }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['dpia-detail', activeId] }),
+  });
+  // Set or replace a "Key: value" field inside the pipe-delimited remarks string.
+  const withField = (remarks: string | null, key: string, value: string) => {
+    const r = remarks || 'Section: screening';
+    const re = new RegExp(`${key}:\\s*[^|]*`, 'i');
+    return re.test(r) ? r.replace(re, `${key}: ${value} `) : `${r.trim()} | ${key}: ${value}`;
+  };
+  const setAnswer = (it: Item, value: 'Yes' | 'No') =>
+    saveItem.mutate({ itemId: it.id, remarks: withField(it.remarks, 'Answer', value) });
+
   const { screening, risks, assessFields, kpis, screenVerdict } = useMemo(() => {
     const items = detail?.items || [];
     const screening = items.filter((i) => section(i.remarks) === 'screening');
@@ -192,7 +209,21 @@ export default function DpiaAssessmentTab() {
                     <li key={s.id} className="flex items-start gap-2 text-[12.5px] text-slate-700">
                       <span className="mt-0.5">{ans ? (yes ? <XCircle className="h-3.5 w-3.5 text-rose-500" /> : <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />) : <span className="inline-block h-3.5 w-3.5 rounded-full border border-slate-300" />}</span>
                       <span className="flex-1">{s.control_description}</span>
-                      {ans && <span className="rounded px-1.5 py-0.5 text-[10px] font-bold" style={yes ? { background: '#fef2f2', color: '#dc2626' } : { background: '#ecfdf5', color: '#059669' }}>{ans}</span>}
+                      <span className="ml-auto flex shrink-0 gap-1">
+                        {(['Yes', 'No'] as const).map((v) => {
+                          const active = ans.toLowerCase() === v.toLowerCase();
+                          const isYes = v === 'Yes';
+                          return (
+                            <button key={v} onClick={() => setAnswer(s, v)} disabled={saveItem.isPending}
+                              className="rounded px-2 py-0.5 text-[10px] font-bold transition-colors hover:opacity-80 disabled:opacity-50"
+                              style={active
+                                ? (isYes ? { background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' } : { background: '#ecfdf5', color: '#059669', border: '1px solid #a7f3d0' })
+                                : { background: '#fff', color: '#94a3b8', border: '1px solid #e2e8f0' }}>
+                              {v}
+                            </button>
+                          );
+                        })}
+                      </span>
                     </li>
                   );
                 })}

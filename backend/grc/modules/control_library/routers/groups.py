@@ -1234,10 +1234,23 @@ def list_groups(
                      .distinct().count())
     total_mapped = norm_mapped + parsed_mapped
 
+    # RAW framework controls behind the library (one link per original framework
+    # control) — lets the UI reconcile "3,419 raw → 2,332 unified" instead of
+    # presenting shared/unique as if they were additional to the unified count.
+    total_raw = 0
+    if run_id is not None:
+        total_raw = (db.query(NormalizedControlLink.parsed_control_id)
+                     .join(NormalizedControl,
+                           NormalizedControl.id == NormalizedControlLink.normalized_control_id)
+                     .filter(NormalizedControl.run_id == run_id,
+                             NormalizedControlLink.parsed_control_id.isnot(None))
+                     .distinct().count())
+
     return {
         "items": [serialize_group(g, db) for g in groups],
         "total": total,
         "total_mapped_controls": total_mapped,
+        "total_raw_controls": total_raw,
         "skip": skip,
         "limit": limit
     }

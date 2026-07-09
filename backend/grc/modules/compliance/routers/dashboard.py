@@ -1,6 +1,6 @@
 from typing import Optional
 from datetime import datetime, timedelta
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Body
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, or_
 
@@ -779,6 +779,11 @@ def get_compliance_sections_overview(
         Evidence, EvidenceControlMapping, NormalizedControl, NormalizationRun,
         NormalizedControlLink, FrameworkControlAlignment, ClauseApplicability,
         ControlEvidenceRequirement,
+        RegulatoryChange, RegulatoryImpactAssessment, RegulatoryImplementationTask,
+        RegulatoryFeedSource, RegulatoryFeedItem,
+        CertificationJourney, ControlImplementation, ImplementationEvidence,
+        ControlWorkItem, ControlWorkTest,
+        PolicyStatementCompliance, PolicyGapFinding,
     )
     user_tenants = get_user_tenants(current_user, db)
     scoped = [tenant_id] if (tenant_id and tenant_id in user_tenants) else user_tenants
@@ -787,25 +792,103 @@ def get_compliance_sections_overview(
         return {"as_of": now.isoformat(), "sections": {}, "attention_queue": {},
                 "performance": {"score": None, "grade": None, "components": []}}
 
-    # ---------- Frameworks (upload → publish pipeline) ----------
+    # ---------- Frameworks (REAL compliance posture, not the upload pipeline) ----------
+    # Measures how compliant the org actually is against its adopted frameworks —
+    # controls implemented / evidenced / verified across certification journeys +
+    # journey coverage — instead of "did the file parse". (uf_ids is still needed by
+    # the Controls section below, so the upload query stays.)
     try:
         ufs = db.query(UploadedFramework.id, UploadedFramework.upload_status,
-                       UploadedFramework.published_framework_id).filter(
+                       UploadedFramework.published_framework_id,
+                       UploadedFramework.classification).filter(
             UploadedFramework.tenant_id.in_(scoped)).all()
     except _SQLErr:
         db.rollback(); ufs = []
     uf_ids = [r.id for r in ufs]
     uf_total = len(ufs)
     uf_published = sum(1 for r in ufs if r.published_framework_id or r.upload_status == "published")
-    uf_failed = sum(1 for r in ufs if r.upload_status in ("failed", "error"))
-    uf_parsed = sum(1 for r in ufs if r.upload_status in ("parsed", "classified", "published"))
+    # "Adopted" = frameworks classified certification/compliance (the ones you comply
+    # against). Includes GLOBAL seed frameworks (tenant_id NULL), not just the few a
+    # tenant uploaded itself — journeys run against those global frameworks.
+    from sqlalchemy import or_ as _or
+    try:
+        adopted_rows = db.query(UploadedFramework.id, UploadedFramework.classification).filter(
+            _or(UploadedFramework.tenant_id.in_(scoped), UploadedFramework.tenant_id.is_(None))).all()
+    except _SQLErr:
+        db.rollback(); adopted_rows = []
+    # Any obligation-type framework counts (SOX/NDMO/NIS2/PDPL are tagged regulatory/
+    # regulation but are still frameworks you comply against).
+    _OBLIGATION = ("certification", "compliance", "regulatory", "regulation", "industry_standard")
+    adopted = [r for r in adopted_rows if (r.classification or "").lower() in _OBLIGATION]
+    adopted_ids = {r.id for r in adopted}
+
+    try:
+        journeys = db.query(CertificationJourney.id, CertificationJourney.uploaded_framework_id,
+                            CertificationJourney.status).filter(
+            CertificationJourney.tenant_id.in_(scoped)).all()
+        jids = [j.id for j in journeys]
+        impls = (db.query(ControlImplementation.id, ControlImplementation.status,
+                          ControlImplementation.is_applicable,
+                          ControlImplementation.criteria_status)
+                 .filter(ControlImplementation.journey_id.in_(jids)).all() if jids else [])
+    except _SQLErr:
+        db.rollback(); journeys, impls = [], []
+    active_journeys = [j for j in journeys if (j.status or "") in ("in_progress", "not_started")]
+    covered_fw = len({j.uploaded_framework_id for j in journeys if j.uploaded_framework_id} & adopted_ids)
+
+    applicable = [i for i in impls if i.is_applicable is not False and (i.status or "") != "not_applicable"]
+    app_ids = {i.id for i in applicable}
+    app_total = len(applicable)
+    fw_implemented = sum(1 for i in applicable if (i.status or "") in ("implemented", "verified"))
+    fw_verified = sum(1 for i in applicable if (i.status or "") == "verified")
+    try:
+        appr_ev_ids = {e[0] for e in db.query(ImplementationEvidence.implementation_id).filter(
+            ImplementationEvidence.review_status == "approved",
+            ImplementationEvidence.implementation_id.in_(list(app_ids))).all()} if app_ids else set()
+    except _SQLErr:
+        db.rollback(); appr_ev_ids = set()
+    fw_evidenced = len(appr_ev_ids)
+
+    # Per-criterion depth: many controls pass only some of their assessment
+    # sub-points. criteria_status is a dict keyed by criterion index with a
+    # boolean met/not-met value: {"0": true, "1": false}. Score the fraction of
+    # individual criteria actually met across applicable controls (drops out when
+    # no control has any criteria recorded).
+    crit_met = crit_total = 0
+    for i in applicable:
+        cs = i.criteria_status or {}
+        if isinstance(cs, dict) and cs:
+            crit_total += len(cs)
+            crit_met += sum(1 for v in cs.values() if v is True)
+
+    # Gap burndown: how many policy-gap findings have been driven to resolution
+    # (closed or accepted as risk) vs all findings raised.
+    try:
+        gap_findings = db.query(PolicyGapFinding.remediation_status).filter(
+            PolicyGapFinding.tenant_id.in_(scoped)).all()
+    except _SQLErr:
+        db.rollback(); gap_findings = []
+    gap_total = len(gap_findings)
+    gap_resolved = sum(1 for g in gap_findings
+                       if (g.remediation_status or "") in ("closed", "accepted_risk"))
+
+    # Score = compliance DEPTH (implemented -> evidenced -> verified) over the controls
+    # in your certification journeys, with a small program-adoption (coverage) signal,
+    # plus per-criterion depth and gap-remediation burndown.
     fw_metrics = [
-        _cm("publish_rate", "Published to library", 0.45, uf_published, uf_total,
-            "uploaded frameworks published / all uploaded frameworks"),
-        _cm("parse_progress", "Parsed", 0.30, uf_parsed, uf_total,
-            "uploaded frameworks parsed or beyond / all uploaded frameworks"),
-        _cm("parse_health", "Parse health", 0.25, uf_failed, uf_total,
-            "1 - (failed parses / all uploaded frameworks)", inverse=True, empty_score=100),
+        _cm("implementation", "Controls implemented", 0.35, fw_implemented, app_total,
+            "controls implemented or verified / applicable controls across all journeys"),
+        _cm("readiness", "Evidence readiness", 0.22, fw_evidenced, app_total,
+            "controls with >=1 approved evidence / applicable controls"),
+        _cm("criteria_completion", "Criteria met", 0.13, crit_met, crit_total,
+            "assessment criteria met / all recorded assessment criteria across applicable controls",
+            empty_score=None),
+        _cm("verification", "Independently verified", 0.12, fw_verified, app_total,
+            "controls verified / applicable controls"),
+        _cm("gap_remediation", "Gaps remediated", 0.10, gap_resolved, gap_total,
+            "policy-gap findings closed or risk-accepted / all gap findings", empty_score=None),
+        _cm("coverage", "Program coverage", 0.08, covered_fw, len(adopted),
+            "obligation frameworks with an active certification journey / all obligation frameworks"),
     ]
 
     # ---------- Controls (parsed framework controls: verify, evidence, align, applicability) ----------
@@ -830,15 +913,28 @@ def get_compliance_sections_overview(
     applic_decided = sum(1 for c in applic if c.status in ("approved", "rejected"))
     cer_mandatory = [r for r in cer if r.is_mandatory]
     cer_satisfied = sum(1 for r in cer_mandatory if r.status == "approved")
+    # Statement compliance: policy statements that have actually been assessed
+    # compliant vs those with any assessed compliance record (not_assessed /
+    # not_applicable excluded from the universe).
+    try:
+        stmt_rows = db.query(PolicyStatementCompliance.compliance_status).filter(
+            PolicyStatementCompliance.tenant_id.in_(scoped)).all()
+    except _SQLErr:
+        db.rollback(); stmt_rows = []
+    stmt_assessed = [r for r in stmt_rows
+                     if (r.compliance_status or "") in ("compliant", "partially_compliant", "non_compliant")]
+    stmt_compliant = sum(1 for r in stmt_assessed if r.compliance_status == "compliant")
     ctrl_metrics = [
-        _cm("evidence_coverage", "Controls with evidence", 0.25, pfc_with_ev, pfc_total,
+        _cm("evidence_coverage", "Controls with evidence", 0.22, pfc_with_ev, pfc_total,
             "framework controls with >=1 linked evidence / all framework controls"),
-        _cm("requirements_satisfied", "Required evidence approved", 0.25, cer_satisfied, len(cer_mandatory),
+        _cm("requirements_satisfied", "Required evidence approved", 0.22, cer_satisfied, len(cer_mandatory),
             "mandatory evidence requirements approved / all mandatory evidence requirements"),
-        _cm("verified", "Verified", 0.20, pfc_verified, pfc_total,
+        _cm("verified", "Verified", 0.18, pfc_verified, pfc_total,
             "framework controls verified / all framework controls"),
-        _cm("library_aligned", "Aligned to library", 0.20, pfc_aligned, pfc_total,
+        _cm("library_aligned", "Aligned to library", 0.16, pfc_aligned, pfc_total,
             "framework controls aligned to the unified library / all framework controls"),
+        _cm("statement_compliance", "Statements compliant", 0.12, stmt_compliant, len(stmt_assessed),
+            "policy statements assessed compliant / statements with a compliance record", empty_score=None),
         _cm("applicability", "Applicability decided", 0.10, applic_decided, pfc_total,
             "framework controls with an approved/rejected applicability decision / all"),
     ]
@@ -906,28 +1002,156 @@ def get_compliance_sections_overview(
             "normalized controls with >=1 linked evidence artifact / all (evidence actually collected)"),
     ]
 
+    # ---------- Regulatory (moved here from Governance — Reg Changes + Feeds now live under the Compliance nav) ----------
+    from datetime import timedelta as _reg_td
+    try:
+        reg_changes = db.query(RegulatoryChange.id, RegulatoryChange.status).filter(
+            RegulatoryChange.tenant_id.in_(scoped)).all()
+        assessed_change_ids = {r.regulatory_change_id for r in db.query(
+            RegulatoryImpactAssessment.regulatory_change_id).filter(
+            RegulatoryImpactAssessment.tenant_id.in_(scoped)).all()}
+        reg_tasks = db.query(RegulatoryImplementationTask.status,
+                             RegulatoryImplementationTask.due_date).filter(
+            RegulatoryImplementationTask.tenant_id.in_(scoped)).all()
+        feed_sources = db.query(RegulatoryFeedSource.is_active,
+                                RegulatoryFeedSource.last_successful_poll).filter(
+            RegulatoryFeedSource.tenant_id.in_(scoped)).all()
+        feed_items = db.query(RegulatoryFeedItem.status).filter(
+            RegulatoryFeedItem.tenant_id.in_(scoped)).all()
+    except _SQLErr:
+        db.rollback()
+        reg_changes, assessed_change_ids, reg_tasks, feed_sources, feed_items = [], set(), [], [], []
+
+    reg_total = len(reg_changes)
+    reg_resolved = sum(1 for c in reg_changes if c.status in ("completed", "not_applicable"))
+    reg_applicable = [c for c in reg_changes if c.status != "not_applicable"]
+    reg_assessed = sum(1 for c in reg_applicable if c.id in assessed_change_ids)
+    reg_open_tasks = [t for t in reg_tasks if t.status in ("pending", "in_progress", "blocked")]
+    reg_overdue_tasks = sum(1 for t in reg_open_tasks if t.due_date and t.due_date < now)
+    active_sources = [s for s in feed_sources if s.is_active]
+    fresh_sources = sum(1 for s in active_sources if s.last_successful_poll
+                        and s.last_successful_poll >= now - _reg_td(days=7))
+    feed_items_total = len(feed_items)
+    feed_items_triaged = sum(1 for i in feed_items if i.status in ("processed", "ignored"))
+    reg_pending_changes = sum(1 for c in reg_changes if c.status in ("identified", "under_assessment"))
+
+    reg_metrics = [
+        _cm("change_progress", "Changes resolved", 0.25, reg_resolved, reg_total,
+            "regulatory changes completed or marked not-applicable / all regulatory changes"),
+        _cm("assessment_coverage", "Changes assessed", 0.25, reg_assessed, len(reg_applicable),
+            "applicable changes with >=1 impact assessment / applicable changes"),
+        _cm("task_health", "Task health", 0.20, reg_overdue_tasks, len(reg_open_tasks),
+            "1 - (overdue implementation tasks / open implementation tasks)", inverse=True, empty_score=100),
+        _cm("feed_triage", "Feed items triaged", 0.15, feed_items_triaged, feed_items_total,
+            "feed items processed or ignored / all ingested feed items"),
+        _cm("feed_freshness", "Feeds polling", 0.15, fresh_sources, len(active_sources),
+            "active feed sources polled in the last 7 days / active feed sources"),
+    ]
+
+    # ---------- Control Effectiveness (CT&A workbench) ----------
+    # The assurance layer: a control being "implemented"/"verified" is not the
+    # same as it being TESTED and operating effectively. Reads the CT&A workbench
+    # (ControlWorkItem / ControlWorkTest) — design vs operating effectiveness,
+    # test currency and exception-clean test results.
+    try:
+        wis = db.query(
+            ControlWorkItem.id, ControlWorkItem.status,
+            ControlWorkItem.design_effectiveness, ControlWorkItem.operating_effectiveness,
+            ControlWorkItem.last_tested_at, ControlWorkItem.next_test_date,
+            ControlWorkItem.is_key_control,
+        ).filter(ControlWorkItem.tenant_id.in_(scoped)).all()
+    except _SQLErr:
+        db.rollback(); wis = []
+    _EFF_RATED = ("effective", "partially_effective", "ineffective")
+    wi_active = [w for w in wis if (w.status or "") == "active"]
+    n_wi = len(wi_active)
+    # Real test records grouped by work item — a dropdown value alone no longer
+    # counts a control as "tested"; it needs an actual last_tested_at timestamp
+    # or at least one ControlWorkTest row.
+    try:
+        tests = db.query(ControlWorkTest.work_item_id, ControlWorkTest.exceptions_found).filter(
+            ControlWorkTest.tenant_id.in_(scoped)).all()
+    except _SQLErr:
+        db.rollback(); tests = []
+    tested_wi_ids = {t.work_item_id for t in tests if t.work_item_id is not None}
+    wi_tested = [w for w in wi_active
+                 if w.last_tested_at is not None or w.id in tested_wi_ids]
+    ops_rated = [w for w in wi_active if w.operating_effectiveness in _EFF_RATED]
+    ops_effective = sum(1 for w in ops_rated if w.operating_effectiveness == "effective")
+    dsn_rated = [w for w in wi_active if w.design_effectiveness in _EFF_RATED]
+    dsn_effective = sum(1 for w in dsn_rated if w.design_effectiveness == "effective")
+    scheduled = [w for w in wi_active if w.next_test_date is not None]
+    overdue_tests = sum(1 for w in scheduled if w.next_test_date < now)
+    key_controls = [w for w in wi_active if w.is_key_control]
+    key_effective = sum(1 for w in key_controls if w.operating_effectiveness == "effective")
+    tests_clean = sum(1 for t in tests if (t.exceptions_found or 0) == 0)
+    eff_metrics = [
+        _cm("test_coverage", "Controls tested", 0.20, len(wi_tested), n_wi,
+            "active controls with a real test record (last_tested_at set or >=1 test row) / all active controls"),
+        _cm("operating_effectiveness", "Operating effectively", 0.25, ops_effective, len(ops_rated),
+            "controls operating effectively / controls with an operating-effectiveness result"),
+        _cm("key_control_effectiveness", "Key controls effective", 0.20, key_effective, len(key_controls),
+            "key controls operating effectively / all active key controls", empty_score=None),
+        _cm("design_effectiveness", "Designed effectively", 0.10, dsn_effective, len(dsn_rated),
+            "controls designed effectively / controls with a design-effectiveness result"),
+        _cm("test_currency", "Tests on schedule", 0.10, overdue_tests, len(scheduled),
+            "1 - (overdue control tests / scheduled control tests)", inverse=True),
+        _cm("exceptions_clean", "Tests without exceptions", 0.15, tests_clean, len(tests),
+            "control tests with no exceptions found / all control tests"),
+    ]
+    # If the CT&A workbench is empty (no active controls, no scheduled tests, no
+    # test records) every metric above is n/a → the section drops out of the
+    # rollup as "not tracked" rather than showing a misleading perfect score.
+
     sections = {
-        "frameworks": {"key": "frameworks", "label": "Frameworks", "weight": 0.25,
+        "frameworks": {"key": "frameworks", "label": "Frameworks", "weight": 0.20,
                        "score": _sec_score(fw_metrics), "metrics": fw_metrics,
-                       "counts": {"uploaded": uf_total, "published": uf_published,
-                                  "failed": uf_failed}},
-        "controls": {"key": "controls", "label": "Controls", "weight": 0.25,
+                       "counts": {"adopted": len(adopted), "covered": covered_fw,
+                                  "active_journeys": len(active_journeys),
+                                  "applicable_controls": app_total, "implemented": fw_implemented,
+                                  "verified": fw_verified, "approved_evidence": fw_evidenced,
+                                  "criteria_met": crit_met, "criteria_total": crit_total,
+                                  "gap_findings": gap_total, "gaps_resolved": gap_resolved,
+                                  "uploaded": uf_total, "published": uf_published}},
+        "controls": {"key": "controls", "label": "Controls", "weight": 0.18,
                      "score": _sec_score(ctrl_metrics), "metrics": ctrl_metrics,
                      "counts": {"total": pfc_total, "verified": pfc_verified,
-                                "with_evidence": pfc_with_ev, "aligned": pfc_aligned}},
-        "evidence": {"key": "evidence", "label": "Evidence", "weight": 0.25,
+                                "with_evidence": pfc_with_ev, "aligned": pfc_aligned,
+                                "statements_assessed": len(stmt_assessed),
+                                "statements_compliant": stmt_compliant}},
+        "effectiveness": {"key": "effectiveness", "label": "Control Effectiveness", "weight": 0.18,
+                          "score": _sec_score(eff_metrics), "metrics": eff_metrics,
+                          "counts": {"active": n_wi, "tested": len(wi_tested),
+                                     "operating_effective": ops_effective, "ops_rated": len(ops_rated),
+                                     "overdue_tests": overdue_tests, "scheduled": len(scheduled),
+                                     "key_controls": len(key_controls), "key_effective": key_effective,
+                                     "tests": len(tests)}},
+        "evidence": {"key": "evidence", "label": "Evidence", "weight": 0.18,
                      "score": _sec_score(ev_metrics), "metrics": ev_metrics,
                      "counts": {"total": ev_total, "approved": ev_approved,
                                 "stale": ev_stale, "linked": ev_linked}},
-        "control_library": {"key": "control_library", "label": "Control Library", "weight": 0.25,
+        "control_library": {"key": "control_library", "label": "Control Library", "weight": 0.14,
                             "score": _sec_score(cl_metrics), "metrics": cl_metrics,
                             "counts": {"controls": total_nc, "unified": unified_nc,
                                        "standalone": total_nc - unified_nc,
                                        "baseline": base.label if base else None}},
+        "regulatory": {"key": "regulatory", "label": "Regulatory", "weight": 0.12,
+                       "score": _sec_score(reg_metrics), "metrics": reg_metrics,
+                       "counts": {"changes_total": reg_total, "changes_resolved": reg_resolved,
+                                  "changes_pending": reg_pending_changes,
+                                  "open_tasks": len(reg_open_tasks), "overdue_tasks": reg_overdue_tasks,
+                                  "feed_sources_active": len(active_sources),
+                                  "feed_items_new": feed_items_total - feed_items_triaged}},
     }
 
+    # Per-tenant fine-tuning: apply saved section + metric weight (and target)
+    # overrides, recomputing section scores + the module score.
+    from grc.services import scorecard_config as sc_cfg
+    _cfg = sc_cfg.get_config(db, scoped[0], "compliance") if scoped else {}
+    _target = _cfg.get("target", 85)
+    sc_cfg.apply_overrides(list(sections.values()), _cfg)
     components = [{"key": s["key"], "label": s["label"], "score": s["score"],
-                   "weight": s["weight"], "target": 85} for s in sections.values()]
+                   "weight": s["weight"], "target": _target} for s in sections.values()]
     scored = [c for c in components if c["score"] is not None]
     wsum = sum(c["weight"] for c in scored)
     perf = round(sum(c["score"] * c["weight"] for c in scored) / wsum, 1) if scored and wsum else None
@@ -942,13 +1166,68 @@ def get_compliance_sections_overview(
             "frameworks_unpublished": uf_total - uf_published,
             "controls_without_evidence": (pfc_total - pfc_with_ev) if pfc_total else 0,
             "controls_unverified": (pfc_total - pfc_verified) if pfc_total else 0,
+            "controls_untested": (n_wi - len(wi_tested)) if n_wi else 0,
+            "overdue_control_tests": overdue_tests,
             "evidence_stale": ev_stale,
+            "regulatory_overdue_tasks": reg_overdue_tasks,
             "total": ((uf_total - uf_published)
-                      + ((pfc_total - pfc_with_ev) if pfc_total else 0) + ev_stale),
+                      + ((pfc_total - pfc_with_ev) if pfc_total else 0) + ev_stale
+                      + overdue_tests + reg_overdue_tasks),
         },
         "performance": {
             "score": perf, "grade": grade,
-            "formula": "weighted mean of section scores: frameworks 25% + controls 25% + evidence 25% + control library 25%",
+            "formula": ("weighted mean of section scores: frameworks 20% + controls 18% "
+                        "+ control effectiveness 18% + evidence 18% + control library 14% + regulatory 12%"),
             "components": components,
         },
     }
+
+
+@router.get("/scorecard-config")
+def get_scorecard_config(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Current section weights + target (built-in defaults merged with tenant overrides)."""
+    from grc.services import scorecard_config as sc_cfg
+    tenants = get_user_tenants(current_user, db)
+    if not tenants:
+        return {"module": "compliance", "sections": [], "target": 85, "default_target": 85, "customized": False}
+    return sc_cfg.merged(db, tenants[0], "compliance")
+
+
+@router.put("/scorecard-config")
+def put_scorecard_config(
+    body: dict = Body(...),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Save section-weight, metric-weight and/or target overrides for this tenant.
+    Any field omitted is left unchanged; weights renormalize to 100%."""
+    from grc.services import scorecard_config as sc_cfg
+    tenants = get_user_tenants(current_user, db)
+    if not tenants:
+        return {"ok": False}
+    cfg = sc_cfg.save_config(
+        db, tenants[0], "compliance",
+        section_weights=body.get("weights"),
+        metric_weights=body.get("metric_weights"),
+        target=body.get("target"),
+        updated_by=getattr(current_user, "id", None),
+    )
+    return {"ok": True, "config": cfg}
+
+
+@router.delete("/scorecard-config")
+def reset_scorecard_config(
+    section: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Reset scorecard tuning to defaults — the whole module, or (with ?section=)
+    just one section's metric weights."""
+    from grc.services import scorecard_config as sc_cfg
+    tenants = get_user_tenants(current_user, db)
+    if tenants:
+        sc_cfg.reset_config(db, tenants[0], "compliance", section=section)
+    return {"ok": True}

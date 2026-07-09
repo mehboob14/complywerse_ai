@@ -1,8 +1,9 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { BarChart3 } from 'lucide-react';
+import { BarChart3, Workflow, Target, ArrowRight } from 'lucide-react';
 import { ermApi } from '@/lib/api';
 import type {
   AttentionItem,
@@ -135,6 +136,7 @@ export default function ERMOverviewPage() {
         weight: s.weight,
         score: s.score,
         metrics: s.metrics.map((m): Metric => ({
+          key: m.key,
           label: m.label,
           score: m.score,
           weight: m.weight,
@@ -286,6 +288,39 @@ export default function ERMOverviewPage() {
         <RiskHeatmap data={heatmap} />
         <TopRisks risks={topRisks} />
       </div>
+
+      {/* Risk analysis tools — Bow-Tie & Scenario, surfaced here as well as the sidebar */}
+      <section>
+        <div className="mb-3 flex items-center gap-2">
+          <Workflow className="h-[17px] w-[17px] text-blue-600" />
+          <h2 className="text-[15px] font-semibold text-slate-900">Risk analysis tools</h2>
+          <span className="text-[11px] text-slate-400">— model and visualize your risks</span>
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {[
+            { title: 'Bow-Tie Analysis', href: '/erm/analytics/bowtie', icon: Workflow,
+              desc: 'Cause-and-effect view: threats → preventive controls → risk event → mitigating controls → consequences.',
+              tint: 'from-blue-500/15 to-cyan-500/15', ic: 'text-blue-600' },
+            { title: 'Scenario Analysis', href: '/erm/analytics/scenario', icon: Target,
+              desc: 'Model what-if scenarios by adjusting likelihood and impact to understand portfolio exposure.',
+              tint: 'from-purple-500/15 to-pink-500/15', ic: 'text-purple-600' },
+          ].map((c) => {
+            const Icon = c.icon;
+            return (
+              <Link key={c.href} href={c.href}
+                className="group flex items-start gap-4 rounded-2xl border border-slate-200 bg-white p-5 transition-all hover:border-slate-300 hover:shadow-md">
+                <span className={`rounded-lg bg-gradient-to-br ${c.tint} p-3`}><Icon className={`h-6 w-6 ${c.ic}`} /></span>
+                <div className="min-w-0 flex-1">
+                  <h3 className="flex items-center gap-2 text-[15px] font-semibold text-slate-900 group-hover:text-blue-600">
+                    {c.title}<ArrowRight className="h-4 w-4 opacity-0 transition-opacity group-hover:opacity-100" />
+                  </h3>
+                  <p className="mt-1 text-[13px] leading-relaxed text-slate-600">{c.desc}</p>
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      </section>
 
       <SectionDetailModal
         open={openKey !== null}

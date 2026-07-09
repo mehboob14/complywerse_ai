@@ -2,6 +2,8 @@
 // contract (GET /erm/dashboard/sections-overview and supporting endpoints).
 
 export interface Metric {
+  /** Stable metric key (used to save per-metric weight overrides). */
+  key?: string;
   label: string;
   /** 0-100, or null when the backend has no data yet. */
   score: number | null;

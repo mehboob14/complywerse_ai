@@ -12,12 +12,13 @@ high >= 12, medium >= 6, low < 6 — the platform's existing bands.
 from typing import Optional
 from datetime import datetime, timedelta, date
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Body
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
 from ....models import (
     Risk, RiskControlLink, RiskAssetLink, RiskEvidenceLink,
+    RiskFrameworkControlLink, RiskGovernanceLink,
     RiskAssessment, RiskAssessmentRisk,
     FrameworkRiskAssessment, FrameworkRiskQuestion, FrameworkRiskQuestionEvidence,
     InternalControl, InternalControlTest, InternalControlRiskLink,
@@ -76,6 +77,7 @@ def get_sections_overview(
     risks = db.query(
         Risk.id, Risk.status, Risk.category, Risk.owner_id,
         Risk.inherent_score, Risk.residual_score,
+        Risk.closed_by, Risk.closure_status, Risk.closure_notes,
         Risk.treatment_plan.isnot(None).label("has_plan"),
     ).filter(Risk.tenant_id.in_(scoped)).all()
 
@@ -103,25 +105,37 @@ def get_sections_overview(
             return set()
 
     linked_ids = (link_ids(RiskAssetLink) | link_ids(RiskControlLink)
-                  | link_ids(RiskEvidenceLink) | link_ids(InternalControlRiskLink)) & active_ids
+                  | link_ids(RiskEvidenceLink) | link_ids(InternalControlRiskLink)
+                  | link_ids(RiskFrameworkControlLink) | link_ids(RiskGovernanceLink)) & active_ids
+
+    # Acceptance governance: accepted risks that carry a documented sign-off
+    # (closer/closure status/closure notes). No acceptance-expiry column exists on
+    # Risk, so presence of a sign-off is the governance signal.
+    accepted_risks = [r for r in active if (r.status or "") == "accepted"]
+    accepted_signed = sum(1 for r in accepted_risks
+                          if r.closed_by or r.closure_status or r.closure_notes)
 
     register_metrics = [
-        _metric("exposure_containment", "Exposure containment", 0.25, high_residual, len(scored),
+        _metric("exposure_containment", "Exposure containment", 0.22, high_residual, len(scored),
                 "1 - (active risks with residual score >= 12 (high/critical) / scored active risks)",
                 inverse=True, empty_score=None),
-        {"key": "risk_reduction", "label": "Risk reduction", "weight": 0.20,
+        {"key": "risk_reduction", "label": "Risk reduction", "weight": 0.18,
          "score": reduction_pct,
          "numerator": round(sum_inherent - sum_residual, 1), "denominator": round(sum_inherent, 1),
          "formula": "(sum of inherent scores - sum of residual scores) / sum of inherent scores",
          "inverse": False, "target": 85},
-        _metric("scoring_completeness", "Fully scored", 0.15, len(scored), len(active),
+        _metric("scoring_completeness", "Fully scored", 0.13, len(scored), len(active),
                 "active risks with both inherent and residual scores / active risks"),
-        _metric("ownership", "Ownership", 0.10, owned, len(active),
+        _metric("ownership", "Ownership", 0.09, owned, len(active),
                 "active risks with an assigned owner / active risks"),
-        _metric("linkage", "Linked to context", 0.15, len(linked_ids), len(active),
-                "active risks linked to >= 1 asset / control / evidence / active risks"),
-        _metric("treatment_coverage", "Treatment defined", 0.15, treated, len(active),
+        _metric("linkage", "Linked to context", 0.14, len(linked_ids), len(active),
+                "active risks linked to >= 1 asset / control / evidence / framework control / governance objective / active risks"),
+        _metric("treatment_coverage", "Treatment defined", 0.14, treated, len(active),
                 "active risks with a treatment plan or in treatment/mitigated/accepted status / active risks"),
+        _metric("acceptance_governance", "Acceptance signed off", 0.10,
+                accepted_signed, len(accepted_risks),
+                "accepted risks with a documented sign-off (closer / closure status / closure notes) / accepted risks",
+                empty_score=100),
     ]
 
     # ================= Risk Assessments ======================================
@@ -256,13 +270,15 @@ def get_sections_overview(
             InternalControl.is_key_control, InternalControl.next_test_date,
         ).filter(InternalControl.tenant_id.in_(scoped)).all()
         ic_ids = [c.id for c in ic]
-        tested_ids = {t.control_id for t in db.query(InternalControlTest.control_id).filter(
-            InternalControlTest.control_id.in_(ic_ids)).all()} if ic_ids else set()
+        ic_tests = db.query(
+            InternalControlTest.control_id, InternalControlTest.exceptions_found,
+        ).filter(InternalControlTest.control_id.in_(ic_ids)).all() if ic_ids else []
+        tested_ids = {t.control_id for t in ic_tests}
         ic_risk_linked = {l.control_id for l in db.query(InternalControlRiskLink.control_id).filter(
             InternalControlRiskLink.control_id.in_(ic_ids)).all()} if ic_ids else set()
     except SQLAlchemyError:
         db.rollback()
-        ic, tested_ids, ic_risk_linked = [], set(), set()
+        ic, ic_tests, tested_ids, ic_risk_linked = [], [], set(), set()
 
     ic_active = [c for c in ic if c.status == "active"]
     ic_active_ids = {c.id for c in ic_active}
@@ -273,17 +289,30 @@ def get_sections_overview(
                        and c.operating_effectiveness == "effective")
     ic_with_next = [c for c in ic_active if c.next_test_date]
     ic_test_overdue = sum(1 for c in ic_with_next if c.next_test_date < now)
+    # Key-control quality: effectiveness weighted toward the controls that matter,
+    # and test rigor measured by exception-free test runs.
+    key_controls = [c for c in ic_active if c.is_key_control]
+    key_effective = sum(1 for c in key_controls if c.operating_effectiveness == "effective")
+    active_tests = [t for t in ic_tests if t.control_id in ic_active_ids]
+    clean_tests = sum(1 for t in active_tests if (t.exceptions_found or 0) == 0)
 
     controls_metrics = [
-        _metric("activation", "Active controls", 0.20, len(ic_active), len(ic),
+        _metric("activation", "Active controls", 0.12, len(ic_active), len(ic),
                 "controls in active status / all internal controls"),
-        _metric("test_coverage", "Tested", 0.25, len(ic_tested_active), len(ic_active),
+        _metric("test_coverage", "Tested", 0.18, len(ic_tested_active), len(ic_active),
                 "active controls with >= 1 recorded test / active controls"),
-        _metric("effectiveness", "Fully effective", 0.30, ic_effective, len(ic_tested_active),
+        _metric("effectiveness", "Fully effective", 0.20, ic_effective, len(ic_tested_active),
                 "tested active controls with design AND operating effectiveness = effective / tested active controls"),
-        _metric("risk_linkage", "Linked to risks", 0.15, len(ic_risk_linked & ic_active_ids), len(ic_active),
+        _metric("key_control_effectiveness", "Key controls effective", 0.18,
+                key_effective, len(key_controls),
+                "key controls operating-effective / all active key controls",
+                empty_score=None),
+        _metric("test_quality", "Exception-free tests", 0.12, clean_tests, len(active_tests),
+                "control test runs with zero exceptions found / all active-control test runs",
+                empty_score=None),
+        _metric("risk_linkage", "Linked to risks", 0.12, len(ic_risk_linked & ic_active_ids), len(ic_active),
                 "active controls linked to >= 1 risk / active controls"),
-        _metric("test_currency", "Test schedule kept", 0.10, ic_test_overdue, len(ic_with_next),
+        _metric("test_currency", "Test schedule kept", 0.08, ic_test_overdue, len(ic_with_next),
                 "1 - (active controls past their next test date / active controls with a test schedule)",
                 inverse=True, empty_score=100),
     ]
@@ -364,6 +393,29 @@ def get_sections_overview(
             return k.current_value < k.amber_threshold
         return k.current_value > k.amber_threshold
 
+    def kri_band_health(k):
+        """Direction-aware band score: green=100, amber=50, red/unmeasured=0.
+        A null current_value counts AGAINST (0) — unmeasured is not healthy.
+        Returns None only when there is no amber threshold to judge against."""
+        if k.amber_threshold is None:
+            return None
+        if k.current_value is None:
+            return 0.0
+        v = k.current_value
+        green = k.green_threshold
+        if (k.threshold_direction or "lower_is_better").startswith("higher"):
+            if v < k.amber_threshold:
+                return 0.0        # below amber = red
+            if green is not None and v >= green:
+                return 100.0      # at/above green
+            return 50.0           # amber band
+        else:
+            if v > k.amber_threshold:
+                return 0.0        # above amber = red
+            if green is not None and v <= green:
+                return 100.0      # at/below green
+            return 50.0           # amber band
+
     try:
         kris = db.query(
             RiskKRI.risk_id, RiskKRI.current_value, RiskKRI.green_threshold,
@@ -376,6 +428,9 @@ def get_sections_overview(
 
     active_kris = [k for k in kris if k.is_active]
     red_kris = sum(1 for k in active_kris if kri_is_red(k))
+    kri_bands = [b for b in (kri_band_health(k) for k in active_kris) if b is not None]
+    kri_not_green = sum(1 for b in kri_bands if b < 100)
+    signal_health_score = round(sum(kri_bands) / len(kri_bands), 1) if kri_bands else 100
     fresh_kris = sum(
         1 for k in active_kris
         if k.last_measured_at and k.last_measured_at >=
@@ -387,8 +442,12 @@ def get_sections_overview(
     high_covered = len(high_res_ids & kri_risk_ids)
 
     kris_metrics = [
-        _metric("signal_health", "Signal health", 0.40, red_kris, len(active_kris),
-                "1 - (red KRIs / active KRIs)", inverse=True, empty_score=100),
+        {"key": "signal_health", "label": "Signal health", "weight": 0.40,
+         "score": signal_health_score,
+         "numerator": kri_not_green, "denominator": len(kri_bands),
+         "formula": ("average KRI band health (green=100, amber=50, red or unmeasured=0), "
+                     "direction-aware, over active KRIs with an amber threshold"),
+         "inverse": False, "target": 85},
         _metric("measurement_freshness", "Measured on schedule", 0.35,
                 fresh_kris, len(active_kris),
                 "active KRIs measured within their frequency window / active KRIs"),
@@ -430,6 +489,8 @@ def get_sections_overview(
         actions = db.query(
             RiskMitigationAction.id, RiskMitigationAction.status,
             RiskMitigationAction.due_date, RiskMitigationAction.evidence_id,
+            RiskMitigationAction.expected_residual_reduction,
+            RiskMitigationAction.actual_residual_reduction,
         ).join(Risk, RiskMitigationAction.risk_id == Risk.id).filter(
             Risk.tenant_id.in_(scoped)).all()
         evidenced_actions = {r.mitigation_action_id for r in db.query(
@@ -445,14 +506,30 @@ def get_sections_overview(
     completed_actions = [a for a in actions if a.status == "completed"]
     evidenced_completed = sum(1 for a in completed_actions
                               if a.evidence_id or a.id in evidenced_actions)
+    # Treatment effectiveness: did completed actions actually deliver the residual
+    # reduction they promised? Ratio of realized to expected reduction, capped at
+    # 100%, over completed actions that carry both figures. This complements the
+    # gameable "completed" count, which rewards closing actions regardless of effect.
+    te_actions = [a for a in completed_actions
+                  if a.expected_residual_reduction is not None
+                  and a.actual_residual_reduction is not None]
+    te_expected = sum(a.expected_residual_reduction for a in te_actions)
+    te_actual = sum(a.actual_residual_reduction for a in te_actions)
+    te_score = round(min((te_actual / te_expected) * 100, 100.0), 1) if te_expected else None
 
     mitigation_metrics = [
-        _metric("timeliness", "On schedule", 0.40, overdue_actions, len(open_actions),
+        _metric("timeliness", "On schedule", 0.30, overdue_actions, len(open_actions),
                 "1 - (overdue mitigation actions / open mitigation actions)",
                 inverse=True, empty_score=100),
-        _metric("completion", "Completed", 0.35, len(completed_actions), len(actions),
+        _metric("completion", "Completed", 0.25, len(completed_actions), len(actions),
                 "completed mitigation actions / all mitigation actions"),
-        _metric("evidence_backed", "Evidence-backed", 0.25,
+        {"key": "treatment_effectiveness", "label": "Treatment effectiveness", "weight": 0.30,
+         "score": te_score,
+         "numerator": round(te_actual, 1), "denominator": round(te_expected, 1),
+         "formula": ("sum of actual residual reduction / sum of expected residual reduction "
+                     "over completed actions with both recorded (capped at 100%)"),
+         "inverse": False, "target": 85},
+        _metric("evidence_backed", "Evidence-backed", 0.15,
                 evidenced_completed, len(completed_actions),
                 "completed actions with linked evidence / completed actions"),
     ]
@@ -495,6 +572,7 @@ def get_sections_overview(
         incidents = db.query(
             RiskIncident.severity, RiskIncident.status, RiskIncident.risk_id,
             RiskIncident.incident_date, RiskIncident.discovered_date,
+            RiskIncident.resolved_at, RiskIncident.financial_impact,
         ).filter(RiskIncident.tenant_id.in_(scoped)).all()
     except SQLAlchemyError:
         db.rollback()
@@ -508,15 +586,29 @@ def get_sections_overview(
     inc_open_critical = sum(1 for i in inc_open
                             if (i.severity or "").lower() in ("critical", "high"))
     inc_linked = sum(1 for i in incidents if i.risk_id)
+    # MTTR + impact quantification over resolved incidents.
+    inc_resolved = [i for i in incidents if i.status in ("resolved", "closed")]
+    inc_res_dated = [i for i in inc_resolved if i.resolved_at and i.incident_date]
+    inc_res_fast = sum(1 for i in inc_res_dated
+                       if (i.resolved_at - i.incident_date).days <= 30)
+    inc_impact_set = sum(1 for i in inc_resolved if i.financial_impact is not None)
 
     incidents_metrics = [
-        _metric("resolution_rate", "Resolved 12m", 0.40, inc_resolved_12m, len(inc_12m),
+        _metric("resolution_rate", "Resolved 12m", 0.30, inc_resolved_12m, len(inc_12m),
                 "incidents resolved or closed / incidents opened in the last 12 months"),
-        _metric("critical_containment", "Critical contained", 0.35,
+        _metric("critical_containment", "Critical contained", 0.25,
                 inc_open_critical, len(inc_open),
                 "1 - (open critical/high incidents / open incidents)",
                 inverse=True, empty_score=100),
-        _metric("risk_linkage", "Linked to risks", 0.25, inc_linked, len(incidents),
+        _metric("resolution_speed", "Resolved within 30 days", 0.15,
+                inc_res_fast, len(inc_res_dated),
+                "resolved incidents closed within 30 days of the incident date / resolved incidents with dates",
+                empty_score=None),
+        _metric("impact_quantified", "Impact quantified", 0.15,
+                inc_impact_set, len(inc_resolved),
+                "resolved incidents with a financial impact recorded / resolved incidents",
+                empty_score=None),
+        _metric("risk_linkage", "Linked to risks", 0.15, inc_linked, len(incidents),
                 "incidents linked to a register risk / all incidents"),
     ]
 
@@ -619,8 +711,14 @@ def get_sections_overview(
         },
     }
 
+    # Per-tenant fine-tuning: apply saved section + metric weight (and target)
+    # overrides, recomputing section scores + the module score.
+    from grc.services import scorecard_config as sc_cfg
+    _cfg = sc_cfg.get_config(db, scoped[0], "erm")
+    _target = _cfg.get("target", 85)
+    sc_cfg.apply_overrides(list(sections.values()), _cfg)
     components = [{"key": s["key"], "label": s["label"], "score": s["score"],
-                   "weight": s["weight"], "target": 85} for s in sections.values()]
+                   "weight": s["weight"], "target": _target} for s in sections.values()]
     scored_comps = [c for c in components if c["score"] is not None]
     weight_sum = sum(c["weight"] for c in scored_comps)
     performance_score = (round(sum(c["score"] * c["weight"] for c in scored_comps) / weight_sum, 1)
@@ -669,3 +767,53 @@ def get_sections_overview(
             "components": components,
         },
     }
+
+
+@router.get("/scorecard-config")
+def get_scorecard_config(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Current section weights + target (built-in defaults merged with tenant overrides)."""
+    from grc.services import scorecard_config as sc_cfg
+    tenants = get_user_tenants(current_user, db)
+    if not tenants:
+        return {"module": "erm", "sections": [], "target": 85, "default_target": 85, "customized": False}
+    return sc_cfg.merged(db, tenants[0], "erm")
+
+
+@router.put("/scorecard-config")
+def put_scorecard_config(
+    body: dict = Body(...),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Save section-weight, metric-weight and/or target overrides for this tenant.
+    Any field omitted is left unchanged; weights renormalize to 100%."""
+    from grc.services import scorecard_config as sc_cfg
+    tenants = get_user_tenants(current_user, db)
+    if not tenants:
+        return {"ok": False}
+    cfg = sc_cfg.save_config(
+        db, tenants[0], "erm",
+        section_weights=body.get("weights"),
+        metric_weights=body.get("metric_weights"),
+        target=body.get("target"),
+        updated_by=getattr(current_user, "id", None),
+    )
+    return {"ok": True, "config": cfg}
+
+
+@router.delete("/scorecard-config")
+def reset_scorecard_config(
+    section: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Reset scorecard tuning to defaults — the whole module, or (with ?section=)
+    just one section's metric weights."""
+    from grc.services import scorecard_config as sc_cfg
+    tenants = get_user_tenants(current_user, db)
+    if tenants:
+        sc_cfg.reset_config(db, tenants[0], "erm", section=section)
+    return {"ok": True}

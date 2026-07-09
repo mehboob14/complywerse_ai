@@ -8,6 +8,7 @@
  * metric payload {score, weight, numerator, denominator, formula} — these
  * components never compute domain math.
  */
+import { useEffect, useState } from 'react';
 import {
   ResponsiveContainer,
   RadialBarChart,
@@ -21,7 +22,9 @@ import {
   YAxis,
   ReferenceLine,
 } from 'recharts';
+import { SlidersHorizontal } from 'lucide-react';
 import { AnimatedModal } from '@/components/ui/AnimatedModal';
+import { MetricWeightEditor } from './score-tuning';
 
 export type OverviewMetric = {
   key: string;
@@ -196,10 +199,26 @@ export function SectionGraphCard({ section, onOpen }: { section: OverviewSection
 export function SectionDetailModal({
   section,
   onClose,
+  tuning,
+  extra,
 }: {
   section: OverviewSection | null;
   onClose: () => void;
+  /** Enables per-tenant metric-weight tuning inside this popup. */
+  tuning?: { configBase: string; invalidateKey: unknown[] };
+  /** Optional module-specific content rendered below the metrics (e.g. a
+   *  breakdown chart). */
+  extra?: React.ReactNode;
 }) {
+  const [editing, setEditing] = useState(false);
+  const [preview, setPreview] = useState<number | null>(null);
+
+  // reset editor state whenever the popup opens a different section
+  useEffect(() => { setEditing(false); setPreview(null); }, [section?.key]);
+
+  const canEdit = Boolean(tuning && section && section.metrics.some((m) => m.key));
+  const shownScore = editing && preview != null ? preview : section?.score ?? null;
+
   return (
     <AnimatedModal
       isOpen={section != null}
@@ -211,36 +230,60 @@ export function SectionDetailModal({
       {section && (
         <div className="p-5">
           <div className="mb-4 flex items-center gap-4 rounded-xl bg-slate-50 p-4">
-            <ScoreRing score={section.score} size={72} />
-            <div className="min-w-0">
-              <span className={`inline-block rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${scoreBand(section.score).pill}`}>
-                {scoreBand(section.score).label}
+            <ScoreRing score={shownScore} size={72} />
+            <div className="min-w-0 flex-1">
+              <span className={`inline-block rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${scoreBand(shownScore).pill}`}>
+                {scoreBand(shownScore).label}
               </span>
               <p className="mt-1.5 text-xs leading-5 text-slate-500">
                 Weighted mean of the {section.metrics.length} metrics below — each row shows
                 its weight, count, and the exact formula behind the number.
               </p>
             </div>
+            {canEdit && !editing && (
+              <button
+                type="button"
+                onClick={() => setEditing(true)}
+                className="inline-flex flex-shrink-0 items-center gap-1 self-start rounded-md border border-slate-200 px-2 py-1 text-[11px] font-medium text-slate-500 transition-colors hover:border-slate-300 hover:text-slate-700"
+              >
+                <SlidersHorizontal className="h-3 w-3" /> Adjust
+              </button>
+            )}
           </div>
 
-          <div className="divide-y divide-slate-100 rounded-xl border border-slate-200">
-            {section.metrics.map((m) => (
-              <MetricRow key={m.key} metric={m} />
-            ))}
-          </div>
+          {editing && tuning ? (
+            <MetricWeightEditor
+              section={section}
+              configBase={tuning.configBase}
+              invalidateKey={tuning.invalidateKey}
+              onSaved={onClose}
+              onCancel={() => { setEditing(false); setPreview(null); }}
+              onPreview={setPreview}
+            />
+          ) : (
+            <>
+              <div className="divide-y divide-slate-100 rounded-xl border border-slate-200">
+                {section.metrics.map((m) => (
+                  <MetricRow key={m.key} metric={m} />
+                ))}
+              </div>
 
-          {section.score != null && (
-            <div className="mt-4 rounded-lg border border-slate-100 bg-slate-50 px-3.5 py-2.5">
-              <p className="text-[11px] leading-5 text-slate-600">
-                <span className="font-semibold text-slate-700">Section score</span>{' = '}
-                {section.metrics
-                  .filter((m) => m.score != null)
-                  .map((m) => `${Math.round(m.score as number)}×${Math.round(m.weight * 100)}%`)
-                  .join(' + ')}
-                {' = '}
-                <span className="font-bold text-slate-800">{Math.round(section.score)}</span>
-              </p>
-            </div>
+              {section.score != null && (
+                <div className="mt-4 rounded-lg border border-slate-100 bg-slate-50 px-3.5 py-2.5">
+                  <p className="text-[11px] leading-5 text-slate-600">
+                    <span className="font-semibold text-slate-700">Section score</span>{' = '}
+                    {section.metrics
+                      .filter((m) => m.score != null)
+                      .map((m) => `${Math.round(m.score as number)}×${Math.round(m.weight * 100)}%`)
+                      .join(' + ')}
+                    {' = '}
+                    <span className="font-bold text-slate-800">{Math.round(section.score)}</span>
+                  </p>
+                </div>
+              )}
+
+              {extra}
+            </>
           )}
         </div>
       )}

@@ -7,4 +7,6 @@ Imports the last section part, which (via a chain of `from .prev import *`){nl}t
 # The access-review commit added a second _40_* that forks the chain from _39 and
 # is not reachable from _42, so import it explicitly to keep those models loaded.
 from ._42_metric_snapshots import *  # noqa: F401,F403
+from ._43_scorecard_config import *  # noqa: F401,F403 — per-tenant scorecard weight/target overrides
+from ._44_control_workbench import *  # noqa: F401,F403 — unified control library work layer
 from ._40_access_review_models import *  # noqa: F401,F403

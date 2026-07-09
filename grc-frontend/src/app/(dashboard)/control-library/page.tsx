@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { usePermissions } from '@/hooks/usePermissions';
 import apiClient, { frameworksApi } from '@/lib/api';
 import { useToast } from '@/components/ui';
+import ControlSurfaceTabs from '@/components/dashboard/ControlSurfaceTabs';
 import {
   Library,
   Loader2,
@@ -131,8 +132,22 @@ export default function ControlLibraryPage() {
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
   // "Build your view" — live, client-side framework filter over the whole
   // library (no backend re-run). pickedFw = [] means the full library.
+  // Persisted in the URL (?fw=…) so a page refresh keeps the selection and the
+  // filtered view is shareable. Read synchronously on the client at first render.
   const [showBuild, setShowBuild] = useState(false);
-  const [pickedFw, setPickedFw] = useState<string[]>([]);
+  const [pickedFw, setPickedFw] = useState<string[]>(() => {
+    if (typeof window === 'undefined') return [];
+    const fw = new URLSearchParams(window.location.search).get('fw');
+    return fw ? fw.split(',').map((s) => s.trim()).filter(Boolean) : [];
+  });
+  // Keep the URL in sync with the selection so refresh/share preserves it.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    if (pickedFw.length) url.searchParams.set('fw', pickedFw.join(','));
+    else url.searchParams.delete('fw');
+    window.history.replaceState(null, '', url.toString());
+  }, [pickedFw]);
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showAutoGroupModal, setShowAutoGroupModal] = useState(false);
@@ -605,6 +620,22 @@ export default function ControlLibraryPage() {
   const dispSets = scoped ? dispSetsScoped : libStats.sets;
   const dispStandalone = scoped ? dispStandaloneScoped : libStats.standalone;
 
+  // Reconciliation for the framework filter: the picked frameworks' raw controls
+  // (sum of per-framework counts) collapse into fewer *unified* entries whenever
+  // frameworks share a requirement (deduped into one set). Surfacing this stops
+  // "162 + 35 + 153 = 350 but only 312 mapped" from looking like missing controls.
+  // Unscoped raw total comes from the backend (all original framework controls
+  // behind the library) so the default page can reconcile raw → unified too.
+  const rawAll = (groupsData as { total_raw_controls?: number } | undefined)?.total_raw_controls ?? 0;
+  const dispRawTotal = scoped ? pickedFw.reduce((a, f) => a + (coverage?.fwTotals?.[f] ?? 0), 0) : rawAll;
+  const dispShared = Math.max(0, dispRawTotal - dispControls);
+  // How many distinct requirements are repeated across 2+ of the picked frameworks
+  // (these are the ones whose duplicate copies get merged away).
+  const sharedReqs = scoped && coverage
+    ? Object.values(coverage.byDomain).reduce((n, d) =>
+        n + d.sets.filter((fws) => fws.filter((f) => pickedFw.includes(f)).length >= 2).length, 0)
+    : 0;
+
   // Carry the active framework filter into a domain so drilling in stays scoped.
   const domainHref = (gid: number) => (filterActive && pickedFw.length)
     ? `/control-library/${gid}?fw=${encodeURIComponent(pickedFw.join(','))}`
@@ -644,6 +675,7 @@ export default function ControlLibraryPage() {
 
   return (
     <div className="space-y-5">
+      <ControlSurfaceTabs active="library" />
       {/* Master-baseline build progress (first-time / rebuild normalization). */}
       {baselineBuild && (
         <div className={`rounded-xl border px-4 py-3 shadow-sm ${baselineBuild.status === 'failed' ? 'border-red-200 bg-red-50' : 'border-primary-200 bg-gradient-to-r from-primary-50 to-white'}`}>
@@ -735,7 +767,9 @@ export default function ControlLibraryPage() {
         <div className="flex flex-wrap items-center gap-2 lg:max-w-2xl lg:justify-end">
           <span className="inline-flex items-center gap-1.5 rounded-lg border border-white/25 bg-white/15 px-3 py-2 text-sm font-medium text-white backdrop-blur">
             {filterActive
-              ? <><Filter className="h-4 w-4" /> Filtered · {coverageLoading ? '…' : filteredControls} of {totalControls} unified controls</>
+              ? <><Filter className="h-4 w-4" /> {coverageLoading ? '…' : dispShared > 0
+                  ? <>Filtered · {dispRawTotal} controls → {filteredControls} unified · {dispShared} duplicates merged</>
+                  : <>Filtered · {filteredControls} of {totalControls} unified controls</>}</>
               : <><CheckCircle className="h-4 w-4" /> Active library · {groupsLoading ? '—' : totalControls} unified controls</>}
           </span>
           <div className="relative">
@@ -824,6 +858,14 @@ export default function ControlLibraryPage() {
             <ShieldCheck size={18} />
             Review Master List
           </Link>
+          <Link
+            href="/controls?promote=1"
+            title="Move verified normalized controls into the working Control Catalog"
+            className="flex items-center gap-2 rounded-lg bg-violet-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-violet-700"
+          >
+            <CheckCircle size={18} />
+            Promote to Catalog
+          </Link>
           {/* Stale pipeline actions (Build Unified View, Create/Rebuild Master Baseline,
               Create Group, Populate from Frameworks) removed — the library is seeded and
               locked, so it is browsed and reviewed, not built in the UI. */}
@@ -844,7 +886,7 @@ export default function ControlLibraryPage() {
             <Library className="h-3.5 w-3.5" />{groupsLoading ? '—' : dispDomains} domains
           </span>
           <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-1 ring-1 ring-white/20">
-            <GitMerge className="h-3.5 w-3.5" />{groupsLoading ? '—' : dispControls} mapped controls
+            <GitMerge className="h-3.5 w-3.5" />{groupsLoading ? '—' : dispControls} unified controls
           </span>
           <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-1 ring-1 ring-white/20">
             <Shield className="h-3.5 w-3.5" />{groupsLoading ? '—' : (filterActive ? pickedFw.length : (availableFrameworks?.length || 0))} frameworks
@@ -869,7 +911,7 @@ export default function ControlLibraryPage() {
               <Library className="h-5 w-5" />
             </span>
           </div>
-          <p className="mt-3 text-[11px] text-slate-400">Organized control sets</p>
+          <p className="mt-3 text-[11px] text-slate-400">Grouped by topic area</p>
         </div>
         {/* Mapped Controls */}
         <div className="group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
@@ -877,13 +919,17 @@ export default function ControlLibraryPage() {
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <p className="text-2xl font-bold leading-none text-slate-900 tabular-nums">{groupsLoading ? '—' : dispControls}</p>
-              <p className="mt-1.5 text-xs font-semibold text-slate-600">Mapped Controls</p>
+              <p className="mt-1.5 text-xs font-semibold text-slate-600">Unified Controls</p>
             </div>
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500 to-blue-600 text-white shadow-sm transition-transform group-hover:scale-105">
               <GitMerge className="h-5 w-5" />
             </span>
           </div>
-          <p className="mt-3 text-[11px] text-slate-400">Across all domains</p>
+          <p className="mt-3 text-[11px] text-slate-400">
+            {dispRawTotal > 0 && dispShared > 0
+              ? <>from <span className="font-semibold text-slate-500">{dispRawTotal.toLocaleString()}</span> framework controls · <span className="font-semibold text-emerald-600">{dispShared.toLocaleString()} duplicates merged</span></>
+              : 'Distinct across all frameworks'}
+          </p>
         </div>
         {/* Frameworks */}
         <div className="group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
@@ -905,13 +951,13 @@ export default function ControlLibraryPage() {
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <p className="text-2xl font-bold leading-none text-slate-900 tabular-nums">{groupsLoading ? '—' : dispSets}</p>
-              <p className="mt-1.5 text-xs font-semibold text-slate-600">Normalized Sets</p>
+              <p className="mt-1.5 text-xs font-semibold text-slate-600">Shared</p>
             </div>
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 text-white shadow-sm transition-transform group-hover:scale-105">
               <GitMerge className="h-5 w-5" />
             </span>
           </div>
-          <p className="mt-3 text-[11px] text-slate-400">Same requirement, deduped across frameworks</p>
+          <p className="mt-3 text-[11px] text-slate-400">of the {groupsLoading ? '—' : dispControls.toLocaleString()} unified · required by 2+ frameworks</p>
         </div>
         {/* Standalone */}
         <div className="group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
@@ -919,15 +965,65 @@ export default function ControlLibraryPage() {
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <p className="text-2xl font-bold leading-none text-slate-900 tabular-nums">{groupsLoading ? '—' : dispStandalone}</p>
-              <p className="mt-1.5 text-xs font-semibold text-slate-600">Standalone</p>
+              <p className="mt-1.5 text-xs font-semibold text-slate-600">Unique</p>
             </div>
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-slate-400 to-slate-600 text-white shadow-sm transition-transform group-hover:scale-105">
               <Shield className="h-5 w-5" />
             </span>
           </div>
-          <p className="mt-3 text-[11px] text-slate-400">Framework-unique controls</p>
+          <p className="mt-3 text-[11px] text-slate-400">of the {groupsLoading ? '—' : dispControls.toLocaleString()} unified · required by one framework</p>
         </div>
       </div>
+
+      {/* Plain-English reconciliation — shown whenever dedup happened (default
+          library view AND filtered views). Turns "426 + 1906 + 2332 = 4664?!"
+          and "350 vs 312" confusion into a visible sum. */}
+      {dispShared > 0 && dispRawTotal > 0 && (
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-4">
+          <div className="flex items-center gap-2">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+              <Info className="h-4 w-4" />
+            </span>
+            <h4 className="text-[13px] font-bold text-slate-800">Why {dispControls.toLocaleString()}, not {dispRawTotal.toLocaleString()}?</h4>
+          </div>
+          <p className="mt-2 max-w-3xl text-[12.5px] leading-relaxed text-slate-600">
+            {scoped ? `Your ${pickedFw.length} frameworks` : `Your ${availableFrameworks?.length || 0} frameworks`} list{' '}
+            <b className="text-slate-800">{dispRawTotal.toLocaleString()}</b> controls in total — but{' '}
+            <b className="text-slate-800">{(scoped ? sharedReqs : dispSets).toLocaleString()}</b> of those requirements are repeated across them (the same requirement
+            listed separately by several frameworks). Counting each one once removes{' '}
+            <b className="text-slate-800">{dispShared.toLocaleString()}</b> duplicate copies. Nothing is deleted — every framework&apos;s controls still
+            exist individually. <b className="text-slate-800">Shared</b> and <b className="text-slate-800">Unique</b> below are a breakdown of the{' '}
+            <b className="text-slate-800">{dispControls.toLocaleString()}</b>, not additional controls.
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-[13px]">
+            <span className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 font-semibold text-slate-700">
+              <span className="tabular-nums">{dispRawTotal}</span> framework controls
+            </span>
+            <span className="font-bold text-slate-400">−</span>
+            <span className="rounded-lg border border-rose-200 bg-white px-2.5 py-1.5 font-semibold text-rose-600">
+              <span className="tabular-nums">{dispShared}</span> duplicates
+            </span>
+            <span className="font-bold text-slate-400">=</span>
+            <span className="rounded-lg border border-emerald-600 bg-emerald-600 px-2.5 py-1.5 font-bold text-white">
+              <span className="tabular-nums">{dispControls}</span> unified controls
+            </span>
+          </div>
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-[12.5px]">
+            <span className="text-slate-500">which breaks down as</span>
+            <span className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 font-semibold text-slate-700">
+              <span className="tabular-nums">{dispStandalone}</span> unique
+            </span>
+            <span className="font-bold text-slate-400">+</span>
+            <span className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 font-semibold text-slate-700">
+              <span className="tabular-nums">{dispSets}</span> shared
+            </span>
+            <span className="font-bold text-slate-400">=</span>
+            <span className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 font-semibold text-slate-700">
+              <span className="tabular-nums">{dispControls}</span>
+            </span>
+          </div>
+        </div>
+      )}
 
 
       <div className="card">
@@ -1070,11 +1166,11 @@ export default function ControlLibraryPage() {
                     <div className="flex flex-wrap items-center gap-2 text-xs">
                       <span className="inline-flex items-center gap-1.5 rounded-full bg-primary-50 px-2.5 py-1 font-semibold text-primary-700 ring-1 ring-primary-100">
                         <Layers className="h-3.5 w-3.5" />
-                        {Math.max(0, (group.normalized_control_count ?? 0) - (group.standalone_control_count ?? 0))} <span className="font-medium text-primary-500">sets</span>
+                        {Math.max(0, (group.normalized_control_count ?? 0) - (group.standalone_control_count ?? 0))} <span className="font-medium text-primary-500">shared</span>
                       </span>
                       <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-50 px-2.5 py-1 font-semibold text-slate-600 ring-1 ring-slate-200">
                         <Shield className="h-3.5 w-3.5" />
-                        {group.standalone_control_count ?? 0} <span className="font-medium text-slate-400">standalone</span>
+                        {group.standalone_control_count ?? 0} <span className="font-medium text-slate-400">unique</span>
                       </span>
                     </div>
                     <div className="mt-2.5 flex items-center justify-end gap-1 border-t border-slate-50 pt-2 opacity-60 transition-opacity group-hover:opacity-100">
@@ -1593,7 +1689,7 @@ export default function ControlLibraryPage() {
                       <p className="text-2xl font-semibold text-black">{autoGroupResult.unified_controls ?? autoGroupResult.groups_created}</p>
                     </div>
                     <div>
-                      <p className="text-gray-600">Standalone</p>
+                      <p className="text-gray-600">Unique</p>
                       <p className="text-2xl font-semibold text-black">{autoGroupResult.standalone ?? 0}</p>
                     </div>
                     <div>

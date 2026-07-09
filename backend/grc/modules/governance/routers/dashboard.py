@@ -1,6 +1,6 @@
 from typing import List, Optional
 from datetime import datetime, timedelta
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Body
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_, extract
 
@@ -702,10 +702,12 @@ def get_documents_overview(
         DocumentRiskLink, DocumentAssetLink, PolicyException,
         PolicyReviewHistory, PolicyGapFinding, PolicyStatement,
         StatementControlMapping, DocumentSignature, DocumentSignoffAssignment,
+        PolicyStatementCompliance, DocumentAttestation, GovernanceActionReview,
         AttestationCampaign, AttestationRequest,
         GovernanceCommittee, CommitteeMeeting, MeetingMinutes, OversightAction,
-        RegulatoryChange, RegulatoryImpactAssessment, RegulatoryImplementationTask,
-        RegulatoryFeedSource, RegulatoryFeedItem,
+        CommitteeCharter, CommitteeMember,
+        RiskKRI, Risk, ISProject, ISProjectMilestone,
+        ComplianceAssessmentDocument, ComplianceAssessmentDocumentItem,
     )
 
     user_tenants = get_user_tenants(current_user, db)
@@ -815,6 +817,20 @@ def get_documents_overview(
         stmt_ids, docs_with_statements, mapped_stmt_ids = set(), set(), set()
         stmt_mappings_total, stmt_mappings_full = 0, 0
 
+    # ---- statement conformance (are policies actually followed, not just mapped) -
+    try:
+        psc_rows = db.query(PolicyStatementCompliance.compliance_status).filter(
+            PolicyStatementCompliance.tenant_id.in_(scoped)).all()
+    except SQLAlchemyError:
+        db.rollback()
+        psc_rows = []
+    # denominator = statements that carry an actual assessment verdict
+    # (compliant vs partially/non-compliant); not_assessed / not_applicable
+    # are excluded so an un-assessed universe is scored n/a, not a free pass.
+    psc_assessed = [r for r in psc_rows
+                    if r.compliance_status in ("compliant", "partially_compliant", "non_compliant")]
+    psc_compliant = sum(1 for r in psc_assessed if r.compliance_status == "compliant")
+
     # ---- approval steps + sign-off ----------------------------------------
     try:
         steps = db.query(
@@ -852,6 +868,16 @@ def get_documents_overview(
                       if r.role_type == "approver" and r.decision == "signed"}
     signatures_total = len(sig_rows)
     signoff_published = len(signed_doc_ids & published_ids)
+
+    # ---- governance action-review queue (drafts/risk-acceptances/etc awaiting review) --
+    try:
+        ar_rows = db.query(GovernanceActionReview.review_status).filter(
+            GovernanceActionReview.tenant_id.in_(scoped)).all()
+    except SQLAlchemyError:
+        db.rollback()
+        ar_rows = []
+    ar_open = [r for r in ar_rows if r.review_status in ("pending_review", "in_review")]
+    ar_pending = sum(1 for r in ar_open if r.review_status == "pending_review")
 
     # ---- reviews ----------------------------------------------------------
     review_pool = [d for d in docs if d.status in ("approved", "published")]
@@ -922,6 +948,21 @@ def get_documents_overview(
     att_overdue = sum(1 for a in att_open if a.status == "overdue" or (a.due_date and a.due_date < now))
     att_evidence = sum(1 for a in att_completed if a.evidence_id)
 
+    # ---- document acknowledgements (legacy read-and-acknowledge records) ----
+    try:
+        ack_rows = db.query(
+            DocumentAttestation.status, DocumentAttestation.completed_at
+        ).filter(
+            DocumentAttestation.tenant_id.in_(scoped),
+            DocumentAttestation.attestation_type == "acknowledgment"
+        ).all()
+    except SQLAlchemyError:
+        db.rollback()
+        ack_rows = []
+    ack_total = len(ack_rows)
+    ack_done = sum(1 for a in ack_rows
+                   if a.status in ("completed", "acknowledged", "attested") or a.completed_at)
+
     # ---- committees --------------------------------------------------------
     try:
         committees_active = db.query(GovernanceCommittee.id).filter(
@@ -934,13 +975,29 @@ def get_documents_overview(
             CommitteeMeeting.scheduled_date, CommitteeMeeting.status,
             CommitteeMeeting.quorum_required, CommitteeMeeting.quorum_present
         ).filter(CommitteeMeeting.committee_id.in_(committee_ids)).all() if committee_ids else []
-        minutes_meeting_ids = {m.meeting_id for m in db.query(MeetingMinutes.meeting_id).filter(
-            MeetingMinutes.meeting_id.in_([m.id for m in meetings])).all()} if meetings else set()
+        # Omission-hardened: only APPROVED minutes count as a minuted meeting.
+        # A bare MeetingMinutes row (draft / pending_approval) was gameable —
+        # a meeting was treated as minuted the instant any row existed.
+        minutes_meeting_ids = {m.meeting_id for m in db.query(
+            MeetingMinutes.meeting_id, MeetingMinutes.status).filter(
+            MeetingMinutes.meeting_id.in_([m.id for m in meetings]),
+            MeetingMinutes.status == "approved").all()} if meetings else set()
         actions = db.query(OversightAction.status, OversightAction.due_date).filter(
             OversightAction.tenant_id.in_(scoped)).all()
+        charter_rows = db.query(
+            CommitteeCharter.committee_id, CommitteeCharter.status,
+            CommitteeCharter.expiry_date
+        ).filter(CommitteeCharter.committee_id.in_(committee_ids)).all() if committee_ids else []
+        member_rows = db.query(
+            CommitteeMember.committee_id, CommitteeMember.role
+        ).filter(
+            CommitteeMember.committee_id.in_(committee_ids),
+            CommitteeMember.is_active == True  # noqa: E712
+        ).all() if committee_ids else []
     except SQLAlchemyError:
         db.rollback()
         committee_ids, meetings, minutes_meeting_ids, actions = [], [], set(), []
+        charter_rows, member_rows = [], []
 
     committees_count = len(committee_ids)
     recent_meeting_committees = {m.committee_id for m in meetings
@@ -955,44 +1012,126 @@ def get_documents_overview(
     actions_completed = sum(1 for a in actions if a.status == "completed")
     upcoming_meetings = sum(1 for m in meetings if m.scheduled_date and m.scheduled_date >= now
                             and m.status == "scheduled")
-    held_quorum = [m for m in meetings if m.status == "completed"
-                   and m.quorum_present is not None and m.quorum_required]
+    # Omission-hardened: quorum is measured over ALL completed meetings. A
+    # completed meeting that never recorded quorum data counts AGAINST the
+    # score (not-quorate) instead of being silently dropped from the
+    # denominator, which previously let untracked meetings inflate the rate.
+    completed_meetings_all = [m for m in meetings if m.status == "completed"]
+    held_quorum = [m for m in completed_meetings_all
+                   if m.quorum_present is not None and m.quorum_required]
     quorum_met_meetings = sum(1 for m in held_quorum if m.quorum_present >= m.quorum_required)
 
-    # ---- regulatory changes + feeds -----------------------------------------
+    # ---- committee charter currency + membership completeness ---------------
+    committees_with_current_charter = {
+        r.committee_id for r in charter_rows
+        if r.status == "active" and (not r.expiry_date or r.expiry_date >= now)
+    }
+    charter_current_count = len(committees_with_current_charter & set(committee_ids))
+    member_roles_by_committee = {}
+    for r in member_rows:
+        member_roles_by_committee.setdefault(r.committee_id, set()).add(r.role or "member")
+    # "Complete" = at least one active member AND both a chair and a secretary
+    # present, so a committee with a lone stray member does not score full.
+    membership_complete_count = sum(
+        1 for cid in committee_ids
+        if {"chair", "secretary"} <= member_roles_by_committee.get(cid, set())
+    )
+
+    # ---- KRIs (governance oversight of key risk indicators) -----------------
+    # Reuses the ERM KRI data as a governance-oversight lens (Regulatory moved to
+    # the Compliance scorecard; KRIs are now a governance nav page).
     try:
-        reg_changes = db.query(
-            RegulatoryChange.id, RegulatoryChange.status
-        ).filter(RegulatoryChange.tenant_id.in_(scoped)).all()
-        assessed_change_ids = {r.regulatory_change_id for r in db.query(
-            RegulatoryImpactAssessment.regulatory_change_id
-        ).filter(RegulatoryImpactAssessment.tenant_id.in_(scoped)).all()}
-        reg_tasks = db.query(
-            RegulatoryImplementationTask.status, RegulatoryImplementationTask.due_date
-        ).filter(RegulatoryImplementationTask.tenant_id.in_(scoped)).all()
-        feed_sources = db.query(
-            RegulatoryFeedSource.is_active, RegulatoryFeedSource.last_successful_poll
-        ).filter(RegulatoryFeedSource.tenant_id.in_(scoped)).all()
-        feed_items = db.query(RegulatoryFeedItem.status).filter(
-            RegulatoryFeedItem.tenant_id.in_(scoped)).all()
+        g_kris = db.query(
+            RiskKRI.risk_id, RiskKRI.current_value, RiskKRI.amber_threshold,
+            RiskKRI.threshold_direction, RiskKRI.frequency,
+            RiskKRI.last_measured_at, RiskKRI.is_active,
+        ).join(Risk, RiskKRI.risk_id == Risk.id).filter(Risk.tenant_id.in_(scoped)).all()
+        g_high_risk_ids = {r.id for r in db.query(Risk.id).filter(
+            Risk.tenant_id.in_(scoped), Risk.residual_score >= 12).all()}
     except SQLAlchemyError:
         db.rollback()
-        reg_changes, assessed_change_ids, reg_tasks = [], set(), []
-        feed_sources, feed_items = [], []
+        g_kris, g_high_risk_ids = [], set()
 
-    reg_total = len(reg_changes)
-    reg_resolved = sum(1 for c in reg_changes if c.status in ("completed", "not_applicable"))
-    reg_applicable = [c for c in reg_changes if c.status != "not_applicable"]
-    reg_assessed = sum(1 for c in reg_applicable if c.id in assessed_change_ids)
-    reg_open_tasks = [t for t in reg_tasks if t.status in ("pending", "in_progress", "blocked")]
-    reg_overdue_tasks = sum(1 for t in reg_open_tasks if t.due_date and t.due_date < now)
-    active_sources = [s for s in feed_sources if s.is_active]
-    fresh_sources = sum(1 for s in active_sources if s.last_successful_poll
-                        and s.last_successful_poll >= now - timedelta(days=7))
-    feed_items_total = len(feed_items)
-    feed_items_triaged = sum(1 for i in feed_items if i.status in ("processed", "ignored"))
-    reg_pending_changes = sum(1 for c in reg_changes
-                              if c.status in ("identified", "under_assessment"))
+    _KRI_FRESH = {"daily": 2, "weekly": 10, "monthly": 35,
+                  "quarterly": 100, "annually": 380, "annual": 380}
+
+    def _kri_red(k):
+        if k.current_value is None or k.amber_threshold is None:
+            return False
+        if (k.threshold_direction or "lower_is_better").startswith("higher"):
+            return k.current_value < k.amber_threshold
+        return k.current_value > k.amber_threshold
+
+    g_active_kris = [k for k in g_kris if k.is_active]
+    g_red_kris = sum(1 for k in g_active_kris if _kri_red(k))
+    g_fresh_kris = sum(1 for k in g_active_kris if k.last_measured_at and k.last_measured_at
+                       >= now - timedelta(days=_KRI_FRESH.get((k.frequency or "monthly").lower(), 35)))
+    g_thresholded_kris = sum(1 for k in g_active_kris if k.amber_threshold is not None)
+    g_kri_risk_ids = {k.risk_id for k in g_active_kris}
+    g_high_covered = len(g_high_risk_ids & g_kri_risk_ids)
+
+    # ---- KPI Report (governance oversight of the Cyber Security KPI report) --
+    import re as _re
+    try:
+        kpi_doc = db.query(ComplianceAssessmentDocument.id).filter(
+            ComplianceAssessmentDocument.tenant_id.in_(scoped),
+            ComplianceAssessmentDocument.assessment_format == "kpi_report").first()
+        kpi_rows = (db.query(ComplianceAssessmentDocumentItem.remarks).filter(
+            ComplianceAssessmentDocumentItem.assessment_id == kpi_doc.id).all()
+            if kpi_doc else [])
+    except SQLAlchemyError:
+        db.rollback()
+        kpi_rows = []
+
+    def _kpi_latest(remarks):
+        """Latest quarter with data -> (target, actual, lower_is_better); else None.
+        remarks blob: '... | Qn: target%/actual% | ...'; some KPIs are lower-is-better."""
+        if not remarks:
+            return None
+        pairs = _re.findall(r"Q\d\s*:\s*([\d.]+)%?\s*/\s*([\d.]+)%?", remarks)
+        if not pairs:
+            return None
+        tgt, act = pairs[-1]
+        lower = bool(_re.search(r"\bnot\b|past deadline|open past|do not", remarks, _re.I))
+        return float(tgt), float(act), lower
+
+    kpi_total = len(kpi_rows)
+    _kpi_parsed = [_kpi_latest(r[0]) for r in kpi_rows]
+    kpi_reported = sum(1 for p in _kpi_parsed if p is not None)
+    kpi_on_target = sum(1 for p in _kpi_parsed if p is not None
+                        and (p[1] <= p[0] if p[2] else p[1] >= p[0]))
+    kpi_cells = sum(len(_re.findall(r"Q\d\s*:\s*[\d.]+%?\s*/\s*[\d.]+%?", r[0] or "")) for r in kpi_rows)
+
+    # ---- IS Projects (governance portfolio oversight) -----------------------
+    try:
+        projects = db.query(
+            ISProject.id, ISProject.status, ISProject.health, ISProject.target_end_date,
+            ISProject.budget_estimated, ISProject.budget_actual, ISProject.business_justification,
+        ).filter(ISProject.tenant_id.in_(scoped)).all()
+        _proj_ids = [p.id for p in projects]
+        milestones = (db.query(ISProjectMilestone.target_date,
+                               ISProjectMilestone.actual_completion_date)
+                      .filter(ISProjectMilestone.project_id.in_(_proj_ids)).all()
+                      if _proj_ids else [])
+    except SQLAlchemyError:
+        db.rollback()
+        projects, milestones = [], []
+
+    _PROJ_DONE = ("completed", "closed", "cancelled")
+    active_projects = [p for p in projects if (p.status or "").lower() not in _PROJ_DONE]
+    # Omission-hardened: a project with NO target end date is NOT counted as
+    # on-schedule — a missing SLA date is a governance gap, not a free pass.
+    proj_on_sched = sum(1 for p in active_projects if p.target_end_date and p.target_end_date >= now)
+    proj_healthy = sum(1 for p in active_projects
+                       if (p.health or "").lower().replace("_", " ") in ("on track", "green"))
+    # Omission-hardened: budget health is measured over ALL active projects; a
+    # project that never entered a budget counts against the score (untracked)
+    # instead of being silently dropped from the denominator.
+    active_budgeted = [p for p in active_projects if p.budget_estimated and p.budget_actual]
+    proj_overbudget = sum(1 for p in active_budgeted if p.budget_actual > p.budget_estimated)
+    proj_budget_untracked = len(active_projects) - len(active_budgeted)
+    ms_completed_dated = [m for m in milestones if m.actual_completion_date and m.target_date]
+    ms_ontime = sum(1 for m in ms_completed_dated if m.actual_completion_date <= m.target_date)
 
     # ---- gap analysis (Documents detail -> Gap Analysis tab) ----------------
     try:
@@ -1034,21 +1173,26 @@ def get_documents_overview(
     ]
 
     mappings_metrics = [
-        metric("document_coverage", "Docs mapped", 0.45, mapped_count, active_count,
+        metric("document_coverage", "Docs mapped", 0.35, mapped_count, active_count,
                "documents linked to >=1 control/risk/framework/asset / active documents"),
-        metric("statement_coverage", "Statements mapped", 0.35, len(mapped_stmt_ids), len(stmt_ids),
+        metric("statement_coverage", "Statements mapped", 0.25, len(mapped_stmt_ids), len(stmt_ids),
                "active policy statements with >=1 control mapping / active policy statements"),
-        metric("mapping_quality", "Full-coverage maps", 0.20, stmt_mappings_full, stmt_mappings_total,
+        metric("statement_conformance", "Statements conformant", 0.25, psc_compliant, len(psc_assessed),
+               "policy statements assessed compliant / statements with a compliance assessment (compliant vs partial/non-compliant)"),
+        metric("mapping_quality", "Full-coverage maps", 0.15, stmt_mappings_full, stmt_mappings_total,
                "statement-control mappings with coverage_type=full / all statement mappings"),
     ]
 
     approvals_metrics = [
-        metric("queue_health", "Queue health", 0.40, len(overdue_steps), len(pending_steps),
+        metric("queue_health", "Queue health", 0.30, len(overdue_steps), len(pending_steps),
                "1 - (overdue approval steps / pending approval steps)",
                inverse=True, empty_score=100),
-        metric("decision_rate", "Approval rate 90d", 0.30, approved_90, len(decided_90),
+        metric("action_review_health", "Action-review backlog", 0.20, ar_pending, len(ar_open),
+               "1 - (action reviews still awaiting triage / open action-review items)",
+               inverse=True, empty_score=100),
+        metric("decision_rate", "Approval rate 90d", 0.25, approved_90, len(decided_90),
                "steps approved / steps decided, last 90 days"),
-        metric("signoff_integrity", "Signed-off published", 0.30, signoff_published, published_count,
+        metric("signoff_integrity", "Signed-off published", 0.25, signoff_published, published_count,
                "published documents with a recorded approver signature / published documents"),
     ]
 
@@ -1071,40 +1215,65 @@ def get_documents_overview(
     ]
 
     attestations_metrics = [
-        metric("completion_rate", "Completion 12m", 0.50, len(att_completed), att_total,
+        metric("completion_rate", "Completion 12m", 0.40, len(att_completed), att_total,
                "attestation requests completed / all requests, last 12 months"),
-        metric("overdue_containment", "Overdue containment", 0.30, att_overdue, len(att_open),
+        metric("acknowledgement_rate", "Acknowledged", 0.25, ack_done, ack_total,
+               "document acknowledgements completed / all required acknowledgement records"),
+        metric("overdue_containment", "Overdue containment", 0.20, att_overdue, len(att_open),
                "1 - (overdue open requests / open requests)", inverse=True, empty_score=100),
-        metric("evidence_linkage", "Evidence linked", 0.20, att_evidence, len(att_completed),
+        metric("evidence_linkage", "Evidence linked", 0.15, att_evidence, len(att_completed),
                "completed attestations linked to evidence / completed attestations"),
     ]
 
     committees_metrics = [
-        metric("action_health", "Action health", 0.30, overdue_actions, len(open_actions),
+        metric("action_health", "Action health", 0.20, overdue_actions, len(open_actions),
                "1 - (overdue oversight actions / open oversight actions)",
                inverse=True, empty_score=100),
-        metric("action_completion", "Actions completed", 0.20, actions_completed, len(actions),
+        metric("action_completion", "Actions completed", 0.15, actions_completed, len(actions),
                "completed oversight actions / all oversight actions"),
-        metric("meeting_cadence", "Meeting cadence", 0.20, len(recent_meeting_committees), committees_count,
+        metric("meeting_cadence", "Meeting cadence", 0.15, len(recent_meeting_committees), committees_count,
                "active committees that met in the last 90 days / active committees"),
-        metric("minutes_discipline", "Minutes recorded", 0.15, minuted, len(completed_meetings_180),
-               "completed meetings (180d) with minutes recorded / completed meetings (180d)"),
-        metric("quorum_rate", "Quorum met", 0.15, quorum_met_meetings, len(held_quorum),
-               "held meetings that reached their quorum threshold / held meetings with quorum data"),
+        metric("charter_currency", "Charters current", 0.15, charter_current_count, committees_count,
+               "active committees with a current (active, non-expired) charter / active committees"),
+        metric("membership_completeness", "Membership complete", 0.15, membership_complete_count, committees_count,
+               "active committees with active chair + secretary roles filled / active committees"),
+        metric("minutes_discipline", "Minutes approved", 0.10, minuted, len(completed_meetings_180),
+               "completed meetings (180d) with APPROVED minutes / completed meetings (180d)"),
+        metric("quorum_rate", "Quorum met", 0.10, quorum_met_meetings, len(completed_meetings_all),
+               "completed meetings that reached their quorum threshold / all completed meetings (missing quorum data counts against)"),
     ]
 
-    regulatory_metrics = [
-        metric("change_progress", "Changes resolved", 0.25, reg_resolved, reg_total,
-               "regulatory changes completed or marked not-applicable / all regulatory changes"),
-        metric("assessment_coverage", "Changes assessed", 0.25, reg_assessed, len(reg_applicable),
-               "applicable changes with >=1 impact assessment / applicable changes"),
-        metric("task_health", "Task health", 0.20, reg_overdue_tasks, len(reg_open_tasks),
-               "1 - (overdue implementation tasks / open implementation tasks)",
-               inverse=True, empty_score=100),
-        metric("feed_triage", "Feed items triaged", 0.15, feed_items_triaged, feed_items_total,
-               "feed items processed or ignored / all ingested feed items"),
-        metric("feed_freshness", "Feeds polling", 0.15, fresh_sources, len(active_sources),
-               "active feed sources successfully polled in the last 7 days / active feed sources"),
+    kris_metrics = [
+        metric("signal_health", "Signal health", 0.35, g_red_kris, len(g_active_kris),
+               "1 - (breached/red KRIs / active KRIs)", inverse=True, empty_score=100),
+        metric("measurement_freshness", "Measured on schedule", 0.30, g_fresh_kris, len(g_active_kris),
+               "active KRIs measured within their frequency window / active KRIs"),
+        metric("threshold_coverage", "Thresholds defined", 0.20, g_thresholded_kris, len(g_active_kris),
+               "active KRIs with a defined amber threshold / active KRIs"),
+        metric("high_risk_coverage", "High risks monitored", 0.15, g_high_covered, len(g_high_risk_ids),
+               "high residual risks (>=12) with >=1 active KRI / high residual risks", empty_score=100),
+    ]
+
+    kpi_metrics = [
+        metric("reporting_coverage", "KPIs reported", 0.40, kpi_reported, kpi_total,
+               "KPIs with a reported actual value / all defined KPIs"),
+        metric("on_target_rate", "On target", 0.40, kpi_on_target, kpi_reported,
+               "KPIs meeting their target (direction-aware) / KPIs with a reported value"),
+        metric("data_completeness", "Data completeness", 0.20, kpi_cells, kpi_total * 4,
+               "reported quarter values across all KPIs / (KPIs x 4 quarters)"),
+    ]
+
+    # empty_score left as None so a tenant with no projects scores n/a (excluded from
+    # the module rollup) instead of a misleading 100.
+    projects_metrics = [
+        metric("on_schedule", "On schedule", 0.30, proj_on_sched, len(active_projects),
+               "active projects with a target end date not yet passed / active projects (missing target dates count against)"),
+        metric("milestone_adherence", "Milestones on time", 0.25, ms_ontime, len(ms_completed_dated),
+               "milestones completed on or before target date / completed milestones with a target"),
+        metric("portfolio_health", "Portfolio health", 0.25, proj_healthy, len(active_projects),
+               "active projects with health 'On Track' / active projects"),
+        metric("budget_health", "Budget health", 0.20, proj_overbudget + proj_budget_untracked, len(active_projects),
+               "1 - (projects over budget or not tracking a budget / active projects)", inverse=True),
     ]
 
     sections = {
@@ -1166,19 +1335,36 @@ def get_documents_overview(
                        "actions_completed": actions_completed, "actions_total": len(actions),
                        "quorum_met_meetings": quorum_met_meetings, "held_with_quorum": len(held_quorum)},
         },
-        "regulatory": {
-            "key": "regulatory", "label": "Regulatory", "weight": 0.09,
-            "score": section_score(regulatory_metrics), "metrics": regulatory_metrics,
-            "counts": {"changes_total": reg_total, "changes_resolved": reg_resolved,
-                       "changes_pending": reg_pending_changes,
-                       "open_tasks": len(reg_open_tasks), "overdue_tasks": reg_overdue_tasks,
-                       "feed_sources_active": len(active_sources),
-                       "feed_items_new": feed_items_total - feed_items_triaged},
+        "kris": {
+            "key": "kris", "label": "Key Risk Indicators", "weight": 0.09,
+            "score": section_score(kris_metrics), "metrics": kris_metrics,
+            "counts": {"active": len(g_active_kris), "red": g_red_kris,
+                       "fresh": g_fresh_kris, "thresholded": g_thresholded_kris,
+                       "high_risks": len(g_high_risk_ids), "high_covered": g_high_covered},
+        },
+        "kpi": {
+            "key": "kpi", "label": "KPI Report", "weight": 0.06,
+            "score": section_score(kpi_metrics), "metrics": kpi_metrics,
+            "counts": {"kpis": kpi_total, "reported": kpi_reported, "on_target": kpi_on_target},
+        },
+        "projects": {
+            "key": "projects", "label": "IS Projects", "weight": 0.06,
+            "score": section_score(projects_metrics), "metrics": projects_metrics,
+            "counts": {"total": len(projects), "active": len(active_projects),
+                       "on_schedule": proj_on_sched, "healthy": proj_healthy,
+                       "over_budget": proj_overbudget,
+                       "milestones_on_time": ms_ontime, "milestones_dated": len(ms_completed_dated)},
         },
     }
 
+    # Per-tenant fine-tuning: apply saved section + metric weight (and target)
+    # overrides, recomputing section scores + the module score.
+    from grc.services import scorecard_config as sc_cfg
+    _cfg = sc_cfg.get_config(db, scoped[0], "governance") if scoped else {}
+    _target = _cfg.get("target", 85)
+    sc_cfg.apply_overrides(list(sections.values()), _cfg)
     components = [{"key": s["key"], "label": s["label"], "score": s["score"],
-                   "weight": s["weight"], "target": 85} for s in sections.values()]
+                   "weight": s["weight"], "target": _target} for s in sections.values()]
     scored = [c for c in components if c["score"] is not None]
     weight_sum = sum(c["weight"] for c in scored)
     performance_score = (round(sum(c["score"] * c["weight"] for c in scored) / weight_sum, 1)
@@ -1194,6 +1380,27 @@ def get_documents_overview(
     else:
         grade = "poor"
 
+    # Health-score history: snapshot today's weighted governance score and read
+    # back a monthly series so the overview draws a real 12-month trend. Starts
+    # from today and fills in over time — no fabricated history.
+    health_trend = []
+    try:
+        from grc.services import metric_snapshots as _ms
+        from calendar import month_abbr
+        _ms.ensure_table(db)
+        _tid = scoped[0]
+        if performance_score is not None:
+            _ms.upsert(db, _tid, "governance_health", now.date(), performance_score)
+            db.commit()
+        _by_month = {}
+        for _h in _ms.read_trend(db, [_tid], "governance_health", days=400):
+            _by_month[_h["date"][:7]] = _h["value"]  # ascending — last value per month wins
+        for _ym, _val in list(_by_month.items())[-12:]:
+            _y, _m = _ym.split("-")
+            health_trend.append({"label": month_abbr[int(_m)], "year": _y, "value": round(float(_val), 1)})
+    except Exception:
+        db.rollback()
+
     expiring_docs_30 = sections["documents"]["counts"]["expiring_30d"]
     return {
         "as_of": now.isoformat(),
@@ -1206,19 +1413,69 @@ def get_documents_overview(
             "open_gaps": open_gaps,
             "overdue_attestations": att_overdue,
             "overdue_actions": overdue_actions,
-            "regulatory_overdue_tasks": reg_overdue_tasks,
-            "feed_items_untriaged": feed_items_total - feed_items_triaged,
+            "red_kris": g_red_kris,
             "total": (docs_awaiting_approval + overdue_reviews + expiring_docs_30
                       + exc_attention + open_gaps + att_overdue + overdue_actions
-                      + reg_overdue_tasks),
+                      + g_red_kris),
         },
         "performance": {
             "score": performance_score,
             "grade": grade,
-            "formula": "weighted mean of section scores: documents 18% + mappings 18% + approvals 14% + reviews 14% + exceptions 9% + attestations 9% + committees 9% + regulatory 9%",
+            "formula": "weighted mean of section scores: documents 18% + mappings 18% + approvals 14% + reviews 14% + exceptions 9% + attestations 9% + committees 9% + KRIs 9% + KPI 6% + Projects 6% (renormalized)",
             "components": components,
+            "health_trend": health_trend,
         },
     }
+
+
+@router.get("/scorecard-config")
+def get_scorecard_config(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Current section weights + target (built-in defaults merged with tenant overrides)."""
+    from grc.services import scorecard_config as sc_cfg
+    tenants = get_user_tenants(current_user, db)
+    if not tenants:
+        return {"module": "governance", "sections": [], "target": 85, "default_target": 85, "customized": False}
+    return sc_cfg.merged(db, tenants[0], "governance")
+
+
+@router.put("/scorecard-config")
+def put_scorecard_config(
+    body: dict = Body(...),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Save section-weight, metric-weight and/or target overrides for this tenant.
+    Any field omitted is left unchanged; weights renormalize to 100%."""
+    from grc.services import scorecard_config as sc_cfg
+    tenants = get_user_tenants(current_user, db)
+    if not tenants:
+        return {"ok": False}
+    cfg = sc_cfg.save_config(
+        db, tenants[0], "governance",
+        section_weights=body.get("weights"),
+        metric_weights=body.get("metric_weights"),
+        target=body.get("target"),
+        updated_by=getattr(current_user, "id", None),
+    )
+    return {"ok": True, "config": cfg}
+
+
+@router.delete("/scorecard-config")
+def reset_scorecard_config(
+    section: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Reset scorecard tuning to defaults — the whole module, or (with ?section=)
+    just one section's metric weights."""
+    from grc.services import scorecard_config as sc_cfg
+    tenants = get_user_tenants(current_user, db)
+    if tenants:
+        sc_cfg.reset_config(db, tenants[0], "governance", section=section)
+    return {"ok": True}
 
 
 @router.get("/owner-statistics")

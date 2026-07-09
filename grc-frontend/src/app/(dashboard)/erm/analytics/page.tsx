@@ -3,8 +3,6 @@
 import Link from 'next/link';
 import {
   BarChart3,
-  Target,
-  GitBranch,
   Layers,
   Activity,
   AlertTriangle,
@@ -22,24 +20,8 @@ const analyticsModules = [
     iconColor: 'text-red-600',
     features: ['Inherent vs Residual toggle', 'Category filtering', 'Drill-down on cells', 'Risk detail popover'],
   },
-  {
-    title: 'Bow-Tie Analysis',
-    description: 'Comprehensive cause-and-effect visualization showing threats, preventive controls, risk event, mitigating controls, and consequences for any risk.',
-    href: '/erm/analytics/bowtie',
-    icon: GitBranch,
-    color: 'from-blue-500/15 to-cyan-500/15',
-    iconColor: 'text-blue-600',
-    features: ['Threat identification', 'Preventive controls', 'Mitigating controls', 'Consequence mapping'],
-  },
-  {
-    title: 'Scenario Analysis',
-    description: 'Model what-if scenarios by adjusting risk likelihood and impact. Use preset scenarios or create custom ones to understand portfolio impact.',
-    href: '/erm/analytics/scenario',
-    icon: Target,
-    color: 'from-purple-500/15 to-pink-500/15',
-    iconColor: 'text-purple-600',
-    features: ['Preset scenarios', 'Custom adjustments', 'Portfolio impact', 'Before/after comparison'],
-  },
+  // Bow-Tie Analysis & Scenario Analysis moved into the sidebar (Operational Risk)
+  // and onto the ERM Overview cards — no longer surfaced here.
   {
     title: 'Risk Aggregation',
     description: 'Enterprise-wide risk aggregation across categories, business units, and status. Track total risk exposure and reduction effectiveness.',

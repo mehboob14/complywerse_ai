@@ -19,8 +19,8 @@ import {
   PieChart, Pie, ResponsiveContainer, Tooltip,
 } from 'recharts';
 import {
-  Landmark, ShieldCheck, Scale, ClipboardCheck, Server, Bug, ListTodo,
-  FileCheck, BadgeCheck, ArrowRight, Gauge, AlertTriangle, Layers, Flame,
+  Landmark, ShieldCheck, Scale, ClipboardCheck, Server, ListTodo,
+  BadgeCheck, ArrowRight, Gauge, AlertTriangle, Layers, Flame,
 } from 'lucide-react';
 
 type Sub = { label: string; score?: number | null };
@@ -73,91 +73,21 @@ const MODULES: Array<{ key: string; label: string; href: string; Icon: typeof Ga
     map: (d) => ({ score: d?.performance?.score ?? null, subs: sectionSubs(d) }),
   },
   {
-    key: 'vulnerabilities', label: 'Vulnerabilities', href: '/vulnerabilities', Icon: Bug, viz: 'donut',
-    path: '/vuln-management/dashboard',
-    map: (d) => {
-      const total = d?.total_vulnerabilities ?? d?.total ?? 0;
-      const overdue = d?.overdue_count ?? 0;
-      const sev = d?.by_severity ?? {};
-      const segs: Seg[] = [
-        { label: 'Critical', value: sev.critical ?? 0, color: '#e11d48' },
-        { label: 'High', value: sev.high ?? 0, color: '#f97316' },
-        { label: 'Medium', value: sev.medium ?? 0, color: '#eab308' },
-        { label: 'Low', value: sev.low ?? 0, color: '#64748b' },
-      ].filter((s) => s.value > 0);
-      return {
-        score: total ? r0(100 * (1 - overdue / total)) : null,   // empty → n/a, not a fake 100
-        subs: [], segs, total,
-        note: overdue > 0 ? `${overdue} past SLA` : null,
-        pastSla: overdue,
-      };
-    },
+    key: 'issues', label: 'Issues & Incidents', href: '/issues', Icon: ListTodo, viz: 'bars',
+    path: '/issue-management/dashboard/sections-overview',
+    map: (d) => ({
+      score: d?.performance?.score ?? null,   // scored module: issues + incidents overview
+      subs: sectionSubs(d),
+      pastSla: d?.attention_queue?.sla_breached_issues ?? 0,
+      note: (d?.attention_queue?.open_critical_incidents ?? 0) > 0
+        ? `${d.attention_queue.open_critical_incidents} critical incident${d.attention_queue.open_critical_incidents === 1 ? '' : 's'}`
+        : null,
+    }),
   },
   {
-    key: 'issues', label: 'Issues', href: '/issues', Icon: ListTodo, viz: 'donut',
-    path: '/issue-management/dashboard/aggregate',
-    map: (d) => {
-      const k = d?.kpis ?? {};
-      const open = k.open ?? 0, breached = k.sla_breached ?? 0, inprog = k.in_progress ?? 0, resolved = k.resolved ?? k.closed ?? 0;
-      // any issues at all? sum count-like kpis (ignore averages/rates). all zero → empty → n/a.
-      const isCount = (key: string) => !/avg|time|day|rate|pct|percent|mttr|hour/i.test(key);
-      const totalCounts = Object.entries(k).filter(([key, v]) => typeof v === 'number' && isCount(key)).reduce((s, [, v]) => s + (v as number), 0);
-      const hasData = totalCounts > 0;
-      const segs: Seg[] = [
-        { label: 'Open', value: open, color: '#d97706' },
-        { label: 'In progress', value: inprog, color: '#0ea5e9' },
-        { label: 'Resolved', value: resolved, color: '#059669' },
-      ].filter((s) => s.value > 0);
-      return {
-        score: hasData ? (open ? r0(100 * (1 - breached / open)) : 100) : null,
-        subs: [], segs, total: open + inprog + resolved,
-        note: breached > 0 ? `${breached} SLA breached` : null,
-        pastSla: breached,
-      };
-    },
-  },
-  {
-    key: 'evidence', label: 'Evidence', href: '/evidence', Icon: FileCheck, viz: 'donut',
-    path: '/evidence',
-    map: (d) => {
-      const arr = Array.isArray(d) ? d : (d?.items ?? []);
-      const total = arr.length;
-      const st = (e: any) => String(e?.status || '').toLowerCase();
-      const approved = arr.filter((e: any) => st(e) === 'approved').length;
-      const pending = arr.filter((e: any) => ['pending_review', 'draft', 'pending'].includes(st(e))).length;
-      const other = Math.max(0, total - approved - pending);
-      const now = Date.now();
-      const expiring = arr.filter((e: any) => e?.expiry_date && new Date(e.expiry_date).getTime() - now < 30 * 864e5 && new Date(e.expiry_date).getTime() > now).length;
-      const segs: Seg[] = [
-        { label: 'Approved', value: approved, color: '#059669' },
-        { label: 'Pending', value: pending, color: '#d97706' },
-        { label: 'Other', value: other, color: '#94a3b8' },
-      ].filter((s) => s.value > 0);
-      return {
-        score: total ? r0(100 * approved / total) : null,
-        subs: [], segs, total,
-        note: expiring > 0 ? `${expiring} expiring 30d` : null,
-      };
-    },
-  },
-  {
-    key: 'attestation', label: 'Attestation', href: '/governance', Icon: BadgeCheck, viz: 'donut',
-    path: '/governance/attestation-campaigns/dashboard',
-    map: (d) => {
-      const completed = d?.completed_requests ?? 0, pending = d?.pending_requests ?? 0, overdue = d?.overdue_requests ?? 0;
-      const total = d?.total_requests ?? (completed + pending + overdue);
-      const rate = d?.completion_rate;
-      const segs: Seg[] = [
-        { label: 'Completed', value: completed, color: '#059669' },
-        { label: 'Pending', value: pending, color: '#d97706' },
-        { label: 'Overdue', value: overdue, color: '#e11d48' },
-      ].filter((s) => s.value > 0);
-      return {
-        score: total ? (rate != null ? r0(rate) : r0(100 * completed / total)) : null,
-        subs: [], segs, total,
-        note: overdue > 0 ? `${overdue} overdue` : null,
-      };
-    },
+    key: 'assurance', label: 'Control Testing & Assurance', href: '/control-library/assurance', Icon: BadgeCheck, viz: 'bars',
+    path: '/control-library/assurance/sections-overview',
+    map: (d) => ({ score: d?.performance?.score ?? null, subs: sectionSubs(d) }),
   },
 ];
 
@@ -364,7 +294,7 @@ export default function MainModuleCards() {
       <div className="grid grid-cols-2 gap-3.5 lg:grid-cols-4">
         <Kpi label="Overall Readiness" value={overall == null ? '—' : `${overall}%`} tone={oBand.hex} sub={`${tracked} modules scored · target 85`} Icon={Gauge} />
         <Kpi label="Risk Posture" value={posture} tone={postureTone} sub={risk?.score == null ? 'from Risk module' : `Risk module at ${r0(risk.score)}`} Icon={Scale} />
-        <Kpi label="Open Items Past SLA" value={`${pastSla}`} tone={pastSla > 0 ? '#e11d48' : '#059669'} sub="overdue vulns · issues · assessments" Icon={AlertTriangle} />
+        <Kpi label="Open Items Past SLA" value={`${pastSla}`} tone={pastSla > 0 ? '#e11d48' : '#059669'} sub="overdue issues · assessments" Icon={AlertTriangle} />
         <Kpi label="Modules Tracked" value={`${tracked} / ${MODULES.length}`} tone="#0369a1" sub="each links to its overview" Icon={Layers} />
       </div>
 

@@ -1,922 +1,188 @@
-﻿'use client';
+'use client';
 
-import { Fragment, useState, useEffect, useMemo } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+/**
+ * Control CATALOG — the compliance workbench, organized by the Library's 20
+ * canonical domains (baseline normalization mapping — no AI at request time).
+ * Views: By Domain (card hub → domain detail with per-framework sections),
+ * By Framework, All Controls (flat power view), My Work. Every row opens the
+ * same workbench drawer: assign, effectiveness & testing, AI test-procedure
+ * checklists (+ per-point evidence), evidence review, risks, workflow.
+ */
+import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { controlsApi, evidenceApi, ermApi, adminApi } from '@/lib/api';
-import { usePermissions } from '@/hooks/usePermissions';
-import { SearchInput, MultiSelectDropdown, InlineLinkPicker, PageLoader, RightSlidePanel, AnimatedModal } from '@/components/ui';
-import { useToast } from '@/components/ui/ToastProvider';
-import AiRecommendationSaver from '@/components/ai/AiRecommendationSaver';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import apiClient from '@/lib/api';
+import { RightSlidePanel, MultiSelectDropdown } from '@/components/ui';
+import ControlSurfaceTabs from '@/components/dashboard/ControlSurfaceTabs';
 import {
-  Shield,
-  Loader2,
-  AlertCircle,
-  Search,
-  Filter,
-  CheckCircle,
-  Clock,
-  ChevronDown,
-  ChevronRight,
-  FileText,
-  Layers,
-  ArrowLeft,
-  FileStack,
-  Info,
-  Paperclip,
-  HelpCircle,
-  Sparkles,
-  Link2,
-  Link2Off,
-  ExternalLink,
-  Upload,
-  ArrowUpDown,
-  ClipboardList,
-  FolderOpen,
-  AlertTriangle,
-  Target,
-  Plus,
-  ShieldAlert
+  Plus, Search, ShieldCheck, Sparkles, Loader2, Check, X, ChevronRight, ChevronLeft,
+  Upload, Star, Trash2, AlertTriangle, ClipboardCheck, Boxes, Layers,
+  KeyRound, Database, Landmark, Share2, ServerCog, Siren, RefreshCw, Activity,
+  Network, GitBranch, Code2, Bug, Building2, GraduationCap, Lock, Scale,
+  Users, CircleHelp, FileClock, FlaskConical, BookOpenCheck, Pencil, SlidersHorizontal,
 } from 'lucide-react';
 
-interface FrameworkControl {
-  id: number;
-  control_id: string;
-  original_reference: string | null;
-  title: string;
-  description: string | null;
-  full_text: string | null;
-  domain: string | null;
-  category: string | null;
-  is_mandatory: boolean;
-  priority: string;
-  // Native implementation-order tier (NDMO P1/P2/P3 → Year 1/2/3 roadmap) and
-  // control-level prerequisite codes. Null/[] for frameworks without them.
-  priority_level: string | null;
-  dependencies: string[];
-  version_history: Array<{ date?: string; version?: string }>;
-  control_description: string | null;
-  section_number: string | null;
-  parent_section: string | null;
-  ai_confidence: number | null;
-  ai_notes: string | null;
-  is_verified: boolean;
-  framework_id: number;
-  framework_name: string;
-  framework_version: string | null;
-  created_at: string | null;
-  evidence_count: number;
-  // Saved per-control evidence recommendations (seed shape: name/description/filetype).
-  // Older callers used title/artifact_type, so both are accepted for safety.
-  evidence_requirements: Array<{
-    name?: string;
-    title?: string;
-    description?: string;
-    filetype?: string;
-    artifact_type?: string;
-  }>;
-}
+const WB = '/control-library/workbench';
 
-interface FrameworkSummary {
-  id: number;
-  name: string;
-  version: string | null;
-  framework_type: string | null;
-  status: string;
-  control_count: number;
-}
+// read ?mode reactively (survives client-side redirects, e.g. /erm/internal-controls → ?mode=internal)
+export const dynamic = 'force-dynamic';
 
-interface FrameworkControlsResponse {
-  controls: FrameworkControl[];
-  total: number;
-  skip: number;
-  limit: number;
-}
-
-interface FrameworkSummaryResponse {
-  frameworks: FrameworkSummary[];
-  total_frameworks: number;
-  total_controls: number;
-}
-
-interface TestProcedure {
-  procedure_type: string;
-  description: string;
-  frequency: string;
-  sample_size: string;
-}
-
-interface EvidenceRequirement {
-  evidence_type: string;
-  title: string;
-  description: string;
-  mandatory: boolean;
-}
-
-interface AddressedRisk {
-  id: number; title: string; category: string | null; status: string | null;
-  inherent_score: number | null; residual_score: number | null; mitigation_effectiveness: string | null;
-}
-interface PotentialRisk {
-  title: string; description?: string; category?: string; severity?: string;
-  likelihood?: number; impact?: number; rationale?: string;
-}
-interface AIRecommendations {
-  control_id: number;
-  test_procedures: TestProcedure[];
-  evidence_requirements: EvidenceRequirement[];
-  key_risks_addressed: string[];
-  audit_focus_areas: string[];
-  addressed_risks: AddressedRisk[];
-  risks_if_not_implemented: PotentialRisk[];
-}
-
-interface ControlImplStatus {
-  status: string;
-  assignee_name: string | null;
-  implementation_date: string | null;
-  verified_date: string | null;
-}
-interface StatusSummary {
-  total: number;
-  verified: number;
-  with_evidence: number;
-  mandatory: number;
-  by_priority: Record<string, number>;
-  implementation: {
-    tracked: boolean;
-    by_status: Record<string, number>;
-  };
-  control_status: Record<string, ControlImplStatus>;
-}
-
-const RISK_CATEGORIES = ['strategic', 'operational', 'financial', 'compliance', 'technology', 'third_party', 'project_change', 'internal'];
-// Mirror the standard ERM Risk Register "Register Type" options (UBL/NCA template
-// import flows are excluded — they don't apply to a control-gap risk).
-const REGISTER_TYPES = ['PCI-DSS', 'ISO 27001', 'SOX', 'GDPR', 'NIST', 'SAMA CSF', 'Internal', 'Project-Based', 'Third-Party', 'Other'];
-const RISK_INPUT_CLS = 'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500';
-function riskSevCls(sev?: string): string {
-  const m: Record<string, string> = {
-    critical: 'bg-red-50 text-red-700 border-red-200', high: 'bg-orange-50 text-orange-700 border-orange-200',
-    medium: 'bg-amber-50 text-amber-700 border-amber-200', low: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  };
-  return m[(sev || 'medium').toLowerCase()] || m.medium;
-}
-
-type SortField =
-  | 'control_id'
-  | 'title'
-  | 'framework_name'
-  | 'domain'
-  | 'priority'
-  | 'evidence_count'
-  | 'status';
-
-interface FrameworkControlEvidenceLink {
-  id: number;
-  evidence_id: number;
-  title?: string;
-  description?: string;
-  evidence_type?: string;
-  status?: string;
-  file_name?: string;
-  linked_at?: string;
-}
-
-interface EvidenceOption {
-  id: number;
-  name?: string;
-  title?: string;
-  file_name?: string;
-  evidence_type?: string;
-  status?: string;
-}
-
-function FrameworkControlEvidenceLinkSection({ controlId }: { controlId: number }) {
-  const queryClient = useQueryClient();
-  const [showPicker, setShowPicker] = useState(false);
-  const [showUploader, setShowUploader] = useState(false);
-  const [searchEv, setSearchEv] = useState('');
-  const [uploadName, setUploadName] = useState('');
-  const [uploadDescription, setUploadDescription] = useState('');
-  const [uploadFile, setUploadFile] = useState<File | null>(null);
-  const [uploadError, setUploadError] = useState('');
-
-  const { data: linkedEvidence, isLoading: loadingLinked } = useQuery({
-    queryKey: ['framework-control-evidence', controlId],
-    queryFn: async () => {
-      const res = await controlsApi.getFrameworkControlEvidence(controlId);
-      return res.data as FrameworkControlEvidenceLink[];
-    },
-  });
-
-  const { data: allEvidence, isLoading: evidenceLoading } = useQuery({
-    queryKey: ['evidence-all'],
-    queryFn: async () => {
-      const res = await evidenceApi.getAll();
-      return res.data as EvidenceOption[];
-    },
-  });
-
-  const linkMutation = useMutation({
-    mutationFn: (evidenceId: number) =>
-      controlsApi.linkFrameworkControlEvidence(controlId, { evidence_id: evidenceId }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['framework-control-evidence', controlId] });
-      queryClient.invalidateQueries({ queryKey: ['framework-controls'] });
-      setShowPicker(false);
-      setSearchEv('');
-    },
-  });
-
-  const unlinkMutation = useMutation({
-    mutationFn: (linkId: number) => controlsApi.unlinkFrameworkControlEvidence(controlId, linkId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['framework-control-evidence', controlId] });
-      queryClient.invalidateQueries({ queryKey: ['framework-controls'] });
-    },
-  });
-
-  const uploadAndLinkMutation = useMutation({
-    mutationFn: async () => {
-      if (!uploadFile) {
-        throw new Error('Please select a file to upload.');
-      }
-
-      const formData = new FormData();
-      formData.append('name', uploadName.trim() || uploadFile.name);
-      if (uploadDescription.trim()) {
-        formData.append('description', uploadDescription.trim());
-      }
-      formData.append('file', uploadFile);
-
-      const uploadRes = await evidenceApi.create(formData);
-      const uploadedEvidenceId = uploadRes.data?.id;
-      if (!uploadedEvidenceId) {
-        throw new Error('Evidence uploaded but no evidence ID was returned.');
-      }
-
-      await controlsApi.linkFrameworkControlEvidence(controlId, { evidence_id: uploadedEvidenceId });
-      return uploadedEvidenceId;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['framework-control-evidence', controlId] });
-      queryClient.invalidateQueries({ queryKey: ['framework-controls'] });
-      queryClient.invalidateQueries({ queryKey: ['evidence-all'] });
-      setShowUploader(false);
-      setUploadError('');
-      setUploadName('');
-      setUploadDescription('');
-      setUploadFile(null);
-    },
-    onError: (error: any) => {
-      const detail = error?.response?.data?.detail;
-      setUploadError(typeof detail === 'string' ? detail : (error?.message || 'Failed to upload and link evidence.'));
-    },
-  });
-
-  const linkedIds = new Set((linkedEvidence ?? []).map((l) => l.evidence_id));
-  const evidencePickerItems = (allEvidence ?? [])
-    .filter((ev) => !linkedIds.has(ev.id))
-    .map((ev) => ({
-      value: String(ev.id),
-      label: ev.name || ev.title || ev.file_name || `Evidence #${ev.id}`,
-      subLabel: ev.evidence_type,
-    }));
-  void searchEv; void setSearchEv; void showPicker; void setShowPicker;
-
-  return (
-    <div className="mt-6 border-t border-slate-200 pt-5">
-      <div className="mb-3 flex items-center justify-between gap-2 flex-wrap">
-        <h3 className="text-sm font-semibold text-slate-800">Linked Evidence</h3>
-        <div className="flex items-center gap-2">
-          <InlineLinkPicker
-            triggerLabel="Link Existing"
-            triggerIcon={<Link2 className="h-3 w-3" />}
-            triggerClassName="flex items-center gap-1 rounded border border-primary-200 bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-700 hover:bg-primary-100 transition-colors disabled:opacity-50"
-            items={evidencePickerItems}
-            isLoading={evidenceLoading || linkMutation.isPending}
-            emptyText="No evidence available"
-            searchPlaceholder="Search evidence"
-            popoverWidth={320}
-            onSelect={(value) => linkMutation.mutate(Number(value))}
-          />
-          <button
-            type="button"
-            onClick={() => {
-              setShowUploader(!showUploader);
-              setUploadError('');
-            }}
-            className="flex items-center gap-1 rounded border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100"
-          >
-            <Upload className="h-3 w-3" />
-            {showUploader ? 'Close Upload' : 'Upload New'}
-          </button>
-        </div>
-      </div>
-
-      {showUploader && (
-        <form
-          className="mb-4 space-y-2 rounded-lg border border-emerald-200 bg-emerald-50/60 p-3"
-          onSubmit={(e) => {
-            e.preventDefault();
-            setUploadError('');
-            uploadAndLinkMutation.mutate();
-          }}
-        >
-          <input
-            type="text"
-            value={uploadName}
-            onChange={(e) => setUploadName(e.target.value)}
-            placeholder="Evidence name (optional, file name will be used)"
-            className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none"
-          />
-          <textarea
-            value={uploadDescription}
-            onChange={(e) => setUploadDescription(e.target.value)}
-            placeholder="Description (optional)"
-            rows={2}
-            className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none"
-          />
-          <input
-            type="file"
-            required
-            onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
-            className="w-full text-xs text-slate-600 file:mr-2 file:rounded file:border file:border-slate-300 file:bg-white file:px-2 file:py-1 file:text-xs file:text-slate-700"
-          />
-          {uploadError && <p className="text-xs text-red-600">{uploadError}</p>}
-          <div className="flex justify-end">
-            <button
-              type="submit"
-              disabled={uploadAndLinkMutation.isPending}
-              className="rounded bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
-            >
-              {uploadAndLinkMutation.isPending ? 'Uploading...' : 'Upload & Link'}
-            </button>
-          </div>
-        </form>
-      )}
-
-      {loadingLinked ? (
-        <div className="flex justify-center py-4">
-          <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
-        </div>
-      ) : (linkedEvidence ?? []).length === 0 ? (
-        <p className="text-xs text-slate-500">No evidence linked yet.</p>
-      ) : (
-        <div className="space-y-2">
-          {(linkedEvidence ?? []).map((lnk) => (
-            <div
-              key={lnk.id}
-              className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"
-            >
-              <div className="min-w-0">
-                <Link
-                  href={`/evidence/${lnk.evidence_id}`}
-                  className="block truncate text-xs font-medium text-primary-700 hover:underline"
-                >
-                  {lnk.title || lnk.file_name || `Evidence #${lnk.evidence_id}`}
-                </Link>
-                {lnk.evidence_type && (
-                  <span className="text-[11px] text-slate-500">{lnk.evidence_type}</span>
-                )}
-              </div>
-              <div className="ml-2 flex flex-shrink-0 items-center gap-1">
-                <Link
-                  href={`/evidence/${lnk.evidence_id}`}
-                  className="rounded p-1 text-slate-400 hover:text-primary-600"
-                  title="View evidence"
-                >
-                  <ExternalLink className="h-3.5 w-3.5" />
-                </Link>
-                <button
-                  type="button"
-                  onClick={() => unlinkMutation.mutate(lnk.id)}
-                  disabled={unlinkMutation.isPending}
-                  className="rounded p-1 text-slate-400 hover:text-red-500"
-                  title="Unlink"
-                >
-                  {unlinkMutation.isPending ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Link2Off className="h-3.5 w-3.5" />
-                  )}
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Native framework tree (NDMO-style): Domain -> Control -> Specification, with
-// P1/P2/P3 implementation-order badges, a Year 1/2/3 phased filter, and the
-// control-level dependency graph. Rendered for frameworks that carry
-// `priority_level` (the NDMO 3-year roadmap model). Self-contained: its own
-// query (fetches the full control set, unpaginated) and local UI state.
-// ---------------------------------------------------------------------------
-const PL_META: Record<string, { year: number; label: string; badge: string; dot: string }> = {
-  P1: { year: 1, label: 'Year 1', badge: 'bg-rose-50 text-rose-700 border-rose-200', dot: 'bg-rose-500' },
-  P2: { year: 2, label: 'Year 2', badge: 'bg-amber-50 text-amber-700 border-amber-200', dot: 'bg-amber-500' },
-  P3: { year: 3, label: 'Year 3', badge: 'bg-emerald-50 text-emerald-700 border-emerald-200', dot: 'bg-emerald-500' },
+const SOURCE_BADGE: Record<string, { label: string; cls: string }> = {
+  framework: { label: 'Framework', cls: 'bg-blue-50 text-blue-700 border-blue-200' },
+  internal: { label: 'Internal Control', cls: 'bg-cyan-50 text-cyan-700 border-cyan-200' },
+  normalized: { label: 'Normalized', cls: 'bg-violet-50 text-violet-700 border-violet-200' },
 };
+const EFF: Record<string, { label: string; dot: string; text: string }> = {
+  effective: { label: 'Effective', dot: 'bg-emerald-500', text: 'text-emerald-700' },
+  partially_effective: { label: 'Partially effective', dot: 'bg-amber-500', text: 'text-amber-700' },
+  ineffective: { label: 'Ineffective', dot: 'bg-rose-500', text: 'text-rose-700' },
+  not_tested: { label: 'Not tested', dot: 'bg-slate-300', text: 'text-slate-500' },
+};
+const STATUS_BADGE: Record<string, string> = {
+  draft: 'bg-slate-100 text-slate-600', pending_approval: 'bg-amber-100 text-amber-700',
+  active: 'bg-emerald-100 text-emerald-700', inactive: 'bg-slate-100 text-slate-500',
+  deprecated: 'bg-rose-100 text-rose-700',
+};
+const IMPL_BADGE: Record<string, string> = {
+  not_started: 'bg-slate-100 text-slate-500', in_progress: 'bg-blue-100 text-blue-700',
+  implemented: 'bg-indigo-100 text-indigo-700', verified: 'bg-emerald-100 text-emerald-700',
+  not_applicable: 'bg-slate-100 text-slate-400',
+};
+const eff = (v?: string | null) => EFF[v || 'not_tested'] || EFF.not_tested;
+const initials = (n?: string) => (n || 'U').split(/\s+/).slice(0, 2).map(s => s[0]).join('').toUpperCase();
 
-function PriorityLevelBadge({ level }: { level: string | null }) {
-  if (!level) {
-    return (
-      <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500" title="Not assessed by NDMO (NCA-governed)">
-        N/A
-      </span>
-    );
-  }
-  const m = PL_META[level];
-  const cls = m ? m.badge : 'bg-slate-100 text-slate-500 border-slate-200';
+type Row = {
+  source_type: string; source_id: number; work_item_id: number | null;
+  code?: string; name?: string; domain?: string; canonical_domain?: string;
+  framework_name?: string; member_count?: number;
+  status?: string | null; implementation_status?: string;
+  design_effectiveness?: string | null; operating_effectiveness?: string | null;
+  assigned_user_ids?: number[]; assignees?: { id: number; display_name: string }[]; is_key_control?: boolean;
+  next_test_date?: string | null; overdue?: boolean;
+};
+type BySource = { framework: number; internal: number; normalized: number };
+type Trend = { since: string; tested: number; effective: number; assigned: number; overdue: number };
+type DomainStat = {
+  domain: string; controls: number; frameworks: number; assigned: number; tested: number;
+  effective: number; partially_effective: number; ineffective: number; evidence_pending: number;
+  overdue?: number; by_source?: BySource;
+};
+type WorkStats = { controls: number; assigned: number; tested: number; effective: number; partially_effective: number; ineffective: number; evidence_pending: number; overdue?: number };
+type Overview = {
+  domains: DomainStat[];
+  totals: WorkStats & { by_source?: BySource };
+  internal?: WorkStats;
+  frameworks: { id: number; name: string; controls: number }[];
+  trend?: Trend | null;
+  scope: { framework_ids: number[]; scoped: boolean };
+};
+type Group = { type: string; framework_id: number | null; name: string; controls: number; tested: number; effective: number; partially_effective: number; ineffective: number };
+
+// per-domain icon + tint (keyword-matched; classes literal for Tailwind JIT)
+const TINT: Record<string, { bg: string; text: string }> = {
+  primary: { bg: 'bg-primary-50', text: 'text-primary-700' },
+  blue: { bg: 'bg-blue-50', text: 'text-blue-600' },
+  violet: { bg: 'bg-violet-50', text: 'text-violet-600' },
+  cyan: { bg: 'bg-cyan-50', text: 'text-cyan-600' },
+  amber: { bg: 'bg-amber-50', text: 'text-amber-600' },
+  rose: { bg: 'bg-rose-50', text: 'text-rose-600' },
+  emerald: { bg: 'bg-emerald-50', text: 'text-emerald-600' },
+  indigo: { bg: 'bg-indigo-50', text: 'text-indigo-600' },
+  sky: { bg: 'bg-sky-50', text: 'text-sky-600' },
+  orange: { bg: 'bg-orange-50', text: 'text-orange-600' },
+  slate: { bg: 'bg-slate-100', text: 'text-slate-400' },
+};
+const DOMAIN_META: [RegExp, any, string][] = [
+  [/access/i, KeyRound, 'blue'],
+  [/data protection|privacy/i, Database, 'violet'],
+  [/governance|leadership|policy/i, Landmark, 'primary'],
+  [/third|supply/i, Share2, 'amber'],
+  [/operations|service/i, ServerCog, 'cyan'],
+  [/risk/i, AlertTriangle, 'rose'],
+  [/incident/i, Siren, 'orange'],
+  [/continuity|resilience/i, RefreshCw, 'emerald'],
+  [/logging|monitoring|detection/i, Activity, 'indigo'],
+  [/network|communications/i, Network, 'sky'],
+  [/configuration|change/i, GitBranch, 'cyan'],
+  [/application|software/i, Code2, 'blue'],
+  [/vulnerability|threat/i, Bug, 'rose'],
+  [/physical|environmental/i, Building2, 'amber'],
+  [/asset/i, Boxes, 'primary'],
+  [/awareness|training/i, GraduationCap, 'emerald'],
+  [/cryptography/i, Lock, 'violet'],
+  [/audit|assurance/i, BookOpenCheck, 'indigo'],
+  [/compliance|legal/i, Scale, 'primary'],
+  [/human resources/i, Users, 'orange'],
+];
+function domainMeta(name: string) {
+  for (const [rx, Icon, tint] of DOMAIN_META) if (rx.test(name)) return { Icon, t: TINT[tint] };
+  return { Icon: CircleHelp, t: TINT.slate };
+}
+
+function EffDots({ d, o }: { d?: string | null; o?: string | null }) {
   return (
-    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${cls}`} title={m ? `Priority ${level} — implement by ${m.label}` : level}>
-      {level}
+    <span className="inline-flex items-center gap-2 text-[11px]">
+      <span className="inline-flex items-center gap-1" title={`Design: ${eff(d).label}`}><span className={`h-2 w-2 rounded-full ${eff(d).dot}`} />D</span>
+      <span className="inline-flex items-center gap-1" title={`Operating: ${eff(o).label}`}><span className={`h-2 w-2 rounded-full ${eff(o).dot}`} />O</span>
     </span>
   );
 }
 
-function DomainId({ code }: { code: string }) {
-  const id = (code || '').split('.')[0] || '?';
+/** Effectiveness distribution bar — effective / partial / ineffective over total. */
+function RagBar({ e, p, i, total, className }: { e: number; p: number; i: number; total: number; className?: string }) {
+  const w = (n: number) => `${total ? (n / total) * 100 : 0}%`;
   return (
-    <span className="inline-flex h-6 min-w-[2.25rem] items-center justify-center rounded-md bg-primary-600 px-1.5 text-[11px] font-bold tracking-wide text-white">
-      {id}
-    </span>
-  );
-}
-
-function NativeFrameworkTree({ frameworkId }: { frameworkId: number }) {
-  const [phase, setPhase] = useState<0 | 1 | 2 | 3>(0); // 0 = all
-  const [openDomains, setOpenDomains] = useState<Set<string>>(new Set());
-  const [openSpec, setOpenSpec] = useState<number | null>(null);
-
-  const { data, isLoading } = useQuery({
-    queryKey: ['framework-controls-tree', frameworkId],
-    queryFn: async () => {
-      const res = await controlsApi.getFrameworkControls({
-        framework_id: frameworkId, limit: 2000, sort_by: 'control_id', sort_order: 'asc',
-      });
-      return res.data as FrameworkControlsResponse;
-    },
-  });
-
-  // Sort by row id = the framework's published/document order (seeded in
-  // document order), so domains render as in the source (e.g. NDMO: Data
-  // Governance first), not alphabetically by control code.
-  const controls = useMemo(() => [...(data?.controls ?? [])].sort((a, b) => a.id - b.id), [data]);
-
-  const grouped = useMemo(() => {
-    const domains: { name: string; controls: { code: string; name: string; deps: string[]; specs: FrameworkControl[] }[] }[] = [];
-    const dIdx = new Map<string, number>();
-    const cIdx = new Map<string, number>();
-    for (const c of controls) {
-      const dn = c.domain || 'Uncategorized';
-      if (!dIdx.has(dn)) { dIdx.set(dn, domains.length); domains.push({ name: dn, controls: [] }); }
-      const di = dIdx.get(dn)!;
-      const code = c.parent_section || c.control_id;
-      const ckey = dn + '||' + code;
-      if (!cIdx.has(ckey)) {
-        // Control name: the flat `category` carries "DG.1: Strategy and Plan".
-        const rawCat = c.category || '';
-        const name = rawCat.includes(':') ? rawCat.split(':').slice(1).join(':').trim() : rawCat;
-        cIdx.set(ckey, domains[di].controls.length);
-        domains[di].controls.push({ code, name, deps: c.dependencies || [], specs: [] });
-      }
-      domains[di].controls[cIdx.get(ckey)!].specs.push(c);
-    }
-    return domains;
-  }, [controls]);
-
-  const counts = useMemo(() => {
-    const c = { P1: 0, P2: 0, P3: 0, other: 0 };
-    for (const x of controls) {
-      if (x.priority_level === 'P1') c.P1++;
-      else if (x.priority_level === 'P2') c.P2++;
-      else if (x.priority_level === 'P3') c.P3++;
-      else c.other++;
-    }
-    return c;
-  }, [controls]);
-
-  const included = useMemo(() => {
-    const s = new Set<string>();
-    if (phase >= 1) s.add('P1');
-    if (phase >= 2) s.add('P2');
-    if (phase >= 3) s.add('P3');
-    return s;
-  }, [phase]);
-
-  const specVisible = (s: FrameworkControl) =>
-    phase === 0 ? true : (s.priority_level ? included.has(s.priority_level) : false);
-
-  const toggleDomain = (name: string) =>
-    setOpenDomains((prev) => {
-      const next = new Set(prev);
-      if (next.has(name)) next.delete(name); else next.add(name);
-      return next;
-    });
-
-  const allDomainNames = grouped.map((d) => d.name);
-  const allOpen = openDomains.size >= allDomainNames.length && allDomainNames.length > 0;
-
-  if (isLoading) {
-    return (
-      <div className="flex h-48 items-center justify-center">
-        <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
-      </div>
-    );
-  }
-
-  const phaseChips: { v: 0 | 1 | 2 | 3; label: string; sub: string }[] = [
-    { v: 0, label: 'All', sub: `${controls.length}` },
-    { v: 1, label: 'Year 1', sub: `${counts.P1}` },
-    { v: 2, label: 'Year 2', sub: `${counts.P1 + counts.P2}` },
-    { v: 3, label: 'Year 3', sub: `${counts.P1 + counts.P2 + counts.P3}` },
-  ];
-
-  return (
-    <div className="space-y-4">
-      {/* Phased roadmap summary + filter */}
-      <div className="rounded-lg border border-slate-200 bg-white p-4">
-        <div className="mb-3 flex items-center gap-2">
-          <Target className="h-4 w-4 text-slate-700" />
-          <h3 className="text-sm font-semibold text-slate-800">3-Year Implementation Roadmap</h3>
-          <span className="text-xs text-slate-500">specifications scored 100% / 0%, cascaded to control → domain → entity</span>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {phaseChips.map((p) => (
-            <button
-              key={p.v}
-              type="button"
-              onClick={() => setPhase(p.v)}
-              className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
-                phase === p.v
-                  ? 'border-primary-600 bg-primary-600 text-white'
-                  : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-              }`}
-            >
-              <span>{p.label}</span>
-              <span className={`rounded-full px-1.5 py-0.5 text-[10px] ${phase === p.v ? 'bg-white/20' : 'bg-slate-100 text-slate-600'}`}>{p.sub}</span>
-            </button>
-          ))}
-          <div className="ml-auto flex items-center gap-3 text-[11px] text-slate-500">
-            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-rose-500" />P1</span>
-            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-amber-500" />P2</span>
-            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500" />P3</span>
-            {counts.other > 0 && <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-slate-300" />N/A ({counts.other})</span>}
-          </div>
-        </div>
-      </div>
-
-      <div className="flex items-center justify-between">
-        <p className="text-xs text-slate-500">
-          {grouped.length} domains · {controls.length} specifications
-          {phase !== 0 && ` · showing ${phaseChips[phase].label} (${phaseChips[phase].sub})`}
-        </p>
-        <button
-          type="button"
-          onClick={() => setOpenDomains(allOpen ? new Set() : new Set(allDomainNames))}
-          className="text-xs font-medium text-slate-600 hover:text-slate-900"
-        >
-          {allOpen ? 'Collapse all' : 'Expand all'}
-        </button>
-      </div>
-
-      {/* Domain -> Control -> Specification tree */}
-      <div className="space-y-2">
-        {grouped.map((domain) => {
-          const visibleControls = domain.controls
-            .map((ctrl) => ({ ...ctrl, vspecs: ctrl.specs.filter(specVisible) }))
-            .filter((ctrl) => ctrl.vspecs.length > 0);
-          if (visibleControls.length === 0) return null;
-          const specCount = visibleControls.reduce((n, c) => n + c.vspecs.length, 0);
-          const domainCode = domain.controls[0]?.code || '';
-          const isOpen = openDomains.has(domain.name);
-          return (
-            <div key={domain.name} className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-              <button
-                type="button"
-                onClick={() => toggleDomain(domain.name)}
-                className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-slate-50"
-              >
-                {isOpen ? <ChevronDown className="h-4 w-4 flex-shrink-0 text-slate-400" /> : <ChevronRight className="h-4 w-4 flex-shrink-0 text-slate-400" />}
-                <DomainId code={domainCode} />
-                <span className="flex-1 text-sm font-semibold text-slate-800">{domain.name}</span>
-                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">
-                  {visibleControls.length} controls · {specCount} specs
-                </span>
-              </button>
-
-              {isOpen && (
-                <div className="border-t border-slate-100 px-3 pb-3 pt-1 sm:px-4">
-                  {visibleControls.map((ctrl) => (
-                    <div key={ctrl.code} className="mt-3 first:mt-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-mono text-xs font-semibold text-slate-900">{ctrl.code}</span>
-                        {ctrl.name && <span className="text-sm font-medium text-slate-700">{ctrl.name}</span>}
-                        {ctrl.deps.length > 0 && (
-                          <span className="inline-flex items-center gap-1 text-[11px] text-slate-500">
-                            <Link2 className="h-3 w-3" />
-                            depends on:
-                            {ctrl.deps.map((d) => (
-                              <span key={d} className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-600">{d}</span>
-                            ))}
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="mt-1.5 space-y-1 border-l-2 border-slate-100 pl-3">
-                        {ctrl.vspecs.map((spec) => {
-                          const isSpecOpen = openSpec === spec.id;
-                          const specCode = spec.section_number || spec.original_reference || spec.control_id;
-                          return (
-                            <div key={spec.id} className="rounded-md">
-                              <button
-                                type="button"
-                                onClick={() => setOpenSpec(isSpecOpen ? null : spec.id)}
-                                className="flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left hover:bg-slate-50"
-                              >
-                                <PriorityLevelBadge level={spec.priority_level} />
-                                <span className="mt-0.5 font-mono text-[11px] text-slate-500">{specCode}</span>
-                                <span className="flex-1 text-sm text-slate-700">{spec.title}</span>
-                                {isSpecOpen ? <ChevronDown className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-slate-400" /> : <ChevronRight className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-slate-400" />}
-                              </button>
-                              {isSpecOpen && (
-                                <div className="ml-2 mb-2 mt-1 rounded-md border border-slate-100 bg-slate-50/60 px-3 py-2 text-xs text-slate-600">
-                                  {spec.full_text || spec.description || 'No description provided.'}
-                                  <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-slate-500">
-                                    {spec.priority_level && PL_META[spec.priority_level] && (
-                                      <span>Priority {spec.priority_level} · implement by {PL_META[spec.priority_level].label}</span>
-                                    )}
-                                    <span>{spec.is_mandatory ? 'Mandatory' : 'Optional'}</span>
-                                    <span className="inline-flex items-center gap-1">
-                                      <Paperclip className="h-3 w-3" /> {spec.evidence_count} evidence
-                                    </span>
-                                    <Link
-                                      href={`/evidence?control_id=${spec.id}`}
-                                      className="text-primary-700 hover:underline"
-                                    >
-                                      Manage evidence
-                                    </Link>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+    <div className={`flex h-1.5 overflow-hidden rounded-full bg-slate-200 ${className || ''}`}
+      title={`Effective ${e} · Partially ${p} · Ineffective ${i} · Not tested ${Math.max(0, total - e - p - i)}`}>
+      <span className="bg-emerald-500" style={{ width: w(e) }} />
+      <span className="bg-amber-500" style={{ width: w(p) }} />
+      <span className="bg-rose-500" style={{ width: w(i) }} />
     </div>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Figure-2 view: renders every control as the exact boxed "Control Structure
-// Format" table from the NDMO v1.5 standard (§7, Figure 2):
-//   Domain Name | Domain ID
-//   Control Name | Control ID
-//   Control Description
-//   [ Specification # | Specification Name | Control Specification | Priority ]
-//   Version History (Date | Version)
-//   Dependencies
-// Grouped by domain, with the same Year 1/2/3 phase filter.
-// ---------------------------------------------------------------------------
-function Figure2View({ frameworkId }: { frameworkId: number }) {
-  const [phase, setPhase] = useState<0 | 1 | 2 | 3>(0);
-  const [openDomains, setOpenDomains] = useState<Set<string>>(new Set());
-  const [openSpecs, setOpenSpecs] = useState<Set<number>>(new Set());
-  const toggleSpec = (id: number) => setOpenSpecs((prev) => {
-    const next = new Set(prev);
-    if (next.has(id)) next.delete(id); else next.add(id);
-    return next;
-  });
-
-  const { data, isLoading } = useQuery({
-    queryKey: ['framework-controls-doc', frameworkId],
-    queryFn: async () => {
-      const res = await controlsApi.getFrameworkControls({
-        framework_id: frameworkId, limit: 2000, sort_by: 'control_id', sort_order: 'asc',
-      });
-      return res.data as FrameworkControlsResponse;
-    },
-  });
-
-  // Sort by row id = the framework's published/document order (seeded in
-  // document order), so domains render as in the source (e.g. NDMO: Data
-  // Governance first), not alphabetically by control code.
-  const controls = useMemo(() => [...(data?.controls ?? [])].sort((a, b) => a.id - b.id), [data]);
-
-  const grouped = useMemo(() => {
-    const domains: { name: string; controls: {
-      code: string; name: string; desc: string | null; deps: string[];
-      versions: Array<{ date?: string; version?: string }>; specs: FrameworkControl[];
-    }[] }[] = [];
-    const dIdx = new Map<string, number>();
-    const cIdx = new Map<string, number>();
-    for (const c of controls) {
-      const dn = c.domain || 'Uncategorized';
-      if (!dIdx.has(dn)) { dIdx.set(dn, domains.length); domains.push({ name: dn, controls: [] }); }
-      const di = dIdx.get(dn)!;
-      const code = c.parent_section || c.control_id;
-      const ckey = dn + '||' + code;
-      if (!cIdx.has(ckey)) {
-        const rawCat = c.category || '';
-        const name = rawCat.includes(':') ? rawCat.split(':').slice(1).join(':').trim() : rawCat;
-        cIdx.set(ckey, domains[di].controls.length);
-        domains[di].controls.push({
-          code, name, desc: c.control_description || null,
-          deps: c.dependencies || [], versions: c.version_history || [], specs: [],
-        });
-      }
-      domains[di].controls[cIdx.get(ckey)!].specs.push(c);
-    }
-    return domains;
-  }, [controls]);
-
-  const counts = useMemo(() => {
-    const c = { P1: 0, P2: 0, P3: 0, other: 0 };
-    for (const x of controls) {
-      if (x.priority_level === 'P1') c.P1++;
-      else if (x.priority_level === 'P2') c.P2++;
-      else if (x.priority_level === 'P3') c.P3++;
-      else c.other++;
-    }
-    return c;
-  }, [controls]);
-
-  const included = useMemo(() => {
-    const s = new Set<string>();
-    if (phase >= 1) s.add('P1');
-    if (phase >= 2) s.add('P2');
-    if (phase >= 3) s.add('P3');
-    return s;
-  }, [phase]);
-  const specVisible = (s: FrameworkControl) =>
-    phase === 0 ? true : (s.priority_level ? included.has(s.priority_level) : false);
-
-  const toggleDomain = (name: string) =>
-    setOpenDomains((prev) => {
-      const next = new Set(prev);
-      if (next.has(name)) next.delete(name); else next.add(name);
-      return next;
-    });
-
-  const allDomainNames = grouped.map((d) => d.name);
-  const allOpen = openDomains.size >= allDomainNames.length && allDomainNames.length > 0;
-
-  if (isLoading) {
-    return <div className="flex h-48 items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-slate-400" /></div>;
-  }
-
-  const phaseChips: { v: 0 | 1 | 2 | 3; label: string; sub: string }[] = [
-    { v: 0, label: 'All', sub: `${controls.length}` },
-    { v: 1, label: 'Year 1', sub: `${counts.P1}` },
-    { v: 2, label: 'Year 2', sub: `${counts.P1 + counts.P2}` },
-    { v: 3, label: 'Year 3', sub: `${counts.P1 + counts.P2 + counts.P3}` },
-  ];
-
+function TrendChip({ delta, goodIsUp = true }: { delta?: number; goodIsUp?: boolean }) {
+  if (delta == null || delta === 0) return null;
+  const up = delta > 0;
+  const good = goodIsUp ? up : !up;
   return (
-    <div className="space-y-4">
-      {/* Phase filter */}
-      <div className="rounded-lg border border-slate-200 bg-white p-4">
-        <div className="mb-3 flex items-center gap-2">
-          <Target className="h-4 w-4 text-slate-700" />
-          <h3 className="text-sm font-semibold text-slate-800">Control Structure (Figure 2 format) · 3-Year Roadmap</h3>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {phaseChips.map((p) => (
-            <button key={p.v} type="button" onClick={() => setPhase(p.v)}
-              className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
-                phase === p.v ? 'border-primary-600 bg-primary-600 text-white' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'}`}>
-              <span>{p.label}</span>
-              <span className={`rounded-full px-1.5 py-0.5 text-[10px] ${phase === p.v ? 'bg-white/20' : 'bg-slate-100 text-slate-600'}`}>{p.sub}</span>
-            </button>
-          ))}
-          <button type="button" onClick={() => setOpenDomains(allOpen ? new Set() : new Set(allDomainNames))}
-            className="ml-auto text-xs font-medium text-slate-600 hover:text-slate-900">
-            {allOpen ? 'Collapse all' : 'Expand all'}
-          </button>
-        </div>
-      </div>
+    <span className={`inline-flex items-center gap-0.5 rounded px-1 text-[9.5px] font-bold tabular-nums ${good ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
+      {up ? '▲' : '▼'}{Math.abs(delta)}
+    </span>
+  );
+}
 
-      {grouped.map((domain) => {
-        const domainCode = (domain.controls[0]?.code || '').split('.')[0] || '?';
-        const visibleControls = domain.controls
-          .map((ctrl) => ({ ...ctrl, vspecs: ctrl.specs.filter(specVisible) }))
-          .filter((ctrl) => ctrl.vspecs.length > 0);
-        if (visibleControls.length === 0) return null;
-        const isOpen = openDomains.has(domain.name);
+function KpiStrip({ s, trend }: { s: WorkStats & { by_source?: BySource }; trend?: Trend | null }) {
+  const pct = (n: number, d: number) => (d ? Math.round((n / d) * 100) : 0);
+  const src = s.by_source;
+  const srcHint = src
+    ? [src.framework ? `${src.framework.toLocaleString()} framework` : '', src.internal ? `${src.internal} internal` : '', src.normalized ? `${src.normalized} normalized` : '']
+      .filter(Boolean).join(' · ') || null
+    : null;
+  const overdue = s.overdue ?? 0;
+  const cards = [
+    { lab: 'Controls', val: s.controls.toLocaleString(), hint: srcHint, icon: Boxes, iw: 'bg-primary-50 text-primary-700', delta: undefined as number | undefined, goodUp: true },
+    { lab: 'Assigned', val: String(s.assigned), hint: s.controls ? `${pct(s.assigned, s.controls)}%` : null, icon: Users, iw: s.assigned ? 'bg-cyan-50 text-cyan-600' : 'bg-slate-100 text-slate-400', delta: trend?.assigned, goodUp: true },
+    { lab: 'Tested', val: `${pct(s.tested, s.controls)}%`, hint: `${s.tested} of ${s.controls.toLocaleString()}`, icon: FlaskConical, iw: s.tested ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-100 text-slate-400', delta: trend?.tested, goodUp: true },
+    { lab: 'Effective', val: s.tested ? `${pct(s.effective, s.tested)}%` : '—', hint: s.tested ? 'of tested' : 'no tests yet', icon: ShieldCheck, iw: s.tested ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400', delta: trend?.effective, goodUp: true },
+    { lab: 'Overdue', val: String(overdue), hint: overdue ? 'tests past due' : 'none due', icon: Siren, iw: overdue ? 'bg-rose-50 text-rose-600' : 'bg-slate-100 text-slate-400', delta: trend?.overdue, goodUp: false },
+    { lab: 'Evidence pending', val: String(s.evidence_pending), hint: 'to review', icon: FileClock, iw: s.evidence_pending ? 'bg-amber-50 text-amber-600' : 'bg-slate-100 text-slate-400', delta: undefined, goodUp: true },
+  ];
+  return (
+    <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3 xl:grid-cols-6">
+      {cards.map(c => {
+        const Icon = c.icon;
         return (
-          <div key={domain.name} className="space-y-3">
-            <button type="button" onClick={() => toggleDomain(domain.name)}
-              className="flex w-full items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-left hover:bg-slate-100">
-              {isOpen ? <ChevronDown className="h-4 w-4 text-slate-400" /> : <ChevronRight className="h-4 w-4 text-slate-400" />}
-              <DomainId code={domainCode} />
-              <span className="flex-1 text-sm font-semibold text-slate-800">{domain.name}</span>
-              <span className="rounded-full bg-white px-2 py-0.5 text-[11px] text-slate-600">{visibleControls.length} controls</span>
-            </button>
-
-            {isOpen && visibleControls.map((ctrl) => (
-              <div key={ctrl.code} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-md">
-                {/* Identity block — all Figure-2 header fields, labelled */}
-                <div className="border-b border-slate-100 bg-white px-5 py-4">
-                  <div className="grid grid-cols-1 gap-x-10 gap-y-3 sm:grid-cols-2">
-                    <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Domain Name</p>
-                      <p className="mt-0.5 text-sm font-medium text-slate-800">{domain.name}</p>
-                    </div>
-                    <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Domain ID</p>
-                      <p className="mt-0.5 font-mono text-sm font-semibold text-primary-700">{domainCode}</p>
-                    </div>
-                    <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Control Name</p>
-                      <p className="mt-0.5 text-sm font-medium text-slate-800">{ctrl.name || '—'}</p>
-                    </div>
-                    <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Control ID</p>
-                      <p className="mt-0.5 font-mono text-sm font-semibold text-primary-700">{ctrl.code}</p>
-                    </div>
-                  </div>
-                  {ctrl.desc && (
-                    <div className="mt-3 border-t border-slate-100 pt-3">
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Control Description</p>
-                      <p className="mt-0.5 text-[13px] leading-relaxed text-slate-600">{ctrl.desc}</p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Specifications — scannable; click a row to reveal the
-                    Control Specification text */}
-                <div className="flex items-center justify-between px-5 pt-3 pb-1">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Specifications</p>
-                  <p className="text-[11px] text-slate-400">{ctrl.vspecs.length} · click to expand</p>
-                </div>
-                <div className="divide-y divide-slate-100">
-                  {ctrl.vspecs.map((s) => {
-                    const isSpecOpen = openSpecs.has(s.id);
-                    const specCode = s.section_number || s.original_reference || s.control_id;
-                    return (
-                      <div key={s.id}>
-                        <button
-                          type="button"
-                          onClick={() => toggleSpec(s.id)}
-                          className="flex w-full items-center gap-3 px-5 py-3 text-left transition-colors hover:bg-slate-50"
-                        >
-                          <span className="w-14 shrink-0 font-mono text-xs text-slate-400">{specCode}</span>
-                          <span className="flex-1 truncate text-sm font-medium text-slate-800">{s.title}</span>
-                          <PriorityLevelBadge level={s.priority_level} />
-                          <ChevronDown className={`h-4 w-4 shrink-0 text-slate-300 transition-transform ${isSpecOpen ? 'rotate-180' : ''}`} />
-                        </button>
-                        {isSpecOpen && (
-                          <div className="px-5 pb-4 pl-[4.25rem]">
-                            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Control Specification</p>
-                            <p className="rounded-lg bg-slate-50 px-4 py-3 text-[13px] leading-relaxed text-slate-600 whitespace-pre-wrap">
-                              {s.full_text || s.description || '—'}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Version History + Dependencies — labelled footer */}
-                <div className="flex flex-wrap items-center gap-x-8 gap-y-2 border-t border-slate-100 bg-slate-50/40 px-5 py-3 text-[12px]">
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className="font-semibold uppercase tracking-wide text-slate-400">Version History</span>
-                    <span className="text-slate-600">
-                      {ctrl.versions[0]?.date || '—'}{ctrl.versions[0]?.version ? ` · Version ${ctrl.versions[0].version}` : ''}
-                    </span>
-                  </span>
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className="font-semibold uppercase tracking-wide text-slate-400">Dependencies</span>
-                    {ctrl.deps.length === 0 ? (
-                      <span className="text-slate-400">None</span>
-                    ) : (
-                      <span className="inline-flex flex-wrap items-center gap-1">
-                        {ctrl.deps.map((d) => (
-                          <span key={d} className="rounded-md bg-white px-1.5 py-0.5 font-mono text-[11px] text-slate-600 ring-1 ring-slate-200">{d}</span>
-                        ))}
-                      </span>
-                    )}
-                  </span>
-                </div>
+          <div key={c.lab} className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
+            <span className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg ${c.iw}`}><Icon className="h-4 w-4" /></span>
+            <div className="min-w-0">
+              <div className="flex items-center gap-1 truncate text-[10px] font-semibold uppercase tracking-wider text-slate-400">{c.lab}<TrendChip delta={c.delta} goodIsUp={c.goodUp} /></div>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-[17px] font-bold tabular-nums leading-tight text-slate-900">{c.val}</span>
+                {c.hint && <span className="truncate text-[10.5px] text-slate-400">{c.hint}</span>}
               </div>
-            ))}
+            </div>
           </div>
         );
       })}
@@ -924,1204 +190,1087 @@ function Figure2View({ frameworkId }: { frameworkId: number }) {
   );
 }
 
-// Implementation-status pill (certification-journey status). Semantic tints only.
-const IMPL_STATUS_META: Record<string, { label: string; cls: string }> = {
-  not_started: { label: 'Not started', cls: 'bg-slate-100 text-slate-600' },
-  in_progress: { label: 'In progress', cls: 'bg-amber-50 text-amber-700' },
-  implemented: { label: 'Implemented', cls: 'bg-primary-50 text-primary-700' },
-  verified: { label: 'Verified', cls: 'bg-emerald-50 text-emerald-700' },
-  not_applicable: { label: 'N/A', cls: 'bg-slate-100 text-slate-500' },
-};
-function ImplStatusPill({ status }: { status: string }) {
-  const m = IMPL_STATUS_META[status] || { label: status, cls: 'bg-slate-100 text-slate-600' };
-  return (
-    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${m.cls}`}>
-      {m.label}
-    </span>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Control-health snapshot — a compact, on-brand tile strip driven by the new
-// status-summary endpoint (guarded to {}). Verified % / evidence coverage % are
-// endpoint-derived (not the paginated list). The implementation mini-bar only
-// renders when the endpoint reports implementation.tracked.
-// ---------------------------------------------------------------------------
-const IMPL_BAR: { key: string; label: string; cls: string }[] = [
-  { key: 'not_started', label: 'Not started', cls: 'bg-slate-300' },
-  { key: 'in_progress', label: 'In progress', cls: 'bg-amber-400' },
-  { key: 'implemented', label: 'Implemented', cls: 'bg-primary-400' },
-  { key: 'verified', label: 'Verified', cls: 'bg-emerald-500' },
-];
-function ControlHealthSnapshot({
-  summary, totalFrameworks, fallbackTotal,
-}: { summary?: Partial<StatusSummary>; totalFrameworks: number; fallbackTotal: number }) {
-  const total = summary?.total ?? fallbackTotal ?? 0;
-  const hasEndpoint = summary?.total != null;
-  const verified = summary?.verified ?? 0;
-  const withEvidence = summary?.with_evidence ?? 0;
-  const mandatory = summary?.mandatory ?? 0;
-  const pct = (n: number) => (total > 0 ? Math.round((n / total) * 100) : 0);
-  const impl = summary?.implementation;
-  const tracked = !!impl?.tracked;
-  const byStatus = impl?.by_status ?? {};
-  const implTotal = IMPL_BAR.reduce((s, b) => s + (byStatus[b.key] || 0), 0);
-
-  const Tile = ({ value, label, tone }: { value: React.ReactNode; label: string; tone?: string }) => (
-    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-      <p className={`text-xl font-bold ${tone || 'text-slate-900'}`}>{value}</p>
-      <p className="mt-0.5 text-xs text-slate-500">{label}</p>
-    </div>
-  );
-
-  return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-      <Tile value={total} label="Total controls" />
-      <Tile value={totalFrameworks} label={totalFrameworks === 1 ? 'Framework' : 'Frameworks'} />
-      <Tile value={hasEndpoint ? `${pct(verified)}%` : '—'} label="Verified" tone="text-emerald-600" />
-      <Tile value={hasEndpoint ? `${pct(withEvidence)}%` : '—'} label="Evidence coverage" tone="text-primary-600" />
-      <Tile value={hasEndpoint ? mandatory : '—'} label="Mandatory" tone="text-rose-600" />
-      {tracked && implTotal > 0 ? (
-        <div className="col-span-2 rounded-xl border border-slate-200 bg-white px-4 py-3 sm:col-span-3 lg:col-span-1">
-          <p className="mb-1.5 text-xs font-medium text-slate-600">Implementation</p>
-          <div className="flex h-2 w-full overflow-hidden rounded-full bg-slate-100">
-            {IMPL_BAR.map((b) => {
-              const n = byStatus[b.key] || 0;
-              if (n === 0) return null;
-              return <div key={b.key} className={b.cls} style={{ width: `${(n / implTotal) * 100}%` }} title={`${b.label}: ${n}`} />;
-            })}
-          </div>
-          <div className="mt-1.5 flex flex-wrap gap-x-2 gap-y-0.5">
-            {IMPL_BAR.map((b) => (
-              <span key={b.key} className="inline-flex items-center gap-1 text-[10px] text-slate-500">
-                <span className={`h-2 w-2 rounded-full ${b.cls}`} />{byStatus[b.key] || 0}
-              </span>
-            ))}
-          </div>
-        </div>
-      ) : (
-        <Tile value={hasEndpoint && total > 0 ? `${pct(withEvidence)}%` : '—'} label="Coverage" tone="text-primary-600" />
-      )}
-    </div>
-  );
-}
-
-export default function ControlsPage() {
+export default function ControlCatalog() {
+  const qc = useQueryClient();
   const searchParams = useSearchParams();
-  const { hasPermission } = usePermissions();
-  const canCreate = hasPermission('controls:control_library:create');
-  const initialFrameworkId = searchParams.get('framework');
-  
-  const [searchInput, setSearchInput] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [frameworkFilter, setFrameworkFilter] = useState<number | null>(
-    initialFrameworkId ? Number(initialFrameworkId) : null
-  );
-  const [domainFilter, setDomainFilter] = useState('');
-  const [sortBy, setSortBy] = useState<SortField>('control_id');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
-  const [selectedControlId, setSelectedControlId] = useState<number | null>(null);
-  const [page, setPage] = useState(0);
-  const [showInfoModal, setShowInfoModal] = useState(false);
-  const [aiRecommendations, setAiRecommendations] = useState<Record<number, AIRecommendations>>({});
-  const [loadingAI, setLoadingAI] = useState<number | null>(null);
-  // Table (default global view) vs Tree (NDMO-style Domain→Control→Spec native
-  // view). The tree auto-engages the first time a phased framework is opened,
-  // unless the user has explicitly toggled.
-  const [viewMode, setViewMode] = useState<'table' | 'tree' | 'doc'>('table');
-  const [viewTouched, setViewTouched] = useState(false);
-  const pageSize = 50;
-
-  const aiRecommendationMutation = useMutation({
-    mutationFn: (data: { control_id: number; control_title: string; control_description?: string; framework_name?: string }) =>
-      controlsApi.getAIRecommendations(data),
-    onSuccess: (response, variables) => {
-      setAiRecommendations(prev => ({
-        ...prev,
-        [variables.control_id]: response.data
-      }));
-      setLoadingAI(null);
-    },
-    onError: () => {
-      setLoadingAI(null);
-    }
-  });
-
-  const handleGetAIRecommendations = (control: FrameworkControl) => {
-    if (aiRecommendations[control.id] || loadingAI === control.id) return;
-    setLoadingAI(control.id);
-    aiRecommendationMutation.mutate({
-      control_id: control.id,
-      control_title: control.title,
-      control_description: control.description || undefined,
-      framework_name: control.framework_name || undefined
-    });
-  };
-
-  // ── Promote an AI "risk if not implemented" into the real ERM Risk Register ──
-  const { toast } = useToast();
-  const [promoteCtx, setPromoteCtx] = useState<{ control: FrameworkControl; risk: PotentialRisk } | null>(null);
-  const [promoteForm, setPromoteForm] = useState({
-    title: '', description: '', register_type: '', category: 'compliance', risk_sub_category: '',
-    business_owner_id: undefined as number | undefined,
-    likelihood: 3, impact: 3, residual_likelihood: 3, residual_impact: 3,
-    treatment_plan: '', root_cause: '', recommendations: '', due_date: '',
-  });
-
-  // Users for the Business Owner select — fetched only while the panel is open.
-  const { data: usersList } = useQuery({
-    queryKey: ['admin-users-for-control-risk'],
-    queryFn: async () => {
-      try {
-        const r = await adminApi.getUsers();
-        return ((r.data || []) as Array<{ id: number; email?: string; full_name?: string; name?: string; first_name?: string; last_name?: string }>).map((u) => ({
-          id: u.id,
-          name: u.full_name || u.name || [u.first_name, u.last_name].filter(Boolean).join(' ').trim() || u.email || `User ${u.id}`,
-        }));
-      } catch { return []; }
-    },
-    enabled: !!promoteCtx,
-  });
-
-  const openPromote = (control: FrameworkControl, risk: PotentialRisk) => {
-    const lk = risk.likelihood && risk.likelihood >= 1 && risk.likelihood <= 5 ? risk.likelihood : 3;
-    const im = risk.impact && risk.impact >= 1 && risk.impact <= 5 ? risk.impact : 3;
-    setPromoteCtx({ control, risk });
-    setPromoteForm({
-      title: risk.title || '',
-      description: risk.description || '',
-      register_type: control.framework_name || '',
-      category: risk.category && RISK_CATEGORIES.includes(risk.category) ? risk.category : 'compliance',
-      risk_sub_category: '',
-      business_owner_id: undefined,
-      likelihood: lk, impact: im,
-      // Control not yet implemented → residual starts at inherent (user can adjust).
-      residual_likelihood: lk, residual_impact: im,
-      treatment_plan: '', root_cause: risk.rationale || '', recommendations: '', due_date: '',
-    });
-  };
-
-  const promoteRiskMutation = useMutation({
-    mutationFn: () => controlsApi.promoteControlRisk({
-      control_id: promoteCtx!.control.id,
-      framework_name: promoteCtx!.control.framework_name || undefined,
-      title: promoteForm.title,
-      description: promoteForm.description || promoteCtx!.risk.description || undefined,
-      register_type: promoteForm.register_type || undefined,
-      category: promoteForm.category,
-      risk_sub_category: promoteForm.risk_sub_category || undefined,
-      inherent_likelihood: promoteForm.likelihood,
-      inherent_impact: promoteForm.impact,
-      residual_likelihood: promoteForm.residual_likelihood,
-      residual_impact: promoteForm.residual_impact,
-      business_owner_id: promoteForm.business_owner_id,
-      treatment_plan: promoteForm.treatment_plan || undefined,
-      root_cause: promoteForm.root_cause || undefined,
-      recommendations: promoteForm.recommendations || undefined,
-      due_date: promoteForm.due_date || undefined,
-    }),
-    onSuccess: (resp) => {
-      // The new risk is now linked to this control. Reflect it locally so the
-      // section flips to "risks addressed" mode (mutual exclusivity) without a refetch.
-      const data = (resp?.data || {}) as { risk_id?: number; title?: string; category?: string | null; inherent_score?: number | null; status?: string | null };
-      const ctrlId = promoteCtx!.control.id;
-      const promoted = promoteCtx!.risk;
-      if (data.risk_id) {
-        setAiRecommendations((prev) => {
-          const rec = prev[ctrlId];
-          if (!rec) return prev;
-          const added: AddressedRisk = {
-            id: data.risk_id!, title: data.title || promoted.title, category: data.category ?? promoteForm.category,
-            status: data.status ?? 'open', inherent_score: data.inherent_score ?? null,
-            residual_score: data.inherent_score ?? null, mitigation_effectiveness: 'full',
-          };
-          return {
-            ...prev,
-            [ctrlId]: {
-              ...rec,
-              addressed_risks: [...rec.addressed_risks, added],
-              risks_if_not_implemented: rec.risks_if_not_implemented.filter((r) => r !== promoted),
-            },
-          };
-        });
-      }
-      toast({ type: 'success', title: 'Risk added to register', message: 'Created in the ERM Risk Register and linked to this control as a mitigation.' });
-      setPromoteCtx(null);
-    },
-    onError: (e: { response?: { data?: { detail?: string } } }) =>
-      toast({ type: 'error', title: 'Could not add risk', message: e?.response?.data?.detail || 'Try again.' }),
-  });
-
-  // ── Close a linked register risk in one click (control mitigates it) ──
-  const [closingRiskId, setClosingRiskId] = useState<number | null>(null);
-  const [closedRiskIds, setClosedRiskIds] = useState<Set<number>>(new Set());
-  const closeRiskMutation = useMutation({
-    mutationFn: (riskId: number) => ermApi.risks.closeRisk(riskId, 'Closed from Controls — the mitigating control is in place.'),
-    onMutate: (riskId: number) => setClosingRiskId(riskId),
-    onSuccess: (_resp, riskId) => {
-      setClosedRiskIds((prev) => new Set(prev).add(riskId));
-      setClosingRiskId(null);
-      toast({ type: 'success', title: 'Risk closed', message: 'The linked risk was closed in the ERM Risk Register.' });
-    },
-    onError: (e: { response?: { data?: { detail?: string } } }) => {
-      setClosingRiskId(null);
-      toast({ type: 'error', title: 'Could not close risk', message: e?.response?.data?.detail || 'Try again.' });
-    },
-  });
-
-  const getProcedureTypeBadge = (type: string) => {
-    const colors: Record<string, string> = {
-      walkthrough: 'bg-primary-50 text-primary-700',
-      inquiry: 'bg-primary-50 text-primary-700',
-      observation: 'bg-slate-100 text-slate-600',
-      inspection: 'bg-amber-50 text-amber-700',
-      reperformance: 'bg-emerald-50 text-emerald-700',
-    };
-    return (
-      <span className={`rounded-full px-2 py-0.5 text-xs capitalize ${colors[type] || 'bg-slate-200 text-slate-500'}`}>
-        {type}
-      </span>
-    );
-  };
-
-  const getEvidenceTypeIcon = (type: string) => {
-    const icons: Record<string, React.ReactNode> = {
-      policy: <FileText className="h-4 w-4" />,
-      procedure: <ClipboardList className="h-4 w-4" />,
-      report: <FolderOpen className="h-4 w-4" />,
-      screenshot: <FileText className="h-4 w-4" />,
-      log: <FileText className="h-4 w-4" />,
-      configuration: <FileText className="h-4 w-4" />,
-      certificate: <FileText className="h-4 w-4" />,
-      attestation: <FileText className="h-4 w-4" />,
-      training: <FileText className="h-4 w-4" />,
-    };
-    return icons[type] || <FileText className="h-4 w-4" />;
-  };
-
+  // top-level source switch: framework controls vs internal / risk controls.
+  // Start 'framework' (matches SSR → no hydration mismatch), then reconcile on
+  // mount from both useSearchParams (client redirects) AND window.location
+  // (fresh deep-links, which useSearchParams can miss on first paint).
+  const [mode, setMode] = useState<'framework' | 'internal'>('framework');
   useEffect(() => {
-    if (initialFrameworkId) {
-      setFrameworkFilter(Number(initialFrameworkId));
-    }
-  }, [initialFrameworkId]);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      setSearchTerm(searchInput.trim());
-      setPage(0);
-    }, 400);
-    return () => window.clearTimeout(timer);
-  }, [searchInput]);
-
-  const { data: summaryData } = useQuery({
-    queryKey: ['framework-controls-summary'],
-    queryFn: async () => {
-      const response = await controlsApi.getFrameworkControlsSummary();
-      return response.data as FrameworkSummaryResponse;
-    },
-  });
-
-  // Control-health snapshot — endpoint-derived, unpaginated. Guarded to {} so a
-  // 404/absent endpoint degrades gracefully (list-only metrics; no impl tile).
-  const { data: statusSummary } = useQuery({
-    queryKey: ['framework-controls-status-summary', frameworkFilter],
-    queryFn: async (): Promise<Partial<StatusSummary>> => {
-      try {
-        const res = await controlsApi.getFrameworkControlsStatusSummary(frameworkFilter ?? undefined);
-        return (res.data ?? {}) as StatusSummary;
-      } catch {
-        return {};
-      }
-    },
-  });
-
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['framework-controls', frameworkFilter, domainFilter, searchTerm, sortBy, sortOrder, page],
-    queryFn: async () => {
-      const params: {
-        skip: number;
-        limit: number;
-        framework_id?: number;
-        domain?: string;
-        search?: string;
-        sort_by?: string;
-        sort_order?: 'asc' | 'desc';
-      } = {
-        skip: page * pageSize,
-        limit: pageSize,
-      };
-      if (frameworkFilter) params.framework_id = frameworkFilter;
-      if (domainFilter) params.domain = domainFilter;
-      if (searchTerm) params.search = searchTerm;
-      params.sort_by = sortBy;
-      params.sort_order = sortOrder;
-      
-      const response = await controlsApi.getFrameworkControls(params);
-      return response.data as FrameworkControlsResponse;
-    },
-    placeholderData: (previousData) => previousData,
-  });
-
-  // A framework is "phased" when its controls carry NDMO-style P1/P2/P3 tiers.
-  const isPhased = !!data?.controls?.some((c) => c.priority_level);
-
-  // Auto-engage the native Document (Figure-2) view the first time a phased
-  // framework is opened.
-  useEffect(() => {
-    if (!viewTouched && frameworkFilter && isPhased) {
-      setViewMode('doc');
-    }
-  }, [viewTouched, frameworkFilter, isPhased]);
-
-  const handleSort = (field: SortField) => {
-    setPage(0);
-    if (sortBy === field) {
-      setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
-      return;
-    }
-    setSortBy(field);
-    setSortOrder(field === 'evidence_count' ? 'desc' : 'asc');
-  };
-
-  const renderSortHeader = (
-    label: string,
-    field: SortField,
-    align: 'left' | 'center' | 'right' = 'left'
-  ) => {
-    const justifyClass =
-      align === 'center' ? 'justify-center' :
-      align === 'right' ? 'justify-end' :
-      'justify-start';
-    const isActive = sortBy === field;
-
-    return (
-      <button
-        type="button"
-        onClick={() => handleSort(field)}
-        className={`inline-flex w-full items-center gap-1 ${justifyClass} text-slate-600 hover:text-black`}
-      >
-        <span>{label}</span>
-        {isActive ? (
-          <span className="text-xs">{sortOrder === 'asc' ? '^' : 'v'}</span>
-        ) : (
-          <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />
-        )}
-      </button>
-    );
-  };
-
-  const getPriorityBadge = (priority: string) => {
-    const colors: Record<string, string> = {
-      high: 'bg-rose-50 text-rose-700',
-      medium: 'bg-amber-50 text-amber-700',
-      low: 'bg-slate-100 text-slate-600',
+    const m = searchParams?.get('mode')
+      || (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('mode') : null);
+    if (m === 'internal' || m === 'framework') setMode(m);
+  }, [searchParams]);
+  const [view, setView] = useState<'hub' | 'byfw' | 'flat' | 'mine'>('hub');
+  const [domainSel, setDomainSel] = useState<DomainStat | null>(null);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const [flatPreset, setFlatPreset] = useState<{ effectiveness?: string; due?: string } | null>(null);
+  const onAttention = (key: 'overdue' | 'ineffective' | 'partial' | 'evidence') => {
+    const map: Record<string, { effectiveness?: string; due?: string }> = {
+      overdue: { due: 'overdue' }, ineffective: { effectiveness: 'ineffective' },
+      partial: { effectiveness: 'partially_effective' }, evidence: {},
     };
-    return (
-      <span className={`rounded-full px-2 py-0.5 text-xs capitalize ${colors[priority] || 'bg-slate-100 text-slate-500'}`}>
-        {priority}
-      </span>
-    );
+    setFlatPreset(map[key]); setDomainSel(null); setInternalOpen(false); setView('flat');
   };
+  const [open, setOpen] = useState<Row | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [promoting, setPromoting] = useState(() => typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('promote') === '1');
 
-  const getVerificationBadge = (isVerified: boolean) => {
-    if (isVerified) {
-      return (
-        <span className="flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700">
-          <CheckCircle size={12} /> Verified
-        </span>
-      );
+  const { data: scope } = useQuery({
+    queryKey: ['wb-scope'],
+    queryFn: async () => (await apiClient.get(`${WB}/scope`)).data as
+      { framework_ids: number[]; available: { id: number; name: string }[]; can_edit: boolean },
+  });
+  const { data: ov, isLoading: ovLoading } = useQuery({
+    queryKey: ['wb-overview'],
+    queryFn: async () => (await apiClient.get(`${WB}/overview`)).data as Overview,
+  });
+  const { data: mine } = useQuery({
+    queryKey: ['wb-my-work'],
+    queryFn: async () => (await apiClient.get(`${WB}/my-work`)).data as { total: number; items: Row[] },
+  });
+
+  const setScope = useMutation({
+    mutationFn: async (ids: number[]) => apiClient.put(`${WB}/scope`, { framework_ids: ids }),
+    onSuccess: () => { ['wb-scope', 'wb-overview', 'wb-list', 'wb-domains', 'wb-groups'].forEach(k => qc.invalidateQueries({ queryKey: [k] })); },
+  });
+  const invalidateAll = () => ['wb-overview', 'wb-list', 'wb-my-work', 'wb-groups'].forEach(k => qc.invalidateQueries({ queryKey: [k] }));
+
+  const frameworks = scope?.available || [];
+  const inInternal = view === 'hub' && internalOpen;
+  const inDetail = view === 'hub' && domainSel && !internalOpen;
+  const changeMode = (m: 'framework' | 'internal') => {
+    setMode(m); setDomainSel(null); setInternalOpen(false);
+    if (typeof window !== 'undefined') {
+      const u = new URL(window.location.href);
+      u.searchParams.set('mode', m);
+      window.history.replaceState(window.history.state, '', u.toString());
     }
-    return (
-      <span className="flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs text-amber-700">
-        <Clock size={12} /> Pending
-      </span>
-    );
   };
 
-  const totalPages = data ? Math.ceil(data.total / pageSize) : 0;
-
-  if (isLoading && !data) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <PageLoader size="md" />
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex h-64 flex-col items-center justify-center text-red-600">
-        <AlertCircle className="mb-2 h-8 w-8" />
-        <p>Failed to load controls</p>
-      </div>
-    );
-  }
-
-  const selectedControl = data?.controls.find((c) => c.id === selectedControlId) ?? null;
-  const selectedImplStatus = selectedControl
-    ? (statusSummary?.control_status?.[String(selectedControl.id)] ?? null)
-    : null;
-
-  const selectedFramework = summaryData?.frameworks.find(f => f.id === frameworkFilter);
-
-  // Fallback: derive framework name from loaded controls when not in summaryData (e.g. status=draft/classified)
-  const fallbackFrameworkName = !selectedFramework && frameworkFilter && data?.controls?.length
-    ? data.controls[0]?.framework_name
-    : null;
-  const effectiveFrameworkName = selectedFramework?.name || fallbackFrameworkName;
+  // Drilling into a domain/internal detail pushes a history entry, so the browser
+  // Back button returns to the hub instead of leaving the page.
+  const openDomain = (d: DomainStat) => { setDomainSel(d); if (typeof window !== 'undefined') window.history.pushState({ ctaDetail: true }, ''); };
+  const openInternal = () => { setInternalOpen(true); if (typeof window !== 'undefined') window.history.pushState({ ctaDetail: true }, ''); };
+  const backToHub = () => { if (typeof window !== 'undefined' && window.history.state?.ctaDetail) window.history.back(); else { setDomainSel(null); setInternalOpen(false); } };
+  useEffect(() => {
+    const onPop = () => { setDomainSel(null); setInternalOpen(false); };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between">
+    <div className="space-y-4 p-1">
+      <ControlSurfaceTabs active="catalog" />
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          {frameworkFilter && (selectedFramework || effectiveFrameworkName) ? (
-            <>
-              <div className="flex items-center gap-2 mb-1">
-                <Link 
-                  href="/frameworks" 
-                  className="flex items-center gap-1 text-sm text-slate-600 hover:text-slate-900 transition-colors"
-                >
-                  <ArrowLeft className="h-4 w-4" />
-                  Back to Frameworks
-                </Link>
-              </div>
-              <h1 className="text-2xl font-bold text-black flex items-center gap-2">
-                <FileStack className="h-6 w-6 text-black" />
-                {effectiveFrameworkName}
-              </h1>
-              <p className="text-slate-600">
-                {selectedFramework ? `${selectedFramework.control_count} controls extracted from this framework` : `Controls for this framework`}
-              </p>
-            </>
-          ) : (
-            <>
-              <h1 className="text-2xl font-bold text-black">Framework Controls</h1>
-              <p className="text-slate-600">Controls extracted from your uploaded regulatory frameworks</p>
-            </>
-          )}
+          <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900"><Boxes className="h-5 w-5 text-primary-600" /> Control Catalog</h1>
+          <p className="text-[13px] text-slate-500">Your working controls, organized by the 20 unified security domains — assign, test, evidence &amp; certify.</p>
         </div>
-        {/* <button
-          onClick={() => setShowInfoModal(true)}
-          className="flex items-center gap-2 rounded-lg bg-slate-200 px-3 py-2 text-sm text-slate-600 hover:bg-slate-600 transition-colors"
-        >
-          <HelpCircle className="h-4 w-4" />
-          How It Works
-        </button> */}
+        <div className="flex items-center gap-2">
+          <Link href="/controls/configure-frameworks"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[13px] font-medium text-slate-600 transition-colors hover:border-slate-300 hover:bg-slate-50"
+            title="Choose which frameworks are in your Control Catalog">
+            <SlidersHorizontal className="h-4 w-4 text-slate-400" /> Configure frameworks
+            <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-slate-500">{(scope?.framework_ids?.length) ? scope.framework_ids.length : 'All'}</span>
+          </Link>
+        </div>
       </div>
 
-      {showInfoModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-lg mx-4 rounded-xl bg-white border border-slate-200 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-200 p-4">
-              <h2 className="text-lg font-semibold text-black flex items-center gap-2">
-                <Info className="h-5 w-5 text-primary-600" />
-                Understanding Frameworks & Controls
-              </h2>
-              <button
-                onClick={() => setShowInfoModal(false)}
-                className="rounded-lg p-1 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
-              >
-                <ChevronDown className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="p-4 space-y-4 text-sm">
-              <div className="space-y-3">
-                <div className="flex gap-3">
-                  <div className="flex-shrink-0 h-8 w-8 rounded-full bg-primary-50 flex items-center justify-center text-primary-600 font-bold">1</div>
-                  <div>
-                    <h3 className="font-medium text-black">Upload Framework</h3>
-                    <p className="text-slate-600">Upload your regulatory framework document (PDF, Excel). The AI extracts individual controls/requirements.</p>
-                  </div>
-                </div>
-                <div className="flex gap-3">
-                  <div className="flex-shrink-0 h-8 w-8 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600 font-bold">2</div>
-                  <div>
-                    <h3 className="font-medium text-black">Controls Are Extracted</h3>
-                    <p className="text-slate-600">Each requirement becomes a control shown here. Controls retain their original reference IDs from the framework document.</p>
-                  </div>
-                </div>
-                <div className="flex gap-3">
-                  <div className="flex-shrink-0 h-8 w-8 rounded-full bg-primary-50 flex items-center justify-center text-primary-600 font-bold">3</div>
-                  <div>
-                    <h3 className="font-medium text-black">Link Evidence</h3>
-                    <p className="text-slate-600">Upload evidence documents to prove compliance. Link evidence to specific controls to demonstrate you meet each requirement.</p>
-                  </div>
-                </div>
-                <div className="flex gap-3">
-                  <div className="flex-shrink-0 h-8 w-8 rounded-full bg-primary-50 flex items-center justify-center text-primary-600 font-bold">4</div>
-                  <div>
-                    <h3 className="font-medium text-black">Track Compliance</h3>
-                    <p className="text-slate-600">Start a certification journey from the Frameworks page to track your progress toward full compliance.</p>
-                  </div>
-                </div>
-              </div>
-              <div className="pt-3 border-t border-slate-200">
-                <p className="text-xs text-slate-500">
-                  <strong>Tip:</strong> Use the Evidence module to upload documents, then link them to controls here. Each control can have multiple pieces of evidence.
-                </p>
-              </div>
-            </div>
-            <div className="flex justify-end border-t border-slate-200 p-4">
-              <button
-                onClick={() => setShowInfoModal(false)}
-                className="btn-primary"
-              >
-                Got it
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* top-level source switch — framework controls vs internal / risk controls */}
+      {ov && <SourceToggle mode={mode} onChange={changeMode}
+        frameworkCount={ov.totals.controls} internalCount={ov.internal?.controls ?? 0} />}
 
-      <ControlHealthSnapshot
-        summary={statusSummary}
-        totalFrameworks={frameworkFilter ? 1 : (summaryData?.total_frameworks ?? 0)}
-        fallbackTotal={frameworkFilter ? (data?.total ?? 0) : (summaryData?.total_controls ?? 0)}
-      />
-
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="flex-1 min-w-[180px] sm:min-w-[280px]">
-          <SearchInput
-            value={searchInput}
-            onChange={setSearchInput}
-            placeholder="Search controls by ID, title, or description..."
-            size="md"
-          />
-        </div>
-        <MultiSelectDropdown
-          title="Framework"
-          items={(() => {
-            const list = summaryData?.frameworks?.map((fw) => ({
-              value: String(fw.id),
-              label: `${fw.name} (${fw.control_count})`,
-            })) || [];
-            if (frameworkFilter && !summaryData?.frameworks?.find((f) => f.id === frameworkFilter) && effectiveFrameworkName) {
-              list.unshift({ value: String(frameworkFilter), label: effectiveFrameworkName });
-            }
-            return list;
-          })()}
-          selectedValues={frameworkFilter ? [String(frameworkFilter)] : []}
-          onApply={(v) => {
-            setFrameworkFilter(v[0] ? Number(v[0]) : null);
-            setPage(0);
-          }}
-          multiSelect={false}
-          autoApply
-          forceSearch
-          placeholder="All Frameworks"
-          searchPlaceholder="Search frameworks"
-          size="md"
-        />
-        {frameworkFilter && isPhased && (
-          <div className="inline-flex overflow-hidden rounded-lg border border-slate-200">
-            <button
-              type="button"
-              onClick={() => { setViewTouched(true); setViewMode('doc'); }}
-              className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors ${
-                viewMode === 'doc' ? 'bg-primary-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              <FileText className="h-4 w-4" /> Document
-            </button>
-            <button
-              type="button"
-              onClick={() => { setViewTouched(true); setViewMode('tree'); }}
-              className={`flex items-center gap-1.5 border-l border-slate-200 px-3 py-2 text-sm font-medium transition-colors ${
-                viewMode === 'tree' ? 'bg-primary-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              <Layers className="h-4 w-4" /> Tree
-            </button>
-            <button
-              type="button"
-              onClick={() => { setViewTouched(true); setViewMode('table'); }}
-              className={`flex items-center gap-1.5 border-l border-slate-200 px-3 py-2 text-sm font-medium transition-colors ${
-                viewMode === 'table' ? 'bg-primary-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              <ClipboardList className="h-4 w-4" /> Table
-            </button>
-          </div>
-        )}
-      </div>
-
-      {viewMode === 'doc' && frameworkFilter ? (
-        <Figure2View frameworkId={frameworkFilter} />
-      ) : viewMode === 'tree' && frameworkFilter ? (
-        <NativeFrameworkTree frameworkId={frameworkFilter} />
+      {mode === 'internal' ? (
+        <InternalMode s={ov?.internal} onOpenRow={setOpen} onNew={() => setCreating(true)} />
       ) : (
       <>
-      <div className="overflow-hidden rounded-lg border border-slate-200">
-        <table className="w-full">
-          <thead className="bg-white">
-            <tr>
-              <th className="px-4 py-3 text-left text-sm font-medium">{renderSortHeader('Control ID', 'control_id')}</th>
-              <th className="px-4 py-3 text-left text-sm font-medium">{renderSortHeader('Title', 'title')}</th>
-              <th className="hidden px-4 py-3 text-left text-sm font-medium md:table-cell">{renderSortHeader('Framework', 'framework_name')}</th>
-              <th className="hidden px-4 py-3 text-left text-sm font-medium lg:table-cell">{renderSortHeader('Domain', 'domain')}</th>
-              <th className="px-4 py-3 text-left text-sm font-medium">{renderSortHeader('Priority', 'priority')}</th>
-              <th className="px-4 py-3 text-center text-sm font-medium">{renderSortHeader('Evidence', 'evidence_count', 'center')}</th>
-              <th className="px-4 py-3 text-left text-sm font-medium">{renderSortHeader('Status', 'status')}</th>
-              <th className="px-4 py-3 text-right text-sm font-medium text-slate-600"></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-700">
-            {data?.controls.map((control) => {
-              return (
-                <Fragment key={control.id}>
-                  <tr
-                    className="group bg-white/50 hover:bg-slate-50 cursor-pointer"
-                    onClick={() => setSelectedControlId(control.id)}
-                  >
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        {/* <Shield className="h-4 w-4 text-primary-600 flex-shrink-0" /> */}
-                        <span className="font-mono text-sm text-black">
-                          {control.original_reference || control.control_id}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <p className="text-sm text-black line-clamp-1">{control.title}</p>
-                    </td>
-                    <td className="hidden px-4 py-3 md:table-cell">
-                      <span className="rounded-full whitespace-nowrap bg-primary-50 px-2 py-1 text-xs text-primary-700">
-                        {control.framework_name}
-                      </span>
-                    </td>
-                    <td className="hidden px-4 py-3 lg:table-cell">
-                      <span className="text-sm text-slate-600">{control.domain || '-'}</span>
-                    </td>
-                    <td className="px-4 py-3">
-                      {control.priority_level
-                        ? <PriorityLevelBadge level={control.priority_level} />
-                        : getPriorityBadge(control.priority)}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <Link
-                        href={`/evidence?control_id=${control.id}`}
-                        onClick={(e) => e.stopPropagation()}
-                        className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs transition-colors ${
-                          control.evidence_count > 0
-                            ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-500/30'
-                            : 'bg-slate-200 text-slate-500 hover:bg-slate-600'
-                        }`}
-                      >
-                        <Paperclip className="h-3 w-3" />
-                        {control.evidence_count}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3">
-                      {getVerificationBadge(control.is_verified)}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <ChevronRight className="ml-auto h-5 w-5 text-slate-400 transition-colors group-hover:text-primary-600" />
-                    </td>
-                  </tr>
-                </Fragment>
-              );
-            })}
-          </tbody>
-        </table>
+      {(scope?.framework_ids?.length ?? 0) > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12.5px] text-amber-800">
+          <ShieldCheck className="h-4 w-4 flex-shrink-0 text-amber-600" />
+          <span>This catalog is <b>scoped to {scope!.framework_ids.length} framework{scope!.framework_ids.length > 1 ? 's' : ''}</b> (an admin base setting) — you&apos;re not seeing every framework&apos;s controls.</span>
+          {scope?.can_edit ? (
+            <button onClick={() => setScope.mutate([])} disabled={setScope.isPending}
+              className="ml-auto inline-flex items-center gap-1 rounded-md border border-amber-300 bg-white px-2 py-1 text-[11.5px] font-semibold text-amber-800 hover:bg-amber-100 disabled:opacity-50">
+              {setScope.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <X className="h-3 w-3" />} Clear scope · show all
+            </button>
+          ) : <span className="ml-auto text-[11.5px] text-amber-700">Set by an admin</span>}
+        </div>
+      )}
+
+      {/* view toggle */}
+      <div className="flex items-center gap-1 border-b border-slate-200">
+        {([['hub', 'By Domain'], ['byfw', 'By Framework'], ['flat', 'All Controls'], ['mine', 'My Work']] as const).map(([k, label]) => (
+          <button key={k} onClick={() => { setView(k); setDomainSel(null); setInternalOpen(false); }} className={`relative px-4 py-2 text-[13px] font-medium ${view === k ? 'text-primary-700' : 'text-slate-500 hover:text-slate-700'}`}>
+            {label}{k === 'mine' && (mine?.total ? ` (${mine.total})` : '')}
+            {view === k && <span className="absolute inset-x-2 -bottom-px h-0.5 rounded bg-primary-600" />}
+          </button>
+        ))}
       </div>
 
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-slate-600">
-            Showing {page * pageSize + 1} to {Math.min((page + 1) * pageSize, data?.total || 0)} of{' '}
-            {data?.total || 0} controls
-          </p>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setPage(Math.max(0, page - 1))}
-              disabled={page === 0}
-              className="btn-secondary btn-sm"
-            >
-              Previous
-            </button>
-            <span className="text-sm text-slate-600">
-              Page {page + 1} of {totalPages}
-            </span>
-            <button
-              onClick={() => setPage(Math.min(totalPages - 1, page + 1))}
-              disabled={page >= totalPages - 1}
-              className="btn-secondary btn-sm"
-            >
-              Next
-            </button>
-          </div>
-        </div>
-      )}
-
-      {(!data?.controls || data.controls.length === 0) && (
-        <div className="card flex flex-col items-center justify-center py-12 text-center">
-          <Shield className="mb-4 h-12 w-12 text-slate-600" />
-          <h3 className="text-lg font-medium text-black">No controls found</h3>
-          <p className="mt-1 text-slate-600">
-            {summaryData?.total_frameworks === 0
-              ? 'Upload a regulatory framework to see controls here'
-              : 'Try adjusting your search or filters'}
-          </p>
-        </div>
-      )}
+      {view === 'hub' && !inDetail && !inInternal && <DomainHub ov={ov} loading={ovLoading} onOpen={openDomain} onOpenInternal={openInternal} onNew={() => setCreating(true)} onAttention={onAttention} />}
+      {inDetail && <DomainDetail d={domainSel!} onBack={backToHub} onOpenRow={setOpen} />}
+      {inInternal && ov?.internal && <InternalDetail s={ov.internal} onBack={backToHub} onOpenRow={setOpen} onNew={() => setCreating(true)} />}
+      {view === 'byfw' && <ByFramework ov={ov} onOpenRow={setOpen} />}
+      {view === 'flat' && <FlatList frameworks={frameworks} onOpenRow={setOpen} preset={flatPreset} />}
+      {view === 'mine' && <MyWork items={mine?.items || []} onOpenRow={setOpen} />}
       </>
       )}
 
-      {/* Control detail — animated centered popup with side-by-side tiles */}
-      <AnimatedModal
-        isOpen={selectedControl != null}
-        onClose={() => setSelectedControlId(null)}
-        size="3xl"
-        title={selectedControl ? (
-          <span className="flex items-center gap-2">
-            <span className="font-mono text-sm text-primary-700">{selectedControl.original_reference || selectedControl.control_id}</span>
-            <span className="truncate">{selectedControl.title}</span>
-          </span>
-        ) : ''}
-        subtitle={selectedControl ? (
-          `${selectedControl.framework_name}${selectedControl.framework_version ? ` (${selectedControl.framework_version})` : ''}${selectedControl.domain ? ` · ${selectedControl.domain}` : ''}`
-        ) : ''}
-        headerAccessory={selectedControl ? (
-          <div className="flex items-center gap-2">
-            {selectedControl.priority_level
-              ? <PriorityLevelBadge level={selectedControl.priority_level} />
-              : getPriorityBadge(selectedControl.priority)}
-            {selectedImplStatus
-              ? <ImplStatusPill status={selectedImplStatus.status} />
-              : getVerificationBadge(selectedControl.is_verified)}
-          </div>
-        ) : undefined}
-        footer={selectedControl ? (
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <Link
-              href={`/evidence?control_id=${selectedControl.id}`}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
-              <Paperclip className="h-4 w-4" /> Manage evidence
-            </Link>
-            <button
-              onClick={() => setSelectedControlId(null)}
-              className="rounded-lg bg-primary-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-primary-700"
-            >
-              Close
-            </button>
-          </div>
-        ) : undefined}
-      >
-        {selectedControl && (() => {
-          const control = selectedControl;
-          return (
-          <div className="grid grid-cols-1 gap-4 p-5 md:grid-cols-2">
-            {/* Requirement */}
-            <div className="rounded-xl border border-slate-200 bg-white p-4 md:col-span-2">
-              <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Requirement</h4>
-              <div className="max-h-72 space-y-3 overflow-y-auto scrollbar-thin pr-1">
-                {control.description && (
-                  <p className="text-sm text-slate-700">{control.description}</p>
-                )}
-                {control.full_text && (
-                  <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-600">{control.full_text}</p>
-                )}
-                {!control.description && !control.full_text && (
-                  <p className="text-sm text-slate-400">No requirement text provided.</p>
-                )}
-              </div>
-            </div>
+      {open && <WorkbenchDrawer row={open} onClose={() => { setOpen(null); invalidateAll(); }} />}
+      {creating && <CreateControl onClose={() => setCreating(false)} onCreated={() => { setCreating(false); invalidateAll(); }} />}
+      {promoting && <PromotePicker onClose={() => setPromoting(false)} onDone={() => { setPromoting(false); invalidateAll(); }} />}
+    </div>
+  );
+}
 
-            {/* Framework mapping */}
-            <div className="rounded-xl border border-slate-200 bg-white p-4">
-              <h4 className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Framework mapping</h4>
-              <dl className="space-y-2 text-sm">
-                <div className="flex justify-between gap-4">
-                  <dt className="text-slate-500">Framework</dt>
-                  <dd className="text-right font-medium text-slate-800">{control.framework_name}{control.framework_version && ` (${control.framework_version})`}</dd>
-                </div>
-                <div className="flex justify-between gap-4">
-                  <dt className="text-slate-500">Domain</dt>
-                  <dd className="text-right text-slate-700">{control.domain || '—'}</dd>
-                </div>
-                <div className="flex justify-between gap-4">
-                  <dt className="text-slate-500">Category</dt>
-                  <dd className="text-right text-slate-700">{control.category || '—'}</dd>
-                </div>
-                <div className="flex justify-between gap-4">
-                  <dt className="text-slate-500">Section</dt>
-                  <dd className="text-right font-mono text-slate-700">{control.section_number || '—'}</dd>
-                </div>
-                <div className="flex justify-between gap-4">
-                  <dt className="text-slate-500">Original reference</dt>
-                  <dd className="text-right font-mono text-slate-700">{control.original_reference || control.control_id}</dd>
-                </div>
-                <div className="flex items-center justify-between gap-4">
-                  <dt className="text-slate-500">Parent control</dt>
-                  <dd className="text-right">
-                    {control.parent_section ? (
-                      <button
-                        onClick={() => {
-                          setSearchInput(control.parent_section || '');
-                          setSearchTerm(control.parent_section || '');
-                          setPage(0);
-                          setSelectedControlId(null);
-                        }}
-                        className="inline-flex items-center gap-1 rounded bg-primary-50 px-2 py-0.5 font-mono text-xs text-primary-700 hover:bg-primary-100"
-                      >
-                        <ChevronRight className="h-3.5 w-3.5" />{control.parent_section}
-                      </button>
-                    ) : <span className="text-slate-400">—</span>}
-                  </dd>
-                </div>
-              </dl>
-            </div>
+// ── executive posture band (hub hero) ───────────────────────────────────────
+function PostureHero({ ov, onAttention }: { ov: Overview; onAttention: (f: 'overdue' | 'ineffective' | 'partial' | 'evidence') => void }) {
+  const t = ov.totals;
+  const total = t.controls || 1;
+  const eff = t.effective, part = t.partially_effective, inef = t.ineffective;
+  const tested = t.tested;
+  const notTested = Math.max(0, total - eff - part - inef);
+  const testedPct = Math.round((tested / total) * 100);
+  const effPct = tested ? Math.round((eff / tested) * 100) : 0;
+  const grade = testedPct === 0 ? { l: 'Not started', c: 'text-slate-500', bg: 'bg-slate-100' }
+    : effPct >= 80 ? { l: 'Strong', c: 'text-emerald-700', bg: 'bg-emerald-100' }
+      : effPct >= 60 ? { l: 'Fair', c: 'text-amber-700', bg: 'bg-amber-100' }
+        : { l: 'Needs work', c: 'text-rose-700', bg: 'bg-rose-100' };
+  // conic donut over the whole estate
+  const segs = [['#10b981', eff], ['#f59e0b', part], ['#f43f5e', inef], ['#e2e8f0', notTested]] as const;
+  let acc = 0;
+  const stops = segs.map(([c, v]) => { const from = (acc / total) * 360; acc += v; const to = (acc / total) * 360; return `${c} ${from}deg ${to}deg`; }).join(', ');
+  const attention = [
+    { key: 'overdue' as const, label: 'Tests overdue', n: t.overdue ?? 0, dot: 'bg-rose-500', txt: 'text-rose-600' },
+    { key: 'ineffective' as const, label: 'Ineffective controls', n: inef, dot: 'bg-rose-500', txt: 'text-rose-600' },
+    { key: 'partial' as const, label: 'Partially effective', n: part, dot: 'bg-amber-500', txt: 'text-amber-600' },
+    { key: 'evidence' as const, label: 'Evidence to review', n: t.evidence_pending, dot: 'bg-amber-500', txt: 'text-amber-600' },
+  ];
+  const attentionTotal = attention.reduce((a, x) => a + x.n, 0);
+  const legend = [['Effective', eff, 'bg-emerald-500'], ['Partial', part, 'bg-amber-500'], ['Ineffective', inef, 'bg-rose-500'], ['Not tested', notTested, 'bg-slate-300']] as const;
 
-            {/* Implementation status */}
-            <div className="rounded-xl border border-slate-200 bg-white p-4">
-              <h4 className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Implementation status</h4>
-              {selectedImplStatus ? (
-                <div className="space-y-2 text-sm">
-                  <div><ImplStatusPill status={selectedImplStatus.status} /></div>
-                  <div className="flex justify-between gap-4">
-                    <span className="text-slate-500">Assignee</span>
-                    <span className="text-right text-slate-700">{selectedImplStatus.assignee_name || 'Unassigned'}</span>
-                  </div>
-                  <div className="flex justify-between gap-4">
-                    <span className="text-slate-500">Implemented</span>
-                    <span className="text-right text-slate-700">{selectedImplStatus.implementation_date || '—'}</span>
-                  </div>
-                  <div className="flex justify-between gap-4">
-                    <span className="text-slate-500">Verified</span>
-                    <span className="text-right text-slate-700">{selectedImplStatus.verified_date || '—'}</span>
-                  </div>
-                </div>
-              ) : (
-                <p className="text-sm text-slate-400">Not tracked in a certification journey yet.</p>
-              )}
-            </div>
-
-            {/* Linked evidence */}
-            <div className="rounded-xl border border-slate-200 bg-white p-4 md:col-span-2">
-              <FrameworkControlEvidenceLinkSection controlId={control.id} />
-            </div>
-
-            {/* Recommended evidence */}
-            {control.evidence_requirements && control.evidence_requirements.length > 0 && (
-              <div className="rounded-xl border border-slate-200 bg-white p-4 md:col-span-2">
-                <h4 className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                  <FileText className="h-3.5 w-3.5 text-amber-600" />
-                  Recommended evidence
-                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700">{control.evidence_requirements.length}</span>
-                </h4>
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-                  {control.evidence_requirements.map((evidence, idx) => {
-                    const evTitle = evidence.name || evidence.title || 'Evidence';
-                    const evType = evidence.filetype || evidence.artifact_type;
-                    return (
-                      <div key={idx} className="rounded-lg border border-amber-200 bg-amber-50/50 p-3">
-                        <div className="flex items-start gap-2">
-                          <div className="mt-0.5 flex-shrink-0 text-amber-600">{getEvidenceTypeIcon(evType || 'document')}</div>
-                          <div className="min-w-0 flex-1">
-                            <h5 className="text-sm font-medium text-slate-800">{evTitle}</h5>
-                            {evidence.description && <p className="mt-1 text-xs text-slate-600">{evidence.description}</p>}
-                            {evType && <span className="mt-2 inline-block rounded bg-amber-100 px-2 py-0.5 text-xs uppercase text-amber-700">{evType}</span>}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Dependencies + AI confidence */}
-            <div className="rounded-xl border border-slate-200 bg-white p-4 md:col-span-2">
-              <h4 className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Dependencies &amp; AI confidence</h4>
-              <div className="flex flex-wrap items-center gap-4">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {control.dependencies && control.dependencies.length > 0 ? (
-                    control.dependencies.map((d) => (
-                      <span key={d} className="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-0.5 font-mono text-xs text-slate-600">
-                        <Link2 className="h-3 w-3" />{d}
-                      </span>
-                    ))
-                  ) : (
-                    <span className="text-sm text-slate-400">No dependencies</span>
-                  )}
-                </div>
-                {control.ai_confidence !== null && (
-                  <div className="ml-auto flex items-center gap-2">
-                    <span className="text-xs text-slate-500">AI confidence</span>
-                    <span className={`text-sm font-semibold ${
-                      control.ai_confidence >= 0.8 ? 'text-emerald-600' :
-                      control.ai_confidence >= 0.5 ? 'text-amber-600' : 'text-rose-600'
-                    }`}>{Math.round(control.ai_confidence * 100)}%</span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* AI Recommendations */}
-            <div className="rounded-xl border border-slate-200 bg-white p-4 md:col-span-2">
-              <div className="mb-4 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-primary-600" />
-                  <h4 className="text-sm font-semibold text-slate-800">AI Recommendations</h4>
-                </div>
-                {!aiRecommendations[control.id] && canCreate && (
-                  <button
-                    onClick={() => handleGetAIRecommendations(control)}
-                    disabled={loadingAI === control.id}
-                    className="flex items-center gap-2 rounded-lg bg-primary-50 px-3 py-1.5 text-sm text-primary-700 hover:bg-primary-100 transition-colors disabled:opacity-50"
-                  >
-                    {loadingAI === control.id ? (
-                      <><Loader2 className="h-4 w-4 animate-spin" /> Generating...</>
-                    ) : (
-                      <><Sparkles className="h-4 w-4" /> Get AI Recommendations</>
-                    )}
-                  </button>
-                )}
-              </div>
-
-              {aiRecommendations[control.id] && (
-                <div className="space-y-6">
-                  <AiRecommendationSaver
-                    module="control_library"
-                    recommendationType="control_ai_recommendations"
-                    entityType="framework_control"
-                    entityId={control.id}
-                    title={`AI recommendations · ${control.control_id}`}
-                    output={aiRecommendations[control.id] as unknown as Record<string, unknown>}
-                    model="gpt-4o"
-                  />
-                  <div className="rounded-lg border border-primary-200 bg-primary-500/5 p-4">
-                    <div className="mb-3 flex items-center gap-2">
-                      <ClipboardList className="h-4 w-4 text-primary-600" />
-                      <h5 className="text-sm font-medium text-primary-600">Test Procedures</h5>
-                    </div>
-                    <div className="space-y-3">
-                      {aiRecommendations[control.id].test_procedures.map((proc, idx) => (
-                        <div key={idx} className="flex gap-3">
-                          <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-primary-50 text-xs font-medium text-primary-600">{idx + 1}</span>
-                          <div className="flex-1">
-                            <div className="mb-1 flex items-center gap-2">
-                              {getProcedureTypeBadge(proc.procedure_type)}
-                              <span className="text-xs text-slate-500">{proc.frequency}</span>
-                              {proc.sample_size !== 'N/A' && proc.sample_size !== 'N/A for inquiry' && (
-                                <span className="text-xs text-slate-500">| Sample: {proc.sample_size}</span>
-                              )}
-                            </div>
-                            <p className="text-sm text-slate-600">{proc.description}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="rounded-lg border border-emerald-200 bg-emerald-500/5 p-4">
-                    <div className="mb-2 flex items-center gap-2">
-                      <Target className="h-4 w-4 text-emerald-600" />
-                      <h5 className="text-sm font-medium text-emerald-600">Audit Focus Areas</h5>
-                    </div>
-                    <ul className="space-y-1">
-                      {aiRecommendations[control.id].audit_focus_areas.map((area, idx) => (
-                        <li key={idx} className="flex items-start gap-2 text-sm text-slate-600">
-                          <span className="mt-1 text-emerald-600">•</span>{area}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  {aiRecommendations[control.id].addressed_risks.length > 0 ? (
-                    <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-4">
-                      <div className="mb-3 flex items-center gap-2">
-                        <AlertTriangle className="h-4 w-4 text-amber-600" />
-                        <h5 className="text-sm font-medium text-amber-600">Risks addressed by this control</h5>
-                        <span className="text-[10px] text-slate-400">linked in the Risk Register · close when mitigated</span>
-                      </div>
-                      <div className="space-y-2">
-                        {aiRecommendations[control.id].addressed_risks.map((r) => {
-                          const isClosed = closedRiskIds.has(r.id) || (r.status || '').toLowerCase() === 'closed';
-                          return (
-                            <div key={r.id} className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white p-3">
-                              <AlertTriangle className={`mt-0.5 h-4 w-4 flex-shrink-0 ${isClosed ? 'text-slate-300' : 'text-amber-500'}`} />
-                              <div className="min-w-0 flex-1">
-                                <Link href="/erm/risks/list" className="text-sm font-medium text-slate-800 hover:text-primary-600">{r.title}</Link>
-                                <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
-                                  {r.category && <span className="capitalize">{r.category.replace('_', ' ')}</span>}
-                                  {r.residual_score != null && <span className="font-mono">· res {r.residual_score}</span>}
-                                  {isClosed && <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-1.5 py-0.5 text-emerald-600"><CheckCircle className="h-3 w-3" /> Closed</span>}
-                                </div>
-                              </div>
-                              {canCreate && (
-                                isClosed ? (
-                                  <span className="inline-flex flex-shrink-0 items-center gap-1 rounded-lg bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-600"><CheckCircle className="h-3.5 w-3.5" /> Closed</span>
-                                ) : (
-                                  <button onClick={() => closeRiskMutation.mutate(r.id)}
-                                    disabled={closingRiskId === r.id}
-                                    className="inline-flex flex-shrink-0 items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
-                                    {closingRiskId === r.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5" />} Close risk
-                                  </button>
-                                )
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ) : aiRecommendations[control.id].risks_if_not_implemented.length > 0 ? (
-                    <div className="rounded-lg border border-red-200 bg-red-500/5 p-4">
-                      <div className="mb-3 flex items-center gap-2">
-                        <ShieldAlert className="h-4 w-4 text-red-600" />
-                        <h5 className="text-sm font-medium text-red-600">Risks if this control isn’t implemented</h5>
-                        <span className="text-[10px] text-slate-400">AI-reasoned · no risks linked yet · add to Risk Register</span>
-                      </div>
-                      <div className="space-y-2">
-                        {aiRecommendations[control.id].risks_if_not_implemented.map((r, idx) => (
-                          <div key={idx} className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white p-3">
-                            <span className={`mt-0.5 inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium capitalize ${riskSevCls(r.severity)}`}>{r.severity || 'medium'}</span>
-                            <div className="min-w-0 flex-1">
-                              <p className="text-sm font-medium text-slate-800">{r.title}</p>
-                              {r.description && <p className="mt-0.5 text-xs text-slate-500">{r.description}</p>}
-                              {r.rationale && <p className="mt-1 text-[11px] italic text-slate-400">Why: {r.rationale}</p>}
-                              <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
-                                {r.category && <span className="capitalize">{r.category.replace('_', ' ')}</span>}
-                                {!!r.likelihood && !!r.impact && <span>· L{r.likelihood}×I{r.impact} = {r.likelihood * r.impact}</span>}
-                              </div>
-                            </div>
-                            {canCreate && (
-                              <button onClick={() => openPromote(control, r)}
-                                className="inline-flex flex-shrink-0 items-center gap-1 rounded-lg bg-red-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-red-700">
-                                <Plus className="h-3.5 w-3.5" /> Add to Risk Register
-                              </button>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                      <p className="text-xs text-slate-500">No register risks are linked to this control, and the AI found no residual risks to add.</p>
-                      {aiRecommendations[control.id].key_risks_addressed.length > 0 && (
-                        <ul className="mt-2 space-y-1">
-                          {aiRecommendations[control.id].key_risks_addressed.map((risk, idx) => (
-                            <li key={idx} className="flex items-start gap-2 text-xs text-slate-500"><span className="mt-0.5 text-amber-600">•</span>{risk}</li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
+  return (
+    <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1.5fr_1fr]">
+      {/* posture */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-5">
+        <div className="flex items-center gap-5">
+          <div className="relative h-[104px] w-[104px] flex-shrink-0">
+            <div className="h-full w-full rounded-full" style={{ background: `conic-gradient(${stops})` }} />
+            <div className="absolute inset-[14px] flex flex-col items-center justify-center rounded-full bg-white">
+              <span className="text-[24px] font-bold leading-none tabular-nums text-slate-900">{testedPct}%</span>
+              <span className="text-[9px] uppercase tracking-wide text-slate-400">tested</span>
             </div>
           </div>
-          );
-        })()}
-      </AnimatedModal>
-
-      {/* Promote an AI risk → real ERM Risk Register entry */}
-      {promoteCtx && (
-        <RightSlidePanel
-          isOpen
-          onClose={() => setPromoteCtx(null)}
-          title="Add risk to register"
-          subtitle={`From control ${promoteCtx.control.control_id} — implementing it mitigates this risk`}
-          width="w-full max-w-lg"
-          footer={
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setPromoteCtx(null)} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
-              <button onClick={() => promoteRiskMutation.mutate()} disabled={promoteRiskMutation.isPending || !promoteForm.title.trim()}
-                className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50">
-                {promoteRiskMutation.isPending ? 'Adding…' : 'Add to Risk Register'}
-              </button>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <h2 className="text-[15px] font-bold text-slate-900">Control assurance posture</h2>
+              <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${grade.bg} ${grade.c}`}>{grade.l}</span>
+              {ov.trend && <TrendChip delta={ov.trend.tested} goodIsUp />}
             </div>
-          }
-        >
-          <div className="space-y-4">
-            <p className="rounded-lg bg-red-50 p-2 text-[11px] text-red-700">
-              Creates a real risk in the ERM Risk Register, linked to this control as a mitigation. These are the same fields as the Risk Register. Residual defaults to inherent until the control is implemented.
+            <p className="mt-1 text-[12px] leading-relaxed text-slate-500">
+              {tested === 0
+                ? <>None of your <b className="text-slate-700">{total.toLocaleString()}</b> controls have been tested yet — start recording tests to build assurance.</>
+                : <><b className="text-slate-700">{tested.toLocaleString()}</b> of {total.toLocaleString()} controls tested · <b className={grade.c}>{effPct}%</b> of those effective{(t.overdue ?? 0) > 0 && <> · <b className="text-rose-600">{t.overdue} overdue</b></>}.</>}
             </p>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-700">Title <span className="text-red-500">*</span></label>
-              <input className={RISK_INPUT_CLS} value={promoteForm.title} onChange={(e) => setPromoteForm({ ...promoteForm, title: e.target.value })} required />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-700">Description</label>
-              <textarea className={RISK_INPUT_CLS} rows={2} value={promoteForm.description} onChange={(e) => setPromoteForm({ ...promoteForm, description: e.target.value })} />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="mb-1 block text-xs font-medium text-gray-700">Register Type</label>
-                <select className={RISK_INPUT_CLS} value={promoteForm.register_type} onChange={(e) => setPromoteForm({ ...promoteForm, register_type: e.target.value })}>
-                  <option value="">Select…</option>
-                  {promoteForm.register_type && !REGISTER_TYPES.includes(promoteForm.register_type) && (
-                    <option value={promoteForm.register_type}>{promoteForm.register_type}</option>
-                  )}
-                  {REGISTER_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-gray-700">Category</label>
-                <select className={RISK_INPUT_CLS} value={promoteForm.category} onChange={(e) => setPromoteForm({ ...promoteForm, category: e.target.value })}>
-                  {RISK_CATEGORIES.map((c) => <option key={c} value={c}>{c.replace('_', ' ')}</option>)}
-                </select>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="mb-1 block text-xs font-medium text-gray-700">Sub-Category <span className="text-gray-400">(optional)</span></label>
-                <input className={RISK_INPUT_CLS} value={promoteForm.risk_sub_category} onChange={(e) => setPromoteForm({ ...promoteForm, risk_sub_category: e.target.value })} />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-gray-700">Business Owner</label>
-                <select className={RISK_INPUT_CLS} value={promoteForm.business_owner_id ?? ''} onChange={(e) => setPromoteForm({ ...promoteForm, business_owner_id: e.target.value ? Number(e.target.value) : undefined })}>
-                  <option value="">Unassigned</option>
-                  {(usersList || []).map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
-                </select>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="mb-1 block text-xs font-medium text-gray-700">Inherent Likelihood</label>
-                <select className={RISK_INPUT_CLS} value={promoteForm.likelihood} onChange={(e) => setPromoteForm({ ...promoteForm, likelihood: Number(e.target.value) })}>
-                  {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-gray-700">Inherent Impact</label>
-                <select className={RISK_INPUT_CLS} value={promoteForm.impact} onChange={(e) => setPromoteForm({ ...promoteForm, impact: Number(e.target.value) })}>
-                  {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-gray-700">Residual Likelihood</label>
-                <select className={RISK_INPUT_CLS} value={promoteForm.residual_likelihood} onChange={(e) => setPromoteForm({ ...promoteForm, residual_likelihood: Number(e.target.value) })}>
-                  {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-gray-700">Residual Impact</label>
-                <select className={RISK_INPUT_CLS} value={promoteForm.residual_impact} onChange={(e) => setPromoteForm({ ...promoteForm, residual_impact: Number(e.target.value) })}>
-                  {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}</option>)}
-                </select>
-              </div>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-700">Treatment Plan <span className="text-gray-400">(optional)</span></label>
-              <textarea className={RISK_INPUT_CLS} rows={2} value={promoteForm.treatment_plan} onChange={(e) => setPromoteForm({ ...promoteForm, treatment_plan: e.target.value })} />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-700">Root Cause <span className="text-gray-400">(optional)</span></label>
-              <textarea className={RISK_INPUT_CLS} rows={2} value={promoteForm.root_cause} onChange={(e) => setPromoteForm({ ...promoteForm, root_cause: e.target.value })} />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-700">Recommendations <span className="text-gray-400">(optional)</span></label>
-              <textarea className={RISK_INPUT_CLS} rows={2} value={promoteForm.recommendations} onChange={(e) => setPromoteForm({ ...promoteForm, recommendations: e.target.value })} />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-700">Due date <span className="text-gray-400">(optional)</span></label>
-              <input type="date" className={RISK_INPUT_CLS} value={promoteForm.due_date} onChange={(e) => setPromoteForm({ ...promoteForm, due_date: e.target.value })} />
+            <div className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1">
+              {legend.map(([l, v, c]) => (
+                <span key={l} className="inline-flex items-center gap-1.5 text-[11px] text-slate-500"><span className={`h-2 w-2 rounded-full ${c}`} /><b className="tabular-nums text-slate-700">{v.toLocaleString()}</b> {l}</span>
+              ))}
             </div>
           </div>
-        </RightSlidePanel>
+        </div>
+      </div>
+
+      {/* needs attention */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-4">
+        <div className="mb-1.5 flex items-center gap-2">
+          <AlertTriangle className="h-4 w-4 text-amber-500" />
+          <span className="text-[13px] font-semibold text-slate-800">Needs attention</span>
+          <span className={`ml-auto rounded-full px-2 py-0.5 text-[11px] font-bold ${attentionTotal ? 'bg-amber-500 text-white' : 'bg-slate-100 text-slate-400'}`}>{attentionTotal}</span>
+        </div>
+        <div className="divide-y divide-slate-50">
+          {attention.map(a => (
+            <button key={a.key} onClick={() => a.n > 0 && onAttention(a.key)} disabled={a.n === 0}
+              className="flex w-full items-center justify-between py-2 text-left text-[12px] text-slate-600 enabled:hover:text-slate-900 disabled:cursor-default">
+              <span className="flex items-center gap-2"><span className={`h-2.5 w-2.5 rounded-full ${a.n > 0 ? a.dot : 'bg-slate-200'}`} />{a.label}</span>
+              <span className={`text-[14px] font-bold tabular-nums ${a.n > 0 ? a.txt : 'text-slate-300'}`}>{a.n}</span>
+            </button>
+          ))}
+        </div>
+        {attentionTotal === 0 && <p className="mt-1 text-center text-[11px] text-emerald-600">Nothing needs attention right now.</p>}
+      </div>
+    </div>
+  );
+}
+
+// ── internal / risk controls — a first-class section (not a footnote bar) ─────
+function InternalSection({ s, onOpen, onNew }: { s: WorkStats; onOpen: () => void; onNew: () => void }) {
+  const has = s.controls > 0;
+  const pct = (n: number, d: number) => (d ? Math.round((n / d) * 100) : 0);
+  const tiles = [
+    { lab: 'Controls', val: s.controls, icon: Layers },
+    { lab: 'Assigned', val: has ? s.assigned : '—', icon: Users },
+    { lab: 'Tested', val: has ? `${pct(s.tested, s.controls)}%` : '—', icon: FlaskConical },
+    { lab: 'Evidence', val: s.evidence_pending || '—', icon: FileClock },
+  ];
+  return (
+    <div className="overflow-hidden rounded-2xl border border-cyan-200 bg-gradient-to-br from-cyan-50/80 via-white to-white">
+      <div className="flex flex-wrap items-center gap-3 border-b border-cyan-100/70 px-4 py-3.5">
+        <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-cyan-500 text-white shadow-sm"><Layers className="h-5 w-5" /></span>
+        <div className="min-w-0 flex-1">
+          <h3 className="text-[14.5px] font-bold text-slate-900">Internal Controls</h3>
+          <p className="text-[11.5px] text-slate-500">Your own controls, authored from the risk register — your first line of defense, distinct from framework requirements.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          {has && <button onClick={onOpen} className="inline-flex items-center gap-1 rounded-lg border border-cyan-200 bg-white px-3 py-2 text-[12.5px] font-semibold text-cyan-700 hover:bg-cyan-50">View all <ChevronRight className="h-3.5 w-3.5" /></button>}
+          <button onClick={onNew} className="inline-flex items-center gap-1.5 rounded-lg bg-cyan-600 px-3 py-2 text-[12.5px] font-semibold text-white shadow-sm hover:bg-cyan-700"><Plus className="h-4 w-4" /> New internal control</button>
+        </div>
+      </div>
+      {has ? (
+        <div className="grid grid-cols-2 gap-px bg-cyan-100/60 sm:grid-cols-4">
+          {tiles.map(t => {
+            const Icon = t.icon;
+            return (
+              <button key={t.lab} onClick={onOpen} className="flex items-center gap-2.5 bg-white/90 px-4 py-3 text-left hover:bg-cyan-50/60">
+                <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-cyan-50 text-cyan-600"><Icon className="h-4 w-4" /></span>
+                <span><span className="block text-[9.5px] font-semibold uppercase tracking-wider text-slate-400">{t.lab}</span><span className="text-[17px] font-bold tabular-nums text-slate-900">{t.val}</span></span>
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="px-4 py-4 text-[12px] text-slate-500">No internal controls yet — <button onClick={onNew} className="font-semibold text-cyan-700 hover:underline">author your first</button> from the risk register.</div>
       )}
+    </div>
+  );
+}
+
+// ── VIEW: domain hub (cards) ─────────────────────────────────────────────────
+function DomainHub({ ov, loading, onOpen, onOpenInternal, onNew, onAttention }: { ov?: Overview; loading: boolean; onOpen: (d: DomainStat) => void; onOpenInternal: () => void; onNew: () => void; onAttention: (f: 'overdue' | 'ineffective' | 'partial' | 'evidence') => void }) {
+  if (loading || !ov) {
+    return (
+      <div className="space-y-4">
+        <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3 xl:grid-cols-5">
+          {Array.from({ length: 5 }).map((_, i) => <div key={i} className="h-[62px] animate-pulse rounded-xl bg-slate-100" />)}
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {Array.from({ length: 8 }).map((_, i) => <div key={i} className="h-[150px] animate-pulse rounded-2xl bg-slate-100" />)}
+        </div>
+      </div>
+    );
+  }
+  const pct = (n: number, d: number) => (d ? Math.round((n / d) * 100) : 0);
+  const [hubQ, setHubQ] = useState('');
+  const shownDomains = hubQ ? ov.domains.filter(d => d.domain.toLowerCase().includes(hubQ.toLowerCase())) : ov.domains;
+  return (
+    <div className="space-y-4">
+      <PostureHero ov={ov} onAttention={onAttention} />
+
+      {/* Domains section header (internal controls now live under the top-level
+          Internal Control toggle, not as a card here). */}
+      <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+        <div className="flex items-center gap-2">
+          <h2 className="text-[13.5px] font-bold text-slate-800">Controls by domain</h2>
+          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10.5px] font-semibold tabular-nums text-slate-500">{ov.domains.length} domains · {ov.totals.controls.toLocaleString()} controls</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="hidden flex-wrap items-center gap-3.5 text-[10.5px] text-slate-400 md:flex">
+            {(['effective', 'partially_effective', 'ineffective', 'not_tested'] as const).map(k => (
+              <span key={k} className="inline-flex items-center gap-1"><span className={`h-1.5 w-1.5 rounded-full ${EFF[k].dot}`} />{EFF[k].label}</span>
+            ))}
+          </div>
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input value={hubQ} onChange={e => setHubQ(e.target.value)} placeholder="Filter domains…" className="h-9 w-48 rounded-lg border border-slate-300 pl-8 pr-3 text-[13px] focus:border-primary-500 focus:outline-none" />
+          </div>
+        </div>
+      </div>
+      {shownDomains.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-slate-200 py-12 text-center text-[13px] text-slate-400">No domains match “{hubQ}”.</div>
+      ) : (
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        {shownDomains.map(d => {
+          const { Icon, t } = domainMeta(d.domain);
+          const misc = d.domain === 'Unclassified';
+          return (
+            <button key={d.domain} onClick={() => onOpen(d)}
+              className={`group relative flex flex-col gap-3 rounded-2xl border bg-white p-4 text-left transition-all hover:-translate-y-0.5 hover:border-primary-300 hover:shadow-lg hover:shadow-slate-200/70 ${misc ? 'border-dashed border-slate-300' : 'border-slate-200'}`}>
+              <div className="flex items-start gap-2.5">
+                <span className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl ${t.bg} ${t.text}`}><Icon className="h-4 w-4" /></span>
+                <h3 className="min-h-[34px] flex-1 pt-0.5 text-[13px] font-semibold leading-snug text-slate-800 group-hover:text-primary-700">{d.domain}</h3>
+                <ChevronRight className="mt-1 h-3.5 w-3.5 flex-shrink-0 text-slate-300 opacity-0 transition-opacity group-hover:opacity-100" />
+              </div>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-[25px] font-bold tabular-nums leading-none text-slate-900">{d.controls}</span>
+                <span className="text-[11px] text-slate-400">{d.by_source && !d.by_source.framework && d.by_source.internal ? 'internal / risk controls' : 'controls'}</span>
+                {d.frameworks > 0 && <span className="ml-auto rounded-full bg-slate-50 px-2 py-0.5 text-[10px] font-semibold tabular-nums text-slate-500 ring-1 ring-slate-200">{d.frameworks} frameworks</span>}
+              </div>
+              {d.by_source && (d.by_source.internal > 0 || d.by_source.normalized > 0) && d.by_source.framework > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[9.5px] font-semibold tabular-nums text-blue-600">{d.by_source.framework} framework</span>
+                  {d.by_source.internal > 0 && <span className="rounded-full bg-cyan-50 px-2 py-0.5 text-[9.5px] font-semibold tabular-nums text-cyan-700">{d.by_source.internal} internal / risk</span>}
+                  {d.by_source.normalized > 0 && <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[9.5px] font-semibold tabular-nums text-violet-600">{d.by_source.normalized} normalized</span>}
+                </div>
+              )}
+              <RagBar e={d.effective} p={d.partially_effective} i={d.ineffective} total={d.controls} />
+              <div className="flex justify-between gap-2 border-t border-slate-100 pt-2.5 text-[10px] uppercase tracking-wide text-slate-400">
+                <span>Assigned<b className="mt-0.5 block text-[13px] font-semibold normal-case tracking-normal text-slate-700">{d.assigned || '—'}</b></span>
+                <span>Tested<b className="mt-0.5 block text-[13px] font-semibold normal-case tracking-normal text-slate-700">{d.tested ? `${pct(d.tested, d.controls)}%` : '—'}</b></span>
+                <span>Evidence<b className={`mt-0.5 block text-[13px] font-semibold normal-case tracking-normal ${d.evidence_pending ? 'text-amber-600' : 'text-slate-700'}`}>{d.evidence_pending || '—'}</b></span>
+              </div>
+              {(d.overdue ?? 0) > 0 && <div className="flex items-center gap-1 text-[10.5px] font-semibold text-rose-600"><Siren className="h-3 w-3" />{d.overdue} test{(d.overdue ?? 0) > 1 ? 's' : ''} overdue</div>}
+            </button>
+          );
+        })}
+      </div>
+      )}
+    </div>
+  );
+}
+
+// ── top-level source switch (framework ⇄ internal) ───────────────────────────
+function SourceToggle({ mode, onChange, frameworkCount, internalCount }: {
+  mode: 'framework' | 'internal'; onChange: (m: 'framework' | 'internal') => void;
+  frameworkCount: number; internalCount: number;
+}) {
+  const opts = [
+    { k: 'framework' as const, label: 'Framework controls', icon: Boxes, count: frameworkCount },
+    { k: 'internal' as const, label: 'Internal Control', icon: Layers, count: internalCount },
+  ];
+  return (
+    <div className="inline-flex rounded-xl border border-slate-200 bg-slate-100 p-1">
+      {opts.map(o => {
+        const on = mode === o.k; const Icon = o.icon;
+        const onCls = o.k === 'internal' ? 'bg-white text-cyan-700 shadow-sm' : 'bg-white text-primary-700 shadow-sm';
+        const badgeCls = on ? (o.k === 'internal' ? 'bg-cyan-100 text-cyan-700' : 'bg-primary-100 text-primary-700') : 'bg-slate-200 text-slate-500';
+        return (
+          <button key={o.k} onClick={() => onChange(o.k)}
+            className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-[13px] font-semibold transition-colors ${on ? onCls : 'text-slate-500 hover:text-slate-700'}`}>
+            <Icon className="h-4 w-4" />{o.label}
+            <span className={`rounded-full px-1.5 text-[10.5px] tabular-nums ${badgeCls}`}>{o.count.toLocaleString()}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── internal mode (top-level view of internal / risk controls) ───────────────
+function InternalMode({ s, onOpenRow, onNew }: { s?: WorkStats; onOpenRow: (r: Row) => void; onNew: () => void }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ['wb-list', 'internal-all'],
+    queryFn: async () => (await apiClient.get(`${WB}/controls?source=internal&limit=500`)).data as { total: number; items: Row[] },
+  });
+  const rows = data?.items || [];
+  return (
+    <div className="space-y-4">
+      {/* No title bar — the top toggle already signals we're in Internal mode.
+          Just the create action + a one-line note. */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-[12px] text-slate-500">Your own controls, authored from the risk register — distinct from framework requirements.</p>
+        <button onClick={onNew} className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-lg bg-cyan-600 px-3 py-2 text-[13px] font-semibold text-white hover:bg-cyan-700"><Plus className="h-4 w-4" /> New internal control</button>
+      </div>
+      {s && <KpiStrip s={s} />}
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+        {isLoading ? <div className="p-10 text-center"><Loader2 className="mx-auto h-5 w-5 animate-spin text-slate-300" /></div> :
+          rows.length === 0 ? <div className="p-10 text-center text-[13px] text-slate-400">No internal controls yet. Click <b>New internal control</b> to author one from your risk register.</div> :
+          <ControlTable rows={rows} onOpenRow={onOpenRow} />}
+      </div>
+    </div>
+  );
+}
+
+// ── VIEW: internal / risk controls (outside the domain taxonomy) ─────────────
+function InternalDetail({ s, onBack, onOpenRow, onNew }: { s: WorkStats; onBack: () => void; onOpenRow: (r: Row) => void; onNew: () => void }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ['wb-list', 'internal-all'],
+    queryFn: async () => (await apiClient.get(`${WB}/controls?source=internal&limit=500`)).data as { total: number; items: Row[] },
+  });
+  const rows = data?.items || [];
+  return (
+    <div className="space-y-4">
+      <button onClick={onBack} className="inline-flex items-center gap-1 text-[12.5px] font-semibold text-slate-500 hover:text-primary-700">
+        <ChevronLeft className="h-4 w-4" /> All domains
+      </button>
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-100 text-cyan-700"><Layers className="h-5 w-5" /></span>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-lg font-bold leading-tight text-slate-900">Internal Controls</h2>
+          <p className="text-[11.5px] text-slate-400">Authored in-house, linked to your risk register — independent of the framework domains</p>
+        </div>
+        <button onClick={onNew} className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-lg bg-cyan-600 px-3 py-2 text-[13px] font-semibold text-white hover:bg-cyan-700"><Plus className="h-4 w-4" /> New internal control</button>
+      </div>
+      <KpiStrip s={s} />
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+        {isLoading ? <div className="p-10 text-center"><Loader2 className="mx-auto h-5 w-5 animate-spin text-slate-300" /></div> :
+          rows.length === 0 ? <div className="p-10 text-center text-[13px] text-slate-400">No internal controls yet. Click <b>New internal control</b> to author one from your risk register.</div> :
+          <ControlTable rows={rows} onOpenRow={onOpenRow} />}
+      </div>
+    </div>
+  );
+}
+
+// ── VIEW: domain detail (framework sections) ─────────────────────────────────
+function DomainDetail({ d, onBack, onOpenRow }: { d: DomainStat; onBack: () => void; onOpenRow: (r: Row) => void }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ['wb-groups', d.domain],
+    queryFn: async () => (await apiClient.get(`${WB}/overview/${encodeURIComponent(d.domain)}/groups`)).data as
+      { domain: string; groups: Group[]; total_controls: number },
+  });
+  const [openKeys, setOpenKeys] = useState<string[]>([]);
+  const gkey = (g: Group) => `${g.type}-${g.framework_id ?? ''}`;
+  const toggle = (g: Group) => setOpenKeys(ks => ks.includes(gkey(g)) ? ks.filter(x => x !== gkey(g)) : [...ks, gkey(g)]);
+  const { Icon, t } = domainMeta(d.domain);
+  return (
+    <div className="space-y-4">
+      <button onClick={onBack} className="inline-flex items-center gap-1 text-[12.5px] font-semibold text-slate-500 hover:text-primary-700">
+        <ChevronLeft className="h-4 w-4" /> All domains
+      </button>
+      <div className="flex flex-wrap items-center gap-3">
+        <span className={`flex h-10 w-10 items-center justify-center rounded-xl ${t.bg} ${t.text}`}><Icon className="h-5 w-5" /></span>
+        <div>
+          <h2 className="text-lg font-bold leading-tight text-slate-900">{d.domain}</h2>
+          <p className="text-[11.5px] text-slate-400">
+            {d.by_source
+              ? [d.by_source.framework ? `${d.by_source.framework} framework controls (${d.frameworks} framework${d.frameworks === 1 ? '' : 's'})` : '', d.by_source.internal ? `${d.by_source.internal} internal / risk` : '', d.by_source.normalized ? `${d.by_source.normalized} normalized` : '']
+                .filter(Boolean).join(' · ')
+              : `${d.controls} controls across ${d.frameworks} framework${d.frameworks === 1 ? '' : 's'}`}
+            {' '}— click any control to open its workbench
+          </p>
+        </div>
+      </div>
+      <KpiStrip s={{ ...d }} />
+      {isLoading ? (
+        <div className="space-y-2.5">{Array.from({ length: 6 }).map((_, i) => <div key={i} className="h-[52px] animate-pulse rounded-xl bg-slate-100" />)}</div>
+      ) : (
+        <div className="space-y-2.5">
+          {(data?.groups || []).map(g => {
+            const isOpen = openKeys.includes(gkey(g));
+            const avatarCls = g.type === 'normalized' ? 'bg-violet-50 text-violet-600' : g.type === 'internal' ? 'bg-cyan-50 text-cyan-600' : 'bg-slate-100 text-slate-500';
+            return (
+              <div key={gkey(g)} className={`overflow-hidden rounded-xl border bg-white transition-colors ${isOpen ? 'border-primary-200 shadow-sm' : 'border-slate-200'}`}>
+                <button onClick={() => toggle(g)} className="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-slate-50/70">
+                  <ChevronRight className={`h-3.5 w-3.5 flex-shrink-0 text-slate-400 transition-transform ${isOpen ? 'rotate-90' : ''}`} />
+                  <span className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg text-[9.5px] font-bold ${avatarCls}`}>
+                    {g.type === 'normalized' ? <Layers className="h-3.5 w-3.5" /> : initials(g.name)}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-slate-700">{g.name}</span>
+                  {g.tested > 0
+                    ? <RagBar e={g.effective} p={g.partially_effective} i={g.ineffective} total={g.controls} className="w-24 flex-shrink-0" />
+                    : <span className="flex-shrink-0 text-[10px] italic text-slate-300">not tested</span>}
+                  <span className="flex-shrink-0 rounded-full bg-slate-50 px-2 py-0.5 text-[10.5px] font-semibold tabular-nums text-slate-500 ring-1 ring-slate-200">{g.controls}</span>
+                </button>
+                {isOpen && <GroupRows domain={d.domain} group={g} onOpenRow={onOpenRow} />}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function GroupRows({ domain, group, onOpenRow }: { domain: string; group: Group; onOpenRow: (r: Row) => void }) {
+  const params = new URLSearchParams({ canonical_domain: domain, limit: '500' });
+  if (group.type === 'framework' && group.framework_id) params.set('framework_id', String(group.framework_id));
+  else params.set('source', group.type);
+  const { data, isLoading } = useQuery({
+    queryKey: ['wb-list', 'group', domain, group.type, group.framework_id],
+    queryFn: async () => (await apiClient.get(`${WB}/controls?${params}`)).data as { total: number; items: Row[] },
+  });
+  return (
+    <div className="border-t border-slate-100">
+      {isLoading ? <div className="p-4 text-center"><Loader2 className="mx-auto h-4 w-4 animate-spin text-slate-300" /></div> : (
+        <ControlTable rows={data?.items || []} onOpenRow={onOpenRow} compact />
+      )}
+    </div>
+  );
+}
+
+// ── VIEW: by framework ───────────────────────────────────────────────────────
+function ByFramework({ ov, onOpenRow }: { ov?: Overview; onOpenRow: (r: Row) => void }) {
+  const [openIds, setOpenIds] = useState<number[]>([]);
+  if (!ov) return <div className="flex h-32 items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-slate-300" /></div>;
+  return (
+    <div className="space-y-2.5">
+      <p className="text-[12px] text-slate-400">Same controls, sliced by framework — for teams that work one framework at a time.</p>
+      {ov.frameworks.map(f => {
+        const isOpen = openIds.includes(f.id);
+        return (
+          <div key={f.id} className={`overflow-hidden rounded-xl border bg-white transition-colors ${isOpen ? 'border-primary-200 shadow-sm' : 'border-slate-200'}`}>
+            <button onClick={() => setOpenIds(s => isOpen ? s.filter(x => x !== f.id) : [...s, f.id])}
+              className="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-slate-50/70">
+              <ChevronRight className={`h-3.5 w-3.5 flex-shrink-0 text-slate-400 transition-transform ${isOpen ? 'rotate-90' : ''}`} />
+              <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-slate-100 text-[9.5px] font-bold text-slate-500">{initials(f.name)}</span>
+              <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-slate-700">{f.name}</span>
+              <span className="flex-shrink-0 rounded-full bg-slate-50 px-2 py-0.5 text-[10.5px] font-semibold tabular-nums text-slate-500 ring-1 ring-slate-200">{f.controls}</span>
+            </button>
+            {isOpen && <FrameworkRows fwId={f.id} onOpenRow={onOpenRow} />}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function FrameworkRows({ fwId, onOpenRow }: { fwId: number; onOpenRow: (r: Row) => void }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ['wb-list', 'byfw', fwId],
+    queryFn: async () => (await apiClient.get(`${WB}/controls?framework_id=${fwId}&limit=600`)).data as { total: number; items: Row[] },
+  });
+  return (
+    <div className="border-t border-slate-100">
+      {isLoading ? <div className="p-4 text-center"><Loader2 className="mx-auto h-4 w-4 animate-spin text-slate-300" /></div> : (
+        <ControlTable rows={data?.items || []} onOpenRow={onOpenRow} compact showDomain />
+      )}
+    </div>
+  );
+}
+
+// ── VIEW: flat list (power view — search everything) ─────────────────────────
+function FlatList({ frameworks, onOpenRow, preset }: { frameworks: { id: number; name: string }[]; onOpenRow: (r: Row) => void; preset?: { effectiveness?: string; due?: string } | null }) {
+  const [q, setQ] = useState('');
+  const [source, setSource] = useState('all');
+  const [framework, setFramework] = useState('');
+  const [domain, setDomain] = useState('');
+  const [effFilter, setEffFilter] = useState(preset?.effectiveness || '');
+  const [due, setDue] = useState(preset?.due || '');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [page, setPage] = useState(0);
+  const LIMIT = 50;
+
+  const { data: domainsData } = useQuery({
+    queryKey: ['wb-domains'],
+    queryFn: async () => (await apiClient.get(`${WB}/domains`)).data as { domains: string[] },
+  });
+
+  const p = new URLSearchParams();
+  if (source !== 'all') p.set('source', source);
+  if (q) p.set('q', q);
+  if (framework) p.set('framework_id', framework);
+  if (domain) p.set('canonical_domain', domain);
+  if (statusFilter) p.set('status', statusFilter);
+  if (effFilter) p.set('effectiveness', effFilter);
+  if (due) p.set('due', due);
+  p.set('skip', String(page * LIMIT)); p.set('limit', String(LIMIT));
+
+  const { data: list, isLoading } = useQuery({
+    queryKey: ['wb-list', 'flat', source, q, framework, domain, statusFilter, effFilter, due, page],
+    queryFn: async () => (await apiClient.get(`${WB}/controls?${p}`)).data as
+      { total: number; items: Row[]; source_counts?: Record<string, number> },
+  });
+  const total = list?.total || 0;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input value={q} onChange={(e) => { setQ(e.target.value); setPage(0); }} placeholder="Search controls…" className="h-9 w-56 rounded-lg border border-slate-300 pl-8 pr-3 text-[13px] focus:border-primary-500 focus:outline-none" />
+        </div>
+        <select value={framework} onChange={(e) => { setFramework(e.target.value); setPage(0); }} className="h-9 max-w-[220px] rounded-lg border border-slate-300 px-2 text-[13px]">
+          <option value="">All frameworks</option>
+          {frameworks.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+        </select>
+        <select value={domain} onChange={(e) => { setDomain(e.target.value); setPage(0); }} className="h-9 max-w-[220px] rounded-lg border border-slate-300 px-2 text-[13px]">
+          <option value="">All domains</option>
+          {(domainsData?.domains || []).map(d => <option key={d} value={d}>{d}</option>)}
+        </select>
+        <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(0); }} className="h-9 rounded-lg border border-slate-300 px-2 text-[13px]">
+          <option value="">Any progress</option>
+          {['not_started', 'in_progress', 'implemented', 'verified', 'not_applicable'].map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
+        </select>
+        <select value={effFilter} onChange={(e) => { setEffFilter(e.target.value); setPage(0); }} className="h-9 rounded-lg border border-slate-300 px-2 text-[13px]">
+          <option value="">Any effectiveness</option>
+          {['effective', 'partially_effective', 'ineffective', 'not_tested'].map(s => <option key={s} value={s}>{eff(s).label}</option>)}
+        </select>
+        {due && (
+          <button onClick={() => { setDue(''); setPage(0); }} className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-[12.5px] font-medium text-rose-700 hover:bg-rose-100">
+            <Siren className="h-3.5 w-3.5" /> {due === 'overdue' ? 'Overdue only' : 'Scheduled only'} <X className="h-3 w-3" />
+          </button>
+        )}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-1.5">
+        {([['all', 'All'], ['framework', 'Framework'], ['internal', 'Internal Control'], ['normalized', 'Normalized']] as const).map(([k, label]) => {
+          const active = source === k;
+          const dot = k === 'framework' ? 'bg-blue-500' : k === 'internal' ? 'bg-cyan-500' : k === 'normalized' ? 'bg-violet-500' : 'bg-slate-400';
+          return (
+            <button key={k} type="button" onClick={() => { setSource(k); setPage(0); }}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12.5px] font-medium transition-colors ${active ? 'border-primary-400 bg-primary-50 text-primary-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+              {k !== 'all' && <span className={`h-2 w-2 rounded-full ${dot}`} />}{label}
+              <span className={`rounded-full px-1.5 text-[10.5px] tabular-nums ${active ? 'bg-primary-100 text-primary-700' : 'bg-slate-100 text-slate-500'}`}>{(list?.source_counts?.[k]) ?? 0}</span>
+            </button>
+          );
+        })}
+        <span className="ml-auto text-[12px] text-slate-400">Showing {total.toLocaleString()}</span>
+      </div>
+
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+        {isLoading ? <div className="p-10 text-center"><Loader2 className="mx-auto h-5 w-5 animate-spin text-slate-300" /></div> :
+          <ControlTable rows={list?.items || []} onOpenRow={onOpenRow} showDomain />}
+      </div>
+
+      {total > LIMIT && (
+        <div className="flex items-center justify-end gap-2 text-[12px]">
+          <button disabled={page === 0} onClick={() => setPage(p2 => Math.max(0, p2 - 1))} className="rounded border border-slate-200 px-2.5 py-1 disabled:opacity-40">Prev</button>
+          <span className="text-slate-500">Page {page + 1} of {Math.ceil(total / LIMIT)}</span>
+          <button disabled={(page + 1) * LIMIT >= total} onClick={() => setPage(p2 => p2 + 1)} className="rounded border border-slate-200 px-2.5 py-1 disabled:opacity-40">Next</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── VIEW: my work ────────────────────────────────────────────────────────────
+function MyWork({ items, onOpenRow }: { items: Row[]; onOpenRow: (r: Row) => void }) {
+  return (
+    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+      {items.length === 0 ? <div className="p-10 text-center text-[13px] text-slate-400">Nothing assigned to you yet.</div> :
+        <ControlTable rows={items} onOpenRow={onOpenRow} showDomain />}
+    </div>
+  );
+}
+
+// ── shared control table ─────────────────────────────────────────────────────
+function ControlTable({ rows, onOpenRow, compact, showDomain }: { rows: Row[]; onOpenRow: (r: Row) => void; compact?: boolean; showDomain?: boolean }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-left text-[13px]">
+        <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
+          <tr>
+            <th className="px-4 py-2.5 font-semibold">Control</th>
+            {showDomain && <th className="px-3 py-2.5 font-semibold">Domain</th>}
+            <th className="px-3 py-2.5 font-semibold">Source</th>
+            <th className="px-3 py-2.5 font-semibold">Progress</th>
+            <th className="px-3 py-2.5 font-semibold">Effectiveness</th>
+            <th className="px-3 py-2.5 font-semibold">Assignees</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {rows.length === 0 ? (
+            <tr><td colSpan={showDomain ? 6 : 5} className="px-4 py-8 text-center text-slate-400">No controls here.</td></tr>
+          ) : rows.map((r) => (
+            <tr key={`${r.source_type}-${r.source_id}`} onClick={() => onOpenRow(r)} className="cursor-pointer hover:bg-slate-50">
+              <td className={`px-4 ${compact ? 'py-2' : 'py-2.5'}`}>
+                <div className="flex items-center gap-2">
+                  {r.is_key_control && <Star className="h-3.5 w-3.5 flex-shrink-0 fill-amber-400 text-amber-400" />}
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5"><span className="truncate font-medium text-slate-800">{r.name || '—'}</span>{r.overdue && <span className="inline-flex flex-shrink-0 items-center gap-0.5 rounded bg-rose-50 px-1.5 py-0.5 text-[9.5px] font-semibold text-rose-600"><Siren className="h-2.5 w-2.5" />overdue</span>}</div>
+                    <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-slate-400">
+                      {r.code && <span className="max-w-[160px] truncate rounded bg-slate-100 px-1.5 py-px font-mono text-[10px] leading-4 text-slate-500" title={r.code}>{r.code}</span>}
+                      {r.framework_name && <span className="truncate">{r.framework_name}</span>}
+                    </div>
+                  </div>
+                </div>
+              </td>
+              {showDomain && <td className="px-3 py-2 text-[11.5px] text-slate-500">{r.canonical_domain || '—'}</td>}
+              <td className="px-3 py-2"><span className={`inline-block rounded-full border px-2 py-0.5 text-[10.5px] font-medium ${(SOURCE_BADGE[r.source_type] || SOURCE_BADGE.framework).cls}`}>{(SOURCE_BADGE[r.source_type] || {}).label}</span>{r.source_type === 'normalized' && (r.member_count || 0) > 0 && <span className="ml-1 text-[10.5px] text-slate-400" title={r.framework_name}>{r.member_count} fw</span>}</td>
+              <td className="px-3 py-2"><span className={`inline-block rounded px-1.5 py-0.5 text-[10.5px] font-medium ${IMPL_BADGE[r.implementation_status || 'not_started']}`}>{(r.implementation_status || 'not_started').replace('_', ' ')}</span></td>
+              <td className="px-3 py-2"><EffDots d={r.design_effectiveness} o={r.operating_effectiveness} /></td>
+              <td className="px-3 py-2">{(r.assignees && r.assignees.length) ? (<div className="flex -space-x-1.5">{r.assignees.slice(0, 3).map(a => <span key={a.id} title={a.display_name} className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-cyan-100 text-[9px] font-semibold text-cyan-700">{initials(a.display_name)}</span>)}{r.assignees.length > 3 && <span className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-slate-100 text-[9px] text-slate-500">+{r.assignees.length - 3}</span>}</div>) : <span className="text-[11px] text-slate-300">Unassigned</span>}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+const inp = 'w-full rounded-lg border border-slate-300 px-3 py-2 text-[13px] focus:border-primary-500 focus:outline-none';
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return <label className="block"><span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">{label}</span>{children}</label>;
+}
+
+// ── Add from Library (promote normalized → catalog) ─────────────────────────
+function PromotePicker({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const [q, setQ] = useState('');
+  const [sel, setSel] = useState<number[]>([]);
+  const { data, isLoading } = useQuery({
+    queryKey: ['wb-normalized', q],
+    queryFn: async () => (await apiClient.get(`${WB}/normalized?only_unpromoted=true&limit=100${q ? `&q=${encodeURIComponent(q)}` : ''}`)).data as
+      { total: number; items: { id: number; code: string; name: string; domain?: string; review_status?: string; frameworks: string[] }[] },
+  });
+  const promote = useMutation({ mutationFn: async () => apiClient.post(`${WB}/promote`, { normalized_control_ids: sel }), onSuccess: onDone });
+  const items = data?.items || [];
+  const toggle = (id: number) => setSel(s => s.includes(id) ? s.filter(x => x !== id) : [...s, id]);
+  return (
+    <RightSlidePanel isOpen onClose={onClose} width="w-full max-w-xl" title="Add controls from the Library"
+      subtitle="Promote verified normalized controls into the catalog (comply once → covers their frameworks)"
+      footer={<div className="flex items-center justify-between"><span className="text-[12px] text-slate-500">{sel.length} selected</span>
+        <div className="flex gap-2"><button onClick={onClose} className="rounded-lg border border-slate-200 px-3 py-2 text-[13px]">Cancel</button>
+          <button disabled={!sel.length || promote.isPending} onClick={() => promote.mutate()} className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-2 text-[13px] font-semibold text-white disabled:opacity-50">{promote.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Promote {sel.length || ''}</button></div></div>}>
+      <div className="space-y-2">
+        <div className="relative"><Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={q} onChange={e => setQ(e.target.value)} placeholder="Search normalized controls…" className="h-9 w-full rounded-lg border border-slate-300 pl-8 pr-3 text-[13px] focus:border-primary-500 focus:outline-none" /></div>
+        {isLoading ? <div className="py-10 text-center"><Loader2 className="mx-auto h-5 w-5 animate-spin text-slate-400" /></div> :
+          items.length === 0 ? <div className="py-10 text-center text-[13px] text-slate-400">Nothing left to promote.</div> :
+            <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
+              {items.map(it => (
+                <li key={it.id} onClick={() => toggle(it.id)} className={`flex cursor-pointer items-start gap-2.5 p-2.5 hover:bg-slate-50 ${sel.includes(it.id) ? 'bg-violet-50' : ''}`}>
+                  <input type="checkbox" checked={sel.includes(it.id)} onChange={() => toggle(it.id)} onClick={e => e.stopPropagation()} className="mt-0.5 h-4 w-4" />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2"><span className="truncate text-[13px] font-medium text-slate-800">{it.name}</span>{it.review_status && <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${it.review_status === 'approved' ? 'bg-emerald-100 text-emerald-700' : it.review_status === 'flagged' ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-500'}`}>{it.review_status}</span>}</div>
+                    <div className="text-[11px] text-slate-400">{it.code}{it.domain ? ` · ${it.domain}` : ''}{it.frameworks?.length ? ` · ${it.frameworks.length} frameworks` : ''}</div>
+                  </div>
+                </li>
+              ))}
+            </ul>}
+      </div>
+    </RightSlidePanel>
+  );
+}
+
+// ── Create control (→ internal) ─────────────────────────────────────────────
+function CreateControl({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+  const [form, setForm] = useState({ name: '', description: '', category: '', frequency: 'quarterly', priority: 'medium', is_key_control: false });
+  const create = useMutation({ mutationFn: async () => (await apiClient.post(`${WB}/controls`, form)).data, onSuccess: onCreated });
+  return (
+    <RightSlidePanel isOpen onClose={onClose} title="New control" subtitle="Authored as an internal (risk-sourced) control"
+      footer={<div className="flex justify-end gap-2"><button onClick={onClose} className="rounded-lg border border-slate-200 px-3 py-2 text-[13px]">Cancel</button>
+        <button disabled={!form.name || create.isPending} onClick={() => create.mutate()} className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-2 text-[13px] font-semibold text-white disabled:opacity-50">{create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Create</button></div>}>
+      <div className="space-y-3">
+        <Field label="Name"><input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className={inp} /></Field>
+        <Field label="Description"><textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={3} className={inp} /></Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Category"><input value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} placeholder="e.g. Operations" className={inp} /></Field>
+          <Field label="Frequency"><select value={form.frequency} onChange={e => setForm({ ...form, frequency: e.target.value })} className={inp}>{['daily', 'weekly', 'monthly', 'quarterly', 'annually', 'ad_hoc'].map(f => <option key={f}>{f}</option>)}</select></Field>
+          <Field label="Priority"><select value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value })} className={inp}>{['low', 'medium', 'high', 'critical'].map(x => <option key={x}>{x}</option>)}</select></Field>
+          <label className="flex items-end gap-2 pb-2 text-[13px] text-slate-600"><input type="checkbox" checked={form.is_key_control} onChange={e => setForm({ ...form, is_key_control: e.target.checked })} /> Key control</label>
+        </div>
+      </div>
+    </RightSlidePanel>
+  );
+}
+
+// ── per-control drawer ──────────────────────────────────────────────────────
+const TABS = [
+  { k: 'details', label: 'Details' }, { k: 'evidence', label: 'Sampling' },
+  { k: 'procedures', label: 'Test Procedures' }, { k: 'effectiveness', label: 'Design & Effectiveness' },
+  { k: 'risks', label: 'Risks' },
+] as const;
+
+function WorkbenchDrawer({ row, onClose }: { row: Row; onClose: () => void }) {
+  const qc = useQueryClient();
+  const [tab, setTab] = useState<typeof TABS[number]['k']>('details');
+  const { data: d, isLoading, refetch } = useQuery({
+    queryKey: ['wb-detail', row.source_type, row.source_id],
+    queryFn: async () => (await apiClient.get(`${WB}/controls/${row.source_type}/${row.source_id}`)).data,
+  });
+  const { data: users } = useQuery({ queryKey: ['wb-users'], queryFn: async () => (await apiClient.get(`${WB}/tenant-users`)).data as { id: number; display_name: string; email?: string }[] });
+  const wid = d?.work_item_id;
+  const invalidate = () => { refetch(); qc.invalidateQueries({ queryKey: ['wb-list'] }); qc.invalidateQueries({ queryKey: ['wb-my-work'] }); qc.invalidateQueries({ queryKey: ['wb-overview'] }); };
+  const assign = useMutation({ mutationFn: async (ids: number[]) => apiClient.patch(`${WB}/items/${wid}/assign`, { assigned_user_ids: ids }), onSuccess: invalidate });
+
+  return (
+    <RightSlidePanel isOpen onClose={onClose} width="w-full max-w-2xl"
+      title={<span className="flex items-center gap-2">{row.is_key_control && <Star className="h-4 w-4 fill-amber-400 text-amber-400" />}{d?.name || row.name}</span>}
+      subtitle={`${row.code || ''} · ${(SOURCE_BADGE[row.source_type] || {}).label}${d?.framework_name ? ` · ${d.framework_name}` : ''}`}>
+      {isLoading || !d ? <div className="flex h-40 items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-slate-400" /></div> : (
+        <div>
+          <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg bg-slate-50 p-3">
+            <span className={`rounded px-2 py-0.5 text-[11px] font-medium ${STATUS_BADGE[d.status || 'draft']}`}>{(d.status || 'draft').replace('_', ' ')}</span>
+            <span className={`rounded px-2 py-0.5 text-[11px] font-medium ${IMPL_BADGE[d.implementation_status || 'not_started']}`}>{(d.implementation_status || 'not_started').replace('_', ' ')}</span>
+            <div className="ml-auto flex items-center gap-2">
+              <div className="flex -space-x-1.5">{(d.assignees || []).map((a: any) => <span key={a.id} title={a.display_name} className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-cyan-100 text-[9px] font-semibold text-cyan-700">{initials(a.display_name)}</span>)}</div>
+              <MultiSelectDropdown title="Assign" size="sm" placeholder="Assign…" forceSearch items={(users || []).map(u => ({ value: String(u.id), label: u.display_name, subLabel: u.email }))} selectedValues={(d.assigned_user_ids || []).map(String)} onApply={(v) => assign.mutate(v.map(Number))} />
+            </div>
+          </div>
+          <div className="mb-4 flex flex-wrap gap-1 border-b border-slate-200">
+            {TABS.map(t => <button key={t.k} onClick={() => setTab(t.k)} className={`relative px-3 py-1.5 text-[12.5px] font-medium ${tab === t.k ? 'text-primary-700' : 'text-slate-500 hover:text-slate-700'}`}>{t.label}{tab === t.k && <span className="absolute inset-x-2 -bottom-px h-0.5 rounded bg-primary-600" />}</button>)}
+          </div>
+          {tab === 'details' && <DetailsTab d={d} wid={wid} onSaved={invalidate} />}
+          {tab === 'effectiveness' && <EffectivenessTab d={d} wid={wid} onSaved={invalidate} />}
+          {tab === 'procedures' && <ProceduresTab d={d} wid={wid} onSaved={invalidate} />}
+          {tab === 'evidence' && <EvidenceTab d={d} wid={wid} onSaved={invalidate} />}
+          {tab === 'risks' && <RisksTab d={d} wid={wid} onSaved={invalidate} />}
+        </div>
+      )}
+    </RightSlidePanel>
+  );
+}
+
+function DetailsTab({ d, wid, onSaved }: any) {
+  const [f, setF] = useState({ name: d.name || '', description: d.description || '', priority: d.priority || 'medium', is_key_control: !!d.is_key_control, implementation_status: d.implementation_status || 'not_started' });
+  const save = useMutation({ mutationFn: async () => apiClient.patch(`${WB}/items/${wid}`, f), onSuccess: onSaved });
+  return (
+    <div className="space-y-3">
+      <Field label="Name"><input value={f.name} onChange={e => setF({ ...f, name: e.target.value })} className={inp} /></Field>
+      <Field label="Description"><textarea value={f.description} onChange={e => setF({ ...f, description: e.target.value })} rows={4} className={inp} /></Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Priority"><select value={f.priority} onChange={e => setF({ ...f, priority: e.target.value })} className={inp}>{['low', 'medium', 'high', 'critical'].map(x => <option key={x}>{x}</option>)}</select></Field>
+        <Field label="Progress"><select value={f.implementation_status} onChange={e => setF({ ...f, implementation_status: e.target.value })} className={inp}>{['not_started', 'in_progress', 'implemented', 'verified', 'not_applicable'].map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}</select></Field>
+      </div>
+      <label className="flex items-center gap-2 text-[13px] text-slate-600"><input type="checkbox" checked={f.is_key_control} onChange={e => setF({ ...f, is_key_control: e.target.checked })} /> Key control</label>
+      <button onClick={() => save.mutate()} disabled={save.isPending} className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-2 text-[13px] font-semibold text-white disabled:opacity-50">{save.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Save</button>
+    </div>
+  );
+}
+
+function EffectivenessTab({ d, wid, onSaved }: any) {
+  const [show, setShow] = useState(false);
+  const [t, setT] = useState({ test_type: 'operating', result: 'effective', sample_size: 25, exceptions_found: 0, findings: '', frequency: 'quarterly' });
+  const add = useMutation({ mutationFn: async () => apiClient.post(`${WB}/items/${wid}/tests`, t), onSuccess: () => { setShow(false); onSaved(); } });
+  const review = useMutation({ mutationFn: async ({ id, action }: any) => apiClient.post(`${WB}/tests/${id}/review`, { action }), onSuccess: onSaved });
+  // per-test edit
+  const [editId, setEditId] = useState<number | null>(null);
+  const [ef, setEf] = useState<{ test_type: string; result: string; sample_size: number; exceptions_found: number; findings: string }>({ test_type: 'operating', result: 'effective', sample_size: 0, exceptions_found: 0, findings: '' });
+  const startEdit = (x: any) => { setEditId(x.id); setEf({ test_type: x.test_type || 'operating', result: x.result || 'effective', sample_size: x.sample_size ?? 0, exceptions_found: x.exceptions_found ?? 0, findings: x.findings || '' }); };
+  const editM = useMutation({ mutationFn: async () => apiClient.patch(`${WB}/tests/${editId}`, ef), onSuccess: () => { setEditId(null); onSaved(); } });
+  const delM = useMutation({ mutationFn: async (id: number) => apiClient.delete(`${WB}/tests/${id}`), onSuccess: () => { setEditId(null); onSaved(); } });
+  const nextDate = d.next_test_date ? new Date(d.next_test_date) : null;
+  const overdue = nextDate ? nextDate < new Date() : false;
+  const daysTo = nextDate ? Math.round((nextDate.getTime() - Date.now()) / 86400000) : null;
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3">
+        {(['design_effectiveness', 'operating_effectiveness'] as const).map((k) => (
+          <div key={k} className="rounded-lg border border-slate-200 p-3">
+            <div className="text-[11px] uppercase tracking-wide text-slate-400">{k === 'design_effectiveness' ? 'Design' : 'Operating'} effectiveness</div>
+            <div className={`mt-1 flex items-center gap-1.5 text-[14px] font-semibold ${eff(d[k]).text}`}><span className={`h-2.5 w-2.5 rounded-full ${eff(d[k]).dot}`} />{eff(d[k]).label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* test schedule status */}
+      <div className={`flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-[12px] ${overdue ? 'border-rose-200 bg-rose-50 text-rose-700' : nextDate ? 'border-slate-200 bg-slate-50 text-slate-600' : 'border-dashed border-slate-200 bg-white text-slate-400'}`}>
+        <FileClock className="h-4 w-4 flex-shrink-0" />
+        {nextDate
+          ? <span>{overdue ? <b>Test overdue</b> : 'Next test'} due <b>{nextDate.toISOString().slice(0, 10)}</b>{daysTo != null && <span className="text-slate-400"> · {overdue ? `${-daysTo}d ago` : `in ${daysTo}d`}</span>}{d.frequency && <span className="text-slate-400"> · {d.frequency}</span>}</span>
+          : <span>No test cadence set — record a test with a frequency to schedule the next one.</span>}
+      </div>
+
+      <div className="flex items-center justify-between"><h4 className="text-[13px] font-semibold text-slate-700">Test history</h4><button onClick={() => setShow(v => !v)} className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-[12px] font-medium text-slate-600 hover:bg-slate-50">{show ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />} {show ? 'Cancel' : 'Record test'}</button></div>
+      {show && (
+        <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <div className="grid grid-cols-2 gap-2">
+            <label className="block"><span className="mb-0.5 block text-[10px] uppercase tracking-wide text-slate-400">Test type</span><select value={t.test_type} onChange={e => setT({ ...t, test_type: e.target.value })} className={inp}><option value="design">Design</option><option value="operating">Operating</option></select></label>
+            <label className="block"><span className="mb-0.5 block text-[10px] uppercase tracking-wide text-slate-400">Result</span><select value={t.result} onChange={e => setT({ ...t, result: e.target.value })} className={inp}>{['effective', 'partially_effective', 'ineffective'].map(r => <option key={r} value={r}>{eff(r).label}</option>)}</select></label>
+            <label className="block"><span className="mb-0.5 block text-[10px] uppercase tracking-wide text-slate-400">Sample size</span><input type="number" value={t.sample_size} onChange={e => setT({ ...t, sample_size: +e.target.value })} className={inp} /></label>
+            <label className="block"><span className="mb-0.5 block text-[10px] uppercase tracking-wide text-slate-400">Exceptions</span><input type="number" value={t.exceptions_found} onChange={e => setT({ ...t, exceptions_found: +e.target.value })} className={inp} /></label>
+            <label className="col-span-2 block"><span className="mb-0.5 block text-[10px] uppercase tracking-wide text-slate-400">Retest cadence (schedules the next test)</span><select value={t.frequency} onChange={e => setT({ ...t, frequency: e.target.value })} className={inp}>{['', 'monthly', 'quarterly', 'semi_annually', 'annually'].map(f => <option key={f} value={f}>{f ? f.replace('_', ' ') : 'no schedule'}</option>)}</select></label>
+          </div>
+          <textarea value={t.findings} onChange={e => setT({ ...t, findings: e.target.value })} placeholder="Findings" rows={2} className={inp} />
+          <button onClick={() => add.mutate()} disabled={add.isPending} className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-50">{add.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />} Save test</button>
+        </div>
+      )}
+      <div className="divide-y divide-slate-100 rounded-lg border border-slate-200">
+        {(d.tests || []).length === 0 ? <div className="p-3 text-[12px] text-slate-400">No tests recorded.</div> :
+          (d.tests || []).map((x: any) => editId === x.id ? (
+            <div key={x.id} className="space-y-2 bg-slate-50 p-2.5">
+              <div className="grid grid-cols-2 gap-2">
+                <label className="block"><span className="mb-0.5 block text-[10px] uppercase tracking-wide text-slate-400">Test type</span><select value={ef.test_type} onChange={e => setEf({ ...ef, test_type: e.target.value })} className={inp}><option value="design">Design</option><option value="operating">Operating</option></select></label>
+                <label className="block"><span className="mb-0.5 block text-[10px] uppercase tracking-wide text-slate-400">Result</span><select value={ef.result} onChange={e => setEf({ ...ef, result: e.target.value })} className={inp}>{['effective', 'partially_effective', 'ineffective'].map(r => <option key={r} value={r}>{eff(r).label}</option>)}</select></label>
+                <label className="block"><span className="mb-0.5 block text-[10px] uppercase tracking-wide text-slate-400">Sample size</span><input type="number" value={ef.sample_size} onChange={e => setEf({ ...ef, sample_size: +e.target.value })} className={inp} /></label>
+                <label className="block"><span className="mb-0.5 block text-[10px] uppercase tracking-wide text-slate-400">Exceptions</span><input type="number" value={ef.exceptions_found} onChange={e => setEf({ ...ef, exceptions_found: +e.target.value })} className={inp} /></label>
+              </div>
+              <textarea value={ef.findings} onChange={e => setEf({ ...ef, findings: e.target.value })} placeholder="Findings" rows={2} className={inp} />
+              <div className="flex items-center justify-between">
+                <button onClick={() => delM.mutate(x.id)} disabled={delM.isPending} className="inline-flex items-center gap-1 rounded-lg border border-rose-200 px-2.5 py-1.5 text-[11.5px] font-medium text-rose-600 hover:bg-rose-50 disabled:opacity-50"><Trash2 className="h-3.5 w-3.5" /> Delete</button>
+                <div className="flex gap-2">
+                  <button onClick={() => setEditId(null)} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-[11.5px] text-slate-500">Cancel</button>
+                  <button onClick={() => editM.mutate()} disabled={editM.isPending} className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-[11.5px] font-semibold text-white disabled:opacity-50">{editM.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />} Save changes</button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div key={x.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 p-2.5 text-[12px]">
+              <span className="capitalize text-slate-700">{x.test_type} · {x.test_date?.slice(0, 10)}</span>
+              <span className={`flex items-center gap-1 font-medium ${eff(x.result).text}`}><span className={`h-2 w-2 rounded-full ${eff(x.result).dot}`} />{eff(x.result).label}{x.exceptions_found ? ` · ${x.exceptions_found} exc` : ''}</span>
+              <div className="ml-auto flex items-center gap-1.5">
+                {x.status === 'reviewed'
+                  ? <span className="inline-flex items-center gap-1 rounded bg-emerald-50 px-1.5 py-0.5 text-[10.5px] font-medium text-emerald-700"><ShieldCheck className="h-3 w-3" /> Signed off{x.reviewer ? ` · ${x.reviewer}` : ''}</span>
+                  : <button onClick={() => review.mutate({ id: x.id, action: 'reviewed' })} className="inline-flex items-center gap-1 rounded border border-slate-200 px-2 py-0.5 text-[10.5px] font-medium text-slate-500 hover:border-emerald-300 hover:text-emerald-700"><Check className="h-3 w-3" /> Sign off</button>}
+                <button onClick={() => startEdit(x)} title="Edit this test" className="rounded border border-slate-200 p-1 text-slate-400 hover:border-primary-300 hover:text-primary-600"><Pencil className="h-3 w-3" /></button>
+              </div>
+            </div>
+          ))}
+      </div>
+    </div>
+  );
+}
+
+function ProceduresTab({ d, wid, onSaved }: any) {
+  const gen = useMutation({ mutationFn: async () => apiClient.post(`${WB}/items/${wid}/ai-procedures`, {}), onSuccess: onSaved });
+  const toggle = useMutation({ mutationFn: async ({ id, checked }: any) => apiClient.patch(`${WB}/procedures/${id}`, { is_checked: checked }), onSuccess: onSaved });
+  const attach = useMutation({ mutationFn: async ({ pid, file }: any) => { const fd = new FormData(); fd.append('test_procedure_id', String(pid)); if (file) fd.append('file', file); return apiClient.post(`${WB}/items/${wid}/evidence`, fd); }, onSuccess: onSaved });
+  const procs = d.test_procedures || [];
+  const evByProc = (pid: number) => (d.evidence || []).filter((e: any) => e.test_procedure_id === pid);
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between"><p className="text-[12px] text-slate-500">Numbered audit test procedures. Check each as you complete it; attach evidence per step (optional).</p>
+        <button onClick={() => gen.mutate()} disabled={gen.isPending} className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-violet-700 disabled:opacity-50">{gen.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />} {procs.length ? 'Regenerate' : 'Get AI Recommendation'}</button></div>
+      {procs.length === 0 ? <div className="rounded-lg border border-dashed border-slate-200 p-6 text-center text-[12px] text-slate-400">No test procedures yet. Click <b>Get AI Recommendation</b>.</div> :
+        <ol className="space-y-2">{procs.map((p: any) => (
+          <li key={p.id} className="rounded-lg border border-slate-200 p-2.5"><div className="flex items-start gap-2.5">
+            <input type="checkbox" checked={p.is_checked} onChange={e => toggle.mutate({ id: p.id, checked: e.target.checked })} className="mt-0.5 h-4 w-4 flex-shrink-0" />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2"><span className="text-[11px] font-semibold text-slate-400">{p.seq}.</span>{p.procedure_type && <span className="rounded bg-violet-50 px-1.5 py-0.5 text-[10px] font-medium text-violet-700">{p.procedure_type}</span>}{p.frequency && <span className="text-[10.5px] text-slate-400">{p.frequency}{p.sample_size ? ` · n=${p.sample_size}` : ''}</span>}</div>
+              <p className={`mt-1 text-[12.5px] ${p.is_checked ? 'text-slate-400 line-through' : 'text-slate-700'}`}>{p.description}</p>
+              <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                <label className="inline-flex cursor-pointer items-center gap-1 text-[11px] text-primary-600 hover:text-primary-700"><Upload className="h-3 w-3" /> Attach sample<input type="file" className="hidden" onChange={e => e.target.files?.[0] && attach.mutate({ pid: p.id, file: e.target.files[0] })} /></label>
+                {evByProc(p.id).map((e: any) => <span key={e.id} className="inline-flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10.5px] text-slate-600"><ClipboardCheck className="h-3 w-3" />{e.file_name || 'evidence'} · {e.review_status}</span>)}
+              </div>
+            </div>
+          </div></li>))}</ol>}
+    </div>
+  );
+}
+
+function EvidenceTab({ d, wid, onSaved }: any) {
+  const [linking, setLinking] = useState(false);
+  const [q, setQ] = useState('');
+  const upload = useMutation({ mutationFn: async (file: File) => { const fd = new FormData(); fd.append('file', file); return apiClient.post(`${WB}/items/${wid}/evidence`, fd); }, onSuccess: onSaved });
+  const linkExisting = useMutation({ mutationFn: async (evidence_id: number) => { const fd = new FormData(); fd.append('evidence_id', String(evidence_id)); return apiClient.post(`${WB}/items/${wid}/evidence`, fd); }, onSuccess: () => { setLinking(false); setQ(''); onSaved(); } });
+  const review = useMutation({ mutationFn: async ({ id, action }: any) => apiClient.post(`${WB}/evidence/${id}/review`, { action }), onSuccess: onSaved });
+  const { data: lib, isLoading } = useQuery({
+    queryKey: ['wb-evidence-lib', q],
+    queryFn: async () => (await apiClient.get(`${WB}/evidence-library?limit=30${q ? `&q=${encodeURIComponent(q)}` : ''}`)).data as
+      { items: { id: number; name: string; file_name?: string; evidence_type?: string; status?: string }[] },
+    enabled: linking,
+  });
+  const items = d.evidence || [];
+  const linkedEv = new Set(items.map((e: any) => e.evidence_id).filter(Boolean));
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-2 text-[13px] font-semibold text-white hover:bg-primary-700"><Upload className="h-4 w-4" /> Upload sample<input type="file" className="hidden" disabled={upload.isPending} onChange={e => e.target.files?.[0] && upload.mutate(e.target.files[0])} /></label>
+        <button onClick={() => setLinking(v => !v)} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-[13px] font-medium text-slate-600 hover:bg-slate-50"><Search className="h-4 w-4" /> Link from library</button>
+        {upload.isPending && <span className="inline-flex items-center gap-1 text-[12px] text-slate-400"><Loader2 className="h-3.5 w-3.5 animate-spin" /> uploading…</span>}
+      </div>
+      <p className="text-[11px] text-slate-400">Attach the sampled evidence used to test this control. Uploads are saved to the Evidence Library (OCR-processed &amp; reviewable there too).</p>
+
+      {linking && (
+        <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-2.5">
+          <div className="relative"><Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder="Search the evidence library…" className="h-9 w-full rounded-lg border border-slate-300 bg-white pl-8 pr-3 text-[13px] focus:border-primary-500 focus:outline-none" /></div>
+          {isLoading ? <div className="py-4 text-center"><Loader2 className="mx-auto h-4 w-4 animate-spin text-slate-300" /></div> :
+            <ul className="max-h-56 divide-y divide-slate-100 overflow-y-auto rounded-lg border border-slate-200 bg-white">
+              {(lib?.items || []).filter(e => !linkedEv.has(e.id)).length === 0 ?
+                <li className="p-3 text-center text-[12px] text-slate-400">Nothing to link.</li> :
+                (lib?.items || []).filter(e => !linkedEv.has(e.id)).map(e => (
+                  <li key={e.id} className="flex items-center gap-2.5 p-2.5 hover:bg-slate-50">
+                    <ClipboardCheck className="h-4 w-4 flex-shrink-0 text-slate-400" />
+                    <div className="min-w-0 flex-1"><div className="truncate text-[12.5px] font-medium text-slate-800">{e.name}</div><div className="text-[11px] text-slate-400">{e.evidence_type || 'evidence'}{e.status ? ` · ${e.status}` : ''}</div></div>
+                    <button disabled={linkExisting.isPending} onClick={() => linkExisting.mutate(e.id)} className="inline-flex flex-shrink-0 items-center gap-1 rounded-md bg-primary-600 px-2.5 py-1 text-[11.5px] font-semibold text-white hover:bg-primary-700 disabled:opacity-50">{linkExisting.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />} Link</button>
+                  </li>
+                ))}
+            </ul>}
+        </div>
+      )}
+
+      <div className="divide-y divide-slate-100 rounded-lg border border-slate-200">
+        {items.length === 0 ? <div className="p-3 text-[12px] text-slate-400">No samples attached yet.</div> :
+          items.map((e: any) => (
+            <div key={e.id} className="flex items-center justify-between gap-2 p-2.5 text-[12.5px]">
+              <span className="flex min-w-0 flex-1 items-center gap-1.5 truncate text-slate-700"><ClipboardCheck className="h-3.5 w-3.5 flex-shrink-0 text-slate-400" />{e.file_name || 'evidence'}{e.test_procedure_id ? <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500">step-linked</span> : ''}{e.evidence_id ? <span className="rounded bg-blue-50 px-1.5 py-0.5 text-[10px] text-blue-600">in library</span> : ''}</span>
+              <span className={`rounded px-1.5 py-0.5 text-[10.5px] font-medium ${e.review_status === 'approved' ? 'bg-emerald-100 text-emerald-700' : e.review_status === 'rejected' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>{e.review_status}</span>
+              {e.review_status === 'pending' && <span className="flex gap-1"><button onClick={() => review.mutate({ id: e.id, action: 'approved' })} className="rounded p-1 text-emerald-600 hover:bg-emerald-50" title="Approve"><Check className="h-3.5 w-3.5" /></button><button onClick={() => review.mutate({ id: e.id, action: 'rejected' })} className="rounded p-1 text-rose-600 hover:bg-rose-50" title="Reject"><X className="h-3.5 w-3.5" /></button></span>}
+            </div>
+          ))}
+      </div>
+    </div>
+  );
+}
+
+const riskBand = (s?: number | null) =>
+  s == null ? { c: 'text-slate-400', bg: 'bg-slate-100', l: '—' }
+    : s >= 15 ? { c: 'text-rose-700', bg: 'bg-rose-100', l: String(s) }
+      : s >= 8 ? { c: 'text-amber-700', bg: 'bg-amber-100', l: String(s) }
+        : { c: 'text-emerald-700', bg: 'bg-emerald-100', l: String(s) };
+
+function RisksTab({ d, wid, onSaved }: any) {
+  const [adding, setAdding] = useState(false);
+  const [q, setQ] = useState('');
+  const del = useMutation({ mutationFn: async (id: number) => apiClient.delete(`${WB}/risks/${id}`), onSuccess: onSaved });
+  const add = useMutation({ mutationFn: async (risk_id: number) => apiClient.post(`${WB}/items/${wid}/risks`, { risk_id }), onSuccess: () => { setAdding(false); setQ(''); onSaved(); } });
+  const { data: riskList, isLoading } = useQuery({
+    queryKey: ['wb-risks', q],
+    queryFn: async () => (await apiClient.get(`${WB}/risks?limit=50${q ? `&q=${encodeURIComponent(q)}` : ''}`)).data as
+      { items: { id: number; title: string; category?: string; residual_score?: number; status?: string }[] },
+    enabled: adding,
+  });
+  const links = d.risk_links || [];
+  const linkedIds = new Set(links.map((l: any) => l.risk_id));
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-[12px] text-slate-500">Risks this control mitigates. Internal controls carry their risk links across automatically.</p>
+        <button onClick={() => setAdding(v => !v)} className="inline-flex flex-shrink-0 items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-[12px] font-medium text-slate-600 hover:bg-slate-50">
+          {adding ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />} {adding ? 'Close' : 'Link a risk'}
+        </button>
+      </div>
+
+      {adding && (
+        <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-2.5">
+          <div className="relative"><Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder="Search the risk register…" className="h-9 w-full rounded-lg border border-slate-300 bg-white pl-8 pr-3 text-[13px] focus:border-primary-500 focus:outline-none" /></div>
+          {isLoading ? <div className="py-4 text-center"><Loader2 className="mx-auto h-4 w-4 animate-spin text-slate-300" /></div> :
+            <ul className="max-h-56 divide-y divide-slate-100 overflow-y-auto rounded-lg border border-slate-200 bg-white">
+              {(riskList?.items || []).filter(r => !linkedIds.has(r.id)).length === 0 ?
+                <li className="p-3 text-center text-[12px] text-slate-400">No matching risks to link.</li> :
+                (riskList?.items || []).filter(r => !linkedIds.has(r.id)).map(r => {
+                  const b = riskBand(r.residual_score);
+                  return (
+                    <li key={r.id} className="flex items-center gap-2.5 p-2.5 hover:bg-slate-50">
+                      <span className={`flex h-7 w-8 flex-shrink-0 items-center justify-center rounded text-[11px] font-bold ${b.bg} ${b.c}`} title="Residual score">{b.l}</span>
+                      <div className="min-w-0 flex-1"><div className="truncate text-[12.5px] font-medium text-slate-800">{r.title}</div><div className="text-[11px] text-slate-400">{r.category}{r.status ? ` · ${r.status}` : ''}</div></div>
+                      <button disabled={add.isPending} onClick={() => add.mutate(r.id)} className="inline-flex flex-shrink-0 items-center gap-1 rounded-md bg-primary-600 px-2.5 py-1 text-[11.5px] font-semibold text-white hover:bg-primary-700 disabled:opacity-50">{add.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />} Link</button>
+                    </li>
+                  );
+                })}
+            </ul>}
+        </div>
+      )}
+
+      <div className="divide-y divide-slate-100 rounded-lg border border-slate-200">
+        {links.length === 0 ? <div className="p-3 text-[12px] text-slate-400">No linked risks yet — click <b>Link a risk</b> to connect this control to your risk register.</div> :
+          links.map((r: any) => {
+            const b = riskBand(r.risk_residual_score);
+            return (
+              <div key={r.id} className="flex items-center gap-2.5 p-2.5 text-[12.5px]">
+                <span className={`flex h-7 w-8 flex-shrink-0 items-center justify-center rounded text-[11px] font-bold ${b.bg} ${b.c}`} title="Residual score">{b.l}</span>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate font-medium text-slate-700">{r.risk_title || `Risk #${r.risk_id}`}</div>
+                  <div className="text-[11px] text-slate-400">{r.risk_category ? `${r.risk_category} · ` : ''}{r.link_type}{r.effectiveness_rating ? ` · ${r.effectiveness_rating}` : ''}</div>
+                </div>
+                <button onClick={() => del.mutate(r.id)} className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600" title="Unlink"><Trash2 className="h-3.5 w-3.5" /></button>
+              </div>
+            );
+          })}
+      </div>
+    </div>
+  );
+}
+
+function WorkflowTab({ d, wid, onSaved }: any) {
+  const act = useMutation({ mutationFn: async (a: string) => apiClient.post(`${WB}/items/${wid}/${a}`, {}), onSuccess: onSaved });
+  const [esc, setEsc] = useState({ escalation_name: '', trigger_condition: 'test_failure', trigger_threshold: 3 });
+  const addEsc = useMutation({ mutationFn: async () => apiClient.post(`${WB}/items/${wid}/escalations`, esc), onSuccess: () => { setEsc({ escalation_name: '', trigger_condition: 'test_failure', trigger_threshold: 3 }); onSaved(); } });
+  const delEsc = useMutation({ mutationFn: async (id: number) => apiClient.delete(`${WB}/escalations/${id}`), onSuccess: onSaved });
+  const st = d.status || 'draft';
+  return (
+    <div className="space-y-4">
+      <div className="rounded-lg border border-slate-200 p-3">
+        <div className="mb-2 flex items-center gap-2 text-[12.5px]"><span className="text-slate-500">Approval status:</span><span className={`rounded px-2 py-0.5 text-[11px] font-medium ${STATUS_BADGE[st]}`}>{st.replace('_', ' ')}</span></div>
+        <div className="flex gap-2">
+          {(st === 'draft' || st === 'inactive') && <button onClick={() => act.mutate('submit')} className="rounded-lg bg-amber-500 px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-amber-600">Submit for approval</button>}
+          {st === 'pending_approval' && <><button onClick={() => act.mutate('approve')} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-emerald-700">Approve</button><button onClick={() => act.mutate('reject')} className="rounded-lg bg-rose-600 px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-rose-700">Reject</button></>}
+          {st === 'active' && <span className="text-[12px] text-emerald-600">✓ Approved &amp; active</span>}
+        </div>
+      </div>
+      <div>
+        <div className="mb-2 flex items-center gap-1.5 text-[13px] font-semibold text-slate-700"><AlertTriangle className="h-4 w-4 text-amber-500" /> Escalation rules</div>
+        <div className="mb-2 flex flex-wrap items-end gap-2 rounded-lg bg-slate-50 p-2.5">
+          <input value={esc.escalation_name} onChange={e => setEsc({ ...esc, escalation_name: e.target.value })} placeholder="Rule name (e.g. Manager review)" className={`${inp} flex-1`} />
+          <select value={esc.trigger_condition} onChange={e => setEsc({ ...esc, trigger_condition: e.target.value })} className={inp}>{['test_failure', 'overdue_test', 'exception_found'].map(c => <option key={c} value={c}>{c.replace('_', ' ')}</option>)}</select>
+          <button onClick={() => addEsc.mutate()} disabled={!esc.escalation_name || addEsc.isPending} className="rounded-lg bg-primary-600 px-3 py-2 text-[12px] font-semibold text-white disabled:opacity-50">Add</button>
+        </div>
+        <div className="divide-y divide-slate-100 rounded-lg border border-slate-200">
+          {(d.escalations || []).length === 0 ? <div className="p-3 text-[12px] text-slate-400">No escalation rules.</div> :
+            (d.escalations || []).map((e: any) => <div key={e.id} className="flex items-center justify-between p-2.5 text-[12.5px]"><span className="text-slate-700">L{e.escalation_level} · {e.escalation_name} <span className="text-slate-400">({e.trigger_condition?.replace('_', ' ')})</span></span><button onClick={() => delEsc.mutate(e.id)} className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button></div>)}
+        </div>
+      </div>
     </div>
   );
 }

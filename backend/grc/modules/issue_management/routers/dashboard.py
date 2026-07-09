@@ -7,11 +7,14 @@ mirrors the framework dashboard pattern.
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Body
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 
-from ....models import Issue, IssueActivity, IssueAction, GRCUser, get_db
+from ....models import (
+    Issue, IssueActivity, IssueAction, GRCUser, get_db, RiskIncident,
+    IssueEvidenceLink, IssueControlLink,
+)
 from ....routers.auth_router import require_auth, get_user_tenants, require_tenant_permission
 
 _require_view = require_tenant_permission("issue_management:issues:view")
@@ -446,3 +449,284 @@ def get_issues_aggregate(
         "severity_age_matrix": severity_age_matrix_out,
         "reopen_stats": reopen_stats,
     }
+
+
+@router.get("/sections-overview")
+def get_issue_incident_sections_overview(
+    tenant_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Issue & Incident Management board — one scored section for Issues and one
+    for Incidents. Same numerator/denominator formula-card shape as the other
+    module scorecards; feeds the module overview page + the main-dashboard card."""
+    user_tenants = get_user_tenants(current_user, db)
+    scoped = [tenant_id] if (tenant_id and tenant_id in user_tenants) else user_tenants
+    now = datetime.utcnow()
+    if not scoped:
+        return {"as_of": now.isoformat(), "sections": {}, "attention_queue": {},
+                "performance": {"score": None, "grade": None, "components": []}}
+
+    def _m(key, label, weight, num, den, formula, inverse=False, empty_score=None):
+        if den:
+            pct = (num / den) * 100
+            score = round(100 - pct, 1) if inverse else round(pct, 1)
+        else:
+            score = empty_score
+        return {"key": key, "label": label, "weight": weight, "score": score,
+                "numerator": num, "denominator": den, "formula": formula,
+                "inverse": inverse, "target": 85}
+
+    def _sec(metrics):
+        av = [m for m in metrics if m["score"] is not None]
+        tw = sum(m["weight"] for m in av)
+        return round(sum(m["score"] * m["weight"] for m in av) / tw, 1) if av and tw else None
+
+    # ---- Issues ----
+    issues = db.query(Issue).filter(Issue.tenant_id.in_(scoped)).all()
+    _CLOSED = ("closed", "cancelled")
+
+    def _closed(i):
+        return (i.workflow_state in _CLOSED) or ((i.status or "") in ("closed", "resolved")) or bool(i.closed_at)
+
+    open_issues = [i for i in issues if not _closed(i)]
+    closed_issues = [i for i in issues if _closed(i)]
+    iss_crit_open = sum(1 for i in open_issues if (i.severity or "").lower() in ("critical", "high"))
+    iss_breached = sum(1 for i in open_issues if i.sla_breached)
+    iss_closed_dated = [i for i in closed_issues if i.target_closure_date and i.closed_at]
+    iss_ontime = sum(1 for i in iss_closed_dated if i.closed_at <= i.target_closure_date)
+    # Open-item aging (previously invisible): an open issue's age from detected_at
+    # (falling back to created_at). Aged-out = open more than 30 days. Closure
+    # timeliness only ever looked at *already-closed* items, so a critical issue
+    # left open indefinitely used to contribute nothing.
+    iss_aged = sum(1 for i in open_issues
+                   if (i.detected_at or i.created_at)
+                   and (now - (i.detected_at or i.created_at)).days > 30)
+    # Resolution rate must reward genuine closure, not cancellation. `_closed()`
+    # treats "cancelled" as closed so it stays out of the open backlog, but a
+    # cancelled issue is an abandoned one — counting it as resolved would let a
+    # tenant inflate the score by mass-cancelling. Numerator = closed/resolved
+    # excluding cancelled; denominator stays all issues.
+    iss_resolved_ok = sum(1 for i in closed_issues if (i.workflow_state or "") != "cancelled")
+    # Ownership coverage — an open issue with no owner AND no assignee is an
+    # accountability gap; missing owner is penalised (kept in the denominator).
+    iss_owned = sum(1 for i in open_issues if i.owner_id or i.assignee_id)
+    # Recurrence — a closed issue that was reopened (IssueActivity of a reopen
+    # type) signals the fix didn't hold. Reuses the same `%reopen%` detection as
+    # the analytics endpoint's reopen_stats.
+    reopened_ids = set()
+    if issue_ids := [i.id for i in issues]:
+        reopened_ids = {
+            r[0] for r in db.query(IssueActivity.issue_id).filter(
+                IssueActivity.issue_id.in_(issue_ids),
+                IssueActivity.type.ilike("%reopen%"),
+            ).distinct().all()
+        }
+    iss_reopened = sum(1 for i in closed_issues if i.id in reopened_ids)
+    # Traceability — a critical/high issue should be substantiated with at least
+    # one evidence attachment OR a linked control. Serious issues without either
+    # are undocumented findings.
+    serious_all = [i for i in issues if (i.severity or "").lower() in ("critical", "high")]
+    serious_all_ids = [i.id for i in serious_all]
+    traced_ids = set()
+    if serious_all_ids:
+        traced_ids = {
+            r[0] for r in db.query(IssueEvidenceLink.issue_id).filter(
+                IssueEvidenceLink.issue_id.in_(serious_all_ids)).distinct().all()
+        } | {
+            r[0] for r in db.query(IssueControlLink.issue_id).filter(
+                IssueControlLink.issue_id.in_(serious_all_ids)).distinct().all()
+        }
+    iss_traced = sum(1 for i in serious_all if i.id in traced_ids)
+    issues_metrics = [
+        _m("resolution_rate", "Resolution rate", 0.20, iss_resolved_ok, len(issues),
+           "closed/resolved issues excluding cancelled / all issues"),
+        _m("sla_adherence", "SLA adherence", 0.15, iss_breached, len(open_issues),
+           "1 - (SLA-breached open issues / open issues)", inverse=True),
+        _m("critical_containment", "Critical containment", 0.15, iss_crit_open, len(open_issues),
+           "1 - (open critical/high issues / open issues)", inverse=True),
+        _m("closure_timeliness", "Closed on time", 0.10, iss_ontime, len(iss_closed_dated),
+           "issues closed on/before target closure date / closed issues with a target"),
+        _m("open_aging", "Open backlog fresh", 0.10, iss_aged, len(open_issues),
+           "1 - (open issues aging beyond 30 days / open issues)", inverse=True),
+        _m("ownership_coverage", "Open issues owned", 0.10, iss_owned, len(open_issues),
+           "open issues with an owner or assignee / open issues"),
+        _m("recurrence", "No reopened issues", 0.10, iss_reopened, len(closed_issues),
+           "1 - (reopened issues / closed issues)", inverse=True),
+        _m("traceability", "Serious issues traceable", 0.10, iss_traced, len(serious_all),
+           "critical/high issues with >=1 evidence or control link / all critical/high issues"),
+    ]
+
+    # ---- Incidents ----
+    incidents = db.query(RiskIncident).filter(RiskIncident.tenant_id.in_(scoped)).all()
+    _INC_DONE = ("resolved", "closed")
+    inc_resolved = [i for i in incidents if (i.status or "").lower() in _INC_DONE]
+    inc_open = [i for i in incidents if (i.status or "").lower() not in _INC_DONE]
+    inc_crit_open = sum(1 for i in inc_open if (i.severity or "").lower() in ("critical", "high"))
+    inc_linked = sum(1 for i in incidents if i.risk_id)
+    inc_rca = sum(1 for i in inc_resolved if i.root_cause)
+    inc_dated = [i for i in inc_resolved if i.resolved_at and i.incident_date]
+    inc_fast = sum(1 for i in inc_dated if (i.resolved_at - i.incident_date).days <= 30)
+    # MTTD: detected within 7 days of occurrence (discovered_date vs incident_date).
+    inc_detect_dated = [i for i in incidents if i.incident_date and i.discovered_date]
+    inc_fast_detect = sum(1 for i in inc_detect_dated
+                          if (i.discovered_date - i.incident_date).days <= 7)
+    # Impact capture: resolved incidents that quantify financial or operational impact.
+    inc_impact = sum(1 for i in inc_resolved
+                     if (i.financial_impact is not None) or i.operational_impact)
+    # Open-incident aging — mirrors the issues `open_aging` lens. An open
+    # incident older than 30 days (age from incident_date, falling back to
+    # created_at) is a stale, unresolved event that otherwise contributes
+    # nothing to the score.
+    inc_aged = sum(1 for i in inc_open
+                   if (i.incident_date or i.created_at)
+                   and (now - (i.incident_date or i.created_at)).days > 30)
+    incidents_metrics = [
+        _m("resolution_rate", "Resolution rate", 0.22, len(inc_resolved), len(incidents),
+           "resolved or closed incidents / all incidents"),
+        _m("critical_containment", "Critical containment", 0.18, inc_crit_open, len(inc_open),
+           "1 - (open critical/high incidents / open incidents)", inverse=True),
+        _m("incident_aging", "Open incidents fresh", 0.12, inc_aged, len(inc_open),
+           "1 - (open incidents older than 30 days / open incidents)", inverse=True),
+        _m("resolution_speed", "Resolved within 30 days", 0.13, inc_fast, len(inc_dated),
+           "incidents resolved within 30 days of occurrence / resolved incidents with dates"),
+        _m("detection_speed", "Detected within 7 days", 0.10, inc_fast_detect, len(inc_detect_dated),
+           "incidents detected within 7 days of occurrence / incidents with occurrence + discovery dates"),
+        _m("impact_assessed", "Impact quantified", 0.09, inc_impact, len(inc_resolved),
+           "resolved incidents with financial or operational impact documented / resolved incidents"),
+        _m("risk_linkage", "Linked to a risk", 0.09, inc_linked, len(incidents),
+           "incidents linked to a risk / all incidents"),
+        _m("root_cause", "Root cause captured", 0.07, inc_rca, len(inc_resolved),
+           "resolved incidents with a documented root cause / resolved incidents"),
+    ]
+
+    # ---- Corrective Actions (CAPA) ----
+    # The module's core engine: corrective/preventive/containment/verification
+    # actions attached to issues. Scored as its own dimension (mirrors ERM's
+    # "Mitigation Actions" section) so effectiveness — not just closure — counts.
+    issue_ids = [i.id for i in issues]
+    actions = (db.query(IssueAction).filter(IssueAction.issue_id.in_(issue_ids)).all()
+               if issue_ids else [])
+    _ACT_DONE = ("completed", "verified")
+    _ACT_OPEN = ("planned", "in_progress", "blocked")
+    act_live = [a for a in actions if (a.status or "planned") != "cancelled"]
+    act_done = [a for a in act_live if (a.status or "") in _ACT_DONE]
+    act_open = [a for a in act_live if (a.status or "planned") in _ACT_OPEN]
+    act_overdue = sum(1 for a in act_open if a.due_date and a.due_date < now)
+    act_verified = sum(1 for a in act_done if a.status == "verified" or a.verified_at)
+    act_eff_reviewed = sum(1 for a in act_done if a.effectiveness_review_at)
+    # Coverage ties CAPA back to issues so the section can't be gamed by simply
+    # not creating actions: serious open issues *should* have a corrective action.
+    issues_with_action = {a.issue_id for a in actions}
+    serious_open = [i for i in open_issues if (i.severity or "").lower() in ("critical", "high")]
+    serious_covered = sum(1 for i in serious_open if i.id in issues_with_action)
+    capa_metrics = [
+        _m("capa_coverage", "Serious issues actioned", 0.20, serious_covered, len(serious_open),
+           "open critical/high issues with a corrective action / all open critical/high issues",
+           empty_score=100),
+        _m("completion_rate", "Actions completed", 0.30, len(act_done), len(act_live),
+           "completed or verified actions / all actions (excluding cancelled)"),
+        _m("on_time", "Actions on time", 0.20, act_overdue, len(act_open),
+           "1 - (overdue open actions / open actions)", inverse=True, empty_score=100),
+        _m("verification", "Independently verified", 0.15, act_verified, len(act_done),
+           "completed actions independently verified / completed actions"),
+        _m("effectiveness", "Effectiveness reviewed", 0.15, act_eff_reviewed, len(act_done),
+           "completed actions with an effectiveness review / completed actions"),
+    ]
+
+    sections = {
+        "issues": {"key": "issues", "label": "Issues", "weight": 0.40,
+                   "score": _sec(issues_metrics), "metrics": issues_metrics,
+                   "counts": {"total": len(issues), "open": len(open_issues), "closed": len(closed_issues),
+                              "critical_open": iss_crit_open, "sla_breached": iss_breached}},
+        "incidents": {"key": "incidents", "label": "Incidents", "weight": 0.35,
+                      "score": _sec(incidents_metrics), "metrics": incidents_metrics,
+                      "counts": {"total": len(incidents), "open": len(inc_open), "resolved": len(inc_resolved),
+                                 "critical_open": inc_crit_open, "linked": inc_linked}},
+        "corrective_actions": {"key": "corrective_actions", "label": "Corrective Actions", "weight": 0.25,
+                   "score": _sec(capa_metrics), "metrics": capa_metrics,
+                   "counts": {"total": len(actions), "open": len(act_open), "done": len(act_done),
+                              "overdue": act_overdue, "verified": act_verified,
+                              "serious_uncovered": len(serious_open) - serious_covered}},
+    }
+
+    try:
+        from grc.services import scorecard_config as sc_cfg
+        _cfg = sc_cfg.get_config(db, scoped[0], "issue_incident") if scoped else {}
+        _target = _cfg.get("target", 85)
+        sc_cfg.apply_overrides(list(sections.values()), _cfg)
+    except Exception:
+        _target = 85
+    components = [{"key": s["key"], "label": s["label"], "score": s["score"],
+                  "weight": s["weight"], "target": _target} for s in sections.values()]
+    scored = [c for c in components if c["score"] is not None]
+    wsum = sum(c["weight"] for c in scored)
+    perf = round(sum(c["score"] * c["weight"] for c in scored) / wsum, 1) if scored and wsum else None
+    grade = (None if perf is None else "excellent" if perf >= 85 else "good" if perf >= 70
+             else "fair" if perf >= 50 else "poor")
+
+    return {
+        "as_of": now.isoformat(),
+        "sections": sections,
+        "attention_queue": {
+            "open_critical_issues": iss_crit_open,
+            "sla_breached_issues": iss_breached,
+            "open_critical_incidents": inc_crit_open,
+            "open_incidents": len(inc_open),
+            "overdue_corrective_actions": act_overdue,
+            "serious_issues_unactioned": len(serious_open) - serious_covered,
+            "total": iss_crit_open + iss_breached + inc_crit_open + act_overdue,
+        },
+        "performance": {"score": perf, "grade": grade,
+                        "formula": ("weighted mean of section scores: "
+                                    "issues 40% + incidents 35% + corrective actions 25%"),
+                        "components": components},
+    }
+
+
+@router.get("/scorecard-config")
+def get_issue_scorecard_config(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Current section weights + target (built-in defaults merged with tenant overrides)."""
+    from grc.services import scorecard_config as sc_cfg
+    tenants = get_user_tenants(current_user, db)
+    if not tenants:
+        return {"module": "issue_incident", "sections": [], "target": 85, "default_target": 85, "customized": False}
+    return sc_cfg.merged(db, tenants[0], "issue_incident")
+
+
+@router.put("/scorecard-config")
+def put_issue_scorecard_config(
+    body: dict = Body(...),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Save section-weight, metric-weight and/or target overrides for this tenant."""
+    from grc.services import scorecard_config as sc_cfg
+    tenants = get_user_tenants(current_user, db)
+    if not tenants:
+        return {"ok": False}
+    cfg = sc_cfg.save_config(
+        db, tenants[0], "issue_incident",
+        section_weights=body.get("weights"),
+        metric_weights=body.get("metric_weights"),
+        target=body.get("target"),
+        updated_by=getattr(current_user, "id", None),
+    )
+    return {"ok": True, "config": cfg}
+
+
+@router.delete("/scorecard-config")
+def reset_issue_scorecard_config(
+    section: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Reset scorecard tuning to defaults — whole module, or one section (?section=)."""
+    from grc.services import scorecard_config as sc_cfg
+    tenants = get_user_tenants(current_user, db)
+    if tenants:
+        sc_cfg.reset_config(db, tenants[0], "issue_incident", section=section)
+    return {"ok": True}

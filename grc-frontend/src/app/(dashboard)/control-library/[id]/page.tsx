@@ -69,6 +69,10 @@ export default function CategoryDetail() {
   const [bfFw, setBfFw] = useState<string>(''); // active framework in the By-framework view
   const [openSet, setOpenSet] = useState<SetT | null>(null);
   const [panelTab, setPanelTab] = useState<'members' | 'evidence' | 'artifacts' | 'upload'>('members');
+  // Collapse the "also normalized with (other frameworks you didn't select)" list —
+  // hidden by default, revealed on click. Resets each time a different set opens.
+  const [showOthers, setShowOthers] = useState(false);
+  useEffect(() => { setShowOthers(false); }, [openSet]);
   const [uploads, setUploads] = useState<any[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadMsg, setUploadMsg] = useState<string | null>(null);
@@ -142,8 +146,8 @@ export default function CategoryDetail() {
     document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(url);
   };
 
-  const chip = 'inline-block text-[11px] font-medium text-primary-800 border border-primary-200 bg-primary-50 rounded px-1.5 py-0.5';
-  const tag = 'inline-block text-[11px] border border-slate-300 text-slate-500 rounded px-1.5 py-0.5';
+  const chip = 'inline-block text-[11px] font-semibold text-primary-800 border border-primary-300 bg-primary-50 rounded px-1.5 py-0.5';
+  const tag = 'inline-block text-[11px] font-medium text-slate-600 border border-slate-300 rounded px-1.5 py-0.5';
 
   if (err) return (
     <div className="space-y-4">
@@ -545,8 +549,16 @@ export default function CategoryDetail() {
                   {mine.map((m, i) => Row(m, 'mine' + i, false))}
                   {others.length > 0 && (
                     <>
-                      <div className="my-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400"><GitMerge className="h-3 w-3" />Also normalized with — {others.length} other framework{others.length === 1 ? '' : 's'} sharing this requirement</div>
-                      {others.map((m, i) => Row(m, 'oth' + i, true))}
+                      <button
+                        onClick={() => setShowOthers((v) => !v)}
+                        className="my-2 flex w-full items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50/60 px-2.5 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 transition-colors hover:bg-slate-100"
+                      >
+                        <GitMerge className="h-3 w-3 shrink-0" />
+                        <span className="flex-1">Also normalized with — {others.length} other framework{others.length === 1 ? '' : 's'} sharing this requirement</span>
+                        <span className="shrink-0 normal-case text-[10px] font-medium text-slate-400">{showOthers ? 'Hide' : 'Show'}</span>
+                        <ChevronDown className={`h-3.5 w-3.5 shrink-0 transition-transform ${showOthers ? 'rotate-180' : ''}`} />
+                      </button>
+                      {showOthers && others.map((m, i) => Row(m, 'oth' + i, true))}
                     </>
                   )}
                 </>

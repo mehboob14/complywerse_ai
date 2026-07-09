@@ -1,9 +1,12 @@
 'use client';
 
-import { useEffect } from 'react';
-import { X } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { X, SlidersHorizontal, Check, RotateCcw, Loader2 } from 'lucide-react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import apiClient from '@/lib/api';
 import type { ModulePerformance, Section } from './types';
 import { BAND_COLOR, BAND_LABEL, bandColor, bandOf } from './scoring';
+import DraggableWeightBar from './DraggableWeightBar';
 
 interface Row {
   label: string;
@@ -36,6 +39,9 @@ export default function SectionDetailModal({
   section: Section | null;
   module: { perf: ModulePerformance; sections: Section[] } | null;
 }) {
+  const [editing, setEditing] = useState(false);
+  const [preview, setPreview] = useState<number | null>(null);
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -43,10 +49,14 @@ export default function SectionDetailModal({
     return () => window.removeEventListener('keydown', onKey);
   }, [open, onClose]);
 
+  useEffect(() => { setEditing(false); setPreview(null); }, [open, section?.key]);
+
   if (!open) return null;
 
   const model = section ? sectionModel(section) : module ? moduleModel(module) : null;
   if (!model) return null;
+  // metric-weight editing is only offered on a section (which has editable metrics with keys)
+  const canEdit = Boolean(section && section.metrics.some((m) => m.key));
 
   return (
     <div
@@ -58,7 +68,10 @@ export default function SectionDetailModal({
         className="max-h-[86vh] w-[540px] max-w-full overflow-auto rounded-2xl border border-slate-200 bg-white shadow-2xl"
       >
         <div className="flex items-center gap-4 border-b border-slate-100 p-5">
-          <ScoreRing score={model.score} color={model.color} />
+          <ScoreRing
+            score={editing && preview != null ? preview : model.score}
+            color={editing && preview != null ? bandColor(preview) : model.color}
+          />
           <div className="min-w-0 flex-1">
             <div className="text-base font-semibold text-slate-900">{model.title}</div>
             <div className="mt-0.5 text-[11.5px] text-slate-400">{model.subtitle}</div>
@@ -69,6 +82,15 @@ export default function SectionDetailModal({
           >
             {model.grade}
           </span>
+          {canEdit && !editing && (
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-[11px] font-medium text-slate-500 transition-colors hover:border-slate-300 hover:text-slate-700"
+            >
+              <SlidersHorizontal className="h-3 w-3" /> Adjust
+            </button>
+          )}
           <button
             type="button"
             onClick={onClose}
@@ -78,6 +100,10 @@ export default function SectionDetailModal({
           </button>
         </div>
 
+        {editing && section ? (
+          <MetricEditor section={section} onSaved={onClose} onCancel={() => { setEditing(false); setPreview(null); }} onPreview={setPreview} />
+        ) : (
+        <>
         <div className="px-5 pb-3.5 pt-2">
           {model.rows.map((r) => {
             const color = bandColor(r.score);
@@ -109,6 +135,99 @@ export default function SectionDetailModal({
           <span className="font-semibold text-slate-700">Score = </span>
           {model.equation}
         </div>
+        </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Drag-to-rebalance the metric weights inside a section, saved per-tenant. */
+function MetricEditor({ section, onSaved, onCancel, onPreview }: { section: Section; onSaved: () => void; onCancel: () => void; onPreview: (s: number | null) => void }) {
+  const qc = useQueryClient();
+  const metrics = section.metrics.filter((m) => m.key);
+  const [weights, setWeights] = useState<number[]>(() => {
+    const w = metrics.map((m) => m.weight);
+    const s = w.reduce((a, b) => a + b, 0) || 1;
+    return w.map((x) => x / s);
+  });
+
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['erm-sections-overview'] });
+  const save = useMutation({
+    mutationFn: async () => {
+      const mw = Object.fromEntries(metrics.map((m, i) => [m.key as string, weights[i]]));
+      return apiClient.put('/erm/dashboard/scorecard-config', { metric_weights: { [section.key]: mw } });
+    },
+    onSuccess: () => { invalidate(); onSaved(); },
+  });
+  const reset = useMutation({
+    mutationFn: async () => apiClient.delete(`/erm/dashboard/scorecard-config?section=${encodeURIComponent(section.key)}`),
+    onSuccess: () => { invalidate(); onSaved(); },
+  });
+
+  const total = weights.reduce((a, b) => a + b, 0) || 1;
+
+  // Nudge one metric up/down and rebalance the rest proportionally (stays 100%).
+  const adjust = (index: number, delta: number) => {
+    setWeights((w) => {
+      const tot = w.reduce((a, b) => a + b, 0) || 1;
+      const cur = w.map((x) => x / tot);
+      const target = Math.max(0.02, Math.min(0.98, cur[index] + delta));
+      const actual = target - cur[index];
+      const otherSum = cur.reduce((a, b, i) => (i === index ? a : a + b), 0);
+      if (otherSum <= 0) return w;
+      const scale = (otherSum - actual) / otherSum;
+      const next = cur.map((x, i) => (i === index ? target : Math.max(0.005, x * scale)));
+      const s = next.reduce((a, b) => a + b, 0);
+      return next.map((x) => x / s);
+    });
+  };
+
+  // Live section-score preview from the edited weights (before saving).
+  const previewScore = (() => {
+    const scored = metrics.map((m, i) => ({ s: m.score, w: weights[i] })).filter((x) => x.s != null);
+    const tw = scored.reduce((a, x) => a + x.w, 0);
+    return tw ? Math.round(scored.reduce((a, x) => a + (x.s as number) * x.w, 0) / tw) : null;
+  })();
+  useEffect(() => { onPreview(previewScore); }, [previewScore, onPreview]);
+
+  return (
+    <div className="px-5 pb-4 pt-2">
+      <p className="mb-2 text-[11px] text-slate-500">
+        Use <b>+ / −</b> (or drag the bar) to rebalance — always totals 100%. The score ring above updates
+        {previewScore != null ? <> live · now <b style={{ color: bandColor(previewScore) }}>{previewScore}%</b></> : ' live'}.
+      </p>
+      <DraggableWeightBar items={metrics.map((m) => ({ key: m.key, label: m.label, score: m.score }))} weights={weights} onChange={setWeights} />
+
+      <div className="mt-3 space-y-1">
+        {metrics.map((m, i) => (
+          <div key={m.key} className="flex items-center gap-2 text-[12px]">
+            <span className="h-2.5 w-2.5 flex-shrink-0 rounded-sm" style={{ backgroundColor: bandColor(m.score) }} />
+            <span className="min-w-0 flex-1 truncate text-slate-600">{m.label}</span>
+            <div className="flex items-center gap-1">
+              <button type="button" onClick={() => adjust(i, -0.05)}
+                className="flex h-5 w-5 items-center justify-center rounded border border-slate-200 text-[13px] leading-none text-slate-500 hover:bg-slate-100">−</button>
+              <span className="w-10 text-center tabular-nums font-semibold text-slate-700">{Math.round((weights[i] / total) * 100)}%</span>
+              <button type="button" onClick={() => adjust(i, 0.05)}
+                className="flex h-5 w-5 items-center justify-center rounded border border-slate-200 text-[13px] leading-none text-slate-500 hover:bg-slate-100">+</button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-4 flex items-center gap-1.5">
+        <button type="button" onClick={() => reset.mutate()} disabled={reset.isPending}
+          className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-[11px] text-slate-500 hover:bg-slate-50 disabled:opacity-50">
+          <RotateCcw className="h-3 w-3" /> Reset
+        </button>
+        <button type="button" onClick={onCancel}
+          className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-[11px] text-slate-500 hover:bg-slate-50">
+          <X className="h-3 w-3" /> Cancel
+        </button>
+        <button type="button" onClick={() => save.mutate()} disabled={save.isPending}
+          className="ml-auto inline-flex items-center gap-1 rounded-md bg-teal-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-teal-700 disabled:opacity-50">
+          {save.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />} Save
+        </button>
       </div>
     </div>
   );

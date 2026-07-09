@@ -6,5 +6,7 @@ from .gap_analysis import router as gap_analysis_router
 from .comparison import router as comparison_router
 from .coverage import router as coverage_router
 from .reports import router as reports_router
+from .workbench import router as workbench_router
+from .assurance import router as assurance_router
 
-__all__ = ["ai_mapping_router", "groups_router", "inheritance_router", "evidence_recs_router", "gap_analysis_router", "comparison_router", "coverage_router", "reports_router"]
+__all__ = ["ai_mapping_router", "groups_router", "inheritance_router", "evidence_recs_router", "gap_analysis_router", "comparison_router", "coverage_router", "reports_router", "workbench_router", "assurance_router"]

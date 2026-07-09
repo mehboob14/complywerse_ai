@@ -3,15 +3,11 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  BarChart3,
   AlertTriangle,
-  Activity,
-  AlertCircle,
   Calendar,
   GitBranch,
   ListTodo,
   Target,
-  Shield,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -19,9 +15,8 @@ const ermNavigation = [
   { name: 'Risk Register', href: '/erm/risks', icon: AlertTriangle },
   { name: 'Appetite', href: '/erm/appetite', icon: Target },
   { name: 'Mitigation Actions', href: '/erm/mitigation-actions', icon: ListTodo },
-  { name: 'Internal Controls', href: '/erm/internal-controls', icon: Shield },
-  { name: 'KRIs', href: '/erm/kris', icon: Activity },
-  { name: 'Incidents', href: '/erm/incidents', icon: AlertCircle },
+  // 'Internal Controls' moved to Control Testing & Assurance (/controls);
+  // 'KRIs' moved to Governance — removed from the ERM/Risk tab strip.
   { name: 'Reviews', href: '/erm/reviews', icon: Calendar },
   { name: 'Dependencies', href: '/erm/dependencies', icon: GitBranch },
 ];
@@ -36,10 +31,13 @@ export default function ERMLayout({
   const isAnalyticsRoute = pathname?.startsWith('/erm/analytics');
   const isRiskAssessmentsRoute = pathname?.startsWith('/erm/risk-assessments');
   const isRcsaRoute = pathname?.startsWith('/erm/rcsa');
+  // Incidents moved to the "Issue & Incident Management" module — render it clean,
+  // without the ERM Risk tab strip.
+  const isIncidentsRoute = pathname?.startsWith('/erm/incidents');
 
   return (
     <div className="cw-dashboard risk-workspace min-h-full space-y-4 px-1 pb-2">
-      {!isOverview && !isAnalyticsRoute && !isRiskAssessmentsRoute && !isRcsaRoute && (
+      {!isOverview && !isAnalyticsRoute && !isRiskAssessmentsRoute && !isRcsaRoute && !isIncidentsRoute && (
         <div className="flex flex-wrap items-center gap-0 border-b border-gray-200">
           {ermNavigation.map((item) => {
             const isActive = pathname === item.href || 

@@ -3,13 +3,13 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
-import { AlertTriangle, Boxes, FileStack, Library, Shield, ShieldCheck, Gavel, Radar as RadarIcon, SlidersHorizontal } from 'lucide-react';
+import { AlertTriangle, ListChecks, Siren, ClipboardCheck, Radar as RadarIcon, SlidersHorizontal } from 'lucide-react';
 import {
   ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   Radar, Tooltip as RTooltip,
   BarChart, Bar, Cell, XAxis, YAxis, ReferenceArea, ReferenceLine,
 } from 'recharts';
-import { complianceApi } from '@/lib/api';
+import apiClient from '@/lib/api';
 import {
   type OverviewSection,
   scoreBand,
@@ -18,15 +18,14 @@ import {
 } from '@/components/dashboard/score-kit';
 import { SectionWeightTunerModal } from '@/components/dashboard/score-tuning';
 
-const COMPLIANCE_TUNING = { configBase: '/compliance/policies/dashboard', invalidateKey: ['compliance-sections-overview'] as unknown[] };
+const ISSUES_TUNING = { configBase: '/issue-management/dashboard', invalidateKey: ['issue-incident-sections-overview'] as unknown[] };
 
 /**
- * Compliance module board dashboard — board-level and graphical, in the spirit
- * of the Governance overview: a performance hero, a compliance-posture RADAR
- * across the four compliance pages, and section detail cards (zone-column charts:
- * every metric a column over tinted weak/fair/strong bands with the dashed 85
- * target) whose formulas open in the shared popup. One scored section per
- * Compliance nav page: Frameworks · Controls · Evidence · Control Library.
+ * Issue & Incident module board — same shape as the Compliance/Governance
+ * overviews: a performance hero (with the per-tenant weight tuner), a posture
+ * radar, a Needs-Attention queue, and section formula-cards whose weighted
+ * metrics open in the shared breakdown modal. One scored section per lane:
+ * Issues · Incidents · Corrective Actions.
  */
 
 type Payload = {
@@ -37,25 +36,21 @@ type Payload = {
 };
 
 const SECTION_META: Record<string, { icon: React.ElementType; href: string; short: string }> = {
-  frameworks: { icon: Boxes, href: '/frameworks', short: 'Frameworks' },
-  controls: { icon: Shield, href: '/controls', short: 'Controls' },
-  effectiveness: { icon: ShieldCheck, href: '/control-library', short: 'Effectiveness' },
-  evidence: { icon: FileStack, href: '/evidence', short: 'Evidence' },
-  control_library: { icon: Library, href: '/control-library', short: 'Library' },
-  regulatory: { icon: Gavel, href: '/governance/regulatory-changes', short: 'Regulatory' },
+  issues: { icon: ListChecks, href: '/issues', short: 'Issues' },
+  incidents: { icon: Siren, href: '/erm/incidents', short: 'Incidents' },
+  corrective_actions: { icon: ClipboardCheck, href: '/issues', short: 'CAPA' },
 };
 
 const ATTENTION_META: Array<{ key: string; label: string; href: string; color: string }> = [
-  { key: 'frameworks_unpublished', label: 'Frameworks not published', href: '/framework-upload', color: '#f59e0b' },
-  { key: 'controls_without_evidence', label: 'Controls without evidence', href: '/controls', color: '#64748b' },
-  { key: 'controls_unverified', label: 'Controls unverified', href: '/controls', color: '#8b5cf6' },
-  { key: 'controls_untested', label: 'Controls not tested', href: '/control-library', color: '#0ea5e9' },
-  { key: 'overdue_control_tests', label: 'Overdue control tests', href: '/control-library', color: '#f97316' },
-  { key: 'evidence_stale', label: 'Stale evidence', href: '/evidence', color: '#e11d48' },
+  { key: 'open_critical_issues', label: 'Open critical/high issues', href: '/issues', color: '#e11d48' },
+  { key: 'sla_breached_issues', label: 'SLA-breached issues', href: '/issues', color: '#f59e0b' },
+  { key: 'open_critical_incidents', label: 'Open critical/high incidents', href: '/erm/incidents', color: '#8b5cf6' },
+  { key: 'overdue_corrective_actions', label: 'Overdue corrective actions', href: '/issues', color: '#f97316' },
+  { key: 'serious_issues_unactioned', label: 'Serious issues without a CAPA', href: '/issues', color: '#0ea5e9' },
 ];
 
 /** Zone columns — one column per metric over tinted weak/fair/strong bands with
- *  the dashed 85 target. The shortfall below the line IS the story at a glance. */
+ *  the dashed 85 target. */
 function ZoneColumns({ metrics }: { metrics: OverviewSection['metrics'] }) {
   const data = metrics.map((m) => ({
     key: m.key, label: m.label,
@@ -68,7 +63,6 @@ function ZoneColumns({ metrics }: { metrics: OverviewSection['metrics'] }) {
       <BarChart data={data} margin={{ top: 8, right: 6, bottom: 0, left: 6 }} barCategoryGap="26%">
         <YAxis type="number" domain={[0, 100]} hide />
         <XAxis dataKey="key" hide />
-        {/* performance zones: weak / fair / strong */}
         <ReferenceArea y1={0} y2={60} fill="#e11d48" fillOpacity={0.05} />
         <ReferenceArea y1={60} y2={80} fill="#d97706" fillOpacity={0.06} />
         <ReferenceArea y1={80} y2={100} fill="#059669" fillOpacity={0.06} />
@@ -91,7 +85,7 @@ function ZoneColumns({ metrics }: { metrics: OverviewSection['metrics'] }) {
 
 function SectionCard({ section, onOpen }: { section: OverviewSection; onOpen: () => void }) {
   const band = scoreBand(section.score);
-  const Icon = SECTION_META[section.key]?.icon ?? Boxes;
+  const Icon = SECTION_META[section.key]?.icon ?? ListChecks;
   return (
     <button type="button" onClick={onOpen}
       className="group flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30">
@@ -104,7 +98,7 @@ function SectionCard({ section, onOpen }: { section: OverviewSection; onOpen: ()
             </span>
             <div className="min-w-0">
               <h3 className="truncate text-sm font-semibold text-slate-800">{section.label}</h3>
-              <p className="text-[10px] text-slate-400">{Math.round(section.weight * 100)}% of compliance score</p>
+              <p className="text-[10px] text-slate-400">{Math.round(section.weight * 100)}% of module score</p>
             </div>
           </div>
           <div className="flex flex-shrink-0 flex-col items-end gap-1">
@@ -128,15 +122,15 @@ function SectionCard({ section, onOpen }: { section: OverviewSection; onOpen: ()
   );
 }
 
-export default function ComplianceOverviewCards() {
+export default function IssuesOverviewCards() {
   const [openSection, setOpenSection] = useState<OverviewSection | null>(null);
   const [tuning, setTuning] = useState(false);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['compliance-sections-overview'],
+    queryKey: ['issue-incident-sections-overview'],
     queryFn: async () => {
       try {
-        const res = await complianceApi.dashboard.getSectionsOverview();
+        const res = await apiClient.get('/issue-management/dashboard/sections-overview');
         return res.data as Payload;
       } catch {
         return null;
@@ -150,8 +144,8 @@ export default function ComplianceOverviewCards() {
         <div className="grid grid-cols-1 gap-3.5 xl:grid-cols-[1fr_1.1fr_1fr]">
           {[1, 2, 3].map((i) => <div key={i} className="skeleton h-64 rounded-2xl" />)}
         </div>
-        <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
-          {[1, 2, 3, 4].map((i) => <div key={i} className="skeleton h-56 rounded-2xl" />)}
+        <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-3">
+          {[1, 2, 3].map((i) => <div key={i} className="skeleton h-56 rounded-2xl" />)}
         </div>
       </div>
     );
@@ -160,7 +154,7 @@ export default function ComplianceOverviewCards() {
 
   const score = data.performance.score == null ? null : Math.round(data.performance.score);
   const band = scoreBand(score);
-  const order = ['frameworks', 'controls', 'effectiveness', 'evidence', 'control_library', 'regulatory'];
+  const order = ['issues', 'incidents', 'corrective_actions'];
   const sections = order.map((k) => data.sections[k]).filter((s): s is OverviewSection => Boolean(s));
   const attention = ATTENTION_META.map((m) => ({ ...m, count: data.attention_queue?.[m.key] ?? 0 }));
   const attentionTotal = data.attention_queue?.total ?? 0;
@@ -181,7 +175,7 @@ export default function ComplianceOverviewCards() {
             <div className="flex min-w-0 items-center gap-4">
               <ScoreRing score={score} size={84} />
               <div className="min-w-0">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Compliance Score</p>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Issue &amp; Incident Score</p>
                 {data.performance.grade && (
                   <span className="mt-1.5 inline-block rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
                     style={{ backgroundColor: `${band.hex}14`, color: band.hex }}>
@@ -198,7 +192,6 @@ export default function ComplianceOverviewCards() {
               </button>
             )}
           </div>
-          {/* section standings mini-bars */}
           <div className="mt-4 space-y-2">
             {sections.map((s) => {
               const b = scoreBand(s.score);
@@ -260,15 +253,15 @@ export default function ComplianceOverviewCards() {
         </div>
       </div>
 
-      {/* Section detail cards */}
-      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
+      {/* Section formula cards */}
+      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-3">
         {sections.map((s) => <SectionCard key={s.key} section={s} onOpen={() => setOpenSection(s)} />)}
       </div>
 
       {tuning && (
-        <SectionWeightTunerModal sections={sections} configBase={COMPLIANCE_TUNING.configBase} invalidateKey={COMPLIANCE_TUNING.invalidateKey} onClose={() => setTuning(false)} />
+        <SectionWeightTunerModal sections={sections} configBase={ISSUES_TUNING.configBase} invalidateKey={ISSUES_TUNING.invalidateKey} onClose={() => setTuning(false)} />
       )}
-      <SectionDetailModal section={openSection} onClose={() => setOpenSection(null)} tuning={COMPLIANCE_TUNING} />
+      <SectionDetailModal section={openSection} onClose={() => setOpenSection(null)} tuning={ISSUES_TUNING} />
     </div>
   );
 }

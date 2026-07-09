@@ -433,27 +433,8 @@ export default function AssetsPage() {
     router.push(`/admin/integrations/connect?${params.toString()}`);
   };
 
-  const assetTypeChartData = useMemo(() => {
-    const byType = dashboard?.by_type || {};
-    return Object.entries(byType)
-      .filter(([, v]) => (v as number) > 0)
-      .map(([key, value]) => ({
-        name: key.replace(/_/g, ' '),
-        value: value as number,
-        fill: ASSET_TYPE_COLORS[key] || '#6b7280',
-      }));
-  }, [dashboard?.by_type]);
-
-  const criticalityChartData = useMemo(() => {
-    const byCrit = dashboard?.by_criticality || {};
-    return ['critical', 'high', 'medium', 'low']
-      .filter((k) => (byCrit[k] ?? 0) > 0)
-      .map((key) => ({
-        name: key.charAt(0).toUpperCase() + key.slice(1),
-        value: byCrit[key] as number,
-        fill: CRITICALITY_COLORS[key],
-      }));
-  }, [dashboard?.by_criticality]);
+  // Asset-type & criticality donuts moved into the Inventory Hygiene /
+  // Criticality Coverage scorecards (see InventoryScorecard.tsx).
 
   const ciaRadarData = useMemo(() => {
     const assetList = (assets as ITAsset[]) || [];
@@ -498,94 +479,11 @@ export default function AssetsPage() {
       {/* Board-level, formula-driven inventory scorecard (server-scored). */}
       <InventoryScorecard />
 
-      {/* Visual overview — 3 chart panels */}
-      <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-3">
+      {/* CIA profile by asset type. (The By-Asset-Type and By-Criticality donuts
+          now live inside the Inventory Hygiene / Criticality Coverage scorecards.) */}
+      <div className="grid grid-cols-1 gap-3 sm:gap-4 sm:max-w-sm">
 
-        {/* Panel 1 — Asset type donut */}
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">By Asset Type</p>
-          {assetTypeChartData.length === 0 ? (
-            <div className="flex h-[120px] items-center justify-center text-xs text-slate-400">No data</div>
-          ) : (
-            <div className="flex items-center gap-4">
-              <div className="relative h-[110px] w-[110px] flex-shrink-0">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={assetTypeChartData} cx="50%" cy="50%" innerRadius={30} outerRadius={50} dataKey="value" paddingAngle={2}>
-                      {assetTypeChartData.map((entry, i) => (
-                        <Cell key={i} fill={entry.fill} />
-                      ))}
-                    </Pie>
-                    <Tooltip content={<AssetTooltip />} />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                  <span className="text-lg font-bold text-slate-900">{totalAssets}</span>
-                  <span className="text-[10px] text-slate-400">total</span>
-                </div>
-              </div>
-              <div className="flex flex-1 flex-col gap-1.5 min-w-0">
-                {assetTypeChartData.map((entry) => (
-                  <div key={entry.name} className="flex items-center gap-2 text-xs">
-                    <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: entry.fill }} />
-                    <span className="text-slate-500 capitalize truncate">{entry.name}</span>
-                    <span className="font-semibold text-slate-800 ml-auto">{entry.value}</span>
-                  </div>
-                ))}
-                <div className="mt-1 border-t border-slate-100 pt-1 flex justify-between text-[10px] text-slate-400">
-                  <span>High Value</span>
-                  <span className="font-semibold text-green-600">{dashboard?.high_value_assets || 0}</span>
-                </div>
-                <div className="flex justify-between text-[10px] text-slate-400">
-                  <span>Need CIA</span>
-                  <span className="font-semibold text-amber-500">{dashboard?.assets_needing_assessment || 0}</span>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Panel 2 — Criticality ring */}
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">By Criticality</p>
-          {criticalityChartData.length === 0 ? (
-            <div className="flex h-[120px] items-center justify-center text-xs text-slate-400">No data</div>
-          ) : (
-            <div className="flex items-center gap-4">
-              <div className="relative h-[110px] w-[110px] flex-shrink-0">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={criticalityChartData} cx="50%" cy="50%" innerRadius={30} outerRadius={50} dataKey="value" paddingAngle={2}>
-                      {criticalityChartData.map((entry, i) => (
-                        <Cell key={i} fill={entry.fill} />
-                      ))}
-                    </Pie>
-                    <Tooltip content={<AssetTooltip />} />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                  <span className="text-lg font-bold text-slate-900">{criticalityChartData.reduce((s, e) => s + e.value, 0)}</span>
-                  <span className="text-[10px] text-slate-400">assets</span>
-                </div>
-              </div>
-              <div className="flex flex-1 flex-col gap-1.5 min-w-0">
-                {criticalityChartData.map((entry) => (
-                  <div key={entry.name} className="flex items-center gap-2 text-xs">
-                    <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: entry.fill }} />
-                    <span className="text-slate-500">{entry.name}</span>
-                    <span className="font-semibold text-slate-800 ml-auto">{entry.value}</span>
-                  </div>
-                ))}
-                <div className="mt-1 border-t border-slate-100 pt-1 flex justify-between text-[10px] text-slate-400">
-                  <span>Active</span>
-                  <span className="font-semibold text-green-600">{dashboard?.by_status?.active || 0}</span>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Panel 3 — CIA radar by asset type */}
+        {/* CIA radar by asset type */}
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">CIA Profile by Type</p>
           <p className="text-[10px] text-slate-400 mb-2">Avg Confidentiality / Integrity / Availability (1–5)</p>

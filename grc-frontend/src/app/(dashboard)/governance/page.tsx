@@ -14,6 +14,7 @@ import {
   SectionGraphCard,
   SectionDetailModal,
 } from '@/components/dashboard/score-kit';
+import { SectionWeightTuner } from '@/components/dashboard/score-tuning';
 import {
   FileText,
   AlertTriangle,
@@ -21,7 +22,10 @@ import {
   Shield,
   Layers,
   TrendingUp,
+  SlidersHorizontal,
 } from 'lucide-react';
+
+const GOVERNANCE_TUNING = { configBase: '/governance/dashboard', invalidateKey: ['governance-documents-overview'] as unknown[] };
 import {
   Tooltip as RTooltip,
   ResponsiveContainer,
@@ -148,6 +152,7 @@ function TrendAreaChart({ data }: { data: { month: string; created: number; publ
 export default function GovernanceDashboardPage() {
   const [openSection, setOpenSection] = useState<OverviewSection | null>(null);
   const [perfOpen, setPerfOpen] = useState(false);
+  const [tuning, setTuning] = useState(false);
 
   const { data: summary, isLoading: summaryLoading } = useQuery({
     queryKey: ['governance-dashboard-summary'],
@@ -274,7 +279,7 @@ export default function GovernanceDashboardPage() {
     weight: c.weight,
   }));
 
-  const sectionOrder = ['documents', 'mappings', 'approvals', 'reviews', 'exceptions', 'attestations', 'committees', 'regulatory'];
+  const sectionOrder = ['documents', 'mappings', 'approvals', 'reviews', 'exceptions', 'attestations', 'committees', 'kris', 'kpi', 'projects'];
   const sectionCards = sectionOrder
     .map((key) => overviewSections?.[key])
     .filter((s): s is OverviewSection => Boolean(s));
@@ -288,7 +293,7 @@ export default function GovernanceDashboardPage() {
     { label: 'Open gap findings', value: attentionQueue?.open_gaps ?? 0, color: '#64748b', href: '/governance/documents' },
     { label: 'Overdue attestations', value: attentionQueue?.overdue_attestations ?? 0, color: '#0ea5e9', href: '/governance/attestations' },
     { label: 'Overdue committee actions', value: attentionQueue?.overdue_actions ?? 0, color: '#d946ef', href: '/governance/committees/actions' },
-    { label: 'Overdue regulatory tasks', value: attentionQueue?.regulatory_overdue_tasks ?? 0, color: '#14b8a6', href: '/governance/regulatory-changes' },
+    { label: 'Breached KRIs', value: attentionQueue?.red_kris ?? 0, color: '#14b8a6', href: '/erm/kris' },
   ];
 
   const trendData = (trends?.created || []).map((item: { month: string; count: number }, idx: number) => ({
@@ -417,11 +422,11 @@ export default function GovernanceDashboardPage() {
         </div>
       )}
 
-      <SectionDetailModal section={openSection} onClose={() => setOpenSection(null)} />
+      <SectionDetailModal section={openSection} onClose={() => setOpenSection(null)} tuning={GOVERNANCE_TUNING} />
 
       <AnimatedModal
         isOpen={perfOpen}
-        onClose={() => setPerfOpen(false)}
+        onClose={() => { setPerfOpen(false); setTuning(false); }}
         size="lg"
         title="Performance Score"
         subtitle="Weighted mean of the module's section scores"
@@ -429,7 +434,7 @@ export default function GovernanceDashboardPage() {
         <div className="p-5">
           <div className="mb-4 flex items-center gap-4 rounded-xl bg-slate-50 p-4">
             <ScoreRing score={governanceHealthScore} size={72} />
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               {governanceHealthGrade && (
                 <span className={`inline-block rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${scoreBand(governanceHealthScore).pill}`}>
                   {governanceHealthGrade}
@@ -440,8 +445,26 @@ export default function GovernanceDashboardPage() {
                 no data are excluded and the remaining weights re-normalize.
               </p>
             </div>
+            {!tuning && sectionCards.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setTuning(true)}
+                className="inline-flex flex-shrink-0 items-center gap-1 self-start rounded-md border border-slate-200 px-2 py-1 text-[11px] font-medium text-slate-500 transition-colors hover:border-slate-300 hover:text-slate-700"
+              >
+                <SlidersHorizontal className="h-3 w-3" /> Adjust weights
+              </button>
+            )}
           </div>
 
+          {tuning ? (
+            <SectionWeightTuner
+              sections={sectionCards}
+              configBase={GOVERNANCE_TUNING.configBase}
+              invalidateKey={GOVERNANCE_TUNING.invalidateKey}
+              onClose={() => setTuning(false)}
+            />
+          ) : (
+          <>
           <div className="divide-y divide-slate-100 rounded-xl border border-slate-200">
             {perfComponents.map((c) => (
               <div key={c.key} className="px-4 py-3">
@@ -485,6 +508,8 @@ export default function GovernanceDashboardPage() {
               <span className="font-bold text-slate-800">{governanceHealthScore}</span>
             </p>
           </div>
+          </>
+          )}
         </div>
       </AnimatedModal>
 

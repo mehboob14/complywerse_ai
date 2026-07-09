@@ -8,7 +8,7 @@ import re
 from functools import lru_cache
 from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Request, Cookie
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Request, Cookie, Body
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import text
@@ -594,6 +594,56 @@ def get_inventory_overview(
                 "performance": {"score": None, "grade": None, "components": []},
                 "attention_queue": {}}
     return score_inventory(db, tids)
+
+
+@router.get("/scorecard-config")
+def get_inventory_scorecard_config(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Current section weights + target (built-in defaults merged with tenant overrides)."""
+    from ..services import scorecard_config as sc_cfg
+    tids = get_user_tenants(current_user, db)
+    if not tids:
+        return {"module": "assets", "sections": [], "target": 85, "default_target": 85, "customized": False}
+    return sc_cfg.merged(db, tids[0], "assets")
+
+
+@router.put("/scorecard-config")
+def put_inventory_scorecard_config(
+    body: dict = Body(...),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Save section-weight, metric-weight and/or target overrides for this tenant.
+    Any field omitted is left unchanged; weights renormalize to 100%."""
+    from ..services import scorecard_config as sc_cfg
+    tids = get_user_tenants(current_user, db)
+    if not tids:
+        return {"ok": False}
+    cfg = sc_cfg.save_config(
+        db, tids[0], "assets",
+        section_weights=body.get("weights"),
+        metric_weights=body.get("metric_weights"),
+        target=body.get("target"),
+        updated_by=getattr(current_user, "id", None),
+    )
+    return {"ok": True, "config": cfg}
+
+
+@router.delete("/scorecard-config")
+def reset_inventory_scorecard_config(
+    section: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Reset scorecard tuning to defaults — the whole module, or (with ?section=)
+    just one section's metric weights."""
+    from ..services import scorecard_config as sc_cfg
+    tids = get_user_tenants(current_user, db)
+    if tids:
+        sc_cfg.reset_config(db, tids[0], "assets", section=section)
+    return {"ok": True}
 
 
 # ─── Criticality helper endpoints ─────────────────────────────────

@@ -2,17 +2,21 @@
 
 /**
  * IT Assets — Inventory scorecard (board-level, formula-driven). Sits at the top
- * of /assets above the existing donuts/table. Five scored sections (hygiene,
- * criticality coverage, vulnerability exposure, scan & monitoring, lifecycle &
- * exposure) blended into one inventory score, each metric's formula one click
- * away. Data: GET /assets/inventory-overview (all scoring server-side).
+ * of /assets above the existing donuts/table. Seven scored sections (inventory
+ * hygiene, criticality coverage, vulnerability exposure, remediation health, CIS
+ * benchmark, scan & monitoring, lifecycle & exposure) blended into one inventory
+ * score, each metric's formula one click away. Data: GET
+ * /assets/inventory-overview (all scoring server-side).
  */
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '@/lib/api';
-import { AlertTriangle, ShieldCheck, ServerCog } from 'lucide-react';
+import { AlertTriangle, ShieldCheck, ServerCog, SlidersHorizontal } from 'lucide-react';
 import { scoreBand, ScoreRing, SectionDetailModal, SectionGraphCard, type OverviewSection } from '@/components/dashboard/score-kit';
+import { SectionWeightTunerModal } from '@/components/dashboard/score-tuning';
+
+const ASSETS_TUNING = { configBase: '/assets', invalidateKey: ['inventory-overview'] as unknown[] };
 
 type Payload = {
   as_of: string | null;
@@ -22,7 +26,7 @@ type Payload = {
   attention_queue: Record<string, number>;
 };
 
-const ORDER = ['hygiene', 'criticality', 'vulnerability', 'scan', 'lifecycle'];
+const ORDER = ['hygiene', 'criticality', 'vulnerability', 'vuln_health', 'cis', 'scan', 'lifecycle'];
 const ATTENTION: Array<{ key: string; label: string; color: string }> = [
   { key: 'open_critical_high_vulns', label: 'Open critical/high vulnerabilities', color: '#e11d48' },
   { key: 'assets_without_owner', label: 'Assets with no owner', color: '#d97706' },
@@ -35,6 +39,7 @@ function pct(n: number | null | undefined) { return n == null ? '—' : Math.rou
 
 export default function InventoryScorecard() {
   const [open, setOpen] = useState<OverviewSection | null>(null);
+  const [tuning, setTuning] = useState(false);
   const { data, isLoading } = useQuery({
     queryKey: ['inventory-overview'],
     queryFn: async () => {
@@ -47,7 +52,7 @@ export default function InventoryScorecard() {
     return (
       <div className="mb-5 space-y-3">
         <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-[1fr_0.7fr]">{[1, 2].map((i) => <div key={i} className="skeleton h-40 rounded-2xl" />)}</div>
-        <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-5">{[1, 2, 3, 4, 5].map((i) => <div key={i} className="skeleton h-44 rounded-2xl" />)}</div>
+        <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-5">{[1, 2, 3, 4, 5, 6, 7].map((i) => <div key={i} className="skeleton h-44 rounded-2xl" />)}</div>
       </div>
     );
   }
@@ -64,13 +69,21 @@ export default function InventoryScorecard() {
       {/* hero: performance + attention */}
       <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-[1fr_0.75fr]">
         <div className="flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex items-center gap-4">
-            <ScoreRing score={perf.score} size={84} />
-            <div className="min-w-0">
-              <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500"><ServerCog className="h-3.5 w-3.5" /> Inventory Score</p>
-              {perf.grade && <span className="mt-1.5 inline-block rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide" style={{ backgroundColor: `${band.hex}14`, color: band.hex }}>{perf.grade}</span>}
-              <p className="mt-1.5 text-[11px] text-slate-400">{data.counts.assets ?? 0} assets · {data.counts.open_vulnerabilities ?? 0} open vulns · target 85</p>
+          <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
+            <div className="flex min-w-0 items-center gap-4">
+              <ScoreRing score={perf.score} size={84} />
+              <div className="min-w-0">
+                <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500"><ServerCog className="h-3.5 w-3.5" /> Inventory Score</p>
+                {perf.grade && <span className="mt-1.5 inline-block rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide" style={{ backgroundColor: `${band.hex}14`, color: band.hex }}>{perf.grade}</span>}
+                <p className="mt-1.5 text-[11px] text-slate-400">{data.counts.assets ?? 0} assets · {data.counts.open_vulnerabilities ?? 0} open vulns · target 85</p>
+              </div>
             </div>
+            {!tuning && (
+              <button type="button" onClick={() => setTuning(true)}
+                className="inline-flex flex-shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-slate-200 px-2 py-1 text-[10.5px] font-medium text-slate-500 transition-colors hover:border-slate-300 hover:text-slate-700">
+                <SlidersHorizontal className="h-3 w-3" /> Adjust weights
+              </button>
+            )}
           </div>
           <div className="mt-4 space-y-2">
             {sections.map((s) => {
@@ -110,7 +123,10 @@ export default function InventoryScorecard() {
         {sections.map((s) => <SectionGraphCard key={s.key} section={s} onOpen={() => setOpen(s)} />)}
       </div>
 
-      <SectionDetailModal section={open} onClose={() => setOpen(null)} />
+      {tuning && (
+        <SectionWeightTunerModal sections={sections} configBase={ASSETS_TUNING.configBase} invalidateKey={ASSETS_TUNING.invalidateKey} onClose={() => setTuning(false)} />
+      )}
+      <SectionDetailModal section={open} onClose={() => setOpen(null)} tuning={ASSETS_TUNING} />
     </div>
   );
 }

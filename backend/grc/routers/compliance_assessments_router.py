@@ -5054,6 +5054,7 @@ def get_assessments_overview(
 
     cats: dict = {}
     sla_tot = {"gaps": 0, "closed": 0, "open": 0, "overdue": 0}
+    unmapped = 0  # recognized (non-excluded) assessments with no family scorer
     for d in docs:
         fmt = getattr(d, "assessment_format", "standard") or "standard"
         if fmt in EXCLUDED_FORMATS:
@@ -5065,10 +5066,13 @@ def get_assessments_overview(
                 ev[it.id] = db.query(_Ev).filter(_Ev.assessment_item_id == it.id).count()
         res = score_assessment(d, items, ev, policy, now)
         if res is None:
+            # A non-excluded format we don't yet score — surface it instead of
+            # silently dropping it from the board.
+            unmapped += 1
             continue
         entry = {
             "id": d.id, "name": d.name, "format": fmt, "family": res["family"],
-            "item_noun": res["item_noun"], "status": d.status,
+            "item_noun": res["item_noun"], "status": d.status, "n_items": len(items),
             "content": res["content"]["score"], "sla": res["sla"]["score"],
             "level_achieved": res["content"].get("level_achieved"),
             "metrics": res["content"]["metrics"], "sla_metrics": res["sla"]["metrics"],
@@ -5084,25 +5088,37 @@ def get_assessments_overview(
         for k in sla_tot:
             sla_tot[k] += sc.get(k, 0)
 
+    # Rollups are ITEM-COUNT WEIGHTED so a 5-item toy assessment no longer weighs
+    # the same as a 500-control register. Weight is capped (200) so one very large
+    # assessment can't swamp the board.
+    def _cap(n):
+        return max(1, min(int(n or 1), 200))
+
+    def _wmean(pairs):
+        num = sum(s * w for s, w in pairs)
+        den = sum(w for _, w in pairs)
+        return round(num / den, 1) if den else None
+
     CAT_ORDER = ["Cyber Security", "NCA", "Digital Operations", "Privacy & Data"]
     categories = []
     for cat in CAT_ORDER + [c for c in cats if c not in CAT_ORDER]:
         rows = cats.get(cat)
         if not rows:
             continue
-        scored = [r["content"] for r in rows if r["content"] is not None]
+        scored = [(r["content"], _cap(r.get("n_items"))) for r in rows if r["content"] is not None]
         slas = [r["sla"] for r in rows if r["sla"] is not None]
         categories.append({
             "category": cat,
-            "score": round(sum(scored) / len(scored), 1) if scored else None,
+            "score": _wmean(scored),
             "sla": round(sum(slas) / len(slas), 1) if slas else None,
             "count": len(rows),
             "assessments": rows,
         })
 
-    all_content = [r["content"] for rows in cats.values() for r in rows if r["content"] is not None]
+    all_content = [(r["content"], _cap(r.get("n_items")))
+                   for rows in cats.values() for r in rows if r["content"] is not None]
     all_sla = [r["sla"] for rows in cats.values() for r in rows if r["sla"] is not None]
-    perf = round(sum(all_content) / len(all_content), 1) if all_content else None
+    perf = _wmean(all_content)
     grade = (None if perf is None else "excellent" if perf >= 85 else "good" if perf >= 70
              else "fair" if perf >= 50 else "poor")
     module_sla = round(sum(all_sla) / len(all_sla), 1) if all_sla else None
@@ -5116,6 +5132,7 @@ def get_assessments_overview(
             "overdue_gaps": sla_tot["overdue"],
             "open_gaps": sla_tot["open"],
             "not_started": sum(1 for rows in cats.values() for r in rows if r["content"] is None),
+            "unmapped_formats": unmapped,
         },
         "categories": categories,
     }
