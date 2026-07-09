@@ -1,0 +1,887 @@
+{
+  "version": 1,
+  "source": "startup_assessment_seed",
+  "sla_policy": {
+    "critical_days": 30,
+    "high_days": 60,
+    "medium_days": 90,
+    "low_days": 180,
+    "due_soon_days": 30,
+    "score_closed_ontime": 100,
+    "score_closed_late": 70,
+    "score_on_track": 40,
+    "score_due_soon": 20,
+    "score_overdue": 0,
+    "score_no_date": 30
+  },
+  "assessments": [
+    {
+      "key": "internal_audit",
+      "name": "Seed - Internal Audit Master Tracking",
+      "assessment_type": "internal_audit",
+      "assessment_format": "ubl_audit_master_tracking",
+      "source": "Startup Seed",
+      "file_name": "seed_internal_audit_master_tracking.xlsx",
+      "status": "in_progress",
+      "assessor": "GRC Seed",
+      "due_in_days": 45,
+      "items": [
+        {
+          "item_number": "IA-001",
+          "area_domain": "Audit OS Points - Governance",
+          "control_description": "Board-approved information security policy is reviewed and ratified annually.",
+          "compliance_status": "complied",
+          "priority": "medium",
+          "responsible_party": "CISO Office",
+          "timeline": "Q1",
+          "evidence_reference": "ISP-annual-review.pdf",
+          "remarks": "Signed off by the board risk committee.",
+          "closed_days_ago": 18
+        },
+        {
+          "item_number": "IA-010",
+          "area_domain": "Audit OS Points - Identity",
+          "control_description": "Privileged accounts are recertified by system owners each quarter.",
+          "compliance_status": "partially_complied",
+          "priority": "high",
+          "responsible_party": "IAM Team",
+          "timeline": "Q2",
+          "gaps_identified": "Quarterly recertification covered 78 percent of privileged accounts.",
+          "proposed_solution": "Automate recertification and enforce escalation after 30 days.",
+          "remediation_status": "in_progress",
+          "target_in_days": 35
+        },
+        {
+          "item_number": "IA-020",
+          "area_domain": "Audit OS Points - Vulnerability",
+          "control_description": "Critical vulnerabilities are remediated within the agreed SLA.",
+          "compliance_status": "not_complied",
+          "priority": "critical",
+          "responsible_party": "SecOps",
+          "timeline": "Immediate",
+          "gaps_identified": "Mean time to remediate critical CVEs is above target.",
+          "proposed_solution": "Create an emergency patch process and weekly breach review.",
+          "remediation_status": "open",
+          "target_in_days": -5
+        }
+      ]
+    },
+    {
+      "key": "maturity",
+      "name": "Seed - ISO 27001 Maturity Review",
+      "assessment_type": "maturity_assessment",
+      "assessment_format": "xlsx_maturity",
+      "source": "Startup Seed",
+      "file_name": "seed_iso27001_maturity.xlsx",
+      "status": "in_progress",
+      "assessor": "GRC Seed",
+      "due_in_days": 70,
+      "items": [
+        {
+          "item_number": "GV-01",
+          "area_domain": "Govern - Policies",
+          "control_description": "Information security policies are approved, communicated, and reviewed.",
+          "compliance_status": "complied",
+          "maturity_score": 4,
+          "priority": "medium",
+          "remarks": "Weighting: 1 | Target: 3",
+          "closed_days_ago": 30
+        },
+        {
+          "item_number": "ID-01",
+          "area_domain": "Identify - Asset Management",
+          "control_description": "Critical information assets are inventoried with owners and classifications.",
+          "compliance_status": "partially_complied",
+          "maturity_score": 3,
+          "priority": "high",
+          "remarks": "Weighting: 1.5 | Target: 4",
+          "gaps_identified": "Ownership metadata is incomplete for legacy assets.",
+          "remediation_status": "in_progress",
+          "target_in_days": 40
+        },
+        {
+          "item_number": "PR-01",
+          "area_domain": "Protect - Access Control",
+          "control_description": "Privileged access is centrally governed and periodically reviewed.",
+          "compliance_status": "not_complied",
+          "maturity_score": 2,
+          "priority": "critical",
+          "remarks": "Weighting: 2 | Target: 4",
+          "gaps_identified": "Privileged access vault rollout is incomplete.",
+          "proposed_solution": "Complete onboarding of administrator accounts to PAM.",
+          "remediation_status": "open",
+          "target_in_days": 21
+        },
+        {
+          "item_number": "RS-01",
+          "area_domain": "Respond - Incident Response",
+          "control_description": "Incident response playbooks are tested and updated after exercises.",
+          "compliance_status": "complied",
+          "maturity_score": 4,
+          "priority": "medium",
+          "remarks": "Weighting: 1 | Target: 3",
+          "closed_days_ago": 10
+        }
+      ]
+    },
+    {
+      "key": "asvs",
+      "name": "Seed - Mobile Banking App ASVS",
+      "assessment_type": "security_checklist",
+      "assessment_format": "asvs_checklist",
+      "source": "Startup Seed",
+      "file_name": "seed_owasp_asvs.xlsx",
+      "status": "in_progress",
+      "assessor": "GRC Seed",
+      "due_in_days": 60,
+      "items": [
+        {
+          "item_number": "V1.1.1",
+          "area_domain": "Architecture",
+          "control_description": "Security architecture documentation defines trust boundaries and sensitive data flows.",
+          "compliance_status": "complied",
+          "priority": "medium",
+          "remarks": "ASVS Level: 1",
+          "closed_days_ago": 12
+        },
+        {
+          "item_number": "V2.1.1",
+          "area_domain": "Authentication",
+          "control_description": "Password policy and authentication controls meet the application risk profile.",
+          "compliance_status": "partially_complied",
+          "priority": "high",
+          "remarks": "ASVS Level: 2",
+          "gaps_identified": "Service-account authentication is not fully covered by MFA.",
+          "remediation_status": "in_progress",
+          "target_in_days": 28
+        },
+        {
+          "item_number": "V3.2.2",
+          "area_domain": "Session Management",
+          "control_description": "Session tokens expire after inactivity and cannot be reused after logout.",
+          "compliance_status": "not_complied",
+          "priority": "critical",
+          "remarks": "ASVS Level: 2",
+          "gaps_identified": "Refresh tokens remain valid after logout on one channel.",
+          "proposed_solution": "Invalidate refresh-token family on logout and risk events.",
+          "remediation_status": "open",
+          "target_in_days": 14
+        },
+        {
+          "item_number": "V5.3.4",
+          "area_domain": "Input Validation",
+          "control_description": "Server-side validation rejects malformed requests before business processing.",
+          "compliance_status": "complied",
+          "priority": "medium",
+          "remarks": "ASVS Level: 3",
+          "closed_days_ago": 6
+        }
+      ]
+    },
+    {
+      "key": "cs_mobile",
+      "name": "Seed - Mobile App Security Review",
+      "assessment_type": "security_checklist",
+      "assessment_format": "mobile_app_security",
+      "source": "Startup Seed",
+      "file_name": "seed_mobile_app_security.xlsx",
+      "status": "in_progress",
+      "assessor": "GRC Seed",
+      "due_in_days": 55,
+      "items": [
+        {
+          "item_number": "MASVS-AUTH-1",
+          "area_domain": "Authentication",
+          "subdomain_name": "iOS",
+          "control_description": "Biometric unlock falls back to strong authentication.",
+          "compliance_status": "complied",
+          "priority": "medium",
+          "remarks": "Platform: iOS | MASVS: L1,L2",
+          "closed_days_ago": 9
+        },
+        {
+          "item_number": "MASVS-STORAGE-1",
+          "area_domain": "Data Storage",
+          "subdomain_name": "Android",
+          "control_description": "Sensitive tokens are stored only in platform-backed secure storage.",
+          "compliance_status": "partially_complied",
+          "priority": "high",
+          "remarks": "Platform: Android | MASVS: L1,L2",
+          "gaps_identified": "Debug build stores session metadata outside encrypted storage.",
+          "remediation_status": "in_progress",
+          "target_in_days": 30
+        },
+        {
+          "item_number": "MASVS-RES-1",
+          "area_domain": "Resilience",
+          "subdomain_name": "General",
+          "control_description": "Runtime tampering controls detect common hooking frameworks.",
+          "compliance_status": "not_complied",
+          "priority": "high",
+          "remarks": "Platform: General | MASVS: R",
+          "gaps_identified": "Runtime tamper detection is not enabled for production builds.",
+          "remediation_status": "open",
+          "target_in_days": 20
+        }
+      ]
+    },
+    {
+      "key": "owasp_testing",
+      "name": "Seed - Retail Web Portal OWASP Testing",
+      "assessment_type": "security_checklist",
+      "assessment_format": "owasp_v4_testing_checklist",
+      "source": "Startup Seed",
+      "file_name": "seed_owasp_testing.xlsx",
+      "status": "in_progress",
+      "assessor": "GRC Seed",
+      "due_in_days": 42,
+      "items": [
+        {
+          "item_number": "WSTG-CONF-01",
+          "area_domain": "Configuration Management",
+          "control_description": "Application server configuration disables insecure defaults.",
+          "compliance_status": "complied",
+          "priority": "medium",
+          "closed_days_ago": 7
+        },
+        {
+          "item_number": "WSTG-IDNT-02",
+          "area_domain": "Identity Management",
+          "control_description": "User registration and account recovery flows resist enumeration.",
+          "compliance_status": "partially_complied",
+          "priority": "medium",
+          "gaps_identified": "Password reset timing varies for unknown accounts.",
+          "remediation_status": "in_progress",
+          "target_in_days": 25
+        },
+        {
+          "item_number": "WSTG-INPV-05",
+          "area_domain": "Input Validation",
+          "control_description": "SQL injection tests pass for critical transaction endpoints.",
+          "compliance_status": "not_complied",
+          "priority": "critical",
+          "gaps_identified": "One reporting endpoint concatenates untrusted filter values.",
+          "proposed_solution": "Move filter building to parameterized query helpers.",
+          "remediation_status": "open",
+          "target_in_days": 10
+        }
+      ]
+    },
+    {
+      "key": "cs_csir",
+      "name": "Seed - CSIR Maturity Assessment",
+      "assessment_type": "maturity_assessment",
+      "assessment_format": "csir_maturity",
+      "source": "Startup Seed",
+      "file_name": "seed_csir_maturity.xlsx",
+      "status": "in_progress",
+      "assessor": "GRC Seed",
+      "due_in_days": 80,
+      "items": [
+        {
+          "item_number": "CSIR-01",
+          "area_domain": "Prepare",
+          "control_description": "Incident response roles and escalation paths are documented.",
+          "compliance_status": "complied",
+          "maturity_score": 4,
+          "priority": "medium",
+          "remarks": "Weighting: 1 | Target: 3",
+          "closed_days_ago": 15
+        },
+        {
+          "item_number": "CSIR-02",
+          "area_domain": "Detect",
+          "control_description": "Detection logic covers high-risk banking channels.",
+          "compliance_status": "partially_complied",
+          "maturity_score": 3,
+          "priority": "high",
+          "remarks": "Weighting: 1.5 | Target: 4",
+          "gaps_identified": "ATM telemetry is not fully integrated into the SIEM.",
+          "remediation_status": "in_progress",
+          "target_in_days": 45
+        },
+        {
+          "item_number": "CSIR-03",
+          "area_domain": "Improve",
+          "control_description": "Post-incident lessons learned are tracked to closure.",
+          "compliance_status": "not_complied",
+          "maturity_score": 2,
+          "priority": "medium",
+          "remarks": "Weighting: 1 | Target: 3",
+          "gaps_identified": "Action owners are not consistently recorded.",
+          "remediation_status": "open",
+          "target_in_days": 35
+        }
+      ]
+    },
+    {
+      "key": "cs_cti",
+      "name": "Seed - CTI Maturity Assessment",
+      "assessment_type": "maturity_assessment",
+      "assessment_format": "cti_maturity",
+      "source": "Startup Seed",
+      "file_name": "seed_cti_maturity.xlsx",
+      "status": "in_progress",
+      "assessor": "GRC Seed",
+      "due_in_days": 85,
+      "items": [
+        {
+          "item_number": "CTI-01",
+          "area_domain": "Collection",
+          "control_description": "Threat intelligence sources are prioritized by relevance and quality.",
+          "compliance_status": "complied",
+          "maturity_score": 4,
+          "priority": "medium",
+          "remarks": "Weighting: 1 | Target: 3",
+          "closed_days_ago": 21
+        },
+        {
+          "item_number": "CTI-02",
+          "area_domain": "Analysis",
+          "control_description": "CTI analysts convert indicators into actionable detection use cases.",
+          "compliance_status": "partially_complied",
+          "maturity_score": 3,
+          "priority": "high",
+          "remarks": "Weighting: 2 | Target: 4",
+          "gaps_identified": "Detection engineering backlog is not linked to CTI priorities.",
+          "remediation_status": "in_progress",
+          "target_in_days": 40
+        },
+        {
+          "item_number": "CTI-03",
+          "area_domain": "Dissemination",
+          "control_description": "Relevant CTI is distributed to fraud, SOC, and vulnerability teams.",
+          "compliance_status": "not_complied",
+          "maturity_score": 2,
+          "priority": "medium",
+          "remarks": "Weighting: 1 | Target: 3",
+          "gaps_identified": "Fraud operations receives CTI only ad hoc.",
+          "remediation_status": "open",
+          "target_in_days": 50
+        }
+      ]
+    },
+    {
+      "key": "cs_itsecops",
+      "name": "Seed - IT Security Operations Maturity",
+      "assessment_type": "maturity_assessment",
+      "assessment_format": "itsecops_maturity",
+      "source": "Startup Seed",
+      "file_name": "seed_it_security_operations.xlsx",
+      "status": "in_progress",
+      "assessor": "GRC Seed",
+      "due_in_days": 75,
+      "items": [
+        {
+          "item_number": "ITSO-01",
+          "area_domain": "Patch Management",
+          "subdomain_name": "Process",
+          "control_description": "Patch SLAs are defined and measured for critical platforms.",
+          "compliance_status": "partially_complied",
+          "maturity_score": 3,
+          "priority": "high",
+          "remarks": "Dimension: Process | Target: 4",
+          "gaps_identified": "Exception handling is manual.",
+          "remediation_status": "in_progress",
+          "target_in_days": 38
+        },
+        {
+          "item_number": "ITSO-02",
+          "area_domain": "Endpoint Security",
+          "subdomain_name": "Technology",
+          "control_description": "Endpoint telemetry is centrally monitored and tuned.",
+          "compliance_status": "complied",
+          "maturity_score": 4,
+          "priority": "medium",
+          "remarks": "Dimension: Technology | Target: 3",
+          "closed_days_ago": 5
+        },
+        {
+          "item_number": "ITSO-03",
+          "area_domain": "Privileged Operations",
+          "subdomain_name": "People",
+          "control_description": "Privileged operators are trained on approved break-glass procedures.",
+          "compliance_status": "not_complied",
+          "maturity_score": 2,
+          "priority": "high",
+          "remarks": "Dimension: People | Target: 4",
+          "gaps_identified": "Break-glass training is not complete for database administrators.",
+          "remediation_status": "open",
+          "target_in_days": 25
+        }
+      ]
+    },
+    {
+      "key": "cs_incident",
+      "name": "Seed - Incident Management Maturity",
+      "assessment_type": "maturity_assessment",
+      "assessment_format": "incident_maturity",
+      "source": "Startup Seed",
+      "file_name": "seed_incident_management.xlsx",
+      "status": "in_progress",
+      "assessor": "GRC Seed",
+      "due_in_days": 68,
+      "items": [
+        {
+          "item_number": "IM-01",
+          "area_domain": "Intake",
+          "control_description": "Security events are triaged using severity-based runbooks.",
+          "compliance_status": "complied",
+          "maturity_score": 4,
+          "priority": "medium",
+          "remarks": "Weighting: 1 | Target: 3",
+          "closed_days_ago": 11
+        },
+        {
+          "item_number": "IM-02",
+          "area_domain": "Containment",
+          "control_description": "Containment actions are pre-approved for critical scenarios.",
+          "compliance_status": "partially_complied",
+          "maturity_score": 3,
+          "priority": "high",
+          "remarks": "Weighting: 1.5 | Target: 4",
+          "gaps_identified": "Cloud isolation playbook requires additional legal approval.",
+          "remediation_status": "in_progress",
+          "target_in_days": 30
+        },
+        {
+          "item_number": "IM-03",
+          "area_domain": "Recovery",
+          "control_description": "Recovery validation includes integrity checks before service restoration.",
+          "compliance_status": "not_complied",
+          "maturity_score": 2,
+          "priority": "medium",
+          "remarks": "Weighting: 1 | Target: 3",
+          "gaps_identified": "Integrity validation evidence is not retained consistently.",
+          "remediation_status": "open",
+          "target_in_days": 45
+        }
+      ]
+    },
+    {
+      "key": "digital_ops_maturity",
+      "name": "Seed - Digital Operations Maturity",
+      "assessment_type": "maturity_assessment",
+      "assessment_format": "digital_ops_maturity",
+      "source": "Startup Seed",
+      "file_name": "seed_digital_operations_maturity.xlsx",
+      "status": "in_progress",
+      "assessor": "GRC Seed",
+      "due_in_days": 90,
+      "items": [
+        {
+          "item_number": "DOMA-01",
+          "area_domain": "Service Management",
+          "control_description": "Digital services have defined owners, SLAs, and support models.",
+          "compliance_status": "complied",
+          "maturity_score": 4,
+          "priority": "medium",
+          "remarks": "Weighting: 1 | Target: 3",
+          "closed_days_ago": 20
+        },
+        {
+          "item_number": "DOMA-02",
+          "area_domain": "Change Management",
+          "control_description": "Emergency changes are reviewed after implementation.",
+          "compliance_status": "partially_complied",
+          "maturity_score": 3,
+          "priority": "high",
+          "remarks": "Weighting: 1.5 | Target: 4",
+          "gaps_identified": "Emergency change post-reviews are late in two business units.",
+          "remediation_status": "in_progress",
+          "target_in_days": 37
+        },
+        {
+          "item_number": "DOMA-03",
+          "area_domain": "Resilience",
+          "control_description": "Critical digital journeys are tested for failover and recovery.",
+          "compliance_status": "not_complied",
+          "maturity_score": 2,
+          "priority": "critical",
+          "remarks": "Weighting: 2 | Target: 4",
+          "gaps_identified": "End-to-end failover has not been tested for merchant acquiring.",
+          "remediation_status": "open",
+          "target_in_days": 18
+        }
+      ]
+    },
+    {
+      "key": "dpia",
+      "name": "Seed - DPIA for Customer Analytics",
+      "assessment_type": "privacy_assessment",
+      "assessment_format": "dpia_pia",
+      "source": "Startup Seed",
+      "file_name": "seed_dpia_pia.xlsx",
+      "status": "in_progress",
+      "assessor": "GRC Seed",
+      "due_in_days": 50,
+      "items": [
+        {
+          "item_number": "S-01",
+          "area_domain": "Screening",
+          "control_description": "Project involves profiling or automated decision support.",
+          "compliance_status": "complied",
+          "priority": "medium",
+          "remarks": "Section: screening",
+          "closed_days_ago": 4
+        },
+        {
+          "item_number": "R-01",
+          "area_domain": "Risk",
+          "control_description": "Unauthorized use of analytics data could affect customer privacy.",
+          "compliance_status": "partially_complied",
+          "priority": "high",
+          "risk_rating": "High",
+          "remarks": "Section: risk | Inherent: 16 | Residual: 8 | InherentRating: High",
+          "gaps_identified": "Data-use approvals are not linked to model deployment gates.",
+          "remediation_status": "in_progress",
+          "target_in_days": 31
+        },
+        {
+          "item_number": "R-02",
+          "area_domain": "Risk",
+          "control_description": "Retention rules may keep derived features beyond approved periods.",
+          "compliance_status": "not_complied",
+          "priority": "critical",
+          "risk_rating": "Critical",
+          "remarks": "Section: risk | Inherent: 20 | Residual: 15 | InherentRating: Critical",
+          "gaps_identified": "Derived-feature retention is not enforced in the feature store.",
+          "proposed_solution": "Apply retention tags and automated purge jobs.",
+          "remediation_status": "open",
+          "target_in_days": 12
+        }
+      ]
+    },
+    {
+      "key": "pdpl",
+      "name": "Seed - Saudi PDPL Assessment",
+      "assessment_type": "privacy_assessment",
+      "assessment_format": "pdpl_assessment_toolkit",
+      "source": "Startup Seed",
+      "file_name": "seed_pdpl_assessment_toolkit.xlsx",
+      "status": "in_progress",
+      "assessor": "GRC Seed",
+      "due_in_days": 95,
+      "items": [
+        {
+          "item_number": "PDPL-01",
+          "area_domain": "Legal Basis and Consent",
+          "control_description": "Personal data processing has documented lawful basis and consent where required.",
+          "compliance_status": "complied",
+          "maturity_score": 4,
+          "risk_rating": "Low",
+          "priority": "medium",
+          "remarks": "PDPL Ref: Art. 5 | Risk: Low",
+          "closed_days_ago": 19
+        },
+        {
+          "item_number": "PDPL-02",
+          "area_domain": "Data Subject Rights",
+          "control_description": "Data subject requests are logged, routed, and fulfilled within SLA.",
+          "compliance_status": "partially_complied",
+          "maturity_score": 2,
+          "risk_rating": "High",
+          "priority": "high",
+          "remarks": "PDPL Ref: Art. 13 | Risk: High",
+          "gaps_identified": "Request tracking is manual for two channels.",
+          "proposed_solution": "Centralize request intake and SLA tracking.",
+          "remediation_status": "in_progress",
+          "target_in_days": 33
+        },
+        {
+          "item_number": "PDPL-03",
+          "area_domain": "Cross-border Transfer",
+          "control_description": "Transfers outside KSA are assessed and approved before execution.",
+          "compliance_status": "not_complied",
+          "maturity_score": 1,
+          "risk_rating": "Critical",
+          "priority": "critical",
+          "remarks": "PDPL Ref: Transfer Regulation | Risk: Critical",
+          "gaps_identified": "Legacy vendor transfer records do not include adequacy assessment.",
+          "proposed_solution": "Backfill transfer impact assessments and approval records.",
+          "remediation_status": "open",
+          "target_in_days": 16
+        },
+        {
+          "item_number": "PDPL-04",
+          "area_domain": "Retention and Disposal",
+          "control_description": "Retention schedules are mapped to systems and disposal evidence is retained.",
+          "compliance_status": "partially_complied",
+          "maturity_score": 3,
+          "risk_rating": "Medium",
+          "priority": "medium",
+          "remarks": "PDPL Ref: Art. 18 | Risk: Medium",
+          "gaps_identified": "Disposal evidence is incomplete for archive stores.",
+          "remediation_status": "in_progress",
+          "target_in_days": 58
+        }
+      ]
+    },
+    {
+      "key": "nca_vuln",
+      "name": "Seed - NCA Vulnerability Register",
+      "assessment_type": "regulatory_assessment",
+      "assessment_format": "nca_vuln_register",
+      "source": "Startup Seed",
+      "file_name": "seed_nca_vulnerability_register.xlsx",
+      "status": "in_progress",
+      "assessor": "GRC Seed",
+      "due_in_days": 35,
+      "items": [
+        {
+          "item_number": "VULN-001",
+          "area_domain": "Critical",
+          "control_description": "Internet-facing VPN appliance requires emergency patching.",
+          "compliance_status": "not_complied",
+          "risk_rating": "Critical",
+          "priority": "critical",
+          "responsible_party": "Network Security",
+          "remarks_json": {
+            "Vulnerability ID": "VULN-001",
+            "Title": "VPN remote code execution exposure",
+            "CVE Score": "9.8",
+            "Status": "OPEN"
+          },
+          "gaps_identified": "Affected gateway is exposed to the internet.",
+          "proposed_solution": "Patch, rotate credentials, and validate indicators of compromise.",
+          "remediation_status": "open",
+          "target_in_days": 7
+        },
+        {
+          "item_number": "VULN-002",
+          "area_domain": "High",
+          "control_description": "Database server has unsupported TLS enabled.",
+          "compliance_status": "partially_complied",
+          "risk_rating": "High",
+          "priority": "high",
+          "responsible_party": "Database Operations",
+          "remarks_json": {
+            "Vulnerability ID": "VULN-002",
+            "Title": "Weak TLS protocol enabled",
+            "CVE Score": "7.1",
+            "Status": "IN PROGRESS"
+          },
+          "gaps_identified": "TLS 1.0 remains enabled for one legacy integration.",
+          "remediation_status": "in_progress",
+          "target_in_days": 24
+        },
+        {
+          "item_number": "VULN-003",
+          "area_domain": "Medium",
+          "control_description": "Endpoint agent version is below approved baseline.",
+          "compliance_status": "complied",
+          "risk_rating": "Medium",
+          "priority": "medium",
+          "responsible_party": "Endpoint Engineering",
+          "remarks_json": {
+            "Vulnerability ID": "VULN-003",
+            "Title": "Endpoint agent drift",
+            "CVE Score": "5.6",
+            "Status": "RESOLVED"
+          },
+          "closed_days_ago": 8
+        }
+      ]
+    },
+    {
+      "key": "nca_audit",
+      "name": "Seed - NCA Cybersecurity Audit Plan Register",
+      "assessment_type": "internal_audit",
+      "assessment_format": "nca_audit_register",
+      "source": "Startup Seed",
+      "file_name": "seed_nca_audit_plan.xlsx",
+      "status": "in_progress",
+      "assessor": "GRC Seed",
+      "due_in_days": 110,
+      "items": [
+        {
+          "item_number": "AUD-001",
+          "area_domain": "Operational Effectiveness",
+          "control_description": "Privileged access management operating effectiveness audit.",
+          "compliance_status": "complied",
+          "priority": "high",
+          "responsible_party": "Internal Audit",
+          "remarks_json": {
+            "Audit ID": "AUD-001",
+            "Audit Name": "PAM operating effectiveness",
+            "Status": "completed"
+          },
+          "target_in_days": -10,
+          "closed_days_ago": 12
+        },
+        {
+          "item_number": "AUD-002",
+          "area_domain": "Design Effectiveness",
+          "control_description": "Cloud security baseline design review.",
+          "compliance_status": "in_progress",
+          "priority": "medium",
+          "responsible_party": "Cybersecurity Org",
+          "remarks_json": {
+            "Audit ID": "AUD-002",
+            "Audit Name": "Cloud baseline design review",
+            "Status": "in progress"
+          },
+          "target_in_days": 22
+        },
+        {
+          "item_number": "REV-001",
+          "area_domain": "Review",
+          "control_description": "Quarterly cybersecurity governance review.",
+          "compliance_status": "in_progress",
+          "priority": "medium",
+          "responsible_party": "CISO Office",
+          "remarks_json": {
+            "Audit ID": "REV-001",
+            "Audit Name": "Governance review",
+            "Status": "planned"
+          },
+          "target_in_days": 54
+        }
+      ]
+    },
+    {
+      "key": "nca_risk",
+      "name": "Seed - NCA Cybersecurity Risk Register",
+      "assessment_type": "risk_assessment",
+      "assessment_format": "nca_risk_register",
+      "source": "Startup Seed",
+      "file_name": "seed_nca_risk_register.xlsx",
+      "status": "in_progress",
+      "assessor": "GRC Seed",
+      "due_in_days": 52,
+      "items": [
+        {
+          "item_number": "RISK-001",
+          "area_domain": "IT Assets",
+          "control_description": "Compromise of privileged cloud administrator account.",
+          "compliance_status": "partially_complied",
+          "risk_rating": "High",
+          "priority": "high",
+          "responsible_party": "Cloud Platform",
+          "remarks_json": {
+            "Risk Identifier": "RISK-001",
+            "Overall Inherent Risk Rating": "High",
+            "Updated Overall Residual Risk Rating": "Medium",
+            "Status": "In Progress"
+          },
+          "gaps_identified": "Privileged access review coverage is incomplete.",
+          "remediation_status": "in_progress",
+          "target_in_days": 29
+        },
+        {
+          "item_number": "RISK-002",
+          "area_domain": "Business Process",
+          "control_description": "Payment processing outage due to single-region dependency.",
+          "compliance_status": "not_complied",
+          "risk_rating": "Critical",
+          "priority": "critical",
+          "responsible_party": "Digital Banking",
+          "remarks_json": {
+            "Risk Identifier": "RISK-002",
+            "Overall Inherent Risk Rating": "Critical",
+            "Updated Overall Residual Risk Rating": "High",
+            "Status": "Open"
+          },
+          "gaps_identified": "Multi-region failover is not tested end to end.",
+          "proposed_solution": "Complete resilience test and update recovery runbooks.",
+          "remediation_status": "open",
+          "target_in_days": 19
+        },
+        {
+          "item_number": "RISK-003",
+          "area_domain": "Personnel",
+          "control_description": "Social engineering against privileged service desk workflows.",
+          "compliance_status": "complied",
+          "risk_rating": "Medium",
+          "priority": "medium",
+          "responsible_party": "Service Desk",
+          "remarks_json": {
+            "Risk Identifier": "RISK-003",
+            "Overall Inherent Risk Rating": "Medium",
+            "Updated Overall Residual Risk Rating": "Low",
+            "Status": "Closed"
+          },
+          "closed_days_ago": 16
+        }
+      ]
+    },
+    {
+      "key": "cs_kpi",
+      "name": "Seed - Cyber Security KPI Report",
+      "assessment_type": "regulatory_assessment",
+      "assessment_format": "kpi_report",
+      "source": "Startup Seed",
+      "file_name": "seed_cyber_security_kpi_report.xlsx",
+      "status": "in_progress",
+      "assessor": "GRC Seed",
+      "due_in_days": 32,
+      "items": [
+        {
+          "item_number": "KPI-001",
+          "area_domain": "Patch Management",
+          "control_description": "Critical vulnerabilities remediated within SLA.",
+          "compliance_status": "partially_complied",
+          "priority": "high",
+          "remarks": "Target: 95 | Actual: 82 | Unit: percent",
+          "target_in_days": 20
+        },
+        {
+          "item_number": "KPI-002",
+          "area_domain": "Incident Response",
+          "control_description": "Mean time to contain high-severity incidents.",
+          "compliance_status": "complied",
+          "priority": "medium",
+          "remarks": "Target: 4 | Actual: 3.2 | Unit: hours",
+          "closed_days_ago": 3
+        }
+      ]
+    }
+  ],
+  "nca_container": {
+    "name": "NCA Cybersecurity Workspace",
+    "assessment_type": "nca_template",
+    "assessment_format": "nca_container",
+    "source": "Startup Seed",
+    "status": "in_progress",
+    "assessor": "GRC Seed",
+    "dcc_status_pattern": ["complied", "partially_complied", "in_progress", "complied", "not_complied", "in_progress"],
+    "audit_plan": [
+      {
+        "entry_type": "Audit",
+        "audit_name": "DCC compliance operating effectiveness",
+        "team_responsible": "Internal Audit",
+        "lead_auditor": "GRC Seed",
+        "audit_type": "Operational effectiveness",
+        "scope": "Sample DCC controls across governance, defense, and third-party domains.",
+        "methods": "Document review, evidence sampling, walkthroughs.",
+        "criteria": "Saudi NCA DCC-1:2022",
+        "sampling": "Risk-based sample of high-priority controls.",
+        "evidence_needed": "Approved policies, review records, implementation evidence.",
+        "duration": "2 weeks",
+        "schedule": "Seeded startup audit plan",
+        "audit_start_in_days": 14,
+        "audit_end_in_days": 28,
+        "status": "planned",
+        "priority": "high"
+      },
+      {
+        "entry_type": "Review",
+        "audit_name": "Cybersecurity governance quarterly review",
+        "team_responsible": "Cybersecurity Org",
+        "lead_auditor": "GRC Seed",
+        "audit_type": "Design effectiveness",
+        "scope": "Governance metrics, exceptions, and remediation tracking.",
+        "methods": "Dashboard review and control-owner interviews.",
+        "criteria": "Internal cybersecurity governance standard",
+        "sampling": "All open high-priority actions.",
+        "evidence_needed": "Committee minutes, exception register, action closure evidence.",
+        "duration": "1 week",
+        "schedule": "Quarterly",
+        "audit_start_in_days": 35,
+        "audit_end_in_days": 42,
+        "status": "in_progress",
+        "priority": "medium"
+      }
+    ]
+  }
+}

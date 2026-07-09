@@ -14,7 +14,7 @@ import logging
 import os
 import re
 from contextlib import redirect_stdout
-from datetime import datetime
+from datetime import datetime, timedelta
 from io import StringIO
 from pathlib import Path
 from typing import Any, Iterable, Optional
@@ -23,9 +23,13 @@ from sqlalchemy.orm import Session
 
 from .db import MasterSession, get_tenant_engine, open_tenant_session
 from .models import (
+    AuditPlanEntry,
     Base,
     CommonControlGroup,
     CommonControlGroupMapping,
+    ComplianceAssessmentDocument,
+    ComplianceAssessmentDocumentItem,
+    ComplianceSlaPolicy,
     GRCUser,
     NormalizationRun,
     NormalizedControl,
@@ -41,6 +45,9 @@ _DISABLE_VALUES = {"1", "true", "yes", "on"}
 _SEED_ROOT = Path(__file__).resolve().parent / "seed_data"
 _FRAMEWORK_SEED_DIR = _SEED_ROOT / "frameworks"
 _BASELINE_PATH = _SEED_ROOT / "normalization_baseline.json"
+_ASSESSMENT_SEED_PATH = _SEED_ROOT / "compliance_assessments_seed.json"
+_DCC_CATALOG_PATH = _SEED_ROOT / "dcc_catalog.json"
+_ASSESSMENT_SEED_SOURCE = "Startup Seed"
 
 
 def _disabled() -> bool:
@@ -429,6 +436,345 @@ def ensure_static_control_library_baseline(db: Session, tenant_id: int) -> dict:
     }
 
 
+def _load_assessment_seed() -> Optional[dict]:
+    if not _ASSESSMENT_SEED_PATH.exists():
+        return None
+    try:
+        return json.loads(_ASSESSMENT_SEED_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        logger.exception("Could not load assessment seed %s", _ASSESSMENT_SEED_PATH)
+        return None
+
+
+def _load_dcc_catalog() -> list[dict]:
+    if not _DCC_CATALOG_PATH.exists():
+        return []
+    try:
+        payload = json.loads(_DCC_CATALOG_PATH.read_text(encoding="utf-8"))
+        return payload if isinstance(payload, list) else []
+    except Exception:
+        logger.exception("Could not load DCC catalog %s", _DCC_CATALOG_PATH)
+        return []
+
+
+def _int_or_none(value: Any) -> Optional[int]:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _relative_datetime(now: datetime, *, in_days: Any = None, days_ago: Any = None) -> Optional[datetime]:
+    delta = _int_or_none(in_days)
+    if delta is not None:
+        return now + timedelta(days=delta)
+    delta = _int_or_none(days_ago)
+    if delta is not None:
+        return now - timedelta(days=delta)
+    return None
+
+
+def _relative_date(now: datetime, *, in_days: Any = None, days_ago: Any = None):
+    dt = _relative_datetime(now, in_days=in_days, days_ago=days_ago)
+    return dt.date() if dt else None
+
+
+def _assessment_stats(items: list[ComplianceAssessmentDocumentItem]) -> dict[str, Any]:
+    stats = {
+        "total": len(items),
+        "complied": 0,
+        "partially_complied": 0,
+        "not_complied": 0,
+        "in_progress": 0,
+        "na": 0,
+        "overall_score": 0.0,
+    }
+    for item in items:
+        status = item.compliance_status or "in_progress"
+        if status in stats:
+            stats[status] += 1
+    applicable = stats["total"] - stats["na"]
+    if applicable > 0:
+        stats["overall_score"] = round(
+            (stats["complied"] + (stats["partially_complied"] * 0.5)) / applicable * 100,
+            2,
+        )
+    return stats
+
+
+def _apply_assessment_stats(doc: ComplianceAssessmentDocument, items: list[ComplianceAssessmentDocumentItem]) -> None:
+    stats = _assessment_stats(items)
+    doc.total_items = stats["total"]
+    doc.complied_count = stats["complied"]
+    doc.partially_complied_count = stats["partially_complied"]
+    doc.not_complied_count = stats["not_complied"]
+    doc.in_progress_count = stats["in_progress"]
+    doc.na_count = stats["na"]
+    doc.overall_score = stats["overall_score"]
+    doc.updated_at = datetime.utcnow()
+
+
+def _seed_item_from_payload(
+    *,
+    tenant_id: int,
+    assessment_id: int,
+    item: dict,
+    now: datetime,
+    default_created_days_ago: int = 21,
+) -> ComplianceAssessmentDocumentItem:
+    status = item.get("compliance_status") or "in_progress"
+    remediation_status = item.get("remediation_status")
+    remarks = item.get("remarks")
+    if item.get("remarks_json") is not None:
+        remarks = json.dumps(item.get("remarks_json") or {}, ensure_ascii=False, sort_keys=True)
+
+    closed_at = _relative_datetime(now, days_ago=item.get("closed_days_ago"))
+    if closed_at is None and (status == "complied" or remediation_status == "closed"):
+        closed_at = now - timedelta(days=1)
+    target_date = _relative_datetime(now, in_days=item.get("target_in_days"))
+    created_days = _int_or_none(item.get("created_days_ago"))
+    if created_days is None:
+        created_days = default_created_days_ago
+
+    return ComplianceAssessmentDocumentItem(
+        assessment_id=assessment_id,
+        tenant_id=tenant_id,
+        item_number=item.get("item_number"),
+        area_domain=item.get("area_domain"),
+        control_description=item.get("control_description"),
+        compliance_status=status,
+        gaps_identified=item.get("gaps_identified"),
+        proposed_solution=item.get("proposed_solution"),
+        responsible_party=item.get("responsible_party"),
+        timeline=item.get("timeline"),
+        priority=item.get("priority"),
+        evidence_reference=item.get("evidence_reference"),
+        remarks=remarks,
+        maturity_score=item.get("maturity_score"),
+        risk_rating=item.get("risk_rating"),
+        remediation_status=remediation_status,
+        control_source=item.get("control_source"),
+        control_type=item.get("control_type"),
+        subdomain_name=item.get("subdomain_name"),
+        target_date=target_date,
+        closed_at=closed_at,
+        created_at=now - timedelta(days=max(0, created_days)),
+        updated_at=closed_at or now,
+    )
+
+
+def _ensure_assessment_sla_policy(db: Session, tenant_id: int, payload: dict) -> bool:
+    if db.query(ComplianceSlaPolicy.id).filter(ComplianceSlaPolicy.tenant_id == tenant_id).first():
+        return False
+    defaults = payload.get("sla_policy") or {}
+    db.add(ComplianceSlaPolicy(tenant_id=tenant_id, **defaults))
+    return True
+
+
+def _ensure_seed_assessment_docs(
+    db: Session,
+    tenant_id: int,
+    user_id: int,
+    payload: dict,
+) -> dict[str, Any]:
+    now = datetime.utcnow()
+    created_docs = 0
+    created_items = 0
+
+    for doc_data in payload.get("assessments") or []:
+        name = (doc_data.get("name") or "").strip()
+        fmt = (doc_data.get("assessment_format") or "standard").strip()
+        if not name:
+            continue
+        existing = db.query(ComplianceAssessmentDocument.id).filter(
+            ComplianceAssessmentDocument.tenant_id == tenant_id,
+            ComplianceAssessmentDocument.name == name,
+            ComplianceAssessmentDocument.assessment_format == fmt,
+            ComplianceAssessmentDocument.source == _ASSESSMENT_SEED_SOURCE,
+        ).first()
+        if existing:
+            continue
+
+        doc = ComplianceAssessmentDocument(
+            tenant_id=tenant_id,
+            name=name,
+            assessment_type=doc_data.get("assessment_type") or "gap_assessment",
+            source=doc_data.get("source") or _ASSESSMENT_SEED_SOURCE,
+            file_name=doc_data.get("file_name"),
+            status=doc_data.get("status") or "in_progress",
+            due_date=_relative_datetime(now, in_days=doc_data.get("due_in_days")),
+            assessor=doc_data.get("assessor"),
+            notes=doc_data.get("notes") or "Seeded on backend startup from seed_data/compliance_assessments_seed.json.",
+            assessment_format=fmt,
+            created_by=user_id,
+            created_at=now - timedelta(days=30),
+            updated_at=now,
+        )
+        db.add(doc)
+        db.flush()
+
+        items: list[ComplianceAssessmentDocumentItem] = []
+        for item_data in doc_data.get("items") or []:
+            item = _seed_item_from_payload(
+                tenant_id=tenant_id,
+                assessment_id=doc.id,
+                item=item_data,
+                now=now,
+            )
+            db.add(item)
+            items.append(item)
+        db.flush()
+        _apply_assessment_stats(doc, items)
+        created_docs += 1
+        created_items += len(items)
+
+    return {"created_docs": created_docs, "created_items": created_items}
+
+
+def _ensure_nca_container_and_dcc(
+    db: Session,
+    tenant_id: int,
+    user_id: int,
+    payload: dict,
+) -> dict[str, Any]:
+    now = datetime.utcnow()
+    container_payload = payload.get("nca_container") or {}
+    if not container_payload:
+        return {"created_container": False, "created_dcc_items": 0, "created_audit_plan_entries": 0}
+
+    fmt = container_payload.get("assessment_format") or "nca_container"
+    doc = db.query(ComplianceAssessmentDocument).filter(
+        ComplianceAssessmentDocument.tenant_id == tenant_id,
+        ComplianceAssessmentDocument.assessment_format == fmt,
+    ).first()
+    created_container = False
+    if doc is None:
+        doc = ComplianceAssessmentDocument(
+            tenant_id=tenant_id,
+            name=container_payload.get("name") or "NCA Cybersecurity Workspace",
+            assessment_type=container_payload.get("assessment_type") or "nca_template",
+            assessment_format=fmt,
+            source=container_payload.get("source") or _ASSESSMENT_SEED_SOURCE,
+            status=container_payload.get("status") or "in_progress",
+            assessor=container_payload.get("assessor"),
+            notes="Seeded NCA container for DCC and audit-plan startup data.",
+            created_by=user_id,
+            created_at=now - timedelta(days=30),
+            updated_at=now,
+        )
+        db.add(doc)
+        db.flush()
+        created_container = True
+
+    created_dcc_items = 0
+    existing_dcc = db.query(ComplianceAssessmentDocumentItem.id).filter(
+        ComplianceAssessmentDocumentItem.assessment_id == doc.id,
+        ComplianceAssessmentDocumentItem.control_source == "dcc",
+    ).first()
+    if existing_dcc is None:
+        catalog = _load_dcc_catalog()
+        pattern = container_payload.get("dcc_status_pattern") or ["in_progress"]
+        items: list[ComplianceAssessmentDocumentItem] = []
+        for idx, ctrl in enumerate(catalog, start=1):
+            status = pattern[(idx - 1) % len(pattern)] if pattern else "in_progress"
+            control_type = (ctrl.get("control_type") or "basic").strip()
+            priority = "high" if control_type.lower() in {"basic", "essential"} else "medium"
+            item_payload = {
+                "item_number": ctrl.get("ref"),
+                "area_domain": ctrl.get("main_domain") or "DCC",
+                "subdomain_name": ctrl.get("subdomain"),
+                "control_description": ctrl.get("control_text_en") or ctrl.get("control_text_ar"),
+                "compliance_status": status,
+                "priority": priority,
+                "control_source": "dcc",
+                "control_type": control_type,
+                "remarks": f"Ref: {ctrl.get('ref') or ''} | Type: {control_type}",
+            }
+            if status in {"not_complied", "partially_complied"}:
+                item_payload["remediation_status"] = "open" if status == "not_complied" else "in_progress"
+                item_payload["target_in_days"] = 14 + (idx % 45)
+            elif status == "complied":
+                item_payload["closed_days_ago"] = 3 + (idx % 20)
+            item = _seed_item_from_payload(
+                tenant_id=tenant_id,
+                assessment_id=doc.id,
+                item=item_payload,
+                now=now,
+                default_created_days_ago=35,
+            )
+            db.add(item)
+            items.append(item)
+        db.flush()
+        created_dcc_items = len(items)
+
+    all_items = db.query(ComplianceAssessmentDocumentItem).filter(
+        ComplianceAssessmentDocumentItem.assessment_id == doc.id
+    ).all()
+    _apply_assessment_stats(doc, all_items)
+
+    created_audit_plan_entries = 0
+    existing_plan = db.query(AuditPlanEntry.id).filter(AuditPlanEntry.assessment_id == doc.id).first()
+    if existing_plan is None:
+        audit_entries = container_payload.get("audit_plan") or []
+        for idx, entry_data in enumerate(audit_entries, start=1):
+            entry_type = entry_data.get("entry_type") or "Audit"
+            prefix = "R" if entry_type.lower() == "review" else "A"
+            entry = AuditPlanEntry(
+                assessment_id=doc.id,
+                tenant_id=tenant_id,
+                entry_type=entry_type,
+                audit_id=f"{prefix}{idx:03d}",
+                audit_name=entry_data.get("audit_name"),
+                team_responsible=entry_data.get("team_responsible"),
+                lead_auditor=entry_data.get("lead_auditor"),
+                audit_type=entry_data.get("audit_type"),
+                scope=entry_data.get("scope"),
+                methods=entry_data.get("methods"),
+                criteria=entry_data.get("criteria"),
+                sampling=entry_data.get("sampling"),
+                evidence_needed=entry_data.get("evidence_needed"),
+                duration=entry_data.get("duration"),
+                schedule=entry_data.get("schedule"),
+                audit_start=_relative_date(now, in_days=entry_data.get("audit_start_in_days")),
+                audit_end=_relative_date(now, in_days=entry_data.get("audit_end_in_days")),
+                cost=entry_data.get("cost"),
+                comment=entry_data.get("comment"),
+                status=entry_data.get("status") or "planned",
+                priority=entry_data.get("priority"),
+                created_at=now,
+                updated_at=now,
+            )
+            db.add(entry)
+            created_audit_plan_entries += 1
+
+    return {
+        "created_container": created_container,
+        "created_dcc_items": created_dcc_items,
+        "created_audit_plan_entries": created_audit_plan_entries,
+    }
+
+
+def ensure_compliance_assessment_seed_data(db: Session, tenant_id: int) -> dict:
+    """Seed local compliance assessment records that power /assessments dashboards."""
+    payload = _load_assessment_seed()
+    if not payload:
+        return {"seeded": False, "reason": "assessment_seed_missing"}
+
+    user_id = _first_user_id(db)
+    policy_created = _ensure_assessment_sla_policy(db, tenant_id, payload)
+    docs = _ensure_seed_assessment_docs(db, tenant_id, user_id, payload)
+    nca = _ensure_nca_container_and_dcc(db, tenant_id, user_id, payload)
+    seeded = bool(policy_created or docs["created_docs"] or docs["created_items"] or nca["created_container"] or nca["created_dcc_items"] or nca["created_audit_plan_entries"])
+    return {
+        "seeded": seeded,
+        "sla_policy_created": policy_created,
+        **docs,
+        **nca,
+    }
+
+
 def ensure_startup_seed_data() -> dict:
     """Backfill all active tenant DBs from local seed files."""
     if _disabled():
@@ -455,9 +801,15 @@ def ensure_startup_seed_data() -> dict:
             _ensure_local_tenant_row(db, tenant)
             catalog = ensure_local_framework_catalog(db)
             baseline = ensure_static_control_library_baseline(db, tenant["id"])
+            assessments = ensure_compliance_assessment_seed_data(db, tenant["id"])
             db.commit()
-            if catalog.get("seeded") or baseline.get("seeded"):
-                summary["seeded"].append({"slug": slug, "catalog": catalog, "baseline": baseline})
+            if catalog.get("seeded") or baseline.get("seeded") or assessments.get("seeded"):
+                summary["seeded"].append({
+                    "slug": slug,
+                    "catalog": catalog,
+                    "baseline": baseline,
+                    "assessments": assessments,
+                })
                 logger.info("Startup seed completed for tenant %s: %s", slug, summary["seeded"][-1])
         except Exception:
             if db is not None:
