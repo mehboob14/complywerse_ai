@@ -222,7 +222,6 @@ type ComplianceScansTab = 'overview' | 'rules' | 'risk-posture' | 'scanners';
 const COMPLIANCE_TABS: { id: ComplianceScansTab; label: string; icon: LucideIcon }[] = [
   { id: 'overview',      label: 'Compliance Overview', icon: BarChart3 },
   { id: 'rules',         label: 'Compliance Rules',    icon: BookOpen },
-  { id: 'risk-posture',  label: 'Risk Posture',        icon: Gauge },
   { id: 'scanners',      label: 'Scanners',            icon: Cpu },
 ];
 
@@ -256,7 +255,6 @@ export default function ComplianceOverviewPage() {
 
       {activeTab === 'overview' && <OverviewTabContent />}
       {activeTab === 'rules' && <RuleLibraryPage />}
-      {activeTab === 'risk-posture' && <RiskPosturePage />}
       {activeTab === 'scanners' && <AgentsAdminPage />}
     </div>
   );

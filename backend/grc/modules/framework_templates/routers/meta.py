@@ -33,6 +33,7 @@ def get_definition(
                 "description": r.get("description", ""),
                 "columns": r.get("columns", []),
                 "formSections": r.get("formSections", []),
+                "assetSource": r.get("assetSource"),
             }
             for r in d.get("registers", [])
         ],

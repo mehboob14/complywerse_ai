@@ -71,6 +71,11 @@ import ArtifactsTab, {
 import FrameworkRegisterTab from './_tabs/FrameworkRegisterTab';
 import FrameworkDocumentTab from './_tabs/FrameworkDocumentTab';
 import FrameworkDynamicRegisterTab from './_tabs/FrameworkDynamicRegisterTab';
+import PciCdeInventoryTab from './_tabs/_PciCdeInventoryTab';
+import FrameworkJourney from './_tabs/FrameworkJourney';
+import TabDropdown from './_tabs/TabDropdown';
+import { orderRegisters, orderDocuments } from './_tabs/templateSequence';
+import { matchFrameworkFlow } from './_data/frameworkFlows';
 
 // Evidence-type markers are categorical labels, not statuses — so they render
 // as neutral slate pills. Only the handful of types that carry genuine status
@@ -587,7 +592,7 @@ export default function CertificationJourneyPage() {
   const canEdit = hasPermission('frameworks:framework_library:edit');
   const canDelete = hasPermission('frameworks:framework_library:delete');
   
-  const [activeTab, setActiveTab] = useState<TabType>('overview');
+  const [activeTab, setActiveTab] = useState<TabType>('journey');
   const [expandedPhases, setExpandedPhases] = useState<number[]>([1]);
   const [expandedDomains, setExpandedDomains] = useState<string[]>(['A.5']);
   const [scopingSubTab, setScopingSubTab] = useState<ScopingSubTab>('definition');
@@ -1499,15 +1504,25 @@ export default function CertificationJourneyPage() {
   );
   // Framework-driven template tabs (generated definitions) for non-ISO frameworks.
   const templateFrameworkName = (((journey as any)?.framework_name || journey?.framework?.name || journey?.name || '') as string);
+  // Canonical end-to-end journey flow (trajectory view) for this framework, if we
+  // have one mapped. Drives the gated "Journey" tab in the Program group.
+  const journeyFlow = useMemo(() => matchFrameworkFlow(templateFrameworkName), [templateFrameworkName]);
+  // Default tab is Journey; if a loaded framework has no matched journey flow,
+  // fall back to Overview so the landing tab still resolves.
+  useEffect(() => {
+    if (journey && !journeyFlow && activeTab === 'journey') setActiveTab('overview');
+  }, [journey, journeyFlow, activeTab]);
   const { data: fwTemplateDef } = useQuery({
     queryKey: ['ft-definition', templateFrameworkName],
     queryFn: async () => (await frameworkTemplatesApi.definition(templateFrameworkName)).data as {
       matched: boolean;
       display_name?: string;
-      registers: Array<{ type: string; label: string; description?: string; columns: any[]; formSections?: any[] }>;
+      registers: Array<{ type: string; label: string; description?: string; columns: any[]; formSections?: any[]; assetSource?: string }>;
       documents: Array<{ type: string; label: string; control_ref?: string | null }>;
     },
-    enabled: !!templateFrameworkName && !isIso27001Framework,
+    // ISO 27001 loads its definition too (adds the dynamic Risk Assessment
+    // register alongside the hardcoded gap/audit/treatment tabs).
+    enabled: !!templateFrameworkName,
   });
 
   // "Phased" frameworks (NDMO) carry P1/P2/P3 priorities — show the 3-year
@@ -1526,37 +1541,44 @@ export default function CertificationJourneyPage() {
   // short framework label, so the tab bar can group + wrap instead of scroll.
   const frameworkGroupLabel = fwTemplateDef?.display_name
     || (isIso27001Framework ? 'ISO 27001' : (isPciDssFramework ? 'PCI DSS' : (templateFrameworkName || 'Framework')));
-  const frameworkGroupTabs: { id: TabType; label: string }[] = [
-    ...(isPciDssFramework ? [{ id: 'cde-scope' as TabType, label: 'CDE Scope' }] : []),
+  // Framework-specific templates (registers) and documents each collapse into a
+  // single dropdown, listed stage-wise (see templateSequence) rather than as a
+  // long row of individual tabs.
+  const templateGroupTabs: { id: TabType; label: string }[] = orderRegisters([
+    // CDE Scope is now a PCI DSS *document* (CDE scope definition template) in
+    // the Documents dropdown — no longer an asset-showing template tab.
     ...(isIso27001Framework ? [
       { id: 'gap-analysis' as TabType, label: 'Gap Analysis' },
       { id: 'internal-audit' as TabType, label: 'Internal Audit' },
       { id: 'risk-treatment' as TabType, label: 'Risk Treatment' },
+    ] : []),
+    ...(fwTemplateDef?.registers || []).map((r) => ({ id: r.type as TabType, label: r.label })),
+  ]);
+  const documentGroupTabs: { id: TabType; label: string }[] = orderDocuments([
+    ...(isIso27001Framework ? [
       { id: 'scope-statement' as TabType, label: 'Scope Statement' },
       { id: 'audit-procedure' as TabType, label: 'Audit Procedure' },
     ] : []),
-    ...(fwTemplateDef?.registers || []).map((r) => ({ id: r.type as TabType, label: r.label })),
     ...(fwTemplateDef?.documents || []).map((d) => ({ id: d.type as TabType, label: d.label })),
-  ];
-  const tabGroups: { label: string; tabs: { id: TabType; label: string; badge?: number }[] }[] = [
+  ]);
+  const frameworkGroupTabs: { id: TabType; label: string }[] = [...templateGroupTabs, ...documentGroupTabs];
+  const tabGroups: { label: string; tabs: { id: TabType; label: string; badge?: number }[]; isFrameworkTemplates?: boolean }[] = [
     {
       label: 'Program',
       tabs: [
-        { id: 'overview' as TabType, label: 'Overview' },
-        ...(isCertificationFramework ? [{ id: 'phases' as TabType, label: 'Phases' }] : []),
-        { id: 'applicability' as TabType, label: 'Applicability' },
+        // Journey replaces Overview as the landing tab; Overview is only a
+        // fallback for a framework with no matched journey flow.
+        ...(journeyFlow ? [{ id: 'journey' as TabType, label: 'Journey' }] : [{ id: 'overview' as TabType, label: 'Overview' }]),
       ],
     },
     {
       label: 'Work',
       tabs: [
         { id: 'controls' as TabType, label: 'Requirements', badge: ((controls as any[])?.length) || undefined },
-        { id: 'assigned-to-me' as TabType, label: 'Assigned to Me' },
         { id: 'artifacts' as TabType, label: 'Artifacts' },
-        { id: 'history' as TabType, label: 'History' },
       ],
     },
-    ...(frameworkGroupTabs.length ? [{ label: frameworkGroupLabel, tabs: frameworkGroupTabs }] : []),
+    ...(frameworkGroupTabs.length ? [{ label: frameworkGroupLabel, tabs: frameworkGroupTabs, isFrameworkTemplates: true }] : []),
   ];
   const tabs = tabGroups.flatMap((g) => g.tabs);
 
@@ -4387,13 +4409,27 @@ export default function CertificationJourneyPage() {
   };
 
   const renderActiveTab = () => {
+    const _progPct = Number(
+      (progress as any)?.compliance_percentage ?? (progress as any)?.readiness_percentage
+      ?? (progress as any)?.percentage ?? (progress as any)?.overall_percentage ?? 0,
+    );
+    const journeyProgressRatio = Math.max(0, Math.min(1, (Number.isFinite(_progPct) ? _progPct : 0) / 100));
     const dynReg = (fwTemplateDef?.registers || []).find((r) => r.type === activeTab);
-    if (dynReg) return <FrameworkDynamicRegisterTab config={dynReg} journeyId={journeyId} frameworkId={appFwId} frameworkName={templateFrameworkName} tenantUsers={templateTenantUsers} frameworkControls={templateFrameworkControls} />;
+    if (dynReg) {
+      // Asset-backed inventory (PCI CDE) → dedicated Assets CRUD tab (synced with
+      // the Assets module); everything else → the generic dynamic register table.
+      if (dynReg.assetSource === 'cde') return <PciCdeInventoryTab journeyId={journeyId} frameworkName={templateFrameworkName} tenantUsers={templateTenantUsers as any} />;
+      return <FrameworkDynamicRegisterTab config={dynReg} journeyId={journeyId} frameworkId={appFwId} frameworkName={templateFrameworkName} tenantUsers={templateTenantUsers} frameworkControls={templateFrameworkControls} />;
+    }
     const dynDoc = (fwTemplateDef?.documents || []).find((d) => d.type === activeTab);
     if (dynDoc) return <FrameworkDocumentTab docType={dynDoc.type} journeyId={journeyId} frameworkId={appFwId} frameworkName={templateFrameworkName} tenantUsers={templateTenantUsers} />;
     switch (activeTab) {
       case 'overview':
         return renderOverviewTab();
+      case 'journey':
+        return journeyFlow
+          ? <FrameworkJourney flow={journeyFlow} liveControls={(controls as any[])?.length} progressRatio={journeyProgressRatio} journeyId={journeyId} stageOwners={(journey as any)?.stage_owners} frameworkId={appFwId} frameworkName={templateFrameworkName} />
+          : renderOverviewTab();
       case 'phases':
         return renderPhasesTab();
       case 'scoping':
@@ -4421,7 +4457,7 @@ export default function CertificationJourneyPage() {
       case 'applicability':
         return renderApplicabilityTab();
       case 'gap-analysis':
-        return <FrameworkRegisterTab registerType="gap_analysis" journeyId={journeyId} frameworkId={appFwId} frameworkName={(journey as any)?.framework_name || 'ISO 27001'} tenantUsers={templateTenantUsers} />;
+        return <FrameworkRegisterTab registerType="gap_analysis" journeyId={journeyId} frameworkId={appFwId} frameworkName={(journey as any)?.framework_name || 'ISO 27001'} tenantUsers={templateTenantUsers} frameworkControls={templateFrameworkControls} />;
       case 'internal-audit':
         return <FrameworkRegisterTab registerType="internal_audit" journeyId={journeyId} frameworkId={appFwId} frameworkName={(journey as any)?.framework_name || 'ISO 27001'} tenantUsers={templateTenantUsers} frameworkControls={templateFrameworkControls} />;
       case 'risk-treatment':
@@ -4627,21 +4663,43 @@ export default function CertificationJourneyPage() {
           {tabGroups.filter((g) => g.tabs.length).map((group, gi) => (
             <Fragment key={`${group.label}-${gi}`}>
               {gi > 0 && <span className="mx-2 h-5 w-px self-center bg-slate-200" />}
-              <span className="mr-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">{group.label}</span>
-              {group.tabs.map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`inline-flex items-center whitespace-nowrap border-b-2 px-2.5 py-2 text-sm font-medium transition-colors ${
-                    activeTab === tab.id
-                      ? 'border-primary-600 text-primary-700'
-                      : 'border-transparent text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  {tab.label}
-                  {tab.badge != null && <span className="ml-1.5 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">{tab.badge}</span>}
-                </button>
-              ))}
+              {group.isFrameworkTemplates ? (
+                <>
+                  {templateGroupTabs.length > 0 && (
+                    <TabDropdown
+                      label="Templates"
+                      icon={<Layers className="h-3.5 w-3.5" strokeWidth={1.9} />}
+                      items={templateGroupTabs}
+                      activeId={activeTab}
+                      onSelect={(id) => setActiveTab(id as TabType)}
+                    />
+                  )}
+                  {documentGroupTabs.length > 0 && (
+                    <TabDropdown
+                      label="Documents"
+                      icon={<FileText className="h-3.5 w-3.5" strokeWidth={1.9} />}
+                      items={documentGroupTabs}
+                      activeId={activeTab}
+                      onSelect={(id) => setActiveTab(id as TabType)}
+                    />
+                  )}
+                </>
+              ) : (
+                group.tabs.map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`inline-flex items-center whitespace-nowrap border-b-2 px-2.5 py-2 text-sm font-medium transition-colors ${
+                      activeTab === tab.id
+                        ? 'border-primary-600 text-primary-700'
+                        : 'border-transparent text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    {tab.label}
+                    {tab.badge != null && <span className="ml-1.5 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">{tab.badge}</span>}
+                  </button>
+                ))
+              )}
             </Fragment>
           ))}
           <button

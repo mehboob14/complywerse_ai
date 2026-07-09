@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, ChevronRight, LogOut, UserCircle, Users, Search, Loader2, Sparkles, AlertCircle, ClipboardCheck } from 'lucide-react';
+import { ChevronDown, ChevronRight, LogOut, UserCircle, Users, Search, Loader2, Sparkles, ClipboardCheck } from 'lucide-react';
 import Link from 'next/link';
 import { apiClient, searchApi } from '@/lib/api';
 
@@ -206,16 +206,6 @@ export default function Header() {
             <ChevronRight size={14} />
           </button>
         </form>
-
-        {/* Issues — applies across all modules, so it lives in the top bar. */}
-        <Link
-          href="/issues"
-          title="Issues"
-          className="relative rounded-md p-1.5 text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-subtle)] hover:text-[var(--color-text)]"
-          aria-label="Issues"
-        >
-          <AlertCircle size={18} strokeWidth={1.75} />
-        </Link>
 
         {/* Pending compliance approvals — opens a dropdown (not a page). */}
         <div className="relative" ref={approvalsRef}>

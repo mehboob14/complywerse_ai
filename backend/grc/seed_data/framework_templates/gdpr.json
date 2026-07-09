@@ -1,390 +1,391 @@
 {
- "framework_key": "gdpr",
- "display_name": "GDPR",
- "name_patterns": [
-  "gdpr",
-  "generaldataprotection"
- ],
- "registers": [
-  {
-   "type": "gdpr__gdpr_processor_compliance_questionnaire_template",
-   "label": "Processor Compliance Questionnaire",
-   "description": "GDPR — Processor Compliance Questionnaire (from the template).",
-   "columns": [
+  "framework_key": "gdpr",
+  "display_name": "GDPR",
+  "name_patterns": [
+    "gdpr",
+    "generaldataprotection"
+  ],
+  "registers": [
     {
-     "key": "col",
-     "label": "#",
-     "type": "auto"
+      "type": "gdpr__gdpr_processor_compliance_questionnaire_template",
+      "label": "Processor Compliance Questionnaire",
+      "description": "GDPR — Processor Compliance Questionnaire (from the template).",
+      "columns": [
+        {
+          "key": "col",
+          "label": "#",
+          "type": "auto"
+        },
+        {
+          "key": "gdpr_area",
+          "label": "GDPR area",
+          "type": "text"
+        },
+        {
+          "key": "question",
+          "label": "Question",
+          "type": "textarea"
+        },
+        {
+          "key": "response_yes_partial_no_n_a",
+          "label": "Response",
+          "type": "select",
+          "options": [
+            {
+              "value": "Yes",
+              "label": "Yes",
+              "tone": "emerald"
+            },
+            {
+              "value": "Partial",
+              "label": "Partial",
+              "tone": "amber"
+            },
+            {
+              "value": "No",
+              "label": "No",
+              "tone": "rose"
+            },
+            {
+              "value": "N/A",
+              "label": "N/A",
+              "tone": "slate"
+            }
+          ]
+        },
+        {
+          "key": "evidence_notes",
+          "label": "Evidence / notes",
+          "type": "text",
+          "picker": "evidence"
+        }
+      ],
+      "seed": [
+        {
+          "data": {
+            "col": "1",
+            "gdpr_area": "Art. 28",
+            "question": "Will you process personal data only on our documented instructions?",
+            "response_yes_partial_no_n_a": "",
+            "evidence_notes": ""
+          }
+        },
+        {
+          "data": {
+            "col": "2",
+            "gdpr_area": "Art. 28",
+            "question": "Will you sign a Data Processing Agreement with the Art. 28(3) terms?",
+            "response_yes_partial_no_n_a": "",
+            "evidence_notes": ""
+          }
+        },
+        {
+          "data": {
+            "col": "3",
+            "gdpr_area": "Confidentiality",
+            "question": "Are personnel bound by confidentiality?",
+            "response_yes_partial_no_n_a": "",
+            "evidence_notes": ""
+          }
+        },
+        {
+          "data": {
+            "col": "4",
+            "gdpr_area": "Security (Art. 32)",
+            "question": "Do you apply appropriate TOMs (encryption, access control, MFA)?",
+            "response_yes_partial_no_n_a": "",
+            "evidence_notes": ""
+          }
+        },
+        {
+          "data": {
+            "col": "5",
+            "gdpr_area": "Sub-processors",
+            "question": "Do you list sub-processors and flow down equivalent obligations?",
+            "response_yes_partial_no_n_a": "",
+            "evidence_notes": ""
+          }
+        },
+        {
+          "data": {
+            "col": "6",
+            "gdpr_area": "Transfers",
+            "question": "Are international transfers covered by SCCs or adequacy?",
+            "response_yes_partial_no_n_a": "",
+            "evidence_notes": ""
+          }
+        },
+        {
+          "data": {
+            "col": "7",
+            "gdpr_area": "Data subject rights",
+            "question": "Will you assist us in responding to data-subject requests?",
+            "response_yes_partial_no_n_a": "",
+            "evidence_notes": ""
+          }
+        },
+        {
+          "data": {
+            "col": "8",
+            "gdpr_area": "Breach",
+            "question": "Will you notify us of a personal-data breach without undue delay?",
+            "response_yes_partial_no_n_a": "",
+            "evidence_notes": ""
+          }
+        },
+        {
+          "data": {
+            "col": "9",
+            "gdpr_area": "Audit",
+            "question": "Will you provide information and allow audits to demonstrate compliance?",
+            "response_yes_partial_no_n_a": "",
+            "evidence_notes": ""
+          }
+        },
+        {
+          "data": {
+            "col": "10",
+            "gdpr_area": "Deletion",
+            "question": "Will you delete or return personal data at the end of the service?",
+            "response_yes_partial_no_n_a": "",
+            "evidence_notes": ""
+          }
+        },
+        {
+          "data": {
+            "col": "11",
+            "gdpr_area": "Accountability",
+            "question": "Do you maintain records of processing as a processor (Art. 30(2))?",
+            "response_yes_partial_no_n_a": "",
+            "evidence_notes": ""
+          }
+        },
+        {
+          "data": {
+            "col": "12",
+            "gdpr_area": "DPO",
+            "question": "Have you appointed a DPO or privacy lead where required?",
+            "response_yes_partial_no_n_a": "",
+            "evidence_notes": ""
+          }
+        }
+      ],
+      "formSections": [
+        {
+          "title": "Item",
+          "keys": [
+            "col",
+            "gdpr_area"
+          ]
+        },
+        {
+          "title": "Assessment",
+          "keys": [
+            "question",
+            "response_yes_partial_no_n_a",
+            "evidence_notes"
+          ]
+        }
+      ]
     },
     {
-     "key": "gdpr_area",
-     "label": "GDPR area",
-     "type": "text"
-    },
-    {
-     "key": "question",
-     "label": "Question",
-     "type": "textarea"
-    },
-    {
-     "key": "response_yes_partial_no_n_a",
-     "label": "Response",
-     "type": "select",
-     "options": [
-      {
-       "value": "Yes",
-       "label": "Yes",
-       "tone": "emerald"
-      },
-      {
-       "value": "Partial",
-       "label": "Partial",
-       "tone": "amber"
-      },
-      {
-       "value": "No",
-       "label": "No",
-       "tone": "rose"
-      },
-      {
-       "value": "N/A",
-       "label": "N/A",
-       "tone": "slate"
-      }
-     ]
-    },
-    {
-     "key": "evidence_notes",
-     "label": "Evidence / notes",
-     "type": "text",
-     "picker": "evidence"
+      "type": "gdpr__gdpr_readiness_assessment_template",
+      "label": "Readiness Assessment",
+      "description": "GDPR — Readiness Assessment (from the template).",
+      "columns": [
+        {
+          "key": "area",
+          "label": "Area",
+          "type": "text"
+        },
+        {
+          "key": "requirement",
+          "label": "Requirement",
+          "type": "textarea",
+          "picker": "framework_controls"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "type": "text"
+        },
+        {
+          "key": "owner",
+          "label": "Owner",
+          "type": "text",
+          "picker": "users"
+        },
+        {
+          "key": "notes_gap",
+          "label": "Notes / gap",
+          "type": "textarea"
+        }
+      ],
+      "seed": [
+        {
+          "data": {
+            "area": "Lawfulness",
+            "requirement": "A lawful basis is identified and recorded for every processing activity",
+            "status": "",
+            "owner": "",
+            "notes_gap": ""
+          }
+        },
+        {
+          "data": {
+            "area": "Transparency",
+            "requirement": "Privacy notices provided to data subjects (website, employees, suppliers)",
+            "status": "",
+            "owner": "",
+            "notes_gap": ""
+          }
+        },
+        {
+          "data": {
+            "area": "Records (ROPA)",
+            "requirement": "Record of Processing Activities maintained (Art. 30)",
+            "status": "",
+            "owner": "",
+            "notes_gap": ""
+          }
+        },
+        {
+          "data": {
+            "area": "Data subject rights",
+            "requirement": "Procedure to handle DSARs within one month",
+            "status": "",
+            "owner": "",
+            "notes_gap": ""
+          }
+        },
+        {
+          "data": {
+            "area": "Consent",
+            "requirement": "Where used, consent is freely given, specific, informed and recorded",
+            "status": "",
+            "owner": "",
+            "notes_gap": ""
+          }
+        },
+        {
+          "data": {
+            "area": "DPIA",
+            "requirement": "High-risk processing screened and assessed (Art. 35)",
+            "status": "",
+            "owner": "",
+            "notes_gap": ""
+          }
+        },
+        {
+          "data": {
+            "area": "Security",
+            "requirement": "Appropriate technical & organisational measures in place (Art. 32)",
+            "status": "",
+            "owner": "",
+            "notes_gap": ""
+          }
+        },
+        {
+          "data": {
+            "area": "Breach",
+            "requirement": "Breach response process meets the 72-hour rule; breach register kept",
+            "status": "",
+            "owner": "",
+            "notes_gap": ""
+          }
+        },
+        {
+          "data": {
+            "area": "Vendors",
+            "requirement": "Processors assessed; Data Processing Agreements in place (Art. 28)",
+            "status": "",
+            "owner": "",
+            "notes_gap": ""
+          }
+        },
+        {
+          "data": {
+            "area": "Transfers",
+            "requirement": "International transfers use a valid mechanism (SCCs/adequacy) + TIA",
+            "status": "",
+            "owner": "",
+            "notes_gap": ""
+          }
+        },
+        {
+          "data": {
+            "area": "Retention",
+            "requirement": "Data retained only as long as necessary per a retention schedule",
+            "status": "",
+            "owner": "",
+            "notes_gap": ""
+          }
+        },
+        {
+          "data": {
+            "area": "Governance",
+            "requirement": "DPO appointed if required; staff trained; accountability documented",
+            "status": "",
+            "owner": "",
+            "notes_gap": ""
+          }
+        }
+      ],
+      "formSections": [
+        {
+          "title": "Item",
+          "keys": [
+            "area",
+            "requirement"
+          ]
+        },
+        {
+          "title": "Assessment",
+          "keys": [
+            "status",
+            "notes_gap"
+          ]
+        },
+        {
+          "title": "Ownership & dates",
+          "keys": [
+            "owner"
+          ]
+        }
+      ]
     }
-   ],
-   "seed": [
+  ],
+  "documents": [
     {
-     "data": {
-      "col": "1",
-      "gdpr_area": "Art. 28",
-      "question": "Will you process personal data only on our documented instructions?",
-      "response_yes_partial_no_n_a": "",
-      "evidence_notes": ""
-     }
-    },
-    {
-     "data": {
-      "col": "2",
-      "gdpr_area": "Art. 28",
-      "question": "Will you sign a Data Processing Agreement with the Art. 28(3) terms?",
-      "response_yes_partial_no_n_a": "",
-      "evidence_notes": ""
-     }
-    },
-    {
-     "data": {
-      "col": "3",
-      "gdpr_area": "Confidentiality",
-      "question": "Are personnel bound by confidentiality?",
-      "response_yes_partial_no_n_a": "",
-      "evidence_notes": ""
-     }
-    },
-    {
-     "data": {
-      "col": "4",
-      "gdpr_area": "Security (Art. 32)",
-      "question": "Do you apply appropriate TOMs (encryption, access control, MFA)?",
-      "response_yes_partial_no_n_a": "",
-      "evidence_notes": ""
-     }
-    },
-    {
-     "data": {
-      "col": "5",
-      "gdpr_area": "Sub-processors",
-      "question": "Do you list sub-processors and flow down equivalent obligations?",
-      "response_yes_partial_no_n_a": "",
-      "evidence_notes": ""
-     }
-    },
-    {
-     "data": {
-      "col": "6",
-      "gdpr_area": "Transfers",
-      "question": "Are international transfers covered by SCCs or adequacy?",
-      "response_yes_partial_no_n_a": "",
-      "evidence_notes": ""
-     }
-    },
-    {
-     "data": {
-      "col": "7",
-      "gdpr_area": "Data subject rights",
-      "question": "Will you assist us in responding to data-subject requests?",
-      "response_yes_partial_no_n_a": "",
-      "evidence_notes": ""
-     }
-    },
-    {
-     "data": {
-      "col": "8",
-      "gdpr_area": "Breach",
-      "question": "Will you notify us of a personal-data breach without undue delay?",
-      "response_yes_partial_no_n_a": "",
-      "evidence_notes": ""
-     }
-    },
-    {
-     "data": {
-      "col": "9",
-      "gdpr_area": "Audit",
-      "question": "Will you provide information and allow audits to demonstrate compliance?",
-      "response_yes_partial_no_n_a": "",
-      "evidence_notes": ""
-     }
-    },
-    {
-     "data": {
-      "col": "10",
-      "gdpr_area": "Deletion",
-      "question": "Will you delete or return personal data at the end of the service?",
-      "response_yes_partial_no_n_a": "",
-      "evidence_notes": ""
-     }
-    },
-    {
-     "data": {
-      "col": "11",
-      "gdpr_area": "Accountability",
-      "question": "Do you maintain records of processing as a processor (Art. 30(2))?",
-      "response_yes_partial_no_n_a": "",
-      "evidence_notes": ""
-     }
-    },
-    {
-     "data": {
-      "col": "12",
-      "gdpr_area": "DPO",
-      "question": "Have you appointed a DPO or privacy lead where required?",
-      "response_yes_partial_no_n_a": "",
-      "evidence_notes": ""
-     }
+      "type": "gdpr__gdpr_consent_form_template_1",
+      "label": "Consent Form",
+      "control_ref": null,
+      "sections": [
+        {
+          "heading": "1. Purpose",
+          "body": "These forms capture and withdraw consent in a way that is freely given, specific, informed and unambiguous, and they make withdrawal as easy as giving consent. Keep a record of each consent: who consented, to what, when and the wording they saw."
+        },
+        {
+          "heading": "2. Scope",
+          "body": "Use wherever consent is the lawful basis for processing."
+        },
+        {
+          "heading": "3. Form 1: Consent",
+          "body": "I, ____________________, consent to [Company Name] processing my personal data for the following specific purpose(s): ____________________.\nI understand what data is collected, that I can withdraw consent at any time, and how to do so.\nSignature: ____________  Date: ______"
+        },
+        {
+          "heading": "4. Form 2: Withdrawal of Consent",
+          "body": "I, ____________________, withdraw my consent for [purpose] given on [date]. I understand that withdrawal does not affect the lawfulness of processing carried out before I withdrew.\nSignature: ____________  Date: ______"
+        },
+        {
+          "heading": "5. Form 3: Parental or Guardian Consent (children)",
+          "body": "I, ____________________, parent or guardian of ____________________ (child), consent to [Company Name] processing the child's data for [purpose].\nSignature: ____________  Date: ______"
+        },
+        {
+          "heading": "6. Record of Consent",
+          "body": "For each consent, record who consented, to what, when, how it was obtained and the exact wording the person was shown."
+        }
+      ]
     }
-   ],
-   "formSections": [
-    {
-     "title": "Item",
-     "keys": [
-      "col",
-      "gdpr_area"
-     ]
-    },
-    {
-     "title": "Assessment",
-     "keys": [
-      "question",
-      "response_yes_partial_no_n_a",
-      "evidence_notes"
-     ]
-    }
-   ]
-  },
-  {
-   "type": "gdpr__gdpr_readiness_assessment_template",
-   "label": "Readiness Assessment",
-   "description": "GDPR — Readiness Assessment (from the template).",
-   "columns": [
-    {
-     "key": "area",
-     "label": "Area",
-     "type": "text"
-    },
-    {
-     "key": "requirement",
-     "label": "Requirement",
-     "type": "textarea"
-    },
-    {
-     "key": "status",
-     "label": "Status",
-     "type": "text"
-    },
-    {
-     "key": "owner",
-     "label": "Owner",
-     "type": "text",
-     "picker": "users"
-    },
-    {
-     "key": "notes_gap",
-     "label": "Notes / gap",
-     "type": "textarea"
-    }
-   ],
-   "seed": [
-    {
-     "data": {
-      "area": "Lawfulness",
-      "requirement": "A lawful basis is identified and recorded for every processing activity",
-      "status": "",
-      "owner": "",
-      "notes_gap": ""
-     }
-    },
-    {
-     "data": {
-      "area": "Transparency",
-      "requirement": "Privacy notices provided to data subjects (website, employees, suppliers)",
-      "status": "",
-      "owner": "",
-      "notes_gap": ""
-     }
-    },
-    {
-     "data": {
-      "area": "Records (ROPA)",
-      "requirement": "Record of Processing Activities maintained (Art. 30)",
-      "status": "",
-      "owner": "",
-      "notes_gap": ""
-     }
-    },
-    {
-     "data": {
-      "area": "Data subject rights",
-      "requirement": "Procedure to handle DSARs within one month",
-      "status": "",
-      "owner": "",
-      "notes_gap": ""
-     }
-    },
-    {
-     "data": {
-      "area": "Consent",
-      "requirement": "Where used, consent is freely given, specific, informed and recorded",
-      "status": "",
-      "owner": "",
-      "notes_gap": ""
-     }
-    },
-    {
-     "data": {
-      "area": "DPIA",
-      "requirement": "High-risk processing screened and assessed (Art. 35)",
-      "status": "",
-      "owner": "",
-      "notes_gap": ""
-     }
-    },
-    {
-     "data": {
-      "area": "Security",
-      "requirement": "Appropriate technical & organisational measures in place (Art. 32)",
-      "status": "",
-      "owner": "",
-      "notes_gap": ""
-     }
-    },
-    {
-     "data": {
-      "area": "Breach",
-      "requirement": "Breach response process meets the 72-hour rule; breach register kept",
-      "status": "",
-      "owner": "",
-      "notes_gap": ""
-     }
-    },
-    {
-     "data": {
-      "area": "Vendors",
-      "requirement": "Processors assessed; Data Processing Agreements in place (Art. 28)",
-      "status": "",
-      "owner": "",
-      "notes_gap": ""
-     }
-    },
-    {
-     "data": {
-      "area": "Transfers",
-      "requirement": "International transfers use a valid mechanism (SCCs/adequacy) + TIA",
-      "status": "",
-      "owner": "",
-      "notes_gap": ""
-     }
-    },
-    {
-     "data": {
-      "area": "Retention",
-      "requirement": "Data retained only as long as necessary per a retention schedule",
-      "status": "",
-      "owner": "",
-      "notes_gap": ""
-     }
-    },
-    {
-     "data": {
-      "area": "Governance",
-      "requirement": "DPO appointed if required; staff trained; accountability documented",
-      "status": "",
-      "owner": "",
-      "notes_gap": ""
-     }
-    }
-   ],
-   "formSections": [
-    {
-     "title": "Item",
-     "keys": [
-      "area",
-      "requirement"
-     ]
-    },
-    {
-     "title": "Assessment",
-     "keys": [
-      "status",
-      "notes_gap"
-     ]
-    },
-    {
-     "title": "Ownership & dates",
-     "keys": [
-      "owner"
-     ]
-    }
-   ]
-  }
- ],
- "documents": [
-  {
-   "type": "gdpr__gdpr_consent_form_template_1",
-   "label": "Consent Form",
-   "control_ref": null,
-   "sections": [
-    {
-     "heading": "1. Purpose",
-     "body": "These forms capture and withdraw consent in a way that is freely given, specific, informed and unambiguous, and they make withdrawal as easy as giving consent. Keep a record of each consent: who consented, to what, when and the wording they saw."
-    },
-    {
-     "heading": "2. Scope",
-     "body": "Use wherever consent is the lawful basis for processing."
-    },
-    {
-     "heading": "3. Form 1: Consent",
-     "body": "I, ____________________, consent to [Company Name] processing my personal data for the following specific purpose(s): ____________________.\nI understand what data is collected, that I can withdraw consent at any time, and how to do so.\nSignature: ____________  Date: ______"
-    },
-    {
-     "heading": "4. Form 2: Withdrawal of Consent",
-     "body": "I, ____________________, withdraw my consent for [purpose] given on [date]. I understand that withdrawal does not affect the lawfulness of processing carried out before I withdrew.\nSignature: ____________  Date: ______"
-    },
-    {
-     "heading": "5. Form 3: Parental or Guardian Consent (children)",
-     "body": "I, ____________________, parent or guardian of ____________________ (child), consent to [Company Name] processing the child's data for [purpose].\nSignature: ____________  Date: ______"
-    },
-    {
-     "heading": "6. Record of Consent",
-     "body": "For each consent, record who consented, to what, when, how it was obtained and the exact wording the person was shown."
-    }
-   ]
-  }
- ]
+  ]
 }

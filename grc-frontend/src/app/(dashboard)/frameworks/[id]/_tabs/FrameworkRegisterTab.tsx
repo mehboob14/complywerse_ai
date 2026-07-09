@@ -218,8 +218,31 @@ export default function FrameworkRegisterTab({ registerType, journeyId, framewor
       );
     }
     if (col.picker === 'framework_controls') {
-      const opts = frameworkControls.map((c) => (c.title ? `${c.code} — ${c.title}` : c.code));
       const cur = (val as string) || '';
+      // When autofillTitleKey is set, pick a requirement by its code and also
+      // fill the companion description column — one dropdown fills ref + text.
+      if (col.autofillTitleKey) {
+        const titleKey = col.autofillTitleKey;
+        const items = frameworkControls.map((c) => ({ value: c.code, label: c.title ? `${c.code} — ${c.title}` : c.code }));
+        if (cur && !frameworkControls.some((c) => c.code === cur)) items.unshift({ value: cur, label: cur });
+        return (
+          <div>
+            <FormDropdown value={cur} items={items} placeholder="Select a requirement…" searchable
+              onChange={(v) => {
+                const ctrl = frameworkControls.find((c) => c.code === v);
+                setEditing((prev) => prev ? { ...prev, draft: {
+                  ...prev.draft,
+                  [col.key]: v,
+                  [titleKey]: ctrl?.title ? ctrl.title : prev.draft[titleKey],
+                } } : prev);
+              }} />
+            {frameworkControls.length === 0 && (
+              <p className="mt-1 text-[11px] text-slate-400">Requirements load from this framework’s Requirements tab.</p>
+            )}
+          </div>
+        );
+      }
+      const opts = frameworkControls.map((c) => (c.title ? `${c.code} — ${c.title}` : c.code));
       const items = opts.map((o) => ({ value: o, label: o }));
       if (cur && !opts.includes(cur)) items.unshift({ value: cur, label: cur });
       return (

@@ -689,6 +689,7 @@ export const assetsApi = {
     vendor?: string;
     location?: string;
     cde_environment?: boolean;
+    pci_dss?: Record<string, unknown> | null;
   }) => apiClient.post<ITAsset>('/assets', data),
   update: (id: number, data: Partial<ITAsset>) => apiClient.put<ITAsset>(`/assets/${id}`, data),
   delete: (id: number) => apiClient.delete(`/assets/${id}`),
@@ -4490,6 +4491,66 @@ export const frameworkTemplatesApi = {
   },
   definition: (frameworkName: string) =>
     apiClient.get('/framework-templates/definition', { params: { framework_name: frameworkName } }),
+};
+
+// ─── Business Continuity Management (BCM) ────────────────────────────────────
+export const bcmApi = {
+  dashboard: () => apiClient.get('/bcm/dashboard'),
+  settings: {
+    get: () => apiClient.get('/bcm/settings'),
+    update: (data: { finding_issue_threshold?: string }) => apiClient.put('/bcm/settings', data),
+  },
+  options: {
+    documents: (search?: string) => apiClient.get('/bcm/document-options', { params: { search } }),
+    incidents: (search?: string) => apiClient.get('/bcm/incident-options', { params: { search } }),
+    risks: (search?: string) => apiClient.get('/bcm/risk-options', { params: { search } }),
+    users: (search?: string) => apiClient.get('/bcm/user-options', { params: { search } }),
+    assets: (search?: string) => apiClient.get('/bcm/asset-options', { params: { search } }),
+  },
+  plans: {
+    list: (params?: { status_filter?: string; search?: string }) => apiClient.get('/bcm/plans', { params }),
+    get: (id: number) => apiClient.get(`/bcm/plans/${id}`),
+    create: (data: Record<string, unknown>) => apiClient.post('/bcm/plans', data),
+    update: (id: number, data: Record<string, unknown>) => apiClient.put(`/bcm/plans/${id}`, data),
+    remove: (id: number) => apiClient.delete(`/bcm/plans/${id}`),
+    transition: (id: number, status: string) => apiClient.post(`/bcm/plans/${id}/transition`, { status }),
+  },
+  bia: {
+    list: (planId: number) => apiClient.get(`/bcm/plans/${planId}/bia`),
+    get: (id: number) => apiClient.get(`/bcm/bia/${id}`),
+    create: (planId: number, data: Record<string, unknown>) => apiClient.post(`/bcm/plans/${planId}/bia`, data),
+    update: (id: number, data: Record<string, unknown>) => apiClient.put(`/bcm/bia/${id}`, data),
+    remove: (id: number) => apiClient.delete(`/bcm/bia/${id}`),
+    linkRisk: (id: number, data: { risk_id?: number }) => apiClient.post(`/bcm/bia/${id}/link-risk`, data),
+    addDependency: (id: number, data: Record<string, unknown>) => apiClient.post(`/bcm/bia/${id}/dependencies`, data),
+    addStrategy: (id: number, data: Record<string, unknown>) => apiClient.post(`/bcm/bia/${id}/recovery-strategies`, data),
+  },
+  dependencies: {
+    update: (id: number, data: Record<string, unknown>) => apiClient.put(`/bcm/dependencies/${id}`, data),
+    remove: (id: number) => apiClient.delete(`/bcm/dependencies/${id}`),
+  },
+  strategies: {
+    update: (id: number, data: Record<string, unknown>) => apiClient.put(`/bcm/recovery-strategies/${id}`, data),
+    remove: (id: number) => apiClient.delete(`/bcm/recovery-strategies/${id}`),
+  },
+  drills: {
+    list: (params?: { plan_id?: number; status_filter?: string; source_type?: string; drill_type?: string; search?: string }) =>
+      apiClient.get('/bcm/drills', { params }),
+    get: (id: number) => apiClient.get(`/bcm/drills/${id}`),
+    create: (data: Record<string, unknown>) => apiClient.post('/bcm/drills', data),
+    update: (id: number, data: Record<string, unknown>) => apiClient.put(`/bcm/drills/${id}`, data),
+    remove: (id: number) => apiClient.delete(`/bcm/drills/${id}`),
+    transition: (id: number, status: string) => apiClient.post(`/bcm/drills/${id}/transition`, { status }),
+    saveResult: (id: number, data: Record<string, unknown>) => apiClient.post(`/bcm/drills/${id}/result`, data),
+  },
+  findings: {
+    list: (drillId: number) => apiClient.get(`/bcm/drills/${drillId}/findings`),
+    create: (drillId: number, data: Record<string, unknown>) => apiClient.post(`/bcm/drills/${drillId}/findings`, data),
+    update: (id: number, data: Record<string, unknown>) => apiClient.put(`/bcm/findings/${id}`, data),
+    remove: (id: number) => apiClient.delete(`/bcm/findings/${id}`),
+    createIssue: (id: number) => apiClient.post(`/bcm/findings/${id}/create-issue`, {}),
+    linkRisk: (id: number, data: { risk_id?: number }) => apiClient.post(`/bcm/findings/${id}/link-risk`, data),
+  },
 };
 
 export default apiClient;

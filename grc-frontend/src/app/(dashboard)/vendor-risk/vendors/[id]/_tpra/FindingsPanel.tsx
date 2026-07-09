@@ -12,6 +12,7 @@ import {
   ArrowUpRight,
 } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { tpraApi } from '@/lib/api';
 import { RightSlidePanel } from '@/components/ui';
 import { useToast } from '@/components/ui/ToastProvider';
@@ -165,6 +166,7 @@ function FindingCard({
   onDelete: () => void; onRestore: () => void;
 }) {
   const qc = useQueryClient();
+  const router = useRouter();
   const { toast } = useToast();
   const [showRem, setShowRem] = useState(false);
   const [showAcc, setShowAcc] = useState(false);
@@ -208,7 +210,16 @@ function FindingCard({
   });
   const promoteMut = useMutation({
     mutationFn: () => tpraApi.promoteFindingToRegister(finding.id),
-    onSuccess: () => { refresh(); toast({ type: 'success', title: 'Moved to Risk Register', message: 'Created a vendor-sourced risk in the ERM register.' }); },
+    onSuccess: (res) => {
+      refresh();
+      const riskId = (res?.data as { risk_id?: number })?.risk_id;
+      toast({
+        type: 'success', title: 'Moved to Risk Register',
+        message: riskId ? 'Opening it so you can complete the risk details.' : 'Created a vendor-sourced risk in the ERM register.',
+      });
+      // Land the user on THIS risk in the ERM register to fill the required fields.
+      if (riskId) router.push(`/erm/risks/list?edit=${riskId}`);
+    },
     onError: (e) => toast({ type: 'error', title: 'Promote failed', message: errMsg(e, 'Try again.') }),
   });
 
@@ -236,7 +247,8 @@ function FindingCard({
             </span>
             <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">{finding.status.replace('_', ' ')}</span>
             {finding.linked_risk_id && (
-              <Link href="/erm/risks/list"
+              <Link href={`/erm/risks/list?edit=${finding.linked_risk_id}`}
+                title="Open this risk in the ERM Risk Register"
                 className="inline-flex items-center gap-1 rounded-full border border-primary-200 bg-primary-50 px-2 py-0.5 text-[11px] font-medium text-primary-700 hover:bg-primary-100">
                 <ArrowUpRight className="h-3 w-3" strokeWidth={1.75} /> In Risk Register
               </Link>

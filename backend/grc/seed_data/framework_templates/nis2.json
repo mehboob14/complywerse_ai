@@ -1,1212 +1,1213 @@
 {
- "framework_key": "nis2",
- "display_name": "NIS2",
- "name_patterns": [
-  "nis2"
- ],
- "registers": [
-  {
-   "type": "nis2__nis2_compliance_roadmap_template_1",
-   "label": "Compliance Roadmap",
-   "description": "NIS2 — Compliance Roadmap (from the template).",
-   "columns": [
-    {
-     "key": "ref",
-     "label": "Ref",
-     "type": "auto"
-    },
-    {
-     "key": "workstream",
-     "label": "Workstream",
-     "type": "text"
-    },
-    {
-     "key": "action",
-     "label": "Action",
-     "type": "textarea"
-    },
-    {
-     "key": "nis2_article",
-     "label": "NIS2 article",
-     "type": "text"
-    },
-    {
-     "key": "priority",
-     "label": "Priority",
-     "type": "select",
-     "options": [
-      {
-       "value": "High",
-       "label": "High",
-       "tone": "rose"
-      },
-      {
-       "value": "Medium",
-       "label": "Medium",
-       "tone": "amber"
-      }
-     ]
-    },
-    {
-     "key": "owner",
-     "label": "Owner",
-     "type": "text",
-     "picker": "users"
-    },
-    {
-     "key": "target_date",
-     "label": "Target date",
-     "type": "date"
-    },
-    {
-     "key": "status",
-     "label": "Status",
-     "type": "select",
-     "options": [
-      {
-       "value": "Not started",
-       "label": "Not started",
-       "tone": "slate"
-      }
-     ]
-    }
-   ],
-   "seed": [
-    {
-     "data": {
-      "ref": "1",
-      "workstream": "Governance",
-      "action": "Brief and train the management body; record approval of the measures",
-      "nis2_article": "20",
-      "priority": "High",
-      "owner": "CISO",
-      "target_date": "2026-09-01",
-      "status": "Not started"
-     }
-    },
-    {
-     "data": {
-      "ref": "2",
-      "workstream": "Incident reporting",
-      "action": "Stand up the 24h/72h/1-month reporting workflow to the CSIRT",
-      "nis2_article": "23",
-      "priority": "High",
-      "owner": "SecOps",
-      "target_date": "2026-09-01",
-      "status": "Not started"
-     }
-    },
-    {
-     "data": {
-      "ref": "3",
-      "workstream": "Supply chain",
-      "action": "Assess critical suppliers and add security clauses",
-      "nis2_article": "21(2)(d)",
-      "priority": "Medium",
-      "owner": "Procurement",
-      "target_date": "2026-10-01",
-      "status": "Not started"
-     }
-    }
-   ],
-   "formSections": [
-    {
-     "title": "Item",
-     "keys": [
-      "ref",
-      "workstream"
-     ]
-    },
-    {
-     "title": "Assessment",
-     "keys": [
-      "action",
-      "nis2_article",
-      "priority",
-      "status"
-     ]
-    },
-    {
-     "title": "Ownership & dates",
-     "keys": [
-      "owner",
-      "target_date"
-     ]
-    }
-   ]
-  },
-  {
-   "type": "nis2__nis2_gap_assessment_template_1",
-   "label": "Gap Assessment",
-   "description": "NIS2 — Gap Assessment (from the template).",
-   "columns": [
-    {
-     "key": "area",
-     "label": "Area",
-     "type": "text"
-    },
-    {
-     "key": "article",
-     "label": "Article",
-     "type": "text",
-     "picker": "framework_controls"
-    },
-    {
-     "key": "obligation_to_verify",
-     "label": "Obligation to verify",
-     "type": "textarea"
-    },
-    {
-     "key": "status",
-     "label": "Status",
-     "type": "text"
-    },
-    {
-     "key": "evidence_notes",
-     "label": "Evidence / notes",
-     "type": "text",
-     "picker": "evidence"
-    },
-    {
-     "key": "owner",
-     "label": "Owner",
-     "type": "text",
-     "picker": "users"
-    }
-   ],
-   "seed": [
-    {
-     "data": {
-      "area": "Governance (Art. 20)",
-      "article": "20",
-      "obligation_to_verify": "Management body approves the cybersecurity risk-management measures",
-      "status": "",
-      "evidence_notes": "",
-      "owner": ""
-     }
-    },
-    {
-     "data": {
-      "area": "Governance (Art. 20)",
-      "article": "20",
-      "obligation_to_verify": "Management body oversees the implementation of the measures",
-      "status": "",
-      "evidence_notes": "",
-      "owner": ""
-     }
-    },
-    {
-     "data": {
-      "area": "Governance (Art. 20)",
-      "article": "20",
-      "obligation_to_verify": "Management-body members follow cybersecurity training, and staff are offered similar training",
-      "status": "",
-      "evidence_notes": "",
-      "owner": ""
-     }
-    },
-    {
-     "data": {
-      "area": "Risk-management (Art. 21)",
-      "article": "21(2)(a)",
-      "obligation_to_verify": "Policies on risk analysis and information system security",
-      "status": "",
-      "evidence_notes": "",
-      "owner": ""
-     }
-    },
-    {
-     "data": {
-      "area": "Risk-management (Art. 21)",
-      "article": "21(2)(b)",
-      "obligation_to_verify": "Incident handling",
-      "status": "",
-      "evidence_notes": "",
-      "owner": ""
-     }
-    },
-    {
-     "data": {
-      "area": "Risk-management (Art. 21)",
-      "article": "21(2)(c)",
-      "obligation_to_verify": "Business continuity (backup management, disaster recovery) and crisis management",
-      "status": "",
-      "evidence_notes": "",
-      "owner": ""
-     }
-    },
-    {
-     "data": {
-      "area": "Risk-management (Art. 21)",
-      "article": "21(2)(d)",
-      "obligation_to_verify": "Supply chain security, including the relationship with direct suppliers and providers",
-      "status": "",
-      "evidence_notes": "",
-      "owner": ""
-     }
-    },
-    {
-     "data": {
-      "area": "Risk-management (Art. 21)",
-      "article": "21(2)(e)",
-      "obligation_to_verify": "Security in network and information systems acquisition, development and maintenance, including vulnerability handling and disclosure",
-      "status": "",
-      "evidence_notes": "",
-      "owner": ""
-     }
-    },
-    {
-     "data": {
-      "area": "Risk-management (Art. 21)",
-      "article": "21(2)(f)",
-      "obligation_to_verify": "Policies and procedures to assess the effectiveness of the risk-management measures",
-      "status": "",
-      "evidence_notes": "",
-      "owner": ""
-     }
-    },
-    {
-     "data": {
-      "area": "Risk-management (Art. 21)",
-      "article": "21(2)(g)",
-      "obligation_to_verify": "Basic cyber hygiene practices and cybersecurity training",
-      "status": "",
-      "evidence_notes": "",
-      "owner": ""
-     }
-    },
-    {
-     "data": {
-      "area": "Risk-management (Art. 21)",
-      "article": "21(2)(h)",
-      "obligation_to_verify": "Policies and procedures on the use of cryptography and, where appropriate, encryption",
-      "status": "",
-      "evidence_notes": "",
-      "owner": ""
-     }
-    },
-    {
-     "data": {
-      "area": "Risk-management (Art. 21)",
-      "article": "21(2)(i)",
-      "obligation_to_verify": "Human resources security, access control policies and asset management",
-      "status": "",
-      "evidence_notes": "",
-      "owner": ""
-     }
-    },
-    {
-     "data": {
-      "area": "Risk-management (Art. 21)",
-      "article": "21(2)(j)",
-      "obligation_to_verify": "Multi-factor or continuous authentication, secured communications and secured emergency communication systems, where appropriate",
-      "status": "",
-      "evidence_notes": "",
-      "owner": ""
-     }
-    },
-    {
-     "data": {
-      "area": "Incident reporting (Art. 23)",
-      "article": "23",
-      "obligation_to_verify": "Process to submit an early warning to the CSIRT or competent authority within 24 hours of a significant incident",
-      "status": "",
-      "evidence_notes": "",
-      "owner": ""
-     }
-    },
-    {
-     "data": {
-      "area": "Incident reporting (Art. 23)",
-      "article": "23",
-      "obligation_to_verify": "Process to submit an incident notification within 72 hours",
-      "status": "",
-      "evidence_notes": "",
-      "owner": ""
-     }
-    },
-    {
-     "data": {
-      "area": "Incident reporting (Art. 23)",
-      "article": "23",
-      "obligation_to_verify": "Process to submit a final report no later than one month after the notification",
-      "status": "",
-      "evidence_notes": "",
-      "owner": ""
-     }
-    },
-    {
-     "data": {
-      "area": "Incident reporting (Art. 23)",
-      "article": "23",
-      "obligation_to_verify": "Process to notify recipients of services of significant incidents where appropriate",
-      "status": "",
-      "evidence_notes": "",
-      "owner": ""
-     }
-    }
-   ],
-   "formSections": [
-    {
-     "title": "Item",
-     "keys": [
-      "area",
-      "article"
-     ]
-    },
-    {
-     "title": "Assessment",
-     "keys": [
-      "obligation_to_verify",
-      "status",
-      "evidence_notes"
-     ]
-    },
-    {
-     "title": "Ownership & dates",
-     "keys": [
-      "owner"
-     ]
-    }
-   ]
-  },
-  {
-   "type": "nis2__nis2_incident_register_template_1",
-   "label": "Incident Register",
-   "description": "NIS2 — Incident Register (from the template).",
-   "columns": [
-    {
-     "key": "ref",
-     "label": "Ref",
-     "type": "auto"
-    },
-    {
-     "key": "date_time_aware",
-     "label": "Date/time aware",
-     "type": "datetime"
-    },
-    {
-     "key": "description",
-     "label": "Description",
-     "type": "textarea"
-    },
-    {
-     "key": "significant",
-     "label": "Significant?",
-     "type": "select",
-     "options": [
-      {
-       "value": "Yes",
-       "label": "Yes",
-       "tone": "emerald"
-      },
-      {
-       "value": "No",
-       "label": "No",
-       "tone": "rose"
-      }
-     ]
-    },
-    {
-     "key": "early_warning_due_24h",
-     "label": "Early warning due (24h)",
-     "type": "date"
-    },
-    {
-     "key": "notification_due_72h",
-     "label": "Notification due (72h)",
-     "type": "date"
-    },
-    {
-     "key": "final_report_due_1mo",
-     "label": "Final report due (1mo)",
-     "type": "date"
-    },
-    {
-     "key": "reported_to_authority",
-     "label": "Reported to authority?",
-     "type": "select",
-     "options": [
-      {
-       "value": "Yes",
-       "label": "Yes",
-       "tone": "emerald"
-      },
-      {
-       "value": "No",
-       "label": "No",
-       "tone": "rose"
-      }
-     ]
-    },
-    {
-     "key": "status",
-     "label": "Status",
-     "type": "select",
-     "options": [
-      {
-       "value": "Open",
-       "label": "Open",
-       "tone": "rose"
-      }
-     ]
-    },
-    {
-     "key": "owner",
-     "label": "Owner",
-     "type": "text",
-     "picker": "users"
-    },
-    {
-     "key": "lessons_learned",
-     "label": "Lessons learned",
-     "type": "text"
-    }
-   ],
-   "seed": [
-    {
-     "data": {
-      "ref": "I1",
-      "date_time_aware": "2026-06-01 09:00:00",
-      "description": "Ransomware on a production server",
-      "significant": "Yes",
-      "early_warning_due_24h": "",
-      "notification_due_72h": "",
-      "final_report_due_1mo": "",
-      "reported_to_authority": "Pending",
-      "status": "Open",
-      "owner": "CISO",
-      "lessons_learned": ""
-     }
-    }
-   ],
-   "formSections": [
-    {
-     "title": "Item",
-     "keys": [
-      "ref",
-      "date_time_aware"
-     ]
-    },
-    {
-     "title": "Assessment",
-     "keys": [
-      "description",
-      "significant",
-      "reported_to_authority",
-      "status",
-      "lessons_learned"
-     ]
-    },
-    {
-     "title": "Ownership & dates",
-     "keys": [
-      "early_warning_due_24h",
-      "notification_due_72h",
-      "final_report_due_1mo",
-      "owner"
-     ]
-    }
-   ]
-  },
-  {
-   "type": "nis2__nis2_scope_applicability_assessment_template_1",
-   "label": "Scope Applicability Assessment",
-   "description": "NIS2 — Scope Applicability Assessment (from the template).",
-   "columns": [
-    {
-     "key": "step",
-     "label": "Step",
-     "type": "text"
-    },
-    {
-     "key": "question",
-     "label": "Question",
-     "type": "textarea"
-    },
-    {
-     "key": "your_answer",
-     "label": "Your answer",
-     "type": "text"
-    },
-    {
-     "key": "notes",
-     "label": "Notes",
-     "type": "textarea"
-    }
-   ],
-   "seed": [
-    {
-     "data": {
-      "step": "1",
-      "question": "Does your organisation operate in a sector listed in Annex I (high criticality) or Annex II (other critical sectors)?",
-      "your_answer": "",
-      "notes": "[FILL IN: name the sector]"
-     }
-    },
-    {
-     "data": {
-      "step": "2",
-      "question": "Annex I sectors include energy, transport, banking, financial market infrastructure, health, drinking water, waste water, digital infrastructure, ICT service management, public administration and space.",
-      "your_answer": "",
-      "notes": ""
-     }
-    },
-    {
-     "data": {
-      "step": "3",
-      "question": "Annex II sectors include postal and courier, waste management, manufacture/production/distribution of chemicals, food, manufacturing, digital providers and research.",
-      "your_answer": "",
-      "notes": ""
-     }
-    },
-    {
-     "data": {
-      "step": "4",
-      "question": "Do you meet at least the medium-enterprise size threshold (50+ staff, or annual turnover and balance sheet above EUR 10 million)?",
-      "your_answer": "",
-      "notes": "Size-cap rule"
-     }
-    },
-    {
-     "data": {
-      "step": "5",
-      "question": "Do any special cases apply that bring you in regardless of size (e.g. sole provider of an essential service, certain DNS/TLD/digital-infrastructure providers, public administration)?",
-      "your_answer": "",
-      "notes": ""
-     }
-    },
-    {
-     "data": {
-      "step": "6",
-      "question": "Entity type: an Annex I sector entity above the size threshold is generally ESSENTIAL; an Annex II entity (and medium Annex I entities) is generally IMPORTANT.",
-      "your_answer": "",
-      "notes": "Determination"
-     }
-    },
-    {
-     "data": {
-      "step": "7",
-      "question": "Determination: is NIS2 in scope, and as which entity type?",
-      "your_answer": "",
-      "notes": "Essential / Important / Out of scope"
-     }
-    }
-   ],
-   "formSections": [
-    {
-     "title": "Item",
-     "keys": [
-      "step",
-      "question"
-     ]
-    },
-    {
-     "title": "Assessment",
-     "keys": [
-      "your_answer",
-      "notes"
-     ]
-    }
-   ]
-  },
-  {
-   "type": "nis2__nis2_supplier_security_register_template_1",
-   "label": "Supplier Security Register",
-   "description": "NIS2 — Supplier Security Register (from the template).",
-   "columns": [
-    {
-     "key": "ref",
-     "label": "Ref",
-     "type": "auto"
-    },
-    {
-     "key": "supplier_provider",
-     "label": "Supplier / provider",
-     "type": "text"
-    },
-    {
-     "key": "service_provided",
-     "label": "Service provided",
-     "type": "text"
-    },
-    {
-     "key": "criticality",
-     "label": "Criticality",
-     "type": "text"
-    },
-    {
-     "key": "security_assessed",
-     "label": "Security assessed?",
-     "type": "select",
-     "options": [
-      {
-       "value": "Yes",
-       "label": "Yes",
-       "tone": "emerald"
-      },
-      {
-       "value": "No",
-       "label": "No",
-       "tone": "rose"
-      }
-     ]
-    },
-    {
-     "key": "contract_security_clauses",
-     "label": "Contract security clauses?",
-     "type": "select",
-     "options": [
-      {
-       "value": "Yes",
-       "label": "Yes",
-       "tone": "emerald"
-      },
-      {
-       "value": "No",
-       "label": "No",
-       "tone": "rose"
-      }
-     ]
-    },
-    {
-     "key": "last_reviewed",
-     "label": "Last reviewed",
-     "type": "text"
-    },
-    {
-     "key": "owner",
-     "label": "Owner",
-     "type": "text",
-     "picker": "users"
-    },
-    {
-     "key": "notes",
-     "label": "Notes",
-     "type": "textarea"
-    }
-   ],
-   "seed": [
-    {
-     "data": {
-      "ref": "S1",
-      "supplier_provider": "Cloud hosting provider",
-      "service_provided": "Production hosting",
-      "criticality": "High",
-      "security_assessed": "Yes",
-      "contract_security_clauses": "Yes",
-      "last_reviewed": "2026-06-01",
-      "owner": "IT",
-      "notes": "SOC 2 / audit reports on file"
-     }
-    },
-    {
-     "data": {
-      "ref": "S2",
-      "supplier_provider": "Managed SOC",
-      "service_provided": "Detection and response",
-      "criticality": "High",
-      "security_assessed": "Partial",
-      "contract_security_clauses": "Yes",
-      "last_reviewed": "2026-06-01",
-      "owner": "CISO",
-      "notes": "Reassess annually"
-     }
-    }
-   ],
-   "formSections": [
-    {
-     "title": "Item",
-     "keys": [
-      "ref",
-      "supplier_provider"
-     ]
-    },
-    {
-     "title": "Assessment",
-     "keys": [
-      "service_provided",
-      "criticality",
-      "security_assessed",
-      "contract_security_clauses",
-      "last_reviewed",
-      "notes"
-     ]
-    },
-    {
-     "title": "Ownership & dates",
-     "keys": [
-      "owner"
-     ]
-    }
-   ]
-  }
- ],
- "documents": [
-  {
-   "type": "nis2__nis2_business_continuity_crisis_management_polic",
-   "label": "Business Continuity Crisis Management Policy",
-   "control_ref": null,
-   "sections": [
-    {
-     "heading": "1. Purpose",
-     "body": "This policy ensures the organisation can continue and recover its services during and after a disruptive incident, covering backup management, disaster recovery and crisis management as required by the NIS2 risk-management measures."
-    },
-    {
-     "heading": "2. Scope",
-     "body": "The services, systems and teams needed to keep the organisation's critical services running."
-    },
-    {
-     "heading": "3. Backup Management",
-     "body": "Critical data and systems can be restored after loss or corruption:\n- Critical data and systems are backed up on a defined schedule.\n- Backups are protected (including against ransomware, for example with offline or immutable copies).\n- Restoration is tested periodically so backups are known to work.\n- [FILL IN: your backup scope, frequency and restore-test cadence.]"
-    },
-    {
-     "heading": "4. Disaster Recovery",
-     "body": "Critical systems are recovered in a planned way:\n- Recovery plans restore critical systems within defined recovery time and recovery point objectives.\n- Recovery is coordinated with the IT disaster recovery plan and prioritises the most critical services.\n- Dependencies on third parties and cloud services are accounted for in the plans."
-    },
-    {
-     "heading": "5. Crisis Management",
-     "body": "A major disruption is managed decisively:\n- A crisis-management team is stood up with defined roles and decision authority.\n- Internal and external communications are coordinated, including with authorities and customers.\n- Crisis management is linked to the incident-reporting procedure so notifications are not missed."
-    },
-    {
-     "heading": "6. Exercising and Improvement",
-     "body": "The continuity and crisis arrangements are exercised periodically, and lessons learned are used to improve the plans, so the arrangements work when a real disruption occurs."
-    },
-    {
-     "heading": "7. Roles & Responsibilities",
-     "body": "",
-     "table": {
+  "framework_key": "nis2",
+  "display_name": "NIS2",
+  "name_patterns": [
+    "nis2"
+  ],
+  "registers": [
+    {
+      "type": "nis2__nis2_compliance_roadmap_template_1",
+      "label": "Compliance Roadmap",
+      "description": "NIS2 — Compliance Roadmap (from the template).",
       "columns": [
-       "Role",
-       "Responsibilities"
+        {
+          "key": "ref",
+          "label": "Ref",
+          "type": "auto"
+        },
+        {
+          "key": "workstream",
+          "label": "Workstream",
+          "type": "text"
+        },
+        {
+          "key": "action",
+          "label": "Action",
+          "type": "textarea"
+        },
+        {
+          "key": "nis2_article",
+          "label": "NIS2 article",
+          "type": "text",
+          "picker": "framework_controls"
+        },
+        {
+          "key": "priority",
+          "label": "Priority",
+          "type": "select",
+          "options": [
+            {
+              "value": "High",
+              "label": "High",
+              "tone": "rose"
+            },
+            {
+              "value": "Medium",
+              "label": "Medium",
+              "tone": "amber"
+            }
+          ]
+        },
+        {
+          "key": "owner",
+          "label": "Owner",
+          "type": "text",
+          "picker": "users"
+        },
+        {
+          "key": "target_date",
+          "label": "Target date",
+          "type": "date"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "type": "select",
+          "options": [
+            {
+              "value": "Not started",
+              "label": "Not started",
+              "tone": "slate"
+            }
+          ]
+        }
       ],
-      "rows": [
-       [
-        "Continuity lead",
-        "Owns continuity and recovery planning and testing."
-       ],
-       [
-        "CISO / Security Lead",
-        "Owns the policy, approves exceptions, monitors compliance and reports to leadership."
-       ],
-       [
-        "IT / Operations",
-        "Implements and maintains the technical controls described in this document."
-       ]
+      "seed": [
+        {
+          "data": {
+            "ref": "1",
+            "workstream": "Governance",
+            "action": "Brief and train the management body; record approval of the measures",
+            "nis2_article": "20",
+            "priority": "High",
+            "owner": "CISO",
+            "target_date": "2026-09-01",
+            "status": "Not started"
+          }
+        },
+        {
+          "data": {
+            "ref": "2",
+            "workstream": "Incident reporting",
+            "action": "Stand up the 24h/72h/1-month reporting workflow to the CSIRT",
+            "nis2_article": "23",
+            "priority": "High",
+            "owner": "SecOps",
+            "target_date": "2026-09-01",
+            "status": "Not started"
+          }
+        },
+        {
+          "data": {
+            "ref": "3",
+            "workstream": "Supply chain",
+            "action": "Assess critical suppliers and add security clauses",
+            "nis2_article": "21(2)(d)",
+            "priority": "Medium",
+            "owner": "Procurement",
+            "target_date": "2026-10-01",
+            "status": "Not started"
+          }
+        }
+      ],
+      "formSections": [
+        {
+          "title": "Item",
+          "keys": [
+            "ref",
+            "workstream"
+          ]
+        },
+        {
+          "title": "Assessment",
+          "keys": [
+            "action",
+            "nis2_article",
+            "priority",
+            "status"
+          ]
+        },
+        {
+          "title": "Ownership & dates",
+          "keys": [
+            "owner",
+            "target_date"
+          ]
+        }
       ]
-     }
     },
     {
-     "heading": "8. Testing & Maintenance",
-     "body": "This plan is reviewed at least annually and after every activation or major change. Exercises (tabletop or full) are scheduled to validate the plan and results are recorded as improvement actions."
-    }
-   ]
-  },
-  {
-   "type": "nis2__nis2_cryptography_policy_template_2",
-   "label": "Cryptography Policy",
-   "control_ref": null,
-   "sections": [
-    {
-     "heading": "1. Purpose",
-     "body": "This policy governs the use of cryptography and, where appropriate, encryption, to protect the confidentiality, integrity and authenticity of information, as required among the NIS2 risk-management measures."
-    },
-    {
-     "heading": "2. Scope",
-     "body": "All systems and data where cryptography is used to protect organisational information."
-    },
-    {
-     "heading": "3. Where Cryptography Is Used",
-     "body": "Cryptography is applied based on the sensitivity of the information and the risk to it:\n- Sensitive data is encrypted in transit over networks and, where appropriate, at rest.\n- Strong, current algorithms, protocols and key sizes are used, and weak or deprecated ones are retired.\n- Where cryptography protects integrity or authenticity, signing or hashing is used as appropriate.\n- [FILL IN: list your approved algorithms and the systems where encryption is mandatory.]"
-    },
-    {
-     "heading": "4. Key Management",
-     "body": "Cryptographic keys are protected across their whole lifecycle:\n- Keys are generated, distributed, stored, rotated and destroyed through a defined, protected process.\n- Access to keys is restricted and separated from the data the keys protect.\n- [FILL IN: your key-management approach or service, e.g. a managed KMS or HSM.]"
-    },
-    {
-     "heading": "5. Standards and Review",
-     "body": "The approved algorithms and the policy are reviewed periodically as cryptographic guidance evolves, so that the organisation moves off methods that are no longer considered secure."
-    },
-    {
-     "heading": "6. Roles & Responsibilities",
-     "body": "",
-     "table": {
+      "type": "nis2__nis2_gap_assessment_template_1",
+      "label": "Gap Assessment",
+      "description": "NIS2 — Gap Assessment (from the template).",
       "columns": [
-       "Role",
-       "Responsibilities"
+        {
+          "key": "area",
+          "label": "Area",
+          "type": "text"
+        },
+        {
+          "key": "article",
+          "label": "Article",
+          "type": "text",
+          "picker": "framework_controls"
+        },
+        {
+          "key": "obligation_to_verify",
+          "label": "Obligation to verify",
+          "type": "textarea"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "type": "text"
+        },
+        {
+          "key": "evidence_notes",
+          "label": "Evidence / notes",
+          "type": "text",
+          "picker": "evidence"
+        },
+        {
+          "key": "owner",
+          "label": "Owner",
+          "type": "text",
+          "picker": "users"
+        }
       ],
-      "rows": [
-       [
-        "IT / security",
-        "Implements and manages cryptography and keys."
-       ],
-       [
-        "CISO / Security Lead",
-        "Owns the policy, approves exceptions, monitors compliance and reports to leadership."
-       ],
-       [
-        "IT / Operations",
-        "Implements and maintains the technical controls described in this document."
-       ]
+      "seed": [
+        {
+          "data": {
+            "area": "Governance (Art. 20)",
+            "article": "20",
+            "obligation_to_verify": "Management body approves the cybersecurity risk-management measures",
+            "status": "",
+            "evidence_notes": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "area": "Governance (Art. 20)",
+            "article": "20",
+            "obligation_to_verify": "Management body oversees the implementation of the measures",
+            "status": "",
+            "evidence_notes": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "area": "Governance (Art. 20)",
+            "article": "20",
+            "obligation_to_verify": "Management-body members follow cybersecurity training, and staff are offered similar training",
+            "status": "",
+            "evidence_notes": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "area": "Risk-management (Art. 21)",
+            "article": "21(2)(a)",
+            "obligation_to_verify": "Policies on risk analysis and information system security",
+            "status": "",
+            "evidence_notes": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "area": "Risk-management (Art. 21)",
+            "article": "21(2)(b)",
+            "obligation_to_verify": "Incident handling",
+            "status": "",
+            "evidence_notes": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "area": "Risk-management (Art. 21)",
+            "article": "21(2)(c)",
+            "obligation_to_verify": "Business continuity (backup management, disaster recovery) and crisis management",
+            "status": "",
+            "evidence_notes": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "area": "Risk-management (Art. 21)",
+            "article": "21(2)(d)",
+            "obligation_to_verify": "Supply chain security, including the relationship with direct suppliers and providers",
+            "status": "",
+            "evidence_notes": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "area": "Risk-management (Art. 21)",
+            "article": "21(2)(e)",
+            "obligation_to_verify": "Security in network and information systems acquisition, development and maintenance, including vulnerability handling and disclosure",
+            "status": "",
+            "evidence_notes": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "area": "Risk-management (Art. 21)",
+            "article": "21(2)(f)",
+            "obligation_to_verify": "Policies and procedures to assess the effectiveness of the risk-management measures",
+            "status": "",
+            "evidence_notes": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "area": "Risk-management (Art. 21)",
+            "article": "21(2)(g)",
+            "obligation_to_verify": "Basic cyber hygiene practices and cybersecurity training",
+            "status": "",
+            "evidence_notes": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "area": "Risk-management (Art. 21)",
+            "article": "21(2)(h)",
+            "obligation_to_verify": "Policies and procedures on the use of cryptography and, where appropriate, encryption",
+            "status": "",
+            "evidence_notes": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "area": "Risk-management (Art. 21)",
+            "article": "21(2)(i)",
+            "obligation_to_verify": "Human resources security, access control policies and asset management",
+            "status": "",
+            "evidence_notes": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "area": "Risk-management (Art. 21)",
+            "article": "21(2)(j)",
+            "obligation_to_verify": "Multi-factor or continuous authentication, secured communications and secured emergency communication systems, where appropriate",
+            "status": "",
+            "evidence_notes": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "area": "Incident reporting (Art. 23)",
+            "article": "23",
+            "obligation_to_verify": "Process to submit an early warning to the CSIRT or competent authority within 24 hours of a significant incident",
+            "status": "",
+            "evidence_notes": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "area": "Incident reporting (Art. 23)",
+            "article": "23",
+            "obligation_to_verify": "Process to submit an incident notification within 72 hours",
+            "status": "",
+            "evidence_notes": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "area": "Incident reporting (Art. 23)",
+            "article": "23",
+            "obligation_to_verify": "Process to submit a final report no later than one month after the notification",
+            "status": "",
+            "evidence_notes": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "area": "Incident reporting (Art. 23)",
+            "article": "23",
+            "obligation_to_verify": "Process to notify recipients of services of significant incidents where appropriate",
+            "status": "",
+            "evidence_notes": "",
+            "owner": ""
+          }
+        }
+      ],
+      "formSections": [
+        {
+          "title": "Item",
+          "keys": [
+            "area",
+            "article"
+          ]
+        },
+        {
+          "title": "Assessment",
+          "keys": [
+            "obligation_to_verify",
+            "status",
+            "evidence_notes"
+          ]
+        },
+        {
+          "title": "Ownership & dates",
+          "keys": [
+            "owner"
+          ]
+        }
       ]
-     }
     },
     {
-     "heading": "7. Compliance & Enforcement",
-     "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
-    },
-    {
-     "heading": "8. Exceptions",
-     "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
-    },
-    {
-     "heading": "9. Review",
-     "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
-    }
-   ]
-  },
-  {
-   "type": "nis2__nis2_cyber_hygiene_training_policy_template_1",
-   "label": "Cyber Hygiene Training Policy",
-   "control_ref": null,
-   "sections": [
-    {
-     "heading": "1. Purpose",
-     "body": "This policy establishes basic cyber hygiene practices and cybersecurity training for everyone in the organisation, which NIS2 lists among the required risk-management measures."
-    },
-    {
-     "heading": "2. Scope",
-     "body": "All staff, contractors and the management body."
-    },
-    {
-     "heading": "3. Basic Cyber Hygiene",
-     "body": "The organisation maintains baseline practices that reduce everyday risk:\n- Keep software and systems updated and patched.\n- Use strong authentication, including multi-factor authentication where appropriate.\n- Apply least-privilege access and remove access promptly when no longer needed.\n- Back up important data and verify that backups can be restored.\n- Recognise and report phishing and suspicious activity."
-    },
-    {
-     "heading": "4. Cybersecurity Training",
-     "body": "Training is provided so people can carry out their roles securely:\n- All staff complete security-awareness training on joining and at a regular cadence.\n- The management body follows training to identify and assess cybersecurity risk.\n- Role-based training is provided where a role carries specific risk.\n- [FILL IN: state your training cadence and platform.]"
-    },
-    {
-     "heading": "5. Roles & Responsibilities",
-     "body": "",
-     "table": {
+      "type": "nis2__nis2_incident_register_template_1",
+      "label": "Incident Register",
+      "description": "NIS2 — Incident Register (from the template).",
       "columns": [
-       "Role",
-       "Responsibilities"
+        {
+          "key": "ref",
+          "label": "Ref",
+          "type": "auto"
+        },
+        {
+          "key": "date_time_aware",
+          "label": "Date/time aware",
+          "type": "datetime"
+        },
+        {
+          "key": "description",
+          "label": "Description",
+          "type": "textarea"
+        },
+        {
+          "key": "significant",
+          "label": "Significant?",
+          "type": "select",
+          "options": [
+            {
+              "value": "Yes",
+              "label": "Yes",
+              "tone": "emerald"
+            },
+            {
+              "value": "No",
+              "label": "No",
+              "tone": "rose"
+            }
+          ]
+        },
+        {
+          "key": "early_warning_due_24h",
+          "label": "Early warning due (24h)",
+          "type": "date"
+        },
+        {
+          "key": "notification_due_72h",
+          "label": "Notification due (72h)",
+          "type": "date"
+        },
+        {
+          "key": "final_report_due_1mo",
+          "label": "Final report due (1mo)",
+          "type": "date"
+        },
+        {
+          "key": "reported_to_authority",
+          "label": "Reported to authority?",
+          "type": "select",
+          "options": [
+            {
+              "value": "Yes",
+              "label": "Yes",
+              "tone": "emerald"
+            },
+            {
+              "value": "No",
+              "label": "No",
+              "tone": "rose"
+            }
+          ]
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "type": "select",
+          "options": [
+            {
+              "value": "Open",
+              "label": "Open",
+              "tone": "rose"
+            }
+          ]
+        },
+        {
+          "key": "owner",
+          "label": "Owner",
+          "type": "text",
+          "picker": "users"
+        },
+        {
+          "key": "lessons_learned",
+          "label": "Lessons learned",
+          "type": "text"
+        }
       ],
-      "rows": [
-       [
-        "HR / training lead",
-        "Runs the training programme and tracks completion."
-       ],
-       [
-        "CISO / Security Lead",
-        "Owns the policy, approves exceptions, monitors compliance and reports to leadership."
-       ],
-       [
-        "All staff",
-        "Complete training and follow cyber hygiene practices."
-       ]
+      "seed": [
+        {
+          "data": {
+            "ref": "I1",
+            "date_time_aware": "2026-06-01 09:00:00",
+            "description": "Ransomware on a production server",
+            "significant": "Yes",
+            "early_warning_due_24h": "",
+            "notification_due_72h": "",
+            "final_report_due_1mo": "",
+            "reported_to_authority": "Pending",
+            "status": "Open",
+            "owner": "CISO",
+            "lessons_learned": ""
+          }
+        }
+      ],
+      "formSections": [
+        {
+          "title": "Item",
+          "keys": [
+            "ref",
+            "date_time_aware"
+          ]
+        },
+        {
+          "title": "Assessment",
+          "keys": [
+            "description",
+            "significant",
+            "reported_to_authority",
+            "status",
+            "lessons_learned"
+          ]
+        },
+        {
+          "title": "Ownership & dates",
+          "keys": [
+            "early_warning_due_24h",
+            "notification_due_72h",
+            "final_report_due_1mo",
+            "owner"
+          ]
+        }
       ]
-     }
     },
     {
-     "heading": "6. Compliance & Enforcement",
-     "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
-    },
-    {
-     "heading": "7. Exceptions",
-     "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
-    },
-    {
-     "heading": "8. Review",
-     "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
-    }
-   ]
-  },
-  {
-   "type": "nis2__nis2_governance_management_body_policy_template_",
-   "label": "Governance Management Body Policy",
-   "control_ref": null,
-   "sections": [
-    {
-     "heading": "1. Purpose",
-     "body": "This policy sets out how the management body governs cybersecurity in line with the NIS2 directive, under which management bodies are accountable for the organisation's cybersecurity risk-management measures."
-    },
-    {
-     "heading": "2. Scope",
-     "body": "The management body and all parts of the organisation in scope of NIS2."
-    },
-    {
-     "heading": "3. Approval of Measures",
-     "body": "The management body approves the cybersecurity risk-management measures the organisation takes to comply with NIS2. These measures span, among others:\n- Risk analysis and information system security policies.\n- Incident handling, business continuity and crisis management.\n- Supply chain security, and security in acquisition, development and maintenance.\n- Basic cyber hygiene, training, cryptography, access control and the use of multi-factor authentication."
-    },
-    {
-     "heading": "4. Oversight of Implementation",
-     "body": "The management body oversees the implementation of those measures and reviews their effectiveness at a defined cadence.\n[FILL IN: state how often cybersecurity is a management-body agenda item.]"
-    },
-    {
-     "heading": "5. Training",
-     "body": "Members of the management body follow cybersecurity training so they can identify risks and assess risk-management practices, and the organisation offers similar training to its staff."
-    },
-    {
-     "heading": "6. Accountability",
-     "body": "The management body remains accountable for the organisation's compliance with its NIS2 obligations."
-    },
-    {
-     "heading": "7. Roles & Responsibilities",
-     "body": "",
-     "table": {
+      "type": "nis2__nis2_scope_applicability_assessment_template_1",
+      "label": "Scope Applicability Assessment",
+      "description": "NIS2 — Scope Applicability Assessment (from the template).",
       "columns": [
-       "Role",
-       "Responsibilities"
+        {
+          "key": "step",
+          "label": "Step",
+          "type": "text"
+        },
+        {
+          "key": "question",
+          "label": "Question",
+          "type": "textarea"
+        },
+        {
+          "key": "your_answer",
+          "label": "Your answer",
+          "type": "text"
+        },
+        {
+          "key": "notes",
+          "label": "Notes",
+          "type": "textarea"
+        }
       ],
-      "rows": [
-       [
-        "Management body",
-        "Approves measures, oversees implementation, undertakes training."
-       ],
-       [
-        "CISO / Security Lead",
-        "Owns the policy, approves exceptions, monitors compliance and reports to leadership."
-       ],
-       [
-        "All staff",
-        "Complete the cybersecurity training offered."
-       ]
+      "seed": [
+        {
+          "data": {
+            "step": "1",
+            "question": "Does your organisation operate in a sector listed in Annex I (high criticality) or Annex II (other critical sectors)?",
+            "your_answer": "",
+            "notes": "[FILL IN: name the sector]"
+          }
+        },
+        {
+          "data": {
+            "step": "2",
+            "question": "Annex I sectors include energy, transport, banking, financial market infrastructure, health, drinking water, waste water, digital infrastructure, ICT service management, public administration and space.",
+            "your_answer": "",
+            "notes": ""
+          }
+        },
+        {
+          "data": {
+            "step": "3",
+            "question": "Annex II sectors include postal and courier, waste management, manufacture/production/distribution of chemicals, food, manufacturing, digital providers and research.",
+            "your_answer": "",
+            "notes": ""
+          }
+        },
+        {
+          "data": {
+            "step": "4",
+            "question": "Do you meet at least the medium-enterprise size threshold (50+ staff, or annual turnover and balance sheet above EUR 10 million)?",
+            "your_answer": "",
+            "notes": "Size-cap rule"
+          }
+        },
+        {
+          "data": {
+            "step": "5",
+            "question": "Do any special cases apply that bring you in regardless of size (e.g. sole provider of an essential service, certain DNS/TLD/digital-infrastructure providers, public administration)?",
+            "your_answer": "",
+            "notes": ""
+          }
+        },
+        {
+          "data": {
+            "step": "6",
+            "question": "Entity type: an Annex I sector entity above the size threshold is generally ESSENTIAL; an Annex II entity (and medium Annex I entities) is generally IMPORTANT.",
+            "your_answer": "",
+            "notes": "Determination"
+          }
+        },
+        {
+          "data": {
+            "step": "7",
+            "question": "Determination: is NIS2 in scope, and as which entity type?",
+            "your_answer": "",
+            "notes": "Essential / Important / Out of scope"
+          }
+        }
+      ],
+      "formSections": [
+        {
+          "title": "Item",
+          "keys": [
+            "step",
+            "question"
+          ]
+        },
+        {
+          "title": "Assessment",
+          "keys": [
+            "your_answer",
+            "notes"
+          ]
+        }
       ]
-     }
     },
     {
-     "heading": "8. Compliance & Enforcement",
-     "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
-    },
-    {
-     "heading": "9. Exceptions",
-     "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
-    },
-    {
-     "heading": "10. Review",
-     "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
-    }
-   ]
-  },
-  {
-   "type": "nis2__nis2_incident_reporting_procedure_template_2",
-   "label": "Incident Reporting Procedure",
-   "control_ref": null,
-   "sections": [
-    {
-     "heading": "1. Purpose",
-     "body": "This procedure ensures the organisation reports significant incidents to the CSIRT or competent authority within the deadlines set by the NIS2 directive, and notifies the recipients of its services where appropriate."
-    },
-    {
-     "heading": "2. Scope",
-     "body": "All significant incidents affecting the network and information systems used to provide the organisation's services."
-    },
-    {
-     "heading": "3. Determine Significance",
-     "body": "An incident is significant, and therefore reportable, if it meets either threshold:\n- It has caused or is capable of causing severe operational disruption of the services or financial loss to the entity, or\n- It has affected or is capable of affecting other natural or legal persons by causing considerable material or non-material damage.\n- [FILL IN: record your significance criteria and who decides.]"
-    },
-    {
-     "heading": "4. Early Warning (within 24 hours)",
-     "body": "Within 24 hours of becoming aware of a significant incident, submit an early warning to the CSIRT or competent authority, indicating whether it is suspected to be caused by unlawful or malicious acts or could have a cross-border impact."
-    },
-    {
-     "heading": "5. Incident Notification (within 72 hours)",
-     "body": "Within 72 hours of becoming aware, submit an incident notification updating the early warning and providing an initial assessment, including severity, impact and any indicators of compromise."
-    },
-    {
-     "heading": "6. Final Report (within one month)",
-     "body": "No later than one month after the notification, submit a final report with a detailed description, the type of threat or root cause, the mitigation applied and any cross-border impact."
-    },
-    {
-     "heading": "7. Notify Service Recipients",
-     "body": "Where appropriate, notify the recipients of the affected services of the incident and of any measures or remedies they can take."
-    },
-    {
-     "heading": "8. Roles & Responsibilities",
-     "body": "",
-     "table": {
+      "type": "nis2__nis2_supplier_security_register_template_1",
+      "label": "Supplier Security Register",
+      "description": "NIS2 — Supplier Security Register (from the template).",
       "columns": [
-       "Role",
-       "Responsibilities"
+        {
+          "key": "ref",
+          "label": "Ref",
+          "type": "auto"
+        },
+        {
+          "key": "supplier_provider",
+          "label": "Supplier / provider",
+          "type": "text"
+        },
+        {
+          "key": "service_provided",
+          "label": "Service provided",
+          "type": "text"
+        },
+        {
+          "key": "criticality",
+          "label": "Criticality",
+          "type": "text"
+        },
+        {
+          "key": "security_assessed",
+          "label": "Security assessed?",
+          "type": "select",
+          "options": [
+            {
+              "value": "Yes",
+              "label": "Yes",
+              "tone": "emerald"
+            },
+            {
+              "value": "No",
+              "label": "No",
+              "tone": "rose"
+            }
+          ]
+        },
+        {
+          "key": "contract_security_clauses",
+          "label": "Contract security clauses?",
+          "type": "select",
+          "options": [
+            {
+              "value": "Yes",
+              "label": "Yes",
+              "tone": "emerald"
+            },
+            {
+              "value": "No",
+              "label": "No",
+              "tone": "rose"
+            }
+          ]
+        },
+        {
+          "key": "last_reviewed",
+          "label": "Last reviewed",
+          "type": "text"
+        },
+        {
+          "key": "owner",
+          "label": "Owner",
+          "type": "text",
+          "picker": "users"
+        },
+        {
+          "key": "notes",
+          "label": "Notes",
+          "type": "textarea"
+        }
       ],
-      "rows": [
-       [
-        "Incident lead",
-        "Runs the reporting workflow and meets the deadlines."
-       ],
-       [
-        "CISO / Security Lead",
-        "Owns the policy, approves exceptions, monitors compliance and reports to leadership."
-       ],
-       [
-        "IT / Operations",
-        "Implements and maintains the technical controls described in this document."
-       ]
-      ]
-     }
-    },
-    {
-     "heading": "9. Testing & Maintenance",
-     "body": "This plan is reviewed at least annually and after every activation or major change. Exercises (tabletop or full) are scheduled to validate the plan and results are recorded as improvement actions."
-    }
-   ]
-  },
-  {
-   "type": "nis2__nis2_risk_management_measures_policy_template_2",
-   "label": "Risk Management Measures Policy",
-   "control_ref": null,
-   "sections": [
-    {
-     "heading": "1. Purpose",
-     "body": "This policy sets out the cybersecurity risk-management measures the organisation applies to manage the risks to its network and information systems, using an all-hazards approach, as required of essential and important entities under the NIS2 directive."
-    },
-    {
-     "heading": "2. Scope",
-     "body": "All network and information systems the organisation uses to provide its services, and the people and processes that support them."
-    },
-    {
-     "heading": "3. Risk Analysis and System Security",
-     "body": "The foundation is a documented, all-hazards approach to risk:\n- The organisation maintains policies on risk analysis and on the security of its information systems.\n- Risk is treated on an all-hazards basis, covering cyber, physical and environmental threats.\n- The measures below are applied proportionately to the risks identified.\n- [FILL IN: reference your risk methodology and security policy.]"
-    },
-    {
-     "heading": "4. Incident Handling",
-     "body": "Incidents are detected, handled and reported through a defined process, including the NIS2 reporting timeline (see the Incident Reporting Procedure)."
-    },
-    {
-     "heading": "5. Business Continuity and Crisis Management",
-     "body": "Backup management, disaster recovery and crisis management keep critical services running and recoverable."
-    },
-    {
-     "heading": "6. Supply Chain Security",
-     "body": "Security in the relationships with direct suppliers and service providers is managed (see the Supply Chain Security Policy)."
-    },
-    {
-     "heading": "7. Secure Acquisition, Development and Maintenance",
-     "body": "Security is built into the acquisition, development and maintenance of network and information systems, including vulnerability handling and disclosure."
-    },
-    {
-     "heading": "8. Effectiveness Assessment",
-     "body": "The organisation has policies and procedures to assess whether its cybersecurity risk-management measures are effective, and improves them."
-    },
-    {
-     "heading": "9. Cyber Hygiene and Training",
-     "body": "Basic cyber hygiene practices and cybersecurity training are provided (see the Cyber Hygiene and Training Policy)."
-    },
-    {
-     "heading": "10. Cryptography",
-     "body": "Policies and procedures govern the use of cryptography and, where appropriate, encryption (see the Cryptography Policy)."
-    },
-    {
-     "heading": "11. Human Resources, Access Control and Asset Management",
-     "body": "Human resources security, access control and asset management protect systems and data."
-    },
-    {
-     "heading": "12. Authentication and Secure Communications",
-     "body": "Multi-factor or continuous authentication, secured voice, video and text communications and secured emergency communications are used where appropriate."
-    },
-    {
-     "heading": "13. Roles & Responsibilities",
-     "body": "",
-     "table": {
-      "columns": [
-       "Role",
-       "Responsibilities"
+      "seed": [
+        {
+          "data": {
+            "ref": "S1",
+            "supplier_provider": "Cloud hosting provider",
+            "service_provided": "Production hosting",
+            "criticality": "High",
+            "security_assessed": "Yes",
+            "contract_security_clauses": "Yes",
+            "last_reviewed": "2026-06-01",
+            "owner": "IT",
+            "notes": "SOC 2 / audit reports on file"
+          }
+        },
+        {
+          "data": {
+            "ref": "S2",
+            "supplier_provider": "Managed SOC",
+            "service_provided": "Detection and response",
+            "criticality": "High",
+            "security_assessed": "Partial",
+            "contract_security_clauses": "Yes",
+            "last_reviewed": "2026-06-01",
+            "owner": "CISO",
+            "notes": "Reassess annually"
+          }
+        }
       ],
-      "rows": [
-       [
-        "Management body",
-        "Approves these measures and oversees their implementation."
-       ],
-       [
-        "CISO / Security Lead",
-        "Owns the policy, approves exceptions, monitors compliance and reports to leadership."
-       ],
-       [
-        "IT / Operations",
-        "Implements and maintains the technical controls described in this document."
-       ]
+      "formSections": [
+        {
+          "title": "Item",
+          "keys": [
+            "ref",
+            "supplier_provider"
+          ]
+        },
+        {
+          "title": "Assessment",
+          "keys": [
+            "service_provided",
+            "criticality",
+            "security_assessed",
+            "contract_security_clauses",
+            "last_reviewed",
+            "notes"
+          ]
+        },
+        {
+          "title": "Ownership & dates",
+          "keys": [
+            "owner"
+          ]
+        }
       ]
-     }
-    },
-    {
-     "heading": "14. Compliance & Enforcement",
-     "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
-    },
-    {
-     "heading": "15. Exceptions",
-     "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
-    },
-    {
-     "heading": "16. Review",
-     "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
     }
-   ]
-  },
-  {
-   "type": "nis2__nis2_supply_chain_security_policy_template_2",
-   "label": "Supply Chain Security Policy",
-   "control_ref": null,
-   "sections": [
+  ],
+  "documents": [
     {
-     "heading": "1. Purpose",
-     "body": "This policy manages the security risks arising from the organisation's suppliers and service providers, which NIS2 requires essential and important entities to address as part of their risk-management measures."
-    },
-    {
-     "heading": "2. Scope",
-     "body": "All direct suppliers and service providers whose products or services support the organisation's network and information systems."
-    },
-    {
-     "heading": "3. Supplier Security Requirements",
-     "body": "Security requirements are set for suppliers and providers proportionate to the criticality of what they supply, and are reflected in contracts:\n- Requirements cover the provider's own security measures and its handling of the organisation's data and access.\n- Contracts require the provider to notify the organisation of incidents affecting the services supplied.\n- Requirements are stricter for suppliers that support critical or important functions."
-    },
-    {
-     "heading": "4. Assessing Suppliers",
-     "body": "The security of direct suppliers and providers is assessed, taking into account their specific vulnerabilities, the quality of their products and cybersecurity practices, and any coordinated security risk assessments of critical supply chains."
-    },
-    {
-     "heading": "5. Ongoing Management",
-     "body": "Critical suppliers are recorded in the supplier register and reassessed periodically and on significant change.\n[FILL IN: define your supplier criticality tiers and review cadence.]"
-    },
-    {
-     "heading": "6. Roles & Responsibilities",
-     "body": "",
-     "table": {
-      "columns": [
-       "Role",
-       "Responsibilities"
-      ],
-      "rows": [
-       [
-        "Procurement",
-        "Sets supplier requirements and manages contracts."
-       ],
-       [
-        "CISO / Security Lead",
-        "Owns the policy, approves exceptions, monitors compliance and reports to leadership."
-       ],
-       [
-        "IT / Operations",
-        "Implements and maintains the technical controls described in this document."
-       ]
+      "type": "nis2__nis2_business_continuity_crisis_management_polic",
+      "label": "Business Continuity Crisis Management Policy",
+      "control_ref": null,
+      "sections": [
+        {
+          "heading": "1. Purpose",
+          "body": "This policy ensures the organisation can continue and recover its services during and after a disruptive incident, covering backup management, disaster recovery and crisis management as required by the NIS2 risk-management measures."
+        },
+        {
+          "heading": "2. Scope",
+          "body": "The services, systems and teams needed to keep the organisation's critical services running."
+        },
+        {
+          "heading": "3. Backup Management",
+          "body": "Critical data and systems can be restored after loss or corruption:\n- Critical data and systems are backed up on a defined schedule.\n- Backups are protected (including against ransomware, for example with offline or immutable copies).\n- Restoration is tested periodically so backups are known to work.\n- [FILL IN: your backup scope, frequency and restore-test cadence.]"
+        },
+        {
+          "heading": "4. Disaster Recovery",
+          "body": "Critical systems are recovered in a planned way:\n- Recovery plans restore critical systems within defined recovery time and recovery point objectives.\n- Recovery is coordinated with the IT disaster recovery plan and prioritises the most critical services.\n- Dependencies on third parties and cloud services are accounted for in the plans."
+        },
+        {
+          "heading": "5. Crisis Management",
+          "body": "A major disruption is managed decisively:\n- A crisis-management team is stood up with defined roles and decision authority.\n- Internal and external communications are coordinated, including with authorities and customers.\n- Crisis management is linked to the incident-reporting procedure so notifications are not missed."
+        },
+        {
+          "heading": "6. Exercising and Improvement",
+          "body": "The continuity and crisis arrangements are exercised periodically, and lessons learned are used to improve the plans, so the arrangements work when a real disruption occurs."
+        },
+        {
+          "heading": "7. Roles & Responsibilities",
+          "body": "",
+          "table": {
+            "columns": [
+              "Role",
+              "Responsibilities"
+            ],
+            "rows": [
+              [
+                "Continuity lead",
+                "Owns continuity and recovery planning and testing."
+              ],
+              [
+                "CISO / Security Lead",
+                "Owns the policy, approves exceptions, monitors compliance and reports to leadership."
+              ],
+              [
+                "IT / Operations",
+                "Implements and maintains the technical controls described in this document."
+              ]
+            ]
+          }
+        },
+        {
+          "heading": "8. Testing & Maintenance",
+          "body": "This plan is reviewed at least annually and after every activation or major change. Exercises (tabletop or full) are scheduled to validate the plan and results are recorded as improvement actions."
+        }
       ]
-     }
     },
     {
-     "heading": "7. Compliance & Enforcement",
-     "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+      "type": "nis2__nis2_cryptography_policy_template_2",
+      "label": "Cryptography Policy",
+      "control_ref": null,
+      "sections": [
+        {
+          "heading": "1. Purpose",
+          "body": "This policy governs the use of cryptography and, where appropriate, encryption, to protect the confidentiality, integrity and authenticity of information, as required among the NIS2 risk-management measures."
+        },
+        {
+          "heading": "2. Scope",
+          "body": "All systems and data where cryptography is used to protect organisational information."
+        },
+        {
+          "heading": "3. Where Cryptography Is Used",
+          "body": "Cryptography is applied based on the sensitivity of the information and the risk to it:\n- Sensitive data is encrypted in transit over networks and, where appropriate, at rest.\n- Strong, current algorithms, protocols and key sizes are used, and weak or deprecated ones are retired.\n- Where cryptography protects integrity or authenticity, signing or hashing is used as appropriate.\n- [FILL IN: list your approved algorithms and the systems where encryption is mandatory.]"
+        },
+        {
+          "heading": "4. Key Management",
+          "body": "Cryptographic keys are protected across their whole lifecycle:\n- Keys are generated, distributed, stored, rotated and destroyed through a defined, protected process.\n- Access to keys is restricted and separated from the data the keys protect.\n- [FILL IN: your key-management approach or service, e.g. a managed KMS or HSM.]"
+        },
+        {
+          "heading": "5. Standards and Review",
+          "body": "The approved algorithms and the policy are reviewed periodically as cryptographic guidance evolves, so that the organisation moves off methods that are no longer considered secure."
+        },
+        {
+          "heading": "6. Roles & Responsibilities",
+          "body": "",
+          "table": {
+            "columns": [
+              "Role",
+              "Responsibilities"
+            ],
+            "rows": [
+              [
+                "IT / security",
+                "Implements and manages cryptography and keys."
+              ],
+              [
+                "CISO / Security Lead",
+                "Owns the policy, approves exceptions, monitors compliance and reports to leadership."
+              ],
+              [
+                "IT / Operations",
+                "Implements and maintains the technical controls described in this document."
+              ]
+            ]
+          }
+        },
+        {
+          "heading": "7. Compliance & Enforcement",
+          "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+        },
+        {
+          "heading": "8. Exceptions",
+          "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+        },
+        {
+          "heading": "9. Review",
+          "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+        }
+      ]
     },
     {
-     "heading": "8. Exceptions",
-     "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+      "type": "nis2__nis2_cyber_hygiene_training_policy_template_1",
+      "label": "Cyber Hygiene Training Policy",
+      "control_ref": null,
+      "sections": [
+        {
+          "heading": "1. Purpose",
+          "body": "This policy establishes basic cyber hygiene practices and cybersecurity training for everyone in the organisation, which NIS2 lists among the required risk-management measures."
+        },
+        {
+          "heading": "2. Scope",
+          "body": "All staff, contractors and the management body."
+        },
+        {
+          "heading": "3. Basic Cyber Hygiene",
+          "body": "The organisation maintains baseline practices that reduce everyday risk:\n- Keep software and systems updated and patched.\n- Use strong authentication, including multi-factor authentication where appropriate.\n- Apply least-privilege access and remove access promptly when no longer needed.\n- Back up important data and verify that backups can be restored.\n- Recognise and report phishing and suspicious activity."
+        },
+        {
+          "heading": "4. Cybersecurity Training",
+          "body": "Training is provided so people can carry out their roles securely:\n- All staff complete security-awareness training on joining and at a regular cadence.\n- The management body follows training to identify and assess cybersecurity risk.\n- Role-based training is provided where a role carries specific risk.\n- [FILL IN: state your training cadence and platform.]"
+        },
+        {
+          "heading": "5. Roles & Responsibilities",
+          "body": "",
+          "table": {
+            "columns": [
+              "Role",
+              "Responsibilities"
+            ],
+            "rows": [
+              [
+                "HR / training lead",
+                "Runs the training programme and tracks completion."
+              ],
+              [
+                "CISO / Security Lead",
+                "Owns the policy, approves exceptions, monitors compliance and reports to leadership."
+              ],
+              [
+                "All staff",
+                "Complete training and follow cyber hygiene practices."
+              ]
+            ]
+          }
+        },
+        {
+          "heading": "6. Compliance & Enforcement",
+          "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+        },
+        {
+          "heading": "7. Exceptions",
+          "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+        },
+        {
+          "heading": "8. Review",
+          "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+        }
+      ]
     },
     {
-     "heading": "9. Review",
-     "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+      "type": "nis2__nis2_governance_management_body_policy_template_",
+      "label": "Governance Management Body Policy",
+      "control_ref": null,
+      "sections": [
+        {
+          "heading": "1. Purpose",
+          "body": "This policy sets out how the management body governs cybersecurity in line with the NIS2 directive, under which management bodies are accountable for the organisation's cybersecurity risk-management measures."
+        },
+        {
+          "heading": "2. Scope",
+          "body": "The management body and all parts of the organisation in scope of NIS2."
+        },
+        {
+          "heading": "3. Approval of Measures",
+          "body": "The management body approves the cybersecurity risk-management measures the organisation takes to comply with NIS2. These measures span, among others:\n- Risk analysis and information system security policies.\n- Incident handling, business continuity and crisis management.\n- Supply chain security, and security in acquisition, development and maintenance.\n- Basic cyber hygiene, training, cryptography, access control and the use of multi-factor authentication."
+        },
+        {
+          "heading": "4. Oversight of Implementation",
+          "body": "The management body oversees the implementation of those measures and reviews their effectiveness at a defined cadence.\n[FILL IN: state how often cybersecurity is a management-body agenda item.]"
+        },
+        {
+          "heading": "5. Training",
+          "body": "Members of the management body follow cybersecurity training so they can identify risks and assess risk-management practices, and the organisation offers similar training to its staff."
+        },
+        {
+          "heading": "6. Accountability",
+          "body": "The management body remains accountable for the organisation's compliance with its NIS2 obligations."
+        },
+        {
+          "heading": "7. Roles & Responsibilities",
+          "body": "",
+          "table": {
+            "columns": [
+              "Role",
+              "Responsibilities"
+            ],
+            "rows": [
+              [
+                "Management body",
+                "Approves measures, oversees implementation, undertakes training."
+              ],
+              [
+                "CISO / Security Lead",
+                "Owns the policy, approves exceptions, monitors compliance and reports to leadership."
+              ],
+              [
+                "All staff",
+                "Complete the cybersecurity training offered."
+              ]
+            ]
+          }
+        },
+        {
+          "heading": "8. Compliance & Enforcement",
+          "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+        },
+        {
+          "heading": "9. Exceptions",
+          "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+        },
+        {
+          "heading": "10. Review",
+          "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+        }
+      ]
+    },
+    {
+      "type": "nis2__nis2_incident_reporting_procedure_template_2",
+      "label": "Incident Reporting Procedure",
+      "control_ref": null,
+      "sections": [
+        {
+          "heading": "1. Purpose",
+          "body": "This procedure ensures the organisation reports significant incidents to the CSIRT or competent authority within the deadlines set by the NIS2 directive, and notifies the recipients of its services where appropriate."
+        },
+        {
+          "heading": "2. Scope",
+          "body": "All significant incidents affecting the network and information systems used to provide the organisation's services."
+        },
+        {
+          "heading": "3. Determine Significance",
+          "body": "An incident is significant, and therefore reportable, if it meets either threshold:\n- It has caused or is capable of causing severe operational disruption of the services or financial loss to the entity, or\n- It has affected or is capable of affecting other natural or legal persons by causing considerable material or non-material damage.\n- [FILL IN: record your significance criteria and who decides.]"
+        },
+        {
+          "heading": "4. Early Warning (within 24 hours)",
+          "body": "Within 24 hours of becoming aware of a significant incident, submit an early warning to the CSIRT or competent authority, indicating whether it is suspected to be caused by unlawful or malicious acts or could have a cross-border impact."
+        },
+        {
+          "heading": "5. Incident Notification (within 72 hours)",
+          "body": "Within 72 hours of becoming aware, submit an incident notification updating the early warning and providing an initial assessment, including severity, impact and any indicators of compromise."
+        },
+        {
+          "heading": "6. Final Report (within one month)",
+          "body": "No later than one month after the notification, submit a final report with a detailed description, the type of threat or root cause, the mitigation applied and any cross-border impact."
+        },
+        {
+          "heading": "7. Notify Service Recipients",
+          "body": "Where appropriate, notify the recipients of the affected services of the incident and of any measures or remedies they can take."
+        },
+        {
+          "heading": "8. Roles & Responsibilities",
+          "body": "",
+          "table": {
+            "columns": [
+              "Role",
+              "Responsibilities"
+            ],
+            "rows": [
+              [
+                "Incident lead",
+                "Runs the reporting workflow and meets the deadlines."
+              ],
+              [
+                "CISO / Security Lead",
+                "Owns the policy, approves exceptions, monitors compliance and reports to leadership."
+              ],
+              [
+                "IT / Operations",
+                "Implements and maintains the technical controls described in this document."
+              ]
+            ]
+          }
+        },
+        {
+          "heading": "9. Testing & Maintenance",
+          "body": "This plan is reviewed at least annually and after every activation or major change. Exercises (tabletop or full) are scheduled to validate the plan and results are recorded as improvement actions."
+        }
+      ]
+    },
+    {
+      "type": "nis2__nis2_risk_management_measures_policy_template_2",
+      "label": "Risk Management Measures Policy",
+      "control_ref": null,
+      "sections": [
+        {
+          "heading": "1. Purpose",
+          "body": "This policy sets out the cybersecurity risk-management measures the organisation applies to manage the risks to its network and information systems, using an all-hazards approach, as required of essential and important entities under the NIS2 directive."
+        },
+        {
+          "heading": "2. Scope",
+          "body": "All network and information systems the organisation uses to provide its services, and the people and processes that support them."
+        },
+        {
+          "heading": "3. Risk Analysis and System Security",
+          "body": "The foundation is a documented, all-hazards approach to risk:\n- The organisation maintains policies on risk analysis and on the security of its information systems.\n- Risk is treated on an all-hazards basis, covering cyber, physical and environmental threats.\n- The measures below are applied proportionately to the risks identified.\n- [FILL IN: reference your risk methodology and security policy.]"
+        },
+        {
+          "heading": "4. Incident Handling",
+          "body": "Incidents are detected, handled and reported through a defined process, including the NIS2 reporting timeline (see the Incident Reporting Procedure)."
+        },
+        {
+          "heading": "5. Business Continuity and Crisis Management",
+          "body": "Backup management, disaster recovery and crisis management keep critical services running and recoverable."
+        },
+        {
+          "heading": "6. Supply Chain Security",
+          "body": "Security in the relationships with direct suppliers and service providers is managed (see the Supply Chain Security Policy)."
+        },
+        {
+          "heading": "7. Secure Acquisition, Development and Maintenance",
+          "body": "Security is built into the acquisition, development and maintenance of network and information systems, including vulnerability handling and disclosure."
+        },
+        {
+          "heading": "8. Effectiveness Assessment",
+          "body": "The organisation has policies and procedures to assess whether its cybersecurity risk-management measures are effective, and improves them."
+        },
+        {
+          "heading": "9. Cyber Hygiene and Training",
+          "body": "Basic cyber hygiene practices and cybersecurity training are provided (see the Cyber Hygiene and Training Policy)."
+        },
+        {
+          "heading": "10. Cryptography",
+          "body": "Policies and procedures govern the use of cryptography and, where appropriate, encryption (see the Cryptography Policy)."
+        },
+        {
+          "heading": "11. Human Resources, Access Control and Asset Management",
+          "body": "Human resources security, access control and asset management protect systems and data."
+        },
+        {
+          "heading": "12. Authentication and Secure Communications",
+          "body": "Multi-factor or continuous authentication, secured voice, video and text communications and secured emergency communications are used where appropriate."
+        },
+        {
+          "heading": "13. Roles & Responsibilities",
+          "body": "",
+          "table": {
+            "columns": [
+              "Role",
+              "Responsibilities"
+            ],
+            "rows": [
+              [
+                "Management body",
+                "Approves these measures and oversees their implementation."
+              ],
+              [
+                "CISO / Security Lead",
+                "Owns the policy, approves exceptions, monitors compliance and reports to leadership."
+              ],
+              [
+                "IT / Operations",
+                "Implements and maintains the technical controls described in this document."
+              ]
+            ]
+          }
+        },
+        {
+          "heading": "14. Compliance & Enforcement",
+          "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+        },
+        {
+          "heading": "15. Exceptions",
+          "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+        },
+        {
+          "heading": "16. Review",
+          "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+        }
+      ]
+    },
+    {
+      "type": "nis2__nis2_supply_chain_security_policy_template_2",
+      "label": "Supply Chain Security Policy",
+      "control_ref": null,
+      "sections": [
+        {
+          "heading": "1. Purpose",
+          "body": "This policy manages the security risks arising from the organisation's suppliers and service providers, which NIS2 requires essential and important entities to address as part of their risk-management measures."
+        },
+        {
+          "heading": "2. Scope",
+          "body": "All direct suppliers and service providers whose products or services support the organisation's network and information systems."
+        },
+        {
+          "heading": "3. Supplier Security Requirements",
+          "body": "Security requirements are set for suppliers and providers proportionate to the criticality of what they supply, and are reflected in contracts:\n- Requirements cover the provider's own security measures and its handling of the organisation's data and access.\n- Contracts require the provider to notify the organisation of incidents affecting the services supplied.\n- Requirements are stricter for suppliers that support critical or important functions."
+        },
+        {
+          "heading": "4. Assessing Suppliers",
+          "body": "The security of direct suppliers and providers is assessed, taking into account their specific vulnerabilities, the quality of their products and cybersecurity practices, and any coordinated security risk assessments of critical supply chains."
+        },
+        {
+          "heading": "5. Ongoing Management",
+          "body": "Critical suppliers are recorded in the supplier register and reassessed periodically and on significant change.\n[FILL IN: define your supplier criticality tiers and review cadence.]"
+        },
+        {
+          "heading": "6. Roles & Responsibilities",
+          "body": "",
+          "table": {
+            "columns": [
+              "Role",
+              "Responsibilities"
+            ],
+            "rows": [
+              [
+                "Procurement",
+                "Sets supplier requirements and manages contracts."
+              ],
+              [
+                "CISO / Security Lead",
+                "Owns the policy, approves exceptions, monitors compliance and reports to leadership."
+              ],
+              [
+                "IT / Operations",
+                "Implements and maintains the technical controls described in this document."
+              ]
+            ]
+          }
+        },
+        {
+          "heading": "7. Compliance & Enforcement",
+          "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+        },
+        {
+          "heading": "8. Exceptions",
+          "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+        },
+        {
+          "heading": "9. Review",
+          "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+        }
+      ]
     }
-   ]
-  }
- ]
+  ]
 }

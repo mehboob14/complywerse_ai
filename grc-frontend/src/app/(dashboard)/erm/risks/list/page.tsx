@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect, Fragment } from 'react';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { usePermissions } from '@/hooks/usePermissions';
 import * as XLSX from 'xlsx';
-import { adminApi, assetsApi, ermApi, teamsApi } from '@/lib/api';
+import { adminApi, assetsApi, ermApi, teamsApi, aiRecommendationsApi } from '@/lib/api';
 import apiClient from '@/lib/api';
 import { ITAsset, Risk, RiskCategory, RiskStatus, RiskDashboard, HeatmapCell } from '@/types';
 import {
@@ -2032,6 +2032,7 @@ function RiskModal({
     residual_impact: risk?.residual_impact || 2,
     treatment_plan: risk?.treatment_plan || '',
     root_cause: (risk as unknown as { root_cause?: string } | null)?.root_cause || '',
+    consequences: (risk as unknown as { consequences?: string } | null)?.consequences || '',
     recommendations: (risk as unknown as { recommendations?: string } | null)?.recommendations || '',
   });
   const [assetSearch, setAssetSearch] = useState('');
@@ -2057,9 +2058,46 @@ function RiskModal({
 
   const [aiSuggestions, setAiSuggestions] = useState<AISuggestion | null>(null);
   const [isLoadingAI, setIsLoadingAI] = useState(false);
-  const [isGeneratingTreatment, setIsGeneratingTreatment] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+  // Which AI sections the user has "saved to field" — the button flips to "Saved".
+  const [savedSections, setSavedSections] = useState<Set<string>>(new Set());
+  // Recommended Controls is collapsed by default (it otherwise consumes space).
+  const [showControls, setShowControls] = useState(false);
+
+  // Rehydrate a previously "Saved for team" AI suggestion when the modal reopens
+  // for an existing risk. The modal unmounts on close and resets state, so
+  // without this the saved panel is blank until the user re-runs AI Assist.
+  useEffect(() => {
+    const rid = risk?.id;
+    if (!rid) return;
+    let cancelled = false;
+    aiRecommendationsApi
+      .list({ module: 'erm_risk_suggestion', recommendation_type: 'ai_suggestion', entity_type: 'risk', entity_id: String(rid) })
+      .then((res) => {
+        if (cancelled) return;
+        const found = ((res.data as { items?: Array<{ output?: unknown }> })?.items || [])[0];
+        if (found?.output) {
+          // Normalize so a partial/older saved record never throws on render
+          // (the panel maps over these arrays unconditionally).
+          const o = found.output as Partial<AISuggestion>;
+          setAiSuggestions({
+            suggested_description: o.suggested_description || '',
+            suggested_causes: o.suggested_causes || [],
+            suggested_consequences: o.suggested_consequences || [],
+            suggested_recommendations: o.suggested_recommendations || [],
+            recommended_controls: o.recommended_controls || [],
+            suggested_likelihood: o.suggested_likelihood || 0,
+            suggested_impact: o.suggested_impact || 0,
+            risk_treatment_options: o.risk_treatment_options || [],
+          });
+          setShowSuggestions(true);
+          setSavedSections(new Set());
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [risk?.id]);
 
   const { data: users } = useQuery({
     queryKey: ['users'],
@@ -2238,6 +2276,7 @@ function RiskModal({
       });
       setAiSuggestions(response.data);
       setShowSuggestions(true);
+      setSavedSections(new Set());
     } catch (err) {
       console.error('AI suggestion error:', err);
       setAiError('Failed to get AI suggestions. Please try again.');
@@ -2252,20 +2291,29 @@ function RiskModal({
     }
   };
 
-  // Save the AI-suggested root causes / recommendations into their OWN fields
-  // (the user reviews them in the panel, then clicks to save).
+  // Save an AI section into its OWN field as a NUMBERED list (1. 2. 3.) and flip
+  // that section's "Save to field" button to "Saved".
+  const markSaved = (key: string) => setSavedSections((prev) => new Set(prev).add(key));
+  const numbered = (items: string[]) => items.map((t, i) => `${i + 1}. ${t}`).join('\n');
   const applyRootCauses = () => {
     const causes = aiSuggestions?.suggested_causes || [];
-    if (causes.length) {
-      setFormData((prev) => ({ ...prev, root_cause: causes.map((c) => `• ${c}`).join('\n') }));
-    }
+    if (causes.length) { setFormData((prev) => ({ ...prev, root_cause: numbered(causes) })); markSaved('rootCauses'); }
   };
   const applyRecommendations = () => {
     const recs = aiSuggestions?.suggested_recommendations || [];
-    if (recs.length) {
-      setFormData((prev) => ({ ...prev, recommendations: recs.map((r) => `• ${r}`).join('\n') }));
-    }
+    if (recs.length) { setFormData((prev) => ({ ...prev, recommendations: numbered(recs) })); markSaved('recommendations'); }
   };
+  const applyConsequences = () => {
+    const cons = aiSuggestions?.suggested_consequences || [];
+    if (cons.length) { setFormData((prev) => ({ ...prev, consequences: numbered(cons) })); markSaved('consequences'); }
+  };
+  const applyTreatmentOptions = () => {
+    const opts = aiSuggestions?.risk_treatment_options || [];
+    if (opts.length) { setFormData((prev) => ({ ...prev, treatment_plan: numbered(opts) })); markSaved('treatment'); }
+  };
+  // Per-section "Save to field" button styling + label (flips to "Saved").
+  const savedBtnClass = (k: string) => `flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium ${savedSections.has(k) ? 'text-emerald-600' : 'text-primary-600 hover:bg-primary-50'}`;
+  const savedBtnLabel = (k: string) => (savedSections.has(k) ? 'Saved' : 'Save to field');
 
   const applyLikelihoodImpact = () => {
     if (aiSuggestions) {
@@ -2277,18 +2325,23 @@ function RiskModal({
     }
   };
 
-  const appendCauseToDescription = (cause: string) => {
-    const causesSection = formData.description.includes('Root Causes:') 
-      ? formData.description 
-      : formData.description + (formData.description ? '\n\n' : '') + 'Root Causes:\n';
-    setFormData({ ...formData, description: causesSection + `â€¢ ${cause}\n` });
+  // Clicking a single AI chip appends that one item into its OWN dedicated
+  // field (Root Cause / Consequences), NOT the description — so the field the
+  // user is about to save visibly fills up. Deduped against lines already there.
+  const appendCauseToRootCause = (cause: string) => {
+    setFormData((prev) => {
+      const entry = `• ${cause}`;
+      if (prev.root_cause.split('\n').some((l) => l.trim() === entry)) return prev;
+      return { ...prev, root_cause: prev.root_cause ? `${prev.root_cause}\n${entry}` : entry };
+    });
   };
 
-  const appendConsequenceToDescription = (consequence: string) => {
-    const consequenceSection = formData.description.includes('Potential Consequences:')
-      ? formData.description
-      : formData.description + (formData.description ? '\n\n' : '') + 'Potential Consequences:\n';
-    setFormData({ ...formData, description: consequenceSection + `â€¢ ${consequence}\n` });
+  const appendConsequenceToField = (consequence: string) => {
+    setFormData((prev) => {
+      const entry = `• ${consequence}`;
+      if (prev.consequences.split('\n').some((l) => l.trim() === entry)) return prev;
+      return { ...prev, consequences: prev.consequences ? `${prev.consequences}\n${entry}` : entry };
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -2494,42 +2547,34 @@ function RiskModal({
                       <div>
                         <div className="flex items-center justify-between mb-2">
                           <h4 className="text-xs font-medium text-slate-600 uppercase tracking-wider">Root Causes</h4>
-                          <button
-                            type="button"
-                            onClick={applyRootCauses}
-                            className="flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium text-primary-600 hover:bg-primary-50"
-                          >
-                            <Check className="h-3 w-3" /> Save to field
+                          <button type="button" onClick={applyRootCauses} className={savedBtnClass('rootCauses')}>
+                            <Check className="h-3 w-3" /> {savedBtnLabel('rootCauses')}
                           </button>
                         </div>
-                        <div className="flex flex-wrap gap-1">
+                        <ol className="space-y-1">
                           {aiSuggestions.suggested_causes.map((cause, idx) => (
-                            <button
-                              key={idx}
-                              type="button"
-                              onClick={() => appendCauseToDescription(cause)}
-                              title="Append to description"
-                              className="rounded-full bg-rose-100 px-2.5 py-1 text-xs text-rose-700 hover:bg-rose-200 transition-colors border border-rose-200"
-                            >
-                              + {cause}
-                            </button>
+                            <li key={idx} className="flex gap-2 rounded-md border border-rose-100 bg-rose-50 px-2.5 py-1.5 text-xs text-rose-800">
+                              <span className="font-semibold text-rose-500">{idx + 1}.</span>
+                              <span>{cause}</span>
+                            </li>
                           ))}
-                        </div>
+                        </ol>
                       </div>
                       <div>
-                        <h4 className="text-xs font-medium text-slate-600 uppercase tracking-wider mb-2">Consequences</h4>
-                        <div className="flex flex-wrap gap-1">
-                          {aiSuggestions.suggested_consequences.map((consequence, idx) => (
-                            <button
-                              key={idx}
-                              type="button"
-                              onClick={() => appendConsequenceToDescription(consequence)}
-                              className="rounded-full bg-orange-100 px-2.5 py-1 text-xs text-orange-700 hover:bg-orange-200 transition-colors border border-orange-200"
-                            >
-                              + {consequence}
-                            </button>
-                          ))}
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="text-xs font-medium text-slate-600 uppercase tracking-wider">Consequences</h4>
+                          <button type="button" onClick={applyConsequences} className={savedBtnClass('consequences')}>
+                            <Check className="h-3 w-3" /> {savedBtnLabel('consequences')}
+                          </button>
                         </div>
+                        <ol className="space-y-1">
+                          {aiSuggestions.suggested_consequences.map((consequence, idx) => (
+                            <li key={idx} className="flex gap-2 rounded-md border border-orange-100 bg-orange-50 px-2.5 py-1.5 text-xs text-orange-800">
+                              <span className="font-semibold text-orange-500">{idx + 1}.</span>
+                              <span>{consequence}</span>
+                            </li>
+                          ))}
+                        </ol>
                       </div>
                     </div>
 
@@ -2537,22 +2582,18 @@ function RiskModal({
                       <div>
                         <div className="flex items-center justify-between mb-2">
                           <h4 className="text-xs font-medium text-slate-600 uppercase tracking-wider">Recommendations</h4>
-                          <button
-                            type="button"
-                            onClick={applyRecommendations}
-                            className="flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium text-primary-600 hover:bg-primary-50"
-                          >
-                            <Check className="h-3 w-3" /> Save to field
+                          <button type="button" onClick={applyRecommendations} className={savedBtnClass('recommendations')}>
+                            <Check className="h-3 w-3" /> {savedBtnLabel('recommendations')}
                           </button>
                         </div>
-                        <ul className="space-y-1">
+                        <ol className="space-y-1">
                           {aiSuggestions.suggested_recommendations.map((rec, idx) => (
                             <li key={idx} className="flex items-start gap-2 text-sm text-slate-700">
-                              <span className="mt-0.5 text-emerald-500">•</span>
+                              <span className="font-semibold text-emerald-500">{idx + 1}.</span>
                               <span>{rec}</span>
                             </li>
                           ))}
-                        </ul>
+                        </ol>
                       </div>
                     )}
 
@@ -2592,7 +2633,15 @@ function RiskModal({
 
                     {aiSuggestions.recommended_controls.length > 0 && (
                       <div>
-                        <h4 className="text-xs font-medium text-slate-600 uppercase tracking-wider mb-2">Recommended Controls</h4>
+                        <button
+                          type="button"
+                          onClick={() => setShowControls((s) => !s)}
+                          className="mb-2 flex w-full items-center justify-between text-left"
+                        >
+                          <h4 className="text-xs font-medium text-slate-600 uppercase tracking-wider">Recommended Controls ({aiSuggestions.recommended_controls.length})</h4>
+                          {showControls ? <ChevronUp className="h-4 w-4 text-slate-500" /> : <ChevronDown className="h-4 w-4 text-slate-500" />}
+                        </button>
+                        {showControls && (
                         <div className="space-y-2">
                           {aiSuggestions.recommended_controls.map((control) => (
                             <div
@@ -2634,21 +2683,25 @@ function RiskModal({
                             </div>
                           ))}
                         </div>
+                        )}
                       </div>
                     )}
 
                     <div>
-                      <h4 className="text-xs font-medium text-slate-600 uppercase tracking-wider mb-2">Treatment Options</h4>
-                      <div className="flex flex-wrap gap-2">
-                        {aiSuggestions.risk_treatment_options.map((option, idx) => (
-                          <span
-                            key={idx}
-                            className="rounded-full bg-primary-100 px-3 py-1 text-xs text-primary-700"
-                          >
-                            {option}
-                          </span>
-                        ))}
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="text-xs font-medium text-slate-600 uppercase tracking-wider">Treatment Options</h4>
+                        <button type="button" onClick={applyTreatmentOptions} className={savedBtnClass('treatment')}>
+                          <Check className="h-3 w-3" /> {savedBtnLabel('treatment')}
+                        </button>
                       </div>
+                      <ol className="space-y-1">
+                        {aiSuggestions.risk_treatment_options.map((option, idx) => (
+                          <li key={idx} className="flex gap-2 rounded-md border border-primary-100 bg-primary-50 px-2.5 py-1.5 text-xs text-primary-800">
+                            <span className="font-semibold text-primary-500">{idx + 1}.</span>
+                            <span>{option}</span>
+                          </li>
+                        ))}
+                      </ol>
                     </div>
                   </div>
                 )}
@@ -2972,44 +3025,19 @@ function RiskModal({
           </div>
 
           <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="block text-sm font-medium text-slate-800">Treatment Plan</label>
-              {risk && (
-                <button
-                  type="button"
-                  onClick={async () => {
-                    setIsGeneratingTreatment(true);
-                    try {
-                      const response = await ermApi.risks.generateTreatmentPlan(risk.id);
-                      setFormData(prev => ({ ...prev, treatment_plan: response.data.treatment_plan }));
-                    } catch {
-                      setAiError('Failed to generate treatment plan');
-                    } finally {
-                      setIsGeneratingTreatment(false);
-                    }
-                  }}
-                  disabled={isGeneratingTreatment}
-                  className="flex items-center gap-1.5 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-[#0a0a0a] hover:bg-primary-700 disabled:opacity-50 transition-all"
-                >
-                  {isGeneratingTreatment ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Sparkles className="h-3.5 w-3.5" />
-                  )}
-                  AI Generate Treatment Plan
-                </button>
-              )}
-            </div>
+            <label className="block text-sm font-medium text-slate-800 mb-1">Treatment Plan</label>
             <textarea
               value={formData.treatment_plan}
               onChange={(e) => setFormData({ ...formData, treatment_plan: e.target.value })}
               className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               rows={formData.treatment_plan.length > 200 ? 8 : 2}
+              placeholder="Treatment approach (use AI Assist → Treatment Options → Save to field, or write your own)…"
             />
           </div>
 
-          {/* Root Cause + Recommendations — reviewable AI-assist fields, also
-              free-text editable. "Save to field" in the AI panel fills these. */}
+          {/* Root Cause + Consequences + Recommendations — reviewable AI-assist
+              fields, also free-text editable. AI panel chips append into these
+              fields, and "Save to field" fills them wholesale. */}
           <div>
             <label className="block text-sm font-medium text-slate-800 mb-1">Root Cause</label>
             <textarea
@@ -3018,6 +3046,16 @@ function RiskModal({
               className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               rows={formData.root_cause.length > 200 ? 6 : 2}
               placeholder="Why this risk exists (use AI Assist → Root Causes → Save to field, or write your own)…"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-800 mb-1">Consequences</label>
+            <textarea
+              value={formData.consequences}
+              onChange={(e) => setFormData({ ...formData, consequences: e.target.value })}
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              rows={formData.consequences.length > 200 ? 6 : 2}
+              placeholder="Potential impact/consequences if this risk materializes (AI Assist → Consequences → Save to field, or write your own)…"
             />
           </div>
           <div>

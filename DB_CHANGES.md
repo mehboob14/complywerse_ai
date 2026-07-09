@@ -32,6 +32,50 @@ you know nothing extra needs to run on Ubuntu.
 
 ---
 
+## 2026-07-06 — ERM risk register: new `consequences` column (auto-applied)
+
+### What
+
+**One new column — `grc_risks.consequences` (TEXT, nullable).** Added to
+the `Risk` model in
+[`backend/grc/models/_11_enterprise_risk_management.py`](backend/grc/models/_11_enterprise_risk_management.py)
+(next to the existing `root_cause` / `recommendations` AI-assist columns),
+plus the matching Pydantic fields on `RiskCreate` / `RiskUpdate` /
+`RiskResponse` and assignment in `create_risk`. Fixes the bug where an
+AI-generated risk's **Consequences** were never saved (the field didn't
+exist anywhere in the stack) and the **Root Cause** AI chips wrote into the
+description instead of the Root Cause field.
+
+### Why
+
+AI-generated risk root cause & consequences were not being saved/updated —
+`consequences` had no column, schema field, assignment, or serialization.
+
+### How
+
+```sql
+-- Auto-applied via schema_migrations.py _COLUMN_ADDS on next request/startup.
+-- Shown for visibility / manual replay only. Idempotent.
+ALTER TABLE grc_risks ADD COLUMN IF NOT EXISTS consequences TEXT;
+```
+
+Registered in
+[`backend/grc/modules/compliance/schema_migrations.py`](backend/grc/modules/compliance/schema_migrations.py)
+as `("grc_risks", "consequences", "TEXT", None)`.
+
+### Risk
+
+Safe no-op on tenants that already have the column (`ADD COLUMN IF NOT
+EXISTS`). Nullable, so existing rows are unaffected.
+
+### Auto-applied?
+
+**Yes** — `schema_migrations.py` runs the ALTER on the next request/startup
+per tenant DB. Requires the backend to be restarted (user does this) for the
+model + schema to reload.
+
+---
+
 ## 2026-07-05 — Controls workbench: standalone per-control ownership (NEW TABLE, auto-applied) + code-only UI
 
 ### What

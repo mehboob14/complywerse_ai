@@ -63,6 +63,9 @@ export interface RegisterColumn {
   grow?: boolean;
   /** When set, the edit-form field for this column is a picker instead of a plain input. */
   picker?: 'framework_risks' | 'framework_controls' | 'users';
+  /** For a framework_controls picker: on select, also fill this column with the
+   *  chosen requirement's description (so one dropdown fills ref + text). */
+  autofillTitleKey?: keyof RegisterEntry;
 }
 
 export interface FormSection {
@@ -140,7 +143,7 @@ export const REGISTER_CONFIGS: Record<string, RegisterConfig> = {
     coverage: true,
     moveToRisk: true,
     columns: [
-      { key: 'reference', label: 'Clause / area', type: 'text', minWidth: '130px' },
+      { key: 'reference', label: 'Clause / area', type: 'text', minWidth: '130px', picker: 'framework_controls', autofillTitleKey: 'title' },
       { key: 'title', label: 'Requirement', type: 'textarea', grow: true },
       { key: 'status', label: 'Status', type: 'select', options: GAP_STATUS, minWidth: '132px' },
       { key: 'action', label: 'Gap / action', type: 'textarea', grow: true },

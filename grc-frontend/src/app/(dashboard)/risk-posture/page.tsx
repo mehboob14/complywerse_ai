@@ -6,7 +6,7 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { ResponsiveContainer, RadialBarChart, RadialBar, PolarAngleAxis } from 'recharts';
-import { ShieldAlert, SlidersHorizontal, Search as SearchIcon, Crown } from 'lucide-react';
+import { ShieldAlert, SlidersHorizontal, Search as SearchIcon, Crown, Eye } from 'lucide-react';
 import { riskPostureApi } from '@/lib/api';
 import EmptyState from '@/components/common/EmptyState';
 import WeightsPanel from './_weights-panel';
@@ -144,7 +144,7 @@ export default function RiskPosturePage() {
   const { summary } = q.data;
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
+    <div className="p-4 space-y-4">
       <WeightsPanel open={weightsOpen} onClose={() => setWeightsOpen(false)} />
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-2.5 min-w-0">
@@ -404,9 +404,11 @@ export default function RiskPosturePage() {
                   <td className="px-4 py-3 text-right">
                     <Link
                       href={`/risk-posture/asset/${a.id}`}
-                      className="text-xs text-primary-700 hover:underline"
+                      title="View details"
+                      aria-label="View details"
+                      className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-primary-700"
                     >
-                      Drill down
+                      <Eye className="h-4 w-4" strokeWidth={1.75} />
                     </Link>
                   </td>
                 </tr>

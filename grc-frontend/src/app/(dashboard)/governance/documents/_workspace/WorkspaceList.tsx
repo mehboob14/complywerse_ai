@@ -185,7 +185,7 @@ export function WorkspaceList({
 
                 <span className="hidden w-40 shrink-0 md:flex">
                   <FrameworkPills
-                    ids={doc.applicable_framework_ids ?? doc.framework_ids ?? []}
+                    ids={doc.framework_ids ?? []}
                     nameMap={nameMap}
                   />
                 </span>

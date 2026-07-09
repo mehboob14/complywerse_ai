@@ -316,6 +316,12 @@ _COLUMN_ADDS = [
     ("grc_policy_gap_findings", "replacement_mode", "VARCHAR(20)", None),
     ("grc_policy_gap_findings", "original_clause_text", "TEXT", None),
     ("grc_policy_gap_findings", "applied_version_id", "INTEGER", None),
+    ("grc_policy_gap_findings", "applied_prev_status", "VARCHAR(50)", None),
+    # Statement-register sync on clause apply (+ pre-change text for undo).
+    ("grc_policy_gap_findings", "applied_statement_id", "INTEGER", None),
+    ("grc_policy_gap_findings", "applied_statement_prev_text", "TEXT", None),
+    # BCM BIA → IT asset inventory linkage (added after tables were provisioned).
+    ("grc_bcm_bia_records", "linked_asset_ids", "JSON", None),
     # ERM provenance — where each risk originated (manual entry, register
     # import, assessment, incident, RCSA, framework gap, UBL/NCA bridge).
     # All nullable so existing risks remain untouched; populated by writers
@@ -334,6 +340,10 @@ _COLUMN_ADDS = [
     ("grc_framework_risk_questions", "phase_code", "VARCHAR(50)", None),
     ("grc_framework_risk_questions", "clause_reference", "VARCHAR(100)", None),
     ("grc_framework_risk_questions", "methodology_fields", "JSON", None),
+    # Per-stage owner assignment on a certification journey (user/team/role).
+    ("grc_certification_journeys", "stage_owners", "JSON", None),
+    # PCI DSS cardholder-data-inventory attributes on CDE assets.
+    ("grc_it_assets", "pci_dss", "JSON", None),
     ("grc_framework_risk_questions", "source_quote", "TEXT", None),
     # Vulnerability enrichment columns — NVD / EPSS / CISA KEV. All nullable
     # with conservative defaults so existing rows stay valid; populated on
@@ -607,8 +617,9 @@ _COLUMN_ADDS = [
     ("grc_vendor_assessments", "gap_analysis", "JSON DEFAULT '[]'::json", None),
     ("grc_vendor_incidents", "linked_issue_id", "INTEGER",
      "ix_grc_vendor_incidents_linked_issue_id"),
-    # ── ERM risk register: reviewable AI-assist fields (root cause + recommendations) ──
+    # ── ERM risk register: reviewable AI-assist fields (root cause + consequences + recommendations) ──
     ("grc_risks", "root_cause", "TEXT", None),
+    ("grc_risks", "consequences", "TEXT", None),
     ("grc_risks", "recommendations", "TEXT", None),
     # ── TPRA productionization (11-stage versioned lifecycle). New TPRA tables
     # (grc_tpra_*, grc_risk_domains) are auto-created via create_all; only these
@@ -637,6 +648,14 @@ _COLUMN_ADDS = [
     # Drives the control-coverage panel (mapped / recommended / missing controls).
     ("grc_governance_documents", "applicable_framework_ids",
      "JSON DEFAULT '[]'::json", None),
+    # Statement-of-Applicability template fields on the clause-applicability row
+    # (owner / implementation status / linked evidence). Surfaced on the
+    # framework detail "Applicability" tab.
+    ("grc_clause_applicability", "owner_id", "INTEGER",
+     "ix_grc_clause_applicability_owner_id"),
+    ("grc_clause_applicability", "owner_name", "VARCHAR(255)", None),
+    ("grc_clause_applicability", "implementation_status", "VARCHAR(50)", None),
+    ("grc_clause_applicability", "linked_evidence_id", "INTEGER", None),
 ]
 
 

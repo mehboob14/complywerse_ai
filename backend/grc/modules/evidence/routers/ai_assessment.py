@@ -8,7 +8,7 @@ import logging
 from typing import List, Optional
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import desc, or_
 from pydantic import BaseModel
 from openai import OpenAI
@@ -285,28 +285,107 @@ def compute_content_hash(content: str) -> str:
     return hashlib.sha256(content.encode('utf-8')).hexdigest()
 
 
+def _assessment_parse_fallback() -> dict:
+    return {
+        "relevance_score": 50,
+        "adequacy_score": 50,
+        "audit_readiness": 50,
+        "confidence_score": 30,
+        "summary": "Unable to parse AI response",
+        "detected_controls": [],
+        "clause_mappings": [],
+        "gaps": ["Assessment parsing failed"],
+        "recommendations": ["Re-run assessment"]
+    }
+
+
+def _balance_json(s: str) -> Optional[str]:
+    """Best-effort repair of a JSON object truncated mid-output (the model ran
+    out of tokens): close an open string and any unclosed brackets so the
+    largest recoverable prefix can still be json.loads-ed. Returns None when
+    the input already looks balanced (nothing to repair)."""
+    in_str = False
+    escape = False
+    stack: List[str] = []
+    for ch in s:
+        if escape:
+            escape = False
+            continue
+        if ch == "\\":
+            if in_str:
+                escape = True
+            continue
+        if ch == '"':
+            in_str = not in_str
+            continue
+        if in_str:
+            continue
+        if ch in "{[":
+            stack.append(ch)
+        elif ch == "}" and stack and stack[-1] == "{":
+            stack.pop()
+        elif ch == "]" and stack and stack[-1] == "[":
+            stack.pop()
+    if not stack and not in_str:
+        return None
+    repaired = s
+    if in_str:
+        repaired += '"'
+    for opener in reversed(stack):
+        repaired += "}" if opener == "{" else "]"
+    return repaired
+
+
 def parse_ai_response(response_text: str) -> dict:
+    """Parse the model's JSON assessment. Robust to code fences, leading/
+    trailing prose, and — most importantly — output truncated mid-JSON when the
+    response is long (many control mappings). Only falls back to the neutral
+    placeholder when nothing at all can be salvaged."""
+    if not response_text or not response_text.strip():
+        return _assessment_parse_fallback()
+
+    cleaned = response_text.strip()
+    if cleaned.startswith("```json"):
+        cleaned = cleaned[7:]
+    elif cleaned.startswith("```"):
+        cleaned = cleaned[3:]
+    if cleaned.endswith("```"):
+        cleaned = cleaned[:-3]
+    cleaned = cleaned.strip()
+
+    # 1) Straight parse.
     try:
-        cleaned = response_text.strip()
-        if cleaned.startswith("```json"):
-            cleaned = cleaned[7:]
-        if cleaned.startswith("```"):
-            cleaned = cleaned[3:]
-        if cleaned.endswith("```"):
-            cleaned = cleaned[:-3]
-        return json.loads(cleaned.strip())
+        return json.loads(cleaned)
     except json.JSONDecodeError:
-        return {
-            "relevance_score": 50,
-            "adequacy_score": 50,
-            "audit_readiness": 50,
-            "confidence_score": 30,
-            "summary": "Unable to parse AI response",
-            "detected_controls": [],
-            "clause_mappings": [],
-            "gaps": ["Assessment parsing failed"],
-            "recommendations": ["Re-run assessment"]
-        }
+        pass
+
+    # 2) Narrow to the outermost object span (drops any surrounding prose).
+    start = cleaned.find("{")
+    end = cleaned.rfind("}")
+    if start != -1 and end > start:
+        try:
+            return json.loads(cleaned[start:end + 1])
+        except json.JSONDecodeError:
+            pass
+
+    # 3) Salvage a response cut off mid-output by closing open brackets/strings.
+    if start != -1:
+        core = cleaned[start:].rstrip()
+        while core.endswith(","):
+            core = core[:-1].rstrip()
+        repaired = _balance_json(core)
+        if repaired is not None:
+            for bad, good in ((",}", "}"), (", }", " }"), (",]", "]"), (", ]", " ]")):
+                repaired = repaired.replace(bad, good)
+            try:
+                salvaged = json.loads(repaired)
+                if isinstance(salvaged, dict):
+                    salvaged.setdefault("_recovered", True)
+                    return salvaged
+            except json.JSONDecodeError:
+                pass
+
+    return _assessment_parse_fallback()
 
 
 def format_assessment_response(assessment: EvidenceAIAssessment) -> AssessmentResponse:
@@ -837,24 +916,45 @@ def run_ai_assessment(
             evidence_content=evidence.ocr_content[:12000]
         )
         
-        # Use deterministic parameters: temperature=0 for consistent output
-        # Note: seed parameter removed for compatibility with Replit AI integrations
-        response = client.chat.completions.create(
-            model=MODEL_VERSION,
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are a Senior GRC Compliance Expert. Provide precise, auditor-defensible assessments with exact clause-level control mappings. Never hallucinate control references - only include controls with explicit evidence support."
-                },
-                {
-                    "role": "user",
-                    "content": enhanced_prompt
-                }
-            ],
-            temperature=0,  # CRITICAL: Deterministic output
-            max_tokens=4000
-        )
-        
+        # Deterministic parameters + JSON mode. `response_format=json_object`
+        # forces syntactically valid JSON (the prompt requests JSON), and the
+        # larger token budget stops long responses (20–50+ control mappings)
+        # from truncating into unparseable JSON. The gpt-5.x compat shim maps
+        # max_tokens→max_completion_tokens and drops temperature transparently.
+        messages = [
+            {
+                "role": "system",
+                "content": "You are a Senior GRC Compliance Expert. Provide precise, auditor-defensible assessments with exact clause-level control mappings. Never hallucinate control references - only include controls with explicit evidence support. Respond with a single valid JSON object only."
+            },
+            {
+                "role": "user",
+                "content": enhanced_prompt
+            }
+        ]
+
+        # Retry the call a couple of times — auto-assessment runs unattended in a
+        # background thread, so a transient API hiccup should self-heal rather
+        # than surface as "AI assessment couldn't run".
+        response = None
+        last_api_error = None
+        for attempt in range(3):
+            try:
+                response = client.chat.completions.create(
+                    model=MODEL_VERSION,
+                    messages=messages,
+                    temperature=0,  # dropped by the shim for reasoning models
+                    max_tokens=8000,
+                    response_format={"type": "json_object"},
+                )
+                break
+            except Exception as api_exc:  # noqa: BLE001
+                last_api_error = api_exc
+                logger.warning("AI assessment API attempt %s/3 failed: %s", attempt + 1, api_exc)
+                if attempt < 2:
+                    time.sleep(1.0 * (attempt + 1))
+        if response is None:
+            raise last_api_error or RuntimeError("AI assessment API call failed")
+
         assessment_duration = int((time.time() - start_time) * 1000)
         ai_result = parse_ai_response(response.choices[0].message.content or "")
         
@@ -1593,7 +1693,8 @@ def _link_candidates(db: Session, target: str, evidence_id: int, user_tenants: L
             UploadedFramework.is_shared == True,  # noqa: E712
             UploadedFramework.tenant_id.is_(None),
         )
-        fw_ids = [fw.id for fw in db.query(UploadedFramework).filter(scope).all()]
+        fw_map = {fw.id: fw.name for fw in db.query(UploadedFramework).filter(scope).all()}
+        fw_ids = list(fw_map.keys())
         if not fw_ids:
             return []
         rows = (db.query(ParsedFrameworkControl)
@@ -1601,8 +1702,9 @@ def _link_candidates(db: Session, target: str, evidence_id: int, user_tenants: L
                 .order_by(ParsedFrameworkControl.control_id.asc()).limit(1200).all())
         return [{
             "id": c.id, "code": c.control_id, "title": (c.title or c.control_id),
-            "subtitle": (getattr(c, "description", None) or c.title or ""),
-            "kwtext": f"{c.control_id or ''} {c.original_reference or ''} {c.title or ''} {getattr(c, 'description', '') or ''}",
+            # Show which framework the control comes from — not just the clause.
+            "subtitle": (fw_map.get(c.uploaded_framework_id) or ""),
+            "kwtext": f"{c.control_id or ''} {c.original_reference or ''} {c.title or ''} {getattr(c, 'description', '') or ''} {fw_map.get(c.uploaded_framework_id) or ''}",
             "meta": {"framework_id": c.uploaded_framework_id},
         } for c in rows if c.id not in linked]
 
@@ -1638,13 +1740,18 @@ def _link_candidates(db: Session, target: str, evidence_id: int, user_tenants: L
 
     if target == "policy_statements":
         linked = _linked_ids(db, EvidencePolicyLink, EvidencePolicyLink.policy_statement_id, evidence_id)
-        rows = (db.query(PolicyStatement).filter(PolicyStatement.tenant_id.in_(user_tenants))
+        rows = (db.query(PolicyStatement).options(joinedload(PolicyStatement.document))
+                .filter(PolicyStatement.tenant_id.in_(user_tenants))
                 .order_by(desc(PolicyStatement.id)).limit(500).all())
+        # Title = the policy (document) NAME — the PS-xxxx code isn't useful to
+        # users. The specific statement summary goes to the subtitle.
         return [{
-            "id": p.id, "code": p.statement_code,
-            "title": (p.statement_summary or (p.statement_text or "")[:90]),
-            "subtitle": (p.statement_text or ""),
-            "kwtext": f"{p.statement_code or ''} {p.statement_summary or ''} {p.statement_text or ''} {p.category or ''}",
+            "id": p.id,
+            "code": None,
+            "title": (getattr(p.document, "title", None) if p.document else None)
+                     or p.statement_summary or (p.statement_text or "")[:90] or "Policy statement",
+            "subtitle": (p.statement_summary or (p.statement_text or "")[:120] or ""),
+            "kwtext": f"{p.statement_summary or ''} {p.statement_text or ''} {p.category or ''} {(getattr(p.document, 'title', '') if p.document else '')}",
         } for p in rows if p.id not in linked]
 
     return []

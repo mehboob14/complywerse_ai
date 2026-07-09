@@ -613,7 +613,7 @@ def get_me(
             "dashboard", "risks", "erm", "controls", "compliance", "evidence",
             "governance", "vulnerabilities", "assets", "frameworks", "reports",
             "admin", "integrations", "workflow_engine", "is_projects",
-            "critical_tasks",
+            "critical_tasks", "bcm",
         ]
     else:
         perms = []

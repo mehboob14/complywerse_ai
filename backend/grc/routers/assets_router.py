@@ -430,6 +430,7 @@ def create_asset(
         availability_rating=asset.availability_rating,
         valuation=asset.valuation,
         cde_environment=asset.cde_environment,
+        pci_dss=asset.pci_dss,
         # Phase 5.1 — Exposure metadata. None values are stored as NULL.
         internet_facing=bool(asset.internet_facing) if asset.internet_facing is not None else False,
         network_segment=asset.network_segment,

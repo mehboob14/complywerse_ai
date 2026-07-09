@@ -35,6 +35,8 @@ import {
   Gavel,
   Landmark,
   ShieldAlert,
+  LifeBuoy,
+  CalendarClock,
   // CIS integration icons
   type LucideIcon,
 } from "lucide-react";
@@ -53,6 +55,9 @@ interface NavItem {
   icon: LucideIcon;
   requiredPermissions?: string[];
   requiredModules?: string[];
+  /** Path prefix used for active-highlighting when it differs from href
+   *  (e.g. link to /frameworks/manage but stay highlighted across /frameworks). */
+  activeMatch?: string;
 }
 
 interface NavGroup {
@@ -69,13 +74,13 @@ type NavEntry = (NavItem & { requiredModules?: string[]; adminOnly?: boolean }) 
 const ADMIN_DEFAULT_MODULES = [
   'dashboard', 'risks', 'erm', 'controls', 'compliance', 'evidence', 'governance',
   'vulnerabilities', 'assets', 'frameworks', 'reports', 'admin', 'workflow_engine', 'integrations',
-  'is_projects', 'critical_tasks'
+  'is_projects', 'critical_tasks', 'bcm'
 ];
 
 const AUTHENTICATED_DEFAULT_MODULES = [
   'dashboard', 'risks', 'erm', 'controls', 'compliance', 'evidence', 'governance',
   'vulnerabilities', 'assets', 'frameworks', 'reports', 'workflow_engine', 'integrations',
-  'is_projects', 'critical_tasks'
+  'is_projects', 'critical_tasks', 'bcm'
 ];
 
 const normalizePerm = (perm: string): string => {
@@ -91,7 +96,7 @@ const extractModuleFromPerm = (perm: string): string => {
 
 const navigation: NavEntry[] = [
   {
-    name: 'Dashboard',
+    name: 'Posture Overview',
     href: '/dashboard',
     icon: LayoutDashboard,
     requiredModules: ['dashboard'],
@@ -102,10 +107,13 @@ const navigation: NavEntry[] = [
     icon: Landmark,
     requiredModules: ['governance'],
     items: [
-      { name: 'Documents', href: '/governance/documents', icon: ScrollText, requiredPermissions: ['governance:policies:*'] },
-      { name: 'Regulatory Changes', href: '/governance/regulatory-changes', icon: GitPullRequest, requiredPermissions: ['governance:regulatory_changes:*'] },
-      { name: 'Regulatory Feeds', href: '/governance/regulatory-feeds', icon: Rss, requiredPermissions: ['governance:regulatory_changes:*'] },
+      { name: 'Overview', href: '/governance', icon: LayoutDashboard, requiredPermissions: ['governance:policies:*'] },
+      { name: 'Document Management', href: '/governance/documents', icon: ScrollText, requiredPermissions: ['governance:policies:*'] },
       { name: 'Committees', href: '/governance/committees', icon: Users, requiredPermissions: ['governance:committees:*'] },
+      { name: 'Projects', href: '/is-projects', icon: FolderKanban, requiredModules: ['is_projects'], requiredPermissions: ['is_projects:projects:*', 'is_projects:dashboard:view'] },
+      // KRI Report moved here from Risk Management; KPI Report from Assessments.
+      { name: 'KRI Report', href: '/erm/kris', icon: Activity, requiredPermissions: ['erm:kris:*', 'erm:risks:*'] },
+      { name: 'KPI Report', href: '/assessments/cs_kpi', icon: Target, requiredPermissions: ['compliance:assessments:*'] },
     ],
   },
   {
@@ -118,9 +126,6 @@ const navigation: NavEntry[] = [
       { name: 'Risk Register', href: '/erm/risks', icon: AlertTriangle, requiredPermissions: ['erm:risks:*'] },
       { name: 'Third-Party Vendor Risk Management', href: '/vendor-risk', icon: Shield, requiredPermissions: ['erm:risks:*'] },
       { name: 'RCSA', href: '/erm/rcsa', icon: ClipboardList, requiredPermissions: ['erm:rcsa:*'] },
-      { name: 'Internal Controls', href: '/erm/internal-controls', icon: Target, requiredPermissions: ['erm:internal_controls:*'] },
-      // { name: 'KRIs', href: '/erm/kris', icon: Activity, requiredPermissions: ['erm:kris:*'] },
-      // { name: 'Incidents', href: '/erm/incidents', icon: AlertCircle, requiredPermissions: ['erm:incidents:*'] },
       { name: 'Advanced Analytics', href: '/erm/analytics', icon: BarChart3, requiredPermissions: ['erm:risks:*'] },
     ],
   },
@@ -130,51 +135,77 @@ const navigation: NavEntry[] = [
     requiredModules: ['compliance', 'controls', 'evidence', 'frameworks'],
     items: [
       { name: 'Overview', href: '/compliance', icon: LayoutDashboard, requiredPermissions: ['compliance:frameworks:*', 'controls:control_library:*', 'evidence:evidence_library:*'] },
-      { name: 'Frameworks', href: '/frameworks', icon: Layers, requiredPermissions: ['compliance:frameworks:*'] },
-      { name: 'Controls Catalog', href: '/controls/overview', icon: Shield, requiredPermissions: ['controls:control_library:*'] },
-      // { name: 'Evidence Requirements', href: '/evidence-requirements', icon: ClipboardList, requiredPermissions: ['evidence:evidence_requirements:*'] },
-      // Assessments lifted out into its own top-level section (below Compliance).
+      { name: 'Frameworks', href: '/frameworks/manage', activeMatch: '/frameworks', icon: Layers, requiredPermissions: ['compliance:frameworks:*'] },
       { name: 'Evidence', href: '/evidence', icon: FileText, requiredPermissions: ['evidence:evidence_library:*', 'evidence:evidence_upload:*'] },
-      { name: 'Control Library', href: '/control-library', icon: Library, requiredPermissions: ['controls:control_library:*'] },
+      // Full Assessments module nested inside Compliance (was a top-level section).
+      {
+        name: 'Assessments',
+        icon: ClipboardCheck,
+        requiredModules: ['compliance'],
+        items: [
+          { name: 'Overview', href: '/assessments', icon: LayoutDashboard, requiredPermissions: ['compliance:assessments:*'] },
+          {
+            name: 'Cyber Security',
+            icon: ShieldAlert,
+            items: [
+              { name: 'OWASP ASVS', href: '/assessments/asvs', icon: Shield, requiredPermissions: ['compliance:assessments:*'] },
+              { name: 'OWASP Testing', href: '/assessments/owasp_testing', icon: Bug, requiredPermissions: ['compliance:assessments:*'] },
+              { name: 'Mobile App Security', href: '/assessments/cs_mobile', icon: Shield, requiredPermissions: ['compliance:assessments:*'] },
+              { name: 'CSIR Maturity', href: '/assessments/cs_csir', icon: BarChart3, requiredPermissions: ['compliance:assessments:*'] },
+              { name: 'CTI Maturity', href: '/assessments/cs_cti', icon: BarChart3, requiredPermissions: ['compliance:assessments:*'] },
+              { name: 'Incident Management', href: '/assessments/cs_incident', icon: AlertTriangle, requiredPermissions: ['compliance:assessments:*'] },
+              { name: 'IT Security Operations', href: '/assessments/cs_itsecops', icon: Activity, requiredPermissions: ['compliance:assessments:*'] },
+            ],
+          },
+          {
+            name: 'NCA',
+            icon: ShieldCheck,
+            items: [
+              { name: 'DCC Assessment', href: '/assessments/nca', icon: ShieldCheck, requiredPermissions: ['compliance:assessments:*'] },
+              { name: 'Vulnerability Register', href: '/assessments/nca_vuln', icon: Bug, requiredPermissions: ['compliance:assessments:*'] },
+              { name: 'Audit Plan', href: '/assessments/nca_audit', icon: ClipboardList, requiredPermissions: ['compliance:assessments:*'] },
+              { name: 'Risk Management', href: '/assessments/nca_risk', icon: AlertTriangle, requiredPermissions: ['compliance:assessments:*'] },
+            ],
+          },
+          { name: 'Digital Operations Maturity', href: '/assessments/digital_ops_maturity', icon: Target, requiredPermissions: ['compliance:assessments:*'] },
+          { name: 'DPIA / PIA', href: '/assessments/dpia', icon: ClipboardList, requiredPermissions: ['compliance:assessments:*'] },
+          { name: 'Saudi PDPL', href: '/assessments/pdpl', icon: ShieldCheck, requiredPermissions: ['compliance:assessments:*'] },
+        ],
+      },
+      // Business Continuity Management — nested continuity sub-module.
+      {
+        name: 'Business Continuity',
+        icon: LifeBuoy,
+        requiredModules: ['bcm'],
+        items: [
+          { name: 'Overview', href: '/bcm', icon: LayoutDashboard, requiredPermissions: ['bcm:dashboard:*'] },
+          { name: 'Continuity Plans', href: '/bcm/plans', icon: ClipboardList, requiredPermissions: ['bcm:plans:*'] },
+          { name: 'Drills & Invocations', href: '/bcm/drills', icon: CalendarClock, requiredPermissions: ['bcm:drills:*'] },
+        ],
+      },
+      { name: 'Regulatory Changes', href: '/governance/regulatory-changes', icon: GitPullRequest, requiredPermissions: ['governance:regulatory_changes:*'] },
+      { name: 'Regulatory Feeds', href: '/governance/regulatory-feeds', icon: Rss, requiredPermissions: ['governance:regulatory_changes:*'] },
     ],
   },
+  // Control Testing & Assurance — the three controls surfaces under one roof.
   {
-    name: 'Assessments',
-    icon: ClipboardCheck,
-    requiredModules: ['compliance'],
+    name: 'Control Testing & Assurance',
+    icon: ShieldCheck,
+    requiredModules: ['controls', 'erm'],
     items: [
-      { name: 'Overview', href: '/assessments', icon: LayoutDashboard, requiredPermissions: ['compliance:assessments:*'] },
-      // "cyber security" folder → nested dropdown holding its templates.
-      {
-        name: 'Cyber Security',
-        icon: ShieldAlert,
-        items: [
-          { name: 'OWASP ASVS', href: '/assessments/asvs', icon: Shield, requiredPermissions: ['compliance:assessments:*'] },
-          { name: 'OWASP Testing', href: '/assessments/owasp_testing', icon: Bug, requiredPermissions: ['compliance:assessments:*'] },
-          { name: 'Mobile App Security', href: '/assessments/cs_mobile', icon: Shield, requiredPermissions: ['compliance:assessments:*'] },
-          { name: 'CSIR Maturity', href: '/assessments/cs_csir', icon: BarChart3, requiredPermissions: ['compliance:assessments:*'] },
-          { name: 'CTI Maturity', href: '/assessments/cs_cti', icon: BarChart3, requiredPermissions: ['compliance:assessments:*'] },
-          { name: 'Incident Management', href: '/assessments/cs_incident', icon: AlertTriangle, requiredPermissions: ['compliance:assessments:*'] },
-          { name: 'IT Security Operations', href: '/assessments/cs_itsecops', icon: Activity, requiredPermissions: ['compliance:assessments:*'] },
-          // KPI Report: the summary panel lives on the main dashboard, but the full
-          // assessment (per-KPI quarterly report) is reachable here too.
-          { name: 'KPI Report', href: '/assessments/cs_kpi', icon: Target, requiredPermissions: ['compliance:assessments:*'] },
-        ],
-      },
-      // "NCA" folder → nested dropdown holding its templates.
-      {
-        name: 'NCA',
-        icon: ShieldCheck,
-        items: [
-          { name: 'DCC Assessment', href: '/assessments/nca', icon: ShieldCheck, requiredPermissions: ['compliance:assessments:*'] },
-          { name: 'Vulnerability Register', href: '/assessments/nca_vuln', icon: Bug, requiredPermissions: ['compliance:assessments:*'] },
-          { name: 'Audit Plan', href: '/assessments/nca_audit', icon: ClipboardList, requiredPermissions: ['compliance:assessments:*'] },
-          { name: 'Risk Management', href: '/assessments/nca_risk', icon: AlertTriangle, requiredPermissions: ['compliance:assessments:*'] },
-        ],
-      },
-      { name: 'Digital Operations Maturity', href: '/assessments/digital_ops_maturity', icon: Target, requiredPermissions: ['compliance:assessments:*'] },
-      { name: 'DPIA / PIA', href: '/assessments/dpia', icon: ClipboardList, requiredPermissions: ['compliance:assessments:*'] },
-      { name: 'Saudi PDPL', href: '/assessments/pdpl', icon: ShieldCheck, requiredPermissions: ['compliance:assessments:*'] },
+      { name: 'Controls Catalog', href: '/controls/overview', icon: Shield, requiredPermissions: ['controls:control_library:*'] },
+      { name: 'Control Library', href: '/control-library', icon: Library, requiredPermissions: ['controls:control_library:*'] },
+      { name: 'Internal Controls', href: '/erm/internal-controls', icon: Target, requiredPermissions: ['erm:internal_controls:*'] },
+    ],
+  },
+  // Issue & Incident Management — cross-module. Issues is ungated (always
+  // visible); Incidents pulls from the ERM/risk register.
+  {
+    name: 'Issue & Incident Management',
+    icon: AlertCircle,
+    items: [
+      { name: 'Incidents', href: '/erm/incidents', icon: AlertTriangle, requiredModules: ['erm', 'risks'], requiredPermissions: ['erm:incidents:*', 'erm:risks:*'] },
+      { name: 'Issues', href: '/issues', icon: AlertCircle },
     ],
   },
   {
@@ -186,50 +217,27 @@ const navigation: NavEntry[] = [
       { name: 'Internal Audit', href: '/auditor-portal/internal-audit', icon: ClipboardCheck, requiredPermissions: ['compliance:assessments:*'] },
     ],
   },
-  // IT ASSETS collapsible group — Inventory + the consolidated
-  // "Compliance & Scans" entry (which mounts Compliance Overview /
-  // Compliance Rules / Risk Posture / Scanners as 4 top tabs inside
-  // /compliance-overview) + Criticality Assessments + the absorbed
-  // Vulnerability-management items.
+  // Cybersecurity Insurance — IT asset inventory, CIS compliance, risk posture,
+  // criticality assessments, vulnerabilities + access reviews under one umbrella.
   {
-    name: 'IT Assets',
+    name: 'Security Center',
     icon: Server,
     items: [
-      { name: 'Inventory',                 href: '/assets',                       icon: Bot,        requiredPermissions: ['dashboard:assets*'] },
-      // Single entry for the 4-tab Compliance & Scans hub. Standalone
-      // routes (/compliance-plugins/library, /risk-posture, /admin/agents)
-      // stay alive so deep-links elsewhere in the app keep working.
-      { name: 'Compliance & Scans',        href: '/compliance-overview',          icon: BarChart3,  requiredPermissions: ['compliance:scan:execute', 'erm:risks:*', 'compliance:agents:manage'] },
-      { name: 'Criticality Assessments',   href: '/assets/criticality-assessments', icon: ClipboardCheck, requiredPermissions: ['assets:criticality_assessments:view'] },
+      { name: 'IT Assets Inventory',                 href: '/assets',                       icon: Bot,        requiredPermissions: ['dashboard:assets*'] },
+      { name: 'CIS Compliance',            href: '/compliance-overview',          icon: BarChart3,  requiredPermissions: ['compliance:scan:execute', 'erm:risks:*', 'compliance:agents:manage'] },
+      { name: 'Assets Risk Posture',              href: '/risk-posture',                 icon: Activity,   requiredPermissions: ['erm:risks:*'] },
+      { name: 'Assets Assessments',   href: '/assets/criticality-assessments', icon: ClipboardCheck, requiredPermissions: ['assets:criticality_assessments:view'] },
       { name: 'Vulnerabilities',           href: '/vulnerabilities',              icon: Bug,        requiredPermissions: ['vulnerabilities:vulnerability_register:*'], requiredModules: ['vulnerabilities'] },
+      { name: 'Access Reviews',            href: '/admin/access-reviews',         icon: ClipboardCheck, requiredPermissions: ['compliance:frameworks:*'] },
     ],
   },
-
   {
-    name: 'Projects',
-    href: '/is-projects',
-    icon: FolderKanban,
-    requiredModules: ['is_projects'],
-    requiredPermissions: ['is_projects:projects:*', 'is_projects:dashboard:view']
-  },
-  {
-    name: 'Critical Tasks',
+    name: 'Tasks Management',
     href: '/tasks',
     icon: ListTodo,
     requiredModules: ['critical_tasks'],
     requiredPermissions: ['critical_tasks:tasks:*', 'critical_tasks:reports:view']
   },
-  // Issues and ComplyChat were moved to the TOP NAV BAR (Header.tsx) — Issues
-  // applies across all modules, and ComplyChat is the global AI assistant, so
-  // both live as top-bar quick-actions rather than per-module sidebar rows.
-  // Bulk Discovery's standalone sidebar entry was removed. The CIDR
-  // network scanner route at /admin/discover stays alive: the Setup
-  // Wizard on /admin/agents still hands off discovered hostnames into
-  // the agent-enrollment flow.
-  // Connect Wizard's standalone sidebar entry was removed — it now lives
-  // as a button on /admin/agents. Route at /admin/integrations/connect
-  // stays alive: per-asset Connect button on /assets and other entry
-  // points still deep-link into it.
   // Administration was lifted out of the scrolling nav into a pinned
   // bottom popover button — see <AdministrationPopover/> further down.
 ];
@@ -244,10 +252,12 @@ function leafHrefs(entries: NavEntry[]): string[] {
   for (const e of entries) { if (isGroup(e)) out.push(...leafHrefs(e.items)); else out.push(e.href); }
   return out;
 }
-function bestActiveHref(pathname: string, hrefs: string[]): string | undefined {
-  return hrefs
-    .filter((h) => pathname === h || (h !== '/dashboard' && pathname.startsWith(h + '/')))
-    .sort((a, b) => b.length - a.length)[0];
+function bestActiveHref(pathname: string, items: NavItem[]): string | undefined {
+  const m = (it: NavItem) => it.activeMatch ?? it.href;
+  return items
+    .filter((it) => pathname === m(it) || (m(it) !== '/dashboard' && pathname.startsWith(m(it) + '/')))
+    .sort((a, b) => m(b).length - m(a).length)
+    .map((it) => it.href)[0];
 }
 function flattenLeaves(entries: NavEntry[]): NavItem[] {
   const out: NavItem[] = [];
@@ -278,7 +288,10 @@ function NavSubGroup({ group, activeHref }: { group: NavGroup; activeHref?: stri
       <div className={clsx('grid transition-[grid-template-rows] duration-300 ease-out', open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')}>
         <div className="overflow-hidden">
           <div className="ml-3 mt-0.5 space-y-px border-l border-[var(--sidebar-hover-bg)] pl-2.5">
-            {(group.items as NavItem[]).map((item) => {
+            {group.items.map((item) => {
+              if (isGroup(item)) {
+                return <NavSubGroup key={item.name} group={item} activeHref={activeHref} />;
+              }
               const childActive = activeHref === item.href;
               return (
                 <Link
@@ -333,7 +346,7 @@ function NavItemLink({ item, collapsed }: { item: NavItem; collapsed: boolean })
 
 function NavGroupSection({ group, collapsed }: { group: NavGroup; collapsed: boolean }) {
   const pathname = usePathname();
-  const activeChildHref = bestActiveHref(pathname, leafHrefs(group.items));
+  const activeChildHref = bestActiveHref(pathname, flattenLeaves(group.items));
   const hasActiveChild = Boolean(activeChildHref);
   // Closed by default — only auto-open the section whose page is currently
   // active (so a deep-link still reveals its context) or one explicitly marked
@@ -475,7 +488,6 @@ const ADMIN_POPOVER_ITEMS: Array<{ id: string; label: string; icon: LucideIcon; 
   { id: 'roles',            label: 'Role Management',    icon: ShieldCheck },
   { id: 'teams',            label: 'Teams',              icon: Users },
   { id: 'password-policy',  label: 'Password Policy',    icon: Shield },
-  { id: 'access-reviews',   label: 'Access Reviews',     icon: ClipboardCheck, href: '/admin/access-reviews' },
   { id: 'integrations',     label: 'Integrations',       icon: Bot },
   { id: 'cloud-connectors', label: 'Cloud Connectors',   icon: Globe },
   { id: 'connectors',       label: 'Connectors',         icon: Layers },
@@ -528,7 +540,7 @@ function AdministrationPopover({
         aria-haspopup="menu"
       >
         <Settings {...navIconProps} className={clsx('flex-shrink-0', open ? 'text-[var(--color-base)]' : 'text-[var(--sidebar-icon)]')} />
-        {!collapsed && <span className="truncate flex-1 text-left">Administration</span>}
+        {!collapsed && <span className="truncate flex-1 text-left">System</span>}
         {!collapsed && (
           <ChevronRight
             size={14}
@@ -549,7 +561,7 @@ function AdministrationPopover({
           )}
         >
           <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400 border-b border-slate-100 mb-1">
-            Administration
+            System
           </div>
           {ADMIN_POPOVER_ITEMS.map(({ id, label, icon: Icon, href }) => (
             <Link

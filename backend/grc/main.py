@@ -61,6 +61,7 @@ from .modules.workflow_engine import (
 )
 from .modules.integrations import integrations_router, cloud_connectors_router
 from .modules.issue_management import issue_management_router
+from .modules.bcm import bcm_router
 # CIS integration (Phase 3 of the integration handoff) — new product surfaces:
 #   * agents_router            — agent enroll / heartbeat / jobs / results
 #   * agent_downloads_router   — public installer + GPO downloads
@@ -215,6 +216,8 @@ app.include_router(framework_templates_router)
 app.include_router(vuln_management_router)
 app.include_router(chatbot_router)
 app.include_router(vendor_risk_router)
+# Business Continuity Management — unique /bcm prefix, order-independent.
+app.include_router(bcm_router)
 app.include_router(auditor_portal_router)
 app.include_router(workflow_engine_router)
 app.include_router(integrations_router)

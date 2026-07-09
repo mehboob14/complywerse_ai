@@ -396,6 +396,7 @@ export interface ITAsset {
   location?: string;
   status: 'active' | 'inactive' | 'decommissioned';
   cde_environment?: boolean;
+  pci_dss?: Record<string, unknown> | null;
   created_at: string;
   // Phase 5 — Operational context. All optional on read; older rows that
   // pre-date the migration will simply omit these.

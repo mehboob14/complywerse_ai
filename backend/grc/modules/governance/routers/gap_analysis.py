@@ -18,10 +18,10 @@ from ....db import open_tenant_session
 from ....models import (
     GovernanceDocument, GovernanceDocumentVersion, PolicyGapAnalysisRun,
     PolicyGapFinding, UploadedFramework, ParsedFrameworkControl, GRCUser,
-    get_db, Risk
+    get_db, Risk, PolicyStatement, PolicyStatementVersion
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
-from .policy_parser import extract_text_from_file
+from .policy_parser import extract_text_from_file, _create_version_snapshot
 from ..action_logger import log_governance_action
 
 router = APIRouter(prefix="/gap-analysis", tags=["Policy Gap Analysis"])
@@ -332,6 +332,7 @@ def serialize_finding(finding: PolicyGapFinding, db: Session) -> dict:
         "applied_by": finding.applied_by,
         "applied_clause_text": finding.applied_clause_text,
         "applied_version_id": finding.applied_version_id,
+        "applied_statement_id": finding.applied_statement_id,
         "created_at": finding.created_at.isoformat() if finding.created_at else None,
         "updated_at": finding.updated_at.isoformat() if finding.updated_at else None,
     }
@@ -1096,6 +1097,107 @@ def _bump_minor_version(current: Optional[str]) -> str:
     return "1.0"
 
 
+def _norm_ws(s: Optional[str]) -> str:
+    """Collapse runs of whitespace so text extracted differently (statement vs.
+    verbatim document slice) can still be compared."""
+    return " ".join((s or "").split())
+
+
+def _find_matching_statement(
+    db: Session, document_id: int, tenant_ids: list, target_text: str
+) -> Optional[PolicyStatement]:
+    """Best-effort: find the active PolicyStatement for this document whose text
+    corresponds to `target_text` (the verbatim slice the clause replaced).
+    Exact match wins outright; otherwise substring containment (either
+    direction) beats word-overlap, and nothing below the overlap threshold is
+    returned. Returns None when there's no confident match."""
+    target = _norm_ws(target_text)
+    if not target:
+        return None
+    statements = db.query(PolicyStatement).filter(
+        PolicyStatement.document_id == document_id,
+        PolicyStatement.tenant_id.in_(tenant_ids),
+        PolicyStatement.status == "active",
+    ).all()
+
+    target_tokens = set(target.lower().split())
+    best, best_score = None, 0.0
+    for st in statements:
+        stext = _norm_ws(st.statement_text)
+        if not stext:
+            continue
+        if stext == target:
+            return st
+        if stext in target or target in stext:
+            shorter, longer = sorted((len(stext), len(target)))
+            score = 2.0 + (shorter / longer if longer else 0.0)
+        else:
+            st_tokens = set(stext.lower().split())
+            union = st_tokens | target_tokens
+            overlap = (len(st_tokens & target_tokens) / len(union)) if union else 0.0
+            score = overlap if overlap >= 0.5 else 0.0
+        if score > best_score:
+            best, best_score = st, score
+    return best
+
+
+def _sync_statement_on_apply(
+    db: Session, document: GovernanceDocument, finding: PolicyGapFinding,
+    mode: str, current_text: Optional[str], proposed_text: str,
+    new_version: GovernanceDocumentVersion, user_id: int, tenant_ids: list,
+) -> None:
+    """Keep the policy-statement register in step with an applied clause:
+      - "replace" — update the matching statement's text (version-snapshot first)
+      - "append"  — create a new statement carrying the added clause
+
+    Stores applied_statement_id / applied_statement_prev_text on the finding so
+    an override/undo can restore (replace) or retract (append) it. Best-effort:
+    a failure here is logged but never blocks the document change."""
+    try:
+        if mode == "replace" and current_text:
+            matched = _find_matching_statement(db, document.id, tenant_ids, current_text)
+            if not matched:
+                return
+            reason = f"Gap remediation — {finding.framework_name or ''} {finding.clause_reference or ''}".strip()
+            finding.applied_statement_prev_text = matched.statement_text
+            _create_version_snapshot(db, matched, "gap_remediation", user_id, change_reason=reason)
+            # Splice within the statement if it embeds the replaced slice,
+            # otherwise the statement corresponds to the slice — take it whole.
+            if current_text in (matched.statement_text or ""):
+                matched.statement_text = matched.statement_text.replace(current_text, proposed_text, 1)
+            else:
+                matched.statement_text = proposed_text
+            matched.document_version_id = new_version.id
+            matched.updated_at = datetime.utcnow()
+            finding.applied_statement_id = matched.id
+        elif mode == "append":
+            existing_count = db.query(PolicyStatement).filter(
+                PolicyStatement.document_id == document.id
+            ).count()
+            statement_code = f"PS-{document.id:04d}-{existing_count + 1:03d}"
+            new_stmt = PolicyStatement(
+                tenant_id=document.tenant_id,
+                document_id=document.id,
+                document_version_id=new_version.id,
+                statement_code=statement_code,
+                statement_text=proposed_text[:10000],
+                priority="medium",
+                is_mandatory=True,
+                source_section=finding.clause_reference or None,
+                status="active",
+                created_by=user_id,
+                created_at=datetime.utcnow(),
+            )
+            db.add(new_stmt)
+            db.flush()
+            reason = f"Added to close gap — {finding.framework_name or ''} {finding.clause_reference or ''}".strip()
+            _create_version_snapshot(db, new_stmt, "gap_remediation", user_id, change_reason=reason)
+            finding.applied_statement_id = new_stmt.id
+            finding.applied_statement_prev_text = None  # marks a created statement
+    except Exception as sync_exc:  # noqa: BLE001
+        print(f"[GAP APPLY] statement sync skipped: {type(sync_exc).__name__}: {sync_exc}", flush=True)
+
+
 @router.post("/findings/{finding_id}/apply-fix")
 def apply_finding_fix(
     finding_id: int,
@@ -1149,6 +1251,7 @@ def apply_finding_fix(
 
     original_content = document.content or ""
     original_version_label = document.current_version or "1.0"
+    original_status = document.status
 
     # ---- Snapshot the pre-change document state into a version row. -----
     # Mark any prior "current" version superseded so only the latest snapshot
@@ -1227,6 +1330,9 @@ def apply_finding_fix(
 
     document.content = new_content
     document.current_version = new_version_label
+    # Applying a remediation edits the document, so it must be re-approved:
+    # route it into the approval queue for its assigned reviewer/approver.
+    document.status = "pending_approval"
     document.updated_at = datetime.utcnow()
 
     now = datetime.utcnow()
@@ -1236,9 +1342,24 @@ def apply_finding_fix(
     finding.applied_at = now
     finding.applied_by = current_user.id
     finding.applied_version_id = new_version.id
-    finding.remediation_status = "closed"
-    finding.actual_close_date = now
+    finding.applied_prev_status = original_status
+    # The clause now lives in the document, so the gap is addressed — flip the
+    # compliance status to fully_compliant so the register reflects the fix.
+    # Remediation stays IN PROGRESS (NOT auto-closed): it closes only once the
+    # document's reviewer/approver approve the change (see update_document_status
+    # in the documents router). An override/undo reverts both.
+    finding.compliance_status = "fully_compliant"
+    finding.remediation_status = "in_progress"
+    finding.actual_close_date = None
     finding.updated_at = now
+
+    # Keep the policy-statement register in sync with the applied clause: update
+    # the AI-matched statement (replace) or add one (append). Best-effort.
+    _sync_statement_on_apply(
+        db, document, finding, mode,
+        body.current_text if mode == "replace" else None,
+        proposed_text, new_version, current_user.id, user_tenants,
+    )
 
     db.commit()
     db.refresh(finding)
@@ -1253,6 +1374,8 @@ def apply_finding_fix(
         "applied_version_id": new_version.id,
         "applied_version_number": new_version_label,
         "previous_version_number": original_version_label,
+        "compliance_status": finding.compliance_status,
+        "document_status": document.status,
     }
 
 
@@ -1322,6 +1445,55 @@ def override_finding(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid override status. Must be one of: {', '.join(valid_statuses)}"
         )
+
+    # If this finding's remediation clause was applied to the document, an
+    # override is an UNDO: roll the document back to the snapshot taken just
+    # before the clause was spliced in, restore its prior status, and clear the
+    # applied audit trail before recording the override.
+    if finding.applied_at and finding.applied_version_id:
+        document = db.query(GovernanceDocument).filter(
+            GovernanceDocument.id == finding.document_id,
+            GovernanceDocument.tenant_id.in_(user_tenants),
+        ).first()
+        if document:
+            snapshot = db.query(GovernanceDocumentVersion).filter(
+                GovernanceDocumentVersion.document_id == document.id,
+                GovernanceDocumentVersion.id < finding.applied_version_id,
+            ).order_by(GovernanceDocumentVersion.id.desc()).first()
+            applied_version = db.query(GovernanceDocumentVersion).filter(
+                GovernanceDocumentVersion.id == finding.applied_version_id,
+            ).first()
+            if snapshot:
+                document.content = snapshot.content
+                document.current_version = snapshot.version_number
+                snapshot.status = "current"
+            if applied_version:
+                applied_version.status = "reverted"
+            document.status = finding.applied_prev_status or "draft"
+            document.updated_at = datetime.utcnow()
+        # Revert the statement change too: restore the prior text (replace) or
+        # retract the statement that was created (append).
+        if finding.applied_statement_id:
+            stmt = db.query(PolicyStatement).filter(
+                PolicyStatement.id == finding.applied_statement_id,
+                PolicyStatement.tenant_id.in_(user_tenants),
+            ).first()
+            if stmt:
+                if finding.applied_statement_prev_text is not None:
+                    _create_version_snapshot(db, stmt, "gap_remediation_undo", current_user.id)
+                    stmt.statement_text = finding.applied_statement_prev_text
+                else:
+                    stmt.status = "superseded"
+                stmt.updated_at = datetime.utcnow()
+        finding.applied_at = None
+        finding.applied_by = None
+        finding.applied_clause_text = None
+        finding.applied_version_id = None
+        finding.applied_prev_status = None
+        finding.applied_statement_id = None
+        finding.applied_statement_prev_text = None
+        finding.actual_close_date = None
+        finding.remediation_status = "open"
 
     finding.is_overridden = True
     finding.override_status = override.override_status

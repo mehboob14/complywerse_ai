@@ -27,6 +27,7 @@ from sqlalchemy.orm import Session
 from ...config import get_openai_api_key, get_openai_model
 
 from ...models import (
+    GovernanceDocument,
     PolicyStatement, StatementControlMapping,
     NormalizedControl, ParsedFrameworkControl, FrameworkControl,
     InternalControl, InternalControlFrameworkLink,
@@ -60,9 +61,31 @@ def _cand_text(kind: str, c) -> tuple:
     return (c.control_id or "", c.title or "", (c.full_text or c.description or ""), c.domain or "")
 
 
-def _candidates(db: Session):
+def _candidates(db: Session, fw_ids=None):
     """Prefer normalized controls (the unified hub with the richest fan-out);
-    fall back to parsed framework controls when the tenant hasn't normalized."""
+    fall back to parsed framework controls when the tenant hasn't normalized.
+
+    When fw_ids (a set/list of UploadedFramework ids) is given, restrict the
+    candidate pool to controls that belong to those frameworks — so a document is
+    only mapped against its OWN in-scope/referenced frameworks, never the whole
+    tenant catalog (the root cause of over-broad "matched across all frameworks"
+    recommendations). Falls back to the full catalog only when fw_ids is empty."""
+    if fw_ids:
+        fw_ids = list(fw_ids)
+        # Parsed controls live in the same id space as the document's framework ids.
+        parsed = db.query(ParsedFrameworkControl).filter(
+            ParsedFrameworkControl.uploaded_framework_id.in_(fw_ids)
+        ).all()
+        # Normalized controls linked INTO those frameworks (comply-once hub).
+        sub = db.query(NormalizedControlLink.normalized_control_id).join(
+            ParsedFrameworkControl,
+            NormalizedControlLink.parsed_control_id == ParsedFrameworkControl.id,
+        ).filter(ParsedFrameworkControl.uploaded_framework_id.in_(fw_ids)).subquery()
+        ncs = db.query(NormalizedControl).filter(NormalizedControl.id.in_(sub)).all()
+        if ncs:
+            return "normalized", ncs
+        # No normalized linkage for these frameworks → map directly against their parsed controls.
+        return "parsed", parsed
     ncs = db.query(NormalizedControl).all()
     if ncs:
         return "normalized", ncs
@@ -148,9 +171,10 @@ def _add(db, seen, stmt, kind, id_field, cid, code, title, fw, dom, conf, cov, r
     db.add(m)
 
 
-def auto_map_statement(db: Session, stmt) -> dict:
+def auto_map_statement(db: Session, stmt, fw_ids=None) -> dict:
     """Map one statement and persist the 360° linkage. Caller handles commit
-    granularity; this commits its own unit of work."""
+    granularity; this commits its own unit of work. fw_ids scopes the candidate
+    pool to the document's own frameworks (see _candidates)."""
     # Idempotent: drop prior AI-generated, non-locked rows before re-mapping.
     db.query(StatementControlMapping).filter(
         StatementControlMapping.statement_id == stmt.id,
@@ -161,7 +185,7 @@ def auto_map_statement(db: Session, stmt) -> dict:
         db.commit()
         return {"mapped": 0, "evidence": 0, "source": "skipped_no_ai"}
 
-    kind, rows = _candidates(db)
+    kind, rows = _candidates(db, fw_ids)
     if not rows:
         db.commit()
         return {"mapped": 0, "evidence": 0, "source": "no_controls"}
@@ -244,6 +268,16 @@ def auto_map_statement(db: Session, stmt) -> dict:
 def auto_map_document(db: Session, document_id: int) -> dict:
     """Auto-map every active statement of a document. Best-effort per statement —
     one failure never aborts the rest. Returns a summary."""
+    # Scope the candidate pool to the document's OWN frameworks (in-scope ∪
+    # referenced UploadedFramework ids) so we never map against the whole catalog.
+    doc = db.query(GovernanceDocument).filter(GovernanceDocument.id == document_id).first()
+    fw_ids = None
+    if doc is not None:
+        fw_ids = sorted(
+            {int(x) for x in (getattr(doc, "applicable_framework_ids", None) or [])}
+            | {int(x) for x in (getattr(doc, "framework_ids", None) or [])}
+        ) or None
+
     stmts = db.query(PolicyStatement).filter(
         PolicyStatement.document_id == document_id,
         PolicyStatement.status == "active",
@@ -251,7 +285,7 @@ def auto_map_document(db: Session, document_id: int) -> dict:
     mapped_total, ev_total, ok = 0, 0, 0
     for s in stmts:
         try:
-            r = auto_map_statement(db, s)
+            r = auto_map_statement(db, s, fw_ids=fw_ids)
             mapped_total += r.get("mapped", 0)
             ev_total += r.get("evidence", 0)
             ok += 1

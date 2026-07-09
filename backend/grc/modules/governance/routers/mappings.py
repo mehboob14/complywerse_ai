@@ -10,7 +10,7 @@ from ....models import (
     DocumentRegulatoryLink, DocumentAssetLink, InternalControl,
     Risk, ITAsset, Framework, FrameworkControl, GRCUser, get_db,
     PolicyStatement, StatementControlMapping,
-    ParsedFrameworkControl, NormalizedControl, UploadedFramework,
+    ParsedFrameworkControl, NormalizedControl, NormalizedControlLink, UploadedFramework,
 )
 from ....routers.auth_router import require_auth, get_user_tenants
 
@@ -83,13 +83,28 @@ def get_document_or_404(document_id: int, user_tenants: List[int], db: Session) 
     return document
 
 
-def _recommended_controls_for_document(db: Session, document_id: int, user_tenants: List[int]) -> List[dict]:
+def _recommended_controls_for_document(
+    db: Session, document_id: int, user_tenants: List[int], fw_ids: Optional[List[int]] = None,
+) -> List[dict]:
     """Roll up the AI control recommendations (StatementControlMapping) across a
     document's active statements into a deduped, document-level list. Covers both
     internal (ERM) controls and framework controls. Each entry is enriched with the
     underlying control's description and exact clause reference, the statements that
     drove it, and whether the user has confirmed (locked) it. Populated automatically
-    by the post-parse auto-map; this just aggregates + enriches what's already stored."""
+    by the post-parse auto-map; this just aggregates + enriches what's already stored.
+
+    Framework scoping (fw_ids = the document's in-scope ∪ referenced UploadedFramework
+    ids): when provided, only recommendations that resolve to one of those frameworks
+    are returned (plus any the user has already confirmed/locked, which are never
+    hidden). Pass fw_ids=None to disable scoping (full list); pass an empty list to
+    scope to nothing (only confirmed links survive). Framework linkage is resolved via
+    ParsedFrameworkControl.uploaded_framework_id (parsed kind) or the
+    NormalizedControlLink→ParsedFrameworkControl join (normalized kind); framework /
+    internal kinds carry no UploadedFramework id and are dropped when scoping is on."""
+    scope: Optional[set] = None
+    if fw_ids is not None:
+        scope = {int(x) for x in fw_ids}
+
     stmts = db.query(
         PolicyStatement.id, PolicyStatement.statement_code, PolicyStatement.statement_text
     ).filter(
@@ -125,15 +140,29 @@ def _recommended_controls_for_document(db: Session, document_id: int, user_tenan
                 "link_source": m.link_source,              # ai | derived
                 "max_confidence": m.confidence,
                 "control_ref_id": getattr(m, f"{m.control_kind}_control_id", None),
+                "rationale": m.rationale,
+                "_rat_conf": m.confidence or 0.0,
                 "_stmt_ids": set(),
+                "_ref_ids": set(),
                 "_locked": 0,
             }
             agg[key] = a
         a["_stmt_ids"].add(m.statement_id)
+        # Track EVERY contributing control id (not just the first): parsed controls
+        # carry auto-generated codes ("FW-001", ...) that collide across frameworks,
+        # so one (kind, code) agg row can span several parsed controls in different
+        # frameworks. Scope must be decided from the union of all of them.
+        _rid = getattr(m, f"{m.control_kind}_control_id", None)
+        if _rid is not None:
+            a["_ref_ids"].add(_rid)
         if m.is_locked:
             a["_locked"] += 1
         if m.confidence is not None:
             a["max_confidence"] = max(a["max_confidence"] or 0.0, m.confidence)
+        # Keep the rationale of the highest-confidence contributing mapping.
+        if m.rationale and (m.confidence or 0.0) >= a.get("_rat_conf", -1):
+            a["_rat_conf"] = m.confidence or 0.0
+            a["rationale"] = m.rationale
         if m.link_source == "ai":
             a["link_source"] = "ai"
         if not a["control_title"] and m.control_title:
@@ -143,30 +172,53 @@ def _recommended_controls_for_document(db: Session, document_id: int, user_tenan
         if a["control_ref_id"] is None:
             a["control_ref_id"] = getattr(m, f"{m.control_kind}_control_id", None)
 
-    # Batch-load the underlying control's description + exact clause reference.
+    # Batch-load the underlying control's description + exact clause reference, and
+    # (for scoping + framework-name backfill) each control's owning UploadedFramework.
     ids_by_kind = {"parsed": set(), "framework": set(), "normalized": set(), "internal": set()}
     for a in agg.values():
-        if a["control_ref_id"] and a["control_kind"] in ids_by_kind:
-            ids_by_kind[a["control_kind"]].add(a["control_ref_id"])
+        if a["control_kind"] in ids_by_kind:
+            ids_by_kind[a["control_kind"]].update(a["_ref_ids"])
 
-    detail: dict = {}  # (kind, id) -> {description, clause_reference}
+    detail: dict = {}          # (kind, id) -> {description, clause_reference}
+    parsed_fw: dict = {}       # parsed_control_id -> uploaded_framework_id
+    normalized_fw: dict = {}   # normalized_control_id -> set(uploaded_framework_id)
     if ids_by_kind["parsed"]:
         for c in db.query(ParsedFrameworkControl).filter(ParsedFrameworkControl.id.in_(ids_by_kind["parsed"])).all():
             detail[("parsed", c.id)] = {"description": c.description or c.full_text, "clause_reference": c.original_reference or c.control_id}
+            if c.uploaded_framework_id:
+                parsed_fw[c.id] = c.uploaded_framework_id
     if ids_by_kind["framework"]:
         for c in db.query(FrameworkControl).filter(FrameworkControl.id.in_(ids_by_kind["framework"])).all():
             detail[("framework", c.id)] = {"description": getattr(c, "statement", None) or getattr(c, "description", None), "clause_reference": getattr(c, "code", None)}
     if ids_by_kind["normalized"]:
         for c in db.query(NormalizedControl).filter(NormalizedControl.id.in_(ids_by_kind["normalized"])).all():
             detail[("normalized", c.id)] = {"description": getattr(c, "statement", None) or getattr(c, "description", None), "clause_reference": getattr(c, "code", None)}
+        # Resolve each normalized control's owning UploadedFramework(s) via the link table.
+        for ncid, ufid in db.query(
+            NormalizedControlLink.normalized_control_id, ParsedFrameworkControl.uploaded_framework_id
+        ).join(
+            ParsedFrameworkControl, NormalizedControlLink.parsed_control_id == ParsedFrameworkControl.id
+        ).filter(NormalizedControlLink.normalized_control_id.in_(ids_by_kind["normalized"])).all():
+            if ufid:
+                normalized_fw.setdefault(ncid, set()).add(ufid)
     if ids_by_kind["internal"]:
         for c in db.query(InternalControl).filter(InternalControl.id.in_(ids_by_kind["internal"])).all():
             detail[("internal", c.id)] = {"description": getattr(c, "description", None), "clause_reference": getattr(c, "control_id", None)}
+
+    # UploadedFramework id -> name (for backfilling framework_name on rows whose
+    # StatementControlMapping.framework_name was null, e.g. normalized-kind rows).
+    all_fw = set(parsed_fw.values()) | {x for s in normalized_fw.values() for x in s}
+    uf_names: dict = {}
+    if all_fw:
+        for uf in db.query(UploadedFramework.id, UploadedFramework.name).filter(UploadedFramework.id.in_(all_fw)).all():
+            uf_names[uf.id] = uf.name
 
     out = []
     for a in agg.values():
         sids = sorted(a.pop("_stmt_ids"))
         locked = a.pop("_locked")
+        a.pop("_rat_conf", None)
+        ref_ids = a.pop("_ref_ids", set())
         a["statement_count"] = len(sids)
         a["is_linked"] = len(sids) > 0 and locked >= len(sids)
         a["statements"] = [stmt_info[sid] for sid in sids if sid in stmt_info]
@@ -174,6 +226,30 @@ def _recommended_controls_for_document(db: Session, document_id: int, user_tenan
         desc = d.get("description")
         a["description"] = desc[:600] if desc else None
         a["clause_reference"] = d.get("clause_reference") or a["control_code"]
+
+        # Resolve this row's owning UploadedFramework(s) for scoping + name backfill,
+        # from the UNION over ALL contributing control ids (see the _ref_ids note
+        # above) — so a code collision across frameworks can't drop an in-scope clause.
+        row_fw = set()
+        if a["control_kind"] == "parsed":
+            for rid in ref_ids:
+                ufid = parsed_fw.get(rid)
+                if ufid:
+                    row_fw.add(ufid)
+        elif a["control_kind"] == "normalized":
+            for rid in ref_ids:
+                row_fw |= normalized_fw.get(rid, set())
+        # Prefer an in-scope framework for the displayed name/id when scoping is on.
+        preferred = (row_fw & scope) if scope else row_fw
+        pick = next(iter(sorted(preferred or row_fw)), None)
+        a["uploaded_framework_id"] = pick
+        if not a.get("framework_name") and pick in uf_names:
+            a["framework_name"] = uf_names[pick]
+
+        # Framework scoping: keep only rows in the document's frameworks, plus any
+        # the user already confirmed (locked) — a confirmed link is never hidden.
+        if scope is not None and not (row_fw & scope) and not a["is_linked"]:
+            continue
         out.append(a)
     out.sort(key=lambda x: (x["statement_count"], x["max_confidence"] or 0.0), reverse=True)
     return out
@@ -187,7 +263,16 @@ def get_document_mappings(
 ):
     user_tenants = get_user_tenants(current_user, db)
     document = get_document_or_404(document_id, user_tenants, db)
-    
+
+    # Scope the AI recommendations to the document's OWN frameworks — the union of
+    # its in-scope (applicable_framework_ids) and referenced (framework_ids) sets —
+    # so the Mappings tab never surfaces the whole tenant catalog. Empty union → the
+    # helper returns nothing (the UI shows the "set applicable frameworks" prompt).
+    doc_fw_ids = sorted(
+        {int(x) for x in (getattr(document, "applicable_framework_ids", None) or [])}
+        | {int(x) for x in (getattr(document, "framework_ids", None) or [])}
+    )
+
     control_links = db.query(InternalControl).filter(
         InternalControl.tenant_id.in_(user_tenants),
         InternalControl.source_document_id == document_id
@@ -255,9 +340,12 @@ def get_document_mappings(
             }
             for link in asset_links
         ],
-        # AI control recommendations rolled up from the document's statements
-        # (internal ERM + framework controls). Populated by the post-parse auto-map.
-        "recommended_controls": _recommended_controls_for_document(db, document_id, user_tenants),
+        # AI control recommendations rolled up from the document's statements,
+        # SCOPED to the document's own frameworks (in-scope ∪ referenced). Populated
+        # by the post-parse auto-map.
+        "recommended_controls": _recommended_controls_for_document(db, document_id, user_tenants, fw_ids=doc_fw_ids),
+        # The framework scope actually applied (for the UI's "in-scope frameworks" header + empty state).
+        "framework_scope_ids": doc_fw_ids,
     }
 
 
@@ -283,12 +371,12 @@ def get_document_control_coverage(
     if framework_ids:
         fw_ids = [int(x) for x in framework_ids.split(",") if x.strip().lstrip("-").isdigit()]
     else:
-        # Default to the document's declared applicable frameworks, falling back
-        # to the drafting/citation frameworks when none were explicitly set.
-        fw_ids = [int(x) for x in (
-            getattr(document, "applicable_framework_ids", None)
-            or getattr(document, "framework_ids", None) or []
-        )]
+        # Default to the UNION of the document's in-scope (applicable) and
+        # referenced (citation) frameworks — the same scope the Mappings tab uses.
+        fw_ids = sorted(
+            {int(x) for x in (getattr(document, "applicable_framework_ids", None) or [])}
+            | {int(x) for x in (getattr(document, "framework_ids", None) or [])}
+        )
 
     recommended = _recommended_controls_for_document(db, document_id, user_tenants)
     mapped_all = [r for r in recommended if r.get("is_linked")]

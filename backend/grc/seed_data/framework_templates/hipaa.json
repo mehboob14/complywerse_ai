@@ -1,1520 +1,1521 @@
 {
- "framework_key": "hipaa",
- "display_name": "HIPAA",
- "name_patterns": [
-  "hipaa"
- ],
- "registers": [
-  {
-   "type": "hipaa__hipaa_compliance_roadmap_template_1",
-   "label": "Compliance Roadmap",
-   "description": "HIPAA — Compliance Roadmap (from the template).",
-   "columns": [
-    {
-     "key": "ref",
-     "label": "Ref",
-     "type": "auto"
-    },
-    {
-     "key": "workstream",
-     "label": "Workstream",
-     "type": "text"
-    },
-    {
-     "key": "action",
-     "label": "Action",
-     "type": "textarea"
-    },
-    {
-     "key": "cfr",
-     "label": "CFR",
-     "type": "text",
-     "picker": "framework_controls"
-    },
-    {
-     "key": "priority",
-     "label": "Priority",
-     "type": "select",
-     "options": [
-      {
-       "value": "High",
-       "label": "High",
-       "tone": "rose"
-      }
-     ]
-    },
-    {
-     "key": "owner",
-     "label": "Owner",
-     "type": "text",
-     "picker": "users"
-    },
-    {
-     "key": "target_date",
-     "label": "Target date",
-     "type": "date"
-    },
-    {
-     "key": "status",
-     "label": "Status",
-     "type": "select",
-     "options": [
-      {
-       "value": "Not started",
-       "label": "Not started",
-       "tone": "slate"
-      }
-     ]
-    }
-   ],
-   "seed": [
-    {
-     "data": {
-      "ref": "1",
-      "workstream": "Risk analysis",
-      "action": "Complete the HIPAA risk analysis and risk management plan",
-      "cfr": "164.308(a)(1)",
-      "priority": "High",
-      "owner": "Security Official",
-      "target_date": "2026-09-01",
-      "status": "Not started"
-     }
-    },
-    {
-     "data": {
-      "ref": "2",
-      "workstream": "Policies",
-      "action": "Adopt the Security and Privacy Rule policies",
-      "cfr": "164.316",
-      "priority": "High",
-      "owner": "Compliance",
-      "target_date": "2026-09-15",
-      "status": "Not started"
-     }
-    },
-    {
-     "data": {
-      "ref": "3",
-      "workstream": "BAAs",
-      "action": "Put business associate agreements in place",
-      "cfr": "164.308(b)",
-      "priority": "High",
-      "owner": "Legal",
-      "target_date": "2026-10-01",
-      "status": "Not started"
-     }
-    }
-   ],
-   "formSections": [
-    {
-     "title": "Item",
-     "keys": [
-      "ref",
-      "workstream"
-     ]
-    },
-    {
-     "title": "Assessment",
-     "keys": [
-      "action",
-      "cfr",
-      "priority",
-      "status"
-     ]
-    },
-    {
-     "title": "Ownership & dates",
-     "keys": [
-      "owner",
-      "target_date"
-     ]
-    }
-   ]
-  },
-  {
-   "type": "hipaa__hipaa_ephi_inventory_template_1",
-   "label": "Ephi Inventory",
-   "description": "HIPAA — Ephi Inventory (from the template).",
-   "columns": [
-    {
-     "key": "ref",
-     "label": "Ref",
-     "type": "auto"
-    },
-    {
-     "key": "system_application",
-     "label": "System / application",
-     "type": "text"
-    },
-    {
-     "key": "ephi_stored_or_processed",
-     "label": "ePHI stored or processed",
-     "type": "text"
-    },
-    {
-     "key": "location",
-     "label": "Location",
-     "type": "text"
-    },
-    {
-     "key": "encrypted",
-     "label": "Encrypted?",
-     "type": "select",
-     "options": [
-      {
-       "value": "Yes",
-       "label": "Yes",
-       "tone": "emerald"
-      },
-      {
-       "value": "No",
-       "label": "No",
-       "tone": "rose"
-      }
-     ]
-    },
-    {
-     "key": "access_controls",
-     "label": "Access controls",
-     "type": "text"
-    },
-    {
-     "key": "business_associate",
-     "label": "Business associate?",
-     "type": "select",
-     "options": [
-      {
-       "value": "Yes",
-       "label": "Yes",
-       "tone": "emerald"
-      },
-      {
-       "value": "No",
-       "label": "No",
-       "tone": "rose"
-      }
-     ]
-    },
-    {
-     "key": "owner",
-     "label": "Owner",
-     "type": "text",
-     "picker": "users"
-    },
-    {
-     "key": "notes",
-     "label": "Notes",
-     "type": "textarea"
-    }
-   ],
-   "seed": [
-    {
-     "data": {
-      "ref": "1",
-      "system_application": "EHR system",
-      "ephi_stored_or_processed": "Patient records",
-      "location": "Cloud (vendor)",
-      "encrypted": "Yes",
-      "access_controls": "Role-based, MFA",
-      "business_associate": "Yes (vendor)",
-      "owner": "IT",
-      "notes": "BAA on file"
-     }
-    },
-    {
-     "data": {
-      "ref": "2",
-      "system_application": "Billing platform",
-      "ephi_stored_or_processed": "Claims, demographics",
-      "location": "Cloud (vendor)",
-      "encrypted": "Yes",
-      "access_controls": "Role-based",
-      "business_associate": "Yes (vendor)",
-      "owner": "Finance",
-      "notes": "BAA on file"
-     }
-    }
-   ],
-   "formSections": [
-    {
-     "title": "Item",
-     "keys": [
-      "ref",
-      "system_application"
-     ]
-    },
-    {
-     "title": "Assessment",
-     "keys": [
-      "ephi_stored_or_processed",
-      "location",
-      "encrypted",
-      "access_controls",
-      "business_associate",
-      "notes"
-     ]
-    },
-    {
-     "title": "Ownership & dates",
-     "keys": [
-      "owner"
-     ]
-    }
-   ]
-  },
-  {
-   "type": "hipaa__hipaa_privacy_rule_assessment_template_1",
-   "label": "Privacy Rule Assessment",
-   "description": "HIPAA — Privacy Rule Assessment (from the template).",
-   "columns": [
-    {
-     "key": "area",
-     "label": "Area",
-     "type": "text"
-    },
-    {
-     "key": "cfr",
-     "label": "CFR",
-     "type": "text",
-     "picker": "framework_controls"
-    },
-    {
-     "key": "requirement_to_verify",
-     "label": "Requirement to verify",
-     "type": "textarea"
-    },
-    {
-     "key": "status",
-     "label": "Status",
-     "type": "text"
-    },
-    {
-     "key": "evidence_notes",
-     "label": "Evidence / notes",
-     "type": "text",
-     "picker": "evidence"
-    },
-    {
-     "key": "owner",
-     "label": "Owner",
-     "type": "text",
-     "picker": "users"
-    }
-   ],
-   "seed": [
-    {
-     "data": {
-      "area": "Notice (164.520)",
-      "cfr": "164.520",
-      "requirement_to_verify": "A Notice of Privacy Practices is provided and posted",
-      "status": "",
-      "evidence_notes": "",
-      "owner": ""
-     }
-    },
-    {
-     "data": {
-      "area": "Minimum necessary (164.502(b))",
-      "cfr": "164.502(b)",
-      "requirement_to_verify": "Uses and disclosures are limited to the minimum necessary",
-      "status": "",
-      "evidence_notes": "",
-      "owner": ""
-     }
-    },
-    {
-     "data": {
-      "area": "Permitted uses (164.506)",
-      "cfr": "164.506",
-      "requirement_to_verify": "Uses and disclosures for treatment, payment and health-care operations are handled correctly",
-      "status": "",
-      "evidence_notes": "",
-      "owner": ""
-     }
-    },
-    {
-     "data": {
-      "area": "Authorisations (164.508)",
-      "cfr": "164.508",
-      "requirement_to_verify": "Valid authorisations are obtained where required",
-      "status": "",
-      "evidence_notes": "",
-      "owner": ""
-     }
-    },
-    {
-     "data": {
-      "area": "Right of access (164.524)",
-      "cfr": "164.524",
-      "requirement_to_verify": "Individuals can access their records within the required timeframe",
-      "status": "",
-      "evidence_notes": "",
-      "owner": ""
-     }
-    },
-    {
-     "data": {
-      "area": "Amendment (164.526)",
-      "cfr": "164.526",
-      "requirement_to_verify": "Individuals can request amendment of their records",
-      "status": "",
-      "evidence_notes": "",
-      "owner": ""
-     }
-    },
-    {
-     "data": {
-      "area": "Accounting (164.528)",
-      "cfr": "164.528",
-      "requirement_to_verify": "An accounting of disclosures is available on request",
-      "status": "",
-      "evidence_notes": "",
-      "owner": ""
-     }
-    },
-    {
-     "data": {
-      "area": "Business associates (164.502(e))",
-      "cfr": "164.502(e)",
-      "requirement_to_verify": "Disclosures to business associates are covered by a BAA",
-      "status": "",
-      "evidence_notes": "",
-      "owner": ""
-     }
-    },
-    {
-     "data": {
-      "area": "Safeguards (164.530)",
-      "cfr": "164.530",
-      "requirement_to_verify": "Administrative, technical and physical safeguards for PHI, plus training and complaints, are in place",
-      "status": "",
-      "evidence_notes": "",
-      "owner": ""
-     }
-    }
-   ],
-   "formSections": [
-    {
-     "title": "Item",
-     "keys": [
-      "area",
-      "cfr"
-     ]
-    },
-    {
-     "title": "Assessment",
-     "keys": [
-      "requirement_to_verify",
-      "status",
-      "evidence_notes"
-     ]
-    },
-    {
-     "title": "Ownership & dates",
-     "keys": [
-      "owner"
-     ]
-    }
-   ]
-  },
-  {
-   "type": "hipaa__hipaa_security_risk_assessment_template",
-   "label": "Security Risk Assessment",
-   "description": "HIPAA — Security Risk Assessment (from the template).",
-   "columns": [
-    {
-     "key": "safeguard_area",
-     "label": "Safeguard area",
-     "type": "text",
-     "picker": "framework_controls"
-    },
-    {
-     "key": "standard",
-     "label": "Standard",
-     "type": "text"
-    },
-    {
-     "key": "r_a",
-     "label": "R/A",
-     "type": "text"
-    },
-    {
-     "key": "implemented_y_p_n",
-     "label": "Implemented?",
-     "type": "select",
-     "options": [
-      {
-       "value": "Y",
-       "label": "Y",
-       "tone": "slate"
-      },
-      {
-       "value": "P",
-       "label": "P",
-       "tone": "slate"
-      },
-      {
-       "value": "N",
-       "label": "N",
-       "tone": "slate"
-      }
-     ]
-    },
-    {
-     "key": "likelihood_1_5",
-     "label": "Likelihood (1-5)",
-     "type": "text"
-    },
-    {
-     "key": "impact_1_5",
-     "label": "Impact (1-5)",
-     "type": "text"
-    },
-    {
-     "key": "risk",
-     "label": "Risk",
-     "type": "text"
-    },
-    {
-     "key": "remediation",
-     "label": "Remediation",
-     "type": "textarea"
-    },
-    {
-     "key": "owner",
-     "label": "Owner",
-     "type": "text",
-     "picker": "users"
-    }
-   ],
-   "seed": [
-    {
-     "data": {
-      "safeguard_area": "Administrative",
-      "standard": "Security Management Process (risk analysis & management)",
-      "r_a": "R",
-      "implemented_y_p_n": "",
-      "likelihood_1_5": "",
-      "impact_1_5": "",
-      "risk": "",
-      "remediation": "",
-      "owner": ""
-     }
-    },
-    {
-     "data": {
-      "safeguard_area": "Administrative",
-      "standard": "Assigned Security Responsibility",
-      "r_a": "R",
-      "implemented_y_p_n": "",
-      "likelihood_1_5": "",
-      "impact_1_5": "",
-      "risk": "",
-      "remediation": "",
-      "owner": ""
-     }
-    },
-    {
-     "data": {
-      "safeguard_area": "Administrative",
-      "standard": "Workforce Security (authorisation/clearance)",
-      "r_a": "A",
-      "implemented_y_p_n": "",
-      "likelihood_1_5": "",
-      "impact_1_5": "",
-      "risk": "",
-      "remediation": "",
-      "owner": ""
-     }
-    },
-    {
-     "data": {
-      "safeguard_area": "Administrative",
-      "standard": "Information Access Management",
-      "r_a": "R",
-      "implemented_y_p_n": "",
-      "likelihood_1_5": "",
-      "impact_1_5": "",
-      "risk": "",
-      "remediation": "",
-      "owner": ""
-     }
-    },
-    {
-     "data": {
-      "safeguard_area": "Administrative",
-      "standard": "Security Awareness & Training",
-      "r_a": "A",
-      "implemented_y_p_n": "",
-      "likelihood_1_5": "",
-      "impact_1_5": "",
-      "risk": "",
-      "remediation": "",
-      "owner": ""
-     }
-    },
-    {
-     "data": {
-      "safeguard_area": "Administrative",
-      "standard": "Security Incident Procedures",
-      "r_a": "R",
-      "implemented_y_p_n": "",
-      "likelihood_1_5": "",
-      "impact_1_5": "",
-      "risk": "",
-      "remediation": "",
-      "owner": ""
-     }
-    },
-    {
-     "data": {
-      "safeguard_area": "Administrative",
-      "standard": "Contingency Plan (backup, DR, emergency mode)",
-      "r_a": "R",
-      "implemented_y_p_n": "",
-      "likelihood_1_5": "",
-      "impact_1_5": "",
-      "risk": "",
-      "remediation": "",
-      "owner": ""
-     }
-    },
-    {
-     "data": {
-      "safeguard_area": "Administrative",
-      "standard": "Business Associate Agreements",
-      "r_a": "R",
-      "implemented_y_p_n": "",
-      "likelihood_1_5": "",
-      "impact_1_5": "",
-      "risk": "",
-      "remediation": "",
-      "owner": ""
-     }
-    },
-    {
-     "data": {
-      "safeguard_area": "Physical",
-      "standard": "Facility Access Controls",
-      "r_a": "A",
-      "implemented_y_p_n": "",
-      "likelihood_1_5": "",
-      "impact_1_5": "",
-      "risk": "",
-      "remediation": "",
-      "owner": ""
-     }
-    },
-    {
-     "data": {
-      "safeguard_area": "Physical",
-      "standard": "Workstation Use & Security",
-      "r_a": "R",
-      "implemented_y_p_n": "",
-      "likelihood_1_5": "",
-      "impact_1_5": "",
-      "risk": "",
-      "remediation": "",
-      "owner": ""
-     }
-    },
-    {
-     "data": {
-      "safeguard_area": "Physical",
-      "standard": "Device & Media Controls (disposal, re-use)",
-      "r_a": "R",
-      "implemented_y_p_n": "",
-      "likelihood_1_5": "",
-      "impact_1_5": "",
-      "risk": "",
-      "remediation": "",
-      "owner": ""
-     }
-    },
-    {
-     "data": {
-      "safeguard_area": "Technical",
-      "standard": "Access Control (unique ID, auto logoff, encryption)",
-      "r_a": "R",
-      "implemented_y_p_n": "",
-      "likelihood_1_5": "",
-      "impact_1_5": "",
-      "risk": "",
-      "remediation": "",
-      "owner": ""
-     }
-    },
-    {
-     "data": {
-      "safeguard_area": "Technical",
-      "standard": "Audit Controls",
-      "r_a": "R",
-      "implemented_y_p_n": "",
-      "likelihood_1_5": "",
-      "impact_1_5": "",
-      "risk": "",
-      "remediation": "",
-      "owner": ""
-     }
-    },
-    {
-     "data": {
-      "safeguard_area": "Technical",
-      "standard": "Integrity (protect ePHI from alteration)",
-      "r_a": "A",
-      "implemented_y_p_n": "",
-      "likelihood_1_5": "",
-      "impact_1_5": "",
-      "risk": "",
-      "remediation": "",
-      "owner": ""
-     }
-    },
-    {
-     "data": {
-      "safeguard_area": "Technical",
-      "standard": "Person/Entity Authentication",
-      "r_a": "R",
-      "implemented_y_p_n": "",
-      "likelihood_1_5": "",
-      "impact_1_5": "",
-      "risk": "",
-      "remediation": "",
-      "owner": ""
-     }
-    },
-    {
-     "data": {
-      "safeguard_area": "Technical",
-      "standard": "Transmission Security (encryption)",
-      "r_a": "A",
-      "implemented_y_p_n": "",
-      "likelihood_1_5": "",
-      "impact_1_5": "",
-      "risk": "",
-      "remediation": "",
-      "owner": ""
-     }
-    }
-   ],
-   "formSections": [
-    {
-     "title": "Item",
-     "keys": [
-      "safeguard_area",
-      "standard"
-     ]
-    },
-    {
-     "title": "Assessment",
-     "keys": [
-      "r_a",
-      "implemented_y_p_n",
-      "likelihood_1_5",
-      "impact_1_5",
-      "risk",
-      "remediation"
-     ]
-    },
-    {
-     "title": "Ownership & dates",
-     "keys": [
-      "owner"
-     ]
-    }
-   ]
-  },
-  {
-   "type": "hipaa__hipaa_security_rule_gap_assessment_template_1",
-   "label": "Security Rule Gap Assessment",
-   "description": "HIPAA — Security Rule Gap Assessment (from the template).",
-   "columns": [
-    {
-     "key": "safeguard_area",
-     "label": "Safeguard area",
-     "type": "text",
-     "picker": "framework_controls"
-    },
-    {
-     "key": "cfr",
-     "label": "CFR",
-     "type": "text",
-     "picker": "framework_controls"
-    },
-    {
-     "key": "standard_to_verify",
-     "label": "Standard to verify",
-     "type": "textarea"
-    },
-    {
-     "key": "status",
-     "label": "Status",
-     "type": "text"
-    },
-    {
-     "key": "evidence_notes",
-     "label": "Evidence / notes",
-     "type": "text",
-     "picker": "evidence"
-    },
-    {
-     "key": "owner",
-     "label": "Owner",
-     "type": "text",
-     "picker": "users"
-    }
-   ],
-   "seed": [
-    {
-     "data": {
-      "safeguard_area": "Administrative (164.308)",
-      "cfr": "164.308(a)(1)",
-      "standard_to_verify": "Security management process: risk analysis, risk management, sanction policy and information system activity review",
-      "status": "",
-      "evidence_notes": "",
-      "owner": ""
-     }
-    },
-    {
-     "data": {
-      "safeguard_area": "Administrative (164.308)",
-      "cfr": "164.308(a)(2)",
-      "standard_to_verify": "Assigned security responsibility (a named security official)",
-      "status": "",
-      "evidence_notes": "",
-      "owner": ""
-     }
-    },
-    {
-     "data": {
-      "safeguard_area": "Administrative (164.308)",
-      "cfr": "164.308(a)(3)",
-      "standard_to_verify": "Workforce security: authorisation, clearance and termination procedures",
-      "status": "",
-      "evidence_notes": "",
-      "owner": ""
-     }
-    },
-    {
-     "data": {
-      "safeguard_area": "Administrative (164.308)",
-      "cfr": "164.308(a)(4)",
-      "standard_to_verify": "Information access management: access authorisation, establishment and modification",
-      "status": "",
-      "evidence_notes": "",
-      "owner": ""
-     }
-    },
-    {
-     "data": {
-      "safeguard_area": "Administrative (164.308)",
-      "cfr": "164.308(a)(5)",
-      "standard_to_verify": "Security awareness and training, including malware protection, log-in monitoring and password management",
-      "status": "",
-      "evidence_notes": "",
-      "owner": ""
-     }
-    },
-    {
-     "data": {
-      "safeguard_area": "Administrative (164.308)",
-      "cfr": "164.308(a)(6)",
-      "standard_to_verify": "Security incident procedures: response and reporting",
-      "status": "",
-      "evidence_notes": "",
-      "owner": ""
-     }
-    },
-    {
-     "data": {
-      "safeguard_area": "Administrative (164.308)",
-      "cfr": "164.308(a)(7)",
-      "standard_to_verify": "Contingency plan: data backup, disaster recovery, emergency mode operation, testing and criticality analysis",
-      "status": "",
-      "evidence_notes": "",
-      "owner": ""
-     }
-    },
-    {
-     "data": {
-      "safeguard_area": "Administrative (164.308)",
-      "cfr": "164.308(a)(8)",
-      "standard_to_verify": "Periodic evaluation of security safeguards",
-      "status": "",
-      "evidence_notes": "",
-      "owner": ""
-     }
-    },
-    {
-     "data": {
-      "safeguard_area": "Administrative (164.308)",
-      "cfr": "164.308(b)",
-      "standard_to_verify": "Business associate contracts and other arrangements",
-      "status": "",
-      "evidence_notes": "",
-      "owner": ""
-     }
-    },
-    {
-     "data": {
-      "safeguard_area": "Physical (164.310)",
-      "cfr": "164.310(a)",
-      "standard_to_verify": "Facility access controls",
-      "status": "",
-      "evidence_notes": "",
-      "owner": ""
-     }
-    },
-    {
-     "data": {
-      "safeguard_area": "Physical (164.310)",
-      "cfr": "164.310(b)(c)",
-      "standard_to_verify": "Workstation use and workstation security",
-      "status": "",
-      "evidence_notes": "",
-      "owner": ""
-     }
-    },
-    {
-     "data": {
-      "safeguard_area": "Physical (164.310)",
-      "cfr": "164.310(d)",
-      "standard_to_verify": "Device and media controls: disposal, media re-use, accountability and backup",
-      "status": "",
-      "evidence_notes": "",
-      "owner": ""
-     }
-    },
-    {
-     "data": {
-      "safeguard_area": "Technical (164.312)",
-      "cfr": "164.312(a)",
-      "standard_to_verify": "Access control: unique user IDs, emergency access, automatic logoff and encryption",
-      "status": "",
-      "evidence_notes": "",
-      "owner": ""
-     }
-    },
-    {
-     "data": {
-      "safeguard_area": "Technical (164.312)",
-      "cfr": "164.312(b)",
-      "standard_to_verify": "Audit controls",
-      "status": "",
-      "evidence_notes": "",
-      "owner": ""
-     }
-    },
-    {
-     "data": {
-      "safeguard_area": "Technical (164.312)",
-      "cfr": "164.312(c)",
-      "standard_to_verify": "Integrity controls for ePHI",
-      "status": "",
-      "evidence_notes": "",
-      "owner": ""
-     }
-    },
-    {
-     "data": {
-      "safeguard_area": "Technical (164.312)",
-      "cfr": "164.312(d)",
-      "standard_to_verify": "Person or entity authentication",
-      "status": "",
-      "evidence_notes": "",
-      "owner": ""
-     }
-    },
-    {
-     "data": {
-      "safeguard_area": "Technical (164.312)",
-      "cfr": "164.312(e)",
-      "standard_to_verify": "Transmission security, including encryption",
-      "status": "",
-      "evidence_notes": "",
-      "owner": ""
-     }
-    },
-    {
-     "data": {
-      "safeguard_area": "Documentation (164.316)",
-      "cfr": "164.316",
-      "standard_to_verify": "Policies and procedures are documented and retained for six years",
-      "status": "",
-      "evidence_notes": "",
-      "owner": ""
-     }
-    }
-   ],
-   "formSections": [
-    {
-     "title": "Item",
-     "keys": [
-      "safeguard_area",
-      "cfr"
-     ]
-    },
-    {
-     "title": "Assessment",
-     "keys": [
-      "standard_to_verify",
-      "status",
-      "evidence_notes"
-     ]
-    },
-    {
-     "title": "Ownership & dates",
-     "keys": [
-      "owner"
-     ]
-    }
-   ]
-  }
- ],
- "documents": [
-  {
-   "type": "hipaa__hipaa_breach_notification_procedure_template_4",
-   "label": "Breach Notification Procedure",
-   "control_ref": null,
-   "sections": [
-    {
-     "heading": "1. Purpose",
-     "body": "This procedure ensures the organisation responds to a breach of unsecured protected health information correctly and within the timelines the HIPAA Breach Notification Rule requires."
-    },
-    {
-     "heading": "2. Scope",
-     "body": "All suspected or confirmed breaches of unsecured PHI."
-    },
-    {
-     "heading": "3. Assess Whether a Breach Occurred",
-     "body": "An impermissible acquisition, access, use or disclosure of unsecured PHI is presumed a breach unless a documented risk assessment shows a low probability that PHI was compromised. The four-factor assessment considers:\n- The nature and extent of the PHI involved, including the types of identifiers.\n- The unauthorised person who used the PHI or to whom it was disclosed.\n- Whether the PHI was actually acquired or viewed.\n- The extent to which the risk to the PHI has been mitigated."
-    },
-    {
-     "heading": "4. Notify Individuals",
-     "body": "Affected individuals are notified without unreasonable delay and no later than 60 calendar days after discovery, with the information the rule requires."
-    },
-    {
-     "heading": "5. Notify HHS",
-     "body": "The Secretary of Health and Human Services is notified: within 60 days for breaches affecting 500 or more individuals, and annually for smaller breaches."
-    },
-    {
-     "heading": "6. Notify the Media",
-     "body": "For a breach affecting more than 500 residents of a state or jurisdiction, prominent media outlets are notified without unreasonable delay and within 60 days."
-    },
-    {
-     "heading": "7. Business Associates",
-     "body": "A business associate notifies the covered entity of a breach without unreasonable delay and within 60 days. [FILL IN: name who coordinates breach response.]"
-    },
-    {
-     "heading": "8. Roles & Responsibilities",
-     "body": "",
-     "table": {
+  "framework_key": "hipaa",
+  "display_name": "HIPAA",
+  "name_patterns": [
+    "hipaa"
+  ],
+  "registers": [
+    {
+      "type": "hipaa__hipaa_compliance_roadmap_template_1",
+      "label": "Compliance Roadmap",
+      "description": "HIPAA — Compliance Roadmap (from the template).",
       "columns": [
-       "Role",
-       "Responsibilities"
+        {
+          "key": "ref",
+          "label": "Ref",
+          "type": "auto"
+        },
+        {
+          "key": "workstream",
+          "label": "Workstream",
+          "type": "text"
+        },
+        {
+          "key": "action",
+          "label": "Action",
+          "type": "textarea"
+        },
+        {
+          "key": "cfr",
+          "label": "CFR",
+          "type": "text",
+          "picker": "framework_controls"
+        },
+        {
+          "key": "priority",
+          "label": "Priority",
+          "type": "select",
+          "options": [
+            {
+              "value": "High",
+              "label": "High",
+              "tone": "rose"
+            }
+          ]
+        },
+        {
+          "key": "owner",
+          "label": "Owner",
+          "type": "text",
+          "picker": "users"
+        },
+        {
+          "key": "target_date",
+          "label": "Target date",
+          "type": "date"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "type": "select",
+          "options": [
+            {
+              "value": "Not started",
+              "label": "Not started",
+              "tone": "slate"
+            }
+          ]
+        }
       ],
-      "rows": [
-       [
-        "Privacy / Security Official",
-        "Runs breach response and notification."
-       ],
-       [
-        "CISO / Security Lead",
-        "Owns the policy, approves exceptions, monitors compliance and reports to leadership."
-       ],
-       [
-        "Managers",
-        "Ensure their teams understand and follow the policy."
-       ]
+      "seed": [
+        {
+          "data": {
+            "ref": "1",
+            "workstream": "Risk analysis",
+            "action": "Complete the HIPAA risk analysis and risk management plan",
+            "cfr": "164.308(a)(1)",
+            "priority": "High",
+            "owner": "Security Official",
+            "target_date": "2026-09-01",
+            "status": "Not started"
+          }
+        },
+        {
+          "data": {
+            "ref": "2",
+            "workstream": "Policies",
+            "action": "Adopt the Security and Privacy Rule policies",
+            "cfr": "164.316",
+            "priority": "High",
+            "owner": "Compliance",
+            "target_date": "2026-09-15",
+            "status": "Not started"
+          }
+        },
+        {
+          "data": {
+            "ref": "3",
+            "workstream": "BAAs",
+            "action": "Put business associate agreements in place",
+            "cfr": "164.308(b)",
+            "priority": "High",
+            "owner": "Legal",
+            "target_date": "2026-10-01",
+            "status": "Not started"
+          }
+        }
+      ],
+      "formSections": [
+        {
+          "title": "Item",
+          "keys": [
+            "ref",
+            "workstream"
+          ]
+        },
+        {
+          "title": "Assessment",
+          "keys": [
+            "action",
+            "cfr",
+            "priority",
+            "status"
+          ]
+        },
+        {
+          "title": "Ownership & dates",
+          "keys": [
+            "owner",
+            "target_date"
+          ]
+        }
       ]
-     }
     },
     {
-     "heading": "9. Testing & Maintenance",
-     "body": "This plan is reviewed at least annually and after every activation or major change. Exercises (tabletop or full) are scheduled to validate the plan and results are recorded as improvement actions."
-    }
-   ]
-  },
-  {
-   "type": "hipaa__hipaa_business_associate_agreement_template_3",
-   "label": "Business Associate Agreement",
-   "control_ref": null,
-   "sections": [
-    {
-     "heading": "1. Purpose",
-     "body": "This business associate agreement sets out the terms HIPAA requires when a business associate creates, receives, maintains or transmits protected health information on behalf of a covered entity (or another business associate)."
-    },
-    {
-     "heading": "2. Scope",
-     "body": "The relationship between the covered entity and the business associate, and the PHI the business associate handles."
-    },
-    {
-     "heading": "3. When a BAA Is Required",
-     "body": "A business associate agreement is put in place before a business associate creates, receives, maintains or transmits protected health information (PHI) on the covered entity's behalf. Sharing PHI without a signed agreement in place is not permitted.\n[FILL IN: identify the business associates you use and the PHI each one handles.]"
-    },
-    {
-     "heading": "4. Required Terms",
-     "body": "The agreement includes the terms required by 45 CFR 164.504(e). At a minimum, the business associate:",
-     "table": {
+      "type": "hipaa__hipaa_ephi_inventory_template_1",
+      "label": "Ephi Inventory",
+      "description": "HIPAA — Ephi Inventory (from the template).",
       "columns": [
-       "Required term",
-       "What it must do"
+        {
+          "key": "ref",
+          "label": "Ref",
+          "type": "auto"
+        },
+        {
+          "key": "system_application",
+          "label": "System / application",
+          "type": "text"
+        },
+        {
+          "key": "ephi_stored_or_processed",
+          "label": "ePHI stored or processed",
+          "type": "text"
+        },
+        {
+          "key": "location",
+          "label": "Location",
+          "type": "text"
+        },
+        {
+          "key": "encrypted",
+          "label": "Encrypted?",
+          "type": "select",
+          "options": [
+            {
+              "value": "Yes",
+              "label": "Yes",
+              "tone": "emerald"
+            },
+            {
+              "value": "No",
+              "label": "No",
+              "tone": "rose"
+            }
+          ]
+        },
+        {
+          "key": "access_controls",
+          "label": "Access controls",
+          "type": "text"
+        },
+        {
+          "key": "business_associate",
+          "label": "Business associate?",
+          "type": "select",
+          "options": [
+            {
+              "value": "Yes",
+              "label": "Yes",
+              "tone": "emerald"
+            },
+            {
+              "value": "No",
+              "label": "No",
+              "tone": "rose"
+            }
+          ]
+        },
+        {
+          "key": "owner",
+          "label": "Owner",
+          "type": "text",
+          "picker": "users"
+        },
+        {
+          "key": "notes",
+          "label": "Notes",
+          "type": "textarea"
+        }
       ],
-      "rows": [
-       [
-        "Permitted uses",
-        "The business associate uses or discloses PHI only as permitted by the agreement or required by law"
-       ],
-       [
-        "Safeguards",
-        "It implements appropriate safeguards, including the Security Rule requirements for ePHI"
-       ],
-       [
-        "Report incidents",
-        "It reports security incidents and breaches of unsecured PHI to the covered entity"
-       ],
-       [
-        "Subcontractors",
-        "It ensures subcontractors that handle PHI agree to the same restrictions and conditions"
-       ],
-       [
-        "Individual rights",
-        "It assists with access, amendment and accounting of disclosures"
-       ],
-       [
-        "HHS access",
-        "It makes its practices, books and records available to HHS"
-       ],
-       [
-        "Return or destroy",
-        "On termination, it returns or destroys all PHI where feasible"
-       ],
-       [
-        "Termination",
-        "The covered entity may terminate if the business associate breaches a material term"
-       ]
+      "seed": [
+        {
+          "data": {
+            "ref": "1",
+            "system_application": "EHR system",
+            "ephi_stored_or_processed": "Patient records",
+            "location": "Cloud (vendor)",
+            "encrypted": "Yes",
+            "access_controls": "Role-based, MFA",
+            "business_associate": "Yes (vendor)",
+            "owner": "IT",
+            "notes": "BAA on file"
+          }
+        },
+        {
+          "data": {
+            "ref": "2",
+            "system_application": "Billing platform",
+            "ephi_stored_or_processed": "Claims, demographics",
+            "location": "Cloud (vendor)",
+            "encrypted": "Yes",
+            "access_controls": "Role-based",
+            "business_associate": "Yes (vendor)",
+            "owner": "Finance",
+            "notes": "BAA on file"
+          }
+        }
+      ],
+      "formSections": [
+        {
+          "title": "Item",
+          "keys": [
+            "ref",
+            "system_application"
+          ]
+        },
+        {
+          "title": "Assessment",
+          "keys": [
+            "ephi_stored_or_processed",
+            "location",
+            "encrypted",
+            "access_controls",
+            "business_associate",
+            "notes"
+          ]
+        },
+        {
+          "title": "Ownership & dates",
+          "keys": [
+            "owner"
+          ]
+        }
       ]
-     }
     },
     {
-     "heading": "5. Parties and Scope",
-     "body": "The agreement identifies the parties, the services the business associate provides, and the PHI involved, so the scope of permitted use is clear.\n[FILL IN: name the parties and the services covered.]"
-    },
-    {
-     "heading": "6. Term and Termination",
-     "body": "The agreement states its effective date and term, and the covered entity may terminate it if the business associate breaches a material term and does not cure it. On termination, the business associate returns or destroys all PHI where feasible, and where it is not feasible, extends the protections of this agreement to the retained PHI and limits further use."
-    },
-    {
-     "heading": "7. Roles & Responsibilities",
-     "body": "",
-     "table": {
+      "type": "hipaa__hipaa_privacy_rule_assessment_template_1",
+      "label": "Privacy Rule Assessment",
+      "description": "HIPAA — Privacy Rule Assessment (from the template).",
       "columns": [
-       "Role",
-       "Responsibilities"
+        {
+          "key": "area",
+          "label": "Area",
+          "type": "text"
+        },
+        {
+          "key": "cfr",
+          "label": "CFR",
+          "type": "text",
+          "picker": "framework_controls"
+        },
+        {
+          "key": "requirement_to_verify",
+          "label": "Requirement to verify",
+          "type": "textarea",
+          "picker": "framework_controls"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "type": "text"
+        },
+        {
+          "key": "evidence_notes",
+          "label": "Evidence / notes",
+          "type": "text",
+          "picker": "evidence"
+        },
+        {
+          "key": "owner",
+          "label": "Owner",
+          "type": "text",
+          "picker": "users"
+        }
       ],
-      "rows": [
-       [
-        "Privacy Official / legal",
-        "Puts BAAs in place and tracks them."
-       ],
-       [
-        "Managers",
-        "Ensure their teams understand and follow the policy."
-       ]
+      "seed": [
+        {
+          "data": {
+            "area": "Notice (164.520)",
+            "cfr": "164.520",
+            "requirement_to_verify": "A Notice of Privacy Practices is provided and posted",
+            "status": "",
+            "evidence_notes": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "area": "Minimum necessary (164.502(b))",
+            "cfr": "164.502(b)",
+            "requirement_to_verify": "Uses and disclosures are limited to the minimum necessary",
+            "status": "",
+            "evidence_notes": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "area": "Permitted uses (164.506)",
+            "cfr": "164.506",
+            "requirement_to_verify": "Uses and disclosures for treatment, payment and health-care operations are handled correctly",
+            "status": "",
+            "evidence_notes": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "area": "Authorisations (164.508)",
+            "cfr": "164.508",
+            "requirement_to_verify": "Valid authorisations are obtained where required",
+            "status": "",
+            "evidence_notes": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "area": "Right of access (164.524)",
+            "cfr": "164.524",
+            "requirement_to_verify": "Individuals can access their records within the required timeframe",
+            "status": "",
+            "evidence_notes": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "area": "Amendment (164.526)",
+            "cfr": "164.526",
+            "requirement_to_verify": "Individuals can request amendment of their records",
+            "status": "",
+            "evidence_notes": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "area": "Accounting (164.528)",
+            "cfr": "164.528",
+            "requirement_to_verify": "An accounting of disclosures is available on request",
+            "status": "",
+            "evidence_notes": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "area": "Business associates (164.502(e))",
+            "cfr": "164.502(e)",
+            "requirement_to_verify": "Disclosures to business associates are covered by a BAA",
+            "status": "",
+            "evidence_notes": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "area": "Safeguards (164.530)",
+            "cfr": "164.530",
+            "requirement_to_verify": "Administrative, technical and physical safeguards for PHI, plus training and complaints, are in place",
+            "status": "",
+            "evidence_notes": "",
+            "owner": ""
+          }
+        }
+      ],
+      "formSections": [
+        {
+          "title": "Item",
+          "keys": [
+            "area",
+            "cfr"
+          ]
+        },
+        {
+          "title": "Assessment",
+          "keys": [
+            "requirement_to_verify",
+            "status",
+            "evidence_notes"
+          ]
+        },
+        {
+          "title": "Ownership & dates",
+          "keys": [
+            "owner"
+          ]
+        }
       ]
-     }
     },
     {
-     "heading": "8. Compliance & Enforcement",
-     "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
-    },
-    {
-     "heading": "9. Exceptions",
-     "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
-    },
-    {
-     "heading": "10. Review",
-     "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
-    }
-   ]
-  },
-  {
-   "type": "hipaa__hipaa_contingency_plan_template_4",
-   "label": "Contingency Plan",
-   "control_ref": null,
-   "sections": [
-    {
-     "heading": "1. Purpose",
-     "body": "This contingency plan ensures the organisation can respond to an emergency or other occurrence that damages systems containing electronic protected health information, as the HIPAA Security Rule requires (164.308(a)(7))."
-    },
-    {
-     "heading": "2. Scope",
-     "body": "The systems and ePHI that support critical operations."
-    },
-    {
-     "heading": "3. Data Backup Plan",
-     "body": "Retrievable, exact copies of ePHI can be recovered after a loss:\n- Backups of ePHI are created on a defined schedule and protected (including against ransomware).\n- Backups are stored so a single event cannot destroy both the data and its backup.\n- Restoration from backup is tested so it is known to work.\n- [FILL IN: your backup scope, frequency and restore-test cadence.]"
-    },
-    {
-     "heading": "4. Disaster Recovery Plan",
-     "body": "Procedures restore any loss of ePHI and the systems that hold it, within defined recovery time and recovery point objectives, prioritising the most critical applications and data."
-    },
-    {
-     "heading": "5. Emergency Mode Operation Plan",
-     "body": "Procedures enable critical business processes to continue, and the security of ePHI to be protected, while the organisation operates in emergency mode (for example during an extended outage)."
-    },
-    {
-     "heading": "6. Testing and Criticality Analysis",
-     "body": "The plan is tested and revised periodically, and the criticality of applications and data is assessed to prioritise recovery."
-    },
-    {
-     "heading": "7. Activation and Roles",
-     "body": "The plan defines who can declare an emergency, the team responsible for executing it, and how they are contacted, so the response can be invoked quickly when systems holding ePHI are affected. [FILL IN: your activation authority and contacts.]"
-    },
-    {
-     "heading": "8. Roles & Responsibilities",
-     "body": "",
-     "table": {
+      "type": "hipaa__hipaa_security_risk_assessment_template",
+      "label": "Security Risk Assessment",
+      "description": "HIPAA — Security Risk Assessment (from the template).",
       "columns": [
-       "Role",
-       "Responsibilities"
+        {
+          "key": "safeguard_area",
+          "label": "Safeguard area",
+          "type": "text",
+          "picker": "framework_controls"
+        },
+        {
+          "key": "standard",
+          "label": "Standard",
+          "type": "text"
+        },
+        {
+          "key": "r_a",
+          "label": "R/A",
+          "type": "text"
+        },
+        {
+          "key": "implemented_y_p_n",
+          "label": "Implemented?",
+          "type": "select",
+          "options": [
+            {
+              "value": "Y",
+              "label": "Y",
+              "tone": "slate"
+            },
+            {
+              "value": "P",
+              "label": "P",
+              "tone": "slate"
+            },
+            {
+              "value": "N",
+              "label": "N",
+              "tone": "slate"
+            }
+          ]
+        },
+        {
+          "key": "likelihood_1_5",
+          "label": "Likelihood (1-5)",
+          "type": "text"
+        },
+        {
+          "key": "impact_1_5",
+          "label": "Impact (1-5)",
+          "type": "text"
+        },
+        {
+          "key": "risk",
+          "label": "Risk",
+          "type": "text"
+        },
+        {
+          "key": "remediation",
+          "label": "Remediation",
+          "type": "textarea"
+        },
+        {
+          "key": "owner",
+          "label": "Owner",
+          "type": "text",
+          "picker": "users"
+        }
       ],
-      "rows": [
-       [
-        "Security Official / IT",
-        "Owns the contingency plan."
-       ],
-       [
-        "CISO / Security Lead",
-        "Owns the policy, approves exceptions, monitors compliance and reports to leadership."
-       ],
-       [
-        "IT / Operations",
-        "Implements and maintains the technical controls described in this document."
-       ]
+      "seed": [
+        {
+          "data": {
+            "safeguard_area": "Administrative",
+            "standard": "Security Management Process (risk analysis & management)",
+            "r_a": "R",
+            "implemented_y_p_n": "",
+            "likelihood_1_5": "",
+            "impact_1_5": "",
+            "risk": "",
+            "remediation": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "safeguard_area": "Administrative",
+            "standard": "Assigned Security Responsibility",
+            "r_a": "R",
+            "implemented_y_p_n": "",
+            "likelihood_1_5": "",
+            "impact_1_5": "",
+            "risk": "",
+            "remediation": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "safeguard_area": "Administrative",
+            "standard": "Workforce Security (authorisation/clearance)",
+            "r_a": "A",
+            "implemented_y_p_n": "",
+            "likelihood_1_5": "",
+            "impact_1_5": "",
+            "risk": "",
+            "remediation": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "safeguard_area": "Administrative",
+            "standard": "Information Access Management",
+            "r_a": "R",
+            "implemented_y_p_n": "",
+            "likelihood_1_5": "",
+            "impact_1_5": "",
+            "risk": "",
+            "remediation": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "safeguard_area": "Administrative",
+            "standard": "Security Awareness & Training",
+            "r_a": "A",
+            "implemented_y_p_n": "",
+            "likelihood_1_5": "",
+            "impact_1_5": "",
+            "risk": "",
+            "remediation": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "safeguard_area": "Administrative",
+            "standard": "Security Incident Procedures",
+            "r_a": "R",
+            "implemented_y_p_n": "",
+            "likelihood_1_5": "",
+            "impact_1_5": "",
+            "risk": "",
+            "remediation": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "safeguard_area": "Administrative",
+            "standard": "Contingency Plan (backup, DR, emergency mode)",
+            "r_a": "R",
+            "implemented_y_p_n": "",
+            "likelihood_1_5": "",
+            "impact_1_5": "",
+            "risk": "",
+            "remediation": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "safeguard_area": "Administrative",
+            "standard": "Business Associate Agreements",
+            "r_a": "R",
+            "implemented_y_p_n": "",
+            "likelihood_1_5": "",
+            "impact_1_5": "",
+            "risk": "",
+            "remediation": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "safeguard_area": "Physical",
+            "standard": "Facility Access Controls",
+            "r_a": "A",
+            "implemented_y_p_n": "",
+            "likelihood_1_5": "",
+            "impact_1_5": "",
+            "risk": "",
+            "remediation": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "safeguard_area": "Physical",
+            "standard": "Workstation Use & Security",
+            "r_a": "R",
+            "implemented_y_p_n": "",
+            "likelihood_1_5": "",
+            "impact_1_5": "",
+            "risk": "",
+            "remediation": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "safeguard_area": "Physical",
+            "standard": "Device & Media Controls (disposal, re-use)",
+            "r_a": "R",
+            "implemented_y_p_n": "",
+            "likelihood_1_5": "",
+            "impact_1_5": "",
+            "risk": "",
+            "remediation": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "safeguard_area": "Technical",
+            "standard": "Access Control (unique ID, auto logoff, encryption)",
+            "r_a": "R",
+            "implemented_y_p_n": "",
+            "likelihood_1_5": "",
+            "impact_1_5": "",
+            "risk": "",
+            "remediation": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "safeguard_area": "Technical",
+            "standard": "Audit Controls",
+            "r_a": "R",
+            "implemented_y_p_n": "",
+            "likelihood_1_5": "",
+            "impact_1_5": "",
+            "risk": "",
+            "remediation": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "safeguard_area": "Technical",
+            "standard": "Integrity (protect ePHI from alteration)",
+            "r_a": "A",
+            "implemented_y_p_n": "",
+            "likelihood_1_5": "",
+            "impact_1_5": "",
+            "risk": "",
+            "remediation": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "safeguard_area": "Technical",
+            "standard": "Person/Entity Authentication",
+            "r_a": "R",
+            "implemented_y_p_n": "",
+            "likelihood_1_5": "",
+            "impact_1_5": "",
+            "risk": "",
+            "remediation": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "safeguard_area": "Technical",
+            "standard": "Transmission Security (encryption)",
+            "r_a": "A",
+            "implemented_y_p_n": "",
+            "likelihood_1_5": "",
+            "impact_1_5": "",
+            "risk": "",
+            "remediation": "",
+            "owner": ""
+          }
+        }
+      ],
+      "formSections": [
+        {
+          "title": "Item",
+          "keys": [
+            "safeguard_area",
+            "standard"
+          ]
+        },
+        {
+          "title": "Assessment",
+          "keys": [
+            "r_a",
+            "implemented_y_p_n",
+            "likelihood_1_5",
+            "impact_1_5",
+            "risk",
+            "remediation"
+          ]
+        },
+        {
+          "title": "Ownership & dates",
+          "keys": [
+            "owner"
+          ]
+        }
       ]
-     }
     },
     {
-     "heading": "9. Testing & Maintenance",
-     "body": "This plan is reviewed at least annually and after every activation or major change. Exercises (tabletop or full) are scheduled to validate the plan and results are recorded as improvement actions."
-    }
-   ]
-  },
-  {
-   "type": "hipaa__hipaa_minimum_necessary_policy_template_3",
-   "label": "Minimum Necessary Policy",
-   "control_ref": null,
-   "sections": [
-    {
-     "heading": "1. Purpose",
-     "body": "This policy implements the HIPAA minimum-necessary standard, so uses, disclosures and requests of protected health information are limited to the minimum necessary to accomplish the intended purpose."
-    },
-    {
-     "heading": "2. Scope",
-     "body": "All uses, disclosures of and requests for PHI, except where the standard does not apply."
-    },
-    {
-     "heading": "3. Role-Based Access",
-     "body": "Access to PHI is limited so that workforce members see only what their job requires:\n- For each role, the categories of PHI it needs and the conditions of access are defined.\n- Access is granted against those role definitions and removed when a role changes or ends.\n- [FILL IN: define the role-based access to PHI in your organisation.]"
-    },
-    {
-     "heading": "4. Routine Disclosures and Requests",
-     "body": "Recurring uses, disclosures and requests are constrained by design:\n- Routine and recurring disclosures and requests are limited to the minimum necessary through standard protocols.\n- Non-routine or one-off disclosures and requests are reviewed individually against the minimum-necessary standard.\n- When requesting PHI from others, the organisation likewise asks only for the minimum necessary."
-    },
-    {
-     "heading": "5. Exceptions",
-     "body": "The minimum-necessary standard does not apply to:\n- Disclosures to, or requests by, a health-care provider for treatment.\n- Disclosures to the individual who is the subject of the PHI.\n- Uses or disclosures made under a valid authorisation, to HHS, or as required by law."
-    },
-    {
-     "heading": "6. Roles & Responsibilities",
-     "body": "",
-     "table": {
+      "type": "hipaa__hipaa_security_rule_gap_assessment_template_1",
+      "label": "Security Rule Gap Assessment",
+      "description": "HIPAA — Security Rule Gap Assessment (from the template).",
       "columns": [
-       "Role",
-       "Responsibilities"
+        {
+          "key": "safeguard_area",
+          "label": "Safeguard area",
+          "type": "text",
+          "picker": "framework_controls"
+        },
+        {
+          "key": "cfr",
+          "label": "CFR",
+          "type": "text",
+          "picker": "framework_controls"
+        },
+        {
+          "key": "standard_to_verify",
+          "label": "Standard to verify",
+          "type": "textarea"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "type": "text"
+        },
+        {
+          "key": "evidence_notes",
+          "label": "Evidence / notes",
+          "type": "text",
+          "picker": "evidence"
+        },
+        {
+          "key": "owner",
+          "label": "Owner",
+          "type": "text",
+          "picker": "users"
+        }
       ],
-      "rows": [
-       [
-        "Privacy Official",
-        "Owns the minimum-necessary standard and role definitions."
-       ],
-       [
-        "Managers",
-        "Ensure their teams understand and follow the policy."
-       ]
-      ]
-     }
-    },
-    {
-     "heading": "7. Compliance & Enforcement",
-     "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
-    },
-    {
-     "heading": "8. Exceptions",
-     "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
-    },
-    {
-     "heading": "9. Review",
-     "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
-    }
-   ]
-  },
-  {
-   "type": "hipaa__hipaa_privacy_rule_policy_template_4",
-   "label": "Privacy Rule Policy",
-   "control_ref": null,
-   "sections": [
-    {
-     "heading": "1. Purpose",
-     "body": "This policy governs how the organisation uses and discloses protected health information (PHI) and how it respects individuals' rights, as the HIPAA Privacy Rule requires."
-    },
-    {
-     "heading": "2. Scope",
-     "body": "All PHI the organisation maintains, in any form, and all workforce members who handle it."
-    },
-    {
-     "heading": "3. Uses and Disclosures",
-     "body": "PHI is used and disclosed only where the Privacy Rule permits:\n- For treatment, payment and health-care operations.\n- As otherwise permitted or required by law (with the conditions the rule sets).\n- Otherwise, only with the individual's valid written authorisation."
-    },
-    {
-     "heading": "4. Minimum Necessary",
-     "body": "Uses, disclosures and requests are limited to the minimum necessary to accomplish the purpose, except where the minimum-necessary standard does not apply (such as treatment, or disclosures to the individual)."
-    },
-    {
-     "heading": "5. Notice of Privacy Practices",
-     "body": "A Notice of Privacy Practices describing how PHI is used and individuals' rights is provided and posted. [FILL IN: reference your Notice of Privacy Practices.]"
-    },
-    {
-     "heading": "6. Individual Rights",
-     "body": "Individuals can exercise their rights:\n- Access and obtain a copy of their records within the required timeframe.\n- Request amendment of their records.\n- Request an accounting of disclosures and restrictions on uses and disclosures.\n- Complain without retaliation."
-    },
-    {
-     "heading": "7. Safeguards and Training",
-     "body": "Reasonable safeguards protect PHI, workforce members are trained, and complaints are handled."
-    },
-    {
-     "heading": "8. Roles & Responsibilities",
-     "body": "",
-     "table": {
-      "columns": [
-       "Role",
-       "Responsibilities"
+      "seed": [
+        {
+          "data": {
+            "safeguard_area": "Administrative (164.308)",
+            "cfr": "164.308(a)(1)",
+            "standard_to_verify": "Security management process: risk analysis, risk management, sanction policy and information system activity review",
+            "status": "",
+            "evidence_notes": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "safeguard_area": "Administrative (164.308)",
+            "cfr": "164.308(a)(2)",
+            "standard_to_verify": "Assigned security responsibility (a named security official)",
+            "status": "",
+            "evidence_notes": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "safeguard_area": "Administrative (164.308)",
+            "cfr": "164.308(a)(3)",
+            "standard_to_verify": "Workforce security: authorisation, clearance and termination procedures",
+            "status": "",
+            "evidence_notes": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "safeguard_area": "Administrative (164.308)",
+            "cfr": "164.308(a)(4)",
+            "standard_to_verify": "Information access management: access authorisation, establishment and modification",
+            "status": "",
+            "evidence_notes": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "safeguard_area": "Administrative (164.308)",
+            "cfr": "164.308(a)(5)",
+            "standard_to_verify": "Security awareness and training, including malware protection, log-in monitoring and password management",
+            "status": "",
+            "evidence_notes": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "safeguard_area": "Administrative (164.308)",
+            "cfr": "164.308(a)(6)",
+            "standard_to_verify": "Security incident procedures: response and reporting",
+            "status": "",
+            "evidence_notes": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "safeguard_area": "Administrative (164.308)",
+            "cfr": "164.308(a)(7)",
+            "standard_to_verify": "Contingency plan: data backup, disaster recovery, emergency mode operation, testing and criticality analysis",
+            "status": "",
+            "evidence_notes": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "safeguard_area": "Administrative (164.308)",
+            "cfr": "164.308(a)(8)",
+            "standard_to_verify": "Periodic evaluation of security safeguards",
+            "status": "",
+            "evidence_notes": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "safeguard_area": "Administrative (164.308)",
+            "cfr": "164.308(b)",
+            "standard_to_verify": "Business associate contracts and other arrangements",
+            "status": "",
+            "evidence_notes": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "safeguard_area": "Physical (164.310)",
+            "cfr": "164.310(a)",
+            "standard_to_verify": "Facility access controls",
+            "status": "",
+            "evidence_notes": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "safeguard_area": "Physical (164.310)",
+            "cfr": "164.310(b)(c)",
+            "standard_to_verify": "Workstation use and workstation security",
+            "status": "",
+            "evidence_notes": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "safeguard_area": "Physical (164.310)",
+            "cfr": "164.310(d)",
+            "standard_to_verify": "Device and media controls: disposal, media re-use, accountability and backup",
+            "status": "",
+            "evidence_notes": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "safeguard_area": "Technical (164.312)",
+            "cfr": "164.312(a)",
+            "standard_to_verify": "Access control: unique user IDs, emergency access, automatic logoff and encryption",
+            "status": "",
+            "evidence_notes": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "safeguard_area": "Technical (164.312)",
+            "cfr": "164.312(b)",
+            "standard_to_verify": "Audit controls",
+            "status": "",
+            "evidence_notes": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "safeguard_area": "Technical (164.312)",
+            "cfr": "164.312(c)",
+            "standard_to_verify": "Integrity controls for ePHI",
+            "status": "",
+            "evidence_notes": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "safeguard_area": "Technical (164.312)",
+            "cfr": "164.312(d)",
+            "standard_to_verify": "Person or entity authentication",
+            "status": "",
+            "evidence_notes": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "safeguard_area": "Technical (164.312)",
+            "cfr": "164.312(e)",
+            "standard_to_verify": "Transmission security, including encryption",
+            "status": "",
+            "evidence_notes": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "safeguard_area": "Documentation (164.316)",
+            "cfr": "164.316",
+            "standard_to_verify": "Policies and procedures are documented and retained for six years",
+            "status": "",
+            "evidence_notes": "",
+            "owner": ""
+          }
+        }
       ],
-      "rows": [
-       [
-        "Privacy Official",
-        "Owns the Privacy Rule programme."
-       ],
-       [
-        "Managers",
-        "Ensure their teams understand and follow the policy."
-       ]
+      "formSections": [
+        {
+          "title": "Item",
+          "keys": [
+            "safeguard_area",
+            "cfr"
+          ]
+        },
+        {
+          "title": "Assessment",
+          "keys": [
+            "standard_to_verify",
+            "status",
+            "evidence_notes"
+          ]
+        },
+        {
+          "title": "Ownership & dates",
+          "keys": [
+            "owner"
+          ]
+        }
       ]
-     }
-    },
-    {
-     "heading": "9. Compliance & Enforcement",
-     "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
-    },
-    {
-     "heading": "10. Exceptions",
-     "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
-    },
-    {
-     "heading": "11. Review",
-     "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
     }
-   ]
-  },
-  {
-   "type": "hipaa__hipaa_sanction_policy_template_3",
-   "label": "Sanction Policy",
-   "control_ref": null,
-   "sections": [
+  ],
+  "documents": [
     {
-     "heading": "1. Purpose",
-     "body": "This policy establishes the sanctions applied to workforce members who fail to comply with the organisation's HIPAA policies and procedures, as the Security Rule requires."
-    },
-    {
-     "heading": "2. Scope",
-     "body": "All workforce members who handle PHI or ePHI."
-    },
-    {
-     "heading": "3. Sanctions",
-     "body": "Failures to comply with the organisation's HIPAA policies and procedures result in disciplinary action:\n- Action is proportionate to the nature and severity of the violation, up to and including termination.\n- Sanctions are applied consistently and documented.\n- [FILL IN: reference your disciplinary scale or tiers.]"
-    },
-    {
-     "heading": "4. Process and Records",
-     "body": "Suspected violations are investigated, the appropriate sanction is decided and applied, and the record of the violation and the action taken is retained for six years. Sanctions are not applied to a workforce member for filing a good-faith complaint, assisting an investigation, or opposing an unlawful practice, nor for exercising HIPAA rights."
-    },
-    {
-     "heading": "5. Consistency and Awareness",
-     "body": "Sanctions are applied consistently regardless of a workforce member's seniority, in proportion to the nature and severity of the violation, and the workforce is made aware that failing to comply with HIPAA policies carries consequences."
-    },
-    {
-     "heading": "6. Roles & Responsibilities",
-     "body": "",
-     "table": {
-      "columns": [
-       "Role",
-       "Responsibilities"
-      ],
-      "rows": [
-       [
-        "Privacy / Security Official",
-        "Owns sanctions."
-       ],
-       [
-        "Managers",
-        "Ensure their teams understand and follow the policy."
-       ]
+      "type": "hipaa__hipaa_breach_notification_procedure_template_4",
+      "label": "Breach Notification Procedure",
+      "control_ref": null,
+      "sections": [
+        {
+          "heading": "1. Purpose",
+          "body": "This procedure ensures the organisation responds to a breach of unsecured protected health information correctly and within the timelines the HIPAA Breach Notification Rule requires."
+        },
+        {
+          "heading": "2. Scope",
+          "body": "All suspected or confirmed breaches of unsecured PHI."
+        },
+        {
+          "heading": "3. Assess Whether a Breach Occurred",
+          "body": "An impermissible acquisition, access, use or disclosure of unsecured PHI is presumed a breach unless a documented risk assessment shows a low probability that PHI was compromised. The four-factor assessment considers:\n- The nature and extent of the PHI involved, including the types of identifiers.\n- The unauthorised person who used the PHI or to whom it was disclosed.\n- Whether the PHI was actually acquired or viewed.\n- The extent to which the risk to the PHI has been mitigated."
+        },
+        {
+          "heading": "4. Notify Individuals",
+          "body": "Affected individuals are notified without unreasonable delay and no later than 60 calendar days after discovery, with the information the rule requires."
+        },
+        {
+          "heading": "5. Notify HHS",
+          "body": "The Secretary of Health and Human Services is notified: within 60 days for breaches affecting 500 or more individuals, and annually for smaller breaches."
+        },
+        {
+          "heading": "6. Notify the Media",
+          "body": "For a breach affecting more than 500 residents of a state or jurisdiction, prominent media outlets are notified without unreasonable delay and within 60 days."
+        },
+        {
+          "heading": "7. Business Associates",
+          "body": "A business associate notifies the covered entity of a breach without unreasonable delay and within 60 days. [FILL IN: name who coordinates breach response.]"
+        },
+        {
+          "heading": "8. Roles & Responsibilities",
+          "body": "",
+          "table": {
+            "columns": [
+              "Role",
+              "Responsibilities"
+            ],
+            "rows": [
+              [
+                "Privacy / Security Official",
+                "Runs breach response and notification."
+              ],
+              [
+                "CISO / Security Lead",
+                "Owns the policy, approves exceptions, monitors compliance and reports to leadership."
+              ],
+              [
+                "Managers",
+                "Ensure their teams understand and follow the policy."
+              ]
+            ]
+          }
+        },
+        {
+          "heading": "9. Testing & Maintenance",
+          "body": "This plan is reviewed at least annually and after every activation or major change. Exercises (tabletop or full) are scheduled to validate the plan and results are recorded as improvement actions."
+        }
       ]
-     }
     },
     {
-     "heading": "7. Compliance & Enforcement",
-     "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
-    },
-    {
-     "heading": "8. Exceptions",
-     "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
-    },
-    {
-     "heading": "9. Review",
-     "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
-    }
-   ]
-  },
-  {
-   "type": "hipaa__hipaa_security_rule_policy_template_3",
-   "label": "Security Rule Policy",
-   "control_ref": null,
-   "sections": [
-    {
-     "heading": "1. Purpose",
-     "body": "This policy implements the administrative, physical and technical safeguards the HIPAA Security Rule requires to protect the confidentiality, integrity and availability of electronic protected health information (ePHI)."
-    },
-    {
-     "heading": "2. Scope",
-     "body": "All ePHI the organisation creates, receives, maintains or transmits, and the systems and workforce that handle it."
-    },
-    {
-     "heading": "3. Administrative Safeguards",
-     "body": "The organisation maintains administrative safeguards:\n- A security management process, including a risk analysis and risk management.\n- An assigned security official responsible for the policy.\n- Workforce security and information access management on least privilege.\n- Security awareness and training, security incident procedures and a contingency plan.\n- A periodic evaluation of safeguards."
-    },
-    {
-     "heading": "4. Physical Safeguards",
-     "body": "Physical safeguards protect facilities, workstations and devices:\n- Facility access controls and workstation use and security.\n- Device and media controls covering disposal, re-use, accountability and backup."
-    },
-    {
-     "heading": "5. Technical Safeguards",
-     "body": "Technical safeguards protect ePHI in systems:\n- Access control with unique user IDs, automatic logoff and encryption where appropriate.\n- Audit controls, integrity controls and authentication.\n- Transmission security, including encryption of ePHI in transit.\n- [FILL IN: name your EHR and key systems and their controls.]"
-    },
-    {
-     "heading": "6. Business Associates and Documentation",
-     "body": "Business associates are bound by agreements, and policies and records are retained for six years."
-    },
-    {
-     "heading": "7. Roles & Responsibilities",
-     "body": "",
-     "table": {
-      "columns": [
-       "Role",
-       "Responsibilities"
-      ],
-      "rows": [
-       [
-        "Security Official",
-        "Owns the Security Rule programme."
-       ],
-       [
-        "CISO / Security Lead",
-        "Owns the policy, approves exceptions, monitors compliance and reports to leadership."
-       ],
-       [
-        "IT / Operations",
-        "Implements and maintains the technical controls described in this document."
-       ]
+      "type": "hipaa__hipaa_business_associate_agreement_template_3",
+      "label": "Business Associate Agreement",
+      "control_ref": null,
+      "sections": [
+        {
+          "heading": "1. Purpose",
+          "body": "This business associate agreement sets out the terms HIPAA requires when a business associate creates, receives, maintains or transmits protected health information on behalf of a covered entity (or another business associate)."
+        },
+        {
+          "heading": "2. Scope",
+          "body": "The relationship between the covered entity and the business associate, and the PHI the business associate handles."
+        },
+        {
+          "heading": "3. When a BAA Is Required",
+          "body": "A business associate agreement is put in place before a business associate creates, receives, maintains or transmits protected health information (PHI) on the covered entity's behalf. Sharing PHI without a signed agreement in place is not permitted.\n[FILL IN: identify the business associates you use and the PHI each one handles.]"
+        },
+        {
+          "heading": "4. Required Terms",
+          "body": "The agreement includes the terms required by 45 CFR 164.504(e). At a minimum, the business associate:",
+          "table": {
+            "columns": [
+              "Required term",
+              "What it must do"
+            ],
+            "rows": [
+              [
+                "Permitted uses",
+                "The business associate uses or discloses PHI only as permitted by the agreement or required by law"
+              ],
+              [
+                "Safeguards",
+                "It implements appropriate safeguards, including the Security Rule requirements for ePHI"
+              ],
+              [
+                "Report incidents",
+                "It reports security incidents and breaches of unsecured PHI to the covered entity"
+              ],
+              [
+                "Subcontractors",
+                "It ensures subcontractors that handle PHI agree to the same restrictions and conditions"
+              ],
+              [
+                "Individual rights",
+                "It assists with access, amendment and accounting of disclosures"
+              ],
+              [
+                "HHS access",
+                "It makes its practices, books and records available to HHS"
+              ],
+              [
+                "Return or destroy",
+                "On termination, it returns or destroys all PHI where feasible"
+              ],
+              [
+                "Termination",
+                "The covered entity may terminate if the business associate breaches a material term"
+              ]
+            ]
+          }
+        },
+        {
+          "heading": "5. Parties and Scope",
+          "body": "The agreement identifies the parties, the services the business associate provides, and the PHI involved, so the scope of permitted use is clear.\n[FILL IN: name the parties and the services covered.]"
+        },
+        {
+          "heading": "6. Term and Termination",
+          "body": "The agreement states its effective date and term, and the covered entity may terminate it if the business associate breaches a material term and does not cure it. On termination, the business associate returns or destroys all PHI where feasible, and where it is not feasible, extends the protections of this agreement to the retained PHI and limits further use."
+        },
+        {
+          "heading": "7. Roles & Responsibilities",
+          "body": "",
+          "table": {
+            "columns": [
+              "Role",
+              "Responsibilities"
+            ],
+            "rows": [
+              [
+                "Privacy Official / legal",
+                "Puts BAAs in place and tracks them."
+              ],
+              [
+                "Managers",
+                "Ensure their teams understand and follow the policy."
+              ]
+            ]
+          }
+        },
+        {
+          "heading": "8. Compliance & Enforcement",
+          "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+        },
+        {
+          "heading": "9. Exceptions",
+          "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+        },
+        {
+          "heading": "10. Review",
+          "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+        }
       ]
-     }
     },
     {
-     "heading": "8. Compliance & Enforcement",
-     "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
-    },
-    {
-     "heading": "9. Exceptions",
-     "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
-    },
-    {
-     "heading": "10. Review",
-     "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
-    }
-   ]
-  },
-  {
-   "type": "hipaa__hipaa_workforce_training_policy_template_3",
-   "label": "Workforce Training Policy",
-   "control_ref": null,
-   "sections": [
-    {
-     "heading": "1. Purpose",
-     "body": "This policy ensures all workforce members receive security and privacy awareness training, as the HIPAA Security and Privacy Rules require."
-    },
-    {
-     "heading": "2. Scope",
-     "body": "All workforce members, including employees, volunteers and trainees, who handle PHI."
-    },
-    {
-     "heading": "3. Training Programme",
-     "body": "Training is provided and documented:\n- To each new workforce member within a reasonable time of joining.\n- Periodically thereafter, and when policies or systems change materially.\n- Covering security awareness (malware, log-in monitoring, passwords) and privacy obligations.\n- [FILL IN: state your training cadence and platform.]"
-    },
-    {
-     "heading": "4. Security Reminders and Role-Specific Content",
-     "body": "Training is reinforced and made relevant:\n- Periodic security reminders are issued to the workforce between formal training sessions.\n- Content is tailored to a member's role and level of access to PHI, so it reflects the risks they actually handle.\n- Topics include guarding against, detecting and reporting malicious software, monitoring log-in attempts, and managing passwords."
-    },
-    {
-     "heading": "5. Records",
-     "body": "Training assignment and completion are documented and retained for six years, and non-completion is followed up so coverage can be demonstrated."
-    },
-    {
-     "heading": "6. Roles & Responsibilities",
-     "body": "",
-     "table": {
-      "columns": [
-       "Role",
-       "Responsibilities"
-      ],
-      "rows": [
-       [
-        "Privacy / Security Official",
-        "Owns training."
-       ],
-       [
-        "Managers",
-        "Ensure their teams understand and follow the policy."
-       ],
-       [
-        "All staff & contractors",
-        "Comply with the policy and report suspected violations or incidents."
-       ]
+      "type": "hipaa__hipaa_contingency_plan_template_4",
+      "label": "Contingency Plan",
+      "control_ref": null,
+      "sections": [
+        {
+          "heading": "1. Purpose",
+          "body": "This contingency plan ensures the organisation can respond to an emergency or other occurrence that damages systems containing electronic protected health information, as the HIPAA Security Rule requires (164.308(a)(7))."
+        },
+        {
+          "heading": "2. Scope",
+          "body": "The systems and ePHI that support critical operations."
+        },
+        {
+          "heading": "3. Data Backup Plan",
+          "body": "Retrievable, exact copies of ePHI can be recovered after a loss:\n- Backups of ePHI are created on a defined schedule and protected (including against ransomware).\n- Backups are stored so a single event cannot destroy both the data and its backup.\n- Restoration from backup is tested so it is known to work.\n- [FILL IN: your backup scope, frequency and restore-test cadence.]"
+        },
+        {
+          "heading": "4. Disaster Recovery Plan",
+          "body": "Procedures restore any loss of ePHI and the systems that hold it, within defined recovery time and recovery point objectives, prioritising the most critical applications and data."
+        },
+        {
+          "heading": "5. Emergency Mode Operation Plan",
+          "body": "Procedures enable critical business processes to continue, and the security of ePHI to be protected, while the organisation operates in emergency mode (for example during an extended outage)."
+        },
+        {
+          "heading": "6. Testing and Criticality Analysis",
+          "body": "The plan is tested and revised periodically, and the criticality of applications and data is assessed to prioritise recovery."
+        },
+        {
+          "heading": "7. Activation and Roles",
+          "body": "The plan defines who can declare an emergency, the team responsible for executing it, and how they are contacted, so the response can be invoked quickly when systems holding ePHI are affected. [FILL IN: your activation authority and contacts.]"
+        },
+        {
+          "heading": "8. Roles & Responsibilities",
+          "body": "",
+          "table": {
+            "columns": [
+              "Role",
+              "Responsibilities"
+            ],
+            "rows": [
+              [
+                "Security Official / IT",
+                "Owns the contingency plan."
+              ],
+              [
+                "CISO / Security Lead",
+                "Owns the policy, approves exceptions, monitors compliance and reports to leadership."
+              ],
+              [
+                "IT / Operations",
+                "Implements and maintains the technical controls described in this document."
+              ]
+            ]
+          }
+        },
+        {
+          "heading": "9. Testing & Maintenance",
+          "body": "This plan is reviewed at least annually and after every activation or major change. Exercises (tabletop or full) are scheduled to validate the plan and results are recorded as improvement actions."
+        }
       ]
-     }
     },
     {
-     "heading": "7. Compliance & Enforcement",
-     "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+      "type": "hipaa__hipaa_minimum_necessary_policy_template_3",
+      "label": "Minimum Necessary Policy",
+      "control_ref": null,
+      "sections": [
+        {
+          "heading": "1. Purpose",
+          "body": "This policy implements the HIPAA minimum-necessary standard, so uses, disclosures and requests of protected health information are limited to the minimum necessary to accomplish the intended purpose."
+        },
+        {
+          "heading": "2. Scope",
+          "body": "All uses, disclosures of and requests for PHI, except where the standard does not apply."
+        },
+        {
+          "heading": "3. Role-Based Access",
+          "body": "Access to PHI is limited so that workforce members see only what their job requires:\n- For each role, the categories of PHI it needs and the conditions of access are defined.\n- Access is granted against those role definitions and removed when a role changes or ends.\n- [FILL IN: define the role-based access to PHI in your organisation.]"
+        },
+        {
+          "heading": "4. Routine Disclosures and Requests",
+          "body": "Recurring uses, disclosures and requests are constrained by design:\n- Routine and recurring disclosures and requests are limited to the minimum necessary through standard protocols.\n- Non-routine or one-off disclosures and requests are reviewed individually against the minimum-necessary standard.\n- When requesting PHI from others, the organisation likewise asks only for the minimum necessary."
+        },
+        {
+          "heading": "5. Exceptions",
+          "body": "The minimum-necessary standard does not apply to:\n- Disclosures to, or requests by, a health-care provider for treatment.\n- Disclosures to the individual who is the subject of the PHI.\n- Uses or disclosures made under a valid authorisation, to HHS, or as required by law."
+        },
+        {
+          "heading": "6. Roles & Responsibilities",
+          "body": "",
+          "table": {
+            "columns": [
+              "Role",
+              "Responsibilities"
+            ],
+            "rows": [
+              [
+                "Privacy Official",
+                "Owns the minimum-necessary standard and role definitions."
+              ],
+              [
+                "Managers",
+                "Ensure their teams understand and follow the policy."
+              ]
+            ]
+          }
+        },
+        {
+          "heading": "7. Compliance & Enforcement",
+          "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+        },
+        {
+          "heading": "8. Exceptions",
+          "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+        },
+        {
+          "heading": "9. Review",
+          "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+        }
+      ]
     },
     {
-     "heading": "8. Exceptions",
-     "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+      "type": "hipaa__hipaa_privacy_rule_policy_template_4",
+      "label": "Privacy Rule Policy",
+      "control_ref": null,
+      "sections": [
+        {
+          "heading": "1. Purpose",
+          "body": "This policy governs how the organisation uses and discloses protected health information (PHI) and how it respects individuals' rights, as the HIPAA Privacy Rule requires."
+        },
+        {
+          "heading": "2. Scope",
+          "body": "All PHI the organisation maintains, in any form, and all workforce members who handle it."
+        },
+        {
+          "heading": "3. Uses and Disclosures",
+          "body": "PHI is used and disclosed only where the Privacy Rule permits:\n- For treatment, payment and health-care operations.\n- As otherwise permitted or required by law (with the conditions the rule sets).\n- Otherwise, only with the individual's valid written authorisation."
+        },
+        {
+          "heading": "4. Minimum Necessary",
+          "body": "Uses, disclosures and requests are limited to the minimum necessary to accomplish the purpose, except where the minimum-necessary standard does not apply (such as treatment, or disclosures to the individual)."
+        },
+        {
+          "heading": "5. Notice of Privacy Practices",
+          "body": "A Notice of Privacy Practices describing how PHI is used and individuals' rights is provided and posted. [FILL IN: reference your Notice of Privacy Practices.]"
+        },
+        {
+          "heading": "6. Individual Rights",
+          "body": "Individuals can exercise their rights:\n- Access and obtain a copy of their records within the required timeframe.\n- Request amendment of their records.\n- Request an accounting of disclosures and restrictions on uses and disclosures.\n- Complain without retaliation."
+        },
+        {
+          "heading": "7. Safeguards and Training",
+          "body": "Reasonable safeguards protect PHI, workforce members are trained, and complaints are handled."
+        },
+        {
+          "heading": "8. Roles & Responsibilities",
+          "body": "",
+          "table": {
+            "columns": [
+              "Role",
+              "Responsibilities"
+            ],
+            "rows": [
+              [
+                "Privacy Official",
+                "Owns the Privacy Rule programme."
+              ],
+              [
+                "Managers",
+                "Ensure their teams understand and follow the policy."
+              ]
+            ]
+          }
+        },
+        {
+          "heading": "9. Compliance & Enforcement",
+          "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+        },
+        {
+          "heading": "10. Exceptions",
+          "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+        },
+        {
+          "heading": "11. Review",
+          "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+        }
+      ]
     },
     {
-     "heading": "9. Review",
-     "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+      "type": "hipaa__hipaa_sanction_policy_template_3",
+      "label": "Sanction Policy",
+      "control_ref": null,
+      "sections": [
+        {
+          "heading": "1. Purpose",
+          "body": "This policy establishes the sanctions applied to workforce members who fail to comply with the organisation's HIPAA policies and procedures, as the Security Rule requires."
+        },
+        {
+          "heading": "2. Scope",
+          "body": "All workforce members who handle PHI or ePHI."
+        },
+        {
+          "heading": "3. Sanctions",
+          "body": "Failures to comply with the organisation's HIPAA policies and procedures result in disciplinary action:\n- Action is proportionate to the nature and severity of the violation, up to and including termination.\n- Sanctions are applied consistently and documented.\n- [FILL IN: reference your disciplinary scale or tiers.]"
+        },
+        {
+          "heading": "4. Process and Records",
+          "body": "Suspected violations are investigated, the appropriate sanction is decided and applied, and the record of the violation and the action taken is retained for six years. Sanctions are not applied to a workforce member for filing a good-faith complaint, assisting an investigation, or opposing an unlawful practice, nor for exercising HIPAA rights."
+        },
+        {
+          "heading": "5. Consistency and Awareness",
+          "body": "Sanctions are applied consistently regardless of a workforce member's seniority, in proportion to the nature and severity of the violation, and the workforce is made aware that failing to comply with HIPAA policies carries consequences."
+        },
+        {
+          "heading": "6. Roles & Responsibilities",
+          "body": "",
+          "table": {
+            "columns": [
+              "Role",
+              "Responsibilities"
+            ],
+            "rows": [
+              [
+                "Privacy / Security Official",
+                "Owns sanctions."
+              ],
+              [
+                "Managers",
+                "Ensure their teams understand and follow the policy."
+              ]
+            ]
+          }
+        },
+        {
+          "heading": "7. Compliance & Enforcement",
+          "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+        },
+        {
+          "heading": "8. Exceptions",
+          "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+        },
+        {
+          "heading": "9. Review",
+          "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+        }
+      ]
+    },
+    {
+      "type": "hipaa__hipaa_security_rule_policy_template_3",
+      "label": "Security Rule Policy",
+      "control_ref": null,
+      "sections": [
+        {
+          "heading": "1. Purpose",
+          "body": "This policy implements the administrative, physical and technical safeguards the HIPAA Security Rule requires to protect the confidentiality, integrity and availability of electronic protected health information (ePHI)."
+        },
+        {
+          "heading": "2. Scope",
+          "body": "All ePHI the organisation creates, receives, maintains or transmits, and the systems and workforce that handle it."
+        },
+        {
+          "heading": "3. Administrative Safeguards",
+          "body": "The organisation maintains administrative safeguards:\n- A security management process, including a risk analysis and risk management.\n- An assigned security official responsible for the policy.\n- Workforce security and information access management on least privilege.\n- Security awareness and training, security incident procedures and a contingency plan.\n- A periodic evaluation of safeguards."
+        },
+        {
+          "heading": "4. Physical Safeguards",
+          "body": "Physical safeguards protect facilities, workstations and devices:\n- Facility access controls and workstation use and security.\n- Device and media controls covering disposal, re-use, accountability and backup."
+        },
+        {
+          "heading": "5. Technical Safeguards",
+          "body": "Technical safeguards protect ePHI in systems:\n- Access control with unique user IDs, automatic logoff and encryption where appropriate.\n- Audit controls, integrity controls and authentication.\n- Transmission security, including encryption of ePHI in transit.\n- [FILL IN: name your EHR and key systems and their controls.]"
+        },
+        {
+          "heading": "6. Business Associates and Documentation",
+          "body": "Business associates are bound by agreements, and policies and records are retained for six years."
+        },
+        {
+          "heading": "7. Roles & Responsibilities",
+          "body": "",
+          "table": {
+            "columns": [
+              "Role",
+              "Responsibilities"
+            ],
+            "rows": [
+              [
+                "Security Official",
+                "Owns the Security Rule programme."
+              ],
+              [
+                "CISO / Security Lead",
+                "Owns the policy, approves exceptions, monitors compliance and reports to leadership."
+              ],
+              [
+                "IT / Operations",
+                "Implements and maintains the technical controls described in this document."
+              ]
+            ]
+          }
+        },
+        {
+          "heading": "8. Compliance & Enforcement",
+          "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+        },
+        {
+          "heading": "9. Exceptions",
+          "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+        },
+        {
+          "heading": "10. Review",
+          "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+        }
+      ]
+    },
+    {
+      "type": "hipaa__hipaa_workforce_training_policy_template_3",
+      "label": "Workforce Training Policy",
+      "control_ref": null,
+      "sections": [
+        {
+          "heading": "1. Purpose",
+          "body": "This policy ensures all workforce members receive security and privacy awareness training, as the HIPAA Security and Privacy Rules require."
+        },
+        {
+          "heading": "2. Scope",
+          "body": "All workforce members, including employees, volunteers and trainees, who handle PHI."
+        },
+        {
+          "heading": "3. Training Programme",
+          "body": "Training is provided and documented:\n- To each new workforce member within a reasonable time of joining.\n- Periodically thereafter, and when policies or systems change materially.\n- Covering security awareness (malware, log-in monitoring, passwords) and privacy obligations.\n- [FILL IN: state your training cadence and platform.]"
+        },
+        {
+          "heading": "4. Security Reminders and Role-Specific Content",
+          "body": "Training is reinforced and made relevant:\n- Periodic security reminders are issued to the workforce between formal training sessions.\n- Content is tailored to a member's role and level of access to PHI, so it reflects the risks they actually handle.\n- Topics include guarding against, detecting and reporting malicious software, monitoring log-in attempts, and managing passwords."
+        },
+        {
+          "heading": "5. Records",
+          "body": "Training assignment and completion are documented and retained for six years, and non-completion is followed up so coverage can be demonstrated."
+        },
+        {
+          "heading": "6. Roles & Responsibilities",
+          "body": "",
+          "table": {
+            "columns": [
+              "Role",
+              "Responsibilities"
+            ],
+            "rows": [
+              [
+                "Privacy / Security Official",
+                "Owns training."
+              ],
+              [
+                "Managers",
+                "Ensure their teams understand and follow the policy."
+              ],
+              [
+                "All staff & contractors",
+                "Comply with the policy and report suspected violations or incidents."
+              ]
+            ]
+          }
+        },
+        {
+          "heading": "7. Compliance & Enforcement",
+          "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+        },
+        {
+          "heading": "8. Exceptions",
+          "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+        },
+        {
+          "heading": "9. Review",
+          "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+        }
+      ]
     }
-   ]
-  }
- ]
+  ]
 }

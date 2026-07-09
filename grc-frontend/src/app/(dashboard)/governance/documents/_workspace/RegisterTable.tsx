@@ -96,7 +96,7 @@ export function RegisterTable({
       minWidth: '150px',
       render: (d) => (
         <FrameworkPills
-          ids={d.applicable_framework_ids ?? d.framework_ids}
+          ids={d.framework_ids ?? []}
           nameMap={nameMap}
           max={3}
         />

@@ -10,8 +10,6 @@
  * hairline borders, no gradients, lucide strokeWidth 1.75.
  */
 
-import { Clock } from 'lucide-react';
-
 export interface TimelineEvidence {
   uploaded_at: string | null;
   uploader_name: string | null;
@@ -58,7 +56,7 @@ export default function EvidenceTimeline({
     },
     {
       key: 'ocr',
-      label: 'OCR extracted',
+      label: 'Text extracted',
       meta: evidence.ocr_processed_at ? fmtDateTime(evidence.ocr_processed_at) : null,
       date: evidence.ocr_processed_at,
       done: !!evidence.ocr_processed_at,
@@ -92,31 +90,30 @@ export default function EvidenceTimeline({
   const steps = raw.filter((s) => s.key === 'approval' || s.date);
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
-      <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-800">
-        <Clock className="h-4 w-4 text-primary-600" strokeWidth={1.75} />
-        Lifecycle
-      </h3>
-      <ol className="relative space-y-4">
+    <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
+      {/* Horizontal lifecycle stepper: dots joined by connector lines, labels
+          left-aligned beneath each dot. Green = done, hollow slate = awaiting. */}
+      <ol className="flex items-start">
         {steps.map((step, i) => {
           const isLast = i === steps.length - 1;
           return (
-            <li key={step.key} className="relative flex gap-3">
-              {/* connector line */}
-              {!isLast && (
+            <li key={step.key} className={`relative min-w-0 ${isLast ? 'flex-none' : 'flex-1'}`}>
+              <div className="flex items-center">
                 <span
-                  className="absolute left-[5px] top-4 h-full w-px bg-slate-200"
+                  className={`relative z-10 h-3.5 w-3.5 shrink-0 rounded-full ${
+                    step.done ? 'bg-emerald-500' : 'border-2 border-slate-300 bg-white'
+                  }`}
                   aria-hidden
                 />
-              )}
-              <span
-                className={`relative z-10 mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${
-                  step.done ? 'bg-emerald-500' : 'bg-slate-300'
-                }`}
-                aria-hidden
-              />
-              <div className="min-w-0">
-                <p className={`text-sm font-medium ${step.done ? 'text-slate-800' : 'text-slate-500'}`}>
+                {!isLast && (
+                  <span
+                    className={`h-0.5 w-full ${step.done ? 'bg-emerald-500' : 'bg-slate-200'}`}
+                    aria-hidden
+                  />
+                )}
+              </div>
+              <div className="mt-2 pr-3">
+                <p className={`truncate text-sm font-medium ${step.done ? 'text-slate-800' : 'text-slate-500'}`}>
                   {step.label}
                 </p>
                 {step.meta && <p className="mt-0.5 truncate text-xs text-slate-500">{step.meta}</p>}

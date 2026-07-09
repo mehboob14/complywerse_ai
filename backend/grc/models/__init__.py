@@ -8,4 +8,5 @@ Imports the last section part, which (via a chain of `from .prev import *`){nl}t
 # is not reachable from _42, so import it explicitly to keep those models loaded.
 from ._42_metric_snapshots import *  # noqa: F401,F403
 from ._43_framework_templates_models import *  # noqa: F401,F403  # framework template registers + documents
+from ._44_business_continuity_management_models import *  # noqa: F401,F403  # BCM plans/BIA/drills/findings (chains from _43)
 from ._40_access_review_models import *  # noqa: F401,F403
