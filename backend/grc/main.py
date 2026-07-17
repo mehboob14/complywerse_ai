@@ -77,6 +77,7 @@ from .modules.compliance_plugins import compliance_plugins_router
 from .routers.connect_wizard_router import router as connect_wizard_router
 from .routers.access_review_router import router as access_review_router
 from .routers.ai_recommendations_router import router as ai_recommendations_router
+from .routers.reporting_router import router as reporting_router
 from .middleware.subdomain import TenantMiddleware
 
 app = FastAPI(
@@ -199,6 +200,7 @@ app.include_router(certification_router)
 app.include_router(advanced_erm_router)
 app.include_router(ai_risk_assessment_router)
 app.include_router(ai_recommendations_router)
+app.include_router(reporting_router)
 app.include_router(compliance_assessments_router)
 app.include_router(artifacts_router)
 app.include_router(dcc_router)

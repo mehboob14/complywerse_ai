@@ -14,3 +14,4 @@ from ._43_framework_templates_models import *  # noqa: F401,F403 — framework t
 from ._44_control_workbench import *  # noqa: F401,F403 — unified control library work layer
 from ._44_business_continuity_management_models import *  # noqa: F401,F403 — BCM plans/BIA/drills/findings
 from ._40_access_review_models import *  # noqa: F401,F403
+from ._45_report_definitions import *  # noqa: F401,F403 — saved reports from the /reports builder
