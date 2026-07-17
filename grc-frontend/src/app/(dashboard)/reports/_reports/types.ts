@@ -48,6 +48,13 @@ export interface ServerPage { rows: Row[]; total: number; skip: number; limit: n
 export type AggFn = 'count' | 'sum' | 'avg' | 'min' | 'max';
 export interface Measure { id: string; key: string; agg: AggFn }
 
+/** Every chart type the builder can render from a pivot result. */
+export type ChartKind =
+  | 'bar' | 'hbar' | 'stacked' | 'stacked100'   // bars
+  | 'line' | 'area'                              // trends
+  | 'pie' | 'donut' | 'treemap'                  // proportion
+  | 'radar' | 'scatter' | 'heatmap';             // compare
+
 /** A saved report definition — the unit the builder edits and persists. */
 export interface ReportSpec {
   id: string;
@@ -58,8 +65,10 @@ export interface ReportSpec {
   measures: Measure[];
   rules: FilterRules;
   search: string;
-  view: 'table' | 'bar' | 'line' | 'pie';
+  view: 'table' | ChartKind;
   measureIdx: number;          // which measure the chart plots (charts show one)
+  showLegend?: boolean;        // chart option (default on)
+  showLabels?: boolean;        // data labels on marks (default off)
   shared?: boolean;            // visible to everyone in the tenant
   mine?: boolean;              // false for someone else's shared report (read-only to us)
 }

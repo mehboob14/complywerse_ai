@@ -174,7 +174,8 @@ export default function ReportPrintPage() {
           <div className="h-[300px] w-full rounded-xl border border-slate-200 p-3">
             <PivotChart result={result} kind={spec.view as ChartKind} animate={false}
               measureIdx={Math.min(spec.measureIdx, Math.max(0, result.measures.length - 1))}
-              colDomain={colDomain} rowDomain={rowDomain} />
+              colDomain={colDomain} rowDomain={rowDomain}
+              options={{ legend: spec.showLegend !== false, labels: !!spec.showLabels }} />
           </div>
         </section>
       )}

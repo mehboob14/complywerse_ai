@@ -13,15 +13,15 @@ import {
   Calendar, Check, ChevronDown, ChevronUp, Download, FileSpreadsheet, FileText,
   Filter, Hash, Loader2, AlertCircle, PieChart as PieIcon, Save, Search, Sigma,
   Table2, Tag, Type, X, BarChart3, LineChart as LineIcon, ChevronsDownUp, ChevronsUpDown,
-  Printer, FileType2, Users, Lock,
+  Printer, FileType2, Users, Lock, Settings2, BarChartHorizontal, Layers, Percent,
+  AreaChart as AreaIcon, CircleDashed, Boxes, Radar as RadarIcon, ScatterChart as ScatterIcon, Grid3x3,
 } from 'lucide-react';
-import type { AggFn, ColType, ColumnDef, ReportDataset, ReportSpec } from './types';
+import type { AggFn, ChartKind, ColType, ColumnDef, ReportDataset, ReportSpec } from './types';
 import { emptySpec } from './types';
 import { describeRules, isActiveCondition, rowMatchesRules, rowMatchesSearch } from './grid-utils';
 import { AGG_LABEL, allNodeKeys, buildPivot, fieldDomain, flattenPivot } from './pivot';
 import PivotTable from './PivotTable';
-import PivotChart from './PivotChart';
-import type { ChartKind } from './PivotChart';
+import PivotChart, { CHART_TYPES } from './PivotChart';
 import FilterBuilder from './FilterBuilder';
 import { exportCSV, exportExcelMulti, exportWord } from './exporters';
 import { newSpecId, persistSpec, type SpecSource } from './savedReports';
@@ -33,6 +33,13 @@ const nextMid = (measures?: { id: string }[]): number =>
 
 const typeIcon = (t?: ColType) => (t === 'number' ? Hash : t === 'date' ? Calendar : t === 'badge' ? Tag : Type);
 const NUM_AGGS: AggFn[] = ['sum', 'avg', 'min', 'max', 'count'];
+
+const CHART_ICON: Record<ChartKind, typeof BarChart3> = {
+  bar: BarChart3, hbar: BarChartHorizontal, stacked: Layers, stacked100: Percent,
+  line: LineIcon, area: AreaIcon, pie: PieIcon, donut: CircleDashed, treemap: Boxes,
+  radar: RadarIcon, scatter: ScatterIcon, heatmap: Grid3x3,
+};
+const CHART_GROUPS = ['Bars', 'Trends', 'Proportion', 'Compare'];
 
 export default function ReportBuilder({
   dataset, initialSpec, onSavedChange,
@@ -54,6 +61,8 @@ export default function ReportBuilder({
   const [savedAt, setSavedAt] = useState(false);
   const [savedSource, setSavedSource] = useState<SpecSource>('server');
   const [menu, setMenu] = useState(false);
+  const [chartMenu, setChartMenu] = useState(false);
+  const [optMenu, setOptMenu] = useState(false);
   const [exporting, setExporting] = useState(false);
   // Seed the measure-id counter past any ids already in the spec (templates and
   // saved reports contain m0/m1…), so a newly added value can't collide with one.
@@ -262,15 +271,53 @@ export default function ReportBuilder({
           <input value={spec.name} onChange={(e) => patch({ name: e.target.value })} placeholder="Untitled report"
             className="min-w-[140px] flex-1 rounded-lg border border-transparent bg-transparent px-2 py-1.5 text-base font-semibold text-slate-900 placeholder:font-normal placeholder:text-slate-400 hover:border-slate-200 focus:border-primary-500 focus:bg-white focus:outline-none" />
 
+          {/* View: Table + a 12-type chart picker */}
           <div className="inline-flex overflow-hidden rounded-lg border border-slate-200 bg-white">
             <button onClick={() => patch({ view: 'table' })} className={seg(spec.view === 'table')} title="Table"><Table2 className="h-3.5 w-3.5" /> Table</button>
-            <button onClick={() => patch({ view: 'bar' })} className={seg(spec.view === 'bar')} title="Bar chart"><BarChart3 className="h-3.5 w-3.5" /></button>
-            <button onClick={() => patch({ view: 'line' })} className={seg(spec.view === 'line')} title="Line chart"><LineIcon className="h-3.5 w-3.5" /></button>
-            <button onClick={() => patch({ view: 'pie' })} className={seg(spec.view === 'pie')} title="Pie chart"><PieIcon className="h-3.5 w-3.5" /></button>
+            <div className="relative">
+              <button onClick={() => { setChartMenu((v) => !v); setOptMenu(false); }} className={seg(spec.view !== 'table')} title="Chart type">
+                {(() => { const cur = CHART_TYPES.find((c) => c.kind === spec.view); const Icon = cur ? CHART_ICON[cur.kind] : BarChart3; return <><Icon className="h-3.5 w-3.5" /> {cur ? cur.label : 'Chart'} <ChevronDown className="h-3 w-3 opacity-60" /></>; })()}
+              </button>
+              {chartMenu && (
+                <div className="absolute right-0 top-full z-40 mt-1 w-64 rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
+                  {CHART_GROUPS.map((group) => (
+                    <div key={group} className="mb-1.5 last:mb-0">
+                      <div className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">{group}</div>
+                      <div className="grid grid-cols-2 gap-1">
+                        {CHART_TYPES.filter((c) => c.group === group).map((c) => { const Icon = CHART_ICON[c.kind]; return (
+                          <button key={c.kind} onClick={() => { patch({ view: c.kind }); setChartMenu(false); }}
+                            className={`flex items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs ${spec.view === c.kind ? 'bg-primary-50 font-semibold text-primary-700' : 'text-slate-600 hover:bg-slate-50'}`}>
+                            <Icon className="h-3.5 w-3.5 shrink-0" /> <span className="truncate">{c.label}</span>
+                          </button>
+                        ); })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
+          {/* Chart options: legend + data labels */}
+          {spec.view !== 'table' && (
+            <div className="relative">
+              <button onClick={() => { setOptMenu((v) => !v); setChartMenu(false); }} title="Chart options"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"><Settings2 className="h-3.5 w-3.5" /></button>
+              {optMenu && (
+                <div className="absolute right-0 top-full z-40 mt-1 w-44 rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg">
+                  <label className="flex cursor-pointer items-center justify-between gap-2 rounded-md px-2 py-1.5 text-xs text-slate-700 hover:bg-slate-50">
+                    Legend <input type="checkbox" checked={spec.showLegend !== false} onChange={(e) => patch({ showLegend: e.target.checked })} className="h-3.5 w-3.5 accent-primary-500" />
+                  </label>
+                  <label className="flex cursor-pointer items-center justify-between gap-2 rounded-md px-2 py-1.5 text-xs text-slate-700 hover:bg-slate-50">
+                    Data labels <input type="checkbox" checked={!!spec.showLabels} onChange={(e) => patch({ showLabels: e.target.checked })} className="h-3.5 w-3.5 accent-primary-500" />
+                  </label>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* One measure per chart — two scales on one axis would invent a correlation. */}
-          {spec.view !== 'table' && spec.measures.length > 1 && (
+          {spec.view !== 'table' && spec.view !== 'scatter' && spec.measures.length > 1 && (
             <select value={spec.measureIdx} onChange={(e) => patch({ measureIdx: Number(e.target.value) })}
               className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-medium text-slate-600 focus:border-primary-500 focus:outline-none">
               {spec.measures.map((m, i) => <option key={m.id} value={i}>{m.agg === 'count' ? 'Count' : `${AGG_LABEL[m.agg]} ${labelFor(m.key)}`}</option>)}
@@ -327,7 +374,8 @@ export default function ReportBuilder({
         {spec.view === 'table'
           ? <PivotTable result={result} expanded={expanded} onToggle={toggleNode} labelFor={labelFor} />
           : <div className="min-h-0 flex-1 rounded-xl border border-slate-200 bg-white p-3">
-              <PivotChart result={result} kind={spec.view as ChartKind} measureIdx={Math.min(spec.measureIdx, Math.max(0, spec.measures.length - 1))} colDomain={colDomain} rowDomain={rowDomain} />
+              <PivotChart result={result} kind={spec.view as ChartKind} measureIdx={Math.min(spec.measureIdx, Math.max(0, spec.measures.length - 1))}
+                colDomain={colDomain} rowDomain={rowDomain} options={{ legend: spec.showLegend !== false, labels: !!spec.showLabels }} />
             </div>}
       </section>
     </div>

@@ -39,3 +39,16 @@ export function seriesColor(name: string, domain: string[]): string {
   const i = domain.indexOf(name);
   return i >= 0 && i < MAX_SERIES ? SERIES[i] : OTHER;
 }
+
+/** Sequential blue ramp (light → dark), from the dataviz palette — one hue, more
+ *  = darker, for magnitude encodings (heatmap cells). Never a rainbow. */
+export const SEQ = ['#e8f1fd', '#cde2fb', '#9ec5f4', '#6da7ec', '#3987e5', '#256abf', '#184f95', '#0d366b'];
+export function heatColor(t: number): string {
+  if (!Number.isFinite(t)) return '#f1f5f9';   // no value → neutral
+  const i = Math.max(0, Math.min(SEQ.length - 1, Math.round(t * (SEQ.length - 1))));
+  return SEQ[i];
+}
+/** Legible ink for text sitting on a heat cell of intensity `t`. */
+export function heatInk(t: number): string {
+  return Number.isFinite(t) && t > 0.5 ? '#ffffff' : INK.primary;
+}
