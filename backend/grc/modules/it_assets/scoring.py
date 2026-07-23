@@ -33,8 +33,9 @@ def score_inventory(db, tids, now=None):
     from ...models import (
         ITAsset, Vulnerability, VulnerabilityAssetLink,
         InfoSystemCriticalityItem, InfraAssetCriticalityItem,
-        CompliancePluginRun,
     )
+    # CompliancePluginRun (CIS scanner results) is imported lazily inside the CIS
+    # section below so a missing model/table never breaks the whole scorecard.
     now = now or datetime.utcnow()
     assets = db.query(ITAsset).filter(ITAsset.tenant_id.in_(tids)).all()
     N = len(assets)
@@ -214,7 +215,16 @@ def score_inventory(db, tids, now=None):
     # Technical configuration compliance from the CIS-benchmark scanner
     # (CompliancePluginRun). If nothing has been scanned the section is n/a and
     # drops out — we do not claim a compliance level we never measured.
+    # Fully self-contained: a missing model OR a missing table just yields an
+    # empty result (n/a) instead of breaking the whole inventory scorecard —
+    # this is exactly what happens on a fresh deploy before any CIS scan runs.
+    cis_runs = []
     try:
+        from ...models import CompliancePluginRun
+        try:  # ensure the table exists so a fresh DB doesn't raise "relation does not exist"
+            CompliancePluginRun.__table__.create(bind=db.get_bind(), checkfirst=True)
+        except Exception:  # noqa: BLE001
+            pass
         cis_runs = db.query(
             CompliancePluginRun.id, CompliancePluginRun.asset_id,
             CompliancePluginRun.plugin_id, CompliancePluginRun.status,
@@ -222,7 +232,8 @@ def score_inventory(db, tids, now=None):
                  CompliancePluginRun.is_leaked.is_(False)).order_by(
                      CompliancePluginRun.started_at.desc().nullslast(),
                      CompliancePluginRun.id.desc()).all()
-    except Exception:
+    except Exception:  # noqa: BLE001 — missing model/table/column → treat as no CIS data
+        db.rollback()
         cis_runs = []
     # Fold to the latest status per (asset, plugin) so each rule counts once.
     per_asset_latest = {}

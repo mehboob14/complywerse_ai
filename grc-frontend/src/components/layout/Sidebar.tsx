@@ -157,29 +157,12 @@ const navigation: NavEntry[] = [
         icon: ClipboardCheck,
         items: [
           { name: 'Overview', href: '/assessments', icon: LayoutDashboard, requiredPermissions: ['compliance:assessments:*'] },
-          {
-            name: 'Cyber Security',
-            icon: ShieldAlert,
-            items: [
-              { name: 'OWASP ASVS', href: '/assessments/asvs', icon: Shield, requiredPermissions: ['compliance:assessments:*'] },
-              { name: 'OWASP Testing', href: '/assessments/owasp_testing', icon: Bug, requiredPermissions: ['compliance:assessments:*'] },
-              { name: 'Mobile App Security', href: '/assessments/cs_mobile', icon: Shield, requiredPermissions: ['compliance:assessments:*'] },
-              { name: 'CSIR Maturity', href: '/assessments/cs_csir', icon: BarChart3, requiredPermissions: ['compliance:assessments:*'] },
-              { name: 'CTI Maturity', href: '/assessments/cs_cti', icon: BarChart3, requiredPermissions: ['compliance:assessments:*'] },
-              { name: 'Incident Management', href: '/assessments/cs_incident', icon: AlertTriangle, requiredPermissions: ['compliance:assessments:*'] },
-              { name: 'IT Security Operations', href: '/assessments/cs_itsecops', icon: Activity, requiredPermissions: ['compliance:assessments:*'] },
-            ],
-          },
-          {
-            name: 'NCA',
-            icon: ShieldCheck,
-            items: [
-              { name: 'DCC Assessment', href: '/assessments/nca', icon: ShieldCheck, requiredPermissions: ['compliance:assessments:*'] },
-              { name: 'Vulnerability Register', href: '/assessments/nca_vuln', icon: Bug, requiredPermissions: ['compliance:assessments:*'] },
-              { name: 'Audit Plan', href: '/assessments/nca_audit', icon: ClipboardList, requiredPermissions: ['compliance:assessments:*'] },
-              { name: 'Risk Management', href: '/assessments/nca_risk', icon: AlertTriangle, requiredPermissions: ['compliance:assessments:*'] },
-            ],
-          },
+          // Cyber Security features now live on a dedicated hub page
+          // (/cyber-security) instead of a nested 7-item dropdown.
+          { name: 'Cyber Security', href: '/cyber-security', activeMatch: '/cyber-security', icon: ShieldAlert, requiredPermissions: ['compliance:assessments:*'] },
+          // NCA features now live on a dedicated hub page (/nca) instead of a
+          // nested 4-item dropdown.
+          { name: 'NCA', href: '/nca', activeMatch: '/nca', icon: ShieldCheck, requiredPermissions: ['compliance:assessments:*'] },
           { name: 'Digital Operations Maturity', href: '/assessments/digital_ops_maturity', icon: Target, requiredPermissions: ['compliance:assessments:*'] },
           { name: 'DPIA / PIA', href: '/assessments/dpia', icon: ClipboardList, requiredPermissions: ['compliance:assessments:*'] },
           { name: 'Saudi PDPL', href: '/assessments/pdpl', icon: ShieldCheck, requiredPermissions: ['compliance:assessments:*'] },

@@ -11,7 +11,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Request, Cookie, Body
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import text
+from sqlalchemy import text, func
 from pydantic import BaseModel
 
 from ..models import (
@@ -341,7 +341,193 @@ def list_assets(
         )
 
     assets = query.order_by(ITAsset.created_at.desc()).offset(skip).limit(limit).all()
+
+    # Attach a computed open-findings count per asset (one batched GROUP BY,
+    # not N+1) so the register table can show a "Findings" column. Counts
+    # vulnerability↔asset links for the listed assets; 0 when none.
+    asset_ids = [a.id for a in assets]
+    if asset_ids:
+        from sqlalchemy import func as _func
+        from ..models import VulnerabilityAssetLink
+        finding_counts = dict(
+            db.query(VulnerabilityAssetLink.asset_id, _func.count())
+            .filter(VulnerabilityAssetLink.asset_id.in_(asset_ids))
+            .group_by(VulnerabilityAssetLink.asset_id)
+            .all()
+        )
+        for a in assets:
+            a.open_findings = int(finding_counts.get(a.id, 0))
     return assets
+
+
+# ─── Faceted filter counts ───────────────────────────────────────────────────
+@router.get("/facets")
+def asset_facets(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Per-value counts for each inventory filter facet, scoped to the caller's
+    tenants. Powers the list toolbar's faceted filters (e.g. `Critical (7)`)."""
+    from sqlalchemy import func as _func
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        return {"total": 0}
+
+    def counts(col):
+        rows = (
+            db.query(col, _func.count())
+            .filter(ITAsset.tenant_id.in_(user_tenants))
+            .group_by(col)
+            .all()
+        )
+        return {(k if k not in (None, "") else "unset"): int(v) for k, v in rows}
+
+    return {
+        "total": db.query(ITAsset).filter(ITAsset.tenant_id.in_(user_tenants)).count(),
+        "asset_type": counts(ITAsset.asset_type),
+        "criticality": counts(ITAsset.criticality),
+        "status": counts(ITAsset.status),
+        "lifecycle_state": counts(ITAsset.lifecycle_state),
+        "environment": counts(ITAsset.environment),
+        "department": counts(ITAsset.department),
+        "data_classification": counts(ITAsset.data_classification),
+    }
+
+
+# ─── Bulk update / delete ────────────────────────────────────────────────────
+class BulkUpdateBody(BaseModel):
+    asset_ids: List[int]
+    patch: Dict[str, Any]
+
+
+# Fields safe to set across many assets at once. Lifecycle_state is allowed here
+# (bulk retire/activate); the FSM's auto-close hooks only run on the single-asset
+# transition endpoint, which is acceptable for a manual bulk correction.
+_BULK_EDITABLE = {
+    "criticality", "owner_id", "owner_name", "primary_owner_id", "lifecycle_state",
+    "status", "environment", "department", "data_classification", "business_function",
+}
+
+
+@router.patch("/bulk")
+def bulk_update_assets(
+    body: BulkUpdateBody,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Apply one field-patch to many assets. Only whitelisted fields are
+    accepted and every target asset must belong to the caller's tenants."""
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants or not body.asset_ids:
+        return {"updated": 0}
+    patch = {k: v for k, v in (body.patch or {}).items() if k in _BULK_EDITABLE}
+    if not patch:
+        raise HTTPException(status_code=400, detail="No editable fields in patch.")
+    assets = (
+        db.query(ITAsset)
+        .filter(ITAsset.id.in_(body.asset_ids), ITAsset.tenant_id.in_(user_tenants))
+        .all()
+    )
+    for a in assets:
+        for k, v in patch.items():
+            setattr(a, k, v)
+    db.commit()
+    return {"updated": len(assets), "fields": list(patch.keys())}
+
+
+class BulkDeleteBody(BaseModel):
+    asset_ids: List[int]
+
+
+@router.post("/bulk-delete")
+def bulk_delete_assets(
+    body: BulkDeleteBody,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Delete many assets at once (tenant-scoped). Uses the same ORM cascades
+    as the single-asset delete."""
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants or not body.asset_ids:
+        return {"deleted": 0}
+    assets = (
+        db.query(ITAsset)
+        .filter(ITAsset.id.in_(body.asset_ids), ITAsset.tenant_id.in_(user_tenants))
+        .all()
+    )
+    n = len(assets)
+    for a in assets:
+        db.delete(a)
+    db.commit()
+    return {"deleted": n}
+
+
+# ─── Saved filter views ──────────────────────────────────────────────────────
+class SavedViewBody(BaseModel):
+    name: str
+    filters: Dict[str, Any] = {}
+    sort: Optional[str] = None
+
+
+@router.get("/saved-views")
+def list_saved_views(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """The caller's saved inventory views (plus any tenant-shared ones)."""
+    from ..models import AssetSavedView
+    tenant_id = get_user_primary_tenant(current_user, db)
+    views = (
+        db.query(AssetSavedView)
+        .filter(
+            AssetSavedView.tenant_id == tenant_id,
+            (AssetSavedView.user_id == current_user.id) | (AssetSavedView.user_id.is_(None)),
+        )
+        .order_by(AssetSavedView.created_at.desc())
+        .all()
+    )
+    return [{"id": v.id, "name": v.name, "filters": v.filters or {}, "sort": v.sort} for v in views]
+
+
+@router.post("/saved-views")
+def create_saved_view(
+    body: SavedViewBody,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Save the current filter + sort combo as a named view for this user."""
+    from ..models import AssetSavedView
+    tenant_id = get_user_primary_tenant(current_user, db)
+    v = AssetSavedView(
+        tenant_id=tenant_id,
+        user_id=current_user.id,
+        name=(body.name or "Untitled view").strip(),
+        filters=body.filters or {},
+        sort=body.sort,
+    )
+    db.add(v)
+    db.commit()
+    db.refresh(v)
+    return {"id": v.id, "name": v.name, "filters": v.filters or {}, "sort": v.sort}
+
+
+@router.delete("/saved-views/{view_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_saved_view(
+    view_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    from ..models import AssetSavedView
+    tenant_id = get_user_primary_tenant(current_user, db)
+    v = (
+        db.query(AssetSavedView)
+        .filter(AssetSavedView.id == view_id, AssetSavedView.tenant_id == tenant_id)
+        .first()
+    )
+    if v:
+        db.delete(v)
+        db.commit()
+    return None
 
 
 @router.post("", response_model=ITAssetResponse, status_code=status.HTTP_201_CREATED)
@@ -425,6 +611,12 @@ def create_asset(
         criticality_override_reason=asset.criticality_override_reason if manual_override else None,
         vendor=asset.vendor,
         location=asset.location,
+        cpu_cores=asset.cpu_cores,
+        memory_gb=asset.memory_gb,
+        storage_gb=asset.storage_gb,
+        manufacturer=asset.manufacturer,
+        model=asset.model,
+        serial_number=asset.serial_number,
         confidentiality_rating=asset.confidentiality_rating,
         integrity_rating=asset.integrity_rating,
         availability_rating=asset.availability_rating,
@@ -842,7 +1034,8 @@ async def upload_assets_file(
     except Exception:  # noqa: BLE001
         normalize_os_string = None  # type: ignore
 
-    imported = []
+    imported = []   # rows that created a new asset
+    updated = []    # rows that matched an existing asset and refreshed it
     errors = []
 
     def _bool(val) -> bool:
@@ -962,8 +1155,8 @@ async def upload_assets_file(
                 pass
 
         try:
-            asset = ITAsset(
-                tenant_id=tenant_id,
+            # Built once so the create and update paths can't drift apart.
+            values = dict(
                 name=name,
                 description=parse_str(row.get("description")),
                 asset_type=asset_type,
@@ -998,31 +1191,139 @@ async def upload_assets_file(
                 criticality_manual_override=manual_override,
                 criticality_override_reason=override_reason if manual_override else None,
             )
+
+            # Dedup. Re-uploading a corrected sheet has to UPDATE the estate,
+            # not duplicate it — without this every re-import doubled the
+            # inventory. Match case-insensitively on host_name (the identity
+            # column every other ingest path keys on), falling back to name
+            # when the sheet carries no host_name. Same check the CIDR-import
+            # path already performs in modules/onboarding/router.py.
+            host_key = (values.get("host_name") or "").strip().lower()
+            existing = None
+            if host_key:
+                existing = db.query(ITAsset).filter(
+                    ITAsset.tenant_id == tenant_id,
+                    func.lower(ITAsset.host_name) == host_key,
+                ).first()
+            if existing is None:
+                existing = db.query(ITAsset).filter(
+                    ITAsset.tenant_id == tenant_id,
+                    func.lower(ITAsset.name) == name.strip().lower(),
+                ).first()
+
+            if existing is not None:
+                # An empty cell means "leave it alone", never "blank it out" —
+                # the same rule the agent heartbeat and cloud upsert follow.
+                for field, value in values.items():
+                    if value is None or value == []:
+                        continue
+                    setattr(existing, field, value)
+                asset = existing
+                was_new = False
+            else:
+                asset = ITAsset(tenant_id=tenant_id, **values)
+                db.add(asset)
+                was_new = True
+
             # Always run the derived-criticality calculation. When
             # `criticality_manual_override` is True, the service keeps
             # the user's bucket but still writes the audit score; when
             # False, both the bucket and score are system-computed.
             recompute_for_asset(asset)
-            db.add(asset)
             db.flush()
-            imported.append({"id": asset.id, "name": asset.name})
+            (imported if was_new else updated).append({"id": asset.id, "name": asset.name})
         except Exception as e:
             errors.append({"row": row_num, "error": str(e)})
 
     db.commit()
     
     imported_count = len(imported)
+    updated_count = len(updated)
     error_count = len(errors)
     error_messages = [f"Row {e['row']}: {e['error']}" for e in errors[:20]]
-    
+
+    parts = []
+    if imported_count:
+        parts.append(f"{imported_count} added")
+    if updated_count:
+        parts.append(f"{updated_count} updated")
+    if not parts:
+        parts.append("no assets changed")
+
     return {
         "success": True,
         "imported": imported_count,
+        "updated": updated_count,
         "total_rows": len(rows),
         "errors": error_messages,
         "total_errors": error_count,
-        "message": f"Successfully imported {imported_count} assets" + (f" with {error_count} errors" if error_count > 0 else "")
+        "message": ", ".join(parts) + (f" with {error_count} errors" if error_count > 0 else "")
     }
+
+
+# ── IP-group composite weights ────────────────────────────────────────────
+# These MUST stay above `GET /{asset_id}`. Starlette matches routes in
+# registration order and `{asset_id}` is a typed int path param, so a literal
+# route declared after it never runs — the literal is captured by the param
+# and FastAPI 422s on the int coercion. The scoring constants these read
+# (`_CRIT_WEIGHT`) are defined further down the module; that's fine, function
+# bodies resolve names at call time. `_CompositeWeightsIn` is a signature
+# annotation, so it has to be declared here with them.
+
+class _CompositeWeightsIn(BaseModel):
+    low: float = 1.0
+    medium: float = 2.0
+    high: float = 3.0
+    critical: float = 4.0
+
+
+@router.get("/composite-weights")
+def get_composite_weights(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    tid = get_user_primary_tenant(current_user, db)
+    tenant = db.query(Tenant).filter(Tenant.id == tid).first()
+    settings = tenant.settings or {} if tenant else {}
+    is_custom = "composite_weights" in settings
+    weights = settings.get("composite_weights", _CRIT_WEIGHT)
+    return {"weights": weights, "is_custom": is_custom, "defaults": _CRIT_WEIGHT}
+
+
+@router.put("/composite-weights")
+def update_composite_weights(
+    body: _CompositeWeightsIn,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    tid = get_user_primary_tenant(current_user, db)
+    tenant = db.query(Tenant).filter(Tenant.id == tid).first()
+    if not tenant:
+        raise HTTPException(404, "Tenant not found")
+    weights = {"low": body.low, "medium": body.medium, "high": body.high, "critical": body.critical}
+    if any(v <= 0 for v in weights.values()):
+        raise HTTPException(400, "All weights must be positive numbers")
+    settings = dict(tenant.settings or {})
+    settings["composite_weights"] = weights
+    tenant.settings = settings
+    db.commit()
+    return {"weights": weights, "is_custom": True, "defaults": _CRIT_WEIGHT}
+
+
+@router.delete("/composite-weights")
+def reset_composite_weights(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    tid = get_user_primary_tenant(current_user, db)
+    tenant = db.query(Tenant).filter(Tenant.id == tid).first()
+    if not tenant:
+        raise HTTPException(404, "Tenant not found")
+    settings = dict(tenant.settings or {})
+    settings.pop("composite_weights", None)
+    tenant.settings = settings
+    db.commit()
+    return {"weights": _CRIT_WEIGHT, "is_custom": False, "defaults": _CRIT_WEIGHT}
 
 
 @router.get("/{asset_id}", response_model=dict)
@@ -1193,6 +1494,31 @@ def update_asset(
     if _criticality_inputs.intersection(update_data.keys()):
         recompute_asset_criticality(asset)
 
+    # Journal the change so the asset's History tab has a real audit trail.
+    # Previously asset edits left no trace at all — a genuine control gap for a
+    # regulated tenant. We record which fields changed and who changed them.
+    try:
+        from ..models import AuditLog
+        changed_fields = [k for k in update_data.keys()]
+        if changed_fields:
+            db.add(AuditLog(
+                tenant_id=asset.tenant_id,
+                user_id=current_user.id,
+                action="asset.updated",
+                resource_type="it_asset",
+                resource_id=asset.id,
+                changes={
+                    "detail": f"Updated {', '.join(changed_fields[:6])}"
+                    + (f" and {len(changed_fields) - 6} more" if len(changed_fields) > 6 else ""),
+                    "fields": changed_fields,
+                },
+            ))
+    except Exception:  # noqa: BLE001 — auditing must never block the save
+        import logging
+        logging.getLogger(__name__).exception(
+            "Failed to write asset-update audit row for asset_id=%s", asset_id
+        )
+
     db.commit()
     db.refresh(asset)
     return asset
@@ -1284,9 +1610,47 @@ def delete_asset(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Asset not found"
         )
-    
-    db.delete(asset)
-    db.commit()
+
+    # Cascade-clean the join rows this asset owns so the delete doesn't fail
+    # on a foreign-key violation (the "assets cannot be deleted" bug). We drop
+    # the asset-local link rows, then null out sibling assets' self-references
+    # (replacement / parent pointers) to this asset.
+    from ..models import (
+        VulnerabilityAssetLink, AssetControlLink, AssetInternalControlLink,
+        AssetFrameworkControlLink, AssetEvidenceLink, AssetRiskAssessment,
+        AssetSecurityComplianceSelection,
+    )
+    for child in (
+        VulnerabilityAssetLink, AssetControlLink, AssetInternalControlLink,
+        AssetFrameworkControlLink, AssetEvidenceLink, AssetRiskAssessment,
+        AssetSecurityComplianceSelection,
+    ):
+        try:
+            db.query(child).filter(child.asset_id == asset_id).delete(synchronize_session=False)
+        except Exception:
+            # Best-effort: a missing/renamed table shouldn't block the delete.
+            db.rollback()
+            asset = db.query(ITAsset).filter(ITAsset.id == asset_id).first()
+
+    db.query(ITAsset).filter(ITAsset.replacement_asset_id == asset_id).update(
+        {ITAsset.replacement_asset_id: None}, synchronize_session=False)
+    db.query(ITAsset).filter(ITAsset.parent_asset_id == asset_id).update(
+        {ITAsset.parent_asset_id: None}, synchronize_session=False)
+
+    try:
+        db.delete(asset)
+        db.commit()
+    except Exception:
+        # Still referenced by a cross-module record (enterprise risk, policy
+        # document, cloud finding, artifact catalogue…). Surface a clear
+        # 409 instead of a 500 so the user knows to unlink first.
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=("This asset is still linked to other records (e.g. a risk, "
+                    "policy document, evidence artifact, or cloud finding). "
+                    "Unlink those first, then delete."),
+        )
     return None
 
 
@@ -1618,6 +1982,14 @@ def get_asset_detail(
             pass
 
     return AssetDetailResponse(
+        # Business-impact inputs — the risk-posture editor hydrates from these.
+        # `operational_dependency` is the wire name; the column is
+        # `op_dep_business_impact`. The frontend was already sending and reading
+        # the wire name, so the mismatch silently made that field unsavable too.
+        is_customer_facing=getattr(asset, "is_customer_facing", None),
+        regulated_data_type=getattr(asset, "regulated_data_type", None),
+        operational_dependency=getattr(asset, "op_dep_business_impact", None),
+        business_impact_notes=getattr(asset, "business_impact_notes", None),
         id=asset.id,
         tenant_id=asset.tenant_id,
         name=asset.name,
@@ -1670,6 +2042,24 @@ def get_asset_detail(
         criticality_score=asset.criticality_score,
         last_seen_at=asset.last_seen_at,
         last_seen_source=asset.last_seen_source,
+        # ITAM parity fields
+        os_family=asset.os_family,
+        os_version=asset.os_version,
+        os_normalized=asset.os_normalized,
+        cpu_cores=asset.cpu_cores,
+        memory_gb=asset.memory_gb,
+        storage_gb=asset.storage_gb,
+        agent_version=asset.agent_version,
+        manufacturer=asset.manufacturer,
+        model=asset.model,
+        serial_number=asset.serial_number,
+        department=asset.department,
+        assigned_user=asset.assigned_user,
+        purchase_cost=asset.purchase_cost,
+        purchase_date=asset.purchase_date,
+        warranty_expiry=asset.warranty_expiry,
+        eol_date=asset.eol_date,
+        environment=asset.environment,
     )
 
 
@@ -2552,15 +2942,31 @@ def get_asset_coverage_analysis(
     partial_framework_coverage = sum(1 for link in asset.framework_control_links if link.coverage_status == "partial")
     full_internal_coverage = sum(1 for link in asset.internal_control_links if link.coverage_status == "full")
     partial_internal_coverage = sum(1 for link in asset.internal_control_links if link.coverage_status == "partial")
+    # Count every link once, matching `_control_coverage` in the risk-posture
+    # engine. This used to weight `partial` links at 0.5 while the engine counted
+    # them fully — so one partially-covering control read as 4% here and 8% on
+    # the Risk & Controls tab and in the score, for the same asset at the same
+    # moment. Aligning the target to 12 earlier was only half the job; the
+    # numerators still disagreed.
+    #
+    # Half-weighting partials is arguably the better model — but it has to be
+    # done in ONE place, and that place is the engine that produces the score
+    # everything else displays. The full/partial split is still returned below
+    # so the UI can show the breakdown without re-deriving the percentage.
     covered_controls = (
         len(asset.control_links)
-        + full_internal_coverage
-        + (partial_internal_coverage * 0.5)
-        + full_framework_coverage
-        + (partial_framework_coverage * 0.5)
+        + len(asset.internal_control_links)
+        + len(asset.framework_control_links)
     )
     
-    expected_controls = 10
+    # Must match the risk-posture engine's target, or the same asset shows two
+    # different coverage percentages: this endpoint feeds the Overview stat while
+    # `_control_coverage` in modules/risk_posture/service.py feeds the risk score
+    # and the Risk & Controls bar. It was 10 here and 12 there, so an asset with
+    # 6 links read as 60% on one tab and 50% on another, and the number that
+    # drove the risk score was never the number on screen.
+    from ..modules.risk_posture.service import CONTROL_COVERAGE_TARGET
+    expected_controls = CONTROL_COVERAGE_TARGET
     coverage_percentage = min((covered_controls / expected_controls) * 100, 100) if expected_controls > 0 else 0
     
     gaps = []
@@ -2886,6 +3292,104 @@ def get_detected_software(
     }
 
 
+class ProbeInventoryIn(BaseModel):
+    """Body for probe-inventory. `connection_id` lets the operator pin the
+    credential to use when a host has more than one — omit it and we resolve
+    the best match ourselves."""
+    connection_id: Optional[int] = None
+
+
+@router.post("/{asset_id}/probe-inventory")
+def probe_inventory(
+    asset_id: int,
+    body: Optional[ProbeInventoryIn] = None,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Collect this host's software inventory agentlessly, over its stored
+    WinRM/SSH credential.
+
+    The no-agent twin of the heartbeat inventory: same read-only probe, same
+    normalisation, same write to detected_software_json — only the transport
+    differs. Use it for hosts where an agent can't be installed, or to refresh
+    a host on demand rather than waiting for the next beat.
+
+    Read-only against the remote host: it reads the registry / installed
+    packages / listening sockets and writes nothing there.
+    """
+    from ..models import IntegrationConnection
+    from ..modules.compliance_plugins.services import agentless_inventory as agentless
+
+    asset = _tenant_asset_or_404(db, current_user, asset_id)
+    if not asset.host_name:
+        raise HTTPException(400, "Asset has no host_name to probe.")
+
+    connection = None
+    if body and body.connection_id:
+        connection = db.query(IntegrationConnection).filter(
+            IntegrationConnection.id == body.connection_id,
+            IntegrationConnection.tenant_id == asset.tenant_id,
+        ).first()
+        if not connection:
+            raise HTTPException(404, "Connection not found for this tenant.")
+    else:
+        # Only a credential that actually targets THIS host — matched on
+        # console_url the way re-detect-os does.
+        #
+        # Deliberately NOT falling back to agentless.resolve_connection_for_asset,
+        # which returns the tenant's first active connection of the right
+        # transport. That pool strategy is fine for "run a check somewhere on a
+        # Linux box", but here we are collecting an inventory and writing it to
+        # a named asset — a pool hit would probe a different machine and store
+        # its software as this host's. Silent cross-host contamination is worse
+        # than making the operator pick.
+        connection = db.query(IntegrationConnection).filter(
+            IntegrationConnection.tenant_id == asset.tenant_id,
+            IntegrationConnection.is_active.is_(True),
+            IntegrationConnection.integration_type.in_(("windows_winrm", "linux_ssh")),
+            func.lower(IntegrationConnection.console_url) == asset.host_name.lower().strip(),
+        ).order_by(IntegrationConnection.id.desc()).first()
+
+    if connection is None:
+        raise HTTPException(
+            400,
+            f"No WinRM or SSH credential targets host '{asset.host_name}'. "
+            f"Add one via the Connect Wizard, or pass connection_id to choose "
+            f"an existing credential explicitly.",
+        )
+
+    # Fail with a cause the operator can act on rather than an empty inventory —
+    # these are the transports the probe needs, and both are easy to lose on a
+    # partial deploy since every call site swallows the ImportError.
+    if connection.integration_type == "windows_winrm" and not agentless.WINRM_AVAILABLE:
+        raise HTTPException(503, "WinRM support is not installed on the server (pywinrm).")
+    if connection.integration_type == "linux_ssh" and not agentless.PARAMIKO_AVAILABLE:
+        raise HTTPException(503, "SSH support is not installed on the server (paramiko).")
+
+    try:
+        result = agentless.probe_and_store(db, asset, connection)
+    except RuntimeError as exc:
+        # probe_and_store raises RuntimeError with a human-readable cause for
+        # transport/credential failures and never writes a partial inventory.
+        db.rollback()
+        raise HTTPException(502, str(exc))
+    except Exception as exc:  # noqa: BLE001
+        db.rollback()
+        import logging
+        logging.getLogger(__name__).exception(
+            "probe-inventory failed asset=%s connection=%s", asset.id, connection.id,
+        )
+        raise HTTPException(502, f"Inventory probe failed: {exc}")
+
+    asset.last_seen_at = datetime.utcnow()
+    asset.last_seen_source = "agentless"
+    db.commit()
+
+    result["asset_id"] = asset.id
+    result["connection_id"] = connection.id
+    return result
+
+
 @router.post("/{asset_id}/promote-software")
 def promote_software(
     asset_id: int,
@@ -3015,60 +3519,11 @@ def _asset_own_compliance(db: Session, asset_id: int, tenant_id: int) -> Optiona
     return round(100.0 * passed / len(rows), 1)
 
 
-class _CompositeWeightsIn(BaseModel):
-    low: float = 1.0
-    medium: float = 2.0
-    high: float = 3.0
-    critical: float = 4.0
-
-
-@router.get("/composite-weights")
-def get_composite_weights(
-    db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth),
-):
-    tid = get_user_primary_tenant(current_user, db)
-    tenant = db.query(Tenant).filter(Tenant.id == tid).first()
-    settings = tenant.settings or {} if tenant else {}
-    is_custom = "composite_weights" in settings
-    weights = settings.get("composite_weights", _CRIT_WEIGHT)
-    return {"weights": weights, "is_custom": is_custom, "defaults": _CRIT_WEIGHT}
-
-
-@router.put("/composite-weights")
-def update_composite_weights(
-    body: _CompositeWeightsIn,
-    db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth),
-):
-    tid = get_user_primary_tenant(current_user, db)
-    tenant = db.query(Tenant).filter(Tenant.id == tid).first()
-    if not tenant:
-        raise HTTPException(404, "Tenant not found")
-    weights = {"low": body.low, "medium": body.medium, "high": body.high, "critical": body.critical}
-    if any(v <= 0 for v in weights.values()):
-        raise HTTPException(400, "All weights must be positive numbers")
-    settings = dict(tenant.settings or {})
-    settings["composite_weights"] = weights
-    tenant.settings = settings
-    db.commit()
-    return {"weights": weights, "is_custom": True, "defaults": _CRIT_WEIGHT}
-
-
-@router.delete("/composite-weights")
-def reset_composite_weights(
-    db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth),
-):
-    tid = get_user_primary_tenant(current_user, db)
-    tenant = db.query(Tenant).filter(Tenant.id == tid).first()
-    if not tenant:
-        raise HTTPException(404, "Tenant not found")
-    settings = dict(tenant.settings or {})
-    settings.pop("composite_weights", None)
-    tenant.settings = settings
-    db.commit()
-    return {"weights": _CRIT_WEIGHT, "is_custom": False, "defaults": _CRIT_WEIGHT}
+# NOTE: the /composite-weights handlers used to live here. They are now
+# declared above `GET /{asset_id}` — see the block before `get_asset`.
+# Registering them after the catch-all meant Starlette matched the literal
+# segment against `{asset_id}: int` and returned 422 instead of ever reaching
+# them. Keep them above the catch-all.
 
 
 @router.get("/{asset_id}/ip-peers")
@@ -3175,6 +3630,27 @@ def get_ip_peers(
             "composite": None,
             "formula": {
                 "description": "Asset has no IP address. Standalone, not part of an IP group.",
+                "weights": {"host": _COMPOSITE_W_SELF, "applications": _COMPOSITE_W_CHILDREN},
+                "criticality_weights": crit_weights,
+            },
+        }
+
+    # Loopback / link-local / unspecified addresses are not a host identity —
+    # every locally-discovered asset carries 127.0.0.1, so grouping on it merges
+    # unrelated assets and makes them share compliance scores. Treat those the
+    # same as having no IP: standalone.
+    from ..modules.risk_posture.service import _is_groupable_ip
+    if not _is_groupable_ip(ip):
+        return {
+            "asset_id": asset_id,
+            "ip_address": ip,
+            "group": [],
+            "composite": None,
+            "formula": {
+                "description": (
+                    f"'{ip}' is a loopback or link-local address, which does not "
+                    "identify a host. This asset is scored on its own evidence."
+                ),
                 "weights": {"host": _COMPOSITE_W_SELF, "applications": _COMPOSITE_W_CHILDREN},
                 "criticality_weights": crit_weights,
             },

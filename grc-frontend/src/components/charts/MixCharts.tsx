@@ -19,27 +19,35 @@ export function SegmentedMixCard({ totalLabel, data }: { totalLabel: string; dat
   const total = data.reduce((s, d) => s + d.value, 0);
   const sorted = [...data].sort((a, b) => b.value - a.value);
   const max = Math.max(1, ...data.map((d) => d.value));
+  // h-full + flex column: this card sits in a stretch-aligned grid beside a
+  // taller chart, so the cell it gets is taller than its natural content. Left
+  // as natural height the rows bunched at the top and the bottom half of the
+  // card was empty. The row list below takes the slack with flex-1 and shares
+  // it out evenly, so the breakdown fills whatever height the grid hands us.
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-card">
-      <div className="mb-2 flex items-baseline gap-2">
+    <div className="flex h-full flex-col rounded-xl border border-slate-200 bg-white p-3 shadow-card">
+      <div className="mb-2 flex shrink-0 items-baseline gap-2">
         <span className="text-2xl font-bold leading-none text-slate-900">{total}</span>
         <span className="text-xs text-slate-500">{totalLabel}</span>
       </div>
       {total > 0 ? (
         <>
-          <div className="flex h-2 w-full overflow-hidden rounded-full bg-slate-100">
+          <div className="flex h-2 w-full shrink-0 overflow-hidden rounded-full bg-slate-100">
             {data.filter((d) => d.value > 0).map((d) => (
               <div key={d.name} style={{ width: `${(d.value / total) * 100}%`, backgroundColor: d.color }} title={`${d.name}: ${d.value}`} />
             ))}
           </div>
-          <ul className="mt-2 space-y-1">
+          <ul className="mt-2 flex flex-1 flex-col gap-1">
             {sorted.map((d) => (
-              <li key={d.name} className="flex items-center gap-2 text-[11px]">
+              // flex-1 per row rather than a fixed gap: rows divide the spare
+              // height equally however many categories there are, and a short
+              // card still degrades to the old compact spacing via min-h.
+              <li key={d.name} className="flex min-h-[1.125rem] flex-1 items-center gap-2 text-[11px]">
                 <span className="flex w-16 shrink-0 items-center gap-1.5">
                   <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: d.color }} />
                   <span className="truncate capitalize text-slate-600">{d.name}</span>
                 </span>
-                <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100">
+                <span className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
                   <span className="block h-full rounded-full" style={{ width: `${(d.value / max) * 100}%`, backgroundColor: d.color }} />
                 </span>
                 <span className="w-6 shrink-0 text-right font-semibold text-slate-800">{d.value}</span>
@@ -48,7 +56,7 @@ export function SegmentedMixCard({ totalLabel, data }: { totalLabel: string; dat
           </ul>
         </>
       ) : (
-        <p className="py-6 text-center text-xs text-slate-400">No data yet</p>
+        <p className="flex flex-1 items-center justify-center text-xs text-slate-400">No data yet</p>
       )}
     </div>
   );

@@ -271,17 +271,20 @@ type OverviewTotals = {
 };
 
 function scoreHex(pct: number): string {
-  if (pct >= 80) return '#059669';  // emerald-600
-  if (pct >= 50) return '#f59e0b';  // amber-500
-  return '#e11d48';                 // rose-600
+  if (pct >= 80) return '#0E5A46';  // emerald-600
+  if (pct >= 50) return '#C79A2A';  // amber-500
+  return '#A33B1F';                 // rose-600
 }
 
 // Sanctioned severity ramp: critical=rose, high=orange, medium/moderate=amber, low=emerald.
+// Keys must match the backend's RISK_BANDS. They were renamed away from the
+// criticality vocabulary (critical/high/moderate/low) so the two scales stop
+// colliding; this copy has to move with them or every band reads 0.
 const RISK_BANDS: Array<{ key: string; label: string; color: string }> = [
-  { key: 'critical', label: 'Critical', color: '#e11d48' },  // rose-600
-  { key: 'high',     label: 'High',     color: '#f97316' },  // orange-500
-  { key: 'moderate', label: 'Moderate', color: '#f59e0b' },  // amber-500
-  { key: 'low',      label: 'Low',      color: '#10b981' },  // emerald-500
+  { key: 'severe',    label: 'Severe',    color: '#A33B1F' },  // rose-600
+  { key: 'elevated',  label: 'Elevated',  color: '#C2542E' },  // orange-500
+  { key: 'watch',     label: 'Watch',     color: '#C79A2A' },  // amber-500
+  { key: 'contained', label: 'Contained', color: '#0E5A46' },  // emerald-500
 ];
 
 function ExecutiveSummary({ totals }: { totals: OverviewTotals }) {
@@ -298,21 +301,21 @@ function ExecutiveSummary({ totals }: { totals: OverviewTotals }) {
   const passRate = totals.passRate;
   // No scans run yet => the gauge has no basis; show a neutral "—" instead of a
   // red 0% that reads as "failing" when it's really "no data".
-  const gColor = hasScans ? scoreHex(passRate) : '#cbd5e1';
+  const gColor = hasScans ? scoreHex(passRate) : '#B3BCB5';
 
   const resultDonut = [
-    { name: 'Passed', value: totals.passed, color: '#10b981' },   // emerald-500
-    { name: 'Failed', value: totals.failed, color: '#f43f5e' },   // rose-500
-    { name: 'Errored', value: totals.errored, color: '#94a3b8' }, // slate-400 (neutral)
+    { name: 'Passed', value: totals.passed, color: '#0E5A46' },   // emerald-500
+    { name: 'Failed', value: totals.failed, color: '#A33B1F' },   // rose-500
+    { name: 'Errored', value: totals.errored, color: '#B3BCB5' }, // slate-400 (neutral)
   ].filter((d) => d.value > 0);
   const resultTotal = resultDonut.reduce((a, d) => a + d.value, 0);
 
   const awaiting = Math.max(0, totals.assetsWithBenchmark - totals.assetsActuallyScanned);
   const unmapped = Math.max(0, totals.assets - totals.assetsWithBenchmark);
   const coverage = [
-    { label: 'Scanned', value: totals.assetsActuallyScanned, color: '#10b981' }, // emerald-500
-    { label: 'Awaiting scan', value: awaiting, color: '#f59e0b' },               // amber-500
-    { label: 'Not mapped', value: unmapped, color: '#cbd5e1' },                  // slate-300
+    { label: 'Scanned', value: totals.assetsActuallyScanned, color: '#0E5A46' }, // emerald-500
+    { label: 'Awaiting scan', value: awaiting, color: '#C79A2A' },               // amber-500
+    { label: 'Not mapped', value: unmapped, color: '#B3BCB5' },                  // slate-300
   ];
   const covTotal = totals.assets || 1;
 
@@ -330,11 +333,11 @@ function ExecutiveSummary({ totals }: { totals: OverviewTotals }) {
             <ResponsiveContainer width="100%" height="100%">
               <RadialBarChart innerRadius="78%" outerRadius="100%" data={[{ value: hasScans ? passRate : 0 }]} startAngle={90} endAngle={-270}>
                 <PolarAngleAxis type="number" domain={[0, 100]} angleAxisId={0} tick={false} />
-                <RadialBar dataKey="value" cornerRadius={10} fill={gColor} background={{ fill: '#f1f5f9' }} />
+                <RadialBar dataKey="value" cornerRadius={10} fill={gColor} background={{ fill: '#EDECE4' }} />
               </RadialBarChart>
             </ResponsiveContainer>
             <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-4xl font-bold tabular-nums" style={{ color: hasScans ? gColor : '#94a3b8' }}>{hasScans ? `${passRate}%` : '—'}</span>
+              <span className="text-4xl font-bold tabular-nums" style={{ color: hasScans ? gColor : '#B3BCB5' }}>{hasScans ? `${passRate}%` : '—'}</span>
               <span className="mt-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Compliant</span>
             </div>
           </div>
@@ -454,12 +457,12 @@ function ExecutiveSummary({ totals }: { totals: OverviewTotals }) {
 function CategoryRing({ pct }: { pct: number | null }) {
   const r = 20;
   const circ = 2 * Math.PI * r;
-  const color = pct === null ? '#cbd5e1' : scoreHex(pct);
+  const color = pct === null ? '#B3BCB5' : scoreHex(pct);
   const dash = ((pct ?? 0) / 100) * circ;
   return (
     <div className="relative h-14 w-14 shrink-0">
       <svg viewBox="0 0 48 48" className="h-14 w-14 -rotate-90">
-        <circle cx="24" cy="24" r={r} fill="none" stroke="#e2e8f0" strokeWidth="5" />
+        <circle cx="24" cy="24" r={r} fill="none" stroke="#EDECE4" strokeWidth="5" />
         {pct !== null && (
           <circle cx="24" cy="24" r={r} fill="none" stroke={color} strokeWidth="5" strokeLinecap="round"
             strokeDasharray={`${dash} ${circ}`} className="transition-all duration-700" />
@@ -616,7 +619,7 @@ function OverviewTabContent() {
                     const failed = rows.reduce((a, r) => a + (r.failed || 0), 0);
                     const scannedDevices = rows.filter(r => (r.scanned_rules || 0) > 0).length;
                     const passRate = scanned > 0 ? Math.round((passed / scanned) * 100) : null;
-                    const accent = passRate === null ? '#cbd5e1' : scoreHex(passRate);
+                    const accent = passRate === null ? '#B3BCB5' : scoreHex(passRate);
                     const isOpen = expandedCat === cat.key;
                     return (
                       <button
