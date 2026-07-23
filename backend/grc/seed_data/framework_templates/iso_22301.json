@@ -1,0 +1,579 @@
+{
+ "framework_key": "iso_22301",
+ "display_name": "ISO 22301",
+ "name_patterns": [
+  "22301"
+ ],
+ "registers": [
+  {
+   "type": "iso_22301__iso_22301_gap_assessment_template_1",
+   "label": "Gap Assessment",
+   "description": "ISO 22301 — Gap Assessment (from the template).",
+   "columns": [
+    {
+     "key": "area",
+     "label": "Area",
+     "type": "text"
+    },
+    {
+     "key": "clause",
+     "label": "Clause",
+     "type": "text",
+     "picker": "framework_controls"
+    },
+    {
+     "key": "outcome_to_verify",
+     "label": "Outcome to verify",
+     "type": "textarea"
+    },
+    {
+     "key": "status",
+     "label": "Status",
+     "type": "text"
+    },
+    {
+     "key": "evidence_notes",
+     "label": "Evidence / notes",
+     "type": "text",
+     "picker": "evidence"
+    },
+    {
+     "key": "owner",
+     "label": "Owner",
+     "type": "text",
+     "picker": "users"
+    }
+   ],
+   "seed": [
+    {
+     "data": {
+      "area": "Clause 4 Context",
+      "clause": "4",
+      "outcome_to_verify": "The organisation, interested parties and BCMS scope are determined",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "area": "Clause 5 Leadership",
+      "clause": "5",
+      "outcome_to_verify": "Leadership, a business continuity policy and roles are established",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "area": "Clause 6 Planning",
+      "clause": "6",
+      "outcome_to_verify": "BCMS risks, objectives and planning are addressed",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "area": "Clause 7 Support",
+      "clause": "7",
+      "outcome_to_verify": "Resources, competence, awareness, communication and documented information support the BCMS",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "area": "Clause 8 Operation",
+      "clause": "8",
+      "outcome_to_verify": "Business impact analysis, risk assessment, strategy, plans and exercises are in place",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "area": "Clause 9 Performance",
+      "clause": "9",
+      "outcome_to_verify": "Monitoring, internal audit and management review evaluate the BCMS",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "area": "Clause 10 Improvement",
+      "clause": "10",
+      "outcome_to_verify": "Nonconformities are corrected and the BCMS is continually improved",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    }
+   ],
+   "formSections": [
+    {
+     "title": "Item",
+     "keys": [
+      "area",
+      "clause"
+     ]
+    },
+    {
+     "title": "Assessment",
+     "keys": [
+      "outcome_to_verify",
+      "status",
+      "evidence_notes"
+     ]
+    },
+    {
+     "title": "Ownership & dates",
+     "keys": [
+      "owner"
+     ]
+    }
+   ]
+  }
+ ],
+ "documents": [
+  {
+   "type": "iso_22301__iso_22301_bcms_scope_statement_template_2",
+   "label": "Bcms Scope Statement",
+   "control_ref": null,
+   "sections": [
+    {
+     "heading": "1. Purpose",
+     "body": "This document defines the scope of the organisation's business continuity management system (BCMS), consistent with the approach of ISO 22301."
+    },
+    {
+     "heading": "2. Scope",
+     "body": "The activities, locations, and products and services included in the BCMS."
+    },
+    {
+     "heading": "3. Context",
+     "body": "The internal and external issues relevant to business continuity, and the needs and expectations of interested parties (such as customers, regulators, suppliers and staff), are determined and taken into account in defining the scope.\n[FILL IN: your key issues and interested parties.]"
+    },
+    {
+     "heading": "4. Scope of the BCMS",
+     "body": "The BCMS scope is defined explicitly:\n- It covers the products and services listed, the activities that deliver them, and the locations and resources involved.\n- Any exclusions are stated with justification.\n- The scope does not exclude activities that influence the organisation's ability to deliver its in-scope products and services.\n- [FILL IN: your in-scope products/services and locations, and any exclusions with justification.]"
+    },
+    {
+     "heading": "5. Boundaries and Interfaces",
+     "body": "The boundaries of the BCMS and its interfaces with outsourced or third-party activities that affect continuity are identified."
+    },
+    {
+     "heading": "6. Disclaimer",
+     "body": "This template is an independently created resource to help you implement a management system aligned to the relevant ISO standard. It is not affiliated with, endorsed by, or certified by ISO or any standards body, does not reproduce the text of the standard, and is not a substitute for professional advice or certification by an accredited body. Obtain the official standard from ISO."
+    },
+    {
+     "heading": "7. Roles & Responsibilities",
+     "body": "",
+     "table": {
+      "columns": [
+       "Role",
+       "Responsibilities"
+      ],
+      "rows": [
+       [
+        "BC manager",
+        "Owns the BCMS scope."
+       ],
+       [
+        "Managers",
+        "Ensure their teams understand and follow the policy."
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "8. Compliance & Enforcement",
+     "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+    },
+    {
+     "heading": "9. Exceptions",
+     "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+    },
+    {
+     "heading": "10. Review",
+     "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+    }
+   ]
+  },
+  {
+   "type": "iso_22301__iso_22301_business_continuity_plan_template_2",
+   "label": "Business Continuity Plan",
+   "control_ref": null,
+   "sections": [
+    {
+     "heading": "1. Purpose",
+     "body": "This business continuity plan documents the procedures to respond to a disruption and recover priority activities within their objectives, consistent with the approach of ISO 22301."
+    },
+    {
+     "heading": "2. Scope",
+     "body": "The priority activities and the teams that recover them."
+    },
+    {
+     "heading": "3. Activation",
+     "body": "The plan is invoked in a controlled way:\n- It defines who can activate it and the criteria and thresholds for activation.\n- It sets out how the plan is invoked and how the response structure is mobilised.\n- [FILL IN: your activation criteria and the authority to invoke the plan.]"
+    },
+    {
+     "heading": "4. Response",
+     "body": "Immediate response steps follow a clear order of priority:\n- Protect life and safety first.\n- Stabilise the situation and prevent escalation.\n- Stand up the response structure with defined roles and actions."
+    },
+    {
+     "heading": "5. Recovery",
+     "body": "Recovery procedures restore each priority activity within its recovery time objective and to its minimum acceptable level, with the resources and workarounds required."
+    },
+    {
+     "heading": "6. Communications",
+     "body": "Internal and external communications, including with interested parties and authorities, are defined, with contact information and message templates."
+    },
+    {
+     "heading": "7. Disclaimer",
+     "body": "This template is an independently created resource to help you implement a management system aligned to the relevant ISO standard. It is not affiliated with, endorsed by, or certified by ISO or any standards body, does not reproduce the text of the standard, and is not a substitute for professional advice or certification by an accredited body. Obtain the official standard from ISO."
+    },
+    {
+     "heading": "8. Roles & Responsibilities",
+     "body": "",
+     "table": {
+      "columns": [
+       "Role",
+       "Responsibilities"
+      ],
+      "rows": [
+       [
+        "BC manager",
+        "Owns the plan."
+       ],
+       [
+        "IT / Operations",
+        "Implements and maintains the technical controls described in this document."
+       ],
+       [
+        "Managers",
+        "Ensure their teams understand and follow the policy."
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "9. Testing & Maintenance",
+     "body": "This plan is reviewed at least annually and after every activation or major change. Exercises (tabletop or full) are scheduled to validate the plan and results are recorded as improvement actions."
+    }
+   ]
+  },
+  {
+   "type": "iso_22301__iso_22301_business_continuity_policy_template_1",
+   "label": "Business Continuity Policy",
+   "control_ref": null,
+   "sections": [
+    {
+     "heading": "1. Purpose",
+     "body": "This policy sets the organisation's commitment to business continuity and provides the framework for continuity objectives, consistent with the approach of ISO 22301."
+    },
+    {
+     "heading": "2. Scope",
+     "body": "The organisation's priority activities and the business continuity management system."
+    },
+    {
+     "heading": "3. Commitments",
+     "body": "The organisation commits to:\n- Establishing and maintaining a BCMS appropriate to its purpose and context.\n- Protecting its priority activities and meeting their recovery objectives.\n- Satisfying applicable legal, regulatory and other requirements.\n- Providing the resources the BCMS needs and continually improving it."
+    },
+    {
+     "heading": "4. Objectives and Framework",
+     "body": "This policy provides the framework for setting measurable business continuity objectives, which are established, monitored and reviewed.\n[FILL IN: your business continuity objectives.]"
+    },
+    {
+     "heading": "5. Communication",
+     "body": "The policy is communicated within the organisation and made available to interested parties as appropriate."
+    },
+    {
+     "heading": "6. Disclaimer",
+     "body": "This template is an independently created resource to help you implement a management system aligned to the relevant ISO standard. It is not affiliated with, endorsed by, or certified by ISO or any standards body, does not reproduce the text of the standard, and is not a substitute for professional advice or certification by an accredited body. Obtain the official standard from ISO."
+    },
+    {
+     "heading": "7. Roles & Responsibilities",
+     "body": "",
+     "table": {
+      "columns": [
+       "Role",
+       "Responsibilities"
+      ],
+      "rows": [
+       [
+        "Top management",
+        "Approves the policy."
+       ],
+       [
+        "BC manager",
+        "Owns the BCMS."
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "8. Compliance & Enforcement",
+     "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+    },
+    {
+     "heading": "9. Exceptions",
+     "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+    },
+    {
+     "heading": "10. Review",
+     "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+    }
+   ]
+  },
+  {
+   "type": "iso_22301__iso_22301_business_continuity_strategy_template_",
+   "label": "Business Continuity Strategy",
+   "control_ref": null,
+   "sections": [
+    {
+     "heading": "1. Purpose",
+     "body": "This document sets out the business continuity strategies and solutions selected to meet the recovery objectives identified in the business impact analysis, consistent with the approach of ISO 22301."
+    },
+    {
+     "heading": "2. Scope",
+     "body": "The priority activities identified in the business impact analysis and the resources they depend on."
+    },
+    {
+     "heading": "3. Strategy Selection",
+     "body": "For each priority activity, continuity strategies and solutions are selected to:\n- Protect the activity from disruption where possible.\n- Stabilise and continue or resume it during a disruption.\n- Recover it within its recovery time objective, addressing people, premises, technology, information, suppliers and stakeholders.\n- [FILL IN: your chosen strategies per priority activity.]"
+    },
+    {
+     "heading": "4. Resource Requirements",
+     "body": "The resources needed to implement each strategy, people and skills, facilities, technology, data, suppliers and finance, are identified and provided, including arrangements for alternates, surge or stockpiles where relevant."
+    },
+    {
+     "heading": "5. Risk and Cost",
+     "body": "Strategies are chosen to meet the recovery objectives at an acceptable balance of risk and cost, and single points of failure and dependencies are addressed."
+    },
+    {
+     "heading": "6. Disclaimer",
+     "body": "This template is an independently created resource to help you implement a management system aligned to the relevant ISO standard. It is not affiliated with, endorsed by, or certified by ISO or any standards body, does not reproduce the text of the standard, and is not a substitute for professional advice or certification by an accredited body. Obtain the official standard from ISO."
+    },
+    {
+     "heading": "7. Roles & Responsibilities",
+     "body": "",
+     "table": {
+      "columns": [
+       "Role",
+       "Responsibilities"
+      ],
+      "rows": [
+       [
+        "BC manager",
+        "Owns the strategy."
+       ],
+       [
+        "Managers",
+        "Ensure their teams understand and follow the policy."
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "8. Compliance & Enforcement",
+     "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+    },
+    {
+     "heading": "9. Exceptions",
+     "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+    },
+    {
+     "heading": "10. Review",
+     "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+    }
+   ]
+  },
+  {
+   "type": "iso_22301__iso_22301_exercise_and_testing_plan_template_2",
+   "label": "Exercise And Testing Plan",
+   "control_ref": null,
+   "sections": [
+    {
+     "heading": "1. Purpose",
+     "body": "This plan ensures business continuity arrangements are exercised and tested so they work when needed, consistent with the approach of ISO 22301."
+    },
+    {
+     "heading": "2. Scope",
+     "body": "The BCMS plans, teams and arrangements."
+    },
+    {
+     "heading": "3. Exercise Programme",
+     "body": "Arrangements are exercised on a defined schedule using a range of exercise types:\n- Discussion-based walkthroughs and tabletop exercises.\n- Operational and full-scale tests as maturity allows.\n- Each exercise has defined aims, scope and scenarios.\n- [FILL IN: your exercise schedule and the types you use.]"
+    },
+    {
+     "heading": "4. Conduct and Safety",
+     "body": "Exercises are designed so they do not expose the organisation to unacceptable risk, and are run against clear objectives and success criteria."
+    },
+    {
+     "heading": "5. Evaluation and Improvement",
+     "body": "Results, observations and gaps are captured in a post-exercise report, and corrective actions update the plans and arrangements."
+    },
+    {
+     "heading": "6. Disclaimer",
+     "body": "This template is an independently created resource to help you implement a management system aligned to the relevant ISO standard. It is not affiliated with, endorsed by, or certified by ISO or any standards body, does not reproduce the text of the standard, and is not a substitute for professional advice or certification by an accredited body. Obtain the official standard from ISO."
+    },
+    {
+     "heading": "7. Roles & Responsibilities",
+     "body": "",
+     "table": {
+      "columns": [
+       "Role",
+       "Responsibilities"
+      ],
+      "rows": [
+       [
+        "BC manager",
+        "Owns exercising."
+       ],
+       [
+        "Managers",
+        "Ensure their teams understand and follow the policy."
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "8. Testing & Maintenance",
+     "body": "This plan is reviewed at least annually and after every activation or major change. Exercises (tabletop or full) are scheduled to validate the plan and results are recorded as improvement actions."
+    }
+   ]
+  },
+  {
+   "type": "iso_22301__iso_22301_incident_response_structure_template_2",
+   "label": "Incident Response Structure",
+   "control_ref": null,
+   "sections": [
+    {
+     "heading": "1. Purpose",
+     "body": "This document defines the incident response structure that manages a disruptive incident, consistent with the approach of ISO 22301."
+    },
+    {
+     "heading": "2. Scope",
+     "body": "The teams, roles and authorities that respond to a disruption."
+    },
+    {
+     "heading": "3. Response Structure",
+     "body": "A defined structure manages a disruptive incident:\n- An incident management team with named roles, deputies and authorities leads the response.\n- Supporting teams are responsible for recovering the priority activities.\n- The structure can scale to the size of the incident.\n- [FILL IN: your incident management team and supporting teams.]"
+    },
+    {
+     "heading": "4. Escalation and Authority",
+     "body": "Thresholds and triggers for escalating an issue to the incident management team, and the authority to commit resources and make decisions during an incident, are defined."
+    },
+    {
+     "heading": "5. Communications",
+     "body": "The structure coordinates internal and external communications, including with interested parties, authorities and the media, through identified spokespeople."
+    },
+    {
+     "heading": "6. Disclaimer",
+     "body": "This template is an independently created resource to help you implement a management system aligned to the relevant ISO standard. It is not affiliated with, endorsed by, or certified by ISO or any standards body, does not reproduce the text of the standard, and is not a substitute for professional advice or certification by an accredited body. Obtain the official standard from ISO."
+    },
+    {
+     "heading": "7. Roles & Responsibilities",
+     "body": "",
+     "table": {
+      "columns": [
+       "Role",
+       "Responsibilities"
+      ],
+      "rows": [
+       [
+        "Incident manager",
+        "Leads the response structure."
+       ],
+       [
+        "Managers",
+        "Ensure their teams understand and follow the policy."
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "8. Compliance & Enforcement",
+     "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+    },
+    {
+     "heading": "9. Exceptions",
+     "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+    },
+    {
+     "heading": "10. Review",
+     "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+    }
+   ]
+  },
+  {
+   "type": "iso_22301__iso_22301_management_review_template_2",
+   "label": "Management Review",
+   "control_ref": null,
+   "sections": [
+    {
+     "heading": "1. Purpose",
+     "body": "This document governs the monitoring, internal audit and management review that evaluate and improve the business continuity management system, consistent with the approach of ISO 22301."
+    },
+    {
+     "heading": "2. Scope",
+     "body": "The performance of the business continuity management system."
+    },
+    {
+     "heading": "3. Monitoring and Measurement",
+     "body": "BCMS performance is monitored and measured against the continuity objectives and defined metrics.\n[FILL IN: your BCMS metrics.]"
+    },
+    {
+     "heading": "4. Internal Audit",
+     "body": "The BCMS is internally audited at planned intervals to confirm it conforms to the organisation's requirements and is effectively implemented and maintained."
+    },
+    {
+     "heading": "5. Management Review",
+     "body": "Top management reviews the BCMS at planned intervals, considering:\n- Audit results, exercise outcomes and performance against the continuity objectives.\n- Changes in the organisation's context and risk.\n- Improvement opportunities.\n- The review concludes with decisions on changes to the BCMS and the resources required, recorded with owners."
+    },
+    {
+     "heading": "6. Disclaimer",
+     "body": "This template is an independently created resource to help you implement a management system aligned to the relevant ISO standard. It is not affiliated with, endorsed by, or certified by ISO or any standards body, does not reproduce the text of the standard, and is not a substitute for professional advice or certification by an accredited body. Obtain the official standard from ISO."
+    },
+    {
+     "heading": "7. Roles & Responsibilities",
+     "body": "",
+     "table": {
+      "columns": [
+       "Role",
+       "Responsibilities"
+      ],
+      "rows": [
+       [
+        "BC manager",
+        "Coordinates evaluation."
+       ],
+       [
+        "Top management",
+        "Reviews the BCMS."
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "8. Compliance & Enforcement",
+     "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+    },
+    {
+     "heading": "9. Exceptions",
+     "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+    },
+    {
+     "heading": "10. Review",
+     "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+    }
+   ]
+  }
+ ]
+}

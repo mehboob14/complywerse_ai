@@ -1,0 +1,44 @@
+<!-- iso_27001_2022 / ISO27-041 | type=Record/Log | mode=table | model=gpt-5.5 | 8669 chars -->
+
+## Management Review Minutes (DOCX template)
+
+_Editable template — add your own rows. The example row(s) below are placeholders to replace._
+
+| Meeting ID | Meeting Date | Review Period Covered | Meeting Chair / Top Management Representative | Attendees and Roles | Apologies / Required Attendees Absent | ISMS Scope Reviewed | Agenda Item ID | ISO/IEC 27001:2022 Input Category | Evidence / Reports Reviewed | Key Results, Trends, and Issues Discussed | Conclusion on ISMS Suitability, Adequacy, and Effectiveness | Management Decision / Output | Change to ISMS Required | Resource Need Identified | Continual Improvement Opportunity | Action ID | Action Description | Action Owner | Action Due Date | Action Status | Previous Action Reference | Previous Action Status Update | Approval / Sign-off | Record Location |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [EXAMPLE: MR-2025-001] | [EXAMPLE: 2025-03-31] | [EXAMPLE: 2024-10-01 to 2025-03-31] | [EXAMPLE: Jane Smith, Chief Operating Officer] | [EXAMPLE: Jane Smith - COO; Alex Brown - ISMS Manager; Priya Patel - Head of IT; Martin Green - Risk Manager] | [EXAMPLE: None] | [EXAMPLE: ISMS covering cloud hosting operations, corporate IT, and customer support services in UK and EU locations] | [EXAMPLE: 1] | [EXAMPLE: Previous management review actions] | [EXAMPLE: Management Review Action Tracker MR-ACT-2024-Q4, exported 2025-03-20] | [EXAMPLE: 8 actions reviewed; 6 complete, 1 in progress, 1 overdue relating to supplier risk reassessment] | [EXAMPLE: Partially effective - prior actions generally progressed, but overdue supplier action requires escalation] | [EXAMPLE: Escalate overdue supplier reassessment to Head of Procurement and review completion at next ISMS steering meeting] | [EXAMPLE: No] | [EXAMPLE: None] | [EXAMPLE: Improve monthly visibility of overdue management review actions] | [EXAMPLE: MR-ACT-2025-001] | [EXAMPLE: Add management review actions to the monthly ISMS dashboard with overdue escalation rules] | [EXAMPLE: Alex Brown, ISMS Manager] | [EXAMPLE: 2025-04-30] | [EXAMPLE: Not started] | [EXAMPLE: MR-ACT-2024-017] | [EXAMPLE: Overdue; supplier reassessment not completed due to delayed procurement input] | [EXAMPLE: Jane Smith, COO, 2025-04-02] | [EXAMPLE: SharePoint/ISMS/Management Reviews/2025/MR-2025-001] |
+| [EXAMPLE: MR-2025-001] | [EXAMPLE: 2025-03-31] | [EXAMPLE: 2024-10-01 to 2025-03-31] | [EXAMPLE: Jane Smith, Chief Operating Officer] | [EXAMPLE: Jane Smith - COO; Alex Brown - ISMS Manager; Priya Patel - Head of IT; Martin Green - Risk Manager] | [EXAMPLE: None] | [EXAMPLE: ISMS covering cloud hosting operations, corporate IT, and customer support services in UK and EU locations] | [EXAMPLE: 2] | [EXAMPLE: Risk assessment results] | [EXAMPLE: Information Security Risk Register v3.2 dated 2025-03-15; Risk Treatment Plan RTP-2025-Q1] | [EXAMPLE: 3 high risks remain open; MFA rollout reduced privileged access risk from High to Medium; third-party concentration risk increased due to new customer support platform] | [EXAMPLE: Partially effective - risk treatment is progressing, but one new high supplier risk requires treatment approval] | [EXAMPLE: Approve new treatment plan for third-party concentration risk and assign executive risk owner] | [EXAMPLE: Yes - update risk register, risk treatment plan, and supplier assurance schedule] | [EXAMPLE: Additional supplier assurance time required from Procurement and Security teams] | [EXAMPLE: Introduce quarterly review of critical supplier resilience evidence] | [EXAMPLE: MR-ACT-2025-002] | [EXAMPLE: Update supplier concentration risk treatment plan and obtain executive approval] | [EXAMPLE: Martin Green, Risk Manager] | [EXAMPLE: 2025-05-15] | [EXAMPLE: Not started] | [EXAMPLE: N/A] | [EXAMPLE: N/A] | [EXAMPLE: Jane Smith, COO, 2025-04-02] | [EXAMPLE: SharePoint/ISMS/Management Reviews/2025/MR-2025-001] |
+
+### Column Guidance
+
+| Column | What to enter |
+|---|---|
+| Meeting ID | Enter a unique identifier for the management review meeting, e.g. MR-YYYY-###. |
+| Meeting Date | Enter the date the management review was held in YYYY-MM-DD format. |
+| Review Period Covered | Enter the period reviewed by top management, e.g. YYYY-MM-DD to YYYY-MM-DD. |
+| Meeting Chair / Top Management Representative | Enter the name and role of the person chairing the review, normally the accountable top management representative. |
+| Attendees and Roles | List all attendees with job roles, separated by semicolons; include top management, ISMS owner, risk owner, compliance, IT/security, and other relevant roles. |
+| Apologies / Required Attendees Absent | Record any required attendees who were absent and whether a delegate attended; enter 'None' if not applicable. |
+| ISMS Scope Reviewed | State the ISMS scope, business units, sites, services, systems, or processes covered by this review. |
+| Agenda Item ID | Enter a sequential agenda reference for each topic reviewed, e.g. 1, 2, 3 or MR-2025-001-A01. |
+| ISO/IEC 27001:2022 Input Category | Select the applicable review input category: Previous management review actions; Internal/external issues; Interested party needs and expectations; ISMS performance feedback; Nonconformities and corrective actions; Monitoring and measurement results; Audit results; Information security objectives; Risk assessment results; Risk treatment plan status; Continual improvement opportunities; Other. |
+| Evidence / Reports Reviewed | Identify the documents, dashboards, logs, registers, reports, or system records reviewed, including title, reference number, version/date, or source link where applicable. |
+| Key Results, Trends, and Issues Discussed | Summarise the factual results discussed, including metrics, trends, exceptions, incidents, overdue items, risks, compliance issues, or significant changes; include units or counts where relevant. |
+| Conclusion on ISMS Suitability, Adequacy, and Effectiveness | Record management's conclusion for this agenda item using one of: Suitable/Adequate/Effective; Partially effective; Not effective; Not assessed, followed by a short rationale. |
+| Management Decision / Output | Record the decision made by top management, including approvals, rejections, escalations, accepted risks, changes required, or confirmation that no action is needed. |
+| Change to ISMS Required | Enter 'Yes' or 'No'; if Yes, specify the required change to policies, scope, objectives, risks, controls, procedures, suppliers, roles, or processes. |
+| Resource Need Identified | Enter 'None' or describe required people, budget, tools, training, external support, or time needed to maintain or improve the ISMS. |
+| Continual Improvement Opportunity | Enter 'None' or describe the improvement opportunity identified, including expected benefit or target area. |
+| Action ID | Enter a unique action reference if an action is raised, e.g. MR-ACT-YYYY-###; enter 'None' if no action is required. |
+| Action Description | Describe the specific action to be completed, including the required outcome or deliverable; enter 'None' if no action is required. |
+| Action Owner | Enter the named person and role accountable for completing the action; enter 'None' if no action is required. |
+| Action Due Date | Enter the target completion date in YYYY-MM-DD format; enter 'N/A' if no action is required. |
+| Action Status | Use one of: Not started; In progress; Complete; Overdue; Deferred; Cancelled; N/A. |
+| Previous Action Reference | If reviewing a prior management review action, enter the previous action ID; otherwise enter 'N/A'. |
+| Previous Action Status Update | For prior actions, record current status, evidence of completion, blockers, or reason for deferral; enter 'N/A' if not applicable. |
+| Approval / Sign-off | Enter the name, role, and date of the person approving the minutes, in the format Name, Role, YYYY-MM-DD. |
+| Record Location | Enter the controlled repository path, document management link, ticket link, or file reference where the approved minutes and supporting evidence are stored. |
+
+### Maintenance
+
+The ISMS Manager owns this template and ensures it is reviewed at least annually and after any change to ISO/IEC 27001 requirements, ISMS governance, or management review process. It is updated from the ISMS document repository and draws inputs from the risk register, risk treatment plan, objectives/KPI dashboard, audit programme, corrective action log, monitoring and measurement reports, incident/problem records, compliance obligations register, and previous management review action tracker.

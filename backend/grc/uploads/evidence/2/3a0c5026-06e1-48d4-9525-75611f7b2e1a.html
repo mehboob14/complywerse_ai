@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>EV-SCR-020 — Data Centre Access Control System Card Reader Log</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { font-family: -apple-system, 'Segoe UI', Arial, sans-serif; background: #f4f6f8; color: #222; }
+  .page { max-width: 1280px; margin: 24px auto; padding: 0 24px 48px; }
+  /* COVER */
+  .cover { background: linear-gradient(135deg, #1F4E79 0%, #2E75B6 100%); color: #fff; border-radius: 10px; padding: 32px 36px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); }
+  .cover h1 { font-size: 28px; margin-bottom: 6px; letter-spacing: 0.5px; }
+  .cover h2 { font-size: 16px; font-weight: 400; opacity: 0.92; margin-bottom: 18px; }
+  .cover .meta { display: grid; grid-template-columns: 180px 1fr 180px 1fr; gap: 10px 16px; font-size: 13px; margin-top: 12px; }
+  .cover .meta b { opacity: 0.85; font-weight: 500; }
+  .cover .ev-id { position: absolute; top: 20px; right: 36px; background: rgba(255,255,255,0.15); padding: 6px 14px; border-radius: 20px; font-size: 12px; letter-spacing: 1px; }
+  .cover-wrap { position: relative; }
+  .fwgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 20px; margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.25); font-size: 12px; }
+  .fwgrid div { padding: 6px 10px; background: rgba(255,255,255,0.10); border-radius: 4px; }
+  .fwgrid b { font-weight: 600; }
+
+  /* LABEL ABOVE SCREENSHOT */
+  .shot-label { margin: 28px 0 8px; padding: 8px 14px; background: #fff; border-left: 4px solid #2E75B6; border-radius: 0 4px 4px 0; font-size: 13px; color: #555; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+  .shot-label b { color: #1F4E79; }
+
+  /* SCREENSHOT FRAME */
+  .screenshot { background: #fff; border: 1px solid #d8dde3; border-radius: 6px; overflow: hidden; box-shadow: 0 2px 12px rgba(0,0,0,0.10); }
+  .browser-bar { background: #e7e9ed; padding: 8px 12px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid #d0d4d9; }
+  .browser-bar .dot { width: 12px; height: 12px; border-radius: 50%; }
+  .browser-bar .dot.r { background: #ff5f57; } .browser-bar .dot.y { background: #ffbd2e; } .browser-bar .dot.g { background: #28c840; }
+  .browser-bar .url { flex: 1; background: #fff; border: 1px solid #c8cdd3; border-radius: 4px; padding: 4px 10px; font-size: 12px; color: #555; }
+  .content { padding: 20px; font-size: 13px; }
+
+  /* AUDIT STAMP */
+  .audit-stamp { margin-top: 10px; padding: 10px 14px; background: #e8f4ea; border-left: 4px solid #2d7a3f; font-size: 12px; color: #1a4d26; border-radius: 0 4px 4px 0; }
+  .audit-stamp b { color: #0f3d1a; }
+
+  /* COMMON UI */
+  table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 12.5px; }
+  th { background: #f3f5f7; text-align: left; padding: 8px 10px; border-bottom: 2px solid #ccd4dc; font-weight: 600; color: #333; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.4px; }
+  td { padding: 8px 10px; border-bottom: 1px solid #e8ecf0; color: #333; }
+  tr:last-child td { border-bottom: none; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+  .badge.ok { background: #e0f4e3; color: #1e7a30; }
+  .badge.warn { background: #fff2cc; color: #8a6215; }
+  .badge.bad { background: #fadbd8; color: #9c1414; }
+  .badge.info { background: #d6e4f0; color: #1F4E79; }
+  .kv { display: grid; grid-template-columns: 200px 1fr; gap: 6px 14px; font-size: 13px; }
+  .kv b { color: #555; font-weight: 500; }
+  .kv .val { color: #222; }
+  .hdr { font-size: 18px; font-weight: 600; color: #1F4E79; margin-bottom: 6px; }
+  .sub { color: #666; font-size: 12px; margin-bottom: 16px; }
+  .section { margin: 20px 0; padding: 12px 14px; background: #f8f9fb; border-radius: 4px; border: 1px solid #e1e5ea; }
+  .flex { display: flex; gap: 20px; align-items: flex-start; }
+  .flex > div { flex: 1; }
+  code { background: #f0f2f5; padding: 1px 6px; border-radius: 3px; font-family: 'Consolas','Monaco',monospace; font-size: 12px; color: #333; }
+  .timestamp { color: #888; font-size: 11px; }
+
+  /* PRINT */
+  @media print { .page { margin: 0; padding: 0; } .cover { break-after: page; } .screenshot { break-inside: avoid; } }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="cover-wrap">
+    <div class="cover">
+      <div class="ev-id">EV-SCR-020</div>
+      <h1>[Bank Name]</h1>
+      <h2>Data Centre Access Control System Card Reader Log</h2>
+      <div class="meta">
+        <b>Evidence ID:</b><div>EV-SCR-020</div>
+        <b>Captured On:</b><div>20-Mar-2026 15:31 GST</div>
+        <b>Classification:</b><div>CONFIDENTIAL</div>
+        <b>Retention:</b><div>7 years</div>
+        <b>Captured By:</b><div>Maryam Al Falasi (Facilities BCP)</div>
+        <b>Reviewed By:</b><div>CISO Office</div>
+        <b>System / Tool:</b><div>Lenel OnGuard</div>
+        <b>Document Type:</b><div>Configuration Screenshot</div>
+      </div>
+      <div class="fwgrid">
+        <div><b>SBP ETGRMF:</b> 2.4.2 Physical Access; 3.6 DC Security</div>
+        <div><b>ISO 27001:</b> A.7.1 Perimeters; A.7.2 Physical Entry</div>
+        <div><b>PCI-DSS:</b> Req 9 Physical Access</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="shot-label">DC physical access log. <br/><b>Purpose:</b> Demonstrates physical access controls to DC per ETGRMF 2.4.2 / PCI Req 9.</div>
+
+  <div class="screenshot">
+    <div style="background:#1F4E79;color:#fff;padding:10px 16px;font-weight:600;font-size:14px;">Lenel OnGuard Enterprise › Access Control › Data Centre Zones</div>
+    <div class="content"><div class="hdr">Data Centre Physical Access — Card Reader Log</div>
+    <div class="sub">Primary DC (Deira, Floor B2) · 14 card readers + palm-vein biometric · Last 48 hours</div>
+    <div class="section">
+      <b>Recent Access Events:</b>
+      <table><tr><th>Timestamp</th><th>Reader</th><th>Employee</th><th>Card ID</th><th>Biometric</th><th>Result</th></tr>
+      <tr><td>20-Mar 14:35</td><td>DC-Entry-Mantrap</td><td>Khalid Al Blooshi</td><td>****-8421</td><td>Verified</td><td><span class="badge ok">GRANTED</span></td></tr>
+      <tr><td>20-Mar 13:42</td><td>DC-Server-Hall-A</td><td>Jassim Al Suwaidi</td><td>****-3189</td><td>Verified</td><td><span class="badge ok">GRANTED</span></td></tr>
+      <tr><td>20-Mar 12:18</td><td>DC-Network-Room</td><td>Rashid Al Nuaimi</td><td>****-7451</td><td>Verified</td><td><span class="badge ok">GRANTED</span></td></tr>
+      <tr><td>20-Mar 10:48</td><td>DC-Entry-Mantrap</td><td>Vendor: Siemens HVAC (escorted)</td><td>VISITOR-0147</td><td>—</td><td><span class="badge ok">GRANTED + ESCORT</span></td></tr>
+      <tr><td>20-Mar 09:22</td><td>DC-Vault-CMS-Cage</td><td>Omar Bin Hussain</td><td>****-2914</td><td>Verified</td><td><span class="badge ok">GRANTED (4-EYES)</span></td></tr>
+      <tr><td>19-Mar 23:14</td><td>DC-Entry-Mantrap</td><td>Unknown card</td><td>****-9999</td><td>—</td><td><span class="badge bad">DENIED (EXPIRED)</span></td></tr>
+      </table>
+    </div>
+    <div class="section">
+      <b>Access Control Posture:</b>
+      <table><tr><th>Control</th><th>Status</th></tr>
+      <tr><td>Card reader at all ingress points</td><td><span class="badge ok">ENFORCED (14 readers)</span></td></tr>
+      <tr><td>Mantrap at DC entry</td><td><span class="badge ok">OPERATIONAL</span></td></tr>
+      <tr><td>Biometric at server halls and CMS vault</td><td><span class="badge ok">PALM-VEIN</span></td></tr>
+      <tr><td>CCTV coverage</td><td><span class="badge ok">100% — 42 cameras, 90-day retention</span></td></tr>
+      <tr><td>Visitor escort policy</td><td><span class="badge ok">ENFORCED</span></td></tr>
+      <tr><td>4-eyes enforcement at sensitive areas</td><td><span class="badge ok">CMS vault, HSM cabinet</span></td></tr>
+      <tr><td>Access reviews</td><td>Quarterly (last: 15-Mar-2026)</td></tr>
+      </table>
+    </div></div>
+  </div>
+
+  <div class="audit-stamp"><b>Control Assurance:</b> Multi-factor physical access (card + biometric), mantrap, CCTV 100%, escort for visitors, quarterly access review.</div>
+
+</div>
+</body>
+</html>
