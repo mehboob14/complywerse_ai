@@ -57,13 +57,26 @@ REMEDIATED_STATUSES = {"resolved", "remediated", "verified", "closed"}
 
 
 def _is_entry_technique(technique_id: str) -> bool:
-    """True if the technique belongs to an entry tactic (Initial Access /
-    Execution) — the capability a CVE-level exploit actually confirms.
+    """True if the technique's PRIMARY (displayed) tactic is an entry tactic
+    (Initial Access / Execution) — the capability a CVE-level exploit confirms.
 
     Exploit/KEV evidence escalates only these. A verified exploit proves "an
     attacker can get in", not that every downstream technique is reached. Recon
     is non-entry, so it's excluded here too (a known exploit doesn't make
     scanning more certain — scanning is either feasible or not).
+
+    Why the PRIMARY tactic, not *any* tactic: ATT&CK v19 tags post-foothold
+    techniques with a secondary entry tag — T1574 Hijack Execution Flow and the
+    proxy-execution utilities carry 'execution'; T1078 Valid Accounts carries
+    'initial-access'. Keying on ``set(tactics) & ENTRY`` escalated all 25 of them
+    to LIKELY-because-KEV while they render under their primary tactic ('stealth',
+    'persistence', …) — a badge that contradicts its own label AND over-claims a
+    foothold the CVE never proves (an RCE doesn't hand the attacker valid creds or
+    a planted DLL). ``tactics[0]`` is the same primary ``view.build_view`` renders,
+    so the badge and the tactic label can never disagree. This only ever strips
+    exploit-borrowed LIKELY from non-entry-positioned techniques; every genuine
+    entry technique (T1190 initial-access, T1203/T1059 execution) has its entry
+    tactic first and is unaffected.
     """
     tech = catalog.get_technique(technique_id)
     if not tech:
@@ -81,7 +94,9 @@ def _is_entry_technique(technique_id: str) -> bool:
             technique_id,
         )
         return False
-    return bool(ENTRY_TACTICS & set(tech.get("tactics") or []))
+    tactics = tech.get("tactics") or []
+    primary = tactics[0] if tactics else None
+    return primary in ENTRY_TACTICS
 
 
 # ──────────────────────────────────────────────────────────────────────────

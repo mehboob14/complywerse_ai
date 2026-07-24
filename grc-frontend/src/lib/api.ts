@@ -2447,6 +2447,11 @@ export const vulnManagementApi = {
     // evidence + remediation. Per-asset: the verdict differs by which host.
     exploitability: (id: number, assetId: number) =>
       apiClient.get(`/vuln-management/vulnerabilities/${id}/exploitability`, { params: { asset_id: assetId } }),
+    // AI attacker-walkthrough for the same (finding × asset): a runtime narration
+    // of the computed chain — what an attacker does at each stage. Separate call
+    // so the chain paints instantly and this (an LLM call) loads progressively.
+    exploitabilityNarrative: (id: number, assetId: number) =>
+      apiClient.get(`/vuln-management/vulnerabilities/${id}/exploitability/narrative`, { params: { asset_id: assetId } }),
     create: (data: Record<string, unknown>) =>
       apiClient.post('/vuln-management/vulnerabilities', data),
     bulkUpload: (file: File) => {
