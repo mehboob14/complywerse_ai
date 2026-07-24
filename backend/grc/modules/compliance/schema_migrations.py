@@ -367,6 +367,13 @@ _COLUMN_ADDS = [
      "ix_vuln_public_exploit_count"),
     ("grc_vulnerabilities", "public_exploit_refs", "JSON DEFAULT '[]'::json", None),
     ("grc_vulnerabilities", "public_exploit_synced_at", "TIMESTAMP", None),
+    # Public-exploit corroboration (Exploit-DB). Graded companion to the GitHub
+    # PoC columns above: the verified count + exploit type let the signal be
+    # graded, not boolean. count=NULL = not checked; 0 = checked, none found.
+    ("grc_vulnerabilities", "exploitdb_count", "INTEGER", None),
+    ("grc_vulnerabilities", "exploitdb_verified_count", "INTEGER", None),
+    ("grc_vulnerabilities", "exploitdb_refs", "JSON DEFAULT '[]'::json", None),
+    ("grc_vulnerabilities", "exploit_source", "VARCHAR(120)", None),
     # Parsed-framework FK for CWE auto-mapper — the legacy FrameworkControl
     # table is empty in upload-seeded tenants; the auto-mapper now writes
     # parsed_framework_control_id instead.
@@ -656,6 +663,32 @@ _COLUMN_ADDS = [
     ("grc_clause_applicability", "owner_name", "VARCHAR(255)", None),
     ("grc_clause_applicability", "implementation_status", "VARCHAR(50)", None),
     ("grc_clause_applicability", "linked_evidence_id", "INTEGER", None),
+    # ── ITAM parity block on ITAsset ──────────────────────────────────────────
+    # These 14 shipped on the model (_14_it_asset_inventory.py) and are read and
+    # written by assets_router (create/update/detail), the agent heartbeat
+    # (modules/agents/router.py — hardware write-through) and the ITAsset
+    # schemas, but they never got an ALTER TABLE entry. `create_all` adds
+    # missing TABLES, never missing COLUMNS, so every tenant DB provisioned
+    # before the model change raised UndefinedColumn on any asset query —
+    # SQLAlchemy SELECTs all mapped columns, so the whole module 500s.
+    # Fresh tenants were unaffected, which is why it stayed hidden.
+    # All nullable / additive, matching the model exactly.
+    ("grc_it_assets", "cpu_cores", "INTEGER", None),
+    ("grc_it_assets", "memory_gb", "INTEGER", None),
+    ("grc_it_assets", "storage_gb", "INTEGER", None),
+    ("grc_it_assets", "agent_version", "VARCHAR(50)", None),
+    ("grc_it_assets", "manufacturer", "VARCHAR(255)", None),
+    ("grc_it_assets", "model", "VARCHAR(255)", None),
+    # Indexed: the identity resolver matches on serial_number as a strong key.
+    ("grc_it_assets", "serial_number", "VARCHAR(255)",
+     "ix_grc_it_assets_serial_number"),
+    ("grc_it_assets", "department", "VARCHAR(150)", None),
+    ("grc_it_assets", "assigned_user", "VARCHAR(255)", None),
+    ("grc_it_assets", "purchase_cost", "FLOAT", None),
+    ("grc_it_assets", "purchase_date", "TIMESTAMP", None),
+    ("grc_it_assets", "warranty_expiry", "TIMESTAMP", None),
+    ("grc_it_assets", "eol_date", "TIMESTAMP", None),
+    ("grc_it_assets", "environment", "VARCHAR(50)", None),
 ]
 
 
