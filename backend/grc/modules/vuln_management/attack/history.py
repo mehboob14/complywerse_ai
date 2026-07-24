@@ -93,6 +93,47 @@ def record_snapshot(db, tenant_id: int, vuln, asset, view: dict) -> Tuple[Option
         return None, False
 
 
+def annotate_history(snapshots: list) -> list:
+    """Turn a chronological (oldest-first) list of snapshot dicts into the timeline
+    the viewer renders: each entry annotated with its transition FROM the prior one.
+
+    Every snapshot is already a material change (the write path dedups), so there is
+    no no-change entry to filter — if one ever appears, that is the tell of a
+    persistence bug, and this is the first place it becomes visible. The dates are the
+    snapshots' own ``assessed_at`` (first-seen, never bumped on re-render), so "when it
+    flipped" is the event, not the last look.
+
+    Cause honesty: when the ATT&CK catalogue version differs between two snapshots, the
+    transition may be driven by the catalogue moving under the finding, not by the asset
+    changing — so `cause` reports "catalog", never silently blaming the asset for a v20
+    re-ingest. Same "world changed vs asset changed" distinction the header's
+    `attack_version` was kept for.
+    """
+    out = []
+    prev = None
+    for s in snapshots:
+        entry = dict(s)
+        if prev is None:
+            entry["is_baseline"] = True
+            entry["change"] = None
+        else:
+            catalog_changed = prev.get("attack_version") != s.get("attack_version")
+            entry["is_baseline"] = False
+            entry["change"] = {
+                "from_verdict": prev.get("verdict"),
+                "to_verdict": s.get("verdict"),
+                "verdict_changed": prev.get("verdict") != s.get("verdict"),
+                "catalog_changed": catalog_changed,
+                "from_attack_version": prev.get("attack_version"),
+                "to_attack_version": s.get("attack_version"),
+                # Honest floor: if the catalogue moved, don't attribute the flip to the asset.
+                "cause": "catalog" if catalog_changed else "asset",
+            }
+        out.append(entry)
+        prev = s
+    return out
+
+
 def attach_narration(db, snapshot: "ReachabilitySnapshot", narration: str, model: Optional[str]) -> bool:
     """Store the narration ON an existing snapshot — a column update on that row ONLY.
     Never creates a snapshot, never touches the hash (so an expand can't read as a

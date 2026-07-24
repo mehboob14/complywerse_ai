@@ -12,6 +12,7 @@ from sqlalchemy.orm import sessionmaker
 
 from grc.models import ReachabilitySnapshot, ReachabilityStep
 from grc.modules.vuln_management.attack.history import (
+    annotate_history,
     attach_narration,
     latest_snapshot,
     record_snapshot,
@@ -157,3 +158,36 @@ def test_attach_narration_is_noop_on_empty_or_missing(db):
     assert attach_narration(db, snap, "", "m") is False
     assert attach_narration(db, None, "x", "m") is False
     assert db.query(ReachabilitySnapshot).count() == 1
+
+
+# ── the history viewer's transition logic ───────────────────────────────────
+def test_annotate_baseline_has_no_transition():
+    out = annotate_history([{"verdict": "likely", "attack_version": "19.1", "assessed_at": "t0"}])
+    assert len(out) == 1 and out[0]["is_baseline"] is True and out[0]["change"] is None
+
+
+def test_annotate_verdict_flip_same_catalog_is_asset_driven():
+    out = annotate_history([
+        {"verdict": "likely", "attack_version": "19.1", "assessed_at": "t0"},
+        {"verdict": "unlikely", "attack_version": "19.1", "assessed_at": "t1"},
+    ])
+    ch = out[1]["change"]
+    assert ch["from_verdict"] == "likely" and ch["to_verdict"] == "unlikely"
+    assert ch["verdict_changed"] is True and ch["catalog_changed"] is False
+    assert ch["cause"] == "asset"  # same catalogue version → the finding changed
+
+
+def test_annotate_catalog_bump_is_not_blamed_on_the_asset():
+    # verdict flipped AND the ATT&CK version moved — the honest floor is "catalog",
+    # never silently attributing a v20 re-ingest to a change on the asset.
+    out = annotate_history([
+        {"verdict": "likely", "attack_version": "19.1", "assessed_at": "t0"},
+        {"verdict": "unlikely", "attack_version": "20.0", "assessed_at": "t1"},
+    ])
+    ch = out[1]["change"]
+    assert ch["catalog_changed"] is True and ch["cause"] == "catalog"
+    assert ch["from_attack_version"] == "19.1" and ch["to_attack_version"] == "20.0"
+
+
+def test_annotate_empty_is_empty():
+    assert annotate_history([]) == []

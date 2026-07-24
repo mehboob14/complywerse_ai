@@ -2452,6 +2452,10 @@ export const vulnManagementApi = {
     // so the chain paints instantly and this (an LLM call) loads progressively.
     exploitabilityNarrative: (id: number, assetId: number) =>
       apiClient.get(`/vuln-management/vulnerabilities/${id}/exploitability/narrative`, { params: { asset_id: assetId } }),
+    // Point-in-time assessment history for the same (finding × asset): the snapshots
+    // recorded on each material change, annotated with the transition from the prior.
+    exploitabilityHistory: (id: number, assetId: number) =>
+      apiClient.get(`/vuln-management/vulnerabilities/${id}/exploitability/history`, { params: { asset_id: assetId } }),
     create: (data: Record<string, unknown>) =>
       apiClient.post('/vuln-management/vulnerabilities', data),
     bulkUpload: (file: File) => {
