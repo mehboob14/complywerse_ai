@@ -199,12 +199,6 @@ export function AssetsWorkspace({
         })}
       </div>
 
-      {/* ─── Charts: criticality mix + monthly stacked mix ─────────────────── */}
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-        <SegmentedMixCard totalLabel="assets by criticality" data={chartData.dist} />
-        <StackedOverTimeCard title="Assets added over time" data={chartData.overTime} categories={chartData.stackCats} />
-      </div>
-
       {/* ─── Toolbar (single compact row; scrolls on very narrow screens) ─────── */}
       <div className="flex items-center gap-2 overflow-x-auto pb-0.5 scrollbar-thin">
         <div className="relative w-40 shrink-0 sm:w-52">

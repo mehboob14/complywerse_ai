@@ -205,7 +205,6 @@ const navigation: NavEntry[] = [
     icon: ShieldCheck,
     items: [
       { name: 'IT Asset Inventory',        href: '/assets',                        icon: Server,        requiredPermissions: ['assets:asset_inventory:*'] },
-      { name: 'CIS Benchmark',             href: '/compliance-overview',           icon: ShieldCheck,   requiredPermissions: ['compliance:scan:execute', 'erm:risks:*', 'compliance:agents:manage'] },
       { name: 'Assets Risk Posture',       href: '/risk-posture',                  icon: Activity,      requiredPermissions: ['erm:risks:*'] },
       { name: 'Criticality Assessments',   href: '/assets/criticality-assessments', icon: ClipboardCheck, requiredPermissions: ['assets:criticality_assessments:view'] },
       { name: 'Vulnerabilities',           href: '/vulnerabilities',               icon: Bug,           requiredPermissions: ['vulnerabilities:vulnerability_register:*'], requiredModules: ['vulnerabilities'] },
