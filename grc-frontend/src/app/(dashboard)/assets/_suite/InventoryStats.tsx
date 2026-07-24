@@ -76,6 +76,74 @@ export function InventoryStats({ assets, onCrit }: { assets: ITAsset[]; onCrit?:
         ))}
       </div>
 
+      {/* charts row */}
+      <div className="as-hero" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,2fr) minmax(0,1fr)', gap: 14, alignItems: 'stretch' }}>
+        {/* Assets added over time */}
+        <div className="as-card" style={{ padding: '20px 22px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+            <div style={{ fontSize: 14.5, fontWeight: 600 }}>Assets added over time</div>
+            <div style={{ fontSize: 12, color: 'var(--as-muted)' }}>last 6 months · stacked by criticality</div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 18, height: 120, marginTop: 16 }}>
+            {buckets.map((b) => {
+              const h = b.total > 0 ? Math.max(6, (b.total / barMax) * 104) : 0;
+              return (
+                <div key={b.label} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, height: '100%', justifyContent: 'flex-end' }}>
+                  {b.total > 0 && <span className="as-mono" style={{ fontSize: 11, fontWeight: 600, color: 'var(--as-secondary)' }}>{b.total}</span>}
+                  {/* The bar previously showed only its total, so a stack of four
+                      colours gave no way to tell how many were critical vs low.
+                      Each band now carries its own count when the band is tall
+                      enough to hold a legible number, and the hover title spells
+                      out the full split either way. */}
+                  <div
+                    title={`${b.label}: ${b.total} added — ` + b.segs.filter((s) => s.count > 0).map((s) => `${CRIT[s.k].label} ${s.count}`).join(', ')}
+                    style={{ width: '100%', maxWidth: 56, height: h, display: 'flex', flexDirection: 'column-reverse', borderRadius: '3px 3px 0 0', overflow: 'hidden' }}
+                  >
+                    {b.segs.map((s) => {
+                      if (s.count <= 0) return null;
+                      const pct = (s.count / Math.max(1, b.total)) * 100;
+                      // Only label a band that is genuinely tall enough — a number
+                      // crammed into a 6px sliver is worse than no number.
+                      const tall = (pct / 100) * h >= 15;
+                      return (
+                        <div
+                          key={s.k}
+                          style={{ height: `${pct}%`, background: s.color, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        >
+                          {tall && (
+                            <span className="as-mono" style={{ fontSize: 10.5, fontWeight: 700, color: '#fff', lineHeight: 1 }}>
+                              {s.count}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <span className="as-mono" style={{ fontSize: 11, color: 'var(--as-faint)' }}>{b.label}</span>
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ display: 'flex', gap: 16, marginTop: 14, borderTop: '1px solid var(--as-divider)', paddingTop: 12, flexWrap: 'wrap' }}>
+            {CRIT_ORDER.map((k) => (
+              <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--as-secondary)' }}>
+                <span style={{ width: 9, height: 9, borderRadius: 3, background: CRIT[k].color }} /> {CRIT[k].label}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Criticality breakdown — moved here from AssetsWorkspace, which
+            rendered the same card lower down the same page. This is the 1fr
+            column of the charts row; it sat empty after the old, differently
+            styled "By criticality" card was removed as a duplicate.
+            `critCounts` already carries label/color/count, which is exactly
+            the MixSlice shape this card expects. */}
+        <SegmentedMixCard
+          totalLabel="assets by criticality"
+          data={critCounts.map((c) => ({ name: c.label, value: c.count, color: c.color }))}
+        />
+      </div>
     </div>
   );
 }
