@@ -11,10 +11,9 @@ import {
   scoreBand,
   ScoreRing,
   MetricRow,
-  SectionGraphCard,
   SectionDetailModal,
-  SCORECARD_SECTION_GRID,
 } from '@/components/dashboard/score-kit';
+import ScoreBreakdownCard, { scoreCardRow } from '@/components/dashboard/ScoreBreakdownCard';
 import { SectionWeightTuner } from '@/components/dashboard/score-tuning';
 import {
   FileText,
@@ -24,6 +23,7 @@ import {
   Layers,
   TrendingUp,
   SlidersHorizontal,
+  ChevronDown,
 } from 'lucide-react';
 
 import { SCORECARD_QUERY_KEYS } from '@/components/dashboard/scorecard-query-keys';
@@ -154,6 +154,8 @@ function TrendAreaChart({ data }: { data: { month: string; created: number; publ
 
 export default function GovernanceDashboardPage() {
   const [openSection, setOpenSection] = useState<OverviewSection | null>(null);
+  // breakdown is opt-in, same as the IT-Assets inventory scorecard
+  const [showBreakdown, setShowBreakdown] = useState(false);
   const [perfOpen, setPerfOpen] = useState(false);
   const [tuning, setTuning] = useState(false);
 
@@ -406,22 +408,48 @@ export default function GovernanceDashboardPage() {
         </div>
       </div>
 
+      {/* score breakdown — collapsible, mirroring the IT-Assets inventory scorecard */}
       {sectionCards.length > 0 && (
-        <div>
-          <div className="mb-2 flex items-center justify-between">
-            <div>
-              <h2 className="text-sm font-semibold text-slate-800">Module Sections</h2>
-              <p className="text-[11px] text-slate-500">
-                Each area scored by its own formulas — hover a metric for the formula and its weight
-              </p>
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+          <button
+            type="button"
+            onClick={() => setShowBreakdown((v) => !v)}
+            aria-expanded={showBreakdown}
+            className="flex w-full items-center justify-between gap-3 px-5 py-3.5 text-left"
+          >
+            <span className="flex items-center gap-3">
+              <span className="flex h-9 w-9 flex-none items-center justify-center rounded-[10px] bg-blue-50 text-blue-600">
+                <Layers className="h-5 w-5" />
+              </span>
+              <span className="flex flex-col">
+                <span className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+                  Score breakdown
+                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                    {sectionCards.length} sections
+                  </span>
+                </span>
+                <span className="text-[11px] text-slate-500">
+                  Each area scored by its own formulas — click a card for the formula and its weight
+                </span>
+              </span>
+            </span>
+            <span className="flex flex-none items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600">
+              {showBreakdown ? 'Hide' : 'Show'}
+              <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${showBreakdown ? 'rotate-180' : ''}`} />
+            </span>
+          </button>
+          {showBreakdown && (
+            <div className="border-t border-slate-100 p-4" style={scoreCardRow(sectionCards.length)}>
+              {sectionCards.map((section, i) => (
+                <ScoreBreakdownCard
+                  key={section.key}
+                  section={section}
+                  variant={i % 2 === 0 ? 'leader' : 'bars'}
+                  onOpen={() => setOpenSection(section)}
+                />
+              ))}
             </div>
-            <Layers className="h-4 w-4 text-blue-600" />
-          </div>
-          <div className={SCORECARD_SECTION_GRID}>
-            {sectionCards.map((section) => (
-              <SectionGraphCard key={section.key} section={section} onOpen={() => setOpenSection(section)} />
-            ))}
-          </div>
+          )}
         </div>
       )}
 

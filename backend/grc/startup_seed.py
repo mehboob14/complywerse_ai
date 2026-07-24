@@ -54,6 +54,7 @@ _SEED_ROOT = Path(__file__).resolve().parent / "seed_data"
 _FRAMEWORK_SEED_DIR = _SEED_ROOT / "frameworks"
 _BASELINE_PATH = _SEED_ROOT / "normalization_baseline.json"
 _ASSESSMENT_SEED_PATH = _SEED_ROOT / "compliance_assessments_seed.json"
+_ASSESSMENT_SNAPSHOT_PATH = _SEED_ROOT / "compliance_assessments_snapshot.json"
 _DCC_CATALOG_PATH = _SEED_ROOT / "dcc_catalog.json"
 _ASSESSMENT_SEED_SOURCE = "Startup Seed"
 
@@ -101,7 +102,7 @@ def _first_user_id(db: Session) -> int:
     # .one() in this SQLAlchemy version and raises MultipleResultsFound once a
     # tenant has more than one user, which broke startup seeding.
     row = db.query(GRCUser.id).order_by(GRCUser.id.asc()).first()
-    return int(row[0] if row else 1)
+    return int((row[0] if row else None) or 1)
 
 
 def _tenant_payload(row: Tenant) -> dict:
@@ -1093,22 +1094,89 @@ def ensure_kpi_trend_history_seed(db: Session, tenant_id: int) -> dict:
         return {"seeded": False, "reason": "error"}
 
 
-def ensure_compliance_assessment_seed_data(db: Session, tenant_id: int) -> dict:
-    """Seed local compliance assessment records that power /assessments dashboards."""
-    payload = _load_assessment_seed()
-    if not payload:
-        return {"seeded": False, "reason": "assessment_seed_missing"}
+def _load_assessment_snapshot() -> Optional[dict]:
+    if not _ASSESSMENT_SNAPSHOT_PATH.exists():
+        return None
+    try:
+        return json.loads(_ASSESSMENT_SNAPSHOT_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        logger.exception("Could not load assessment snapshot %s", _ASSESSMENT_SNAPSHOT_PATH)
+        return None
 
+
+def _deser_snapshot_value(v: Any) -> Any:
+    """Reverse the export's date wrapper {"__dt__": <iso>} back into a datetime."""
+    if isinstance(v, dict) and set(v.keys()) == {"__dt__"}:
+        try:
+            return datetime.fromisoformat(v["__dt__"])
+        except Exception:
+            return None
+    return v
+
+
+def ensure_assessment_snapshot_seed(db: Session, tenant_id: int, user_id: int) -> dict:
+    """Recreate the full real compliance assessments (documents + every item) from the
+    committed snapshot (``compliance_assessments_snapshot.json``), so a fresh tenant DB
+    reproduces the live Cyber Security / NCA / PDPL / DPIA dashboards exactly. Idempotent
+    per document name: an existing document of the same name for the tenant is left as-is."""
+    payload = _load_assessment_snapshot()
+    out = {"created_docs": 0, "created_items": 0, "skipped_docs": 0}
+    if not payload:
+        return out
+    doc_cols = {c.name for c in ComplianceAssessmentDocument.__table__.columns}
+    item_cols = {c.name for c in ComplianceAssessmentDocumentItem.__table__.columns}
+    for entry in payload.get("assessments") or []:
+        name = entry.get("name")
+        if not name:
+            continue
+        exists = (
+            db.query(ComplianceAssessmentDocument.id)
+            .filter(
+                ComplianceAssessmentDocument.tenant_id == tenant_id,
+                ComplianceAssessmentDocument.name == name,
+            )
+            .first()
+        )
+        if exists:
+            out["skipped_docs"] += 1
+            continue
+        doc_kwargs = {
+            k: _deser_snapshot_value(v)
+            for k, v in entry.items()
+            if k != "items" and k in doc_cols
+        }
+        doc = ComplianceAssessmentDocument(tenant_id=tenant_id, created_by=user_id, **doc_kwargs)
+        db.add(doc)
+        db.flush()  # assign doc.id for the item FK
+        for it in entry.get("items") or []:
+            item_kwargs = {
+                k: _deser_snapshot_value(v) for k, v in it.items() if k in item_cols
+            }
+            db.add(
+                ComplianceAssessmentDocumentItem(
+                    tenant_id=tenant_id, assessment_id=doc.id, **item_kwargs
+                )
+            )
+            out["created_items"] += 1
+        out["created_docs"] += 1
+    return out
+
+
+def ensure_compliance_assessment_seed_data(db: Session, tenant_id: int) -> dict:
+    """Seed local compliance assessment records that power /assessments dashboards.
+
+    The real assessment content (Cyber Security, NCA/DCC, PDPL, DPIA, …) is restored
+    verbatim from ``compliance_assessments_snapshot.json``; the thin
+    ``compliance_assessments_seed.json`` is retained only for the SLA policy."""
     user_id = _first_user_id(db)
-    policy_created = _ensure_assessment_sla_policy(db, tenant_id, payload)
-    docs = _ensure_seed_assessment_docs(db, tenant_id, user_id, payload)
-    nca = _ensure_nca_container_and_dcc(db, tenant_id, user_id, payload)
-    seeded = bool(policy_created or docs["created_docs"] or docs["created_items"] or nca["created_container"] or nca["created_dcc_items"] or nca["created_audit_plan_entries"])
+    thin = _load_assessment_seed()
+    policy_created = _ensure_assessment_sla_policy(db, tenant_id, thin) if thin else False
+    snap = ensure_assessment_snapshot_seed(db, tenant_id, user_id)
+    seeded = bool(policy_created or snap["created_docs"] or snap["created_items"])
     return {
         "seeded": seeded,
         "sla_policy_created": policy_created,
-        **docs,
-        **nca,
+        **snap,
     }
 
 

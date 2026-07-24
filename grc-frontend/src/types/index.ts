@@ -420,6 +420,23 @@ export interface ITAsset {
   criticality_score?: number | null;
   last_seen_at?: string | null;
   last_seen_source?: string | null;
+  // ── ITAM parity: hardware, procurement & identity extras ──────────────
+  cpu_cores?: number | null;
+  memory_gb?: number | null;
+  storage_gb?: number | null;
+  agent_version?: string | null;
+  manufacturer?: string | null;
+  model?: string | null;
+  serial_number?: string | null;
+  department?: string | null;
+  assigned_user?: string | null;
+  purchase_cost?: number | null;
+  purchase_date?: string | null;
+  warranty_expiry?: string | null;
+  eol_date?: string | null;
+  environment?: string | null;
+  // Computed by the list endpoint — count of linked vulnerability findings.
+  open_findings?: number | null;
 }
 
 export interface AssetDetail extends ITAsset {

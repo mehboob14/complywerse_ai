@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import apiClient from '@/lib/api';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { usePermissions } from '@/hooks/usePermissions';
 import { assetsApi } from '@/lib/api';
 import { CriticalityCoverageWidget } from '@/components/assets/CriticalityCoverageWidget';
@@ -26,7 +26,15 @@ import {
   Upload,
   FileSpreadsheet,
   CheckCircle2,
+  Server,
+  ShieldCheck,
 } from 'lucide-react';
+// CIS Benchmark now lives as a tab inside IT Asset Inventory (merged from the
+// former standalone /compliance-overview page). We reuse its component as-is.
+import CisBenchmarkView from '../compliance-overview/page';
+// Design-handoff theme (warm cream + IBM Plex), scoped under .asset-suite.
+import './_suite/asset-suite.css';
+import { InventoryStats } from './_suite/InventoryStats';
 
 type StatusFilter = 'all' | 'active' | 'inactive' | 'decommissioned';
 type CriticalityFilter = 'all' | 'critical' | 'high' | 'medium' | 'low';
@@ -101,6 +109,15 @@ const ASSET_SUB_COMPONENT_SUGGESTIONS: Record<AssetType, Record<string, string[]
 
 export default function AssetsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  // Inventory ↔ CIS Benchmark tab (CIS merged in from /compliance-overview).
+  const [activeView, setActiveView] = useState<'inventory' | 'cis'>(
+    searchParams.get('tab') === 'cis' ? 'cis' : 'inventory'
+  );
+  const switchView = (v: 'inventory' | 'cis') => {
+    setActiveView(v);
+    router.replace(v === 'cis' ? '/assets?tab=cis' : '/assets', { scroll: false });
+  };
   const { hasPermission } = usePermissions();
   const canCreate = hasPermission('assets:asset_inventory:create');
   const canEdit = hasPermission('assets:asset_inventory:edit');
@@ -119,6 +136,8 @@ export default function AssetsPage() {
   const [staleOnly, setStaleOnly] = useState<boolean>(false);
   // Phase 7 — source filter (which cloud / scanner discovered this asset).
   const [sourceFilter, setSourceFilter] = useState<string>('all');
+  // ITAM parity — deployment-environment facet.
+  const [environmentFilter, setEnvironmentFilter] = useState<string>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [editingAsset, setEditingAsset] = useState<ITAsset | null>(null);
@@ -130,6 +149,32 @@ export default function AssetsPage() {
     queryFn: async () => {
       const response = await assetsApi.getAll();
       return response.data;
+    },
+  });
+
+  // Faceted filter counts for the toolbar (Critical (7), Production (4), …).
+  const { data: facets } = useQuery({
+    queryKey: ['asset-facets'],
+    queryFn: async () => (await assetsApi.getFacets()).data,
+    staleTime: 30_000,
+  });
+
+  // Bulk delete — used by the register's "Delete selected" action.
+  const bulkDeleteMutation = useMutation({
+    mutationFn: (ids: number[]) => assetsApi.bulkDelete(ids),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['assets'] });
+      queryClient.invalidateQueries({ queryKey: ['asset-facets'] });
+    },
+  });
+
+  // Bulk field update — used by the register's "Set …" actions.
+  const bulkUpdateMutation = useMutation({
+    mutationFn: ({ ids, patch }: { ids: number[]; patch: Record<string, unknown> }) =>
+      assetsApi.bulkUpdate(ids, patch),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['assets'] });
+      queryClient.invalidateQueries({ queryKey: ['asset-facets'] });
     },
   });
 
@@ -243,6 +288,10 @@ export default function AssetsPage() {
       return src === sourceFilter;
     })();
 
+    const matchesEnvironment =
+      environmentFilter === 'all' ||
+      ((asset as ITAsset).environment || '').toLowerCase() === environmentFilter;
+
     return (
       matchesSearch &&
       matchesStatus &&
@@ -251,7 +300,8 @@ export default function AssetsPage() {
       matchesLifecycle &&
       matchesClassification &&
       matchesStale &&
-      matchesSource
+      matchesSource &&
+      matchesEnvironment
     );
   });
 
@@ -348,8 +398,27 @@ export default function AssetsPage() {
   const noopEvent = { stopPropagation: () => {} } as unknown as React.MouseEvent;
 
   return (
-    <div className="assets-light space-y-4 sm:space-y-5 px-3 sm:px-4 pt-3">
+    <div className="asset-suite assets-light space-y-3.5 px-3 sm:px-4 pt-0" style={{ marginTop: -10 }}>
+      {/* Header controls — title/subtitle live in the global top bar already, so
+          only the Inventory | CIS toggle + primary "Add asset" sit here, pulled
+          tight to the top-right (no empty title band). */}
+      <div className="as-fadeup" style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 10, flexWrap: 'wrap', marginTop: 0, marginBottom: -8 }}>
+        <div className="as-seg">
+          <button type="button" className={activeView === 'inventory' ? 'is-active' : ''} onClick={() => switchView('inventory')}>Inventory</button>
+          <button type="button" className={activeView === 'cis' ? 'is-active' : ''} onClick={() => switchView('cis')}>CIS Benchmark</button>
+        </div>
+        {activeView === 'inventory' && canCreate && (
+          <button type="button" className="as-btn as-btn-primary" onClick={() => setIsModalOpen(true)}>+ Add asset</button>
+        )}
+      </div>
+
+      {activeView === 'cis' ? (
+        <CisBenchmarkView />
+      ) : (
+      <>
       <InventoryScorecard />
+
+      <InventoryStats assets={(assets as ITAsset[]) || []} onCrit={(c) => setCriticalityFilter(c as CriticalityFilter)} />
 
       <AssetsWorkspace
         assets={(assets as ITAsset[]) || []}
@@ -366,6 +435,11 @@ export default function AssetsPage() {
         setLifecycleFilter={setLifecycleFilter}
         typeFilter={typeFilter}
         setTypeFilter={setTypeFilter}
+        environmentFilter={environmentFilter}
+        setEnvironmentFilter={setEnvironmentFilter}
+        facets={facets}
+        onBulkDelete={(ids) => bulkDeleteMutation.mutate(ids)}
+        onBulkUpdate={(ids, patch) => bulkUpdateMutation.mutate({ ids, patch })}
         canCreate={canCreate}
         canEdit={canEdit}
         canDelete={canDelete}
@@ -393,6 +467,8 @@ export default function AssetsPage() {
         onImport={() => setIsImportModalOpen(true)}
         onAdd={() => setIsModalOpen(true)}
       />
+      </>
+      )}
 
       {isModalOpen && (
         <AssetModal
@@ -577,6 +653,13 @@ export function AssetModal({
     os_normalized: ((initialData as any)?.os_normalized || '') as string,
     os_family: ((initialData as any)?.os_family || '') as string,
     os_version: ((initialData as any)?.os_version || '') as string,
+    // Hardware — also auto-filled by agent heartbeat / agentless scan.
+    cpu_cores: ((initialData as any)?.cpu_cores ?? '') as number | '',
+    memory_gb: ((initialData as any)?.memory_gb ?? '') as number | '',
+    storage_gb: ((initialData as any)?.storage_gb ?? '') as number | '',
+    manufacturer: ((initialData as any)?.manufacturer || '') as string,
+    model: ((initialData as any)?.model || '') as string,
+    serial_number: ((initialData as any)?.serial_number || '') as string,
   });
   const [customSubComponent, setCustomSubComponent] = useState('');
 
@@ -690,6 +773,12 @@ export function AssetModal({
       os_normalized: formData.os_normalized || undefined,
       os_family: formData.os_family || undefined,
       os_version: formData.os_version || undefined,
+      cpu_cores: formData.cpu_cores !== '' ? Number(formData.cpu_cores) : undefined,
+      memory_gb: formData.memory_gb !== '' ? Number(formData.memory_gb) : undefined,
+      storage_gb: formData.storage_gb !== '' ? Number(formData.storage_gb) : undefined,
+      manufacturer: formData.manufacturer || undefined,
+      model: formData.model || undefined,
+      serial_number: formData.serial_number || undefined,
     };
     if (isEditMode) {
       submitData.status = formData.status;
@@ -859,6 +948,20 @@ export function AssetModal({
                   className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
                   placeholder="e.g., 10.0.10.15"
                 />
+              </div>
+            </div>
+
+            {/* Hardware — optional; also auto-populated by agent heartbeat or
+                agentless (WinRM/SSH) scan. Kept editable for manual entry. */}
+            <div className="mb-3">
+              <label className="block text-xs font-medium text-slate-600 mb-1">Hardware <span className="text-slate-400">(optional — auto-filled by scan)</span></label>
+              <div className="grid grid-cols-3 gap-x-4 gap-y-3">
+                <input type="text" value={formData.manufacturer} onChange={(e) => setFormData({ ...formData, manufacturer: e.target.value })} placeholder="Manufacturer" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
+                <input type="text" value={formData.model} onChange={(e) => setFormData({ ...formData, model: e.target.value })} placeholder="Model" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
+                <input type="text" value={formData.serial_number} onChange={(e) => setFormData({ ...formData, serial_number: e.target.value })} placeholder="Serial number" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
+                <input type="number" min="0" value={formData.cpu_cores} onChange={(e) => setFormData({ ...formData, cpu_cores: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="vCPU" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
+                <input type="number" min="0" value={formData.memory_gb} onChange={(e) => setFormData({ ...formData, memory_gb: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="RAM (GB)" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
+                <input type="number" min="0" value={formData.storage_gb} onChange={(e) => setFormData({ ...formData, storage_gb: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="Disk (GB)" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
               </div>
             </div>
 
@@ -1265,12 +1368,19 @@ function ImportAssetsModal({
   const [result, setResult] = useState<{
     success: boolean;
     imported: number;
+    // Rows that matched an existing asset and refreshed it instead of adding
+    // a duplicate. Re-uploading a corrected sheet lands entirely here.
+    updated?: number;
     total_rows: number;
     errors: string[];
     total_errors: number;
     message: string;
   } | null>(null);
   const [dragActive, setDragActive] = useState(false);
+
+  // Rows added plus rows refreshed. A re-upload of a corrected sheet adds
+  // nothing and updates everything, and that is still a successful import.
+  const changedCount = (result?.imported ?? 0) + (result?.updated ?? 0);
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -1310,13 +1420,16 @@ function ImportAssetsModal({
     try {
       const response = await assetsApi.importAssets(file);
       setResult(response.data);
-      if (response.data.imported > 0) {
+      // An import that only refreshed existing assets still changed the
+      // register, so it still has to trigger a reload.
+      if ((response.data.imported ?? 0) + (response.data.updated ?? 0) > 0) {
         onSuccess();
       }
     } catch (error: any) {
       setResult({
         success: false,
         imported: 0,
+        updated: 0,
         total_rows: 0,
         errors: [error.response?.data?.detail || 'Upload failed'],
         total_errors: 1,
@@ -1421,24 +1534,27 @@ function ImportAssetsModal({
         ) : (
           <>
             <div className={`mb-4 rounded-lg p-4 ${
-              result.success && result.imported > 0
+              result.success && changedCount > 0
                 ? 'border border-green-200 bg-green-50'
                 : 'border border-red-200 bg-red-50'
             }`}>
               <div className="flex items-start gap-3">
-                {result.success && result.imported > 0 ? (
+                {result.success && changedCount > 0 ? (
                   <CheckCircle2 className="mt-0.5 h-5 w-5 text-green-600" />
                 ) : (
                   <AlertCircle className="mt-0.5 h-5 w-5 text-red-600" />
                 )}
                 <div>
                   <p className={`font-medium ${
-                    result.success && result.imported > 0 ? 'text-green-700' : 'text-red-700'
+                    result.success && changedCount > 0 ? 'text-green-700' : 'text-red-700'
                   }`}>
                     {result.message}
                   </p>
                   <div className="mt-2 text-sm text-gray-600">
-                    <p>Imported: {result.imported} of {result.total_rows} rows</p>
+                    <p>Added: {result.imported} of {result.total_rows} rows</p>
+                    {(result.updated ?? 0) > 0 && (
+                      <p>Updated in place: {result.updated}</p>
+                    )}
                     {result.total_errors > 0 && (
                       <p className="text-red-600">Errors: {result.total_errors}</p>
                     )}

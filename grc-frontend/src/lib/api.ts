@@ -720,6 +720,17 @@ export const assetsApi = {
     apiClient.put<{ weights: Record<string, number>; is_custom: boolean; defaults: Record<string, number> }>(`/assets/composite-weights`, weights),
   resetCompositeWeights: () =>
     apiClient.delete<{ weights: Record<string, number>; is_custom: boolean; defaults: Record<string, number> }>(`/assets/composite-weights`),
+  // ── Inventory toolbar: facets, bulk ops, saved views ──────────────────────
+  getFacets: () => apiClient.get<Record<string, Record<string, number> | number>>(`/assets/facets`),
+  bulkUpdate: (asset_ids: number[], patch: Record<string, unknown>) =>
+    apiClient.patch<{ updated: number; fields: string[] }>(`/assets/bulk`, { asset_ids, patch }),
+  bulkDelete: (asset_ids: number[]) =>
+    apiClient.post<{ deleted: number }>(`/assets/bulk-delete`, { asset_ids }),
+  getSavedViews: () =>
+    apiClient.get<Array<{ id: number; name: string; filters: Record<string, string>; sort: string | null }>>(`/assets/saved-views`),
+  createSavedView: (name: string, filters: Record<string, string>, sort?: string | null) =>
+    apiClient.post<{ id: number; name: string; filters: Record<string, string>; sort: string | null }>(`/assets/saved-views`, { name, filters, sort }),
+  deleteSavedView: (id: number) => apiClient.delete(`/assets/saved-views/${id}`),
   // Detected software inventory and promote-to-child-asset flow.
   getDetectedSoftware: (id: number) => apiClient.get(`/assets/${id}/detected-software`),
   promoteSoftware: (id: number, software_keys: string[], criticality?: string) =>
@@ -764,6 +775,10 @@ export const assetsApi = {
     return apiClient.post<{
       success: boolean;
       imported: number;
+      // Rows that matched an existing asset by host_name (or name) and
+      // refreshed it rather than adding a duplicate. Optional so older
+      // backends that predate import dedup still typecheck.
+      updated?: number;
       total_rows: number;
       errors: string[];
       total_errors: number;
