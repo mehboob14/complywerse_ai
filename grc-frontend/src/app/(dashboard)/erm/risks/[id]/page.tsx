@@ -8,15 +8,18 @@ import { RiskCategory, RiskStatus, NormalizedControl, ITAsset, Evidence, Governa
 import { usePermissions } from '@/hooks/usePermissions';
 import {
   ArrowLeft, Loader2, AlertCircle, AlertTriangle, Shield,
-  Target, TrendingDown, Calendar, User, FileText,
-  Plus, Trash2, Edit, Save, Building2, ClipboardCheck,
-  Activity, BarChart3, Settings
+  Target, Calendar, User, FileText,
+  Trash2, Edit, Save, Building2, ClipboardCheck,
+  Activity, BarChart3, ExternalLink,
 } from 'lucide-react';
 import Link from 'next/link';
 import clsx from 'clsx';
 import InlineLinkPicker from '@/components/ui/InlineLinkPicker';
 import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
 import { PageLoader } from '@/components/ui';
+import { CreateIssueButton } from '@/components/issue-management/CreateIssueButton';
+import { RelatedIssuesPanel } from '@/components/issue-management/RelatedIssuesPanel';
+import type { ReactNode } from 'react';
 
 interface RiskDetailData {
   id: number;
@@ -95,7 +98,6 @@ export default function RiskDetailPage() {
   const [activeTab, setActiveTab] = useState<TabType>('details');
   const [isEditingTreatment, setIsEditingTreatment] = useState(false);
   const [treatmentPlan, setTreatmentPlan] = useState('');
-  const [showtitle, setShowTitle] = useState(false);
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showLinkFrameworkControlModal, setShowLinkFrameworkControlModal] = useState(false);
@@ -188,7 +190,7 @@ export default function RiskDetailPage() {
       const data: any = response.data;
       return data?.documents || [];
     },
-    enabled: activeTab === 'governance',
+    enabled: !!riskId,
   });
 
   const deleteMutation = useMutation({
@@ -378,13 +380,13 @@ export default function RiskDetailPage() {
     );
   }
 
-  const tabs: { id: TabType; label: string; icon: React.ElementType }[] = [
-    { id: 'details', label: 'Details', icon: ClipboardCheck },
+  const tabs: { id: TabType; label: string; icon: React.ElementType; count?: number }[] = [
+    { id: 'details', label: 'Overview', icon: ClipboardCheck },
     { id: 'treatment', label: 'Treatment', icon: Activity },
-    { id: 'controls', label: 'Internal Controls', icon: Shield },
-    { id: 'assets', label: 'Assets', icon: Building2 },
-    { id: 'evidence', label: 'Evidence', icon: FileText },
-    { id: 'governance', label: 'Documents', icon: Target },
+    { id: 'controls', label: 'Controls', icon: Shield, count: (risk.linked_controls?.length || 0) + (risk.linked_framework_controls?.length || 0) },
+    { id: 'assets', label: 'Assets', icon: Building2, count: risk.linked_assets?.length || 0 },
+    { id: 'evidence', label: 'Evidence', icon: FileText, count: risk.linked_evidence?.length || 0 },
+    { id: 'governance', label: 'Documents', icon: Target, count: (risk.linked_governance?.length || 0) + (linkedDocuments?.length || 0) },
   ];
 
   const riskReduction = calculateRiskReduction();
@@ -393,256 +395,195 @@ export default function RiskDetailPage() {
   const statusStyle = getStatusStyle(risk.status);
 
   return (
-    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
-      <div className="flex items-center gap-4">
-        <Link
-          href="/erm/risks"
-          className="rounded-lg p-2 text-slate-600 hover:bg-white hover:text-slate-900"
-        >
-          <ArrowLeft className="h-5 w-5" />
-        </Link>
-        <div className="flex-1">
-          <h1 className={clsx("text-lg sm:text-xl font-semibold text-slate-900 ",
-            showtitle ? 'line-clamp-none' : 'line-clamp-2',
-          )}>{risk.title}</h1>
-          <button
-            onClick={() => setShowTitle(!showtitle)}
-            className="text-sm text-primary-600 hover:underline"
-          >
-            {showtitle ? 'Show Less' : 'Show More'}
-          </button>
+    <div className="risk-workspace -m-4 space-y-4 lg:-m-5">
+      {/* Header */}
+      <div className="border-b border-slate-200 px-4 py-3 sm:px-6">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+          <div className="flex min-w-0 items-start gap-3">
+            <Link
+              href="/erm/risks"
+              className="mt-0.5 rounded-md p-1.5 text-slate-600 hover:bg-slate-50 hover:text-slate-800"
+              title="Back to risk register"
+            >
+              <ArrowLeft className="h-4 w-4" strokeWidth={1.75} />
+            </Link>
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-50 text-primary-600">
+              <AlertTriangle className="h-5 w-5" strokeWidth={1.75} />
+            </div>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                  RISK-{risk.id}
+                </span>
+                {risk.register_type && (
+                  <span className="text-[10px] text-slate-500">· {String(risk.register_type).replace(/_/g, ' ')}</span>
+                )}
+              </div>
+              <h1 className="text-lg font-semibold leading-snug text-slate-800">{risk.title}</h1>
+              {risk.description && (
+                <p className="mt-0.5 line-clamp-2 text-xs text-slate-500">{risk.description}</p>
+              )}
+            </div>
+          </div>
 
-          {/* <p className="text-slate-600">{risk.description || 'No description'}</p> */}
+          <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+            <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${categoryStyle.color}`}>
+              {categoryStyle.label}
+            </span>
+            <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${statusStyle.color}`}>
+              {statusStyle.label}
+            </span>
+            <CreateIssueButton
+              sourceType="risk"
+              sourceId={risk.id}
+              presetFields={{
+                title: `RISK-${risk.id} — ${risk.title}`,
+                description: risk.description || undefined,
+                category: 'operations',
+                issue_type: 'audit_finding',
+              }}
+            />
+          </div>
         </div>
-        <div className="flex items-center gap-3">
-          <span className={`rounded-full border px-3 py-1 text-sm ${categoryStyle.color}`}>
-            {categoryStyle.label}
-          </span>
-          <span className={`rounded-full border px-3 py-1 text-sm ${statusStyle.color}`}>
-            {statusStyle.label}
-          </span>
+      </div>
+
+      {/* D1 split */}
+      <div className="mx-4 grid grid-cols-1 gap-4 pb-4 sm:mx-6 lg:grid-cols-12">
+        <div className="lg:col-span-5">
+          <div className="space-y-3 lg:sticky lg:top-4">
+            <RiskContextRail
+              risk={risk}
+              categoryStyle={categoryStyle}
+              statusStyle={statusStyle}
+              treatmentStatus={treatmentStatus}
+              riskReduction={riskReduction}
+              getScoreColor={getScoreColor}
+              getScoreBgColor={getScoreBgColor}
+              formatDate={formatDate}
+              canEdit={canEdit}
+              canDelete={canDelete}
+              onEdit={() => router.push(`/erm/risks/list?edit=${risk.id}`)}
+              onTreatment={() => { setActiveTab('treatment'); setIsEditingTreatment(true); }}
+              onDelete={() => setShowDeleteConfirm(true)}
+              controlCount={(risk.linked_controls?.length || 0) + (risk.linked_framework_controls?.length || 0)}
+              assetCount={risk.linked_assets?.length || 0}
+              evidenceCount={risk.linked_evidence?.length || 0}
+            />
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          {canEdit && (
-          <button
-            onClick={() => router.push(`/erm/risks?edit=${risk.id}`)}
-            className="flex items-center gap-2 rounded-lg bg-slate-100 px-4 py-2 text-slate-900 hover:bg-slate-200"
-          >
-            <Edit className="h-4 w-4" />
-            Edit
-          </button>
-          )}
-          {canEdit && (
-          <button
-            onClick={() => {
-              setActiveTab('treatment');
-              setIsEditingTreatment(true);
+
+        <div className="min-w-0 space-y-4 lg:col-span-7">
+          <RelatedIssuesPanel
+            sourceType="risk"
+            sourceId={risk.id}
+            title="Issues"
+            createFields={{
+              title: `RISK-${risk.id} — ${risk.title}`,
+              description: risk.description || undefined,
+              category: 'operations',
+              issue_type: 'audit_finding',
             }}
-            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-[#0a0a0a] hover:bg-primary-700"
-          >
-            <Activity className="h-4 w-4" />
-            Update Treatment
-          </button>
-          )}
-          {canDelete && (
-          <button
-            onClick={() => setShowDeleteConfirm(true)}
-            className="flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-rose-700 hover:bg-rose-100"
-          >
-            <Trash2 className="h-4 w-4" />
-            Delete
-          </button>
-          )}
-        </div>
-      </div>
+          />
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-lg border border-slate-200 bg-white p-3">
-          <div className="mb-2 flex items-center gap-2 text-slate-600">
-            <AlertTriangle className="h-4 w-4" />
-            <span className="text-[11px] font-medium uppercase tracking-wider">Inherent Risk Score</span>
+          <div className="cw-card rounded-xl p-2">
+            <nav className="flex flex-wrap gap-1">
+              {tabs.map((tab) => {
+                const Icon = tab.icon;
+                const on = activeTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setActiveTab(tab.id)}
+                    className={clsx(
+                      'inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors',
+                      on ? 'bg-primary-50 text-primary-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900',
+                    )}
+                  >
+                    <Icon className="h-3.5 w-3.5" strokeWidth={1.75} />
+                    {tab.label}
+                    {tab.count != null && tab.count > 0 && (
+                      <span className={clsx('rounded-full px-1.5 py-0.5 text-[10px] font-semibold', on ? 'bg-primary-100 text-primary-800' : 'bg-slate-100 text-slate-500')}>
+                        {tab.count}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </nav>
           </div>
-          <div className={`text-2xl font-bold ${getScoreColor(risk.inherent_score)}`}>
-            {risk.inherent_score ?? '-'}
-          </div>
-          <p className="mt-1 text-xs text-slate-500">
-            Likelihood: {risk.inherent_likelihood ?? '-'} × Impact: {risk.inherent_impact ?? '-'}
-          </p>
-        </div>
 
-        <div className="rounded-lg border border-slate-200 bg-white p-3">
-          <div className="mb-2 flex items-center gap-2 text-slate-600">
-            <TrendingDown className="h-4 w-4" />
-            <span className="text-[11px] font-medium uppercase tracking-wider">Residual Risk Score</span>
-          </div>
-          <div className={`text-2xl font-bold ${getScoreColor(risk.residual_score)}`}>
-            {risk.residual_score ?? '-'}
-          </div>
-          <p className="mt-1 text-xs text-slate-500">
-            Likelihood: {risk.residual_likelihood ?? '-'} × Impact: {risk.residual_impact ?? '-'}
-          </p>
-        </div>
-
-        <div className="rounded-lg border border-slate-200 bg-white p-3">
-          <div className="mb-2 flex items-center gap-2 text-slate-600">
-            <Settings className="h-4 w-4" />
-            <span className="text-[11px] font-medium uppercase tracking-wider">Treatment Status</span>
-          </div>
-          <div className={`text-sm font-semibold ${treatmentStatus.color}`}>
-            {treatmentStatus.label}
-          </div>
-          <p className="mt-1 text-xs text-slate-500">
-            {risk.treatment_plan ? 'Treatment plan exists' : 'No treatment plan'}
-          </p>
-        </div>
-
-        <div className="rounded-lg border border-slate-200 bg-white p-3">
-          <div className="mb-2 flex items-center gap-2 text-slate-600">
-            <User className="h-4 w-4" />
-            <span className="text-[11px] font-medium uppercase tracking-wider">Owner / Due Date</span>
-          </div>
-          <div className="text-sm font-medium text-slate-900">
-            {risk.owner_name || 'Unassigned'}
-          </div>
-          <p className="mt-1 flex items-center gap-1 text-xs text-slate-500">
-            <Calendar className="h-3 w-3" />
-            Due: {formatDate(risk.due_date)}
-          </p>
-        </div>
-      </div>
-
-      <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
-        <h3 className="mb-3 text-sm font-semibold text-slate-900">Risk Score Comparison</h3>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-xs text-slate-600">Inherent Risk</span>
-              <span className={`text-sm font-bold ${getScoreColor(risk.inherent_score)}`}>
-                {risk.inherent_score ?? 0}/25
-              </span>
-            </div>
-            <div className="h-2 w-full rounded-full bg-slate-100">
-              <div
-                className={`h-2 rounded-full transition-all ${getScoreBgColor(risk.inherent_score)}`}
-                style={{ width: `${((risk.inherent_score || 0) / 25) * 100}%` }}
+          <div className="cw-card rounded-xl p-4">
+            {activeTab === 'details' && (
+              <DetailsTab risk={risk} formatDate={formatDate} />
+            )}
+            {activeTab === 'treatment' && (
+              <TreatmentTab
+                risk={risk}
+                treatmentPlan={treatmentPlan}
+                setTreatmentPlan={setTreatmentPlan}
+                isEditing={isEditingTreatment}
+                setIsEditing={setIsEditingTreatment}
+                onSave={() => updateTreatmentMutation.mutate(treatmentPlan)}
+                isSaving={updateTreatmentMutation.isPending}
               />
-            </div>
-          </div>
-          <div>
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-xs text-slate-600">Residual Risk</span>
-              <span className={`text-sm font-bold ${getScoreColor(risk.residual_score)}`}>
-                {risk.residual_score ?? 0}/25
-              </span>
-            </div>
-            <div className="h-2 w-full rounded-full bg-slate-100">
-              <div
-                className={`h-2 rounded-full transition-all ${getScoreBgColor(risk.residual_score)}`}
-                style={{ width: `${((risk.residual_score || 0) / 25) * 100}%` }}
+            )}
+            {activeTab === 'controls' && (
+              <ControlsTab
+                risk={risk}
+                allControls={allControls || []}
+                allInternalControls={allInternalControls || []}
+                sessionLinkedInternalIds={sessionLinkedInternalIds}
+                onLinkControl={(controlId) => linkControlMutation.mutate({ normalized_control_id: controlId })}
+                onLinkInternalControl={(controlId) => linkInternalControlMutation.mutate(controlId)}
+                onLinkFrameworkControl={() => setShowLinkFrameworkControlModal(true)}
+                onUnlinkControl={(linkId) => unlinkControlMutation.mutate(linkId)}
+                onUnlinkFrameworkControl={(linkId) => unlinkFrameworkControlMutation.mutate(linkId)}
+                onUnlinkSessionInternalControl={unlinkSessionInternalControl}
+                isUnlinking={unlinkControlMutation.isPending || unlinkFrameworkControlMutation.isPending}
+                canEdit={canEdit}
+                canDelete={canDelete}
               />
-            </div>
+            )}
+            {activeTab === 'assets' && (
+              <AssetsTab
+                risk={risk}
+                allAssets={allAssets || []}
+                onLinkAsset={(assetId) => linkAssetMutation.mutate({ asset_id: assetId })}
+                onUnlinkAsset={(linkId) => unlinkAssetMutation.mutate(linkId)}
+                isUnlinking={unlinkAssetMutation.isPending}
+                canEdit={canEdit}
+                canDelete={canDelete}
+              />
+            )}
+            {activeTab === 'evidence' && (
+              <EvidenceTab
+                risk={risk}
+                allEvidence={allEvidence || []}
+                onLinkEvidence={(evidenceId) => linkEvidenceMutation.mutate({ evidence_id: evidenceId })}
+                onUnlinkEvidence={(linkId) => unlinkEvidenceMutation.mutate(linkId)}
+                isUnlinking={unlinkEvidenceMutation.isPending}
+                canEdit={canEdit}
+                canDelete={canDelete}
+              />
+            )}
+            {activeTab === 'governance' && (
+              <GovernanceTab
+                risk={risk}
+                allGovernance={allGovernance || []}
+                allDocuments={allDocuments || []}
+                linkedDocuments={linkedDocuments || []}
+                onLinkGovernance={(objectiveId) => linkGovernanceMutation.mutate({ governance_objective_id: objectiveId, impact_level: 'medium' })}
+                onLinkDocument={(docId) => linkDocumentToRiskMutation.mutate(docId)}
+                onUnlinkGovernance={(linkId) => unlinkGovernanceMutation.mutate(linkId)}
+                onUnlinkDocument={(linkId) => unlinkDocumentFromRiskMutation.mutate(linkId)}
+                isUnlinking={unlinkGovernanceMutation.isPending || unlinkDocumentFromRiskMutation.isPending}
+                canEdit={canEdit}
+                canDelete={canDelete}
+              />
+            )}
           </div>
         </div>
-        {riskReduction !== null && (
-          <div className="mt-3 flex items-center justify-center gap-2 rounded-lg bg-white p-2">
-            <BarChart3 className="h-4 w-4 text-emerald-700" />
-            <span className="text-xs text-slate-700">Risk Reduction:</span>
-            <span className="text-sm font-bold text-emerald-700">{riskReduction}%</span>
-          </div>
-        )}
-      </div>
-
-      <div className="border-b border-slate-200 overflow-x-auto">
-        <nav className="flex gap-1 min-w-max">
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 border-b-2 px-3 sm:px-4 py-2.5 text-sm font-medium transition-colors whitespace-nowrap ${
-                  activeTab === tab.id
-                    ? 'border-primary-600 text-primary-600'
-                    : 'border-transparent text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <Icon className="h-4 w-4" />
-                {tab.label}
-              </button>
-            );
-          })}
-        </nav>
-      </div>
-
-      <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
-        {activeTab === 'details' && (
-          <DetailsTab risk={risk} formatDate={formatDate} />
-        )}
-        {activeTab === 'treatment' && (
-          <TreatmentTab
-            risk={risk}
-            treatmentPlan={treatmentPlan}
-            setTreatmentPlan={setTreatmentPlan}
-            isEditing={isEditingTreatment}
-            setIsEditing={setIsEditingTreatment}
-            onSave={() => updateTreatmentMutation.mutate(treatmentPlan)}
-            isSaving={updateTreatmentMutation.isPending}
-          />
-        )}
-        {activeTab === 'controls' && (
-          <ControlsTab
-            risk={risk}
-            allControls={allControls || []}
-            allInternalControls={allInternalControls || []}
-            sessionLinkedInternalIds={sessionLinkedInternalIds}
-            onLinkControl={(controlId) => linkControlMutation.mutate({ normalized_control_id: controlId })}
-            onLinkInternalControl={(controlId) => linkInternalControlMutation.mutate(controlId)}
-            onLinkFrameworkControl={() => setShowLinkFrameworkControlModal(true)}
-            onUnlinkControl={(linkId) => unlinkControlMutation.mutate(linkId)}
-            onUnlinkFrameworkControl={(linkId) => unlinkFrameworkControlMutation.mutate(linkId)}
-            onUnlinkSessionInternalControl={unlinkSessionInternalControl}
-            isUnlinking={unlinkControlMutation.isPending || unlinkFrameworkControlMutation.isPending}
-            canEdit={canEdit}
-            canDelete={canDelete}
-          />
-        )}
-        {activeTab === 'assets' && (
-          <AssetsTab
-            risk={risk}
-            allAssets={allAssets || []}
-            onLinkAsset={(assetId) => linkAssetMutation.mutate({ asset_id: assetId })}
-            onUnlinkAsset={(linkId) => unlinkAssetMutation.mutate(linkId)}
-            isUnlinking={unlinkAssetMutation.isPending}
-            canEdit={canEdit}
-            canDelete={canDelete}
-          />
-        )}
-        {activeTab === 'evidence' && (
-          <EvidenceTab
-            risk={risk}
-            allEvidence={allEvidence || []}
-            onLinkEvidence={(evidenceId) => linkEvidenceMutation.mutate({ evidence_id: evidenceId })}
-            onUnlinkEvidence={(linkId) => unlinkEvidenceMutation.mutate(linkId)}
-            isUnlinking={unlinkEvidenceMutation.isPending}
-            canEdit={canEdit}
-            canDelete={canDelete}
-          />
-        )}
-        {activeTab === 'governance' && (
-          <GovernanceTab
-            risk={risk}
-            allGovernance={allGovernance || []}
-            allDocuments={allDocuments || []}
-            linkedDocuments={linkedDocuments || []}
-            onLinkGovernance={(objectiveId) => linkGovernanceMutation.mutate({ governance_objective_id: objectiveId, impact_level: 'medium' })}
-            onLinkDocument={(docId) => linkDocumentToRiskMutation.mutate(docId)}
-            onUnlinkGovernance={(linkId) => unlinkGovernanceMutation.mutate(linkId)}
-            onUnlinkDocument={(linkId) => unlinkDocumentFromRiskMutation.mutate(linkId)}
-            isUnlinking={unlinkGovernanceMutation.isPending || unlinkDocumentFromRiskMutation.isPending}
-            canEdit={canEdit}
-            canDelete={canDelete}
-          />
-        )}
       </div>
 
       {showDeleteConfirm && (
@@ -683,6 +624,213 @@ export default function RiskDetailPage() {
   );
 }
 
+function RailStatRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-3 py-1.5">
+      <span className="text-xs text-slate-500">{label}</span>
+      <span className="text-right text-sm font-medium text-slate-800">{children}</span>
+    </div>
+  );
+}
+
+function LinkEntityRow({
+  href, icon: Icon, title, subtitle, badge, onUnlink, canDelete, isUnlinking,
+}: {
+  href?: string;
+  icon: React.ElementType;
+  title: string;
+  subtitle?: ReactNode;
+  badge?: ReactNode;
+  onUnlink?: () => void;
+  canDelete?: boolean;
+  isUnlinking?: boolean;
+}) {
+  const body = (
+    <div className="flex min-w-0 flex-1 items-center gap-3">
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-50 text-slate-500">
+        <Icon className="h-4 w-4" strokeWidth={1.75} />
+      </div>
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="truncate text-sm font-medium text-slate-900">{title}</p>
+          {badge}
+        </div>
+        {subtitle && <div className="mt-0.5 text-xs text-slate-500">{subtitle}</div>}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50/60 p-3 hover:bg-slate-50">
+      {href ? (
+        <Link href={href} className="group flex min-w-0 flex-1 items-center gap-2 hover:opacity-90">
+          {body}
+          <ExternalLink className="h-3.5 w-3.5 shrink-0 text-slate-300 group-hover:text-primary-600" strokeWidth={1.75} />
+        </Link>
+      ) : body}
+      {canDelete && onUnlink && (
+        <button
+          type="button"
+          onClick={onUnlink}
+          disabled={isUnlinking}
+          className="rounded-md p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50"
+          title="Unlink"
+        >
+          <Trash2 className="h-3.5 w-3.5" strokeWidth={1.75} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+function EmptyLinkState({ icon: Icon, title, hint }: { icon: React.ElementType; title: string; hint: string }) {
+  return (
+    <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/50 px-4 py-10 text-center">
+      <Icon className="mx-auto mb-2 h-8 w-8 text-slate-300" strokeWidth={1.5} />
+      <p className="text-sm font-medium text-slate-600">{title}</p>
+      <p className="mt-1 text-xs text-slate-400">{hint}</p>
+    </div>
+  );
+}
+
+function RiskContextRail({
+  risk, categoryStyle, statusStyle, treatmentStatus, riskReduction,
+  getScoreColor, getScoreBgColor, formatDate,
+  canEdit, canDelete, onEdit, onTreatment, onDelete,
+  controlCount, assetCount, evidenceCount,
+}: {
+  risk: RiskDetailData;
+  categoryStyle: { label: string; color: string };
+  statusStyle: { label: string; color: string };
+  treatmentStatus: { label: string; color: string };
+  riskReduction: number | null;
+  getScoreColor: (s?: number | null) => string;
+  getScoreBgColor: (s?: number | null) => string;
+  formatDate: (d?: string) => string;
+  canEdit: boolean;
+  canDelete: boolean;
+  onEdit: () => void;
+  onTreatment: () => void;
+  onDelete: () => void;
+  controlCount: number;
+  assetCount: number;
+  evidenceCount: number;
+}) {
+  return (
+    <>
+      <div className="cw-card flex flex-wrap items-center gap-2 rounded-xl p-3">
+        {canEdit && (
+          <button type="button" onClick={onEdit} className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-700 hover:bg-slate-50">
+            <Edit className="h-3.5 w-3.5" strokeWidth={1.75} /> Edit
+          </button>
+        )}
+        {canEdit && (
+          <button type="button" onClick={onTreatment} className="inline-flex items-center gap-1.5 rounded-md bg-primary-500 px-2.5 py-1.5 text-xs font-semibold text-[#0a0a0a] hover:bg-primary-600">
+            <Activity className="h-3.5 w-3.5" strokeWidth={1.75} /> Treatment
+          </button>
+        )}
+        <CreateIssueButton
+          sourceType="risk"
+          sourceId={risk.id}
+          presetFields={{
+            title: `RISK-${risk.id} — ${risk.title}`,
+            description: risk.description || undefined,
+            category: 'operations',
+            issue_type: 'audit_finding',
+          }}
+        />
+        {canDelete && (
+          <button type="button" onClick={onDelete} className="inline-flex items-center gap-1.5 rounded-md border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-xs text-rose-600 hover:bg-rose-100">
+            <Trash2 className="h-3.5 w-3.5" strokeWidth={1.75} /> Delete
+          </button>
+        )}
+      </div>
+
+      <div className="cw-card rounded-xl p-4">
+        <div className="flex items-start gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-50 text-primary-600">
+            <AlertTriangle className="h-5 w-5" strokeWidth={1.75} />
+          </div>
+          <div className="min-w-0">
+            <h2 className="truncate text-base font-semibold text-slate-800">{risk.title}</h2>
+            <p className="text-xs text-slate-500">{categoryStyle.label} risk</p>
+          </div>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${categoryStyle.color}`}>{categoryStyle.label}</span>
+          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${statusStyle.color}`}>{statusStyle.label}</span>
+          <span className={`inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-medium ${treatmentStatus.color}`}>
+            {treatmentStatus.label}
+          </span>
+        </div>
+      </div>
+
+      <div className="cw-card rounded-xl p-4">
+        <div className="mb-3 flex items-center gap-1.5 text-xs font-medium text-slate-500">
+          <BarChart3 className="h-3.5 w-3.5" strokeWidth={1.75} /> Risk scores
+        </div>
+        <div className="space-y-3">
+          <div>
+            <div className="mb-1 flex items-center justify-between">
+              <span className="text-xs text-slate-500">Inherent</span>
+              <span className={`text-sm font-bold tabular-nums ${getScoreColor(risk.inherent_score)}`}>
+                {risk.inherent_score ?? '—'}<span className="font-normal text-slate-400"> / 25</span>
+              </span>
+            </div>
+            <div className="h-1.5 w-full rounded-full bg-slate-100">
+              <div className={`h-1.5 rounded-full transition-all ${getScoreBgColor(risk.inherent_score)}`} style={{ width: `${Math.min(100, ((risk.inherent_score || 0) / 25) * 100)}%` }} />
+            </div>
+            <p className="mt-1 text-[11px] text-slate-400">L {risk.inherent_likelihood ?? '—'} × I {risk.inherent_impact ?? '—'}</p>
+          </div>
+          <div>
+            <div className="mb-1 flex items-center justify-between">
+              <span className="text-xs text-slate-500">Residual</span>
+              <span className={`text-sm font-bold tabular-nums ${getScoreColor(risk.residual_score)}`}>
+                {risk.residual_score ?? '—'}<span className="font-normal text-slate-400"> / 25</span>
+              </span>
+            </div>
+            <div className="h-1.5 w-full rounded-full bg-slate-100">
+              <div className={`h-1.5 rounded-full transition-all ${getScoreBgColor(risk.residual_score)}`} style={{ width: `${Math.min(100, ((risk.residual_score || 0) / 25) * 100)}%` }} />
+            </div>
+            <p className="mt-1 text-[11px] text-slate-400">L {risk.residual_likelihood ?? '—'} × I {risk.residual_impact ?? '—'}</p>
+          </div>
+          {riskReduction != null && (
+            <div className="flex items-center justify-between rounded-lg border border-emerald-100 bg-emerald-50/60 px-2.5 py-1.5">
+              <span className="text-xs text-emerald-800">Risk reduction</span>
+              <span className="text-sm font-bold text-emerald-700">{riskReduction}%</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="cw-card rounded-xl p-4">
+        <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-slate-500">
+          <User className="h-3.5 w-3.5" strokeWidth={1.75} /> Ownership &amp; coverage
+        </div>
+        <div className="divide-y divide-slate-100">
+          <RailStatRow label="Owner">{risk.owner_name || <span className="font-normal text-slate-400">Unassigned</span>}</RailStatRow>
+          <RailStatRow label="Appetite">{risk.risk_appetite || <span className="font-normal text-slate-400">Not set</span>}</RailStatRow>
+          <RailStatRow label="Controls"><span className="tabular-nums">{controlCount}</span></RailStatRow>
+          <RailStatRow label="Assets"><span className="tabular-nums">{assetCount}</span></RailStatRow>
+          <RailStatRow label="Evidence"><span className="tabular-nums">{evidenceCount}</span></RailStatRow>
+        </div>
+      </div>
+
+      <div className="cw-card rounded-xl p-4">
+        <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-slate-500">
+          <Calendar className="h-3.5 w-3.5" strokeWidth={1.75} /> Timeline
+        </div>
+        <div className="divide-y divide-slate-100">
+          <RailStatRow label="Due">{formatDate(risk.due_date)}</RailStatRow>
+          <RailStatRow label="Review">{formatDate(risk.review_date)}</RailStatRow>
+          <RailStatRow label="Created">{formatDate(risk.created_at)}</RailStatRow>
+          <RailStatRow label="Updated">{formatDate(risk.updated_at)}</RailStatRow>
+        </div>
+      </div>
+    </>
+  );
+}
+
 function DetailsTab({ risk, formatDate }: { risk: RiskDetailData; formatDate: (d?: string) => string }) {
   const isNca = (risk.register_type || '').toLowerCase().includes('nca');
   const ncaFields = risk.template_fields && typeof risk.template_fields === 'object'
@@ -692,63 +840,46 @@ function DetailsTab({ risk, formatDate }: { risk: RiskDetailData; formatDate: (d
     <div className="space-y-4">
       {isNca && ncaFields.length > 0 && (
         <div className="rounded-xl border border-primary-200 bg-primary-50/40 p-4">
-          <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900 mb-3">
+          <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900">
             <ClipboardCheck className="h-4 w-4 text-primary-600" strokeWidth={1.75} />
-            NCA Template Fields
+            NCA template fields
           </h3>
-          <p className="text-xs text-slate-500 mb-3">All fields from the NCA Saudi cybersecurity risk register template. Owner and asset linking are managed via the platform pickers in the other tabs.</p>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
+          <div className="grid grid-cols-1 gap-3 text-xs md:grid-cols-2">
             {ncaFields.map(([k, v]) => (
-              <div key={k}>
-                <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-0.5">{k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</p>
-                <p className="text-sm text-slate-800 whitespace-pre-wrap break-words">{String(v)}</p>
+              <div key={k} className="rounded-lg border border-white/60 bg-white/70 p-2.5">
+                <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">{k.replace(/_/g, ' ')}</p>
+                <p className="whitespace-pre-wrap break-words text-sm text-slate-800">{String(v)}</p>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-      <div className="space-y-2">
-        <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-          <ClipboardCheck className="h-4 w-4 text-primary-400" />
+      <div>
+        <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-900">
+          <ClipboardCheck className="h-4 w-4 text-slate-400" strokeWidth={1.75} />
           Description
         </h3>
-        <p className="text-sm text-slate-700">{risk.description || 'No description provided'}</p>
+        <p className="text-sm leading-relaxed text-slate-700">{risk.description || <span className="italic text-slate-400">No description provided</span>}</p>
       </div>
 
-      <div className="space-y-2">
-        <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-          <Calendar className="h-4 w-4 text-primary-400" />
-          Important Dates
-        </h3>
-        <div className="space-y-2">
-          <div>
-            <span className="text-xs text-slate-600">Created</span>
-            <p className="text-sm text-slate-900">{formatDate(risk.created_at)}</p>
-          </div>
-          <div>
-            <span className="text-xs text-slate-600">Due Date</span>
-            <p className="text-sm text-slate-900">{formatDate(risk.due_date)}</p>
-          </div>
-          <div>
-            <span className="text-xs text-slate-600">Review Date</span>
-            <p className="text-sm text-slate-900">{formatDate(risk.review_date)}</p>
-          </div>
-          <div>
-            <span className="text-xs text-slate-600">Last Updated</span>
-            <p className="text-sm text-slate-900">{formatDate(risk.updated_at)}</p>
-          </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="rounded-lg border border-slate-100 bg-slate-50/50 p-3">
+          <h3 className="mb-2 flex items-center gap-2 text-xs font-medium text-slate-500">
+            <Target className="h-3.5 w-3.5" strokeWidth={1.75} /> Risk appetite
+          </h3>
+          <p className="text-sm text-slate-800">{risk.risk_appetite || <span className="text-slate-400">Not defined</span>}</p>
         </div>
-      </div>
-
-      <div className="space-y-2">
-        <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-          <Target className="h-4 w-4 text-primary-400" />
-          Risk Appetite
-        </h3>
-        <p className="text-sm text-slate-700">{risk.risk_appetite || 'Not defined'}</p>
-      </div>
+        <div className="rounded-lg border border-slate-100 bg-slate-50/50 p-3">
+          <h3 className="mb-2 flex items-center gap-2 text-xs font-medium text-slate-500">
+            <Calendar className="h-3.5 w-3.5" strokeWidth={1.75} /> Key dates
+          </h3>
+          <dl className="space-y-1.5 text-xs">
+            <div className="flex justify-between gap-2"><dt className="text-slate-500">Due</dt><dd className="font-medium text-slate-800">{formatDate(risk.due_date)}</dd></div>
+            <div className="flex justify-between gap-2"><dt className="text-slate-500">Review</dt><dd className="font-medium text-slate-800">{formatDate(risk.review_date)}</dd></div>
+            <div className="flex justify-between gap-2"><dt className="text-slate-500">Updated</dt><dd className="font-medium text-slate-800">{formatDate(risk.updated_at)}</dd></div>
+          </dl>
+        </div>
       </div>
     </div>
   );
@@ -775,54 +906,54 @@ function TreatmentTab({
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-          <Activity className="h-4 w-4 text-primary-400" />
-          Treatment Plan
+          <Activity className="h-4 w-4 text-slate-400" strokeWidth={1.75} />
+          Treatment plan
         </h3>
         {!isEditing && (
           <button
             onClick={() => setIsEditing(true)}
-            className="flex items-center gap-2 rounded-lg bg-slate-100 px-4 py-2 text-sm text-slate-900 hover:bg-slate-200"
+            className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
           >
-            <Edit className="h-4 w-4" />
-            Edit Treatment
+            <Edit className="h-3.5 w-3.5" strokeWidth={1.75} />
+            Edit
           </button>
         )}
       </div>
 
       {isEditing ? (
-        <div className="space-y-4">
+        <div className="space-y-3">
           <textarea
             value={treatmentPlan}
             onChange={(e) => setTreatmentPlan(e.target.value)}
-            placeholder="Enter treatment plan details..."
-            className="h-48 w-full rounded-lg border border-slate-300 bg-white p-4 text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+            placeholder="Enter treatment plan details…"
+            className="h-48 w-full rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
           />
-          <div className="flex justify-end gap-3">
+          <div className="flex justify-end gap-2">
             <button
               onClick={() => {
                 setTreatmentPlan(risk.treatment_plan || '');
                 setIsEditing(false);
               }}
-              className="rounded-lg bg-slate-100 px-4 py-2 text-slate-900 hover:bg-slate-200"
+              className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
             >
               Cancel
             </button>
             <button
               onClick={onSave}
               disabled={isSaving}
-              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700 disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-md bg-primary-500 px-3 py-1.5 text-xs font-semibold text-[#0a0a0a] hover:bg-primary-600 disabled:opacity-50"
             >
-              {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              Save Treatment Plan
+              {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" strokeWidth={1.75} />}
+              Save
             </button>
           </div>
         </div>
       ) : (
-        <div className="rounded-lg bg-white p-4">
+        <div className="rounded-lg border border-slate-100 bg-slate-50/50 p-4">
           {risk.treatment_plan ? (
-            <p className="whitespace-pre-wrap text-slate-700">{risk.treatment_plan}</p>
+            <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700">{risk.treatment_plan}</p>
           ) : (
-            <p className="text-slate-500 italic">No treatment plan defined. Click "Edit Treatment" to add one.</p>
+            <p className="text-sm italic text-slate-400">No treatment plan yet. Click Edit to add one.</p>
           )}
         </div>
       )}
@@ -917,45 +1048,28 @@ function ControlsTab({
           <h4 className="mb-2 text-xs font-medium text-slate-600">Internal Controls</h4>
           <div className="space-y-2">
             {sessionLinkedInternalControls.map((control: any) => (
-              <div key={`session-i-${control.id}`} className="flex items-center justify-between rounded-lg bg-white p-3">
-                <div className="flex items-center gap-3">
-                  <Shield className="h-4 w-4 text-emerald-500" />
-                  <div>
-                    <span className="text-xs font-medium text-emerald-500">{control.control_id || `IC-${control.id}`}</span>
-                    <p className="text-sm text-slate-900">{control.name || control.title || `Control #${control.id}`}</p>
-                  </div>
-                </div>
-                {canDelete && (
-                  <button
-                    onClick={() => onUnlinkSessionInternalControl(Number(control.id))}
-                    disabled={isUnlinking}
-                    className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 disabled:opacity-50"
-                    title="Remove from this view (link persists in database)"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                )}
-              </div>
+              <LinkEntityRow
+                key={`session-i-${control.id}`}
+                href={`/erm/internal-controls/${control.id}`}
+                icon={Shield}
+                title={control.name || control.title || `Control #${control.id}`}
+                subtitle={control.control_id || `IC-${control.id}`}
+                onUnlink={() => onUnlinkSessionInternalControl(Number(control.id))}
+                canDelete={canDelete}
+                isUnlinking={isUnlinking}
+              />
             ))}
             {(risk.linked_controls || []).map((control) => (
-              <div key={control.id} className="flex items-center justify-between rounded-lg bg-white p-3">
-                <div className="flex items-center gap-3">
-                  <Shield className="h-4 w-4 text-primary-400" />
-                  <div>
-                    <span className="text-xs font-medium text-primary-400">{control.code}</span>
-                    <p className="text-sm text-slate-900">{control.name}</p>
-                  </div>
-                </div>
-                {canDelete && (
-                <button
-                  onClick={() => onUnlinkControl(control.id)}
-                  disabled={isUnlinking}
-                  className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 disabled:opacity-50"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-                )}
-              </div>
+              <LinkEntityRow
+                key={control.id}
+                href={`/control-library/${control.control_id}`}
+                icon={Shield}
+                title={control.name}
+                subtitle={control.code}
+                onUnlink={() => onUnlinkControl(control.id)}
+                canDelete={canDelete}
+                isUnlinking={isUnlinking}
+              />
             ))}
           </div>
         </div>
@@ -966,41 +1080,33 @@ function ControlsTab({
           <h4 className="mb-2 text-xs font-medium text-slate-600">Framework Controls</h4>
           <div className="space-y-2">
             {risk.linked_framework_controls.map((control) => (
-              <div key={control.id} className="flex items-center justify-between rounded-lg bg-white p-3">
-                <div className="flex items-center gap-3">
-                  <Shield className="h-4 w-4 text-slate-500" />
-                  <div>
-                    <span className="text-xs font-medium text-slate-500">{control.code}</span>
-                    <p className="text-sm text-slate-900">{control.name}</p>
+              <LinkEntityRow
+                key={control.id}
+                icon={Shield}
+                title={control.name}
+                subtitle={
+                  <>
+                    <span>{control.code}</span>
                     {control.mitigation_effectiveness && (
-                      <span className={`text-xs ${getMitigationColor(control.mitigation_effectiveness)}`}>
-                        Effectiveness: {control.mitigation_effectiveness}
+                      <span className={`ml-2 ${getMitigationColor(control.mitigation_effectiveness)}`}>
+                        · {control.mitigation_effectiveness}
                       </span>
                     )}
-                  </div>
-                </div>
-                {canDelete && (
-                <button
-                  onClick={() => onUnlinkFrameworkControl(control.id)}
-                  disabled={isUnlinking}
-                  className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 disabled:opacity-50"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-                )}
-              </div>
+                  </>
+                }
+                onUnlink={() => onUnlinkFrameworkControl(control.id)}
+                canDelete={canDelete}
+                isUnlinking={isUnlinking}
+              />
             ))}
           </div>
         </div>
       )}
 
       {(!risk.linked_controls || risk.linked_controls.length === 0) &&
-       (!risk.linked_framework_controls || risk.linked_framework_controls.length === 0) && (
-        <div className="rounded-lg bg-white p-6 text-center">
-          <Shield className="mx-auto mb-2 h-10 w-10 text-slate-600" />
-          <p className="text-sm text-slate-600">No internal controls linked to this risk</p>
-          <p className="text-xs text-slate-500">Link controls to track mitigation measures</p>
-        </div>
+       (!risk.linked_framework_controls || risk.linked_framework_controls.length === 0) &&
+       sessionLinkedInternalControls.length === 0 && (
+        <EmptyLinkState icon={Shield} title="No controls linked" hint="Link controls to track mitigation measures" />
       )}
     </div>
   );
@@ -1053,32 +1159,20 @@ function AssetsTab({
       {risk.linked_assets && risk.linked_assets.length > 0 ? (
         <div className="space-y-2">
           {risk.linked_assets.map((asset) => (
-            <div key={asset.id} className="flex items-center justify-between rounded-lg bg-white p-3">
-              <div className="flex items-center gap-3">
-                <Building2 className="h-4 w-4 text-primary-500" />
-                <div>
-                  <p className="text-sm text-slate-900">{asset.name}</p>
-                  <span className="text-xs text-slate-600">{asset.asset_type}</span>
-                </div>
-              </div>
-              {canDelete && (
-              <button
-                onClick={() => onUnlinkAsset(asset.id)}
-                disabled={isUnlinking}
-                className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 disabled:opacity-50"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
-              )}
-            </div>
+            <LinkEntityRow
+              key={asset.id}
+              href={`/assets/${asset.asset_id}`}
+              icon={Building2}
+              title={asset.name}
+              subtitle={asset.asset_type}
+              onUnlink={() => onUnlinkAsset(asset.id)}
+              canDelete={canDelete}
+              isUnlinking={isUnlinking}
+            />
           ))}
         </div>
       ) : (
-        <div className="rounded-lg bg-white p-6 text-center">
-          <Building2 className="mx-auto mb-2 h-10 w-10 text-slate-600" />
-          <p className="text-sm text-slate-600">No assets linked to this risk</p>
-          <p className="text-xs text-slate-500">Link IT assets that are affected by this risk</p>
-        </div>
+        <EmptyLinkState icon={Building2} title="No assets linked" hint="Link IT assets affected by this risk" />
       )}
     </div>
   );
@@ -1141,34 +1235,24 @@ function EvidenceTab({
       {risk.linked_evidence && risk.linked_evidence.length > 0 ? (
         <div className="space-y-2">
           {risk.linked_evidence.map((evidence) => (
-            <div key={evidence.id} className="flex items-center justify-between rounded-lg bg-white p-3">
-              <div className="flex items-center gap-3">
-                <FileText className="h-4 w-4 text-primary-400" />
-                <div>
-                  <p className="text-sm text-slate-900">{evidence.name}</p>
-                  <span className={`rounded px-2 py-0.5 text-xs ${getStatusColor(evidence.status)}`}>
-                    {evidence.status}
-                  </span>
-                </div>
-              </div>
-              {canDelete && (
-              <button
-                onClick={() => onUnlinkEvidence(evidence.id)}
-                disabled={isUnlinking}
-                className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 disabled:opacity-50"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
-              )}
-            </div>
+            <LinkEntityRow
+              key={evidence.id}
+              href={`/evidence/${evidence.evidence_id}`}
+              icon={FileText}
+              title={evidence.name}
+              badge={
+                <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${getStatusColor(evidence.status)}`}>
+                  {evidence.status}
+                </span>
+              }
+              onUnlink={() => onUnlinkEvidence(evidence.id)}
+              canDelete={canDelete}
+              isUnlinking={isUnlinking}
+            />
           ))}
         </div>
       ) : (
-        <div className="rounded-lg bg-white p-6 text-center">
-          <FileText className="mx-auto mb-2 h-10 w-10 text-slate-600" />
-          <p className="text-sm text-slate-600">No evidence linked to this risk</p>
-          <p className="text-xs text-slate-500">Link evidence items to support risk assessment</p>
-        </div>
+        <EmptyLinkState icon={FileText} title="No evidence linked" hint="Link evidence that supports this risk assessment" />
       )}
     </div>
   );
@@ -1253,56 +1337,31 @@ function GovernanceTab({
       {totalLinkedCount > 0 ? (
         <div className="space-y-2">
           {(linkedDocuments || []).map((doc: any) => (
-            <div key={`d-${doc.link_id || doc.id}`} className="flex items-center justify-between rounded-lg bg-white p-3">
-              <div className="flex items-center gap-3">
-                <FileText className="h-4 w-4 text-primary-500" />
-                <div>
-                  <p className="text-sm text-slate-900">{doc.title || doc.document_title || doc.name || `Document #${doc.document_id || doc.id}`}</p>
-                  <span className="text-xs text-slate-500">
-                    {doc.doc_type || doc.document_type || 'Document'}{doc.link_type ? ` • ${doc.link_type}` : ''}
-                  </span>
-                </div>
-              </div>
-              {canDelete && (
-                <button
-                  onClick={() => onUnlinkDocument(doc.link_id || doc.id)}
-                  disabled={isUnlinking}
-                  className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 disabled:opacity-50"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              )}
-            </div>
+            <LinkEntityRow
+              key={`d-${doc.link_id || doc.id}`}
+              href={`/governance/documents/${doc.document_id || doc.id}`}
+              icon={FileText}
+              title={doc.title || doc.document_title || doc.name || `Document #${doc.document_id || doc.id}`}
+              subtitle={`${doc.doc_type || doc.document_type || 'Document'}${doc.link_type ? ` · ${doc.link_type}` : ''}`}
+              onUnlink={() => onUnlinkDocument(doc.link_id || doc.id)}
+              canDelete={canDelete}
+              isUnlinking={isUnlinking}
+            />
           ))}
           {(risk.linked_governance || []).map((objective) => (
-            <div key={`o-${objective.id}`} className="flex items-center justify-between rounded-lg bg-white p-3">
-              <div className="flex items-center gap-3">
-                <Target className="h-4 w-4 text-amber-500" />
-                <div>
-                  <p className="text-sm text-slate-900">{objective.name}</p>
-                  <span className={`text-xs ${getImpactColor(objective.impact_level)}`}>
-                    Impact: {objective.impact_level}
-                  </span>
-                </div>
-              </div>
-              {canDelete && (
-                <button
-                  onClick={() => onUnlinkGovernance(objective.id)}
-                  disabled={isUnlinking}
-                  className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 disabled:opacity-50"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              )}
-            </div>
+            <LinkEntityRow
+              key={`o-${objective.id}`}
+              icon={Target}
+              title={objective.name}
+              subtitle={<span className={getImpactColor(objective.impact_level)}>Impact: {objective.impact_level}</span>}
+              onUnlink={() => onUnlinkGovernance(objective.id)}
+              canDelete={canDelete}
+              isUnlinking={isUnlinking}
+            />
           ))}
         </div>
       ) : (
-        <div className="rounded-lg bg-white p-6 text-center">
-          <Target className="mx-auto mb-2 h-10 w-10 text-slate-600" />
-          <p className="text-sm text-slate-600">No documents linked to this risk</p>
-          <p className="text-xs text-slate-500">Link governance documents affected by this risk</p>
-        </div>
+        <EmptyLinkState icon={Target} title="No documents linked" hint="Link governance documents affected by this risk" />
       )}
     </div>
   );

@@ -3,7 +3,8 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Shield, ArrowRight, ArrowLeft, Check, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { ArrowRight, ArrowLeft, Check, AlertCircle, Eye, EyeOff, ChevronDown } from 'lucide-react';
+import { AuthShell } from '@/components/auth/AuthShell';
 
 const INDUSTRIES = [
   'Financial Services',
@@ -67,6 +68,15 @@ interface FormData {
   primaryContactPhone: string;
   termsAccepted: boolean;
 }
+
+// Shared field styling (matches the login screen's pill inputs).
+const INPUT_BASE =
+  'block w-full rounded-full border border-slate-200 bg-slate-50/80 py-3 text-[14px] text-slate-900 placeholder:font-normal placeholder:text-slate-400/70 outline-none transition-all focus:border-primary-500 focus:bg-white focus:ring-4 focus:ring-primary-500/15 hover:border-slate-300';
+const FIELD = `${INPUT_BASE} px-4`;
+const FIELD_PW = `${INPUT_BASE} pl-4 pr-11`;
+const SELECT = `${INPUT_BASE} pl-4 pr-10 appearance-none cursor-pointer`;
+const LABEL = 'mb-1 block pl-1 text-[13px] font-medium text-slate-700';
+const STEP_LABELS = ['Account', 'Company', 'Compliance', 'Review'];
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -266,7 +276,7 @@ export default function RegisterPage() {
       } else {
         const data = await response.json();
         let errorMessage = 'Registration failed. Please try again.';
-        
+
         if (Array.isArray(data.detail)) {
           const messages = data.detail.map((err: { msg?: string; loc?: string[] }) => {
             const field = err.loc?.slice(-1)[0] || 'field';
@@ -290,7 +300,7 @@ export default function RegisterPage() {
             ? 'Please use a corporate email address. Free email providers are not accepted.'
             : data.detail;
         }
-        
+
         setError(errorMessage);
       }
     } catch {
@@ -301,339 +311,280 @@ export default function RegisterPage() {
   };
 
   const renderStepIndicator = () => (
-    <div className="mb-8 flex items-center justify-center gap-2">
-      {[1, 2, 3, 4].map((s) => (
-        <div key={s} className="flex items-center">
-          <div
-            className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium ${
-              s < step
-                ? 'bg-green-600 text-white'
-                : s === step
-                ? 'bg-primary-600 text-white'
-                : 'bg-slate-300 text-slate-500'
-            }`}
-          >
-            {s < step ? <Check size={16} /> : s}
-          </div>
-          {s < 4 && (
-            <div
-              className={`h-0.5 w-8 ${s < step ? 'bg-green-600' : 'bg-slate-300'}`}
-            />
-          )}
-        </div>
-      ))}
+    <div className="mb-3.5">
+      <div className="flex items-center">
+        {STEP_LABELS.map((label, i) => {
+          const n = i + 1;
+          const done = n < step;
+          const active = n === step;
+          return (
+            <div key={label} className={`flex items-center ${n < 4 ? 'flex-1' : ''}`}>
+              <div className="flex items-center gap-2">
+                <div
+                  className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold transition-colors ${
+                    done
+                      ? 'bg-primary-600 text-white'
+                      : active
+                      ? 'bg-primary-700 text-white ring-4 ring-primary-500/15'
+                      : 'bg-slate-100 text-slate-400'
+                  }`}
+                >
+                  {done ? <Check size={15} /> : n}
+                </div>
+                {/* The active step names itself on mobile; the rest stay numbers
+                    so the row still fits a narrow screen. */}
+                <span className={`text-xs font-medium ${active ? 'inline' : 'hidden sm:inline'} ${active || done ? 'text-slate-700' : 'text-slate-400'}`}>
+                  {label}
+                </span>
+              </div>
+              {n < 4 && <div className={`mx-2 h-0.5 flex-1 rounded ${done ? 'bg-primary-500' : 'bg-slate-200'}`} />}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 
   const renderStep1 = () => (
-    <div className="space-y-4">
-      <h2 className="text-lg font-semibold text-slate-800">Account Details</h2>
-
+    <div className="space-y-3">
       <div>
-        <label htmlFor="email" className="block text-sm font-medium text-slate-600">
-          Email address
-        </label>
+        <label htmlFor="email" className={LABEL}>Email address</label>
         <input
           id="email"
           type="email"
           value={formData.email}
           onChange={(e) => updateFormData('email', e.target.value)}
           onBlur={() => markTouched('email')}
-          className="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+          className={FIELD}
           placeholder="you@company.com"
         />
         {touched.email && formData.email && (
-          <p
-            className={`mt-1 text-xs ${
-              isCorporateEmail(formData.email) ? 'text-green-400' : 'text-yellow-400'
-            }`}
-          >
-            {isCorporateEmail(formData.email)
-              ? '✓ Corporate email detected'
-              : '⚠ Please use a corporate email address'}
+          <p className={`mt-1 text-xs ${isCorporateEmail(formData.email) ? 'text-emerald-600' : 'text-amber-600'}`}>
+            {isCorporateEmail(formData.email) ? '✓ Corporate email detected' : '⚠ Please use a corporate email address'}
           </p>
         )}
       </div>
 
       <div>
-        <label htmlFor="displayName" className="block text-sm font-medium text-slate-600">
-          Full name
-        </label>
+        <label htmlFor="displayName" className={LABEL}>Full name</label>
         <input
           id="displayName"
           type="text"
           value={formData.displayName}
           onChange={(e) => updateFormData('displayName', e.target.value)}
-          className="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+          className={FIELD}
           placeholder="John Doe"
         />
       </div>
 
       <div>
-        <label htmlFor="password" className="block text-sm font-medium text-slate-600">
-          Password
-        </label>
+        <label htmlFor="password" className={LABEL}>Password</label>
         <div className="relative">
           <input
             id="password"
             type={showPassword ? 'text' : 'password'}
             value={formData.password}
             onChange={(e) => updateFormData('password', e.target.value)}
-            className="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-4 py-2 pr-10 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+            className={FIELD_PW}
             placeholder="••••••••"
           />
           <button
             type="button"
             onClick={() => setShowPassword(!showPassword)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-600"
+            aria-label={showPassword ? 'Hide password' : 'Show password'}
+            className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
           >
-            {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+            {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
           </button>
         </div>
         {formData.password && (
-          <div className="mt-2">
-            <div className="mb-1 flex items-center gap-2">
-              <div className="flex h-1.5 flex-1 gap-1">
-                {[1, 2, 3, 4, 5].map((i) => (
-                  <div
-                    key={i}
-                    className={`h-full flex-1 rounded ${
-                      i <= passwordStrength ? passwordStrengthLabel.color : 'bg-slate-300'
-                    }`}
-                  />
-                ))}
-              </div>
-              <span className={`text-xs ${passwordStrengthLabel.color.replace('bg-', 'text-')}`}>
-                {passwordStrengthLabel.label}
-              </span>
+          <div className="mt-2 flex items-center gap-2">
+            <div className="flex h-1.5 flex-1 gap-1">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className={`h-full flex-1 rounded ${i <= passwordStrength ? passwordStrengthLabel.color : 'bg-slate-200'}`} />
+              ))}
             </div>
+            <span className={`text-xs font-medium ${passwordStrengthLabel.color.replace('bg-', 'text-')}`}>
+              {passwordStrengthLabel.label}
+            </span>
           </div>
         )}
       </div>
 
       <div>
-        <label htmlFor="confirmPassword" className="block text-sm font-medium text-slate-600">
-          Confirm password
-        </label>
+        <label htmlFor="confirmPassword" className={LABEL}>Confirm password</label>
         <div className="relative">
           <input
             id="confirmPassword"
             type={showConfirmPassword ? 'text' : 'password'}
             value={formData.confirmPassword}
             onChange={(e) => updateFormData('confirmPassword', e.target.value)}
-            className="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-4 py-2 pr-10 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+            className={FIELD_PW}
             placeholder="••••••••"
           />
           <button
             type="button"
             onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-600"
+            aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+            className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
           >
-            {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+            {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
           </button>
         </div>
         {formData.confirmPassword && formData.password !== formData.confirmPassword && (
-          <p className="mt-1 text-xs text-red-400">Passwords do not match</p>
+          <p className="mt-1 text-xs text-rose-600">Passwords do not match</p>
         )}
       </div>
     </div>
   );
 
   const renderStep2 = () => (
-    <div className="space-y-4">
-      <h2 className="text-lg font-semibold text-slate-800">Company Details</h2>
-
+    <div className="space-y-3">
       <div>
-        <label htmlFor="organizationName" className="block text-sm font-medium text-slate-600">
-          Company name <span className="text-red-400">*</span>
-        </label>
+        <label htmlFor="organizationName" className={LABEL}>Company name <span className="text-rose-500">*</span></label>
         <input
           id="organizationName"
           type="text"
           value={formData.organizationName}
           onChange={(e) => updateFormData('organizationName', e.target.value)}
-          className="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+          className={FIELD}
           placeholder="Acme Corporation"
         />
       </div>
 
       <div>
-        <label htmlFor="legalEntityName" className="block text-sm font-medium text-slate-600">
-          Legal entity name <span className="text-slate-500">(optional)</span>
-        </label>
+        <label htmlFor="legalEntityName" className={LABEL}>Legal entity name <span className="text-slate-400">(optional)</span></label>
         <input
           id="legalEntityName"
           type="text"
           value={formData.legalEntityName}
           onChange={(e) => updateFormData('legalEntityName', e.target.value)}
-          className="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+          className={FIELD}
           placeholder="Acme Corporation Ltd."
         />
       </div>
 
       <div>
-        <label htmlFor="industry" className="block text-sm font-medium text-slate-600">
-          Industry <span className="text-red-400">*</span>
-        </label>
-        <select
-          id="industry"
-          value={formData.industry}
-          onChange={(e) => updateFormData('industry', e.target.value)}
-          className="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-slate-800 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-        >
-          <option value="">Select industry</option>
-          {INDUSTRIES.map((industry) => (
-            <option key={industry} value={industry}>
-              {industry}
-            </option>
-          ))}
-        </select>
+        <label htmlFor="industry" className={LABEL}>Industry <span className="text-rose-500">*</span></label>
+        <div className="relative">
+          <select id="industry" value={formData.industry} onChange={(e) => updateFormData('industry', e.target.value)} className={SELECT}>
+            <option value="">Select industry</option>
+            {INDUSTRIES.map((industry) => (
+              <option key={industry} value={industry}>{industry}</option>
+            ))}
+          </select>
+          <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+        </div>
       </div>
 
       <div>
-        <label htmlFor="companySize" className="block text-sm font-medium text-slate-600">
-          Company size <span className="text-red-400">*</span>
-        </label>
-        <select
-          id="companySize"
-          value={formData.companySize}
-          onChange={(e) => updateFormData('companySize', e.target.value)}
-          className="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-slate-800 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-        >
-          <option value="">Select company size</option>
-          {COMPANY_SIZES.map((size) => (
-            <option key={size} value={size}>
-              {size} employees
-            </option>
-          ))}
-        </select>
+        <label htmlFor="companySize" className={LABEL}>Company size <span className="text-rose-500">*</span></label>
+        <div className="relative">
+          <select id="companySize" value={formData.companySize} onChange={(e) => updateFormData('companySize', e.target.value)} className={SELECT}>
+            <option value="">Select company size</option>
+            {COMPANY_SIZES.map((size) => (
+              <option key={size} value={size}>{size} employees</option>
+            ))}
+          </select>
+          <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+        </div>
       </div>
     </div>
   );
 
   const renderStep3 = () => (
-    <div className="space-y-4">
-      <h2 className="text-lg font-semibold text-slate-800">Compliance Profile</h2>
-
+    <div className="space-y-3">
       <div>
-        <label htmlFor="geography" className="block text-sm font-medium text-slate-600">
-          Geography <span className="text-red-400">*</span>
-        </label>
-        <select
-          id="geography"
-          value={formData.geography}
-          onChange={(e) => updateFormData('geography', e.target.value)}
-          className="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-slate-800 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-        >
-          <option value="">Select geography</option>
-          {GEOGRAPHIES.map((geo) => (
-            <option key={geo} value={geo}>
-              {geo}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-slate-600">
-          Regulatory scope <span className="text-red-400">*</span>
-        </label>
-        <p className="mb-2 text-xs text-slate-500">Select all that apply</p>
-        <div className="grid grid-cols-2 gap-2">
-          {REGULATORY_SCOPES.map((scope) => (
-            <label
-              key={scope}
-              className={`flex cursor-pointer items-center gap-2 rounded-lg border p-3 transition-colors ${
-                formData.regulatoryScope.includes(scope)
-                  ? 'border-primary-500 bg-primary-50'
-                  : 'border-slate-300 bg-white hover:border-slate-400'
-              }`}
-            >
-              <input
-                type="checkbox"
-                checked={formData.regulatoryScope.includes(scope)}
-                onChange={() => toggleRegulatoryScope(scope)}
-                className="h-4 w-4 rounded border-slate-300 bg-white text-primary-600 focus:ring-primary-500"
-              />
-              <span className="text-sm text-slate-800">{scope}</span>
-            </label>
-          ))}
+        <label htmlFor="geography" className={LABEL}>Geography <span className="text-rose-500">*</span></label>
+        <div className="relative">
+          <select id="geography" value={formData.geography} onChange={(e) => updateFormData('geography', e.target.value)} className={SELECT}>
+            <option value="">Select geography</option>
+            {GEOGRAPHIES.map((geo) => (
+              <option key={geo} value={geo}>{geo}</option>
+            ))}
+          </select>
+          <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
         </div>
       </div>
 
       <div>
-        <label htmlFor="primaryContactPhone" className="block text-sm font-medium text-slate-600">
-          Primary contact phone <span className="text-slate-500">(optional)</span>
+        <label className={LABEL}>
+          Regulatory scope <span className="text-rose-500">*</span>{' '}
+          <span className="font-normal text-slate-400">— select all that apply</span>
         </label>
+        <div className="grid grid-cols-2 gap-1.5">
+          {REGULATORY_SCOPES.map((scope) => {
+            const checked = formData.regulatoryScope.includes(scope);
+            return (
+              <button
+                type="button"
+                key={scope}
+                onClick={() => toggleRegulatoryScope(scope)}
+                className={`flex items-center gap-2 rounded-xl border px-3 py-1.5 text-left text-sm transition-colors ${
+                  checked ? 'border-primary-500 bg-primary-50 text-slate-800' : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
+                }`}
+              >
+                <span className={`flex h-4 w-4 items-center justify-center rounded border ${checked ? 'border-primary-500 bg-primary-600 text-white' : 'border-slate-300 bg-white'}`}>
+                  {checked && <Check size={12} strokeWidth={3} />}
+                </span>
+                {scope}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div>
+        <label htmlFor="primaryContactPhone" className={LABEL}>Primary contact phone <span className="text-slate-400">(optional)</span></label>
         <input
           id="primaryContactPhone"
           type="tel"
           value={formData.primaryContactPhone}
           onChange={(e) => updateFormData('primaryContactPhone', e.target.value)}
-          className="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+          className={FIELD}
           placeholder="+1 (555) 123-4567"
         />
       </div>
     </div>
   );
 
+  const ReviewRow = ({ label, value }: { label: string; value: string }) => (
+    <div className="flex justify-between gap-4 text-sm">
+      <span className="text-slate-500">{label}</span>
+      <span className="text-right font-medium text-slate-800">{value}</span>
+    </div>
+  );
+
   const renderStep4 = () => (
-    <div className="space-y-4">
-      <h2 className="text-lg font-semibold text-slate-800">Review & Submit</h2>
-
-      <div className="space-y-4 rounded-lg bg-slate-50 p-4">
+    <div className="space-y-2.5">
+      <div className="space-y-2.5 rounded-xl border border-slate-200 bg-slate-50 p-3">
         <div>
-          <h3 className="text-sm font-medium text-slate-500">Account Details</h3>
-          <div className="mt-2 space-y-1 text-sm">
-            <p className="text-slate-800">
-              <span className="text-slate-500">Email:</span> {formData.email}
-            </p>
-            <p className="text-slate-800">
-              <span className="text-slate-500">Name:</span> {formData.displayName}
-            </p>
+          <h3 className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Account</h3>
+          <div className="space-y-0.5">
+            <ReviewRow label="Email" value={formData.email} />
+            <ReviewRow label="Name" value={formData.displayName} />
           </div>
         </div>
-
-        <div className="border-t border-slate-200 pt-4">
-          <h3 className="text-sm font-medium text-slate-500">Company Details</h3>
-          <div className="mt-2 space-y-1 text-sm">
-            <p className="text-slate-800">
-              <span className="text-slate-500">Company:</span> {formData.organizationName}
-            </p>
-            {formData.legalEntityName && (
-              <p className="text-slate-800">
-                <span className="text-slate-500">Legal Entity:</span> {formData.legalEntityName}
-              </p>
-            )}
-            <p className="text-slate-800">
-              <span className="text-slate-500">Industry:</span> {formData.industry}
-            </p>
-            <p className="text-slate-800">
-              <span className="text-slate-500">Company Size:</span> {formData.companySize} employees
-            </p>
+        <div className="border-t border-slate-200 pt-2.5">
+          <h3 className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Company</h3>
+          <div className="space-y-0.5">
+            <ReviewRow label="Company" value={formData.organizationName} />
+            {formData.legalEntityName && <ReviewRow label="Legal entity" value={formData.legalEntityName} />}
+            <ReviewRow label="Industry" value={formData.industry} />
+            <ReviewRow label="Company size" value={`${formData.companySize} employees`} />
           </div>
         </div>
-
-        <div className="border-t border-slate-200 pt-4">
-          <h3 className="text-sm font-medium text-slate-500">Compliance Profile</h3>
-          <div className="mt-2 space-y-1 text-sm">
-            <p className="text-slate-800">
-              <span className="text-slate-500">Geography:</span> {formData.geography}
-            </p>
-            <p className="text-slate-800">
-              <span className="text-slate-500">Regulatory Scope:</span>{' '}
-              {formData.regulatoryScope.join(', ')}
-            </p>
-            {formData.primaryContactPhone && (
-              <p className="text-slate-800">
-                <span className="text-slate-500">Phone:</span> {formData.primaryContactPhone}
-              </p>
-            )}
+        <div className="border-t border-slate-200 pt-2.5">
+          <h3 className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Compliance profile</h3>
+          <div className="space-y-0.5">
+            <ReviewRow label="Geography" value={formData.geography} />
+            <ReviewRow label="Regulatory scope" value={formData.regulatoryScope.join(', ')} />
+            {formData.primaryContactPhone && <ReviewRow label="Phone" value={formData.primaryContactPhone} />}
           </div>
         </div>
       </div>
 
-      <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-slate-300 bg-white p-4">
+      <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-slate-200 bg-white p-2.5">
         <input
           type="checkbox"
           checked={formData.termsAccepted}
@@ -642,89 +593,85 @@ export default function RegisterPage() {
         />
         <span className="text-sm text-slate-600">
           I agree to the{' '}
-          <a href="#" className="text-primary-600 hover:text-primary-700">
-            Terms of Service
-          </a>{' '}
+          <a href="https://compliverse.ai/terms" target="_blank" rel="noopener noreferrer" className="font-medium text-primary-700 hover:text-primary-800">Terms of Service</a>{' '}
           and{' '}
-          <a href="#" className="text-primary-600 hover:text-primary-700">
-            Privacy Policy
-          </a>
+          <a href="https://compliverse.ai/privacy-policy" target="_blank" rel="noopener noreferrer" className="font-medium text-primary-700 hover:text-primary-800">Privacy Policy</a>.
         </span>
       </label>
     </div>
   );
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-8">
-      <div className="w-full max-w-lg">
-        <div className="mb-6 text-center">
-          <Shield className="mx-auto h-10 w-10 text-primary-600" />
-          <h1 className="text-2xl font-bold text-slate-900">ComplyVerse</h1>
-          <p className="mt-2 text-slate-500">Create your company account</p>
-        </div>
-
-        {renderStepIndicator()}
-
-        <div className="rounded-xl border border-slate-200 bg-white shadow-card p-6">
-          {error && (
-            <div className="mb-4 flex items-center gap-2 rounded-lg bg-red-900/50 p-3 text-red-400">
-              <AlertCircle size={18} />
-              <span className="text-sm">{error}</span>
-            </div>
-          )}
-
-          {step === 1 && renderStep1()}
-          {step === 2 && renderStep2()}
-          {step === 3 && renderStep3()}
-          {step === 4 && renderStep4()}
-
-          <div className="mt-6 flex gap-3">
-            {step > 1 && (
-              <button
-                type="button"
-                onClick={handleBack}
-                className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 font-medium text-slate-800 hover:bg-slate-50"
-              >
-                <ArrowLeft size={18} />
-                Back
-              </button>
-            )}
-            {step < 4 ? (
-              <button
-                type="button"
-                onClick={handleNext}
-                className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-white hover:bg-primary-700"
-              >
-                Next
-                <ArrowRight size={18} />
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={handleSubmit}
-                disabled={isLoading}
-                className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-white hover:bg-primary-700 disabled:opacity-50"
-              >
-                {isLoading ? (
-                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                ) : (
-                  <>
-                    <Check size={18} />
-                    Create Account
-                  </>
-                )}
-              </button>
-            )}
-          </div>
-        </div>
-
-        <p className="mt-6 text-center text-sm text-slate-500">
-          Already have an account?{' '}
-          <Link href="/login" className="text-primary-600 hover:text-primary-700">
-            Sign in
-          </Link>
-        </p>
+    <AuthShell tagline="Set up your organization's compliance workspace in four steps.">
+      {/* No "Step 2 of 4 — …" line: the indicator below already says where you
+          are, and now names the active step on mobile too. */}
+      <div className="mb-3">
+        <h2 className="text-2xl font-bold leading-tight tracking-tight text-slate-900">Create your account</h2>
       </div>
-    </div>
+
+      {renderStepIndicator()}
+
+      {error && (
+        <div className="mb-4 flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5 text-rose-700">
+          <AlertCircle size={15} className="mt-0.5 shrink-0" />
+          <span className="text-xs">{error}</span>
+        </div>
+      )}
+
+      <div key={step} className="auth-fade-up">
+        {step === 1 && renderStep1()}
+        {step === 2 && renderStep2()}
+        {step === 3 && renderStep3()}
+        {step === 4 && renderStep4()}
+      </div>
+
+      <div className="mt-3.5 flex gap-3">
+        {step > 1 && (
+          <button
+            type="button"
+            onClick={handleBack}
+            className="flex flex-1 items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition-colors hover:border-slate-300 hover:bg-slate-50"
+          >
+            <ArrowLeft size={16} />
+            Back
+          </button>
+        )}
+        {step < 4 ? (
+          <button
+            type="button"
+            onClick={handleNext}
+            className="auth-cta group flex flex-1 items-center justify-center gap-2 rounded-full bg-gradient-to-r from-primary-400 via-primary-600 to-primary-700 px-4 py-3 text-sm font-bold text-white shadow-[0_14px_30px_-14px_rgba(13,148,136,0.65)] transition-all hover:-translate-y-0.5 hover:shadow-[0_18px_36px_-14px_rgba(13,148,136,0.7)]"
+          >
+            <span className="inline-flex items-center gap-2">
+              Continue
+              <ArrowRight size={16} className="transition-transform group-hover:translate-x-0.5" />
+            </span>
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={isLoading}
+            className="auth-cta group flex flex-1 items-center justify-center gap-2 rounded-full bg-gradient-to-r from-primary-400 via-primary-600 to-primary-700 px-4 py-3 text-sm font-bold text-white shadow-[0_14px_30px_-14px_rgba(13,148,136,0.65)] transition-all hover:-translate-y-0.5 hover:shadow-[0_18px_36px_-14px_rgba(13,148,136,0.7)] disabled:translate-y-0 disabled:opacity-60"
+          >
+            <span className="inline-flex items-center gap-2">
+              {isLoading ? (
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+              ) : (
+                <>
+                  <Check size={16} />
+                  Create account
+                </>
+              )}
+            </span>
+          </button>
+        )}
+      </div>
+
+      <p className="mt-3.5 text-center text-[13px] text-slate-500">
+        Already have an account?{' '}
+        <Link href="/login" className="font-semibold text-primary-700 underline-offset-2 hover:text-primary-800 hover:underline">Sign in</Link>
+      </p>
+    </AuthShell>
   );
 }

@@ -36,6 +36,7 @@ from ....schemas import (
     RiskMitigationActionCreate, RiskMitigationActionResponse
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from ..schema_migrations import ensure_register_labels
 
 router = APIRouter(prefix="/risks", tags=["ERM - Risk Register"])
 
@@ -996,6 +997,7 @@ def list_risks(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
+    ensure_register_labels(db)
     user_tenants = get_user_tenants(current_user, db)
     if not user_tenants:
         return []
@@ -1130,6 +1132,7 @@ def create_risk(
         risk_sub_category=risk_sub_category,
         register_type=risk.register_type,
         ubl_fields=sanitized_ubl_fields if isinstance(sanitized_ubl_fields, dict) else None,
+        template_fields=getattr(risk, "template_fields", None),
         owner_id=risk.owner_id,
         business_owner_id=risk.business_owner_id,
         business_unit_id=resolved_bu_id,

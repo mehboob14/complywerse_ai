@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useState } from 'react';
-import { LayoutDashboard, ListChecks, ClipboardList, Building2, BarChart3, Sliders, Settings2, Plus, Zap } from 'lucide-react';
+import { LayoutDashboard, ListChecks, ClipboardList, Building2, BarChart3, Sliders, Settings2, Plus, Zap, Upload } from 'lucide-react';
 import IssuesOverviewCards from '@/components/dashboard/IssuesOverviewCards';
 import { IssueList } from './_components/IssueList';
 import { CAPABoard } from './_components/CAPABoard';
@@ -12,6 +12,7 @@ import { SeverityMatrixEditor } from './_components/SeverityMatrixEditor';
 import { ClassificationMatrixEditor } from './_components/ClassificationMatrixEditor';
 import { IssueForm } from './_components/IssueForm';
 import { AutomationFlags } from './_components/AutomationFlags';
+import { ImportIssuesModal } from './_components/ImportIssuesModal';
 
 type TabId = 'overview' | 'log' | 'capa' | 'contract' | 'closure' | 'severity_matrix' | 'classification_matrix' | 'automation';
 
@@ -29,6 +30,7 @@ const TABS: Array<{ id: TabId; label: string; icon: React.ElementType }> = [
 export default function IssuesPage() {
   const [tab, setTab] = useState<TabId>('overview');
   const [showForm, setShowForm] = useState(false);
+  const [showImport, setShowImport] = useState(false);
 
   return (
     <div className="space-y-4">
@@ -41,6 +43,13 @@ export default function IssuesPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowImport(true)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+          >
+            <Upload className="h-3.5 w-3.5" />
+            Import
+          </button>
           <button
             onClick={() => setShowForm(true)}
             className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-semibold text-[#0a0a0a] shadow-sm hover:bg-primary-700"
@@ -84,6 +93,7 @@ export default function IssuesPage() {
       {tab === 'automation' && <AutomationFlags />}
 
       <IssueForm open={showForm} onClose={() => setShowForm(false)} />
+      {showImport && <ImportIssuesModal onClose={() => setShowImport(false)} />}
     </div>
   );
 }

@@ -631,7 +631,7 @@ export default function RiskAppetitePage() {
                   <div className="flex items-center gap-4">
                     <div className="flex flex-col">
                       <Link
-                        href={`/erm/risks?id=${breach.risk_id}`}
+                        href={`/erm/risks/${breach.risk_id}`}
                         className="text-slate-900 font-medium hover:text-primary-600 flex items-center gap-1"
                       >
                         {breach.risk_title}
@@ -655,7 +655,7 @@ export default function RiskAppetitePage() {
                       <p className="font-medium text-orange-600">{breach.days_over}</p>
                     </div>
                     <Link
-                      href={`/erm/risks?id=${breach.risk_id}`}
+                      href={`/erm/risks/${breach.risk_id}`}
                       className="px-3 py-1.5 rounded-lg bg-rose-100 text-rose-700 text-xs font-medium hover:bg-rose-200 transition-colors"
                     >
                       Remediate

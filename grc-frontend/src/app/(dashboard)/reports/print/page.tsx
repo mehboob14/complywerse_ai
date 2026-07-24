@@ -21,11 +21,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Loader2, Printer } from 'lucide-react';
 import { datasetByKey } from '../_reports/datasets';
+import { enrichReportRows, fetchLinkageCatalog, linkageColumns } from '../_reports/linkages';
+import { defaultVisibleColumns } from '../_reports/builderUtils';
 import { readPrintSpec } from '../_reports/printPayload';
 import { AGG_LABEL, allNodeKeys, buildPivot, fieldDomain, fmtAgg } from '../_reports/pivot';
-import { describeRules, rowMatchesRules, rowMatchesSearch } from '../_reports/grid-utils';
+import { asRows, describeRules, rowMatchesRules, rowMatchesSearch } from '../_reports/grid-utils';
 import PivotTable from '../_reports/PivotTable';
 import PivotChart from '../_reports/PivotChart';
+import ReportDataTable from '../_reports/ReportDataTable';
 import type { ChartKind } from '../_reports/PivotChart';
 import type { ReportSpec, Row } from '../_reports/types';
 
@@ -36,15 +39,34 @@ export default function ReportPrintPage() {
   useEffect(() => { setSpec(readPrintSpec()); setReady(true); }, []);
 
   const dataset = spec ? datasetByKey(spec.dataset) : undefined;
-  const { data: rows = [], isLoading, error } = useQuery<Row[]>({
-    queryKey: ['report', dataset?.key],
-    queryFn: dataset!.fetch,
+  const includes = useMemo(() => spec?.includes ?? [], [spec?.includes]);
+  const { data: linkageCatalog = [] } = useQuery({
+    queryKey: ['report-linkages', dataset?.key],
+    queryFn: () => fetchLinkageCatalog(dataset!.key),
+    enabled: !!dataset,
+    staleTime: 60_000,
+  });
+  const { data: rawRows = [], isLoading, error } = useQuery<Row[]>({
+    queryKey: ['report', dataset?.key, includes.join(',')],
+    queryFn: async () => {
+      const base = asRows(await dataset!.fetch());
+      if (!includes.length) return base;
+      return enrichReportRows(dataset!.key, base, includes);
+    },
     enabled: !!dataset,
     staleTime: 30_000,
   });
+  const rows = asRows(rawRows);
 
-  const cols = dataset?.columns ?? [];
-  const labelFor = (key: string) => cols.find((c) => c.key === key)?.label ?? 'rows';
+  const cols = useMemo(
+    () => (dataset ? [...dataset.columns, ...linkageColumns(linkageCatalog, includes)] : []),
+    [dataset, linkageCatalog, includes],
+  );
+  const labelFor = (key: string) => cols.find((c) => c.key === key)?.label ?? key;
+  const visibleKeys = useMemo(
+    () => (spec?.visibleColumns?.length ? spec.visibleColumns : defaultVisibleColumns(cols)),
+    [spec?.visibleColumns, cols],
+  );
 
   const filteredRows = useMemo(
     () => (spec ? rows.filter((r) => rowMatchesSearch(cols, r, spec.search) && rowMatchesRules(cols, r, spec.rules)) : []),
@@ -183,7 +205,11 @@ export default function ReportPrintPage() {
       {/* ── Detail table ────────────────────────────────────────────── */}
       <section className={`mt-6 ${hasChart ? 'rpt-break' : ''}`}>
         <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Detail</h2>
-        <PivotTable result={result} expanded={expanded} onToggle={() => {}} labelFor={labelFor} />
+        {spec.view === 'table' ? (
+          <ReportDataTable rows={filteredRows} cols={cols} visibleKeys={visibleKeys} labelFor={labelFor} />
+        ) : (
+          <PivotTable result={result} expanded={expanded} onToggle={() => {}} labelFor={labelFor} />
+        )}
       </section>
 
       <footer className="rpt-runfoot mt-6 border-t border-slate-200 pt-2 text-[10px] text-slate-400">

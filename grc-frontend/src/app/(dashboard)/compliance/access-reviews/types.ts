@@ -1,4 +1,4 @@
-// src/app/(dashboard)/admin/access-reviews/types.ts
+// src/app/(dashboard)/compliance/access-reviews/types.ts
 // Mirrors backend dict builders in grc/routers/access_review_router.py
 // (_campaign_dict, _item_dict, _build_report) and rule_catalog.py.
 

@@ -20,7 +20,7 @@ import {
 import type { ColumnDef, ReportDataset, ReportView, Row, SortSpec } from './types';
 import { emptyView, REL_PRESETS } from './types';
 import {
-  aggregate, compareRows, describeRules, displayText, distinctValues, groupRows, isActiveCondition, rawValue,
+  aggregate, asRows, compareRows, describeRules, displayText, distinctValues, groupRows, isActiveCondition, rawValue,
   rowMatchesFilters, rowMatchesRules, rowMatchesSearch,
 } from './grid-utils';
 import { exportCSV, exportExcel, exportWord } from './exporters';
@@ -70,7 +70,7 @@ export default function ReportGrid({ dataset }: { dataset: ReportDataset }) {
     queryFn: () => queryServer(buildServerQuery(dataset.key, view, debouncedSearch, page, serverSize)),
     enabled: server, staleTime: 15_000, placeholderData: (prev) => prev,
   });
-  const rows: Row[] = server ? serverQ.data?.rows ?? [] : clientQ.data ?? [];
+  const rows: Row[] = asRows(server ? serverQ.data?.rows : clientQ.data);
   const serverTotal = serverQ.data?.total ?? 0;
   const isLoading = server ? serverQ.isLoading : clientQ.isLoading;
   const error = server ? serverQ.error : clientQ.error;
@@ -270,10 +270,10 @@ export default function ReportGrid({ dataset }: { dataset: ReportDataset }) {
   const iconBtn = 'inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50';
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
       {/* ── Toolbar ─────────────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center gap-2 pb-3">
-        <div className="relative min-w-[200px] flex-1 sm:max-w-xs">
+      <div className="flex shrink-0 flex-wrap items-center gap-2 pb-2">
+        <div className="relative min-w-0 flex-1 basis-[12rem] sm:max-w-xs">
           <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
           <input value={view.search} onChange={(e) => patch({ search: e.target.value })} placeholder={`Search ${dataset.label.toLowerCase()}…`} className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-8 pr-3 text-sm focus:border-primary-500 focus:outline-none" />
         </div>
@@ -364,7 +364,9 @@ export default function ReportGrid({ dataset }: { dataset: ReportDataset }) {
 
       {/* ── Advanced AND/OR filter builder (shared with the Report Builder) ── */}
       {showBuilder && (
-        <FilterBuilder cols={cols} rows={rows} rules={view.rules} onChange={(rules) => patch({ rules })} onClose={() => setShowBuilder(false)} />
+        <div className="mb-2 max-h-40 shrink-0 overflow-y-auto overflow-x-hidden">
+          <FilterBuilder cols={cols} rows={rows} rules={view.rules} onChange={(rules) => patch({ rules })} onClose={() => setShowBuilder(false)} />
+        </div>
       )}
 
       {/* Client-mode scale guardrail — this dataset holds every row in the browser. */}
@@ -376,8 +378,8 @@ export default function ReportGrid({ dataset }: { dataset: ReportDataset }) {
       )}
 
       {/* ── Table ───────────────────────────────────────────────────── */}
-      <div ref={scrollRef} onScroll={onScroll} className="min-h-0 flex-1 overflow-auto rounded-xl border border-slate-200 bg-white">
-        <table className="w-max min-w-full border-collapse text-sm">
+      <div ref={scrollRef} onScroll={onScroll} className="min-h-0 min-w-0 flex-1 overflow-auto rounded-xl border border-slate-200 bg-white">
+        <table className="w-max min-w-full table-fixed border-collapse text-sm">
           <thead className="sticky top-0 z-20">
             <tr>
               {orderedCols.map((c) => {

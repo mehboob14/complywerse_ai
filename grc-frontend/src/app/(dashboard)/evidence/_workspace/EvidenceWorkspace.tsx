@@ -19,7 +19,7 @@ import type { EvidenceItem } from './lib';
 import { statusLabel } from './lib';
 import {
   fetchSummary, fetchItems, fetchTypes, fetchExpiringSoon,
-  reviewEvidence, runAssessment, submitForReview,
+  reviewEvidence, runAssessment, submitForReview, deleteEvidence,
 } from './api';
 import { WorkbenchView } from './WorkbenchView';
 import { RegisterView } from './RegisterView';
@@ -42,7 +42,6 @@ export function EvidenceWorkspace({ canCreate, canDelete, onUploadClick }: Evide
   const router = useRouter();
   const qc = useQueryClient();
   const { toast } = useToast();
-  void canDelete;
 
   const [view, setView] = useState<ViewMode>('workbench');
   const [search, setSearch] = useState('');
@@ -110,6 +109,23 @@ export function EvidenceWorkspace({ canCreate, canDelete, onUploadClick }: Evide
   };
   const onApprove = (id: number) => run(() => reviewEvidence(id, 'approve'), 'Approved');
   const onReassess = (id: number) => run(() => runAssessment(id), 'Re-assessment started');
+  const onDelete = async (id: number) => {
+    const it = allItems.find((x) => x.id === id);
+    if (!window.confirm(`Delete "${it?.name ?? 'this evidence'}"? This cannot be undone.`)) return;
+    try {
+      const res = await deleteEvidence(id, false);
+      const data = res.data as { warning?: boolean; message?: string } | undefined;
+      if (data?.warning) {
+        if (!window.confirm(`${data.message}\n\nDelete it anyway?`)) return;
+        await deleteEvidence(id, true);
+      }
+      toast({ title: 'Evidence deleted', type: 'success' });
+      if (selectedId === id) setSelectedId(null);
+      refresh();
+    } catch {
+      toast({ title: 'Failed to delete evidence', message: 'Please try again.', type: 'error' });
+    }
+  };
   const onTransition = (id: number, action: 'submit' | 'review') => {
     if (action === 'submit') return run(() => submitForReview(id), 'Submitted for review');
     return run(() => reviewEvidence(id, 'approve'), 'Approved');
@@ -179,7 +195,7 @@ export function EvidenceWorkspace({ canCreate, canDelete, onUploadClick }: Evide
 
       {/* Active view */}
       {view === 'workbench' && (
-        <WorkbenchView items={items} selectedId={effectiveSelected} onSelect={setSelectedId} onOpenFull={openFull} onApprove={onApprove} onReassess={onReassess} onOpenFile={onOpenFile} canReview={canCreate} />
+        <WorkbenchView items={items} selectedId={effectiveSelected} onSelect={setSelectedId} onOpenFull={openFull} onApprove={onApprove} onReassess={onReassess} onOpenFile={onOpenFile} onDelete={onDelete} canReview={canCreate} canDelete={canDelete} />
       )}
       {view === 'register' && (
         <RegisterView items={items} onOpenFull={openFull} onApprove={onApprove} onOpenFile={onOpenFile} canReview={canCreate} />

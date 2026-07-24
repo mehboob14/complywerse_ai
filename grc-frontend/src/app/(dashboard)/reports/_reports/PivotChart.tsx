@@ -28,21 +28,29 @@ import { INK, MAX_SERIES, MAX_SLICES, OTHER, SERIES, heatColor, heatInk } from '
 export type { ChartKind };
 
 /** Picker metadata — grouped for the builder's chart menu. */
-export interface ChartTypeDef { kind: ChartKind; label: string; group: string }
+export interface ChartTypeDef {
+  kind: ChartKind;
+  label: string;
+  group: 'Bars' | 'Trends' | 'Proportion' | 'Compare';
+  blurb: string;
+  tip: string;
+}
 export const CHART_TYPES: ChartTypeDef[] = [
-  { kind: 'bar', label: 'Column', group: 'Bars' },
-  { kind: 'hbar', label: 'Bar', group: 'Bars' },
-  { kind: 'stacked', label: 'Stacked', group: 'Bars' },
-  { kind: 'stacked100', label: '100% stacked', group: 'Bars' },
-  { kind: 'line', label: 'Line', group: 'Trends' },
-  { kind: 'area', label: 'Area', group: 'Trends' },
-  { kind: 'pie', label: 'Pie', group: 'Proportion' },
-  { kind: 'donut', label: 'Donut', group: 'Proportion' },
-  { kind: 'treemap', label: 'Treemap', group: 'Proportion' },
-  { kind: 'radar', label: 'Radar', group: 'Compare' },
-  { kind: 'scatter', label: 'Scatter', group: 'Compare' },
-  { kind: 'heatmap', label: 'Heatmap', group: 'Compare' },
+  { kind: 'bar', label: 'Column', group: 'Bars', blurb: 'Compare values side by side', tip: 'Best for a handful of categories with clear rankings.' },
+  { kind: 'hbar', label: 'Bar', group: 'Bars', blurb: 'Horizontal compare with long labels', tip: 'Use when category names are long or you have many rows.' },
+  { kind: 'stacked', label: 'Stacked', group: 'Bars', blurb: 'Totals split into parts', tip: 'Needs a Split-by field so each bar shows composition.' },
+  { kind: 'stacked100', label: '100% stack', group: 'Bars', blurb: 'Share of whole per category', tip: 'Compare mix (%) across categories, not absolute size.' },
+  { kind: 'line', label: 'Line', group: 'Trends', blurb: 'Change across an ordered axis', tip: 'Works best with dates or a natural sequence.' },
+  { kind: 'area', label: 'Area', group: 'Trends', blurb: 'Magnitude of change over time', tip: 'Same setup as Line — area emphasises volume.' },
+  { kind: 'pie', label: 'Pie', group: 'Proportion', blurb: 'Parts of a single total', tip: 'Keep to ≤6 slices. One group field, no split.' },
+  { kind: 'donut', label: 'Donut', group: 'Proportion', blurb: 'Parts of a total with centre focus', tip: 'Same rules as Pie — centre can show the total.' },
+  { kind: 'treemap', label: 'Treemap', group: 'Proportion', blurb: 'Nested size of many parts', tip: 'Good when you have more categories than a pie can show.' },
+  { kind: 'radar', label: 'Radar', group: 'Compare', blurb: 'Profile across several axes', tip: 'Compare a few series across the same set of dimensions.' },
+  { kind: 'scatter', label: 'Scatter', group: 'Compare', blurb: 'Relationship between two measures', tip: 'Needs two numeric measures (X vs Y).' },
+  { kind: 'heatmap', label: 'Heatmap', group: 'Compare', blurb: 'Intensity across a grid', tip: 'Needs Group-by and Split-by to form the matrix.' },
 ];
+
+export const CHART_GROUPS: ChartTypeDef['group'][] = ['Bars', 'Trends', 'Proportion', 'Compare'];
 
 const TOOLTIP = {
   contentStyle: { borderRadius: 10, border: '1px solid #e2e8f0', boxShadow: '0 4px 16px rgba(15,23,42,0.08)', fontSize: 12, padding: '8px 10px' },

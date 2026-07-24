@@ -57,6 +57,10 @@ export async function fetchOcr(id: number): Promise<{ ocr_content: string | null
 
 // ── mutations ──
 export const processOCR = (id: number) => apiClient.post(`/evidence-mgmt/ocr/${id}/process-ocr`);
+// Delete an evidence item. Backend returns { warning, message, control_mappings_count }
+// (HTTP 200, not deleted) when the item is linked to controls unless force=true.
+export const deleteEvidence = (id: number, force = false) =>
+  apiClient.delete(`/evidence-mgmt/items/${id}`, { params: { force } });
 export const runAssessment = (id: number) => apiClient.post(`/evidence-mgmt/ai/${id}/assess`, null, { params: { force_refresh: true } });
 export const submitForReview = (id: number) => apiClient.post(`/evidence-mgmt/lifecycle/${id}/submit`);
 export const reviewEvidence = (id: number, action: 'approve' | 'reject', comments?: string) =>

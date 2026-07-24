@@ -771,6 +771,11 @@ def answer_grc_knowledge_question(
                 "Please ask about frameworks, risks, or controls stored in the platform."
             )
         _client = _openai.OpenAI(api_key=_api_key)
+        try:
+            from ...services.ai_tracing import wrap_openai_for_tracing
+            _client = wrap_openai_for_tracing(_client, feature="complychat")
+        except Exception:
+            pass
 
         system_prompt = (
             "You are ComplyChat, an expert GRC AI assistant inside the ComplyVerse enterprise GRC platform.\n\n"
@@ -1086,6 +1091,11 @@ def analyze_uploaded_files_with_llm(
                 "Please check that OPENAI_API_KEY is configured."
             )
         _client = _openai.OpenAI(api_key=_api_key)
+        try:
+            from ...services.ai_tracing import wrap_openai_for_tracing
+            _client = wrap_openai_for_tracing(_client, feature="complychat")
+        except Exception:
+            pass
 
         # Build file context — include actual extracted text, not just keyword counts
         file_blocks: List[str] = []

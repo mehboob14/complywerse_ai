@@ -4,6 +4,8 @@
  * This file contains all TypeScript types and API methods for the visual workflow builder
  */
 
+import { apiClient } from './api';
+
 // ==================== Node and Edge Types ====================
 
 export type NodeCategory = "trigger" | "action" | "control" | "notification";

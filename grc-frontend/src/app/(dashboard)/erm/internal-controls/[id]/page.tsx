@@ -9,6 +9,6 @@ import { useRouter } from 'next/navigation';
 
 export default function InternalControlDetailRedirect() {
   const router = useRouter();
-  useEffect(() => { router.replace('/controls'); }, [router]);
+  useEffect(() => { router.replace('/controls?mode=internal'); }, [router]);
   return null;
 }

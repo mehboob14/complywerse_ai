@@ -448,7 +448,7 @@ export default function NcaRiskDetailPage() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <button
-          onClick={() => router.push('/erm/risks?view=nca')}
+          onClick={() => router.push('/erm/risks/list?register_type=NCA%20Template')}
           className="text-sm text-slate-600 hover:text-primary-600 flex items-center gap-1"
         >
           <ArrowLeft className="h-4 w-4" /> Back to NCA Risk Register
@@ -482,7 +482,7 @@ export default function NcaRiskDetailPage() {
               {entry.ai_recommendation ? 'Regenerate AI' : 'Generate AI'}
             </button>
             <button
-              onClick={() => router.push('/erm/risks?view=nca&edit=' + entry.id)}
+              onClick={() => router.push('/erm/risks/list?register_type=NCA%20Template&edit=' + entry.id)}
               className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-[#0a0a0a] bg-primary-600 rounded-lg hover:bg-primary-700"
             >
               <Edit2 className="h-4 w-4" /> Edit Fields

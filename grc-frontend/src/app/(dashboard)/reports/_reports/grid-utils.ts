@@ -218,3 +218,17 @@ export function distinctValues(col: ColumnDef, rows: Row[]): string[] {
   for (const r of rows) { const t = displayText(col, r); if (t) set.add(t); }
   return Array.from(set).sort((a, b) => a.localeCompare(b));
 }
+
+/** Normalize list API payloads to Row[]. Many endpoints return `{ items }` (or
+ *  rows/results/data/vendors) instead of a bare array — casting alone does not
+ *  make `.filter` safe. */
+export function asRows(data: unknown): Row[] {
+  if (Array.isArray(data)) return data as Row[];
+  if (data && typeof data === 'object') {
+    const o = data as Record<string, unknown>;
+    for (const k of ['items', 'rows', 'results', 'data', 'vendors'] as const) {
+      if (Array.isArray(o[k])) return o[k] as Row[];
+    }
+  }
+  return [];
+}

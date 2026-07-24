@@ -23,6 +23,7 @@ _require_edit = require_tenant_permission("issue_management:issues:edit")
 
 
 def _serialize_action(a: IssueAction) -> Dict[str, Any]:
+    verifier = getattr(a, "verifier", None)
     return {
         "id": a.id,
         "issue_id": a.issue_id,
@@ -30,16 +31,38 @@ def _serialize_action(a: IssueAction) -> Dict[str, Any]:
         "title": a.title,
         "description": a.description,
         "assignee_id": a.assignee_id,
-        "assignee_name": getattr(a.assignee, "display_name", None) or getattr(a.assignee, "username", None) if a.assignee else None,
+        "assignee_name": (
+            getattr(a.assignee, "display_name", None)
+            or getattr(a.assignee, "username", None)
+            if a.assignee else None
+        ),
         "due_date": a.due_date.isoformat() if a.due_date else None,
         "status": a.status,
         "completed_at": a.completed_at.isoformat() if a.completed_at else None,
         "verified_by_id": a.verified_by_id,
+        "verified_by_name": (
+            getattr(verifier, "display_name", None)
+            or getattr(verifier, "username", None)
+            if verifier else None
+        ),
         "verified_at": a.verified_at.isoformat() if a.verified_at else None,
         "effectiveness_review_at": a.effectiveness_review_at.isoformat() if a.effectiveness_review_at else None,
         "evidence_id": a.evidence_id,
+        "linked_critical_task_id": a.linked_critical_task_id,
         "created_at": a.created_at.isoformat() if a.created_at else None,
     }
+
+
+def _parse_optional_dt(raw) -> Optional[_dt]:
+    if raw is None or raw == "":
+        return None
+    if isinstance(raw, _dt):
+        return raw
+    text = str(raw).strip().replace("Z", "+00:00")
+    try:
+        return _dt.fromisoformat(text)
+    except ValueError:
+        return None
 
 
 def _get_issue(issue_id: int, current_user: GRCUser, db: Session) -> Issue:
@@ -57,6 +80,7 @@ def _get_action_with_issue(action_id: int, current_user: GRCUser, db: Session) -
     user_tenants = get_user_tenants(current_user, db)
     action = db.query(IssueAction).options(
         joinedload(IssueAction.assignee),
+        joinedload(IssueAction.verifier),
     ).join(Issue, Issue.id == IssueAction.issue_id).filter(
         IssueAction.id == action_id,
         Issue.tenant_id.in_(user_tenants),
@@ -76,6 +100,7 @@ def list_actions(
     _get_issue(issue_id, current_user, db)
     actions = db.query(IssueAction).options(
         joinedload(IssueAction.assignee),
+        joinedload(IssueAction.verifier),
     ).filter(IssueAction.issue_id == issue_id).order_by(IssueAction.created_at.asc()).all()
     return [_serialize_action(a) for a in actions]
 
@@ -103,7 +128,7 @@ def create_action(
         title=title,
         description=body.get("description"),
         assignee_id=body.get("assignee_id"),
-        due_date=datetime.fromisoformat(due_date_raw) if due_date_raw else None,
+        due_date=_parse_optional_dt(due_date_raw),
         status=body.get("status") or "planned",
         evidence_id=body.get("evidence_id"),
         created_by=current_user.id,
@@ -128,19 +153,59 @@ def update_action(
     current_user: GRCUser = Depends(require_auth),
 ):
     action = _get_action_with_issue(action_id, current_user, db)
-    for field in ("title", "description", "action_type", "assignee_id", "status", "evidence_id"):
+    prev_status = action.status
+
+    for field in ("title", "description", "action_type", "assignee_id", "evidence_id"):
         if field in body:
             setattr(action, field, body[field])
+
     if "due_date" in body:
-        action.due_date = datetime.fromisoformat(body["due_date"]) if body["due_date"] else None
-    if body.get("status") == "completed" and not action.completed_at:
-        action.completed_at = datetime.utcnow()
-        db.add(IssueActivity(
-            issue_id=action.issue_id, user_id=current_user.id, type="action_completed",
-            payload={"action_id": action.id, "title": action.title},
-        ))
+        action.due_date = _parse_optional_dt(body["due_date"])
+
+    if "status" in body and body["status"] is not None:
+        new_status = str(body["status"]).strip()
+        allowed = {"planned", "in_progress", "blocked", "completed", "verified", "cancelled"}
+        if new_status not in allowed:
+            raise HTTPException(status_code=400, detail=f"Invalid status '{new_status}'")
+        action.status = new_status
+
+        if new_status == "completed" and not action.completed_at:
+            action.completed_at = datetime.utcnow()
+            db.add(IssueActivity(
+                issue_id=action.issue_id, user_id=current_user.id, type="action_completed",
+                payload={"action_id": action.id, "title": action.title},
+            ))
+        elif new_status == "verified":
+            # Allow status→verified via PATCH (detail modal Save), and stamp verifier.
+            if prev_status not in {"completed", "verified"} and not action.completed_at:
+                action.completed_at = datetime.utcnow()
+            if not action.verified_at:
+                action.verified_by_id = current_user.id
+                action.verified_at = datetime.utcnow()
+                db.add(IssueActivity(
+                    issue_id=action.issue_id, user_id=current_user.id, type="action_verified",
+                    payload={"action_id": action.id, "title": action.title, "via": "patch"},
+                ))
+        elif new_status in {"planned", "in_progress", "blocked"} and prev_status in {"completed", "verified"}:
+            # Re-opening work — clear completion / verification stamps.
+            action.completed_at = None
+            action.verified_at = None
+            action.verified_by_id = None
+
+        if prev_status != new_status and new_status not in {"completed", "verified"}:
+            db.add(IssueActivity(
+                issue_id=action.issue_id, user_id=current_user.id, type="action_status_changed",
+                payload={
+                    "action_id": action.id,
+                    "title": action.title,
+                    "from": prev_status,
+                    "to": new_status,
+                },
+            ))
+
     db.commit()
-    db.refresh(action)
+    # Re-load relationships for a complete response payload.
+    action = _get_action_with_issue(action_id, current_user, db)
     return _serialize_action(action)
 
 
@@ -271,7 +336,10 @@ def list_all_actions(
     """Returns all actions across issues the user can see, grouped by status
     on the client for the CAPA board view."""
     user_tenants = get_user_tenants(current_user, db)
-    q = db.query(IssueAction).options(joinedload(IssueAction.assignee)).join(
+    q = db.query(IssueAction).options(
+        joinedload(IssueAction.assignee),
+        joinedload(IssueAction.verifier),
+    ).join(
         Issue, Issue.id == IssueAction.issue_id,
     ).filter(Issue.tenant_id.in_(user_tenants))
     if status_filter:

@@ -227,6 +227,8 @@ def create_from_source(
         issue_id=issue.id, user_id=current_user.id, type="created",
         payload={"source_type": source_type, "source_id": source_id, "auto_pinned_assets": len(extra_asset_ids)},
     ))
+    from ..services.capa_defaults import ensure_initial_capa
+    ensure_initial_capa(db, issue=issue, user_id=current_user.id)
     db.commit()
     db.refresh(issue)
     return {"id": issue.id, "code": issue.code, "title": issue.title}

@@ -34,10 +34,25 @@ export default function ERMLayout({
   // Incidents moved to the "Issue & Incident Management" module — render it clean,
   // without the ERM Risk tab strip.
   const isIncidentsRoute = pathname?.startsWith('/erm/incidents');
+  // KRIs moved to Governance — render clean, without the ERM Risk tab strip.
+  const isKrisRoute = pathname?.startsWith('/erm/kris');
+  // Risk detail pages need the full workspace chrome (like assets/vulns) — no
+  // sibling-module tab strip competing with the detail header.
+  const isRiskDetailRoute =
+    !!pathname && (/^\/erm\/risks\/\d+/.test(pathname) || pathname.startsWith('/erm/risks/nca/'));
+
+  const hideTabs =
+    isOverview ||
+    isAnalyticsRoute ||
+    isRiskAssessmentsRoute ||
+    isRcsaRoute ||
+    isIncidentsRoute ||
+    isKrisRoute ||
+    isRiskDetailRoute;
 
   return (
     <div className="cw-dashboard risk-workspace min-h-full space-y-4 px-1 pb-2">
-      {!isOverview && !isAnalyticsRoute && !isRiskAssessmentsRoute && !isRcsaRoute && !isIncidentsRoute && (
+      {!hideTabs && (
         <div className="flex flex-wrap items-center gap-0 border-b border-slate-200">
           {ermNavigation.map((item) => {
             const isActive = pathname === item.href || 

@@ -15,10 +15,23 @@ class RiskKRIBase(BaseModel):
     frequency: str = "monthly"
     data_source: Optional[str] = None
     owner_id: Optional[int] = None
+    metric_key: Optional[str] = None  # bind to a metric_catalog key → live-fed value
+    # Full lifecycle
+    kind: str = "kri"                 # 'kri' | 'kpi'
+    category: Optional[str] = None
+    formula: Optional[str] = None
+    target: Optional[float] = None
+    reporting_period: Optional[str] = None
+    next_due_date: Optional[datetime] = None
+    data_provider_id: Optional[int] = None
+    reviewer_id: Optional[int] = None
+    linked_control_ids: Optional[List[int]] = None
+    linked_objective_ids: Optional[List[int]] = None
+    linked_framework_id: Optional[int] = None
 
 
 class RiskKRICreate(RiskKRIBase):
-    risk_id: int
+    risk_id: Optional[int] = None
 
 
 class RiskKRIUpdate(BaseModel):
@@ -34,11 +47,23 @@ class RiskKRIUpdate(BaseModel):
     data_source: Optional[str] = None
     owner_id: Optional[int] = None
     is_active: Optional[bool] = None
+    metric_key: Optional[str] = None
+    kind: Optional[str] = None
+    category: Optional[str] = None
+    formula: Optional[str] = None
+    target: Optional[float] = None
+    reporting_period: Optional[str] = None
+    next_due_date: Optional[datetime] = None
+    data_provider_id: Optional[int] = None
+    reviewer_id: Optional[int] = None
+    linked_control_ids: Optional[List[int]] = None
+    linked_objective_ids: Optional[List[int]] = None
+    linked_framework_id: Optional[int] = None
 
 
 class RiskKRIResponse(BaseModel):
     id: int
-    risk_id: int
+    risk_id: Optional[int] = None
     name: str
     description: Optional[str]
     metric_type: str
@@ -54,6 +79,21 @@ class RiskKRIResponse(BaseModel):
     last_measured_at: Optional[datetime]
     created_at: datetime
     current_status: Optional[str] = None
+    metric_key: Optional[str] = None
+    is_live: bool = False           # True when value is fed from a platform metric
+    module: Optional[str] = None    # source module of the bound metric
+    module_label: Optional[str] = None
+    kind: str = "kri"
+    category: Optional[str] = None
+    formula: Optional[str] = None
+    target: Optional[float] = None
+    reporting_period: Optional[str] = None
+    next_due_date: Optional[datetime] = None
+    data_provider_id: Optional[int] = None
+    reviewer_id: Optional[int] = None
+    linked_control_ids: Optional[List[int]] = None
+    linked_objective_ids: Optional[List[int]] = None
+    linked_framework_id: Optional[int] = None
 
     class Config:
         from_attributes = True
@@ -62,6 +102,9 @@ class RiskKRIResponse(BaseModel):
 class RiskKRIMeasurementCreate(BaseModel):
     value: float
     notes: Optional[str] = None
+    period_label: Optional[str] = None
+    target: Optional[float] = None
+    review_status: Optional[str] = None  # draft | submitted | approved
 
 
 class RiskKRIMeasurementResponse(BaseModel):
@@ -72,6 +115,11 @@ class RiskKRIMeasurementResponse(BaseModel):
     measured_at: datetime
     measured_by: Optional[int]
     notes: Optional[str]
+    period_label: Optional[str] = None
+    target: Optional[float] = None
+    review_status: Optional[str] = None
+    reviewed_by: Optional[int] = None
+    reviewed_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -91,6 +139,11 @@ class RiskIncidentBase(BaseModel):
 class RiskIncidentCreate(RiskIncidentBase):
     risk_id: Optional[int] = None
     assigned_to: Optional[int] = None
+    tags: Optional[List[str]] = None
+    linked_asset_ids: Optional[List[int]] = None
+    linked_vulnerability_ids: Optional[List[int]] = None
+    linked_risk_ids: Optional[List[int]] = None
+    linked_evidence_ids: Optional[List[int]] = None
 
 
 class RiskIncidentUpdate(BaseModel):
@@ -106,6 +159,11 @@ class RiskIncidentUpdate(BaseModel):
     lessons_learned: Optional[str] = None
     assigned_to: Optional[int] = None
     risk_id: Optional[int] = None
+    tags: Optional[List[str]] = None
+    linked_asset_ids: Optional[List[int]] = None
+    linked_vulnerability_ids: Optional[List[int]] = None
+    linked_risk_ids: Optional[List[int]] = None
+    linked_evidence_ids: Optional[List[int]] = None
 
 
 class RiskIncidentResponse(BaseModel):
@@ -129,6 +187,9 @@ class RiskIncidentResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     risk_title: Optional[str] = None
+    tags: Optional[List[str]] = None
+    assignee_name: Optional[str] = None
+    link_counts: Optional[Dict[str, int]] = None
 
     class Config:
         from_attributes = True

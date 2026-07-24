@@ -21,9 +21,17 @@ export default function GovernanceLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  // This strip is the sub-nav for the Documents area only (Documents · Policy
+  // Exceptions). Other governance pages (regulatory-feeds/changes, committees,
+  // approvals, workflows, gap-analysis) are reached from the sidebar and must
+  // render clean, without this tab strip.
+  const showTabs =
+    pathname?.startsWith('/governance/documents') ||
+    pathname?.startsWith('/governance/exceptions');
 
   return (
     <div className="-m-4 lg:-m-5 text-slate-900">
+      {showTabs && (
       <div className="border-b border-slate-200 px-3 sm:px-6 pt-3 overflow-x-auto">
         <div className="flex items-center gap-0 min-w-max">
           {governanceNavigation.map((item) => {
@@ -48,6 +56,7 @@ export default function GovernanceLayout({
           })}
         </div>
       </div>
+      )}
 
       <div className="px-4 sm:px-6 py-4 sm:py-5 space-y-4 sm:space-y-6">{children}</div>
     </div>

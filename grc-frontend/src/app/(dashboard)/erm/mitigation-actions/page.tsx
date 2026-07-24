@@ -319,7 +319,7 @@ export default function MitigationActionsPage() {
                       </td>
                       <td className="px-4 py-3 max-w-xs">
                         <Link
-                          href={`/erm/risks`}
+                          href={`/erm/risks/${action.risk_id}`}
                           className="flex items-center gap-1 text-sm text-primary-600 hover:text-primary-700"
                         >
                           <LinkIcon className="h-3 w-3 flex-shrink-0" />

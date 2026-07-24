@@ -15,3 +15,4 @@ from ._44_control_workbench import *  # noqa: F401,F403 — unified control libr
 from ._44_business_continuity_management_models import *  # noqa: F401,F403 — BCM plans/BIA/drills/findings
 from ._40_access_review_models import *  # noqa: F401,F403
 from ._45_report_definitions import *  # noqa: F401,F403 — saved reports from the /reports builder
+from ._46_metric_targets import *  # noqa: F401,F403 — per-tenant trend metric targets / RAG thresholds

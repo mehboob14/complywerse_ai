@@ -17,6 +17,8 @@ from ....schemas import (
     MessageResponse
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from ..schema_migrations import ensure_incident_schema
+from .incident_links import apply_inline_links, serialize_links
 
 router = APIRouter(prefix="/incidents", tags=["ERM - Incidents"])
 
@@ -62,6 +64,44 @@ def get_user_tenant_id(user: GRCUser, db: Session) -> int:
             detail="User is not assigned to any tenant"
         )
     return tenant_id
+
+
+def _normalize_tags(raw) -> Optional[list]:
+    if raw is None:
+        return None
+    if isinstance(raw, str):
+        parts = [p.strip() for p in raw.replace(";", ",").split(",") if p.strip()]
+        return parts or None
+    if isinstance(raw, (list, tuple)):
+        parts = [str(p).strip() for p in raw if str(p).strip()]
+        return parts or None
+    return None
+
+
+def _enrich_incident_response(incident: RiskIncident, db: Session) -> RiskIncidentResponse:
+    data = RiskIncidentResponse.model_validate(incident)
+    if incident.risk:
+        data.risk_title = incident.risk.title
+    tags = getattr(incident, "tags", None)
+    if isinstance(tags, list):
+        data.tags = tags
+    elif isinstance(tags, str) and tags.strip():
+        data.tags = [t.strip() for t in tags.split(",") if t.strip()]
+    else:
+        data.tags = []
+    assignee = getattr(incident, "assignee", None)
+    if assignee:
+        data.assignee_name = (
+            getattr(assignee, "display_name", None)
+            or getattr(assignee, "username", None)
+            or getattr(assignee, "email", None)
+        )
+    try:
+        links = serialize_links(db, incident.id)
+        data.link_counts = {k: len(v) for k, v in links.items()}
+    except Exception:
+        data.link_counts = {"assets": 0, "vulnerabilities": 0, "risks": 0, "evidence": 0}
+    return data
 
 
 def _fallback_incident_suggestion(title: str, description: Optional[str] = None, severity: Optional[str] = None) -> dict:
@@ -134,11 +174,15 @@ def list_incidents(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
+    ensure_incident_schema(db)
     user_tenants = get_user_tenants(current_user, db)
     if not user_tenants:
         return []
     
-    query = db.query(RiskIncident).filter(RiskIncident.tenant_id.in_(user_tenants))
+    query = db.query(RiskIncident).options(
+        joinedload(RiskIncident.risk),
+        joinedload(RiskIncident.assignee),
+    ).filter(RiskIncident.tenant_id.in_(user_tenants))
     
     if risk_id:
         query = query.filter(RiskIncident.risk_id == risk_id)
@@ -152,15 +196,7 @@ def list_incidents(
         query = query.filter(RiskIncident.incident_date <= end_date)
     
     incidents = query.order_by(RiskIncident.incident_date.desc()).offset(skip).limit(limit).all()
-    
-    result = []
-    for incident in incidents:
-        incident_data = RiskIncidentResponse.model_validate(incident)
-        if incident.risk:
-            incident_data.risk_title = incident.risk.title
-        result.append(incident_data)
-    
-    return result
+    return [_enrich_incident_response(incident, db) for incident in incidents]
 
 
 @router.post("", response_model=RiskIncidentResponse, status_code=status.HTTP_201_CREATED)
@@ -170,6 +206,7 @@ def create_incident(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
+    ensure_incident_schema(db)
     tenant_id = get_user_tenant_id(current_user, db)
     
     if incident.risk_id:
@@ -218,12 +255,33 @@ def create_incident(
         root_cause=root_cause,
         corrective_actions=corrective_actions,
         reported_by=current_user.id,
-        assigned_to=incident.assigned_to
+        assigned_to=incident.assigned_to,
+        tags=_normalize_tags(incident.tags),
     )
     db.add(db_incident)
+    db.flush()
+
+    # Inline cross-module links from the create payload.
+    link_body = incident.model_dump(exclude_unset=True)
+    apply_inline_links(
+        db, incident=db_incident, tenant_id=tenant_id,
+        body=link_body, user_id=current_user.id, replace=False,
+    )
+    # Mirror primary risk_id into the multi-risk link table when set.
+    if incident.risk_id:
+        apply_inline_links(
+            db, incident=db_incident, tenant_id=tenant_id,
+            body={"linked_risk_ids": [incident.risk_id]},
+            user_id=current_user.id, replace=False,
+        )
+
     db.commit()
     db.refresh(db_incident)
-    return db_incident
+    db_incident = db.query(RiskIncident).options(
+        joinedload(RiskIncident.risk),
+        joinedload(RiskIncident.assignee),
+    ).filter(RiskIncident.id == db_incident.id).first()
+    return _enrich_incident_response(db_incident, db)
 
 
 @router.post("/ai-suggest")
@@ -469,10 +527,12 @@ def get_incident(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
+    ensure_incident_schema(db)
     user_tenants = get_user_tenants(current_user, db)
     
     incident = db.query(RiskIncident).options(
-        joinedload(RiskIncident.risk)
+        joinedload(RiskIncident.risk),
+        joinedload(RiskIncident.assignee),
     ).filter(
         RiskIncident.id == incident_id,
         RiskIncident.tenant_id.in_(user_tenants)
@@ -484,10 +544,7 @@ def get_incident(
             detail="Incident not found"
         )
     
-    incident_data = RiskIncidentResponse.model_validate(incident)
-    if incident.risk:
-        incident_data.risk_title = incident.risk.title
-    return incident_data
+    return _enrich_incident_response(incident, db)
 
 
 @router.put("/{incident_id}", response_model=RiskIncidentResponse)
@@ -497,6 +554,7 @@ def update_incident(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
+    ensure_incident_schema(db)
     user_tenants = get_user_tenants(current_user, db)
     
     incident = db.query(RiskIncident).filter(
@@ -511,16 +569,33 @@ def update_incident(
         )
     
     update_data = incident_update.model_dump(exclude_unset=True)
+    link_keys = {
+        "linked_asset_ids", "linked_vulnerability_ids",
+        "linked_risk_ids", "linked_evidence_ids",
+    }
+    link_payload = {k: update_data.pop(k) for k in list(update_data.keys()) if k in link_keys}
+
+    if "tags" in update_data:
+        update_data["tags"] = _normalize_tags(update_data["tags"])
     
     if update_data.get("status") == "resolved" and not incident.resolved_at:
         update_data["resolved_at"] = datetime.utcnow()
     
     for key, value in update_data.items():
         setattr(incident, key, value)
+
+    if link_payload:
+        apply_inline_links(
+            db, incident=incident, tenant_id=incident.tenant_id,
+            body=link_payload, user_id=current_user.id, replace=True,
+        )
     
     db.commit()
-    db.refresh(incident)
-    return incident
+    incident = db.query(RiskIncident).options(
+        joinedload(RiskIncident.risk),
+        joinedload(RiskIncident.assignee),
+    ).filter(RiskIncident.id == incident_id).first()
+    return _enrich_incident_response(incident, db)
 
 
 @router.delete("/{incident_id}", response_model=MessageResponse)

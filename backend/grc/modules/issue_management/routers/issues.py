@@ -58,7 +58,7 @@ def _serialize_user(u: Optional[GRCUser]) -> Optional[Dict[str, Any]]:
     }
 
 
-def _serialize_issue_summary(issue: Issue) -> Dict[str, Any]:
+def _serialize_issue_summary(issue: Issue, *, action_count: Optional[int] = None) -> Dict[str, Any]:
     return {
         "id": issue.id,
         "code": issue.code,
@@ -88,6 +88,7 @@ def _serialize_issue_summary(issue: Issue) -> Dict[str, Any]:
         "approved_by": _serialize_user(issue.approver),
         "sla_breached": bool(issue.sla_breached),
         "created_at": issue.created_at.isoformat() if issue.created_at else None,
+        "action_count": action_count if action_count is not None else len(getattr(issue, "actions", []) or []),
     }
 
 
@@ -189,8 +190,23 @@ def list_issues(
     q = q.order_by(sort_column.desc() if sort_order == "desc" else sort_column.asc())
 
     issues = q.offset(skip).limit(limit).all()
+    issue_ids = [i.id for i in issues]
+    action_counts: Dict[int, int] = {}
+    if issue_ids:
+        from sqlalchemy import func
+        rows = (
+            db.query(IssueAction.issue_id, func.count(IssueAction.id))
+            .filter(IssueAction.issue_id.in_(issue_ids))
+            .group_by(IssueAction.issue_id)
+            .all()
+        )
+        action_counts = {int(iid): int(cnt) for iid, cnt in rows}
+
     return {
-        "items": [_serialize_issue_summary(i) for i in issues],
+        "items": [
+            _serialize_issue_summary(i, action_count=action_counts.get(i.id, 0))
+            for i in issues
+        ],
         "total": total,
     }
 

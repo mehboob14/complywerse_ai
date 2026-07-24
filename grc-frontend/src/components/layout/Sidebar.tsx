@@ -37,6 +37,7 @@ import {
   ShieldAlert,
   LifeBuoy,
   CalendarClock,
+  Bookmark,
   Building2,
   type LucideIcon,
 } from "lucide-react";
@@ -110,7 +111,8 @@ const navigation: NavEntry[] = [
       { name: 'Document Management', href: '/governance/documents', icon: ScrollText, requiredPermissions: ['governance:policies:*'] },
       { name: 'Committees', href: '/governance/committees', icon: Users, requiredPermissions: ['governance:committees:*'] },
       { name: 'KRIs', href: '/erm/kris', icon: Activity, requiredPermissions: ['erm:kris:*'] },
-      { name: 'KPI Report', href: '/assessments/cs_kpi', icon: Target, requiredPermissions: ['compliance:assessments:*'] },
+      { name: 'KRI Report', href: '/governance/kri-report', icon: ShieldAlert, requiredPermissions: ['erm:kris:*'] },
+      { name: 'KPI Report', href: '/governance/kpi-report', icon: Target, requiredPermissions: ['erm:kris:*'] },
       { name: 'Projects', href: '/is-projects', icon: FolderKanban, requiredPermissions: ['is_projects:projects:*', 'is_projects:dashboard:view'] },
     ],
   },
@@ -150,6 +152,7 @@ const navigation: NavEntry[] = [
       { name: 'Overview', href: '/compliance', icon: LayoutDashboard, requiredPermissions: ['compliance:frameworks:*', 'controls:control_library:*', 'evidence:evidence_library:*'] },
       { name: 'Frameworks', href: '/frameworks/manage', activeMatch: '/frameworks', icon: Layers, requiredPermissions: ['compliance:frameworks:*'] },
       { name: 'Evidence Management', href: '/evidence', icon: FileText, requiredPermissions: ['evidence:evidence_library:*', 'evidence:evidence_upload:*'] },
+      { name: 'Access Reviews', href: '/compliance/access-reviews', icon: Users, requiredPermissions: ['compliance:frameworks:*'] },
       { name: 'Regulatory Changes', href: '/governance/regulatory-changes', icon: GitPullRequest, requiredPermissions: ['governance:regulatory_changes:*'] },
       { name: 'Regulatory Feeds', href: '/governance/regulatory-feeds', icon: Rss, requiredPermissions: ['governance:regulatory_changes:*'] },
       {
@@ -224,7 +227,6 @@ const navigation: NavEntry[] = [
       { name: 'Assets Risk Posture',       href: '/risk-posture',                  icon: Activity,      requiredPermissions: ['erm:risks:*'] },
       { name: 'Criticality Assessments',   href: '/assets/criticality-assessments', icon: ClipboardCheck, requiredPermissions: ['assets:criticality_assessments:view'] },
       { name: 'Vulnerabilities',           href: '/vulnerabilities',               icon: Bug,           requiredPermissions: ['vulnerabilities:vulnerability_register:*'], requiredModules: ['vulnerabilities'] },
-      { name: 'Access Reviews',            href: '/admin/access-reviews',          icon: Users,         requiredPermissions: ['compliance:frameworks:*'] },
     ],
   },
   {
@@ -242,6 +244,15 @@ const navigation: NavEntry[] = [
     icon: ListTodo,
     requiredModules: ['critical_tasks'],
     requiredPermissions: ['critical_tasks:tasks:*', 'critical_tasks:reports:view']
+  },
+  // Reports — built-in interactive reporting workspace across all modules.
+  {
+    name: 'Reports',
+    icon: BarChart3,
+    items: [
+      { name: 'Workspace', href: '/reports', icon: BarChart3 },
+      { name: 'Saved reports', href: '/reports/saved', icon: Bookmark },
+    ],
   },
   // Issues moved into "Issue & Incident Management" (top-bar quick action removed in Header.tsx).
   // ComplyChat remains the global AI assistant in the top bar.
@@ -487,20 +498,19 @@ function NavGroupSection({ group, collapsed }: { group: NavGroup; collapsed: boo
 // renders for users who pass this check.
 
 // Most items deep-link into the admin tab bar via `/admin?tab=<id>`. Items
-// that live at their own standalone route (e.g. Access Reviews) set `href`
-// to override that and link directly.
+// that live at their own standalone route set `href` to override that.
 const ADMIN_POPOVER_ITEMS: Array<{ id: string; label: string; icon: LucideIcon; href?: string }> = [
   { id: 'company',          label: 'Company',            icon: Settings },
   { id: 'users',            label: 'User Management',    icon: Users },
   { id: 'roles',            label: 'Role Management',    icon: ShieldCheck },
   { id: 'teams',            label: 'Teams',              icon: Users },
   { id: 'password-policy',  label: 'Password Policy',    icon: Shield },
-  { id: 'access-reviews',   label: 'Access Reviews',     icon: ClipboardCheck, href: '/admin/access-reviews' },
   { id: 'integrations',     label: 'Integrations',       icon: Bot },
   { id: 'cloud-connectors', label: 'Cloud Connectors',   icon: Globe },
   { id: 'connectors',       label: 'Connectors',         icon: Layers },
   { id: 'identity',         label: 'Identity Providers', icon: Shield },
   { id: 'workflow',         label: 'Workflow Engine',    icon: GitPullRequest },
+  { id: 'usage',            label: 'Usage Monitoring',   icon: Activity, href: '/admin/usage' },
   { id: 'audit',            label: 'Audit Logs',         icon: ScrollText },
 ];
 

@@ -147,6 +147,7 @@ class RegulatoryImplementationTaskResponse(BaseModel):
     priority: str
     assigned_to: Optional[int]
     assignee_name: Optional[str] = None
+    assignee_department: Optional[str] = None
     due_date: Optional[datetime]
     completed_at: Optional[datetime]
     linked_policy_id: Optional[int]

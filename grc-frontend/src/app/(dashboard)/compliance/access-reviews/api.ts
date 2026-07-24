@@ -1,4 +1,4 @@
-// src/app/(dashboard)/admin/access-reviews/api.ts
+// src/app/(dashboard)/compliance/access-reviews/api.ts
 // React-Query data layer for Access Reviews. Endpoints map 1:1 to
 // grc/routers/access_review_router.py (APIRouter prefix "/access-reviews";
 // Next proxies it under /api). Uses the app-wide authedFetch helper.

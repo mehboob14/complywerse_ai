@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { riskAssessmentApi, ermApi } from '@/lib/api';
+import { riskAssessmentApi, ermApi, adminApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
   ArrowLeft, Save, Plus, Trash2, Loader2, AlertTriangle, Activity,
@@ -13,6 +13,13 @@ import {
 } from 'lucide-react';
 import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
 import { PageLoader } from '@/components/ui';
+import OneLinkRegisterFields, {
+  initOneLinkValue,
+  deriveCore,
+  isOneLinkRegisterType,
+  ONELINK_ASSESSMENT_GROUP_TITLES,
+  type OneLinkValue,
+} from '../../risks/_components/OneLinkRegisterFields';
 
 type AssessmentStatus = 'draft' | 'in_progress' | 'under_review' | 'approved' | 'closed';
 type AssessmentType = 'periodic' | 'annual' | 'ad_hoc' | 'triggered';
@@ -158,6 +165,19 @@ export default function RiskAssessmentDetailPage() {
     queryFn: async () => { const res = await ermApi.incidents.getAll(); return res.data; },
     enabled: linkModal?.type === 'incident',
   });
+
+  // Register rows behind each assessed risk — needed to surface the 1LINK
+  // template's assessment fields for risks that came from the 1LINK register.
+  const { data: registerRisks } = useQuery({
+    queryKey: ['erm-risks-for-assessment'],
+    queryFn: async () => { const res = await ermApi.risks.getAll(); return res.data || []; },
+    staleTime: 60 * 1000,
+  });
+  const registerRiskById = useMemo(() => {
+    const map = new Map<number, any>();
+    (registerRisks || []).forEach((r: any) => map.set(r.id, r));
+    return map;
+  }, [registerRisks]);
 
   const invalidateAll = () => {
     queryClient.invalidateQueries({ queryKey: ['risk-assessment', assessmentId] });
@@ -525,6 +545,8 @@ export default function RiskAssessmentDetailPage() {
             const inherentColor = getScoreColor(inherentScore);
             const residualColor = getScoreColor(residualScore);
             const ratingStyle = getRatingStyle(editing.risk_rating as string || computeRating(residualScore));
+            const registerRisk = registerRiskById.get(ar.risk_id);
+            const isOneLinkRisk = !!registerRisk && isOneLinkRegisterType(registerRisk.register_type);
             const categoryColors: Record<string, string> = {
               strategic: 'bg-slate-100 text-slate-700',
               operational: 'bg-primary-50 text-primary-700',
@@ -711,6 +733,14 @@ export default function RiskAssessmentDetailPage() {
                     </div>
                   )}
 
+                  {isOneLinkRisk && (
+                    <OneLinkAssessmentSection
+                      key={`onelink-${registerRisk.id}-${registerRisk.updated_at || ''}`}
+                      risk={registerRisk}
+                      isEditable={isEditable}
+                    />
+                  )}
+
                   <div className="mt-2 flex gap-4 text-xs text-slate-500">
                     <span className="flex items-center gap-1"><Activity size={12} /> {ar.linked_kris_count} KRIs</span>
                     <span className="flex items-center gap-1"><AlertTriangle size={12} /> {ar.linked_incidents_count} Incidents</span>
@@ -783,7 +813,14 @@ export default function RiskAssessmentDetailPage() {
                         className="rounded border-slate-500"
                       />
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-slate-900 truncate">{risk.title}</p>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <p className="text-sm font-medium text-slate-900 truncate">{risk.title}</p>
+                          {registerRiskById.get(risk.id)?.register_type && (
+                            <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                              {registerRiskById.get(risk.id)?.register_type}
+                            </span>
+                          )}
+                        </div>
                         <div className="flex gap-3 mt-1 text-xs text-slate-600">
                           {risk.category && <span className="capitalize">{risk.category.replace('_', ' ')}</span>}
                           {risk.inherent_score != null && (
@@ -942,6 +979,113 @@ function ExpandedRiskSection({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Inline editor for the 1LINK register template's assessment fields (business
+ * impact factors, gross risk, control design/assessment, residual & response).
+ * Shown inside a risk assessment whenever the assessed risk belongs to the
+ * 1LINK register. Saves straight onto the risk's template_fields so the
+ * register row and the assessment stay in sync.
+ */
+function OneLinkAssessmentSection({
+  risk, isEditable,
+}: {
+  risk: { id: number; register_type?: string | null; template_fields?: Record<string, unknown> | null };
+  isEditable: boolean;
+}) {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [fields, setFields] = useState<OneLinkValue>(() => initOneLinkValue(risk.template_fields));
+  const [dirty, setDirty] = useState(false);
+
+  const { data: users } = useQuery({
+    queryKey: ['onelink-assessment-users'],
+    queryFn: async () => {
+      try {
+        const res = await adminApi.getUsers();
+        return (res.data || []) as Array<{ email?: string; full_name?: string; first_name?: string; last_name?: string }>;
+      } catch { return []; }
+    },
+    enabled: open,
+    staleTime: 60 * 1000,
+  });
+
+  const { data: incidents } = useQuery({
+    queryKey: ['onelink-assessment-incidents'],
+    queryFn: async () => {
+      try {
+        const res = await ermApi.incidents.getAll();
+        return (res.data || []) as Array<{ id: number; title?: string }>;
+      } catch { return []; }
+    },
+    enabled: open,
+    staleTime: 60 * 1000,
+  });
+
+  const lookups = useMemo(() => ({
+    users: (users || [])
+      .map((u) => u.full_name || [u.first_name, u.last_name].filter(Boolean).join(' ') || u.email || '')
+      .filter(Boolean),
+    incidents: (incidents || []).map((i) => `INC-${i.id}${i.title ? ` · ${i.title}` : ''}`),
+  }), [users, incidents]);
+
+  const saveMutation = useMutation({
+    mutationFn: () =>
+      ermApi.risks.update(risk.id, { template_fields: fields, ...deriveCore(fields) } as any),
+    onSuccess: () => {
+      setDirty(false);
+      queryClient.invalidateQueries({ queryKey: ['erm-risks-for-assessment'] });
+      queryClient.invalidateQueries({ queryKey: ['risks'] });
+    },
+  });
+
+  const filledCount = useMemo(
+    () => Object.values(fields).filter((v) => String(v || '').trim() !== '').length,
+    [fields],
+  );
+
+  return (
+    <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50/60">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="flex w-full items-center justify-between px-3 py-2 text-left"
+      >
+        <span className="flex items-center gap-2 text-sm font-medium text-slate-800">
+          <FileText size={14} className="text-primary-500" />
+          1LINK Assessment Fields
+          <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+            {filledCount} filled
+          </span>
+        </span>
+        {open ? <ChevronUp size={16} className="text-slate-500" /> : <ChevronDown size={16} className="text-slate-500" />}
+      </button>
+
+      {open && (
+        <div className="border-t border-slate-200 p-3">
+          <OneLinkRegisterFields
+            value={fields}
+            onChange={(next) => { if (!isEditable) return; setFields(next); setDirty(true); }}
+            lookups={lookups}
+            groups={ONELINK_ASSESSMENT_GROUP_TITLES}
+          />
+          {isEditable && dirty && (
+            <div className="mt-3 flex justify-end">
+              <button
+                onClick={() => saveMutation.mutate()}
+                disabled={saveMutation.isPending}
+                className="flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-sm font-medium text-[#0a0a0a] hover:bg-primary-700 disabled:opacity-50"
+              >
+                {saveMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                Save 1LINK Fields
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

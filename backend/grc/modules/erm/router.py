@@ -4,6 +4,8 @@ from .routers import (
     risks_router,
     kris_router,
     incidents_router,
+    incident_import_router,
+    incident_links_router,
     reviews_router,
     dependencies_router,
     reports_router,
@@ -18,6 +20,8 @@ from .routers import (
     framework_risk_assessments_router,
     advanced_analytics_router,
     sections_dashboard_router,
+    onboarding_router,
+    kris_workflow_router,
 )
 
 router = APIRouter(
@@ -28,6 +32,9 @@ router = APIRouter(
 
 router.include_router(risks_router)
 router.include_router(kris_router)
+# Import + static link routes must register before parametric /incidents/{id}.
+router.include_router(incident_import_router)
+router.include_router(incident_links_router)
 router.include_router(incidents_router)
 router.include_router(reviews_router)
 router.include_router(dependencies_router)
@@ -43,6 +50,8 @@ router.include_router(risk_assessments_router, tags=["ERM - Risk Assessments"])
 router.include_router(framework_risk_assessments_router, tags=["ERM - Framework Risk Assessments"])
 router.include_router(advanced_analytics_router, tags=["ERM - Advanced Analytics"])
 router.include_router(sections_dashboard_router, tags=["ERM Sections Dashboard"])
+router.include_router(onboarding_router, tags=["ERM Onboarding"])
+router.include_router(kris_workflow_router, tags=["ERM - KRI Workflow"])
 
 
 @router.get("")

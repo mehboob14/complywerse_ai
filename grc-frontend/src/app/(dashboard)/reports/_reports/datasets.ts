@@ -1,8 +1,9 @@
 // Report dataset registry — maps each module's list API to a set of columns.
 // Add a dataset here and it shows up in the Reports module switcher automatically.
 
-import apiClient, { risksApi, controlsApi, evidenceApi, certificationsApi, assetsApi, vendorRiskApi, vulnManagementApi } from '@/lib/api';
-import type { ColumnDef, ReportDataset, Row } from './types';
+import apiClient, { risksApi, controlsApi, evidenceApi, certificationsApi, assetsApi, vendorRiskApi, vulnManagementApi, issuesApi, ermApi } from '@/lib/api';
+import { asRows } from './grid-utils';
+import type { ReportDataset } from './types';
 
 const TONE = {
   green: 'bg-emerald-50 text-emerald-700 border-emerald-200',
@@ -49,7 +50,7 @@ export const DATASETS: ReportDataset[] = [
   {
     key: 'risks', permissions: ['erm:risks:*'], module: 'Risk Management', label: 'Risk Register', server: true,
     description: 'All enterprise risks with inherent/residual scoring and ownership.',
-    fetch: async () => ((await risksApi.getAll()).data as unknown as Row[]) || [],
+    fetch: async () => asRows((await risksApi.getAll()).data),
     columns: [
       { key: 'id', label: 'ID', type: 'number', width: 70, href: (r) => `/erm/risks/${r.id}` },
       { key: 'title', label: 'Risk', type: 'text', width: 320, href: (r) => `/erm/risks/${r.id}` },
@@ -69,7 +70,7 @@ export const DATASETS: ReportDataset[] = [
   {
     key: 'controls', permissions: ['controls:control_library:*'], module: 'Controls', label: 'Controls Library',
     description: 'Control objectives, type and automation status.',
-    fetch: async () => ((await controlsApi.getAll()).data as unknown as Row[]) || [],
+    fetch: async () => asRows((await controlsApi.getAll()).data),
     columns: [
       // Aligned to NormalizedControlResponse (the /controls list shape): code, name,
       // control_owner, maturity_level, created_at. The prior keys (reference_code,
@@ -84,7 +85,7 @@ export const DATASETS: ReportDataset[] = [
   {
     key: 'evidence', permissions: ['evidence:evidence_library:*', 'evidence:evidence_upload:*'], module: 'Evidence', label: 'Evidence Library', server: true,
     description: 'Collected evidence with type, status and expiry.',
-    fetch: async () => ((await evidenceApi.getAll()).data as unknown as Row[]) || [],
+    fetch: async () => asRows((await evidenceApi.getAll()).data),
     columns: [
       // Aligned to EvidenceResponse (the /evidence list shape): id, name, file_type,
       // status, uploaded_at, version. The prior keys (title, evidence_type,
@@ -100,7 +101,7 @@ export const DATASETS: ReportDataset[] = [
   {
     key: 'journeys', permissions: ['compliance:frameworks:*'], module: 'Compliance', label: 'Framework Journeys',
     description: 'Certification journeys, target dates and progress.',
-    fetch: async () => ((await certificationsApi.getAll()).data as unknown as Row[]) || [],
+    fetch: async () => asRows((await certificationsApi.getAll()).data),
     columns: [
       { key: 'id', label: 'ID', type: 'number', width: 70, href: (r) => `/frameworks/${r.id}` },
       { key: 'framework_name', label: 'Framework', type: 'text', width: 300, href: (r) => `/frameworks/${r.id}` },
@@ -115,7 +116,7 @@ export const DATASETS: ReportDataset[] = [
   {
     key: 'gov_documents', permissions: ['governance:policies:*'], module: 'Governance', label: 'Governance Documents',
     description: 'Policies, procedures and standards with review dates.',
-    fetch: async () => ((await apiClient.get('/governance/documents')).data as unknown as Row[]) || [],
+    fetch: async () => asRows((await apiClient.get('/governance/documents')).data),
     columns: [
       { key: 'title', label: 'Document', type: 'text', width: 320, href: (r) => `/governance/documents/${r.id}` },
       { key: 'document_type', label: 'Type', type: 'badge', width: 130, badgeTone: () => TONE.teal, format: titleCase },
@@ -130,7 +131,7 @@ export const DATASETS: ReportDataset[] = [
   {
     key: 'assets', permissions: ['assets:asset_inventory:*'], module: 'IT Assets', label: 'Asset Inventory', server: true,
     description: 'IT assets with type, criticality, ownership and internet exposure.',
-    fetch: async () => ((await assetsApi.getAll()).data as unknown as Row[]) || [],
+    fetch: async () => asRows((await assetsApi.getAll()).data),
     columns: [
       { key: 'id', label: 'ID', type: 'number', width: 70, href: (r) => `/assets/${r.id}` },
       { key: 'name', label: 'Asset', type: 'text', width: 260, href: (r) => `/assets/${r.id}` },
@@ -148,10 +149,7 @@ export const DATASETS: ReportDataset[] = [
   {
     key: 'vendors', permissions: ['erm:risks:*'], module: 'Vendor Risk', label: 'Vendor Register',
     description: 'Third-party vendors with tier, data-access level and status.',
-    fetch: async () => {
-      const d = (await vendorRiskApi.getVendors()).data as { items?: Row[]; vendors?: Row[] } | Row[];
-      return (Array.isArray(d) ? d : d.items ?? d.vendors ?? []) as Row[];
-    },
+    fetch: async () => asRows((await vendorRiskApi.getVendors()).data),
     columns: [
       { key: 'id', label: 'ID', type: 'number', width: 70, href: (r) => `/vendor-risk/vendors/${r.id}` },
       { key: 'name', label: 'Vendor', type: 'text', width: 260, href: (r) => `/vendor-risk/vendors/${r.id}`, accessor: (r) => r.name ?? r.vendor_name ?? r.company_name },
@@ -165,7 +163,7 @@ export const DATASETS: ReportDataset[] = [
   {
     key: 'vulnerabilities', permissions: ['vulnerabilities:vulnerability_register:*'], module: 'Vulnerabilities', label: 'Vulnerability Register', server: true,
     description: 'Open vulnerabilities with severity, CVSS, KEV and remediation status.',
-    fetch: async () => ((await vulnManagementApi.vulnerabilities.getAll()).data as unknown as Row[]) || [],
+    fetch: async () => asRows((await vulnManagementApi.vulnerabilities.getAll()).data),
     columns: [
       { key: 'id', label: 'ID', type: 'number', width: 70, href: (r) => `/vulnerabilities/${r.id}` },
       { key: 'title', label: 'Vulnerability', type: 'text', width: 320, href: (r) => `/vulnerabilities/${r.id}`, accessor: (r) => r.title ?? r.name ?? r.vuln_id },
@@ -178,6 +176,40 @@ export const DATASETS: ReportDataset[] = [
       { key: 'owner', label: 'Owner', type: 'text', width: 150, accessor: (r) => r.owner_name ?? r.assigned_to },
       { key: 'due_date', label: 'Due', type: 'date', width: 120, accessor: (r) => r.due_date ?? r.sla_due_date },
       { key: 'created_at', label: 'Detected', type: 'date', width: 120, accessor: (r) => r.created_at ?? r.discovered_at },
+    ],
+  },
+  {
+    key: 'issues', permissions: ['issue_management:issues:*'], module: 'Issue Management', label: 'Enterprise Log',
+    description: 'Issues and findings with severity, workflow state, assignment and SLA.',
+    fetch: async () => asRows((await issuesApi.list({ limit: 2000 })).data),
+    columns: [
+      { key: 'id', label: 'ID', type: 'number', width: 70, href: (r) => `/issues/${r.id}` },
+      { key: 'code', label: 'Code', type: 'text', width: 90, href: (r) => `/issues/${r.id}` },
+      { key: 'title', label: 'Issue', type: 'text', width: 300, href: (r) => `/issues/${r.id}` },
+      { key: 'severity', label: 'Severity', type: 'badge', width: 110, badgeTone: sevTone, format: titleCase },
+      { key: 'workflow_state', label: 'State', type: 'badge', width: 130, badgeTone: statusTone, format: titleCase },
+      { key: 'issue_type', label: 'Type', type: 'badge', width: 130, badgeTone: () => TONE.slate, format: titleCase },
+      { key: 'category', label: 'Category', type: 'text', width: 120, format: titleCase },
+      { key: 'sla_breached', label: 'SLA breached', type: 'badge', width: 110, badgeTone: (v) => (boolTrue(v) ? TONE.red : TONE.slate), format: boolFmt },
+      { key: 'assignee', label: 'Assignee', type: 'text', width: 150, accessor: (r) => (r.assignee as { display_name?: string })?.display_name },
+      { key: 'created_at', label: 'Created', type: 'date', width: 120 },
+      { key: 'target_closure_date', label: 'Target close', type: 'date', width: 120 },
+    ],
+  },
+  {
+    key: 'incidents', permissions: ['erm:incidents:*'], module: 'ERM', label: 'Incidents',
+    description: 'Risk incidents with severity, status, assignment and impact.',
+    fetch: async () => asRows((await ermApi.incidents.getAll()).data),
+    columns: [
+      { key: 'id', label: 'ID', type: 'number', width: 70, href: (r) => `/erm/incidents` },
+      { key: 'title', label: 'Incident', type: 'text', width: 300 },
+      { key: 'severity', label: 'Severity', type: 'badge', width: 110, badgeTone: sevTone, format: titleCase },
+      { key: 'status', label: 'Status', type: 'badge', width: 130, badgeTone: statusTone, format: titleCase },
+      { key: 'risk_title', label: 'Primary risk', type: 'text', width: 200 },
+      { key: 'assignee_name', label: 'Assignee', type: 'text', width: 150 },
+      { key: 'financial_impact', label: 'Financial impact', type: 'number', width: 120, align: 'right', agg: 'sum' },
+      { key: 'incident_date', label: 'Incident date', type: 'date', width: 120 },
+      { key: 'tags', label: 'Tags', type: 'text', width: 180, accessor: (r) => Array.isArray(r.tags) ? r.tags.join(', ') : '' },
     ],
   },
 ];

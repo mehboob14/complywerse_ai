@@ -42,6 +42,7 @@ function deleteLocal(id: string): void {
 interface ServerReport {
   slug: string; name: string; dataset: string;
   spec: Partial<ReportSpec>; is_shared: boolean; is_mine: boolean;
+  updated_at?: string | null;
 }
 
 const toSpec = (r: ServerReport): ReportSpec => ({
@@ -51,6 +52,7 @@ const toSpec = (r: ServerReport): ReportSpec => ({
   dataset: r.dataset,
   shared: !!r.is_shared,
   mine: r.is_mine !== false,
+  updatedAt: r.updated_at ?? null,
 });
 
 const toBody = (spec: ReportSpec) => ({
@@ -113,4 +115,18 @@ export async function removeSpec(id: string): Promise<SpecSource> {
 
 export function newSpecId(): string {
   return `rep_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
+}
+
+/** Clone a report under a new id (always owned by the current user). */
+export async function duplicateSpec(spec: ReportSpec, name?: string): Promise<{ spec: ReportSpec; source: SpecSource }> {
+  const copy: ReportSpec = {
+    ...spec,
+    id: newSpecId(),
+    name: name ?? `${spec.name || 'Untitled report'} (copy)`,
+    shared: false,
+    mine: true,
+    updatedAt: new Date().toISOString(),
+  };
+  const source = await persistSpec(copy);
+  return { spec: copy, source };
 }

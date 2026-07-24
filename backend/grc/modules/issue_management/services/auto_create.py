@@ -108,4 +108,6 @@ def from_event(
             "computed_severity": computed_severity,
         },
     ))
+    from .capa_defaults import ensure_initial_capa
+    ensure_initial_capa(db, issue=issue, user_id=reporter_id)
     return issue

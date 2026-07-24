@@ -21,6 +21,7 @@ import {
   RiskIncident,
   RiskIncidentCreate,
   RiskIncidentUpdate,
+  IncidentLinks,
   RiskReview,
   RiskReviewCreate,
   FrameworkMethodology,
@@ -1096,11 +1097,15 @@ export const ermApi = {
     create: (data: RiskKRICreate) => apiClient.post<RiskKRI>('/erm/kris', data),
     update: (id: number, data: RiskKRIUpdate) => apiClient.put<RiskKRI>(`/erm/kris/${id}`, data),
     delete: (id: number) => apiClient.delete(`/erm/kris/${id}`),
-    measure: (id: number, data: { value: number; notes?: string }) => 
+    measure: (id: number, data: { value: number; notes?: string; period_label?: string; target?: number; review_status?: string }) =>
       apiClient.post<RiskKRIMeasurement>(`/erm/kris/${id}/measure`, data),
     getTrend: (id: number, days?: number) => 
       apiClient.get<RiskKRIMeasurement[]>(`/erm/kris/${id}/trend`, { params: { days } }),
     getAlerts: () => apiClient.get<RiskKRI[]>('/erm/kris/alerts'),
+    report: (days?: number, kind?: string) => apiClient.get('/erm/kris/report', { params: { ...(days ? { days } : {}), ...(kind ? { kind } : {}) } }),
+    metricOptions: () => apiClient.get('/erm/kris/metric-options'),
+    templates: () => apiClient.get('/erm/kris/templates'),
+    due: () => apiClient.get('/erm/kris/due'),
     upload: (file: File) => {
       const formData = new FormData();
       formData.append('file', file);
@@ -1143,6 +1148,35 @@ export const ermApi = {
     update: (id: number, data: RiskIncidentUpdate) => apiClient.put<RiskIncident>(`/erm/incidents/${id}`, data),
     delete: (id: number) => apiClient.delete(`/erm/incidents/${id}`),
     getDashboard: () => apiClient.get<IncidentDashboard>('/erm/incidents/dashboard'),
+    getLinks: (id: number) => apiClient.get<IncidentLinks>(`/erm/incidents/${id}/links`),
+    downloadTemplate: async () => {
+      const response = await apiClient.get('/erm/incidents/template/download', {
+        responseType: 'blob',
+      });
+      const blob = new Blob([response.data], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'incidents_import_template.csv';
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    },
+    importIncidents: async (file: File) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      return apiClient.post<{
+        success: boolean;
+        imported: number;
+        total_rows: number;
+        errors: string[];
+        total_errors: number;
+        message: string;
+      }>('/erm/incidents/import/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+    },
     analyzeWithAI: (data: { title: string; description: string; severity?: string; incident_date?: string; department?: string }) =>
       apiClient.post<{
         root_cause_analysis: {
@@ -2718,6 +2752,19 @@ export const regulatoryApi = {
     apiClient.get('/governance/regulatory-changes/changes', { params }),
   getChange: (id: number) => apiClient.get(`/governance/regulatory-changes/changes/${id}`),
   createChange: (data: Record<string, unknown>) => apiClient.post('/governance/regulatory-changes/changes', data),
+  uploadChangeDocument: (
+    file: File,
+    opts?: { source?: string; title_hint?: string },
+  ) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    if (opts?.source) fd.append('source', opts.source);
+    if (opts?.title_hint) fd.append('title_hint', opts.title_hint);
+    return apiClient.post('/governance/regulatory-changes/changes/upload', fd, {
+      headers: { 'Content-Type': undefined },
+      timeout: 2 * 60 * 1000,
+    });
+  },
   updateChange: (id: number, data: Record<string, unknown>) => apiClient.put(`/governance/regulatory-changes/changes/${id}`, data),
   deleteChange: (id: number) => apiClient.delete(`/governance/regulatory-changes/changes/${id}`),
   getAssessments: (changeId: number) => apiClient.get(`/governance/regulatory-changes/changes/${changeId}/assessments`),
@@ -3783,6 +3830,67 @@ export const adminApi = {
       `/admin/audit-logs/${logId}/ai-summary`,
       { force },
     ),
+
+  // LangSmith-backed AI usage monitoring (tenant-scoped).
+  getAiUsageStatus: () =>
+    apiClient.get<{ configured: boolean; project: string | null; tenant_slug: string; message?: string | null }>(
+      '/admin/ai-usage/status',
+    ),
+  getAiUsageOverview: (params?: { start?: string; end?: string }) =>
+    apiClient.get<{
+      configured: boolean;
+      project: string | null;
+      tenant_slug: string;
+      message?: string | null;
+      plain_english?: string;
+      period: { start: string; end: string };
+      summary: {
+        total_runs: number;
+        successful_runs: number;
+        failed_runs: number;
+        prompt_tokens: number;
+        completion_tokens: number;
+        total_tokens: number;
+        estimated_cost_usd: number;
+        avg_latency_ms: number | null;
+      };
+      by_feature: Array<{ feature: string; runs: number; total_tokens: number; estimated_cost_usd: number }>;
+      by_day: Array<{ date: string; runs: number; total_tokens: number; estimated_cost_usd: number }>;
+      recent: Array<{
+        id: string;
+        name: string;
+        feature: string;
+        status: string;
+        started_at: string | null;
+        prompt_tokens: number;
+        completion_tokens: number;
+        total_tokens: number;
+        estimated_cost_usd: number;
+      }>;
+    }>('/admin/ai-usage/overview', { params }),
+  getAiUsageRuns: (params?: { start?: string; end?: string; limit?: number; offset?: number; feature?: string }) =>
+    apiClient.get<{
+      configured: boolean;
+      total: number;
+      runs: Array<{
+        id: string;
+        name: string;
+        feature: string;
+        status: string;
+        started_at: string | null;
+        latency_ms: number | null;
+        prompt_tokens: number;
+        completion_tokens: number;
+        total_tokens: number;
+        estimated_cost_usd: number;
+        error?: string | null;
+        tags: string[];
+        metadata: Record<string, unknown>;
+        inputs?: unknown;
+        outputs?: unknown;
+      }>;
+    }>('/admin/ai-usage/runs', { params }),
+  getAiUsageRun: (runId: string) => apiClient.get(`/admin/ai-usage/runs/${runId}`),
 };
 
 export interface IdpConfig {
@@ -4060,6 +4168,36 @@ export const issuesApi = {
   reopen: (id: number, body: { reason: string }) =>
     apiClient.post(`/issue-management/issues/${id}/reopen`, body),
   delete: (id: number) => apiClient.delete(`/issue-management/issues/${id}`),
+
+  downloadTemplate: async () => {
+    const response = await apiClient.get('/issue-management/issues/template/download', {
+      responseType: 'blob',
+    });
+    const blob = new Blob([response.data], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'issues_import_template.csv';
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  },
+  importIssues: async (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return apiClient.post<{
+      success: boolean;
+      imported: number;
+      capa_created?: number;
+      total_rows: number;
+      errors: string[];
+      total_errors: number;
+      message: string;
+    }>('/issue-management/issues/import/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
 
   // "Create Issue from <upstream>" — used by the +button on vuln/risk/asset/control detail pages.
   fromSource: (body: {

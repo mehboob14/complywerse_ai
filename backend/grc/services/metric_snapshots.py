@@ -96,6 +96,19 @@ def write_daily(db: Session, tenant_id: int, as_of: Optional[date] = None) -> in
             upsert(db, tenant_id, "exceptions_closed_on_time_pct", d, ex["closed_on_time_pct"]); n += 1
     except Exception:  # noqa: BLE001
         pass
+    # Cross-module metrics (compliance, controls, evidence, vulnerabilities, vendors,
+    # assets, governance) — computed from each module's canonical formula so the
+    # trend equals the module screen. Each module is guarded inside collect(), so a
+    # module that isn't provisioned in this tenant just contributes nothing.
+    try:
+        from . import metrics_cross
+        for smp in metrics_cross.collect(db, tids):
+            upsert(db, tenant_id, smp["metric"], d, smp["value"],
+                   dimension=smp.get("dimension", "overall"),
+                   dimension_value=smp.get("dimension_value", "all"),
+                   meta=smp.get("meta")); n += 1
+    except Exception:  # noqa: BLE001 — never block the daily risk snapshot
+        pass
     db.commit()
     return n
 

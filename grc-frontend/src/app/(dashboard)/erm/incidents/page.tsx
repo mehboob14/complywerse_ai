@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
-import { ermApi } from '@/lib/api';
+import { assetsApi, ermApi, evidenceApi, vulnManagementApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
   RiskIncident,
@@ -28,9 +28,13 @@ import {
   Link2,
   Target,
   TrendingUp,
+  Upload,
+  Tag,
+  User,
 } from 'lucide-react';
 import { MultiSelectDropdown, RightSlidePanel, PageLoader } from '@/components/ui';
 import AiRecommendationSaver from '@/components/ai/AiRecommendationSaver';
+import { ImportIncidentsModal } from './ImportIncidentsModal';
 
 const SEVERITIES: { value: IncidentSeverity; label: string; color: string }[] = [
   { value: 'low', label: 'Low', color: 'bg-emerald-50 text-emerald-700' },
@@ -86,6 +90,7 @@ export default function IncidentsPage() {
   const canCreate = hasPermission('erm:incidents:create');
   const canDelete = hasPermission('erm:incidents:delete');
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [editingIncident, setEditingIncident] = useState<RiskIncident | null>(null);
   const [severityFilter, setSeverityFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -226,13 +231,24 @@ export default function IncidentsPage() {
           />
         </div>
         {canCreate && (
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-[#0a0a0a] hover:bg-primary-700"
-        >
-          <Plus className="h-4 w-4" />
-          Report Incident
-        </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowImport(true)}
+              className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              <Upload className="h-4 w-4" />
+              Import
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowCreateModal(true)}
+              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-[#0a0a0a] hover:bg-primary-700"
+            >
+              <Plus className="h-4 w-4" />
+              Report Incident
+            </button>
+          </div>
         )}
       </div>
 
@@ -261,13 +277,45 @@ export default function IncidentsPage() {
                       <span className="text-xs text-slate-500">
                         {new Date(incident.incident_date).toLocaleDateString()}
                       </span>
+                      {incident.assignee_name && (
+                        <span className="inline-flex items-center gap-1 text-xs text-slate-600">
+                          <User className="h-3 w-3" />
+                          {incident.assignee_name}
+                        </span>
+                      )}
                       {incident.financial_impact && (
                         <span className="flex items-center gap-1 text-xs text-orange-600">
                           <DollarSign className="h-3 w-3" />
                           {incident.financial_impact.toLocaleString()}
                         </span>
                       )}
+                      {(incident.link_counts?.assets ||
+                        incident.link_counts?.vulnerabilities ||
+                        incident.link_counts?.risks ||
+                        incident.link_counts?.evidence) ? (
+                        <span className="inline-flex items-center gap-1 text-xs text-slate-500">
+                          <Link2 className="h-3 w-3" />
+                          {(incident.link_counts?.assets || 0) +
+                            (incident.link_counts?.vulnerabilities || 0) +
+                            (incident.link_counts?.risks || 0) +
+                            (incident.link_counts?.evidence || 0)}{' '}
+                          linked
+                        </span>
+                      ) : null}
                     </div>
+                    {incident.tags && incident.tags.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {incident.tags.map((tag) => (
+                          <span
+                            key={tag}
+                            className="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-0.5 text-[11px] text-slate-700"
+                          >
+                            <Tag className="h-3 w-3 text-slate-400" />
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div className="ml-4 flex gap-1">
                     <button
@@ -306,6 +354,8 @@ export default function IncidentsPage() {
           <p className="mt-1 text-slate-600">Report incidents as they occur to track and resolve them</p>
         </div>
       )}
+
+      {showImport && <ImportIncidentsModal onClose={() => setShowImport(false)} />}
 
       {(showCreateModal || editingIncident) && (
         <IncidentModal
@@ -351,7 +401,7 @@ function IncidentModal({
   onSuccess: () => void;
 }) {
   const [formData, setFormData] = useState<Partial<RiskIncidentCreate>>({
-    risk_id: incident?.risk_id || (risks[0]?.id || 0),
+    risk_id: incident?.risk_id || undefined,
     title: incident?.title || '',
     description: incident?.description || '',
     incident_date: incident?.incident_date?.split('T')[0] || new Date().toISOString().split('T')[0],
@@ -359,9 +409,75 @@ function IncidentModal({
     financial_impact: incident?.financial_impact,
     root_cause: incident?.root_cause || '',
     corrective_actions: incident?.corrective_actions || '',
+    assigned_to: incident?.assigned_to,
+    tags: incident?.tags || [],
+    linked_asset_ids: [],
+    linked_vulnerability_ids: [],
+    linked_risk_ids: incident?.risk_id ? [incident.risk_id] : [],
+    linked_evidence_ids: [],
   });
+  const [tagsInput, setTagsInput] = useState((incident?.tags || []).join(', '));
   const [status, setStatus] = useState<IncidentStatus>(incident?.status || 'open');
   const [aiSuggestionNote, setAiSuggestionNote] = useState<string | null>(null);
+  const [linksLoaded, setLinksLoaded] = useState(!incident);
+
+  const { data: tenantUsers } = useQuery({
+    queryKey: ['tenant-users'],
+    queryFn: async () => {
+      const r = await assetsApi.getTenantUsers();
+      return r.data;
+    },
+  });
+
+  const { data: assets } = useQuery({
+    queryKey: ['assets-for-incident-link'],
+    queryFn: async () => {
+      const r = await assetsApi.getAll({ limit: 500 });
+      return r.data;
+    },
+  });
+
+  const { data: vulnerabilities } = useQuery({
+    queryKey: ['vulns-for-incident-link'],
+    queryFn: async () => {
+      const r = await vulnManagementApi.vulnerabilities.getAll({ include_closed: true });
+      return Array.isArray(r.data) ? r.data : [];
+    },
+  });
+
+  const { data: evidenceList } = useQuery({
+    queryKey: ['evidence-for-incident-link'],
+    queryFn: async () => {
+      const r = await evidenceApi.getAll();
+      return Array.isArray(r.data) ? r.data : [];
+    },
+  });
+
+  useEffect(() => {
+    if (!incident) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await ermApi.incidents.getLinks(incident.id);
+        if (cancelled) return;
+        const links = r.data;
+        setFormData((prev) => ({
+          ...prev,
+          linked_asset_ids: links.assets.map((a) => a.asset_id),
+          linked_vulnerability_ids: links.vulnerabilities.map((v) => v.vulnerability_id),
+          linked_risk_ids: links.risks.map((x) => x.risk_id).length
+            ? links.risks.map((x) => x.risk_id)
+            : (incident.risk_id ? [incident.risk_id] : []),
+          linked_evidence_ids: links.evidence.map((e) => e.evidence_id),
+        }));
+      } catch {
+        // Keep defaults if links endpoint is unavailable
+      } finally {
+        if (!cancelled) setLinksLoaded(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [incident]);
 
   const createMutation = useMutation({
     mutationFn: (data: RiskIncidentCreate) => ermApi.incidents.create(data),
@@ -398,12 +514,25 @@ function IncidentModal({
     },
   });
 
+  const parseTags = (raw: string) =>
+    raw.split(/[,;]/).map((t) => t.trim()).filter(Boolean);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const tags = parseTags(tagsInput);
+    const linkedRiskIds = formData.linked_risk_ids?.length
+      ? formData.linked_risk_ids
+      : (formData.risk_id ? [formData.risk_id] : []);
+    const payload = {
+      ...formData,
+      tags,
+      linked_risk_ids: linkedRiskIds,
+      risk_id: formData.risk_id || linkedRiskIds[0] || undefined,
+    };
     if (incident) {
-      updateMutation.mutate({ id: incident.id, updates: { ...formData, status } });
+      updateMutation.mutate({ id: incident.id, updates: { ...payload, status } });
     } else {
-      createMutation.mutate(formData as RiskIncidentCreate);
+      createMutation.mutate(payload as RiskIncidentCreate);
     }
   };
 
@@ -445,7 +574,7 @@ function IncidentModal({
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Related Risk</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Primary Risk</label>
             <MultiSelectDropdown
               title="Risk"
               items={risks.map((risk) => ({
@@ -454,7 +583,16 @@ function IncidentModal({
                 subLabel: risk.risk_category,
               }))}
               selectedValues={formData.risk_id ? [String(formData.risk_id)] : []}
-              onApply={(values) => setFormData({ ...formData, risk_id: values[0] ? Number(values[0]) : 0 })}
+              onApply={(values) => {
+                const rid = values[0] ? Number(values[0]) : undefined;
+                setFormData({
+                  ...formData,
+                  risk_id: rid,
+                  linked_risk_ids: rid
+                    ? Array.from(new Set([...(formData.linked_risk_ids || []), rid]))
+                    : formData.linked_risk_ids,
+                });
+              }}
               multiSelect={false}
               triggerVariant="input"
               triggerClassName="w-full"
@@ -518,6 +656,45 @@ function IncidentModal({
           </div>
         </div>
 
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Assign to</label>
+            <MultiSelectDropdown
+              title="Assignee"
+              items={(tenantUsers || []).map((u) => ({
+                value: String(u.id),
+                label: u.display_name || u.email,
+                subLabel: u.email,
+              }))}
+              selectedValues={formData.assigned_to ? [String(formData.assigned_to)] : []}
+              onApply={(values) =>
+                setFormData({
+                  ...formData,
+                  assigned_to: values[0] ? Number(values[0]) : undefined,
+                })
+              }
+              multiSelect={false}
+              triggerVariant="input"
+              triggerClassName="w-full"
+              forceSearch
+              searchPlaceholder="Search user..."
+              placeholder="Unassigned"
+              size="md"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Tags</label>
+            <input
+              type="text"
+              value={tagsInput}
+              onChange={(e) => setTagsInput(e.target.value)}
+              placeholder="e.g. availability, p1, payments"
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            />
+            <p className="mt-1 text-[11px] text-slate-500">Comma-separated labels</p>
+          </div>
+        </div>
+
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
           <textarea
@@ -526,6 +703,106 @@ function IncidentModal({
             className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
             rows={2}
           />
+        </div>
+
+        <div className="rounded-lg border border-slate-200 p-3 space-y-3">
+          <div className="flex items-center gap-2">
+            <Link2 className="h-4 w-4 text-slate-500" />
+            <p className="text-sm font-medium text-slate-800">Cross-module links</p>
+            {!linksLoaded && <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" />}
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Related Risks</label>
+            <MultiSelectDropdown
+              title="Risks"
+              items={risks.map((risk) => ({
+                value: String(risk.id),
+                label: risk.title,
+                subLabel: risk.risk_category,
+              }))}
+              selectedValues={(formData.linked_risk_ids || []).map(String)}
+              onApply={(values) =>
+                setFormData({ ...formData, linked_risk_ids: values.map(Number) })
+              }
+              multiSelect
+              triggerVariant="input"
+              triggerClassName="w-full"
+              forceSearch
+              searchPlaceholder="Search risks..."
+              placeholder="Link risks"
+              size="md"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Related Assets</label>
+            <MultiSelectDropdown
+              title="Assets"
+              items={(assets || []).map((a) => ({
+                value: String(a.id),
+                label: a.name,
+                subLabel: a.asset_type,
+              }))}
+              selectedValues={(formData.linked_asset_ids || []).map(String)}
+              onApply={(values) =>
+                setFormData({ ...formData, linked_asset_ids: values.map(Number) })
+              }
+              multiSelect
+              triggerVariant="input"
+              triggerClassName="w-full"
+              forceSearch
+              searchPlaceholder="Search assets..."
+              placeholder="Link assets"
+              size="md"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Related Vulnerabilities</label>
+            <MultiSelectDropdown
+              title="Vulnerabilities"
+              items={(vulnerabilities || []).map((v: { id: number; title?: string; cve_id?: string; severity?: string }) => ({
+                value: String(v.id),
+                label: v.title || v.cve_id || `Vuln #${v.id}`,
+                subLabel: v.severity || v.cve_id,
+              }))}
+              selectedValues={(formData.linked_vulnerability_ids || []).map(String)}
+              onApply={(values) =>
+                setFormData({ ...formData, linked_vulnerability_ids: values.map(Number) })
+              }
+              multiSelect
+              triggerVariant="input"
+              triggerClassName="w-full"
+              forceSearch
+              searchPlaceholder="Search vulnerabilities..."
+              placeholder="Link vulnerabilities"
+              size="md"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Related Evidence</label>
+            <MultiSelectDropdown
+              title="Evidence"
+              items={(evidenceList || []).map((e) => ({
+                value: String(e.id),
+                label: e.title || `Evidence #${e.id}`,
+                subLabel: e.evidence_type,
+              }))}
+              selectedValues={(formData.linked_evidence_ids || []).map(String)}
+              onApply={(values) =>
+                setFormData({ ...formData, linked_evidence_ids: values.map(Number) })
+              }
+              multiSelect
+              triggerVariant="input"
+              triggerClassName="w-full"
+              forceSearch
+              searchPlaceholder="Search evidence..."
+              placeholder="Link evidence"
+              size="md"
+            />
+          </div>
         </div>
 
         <div>

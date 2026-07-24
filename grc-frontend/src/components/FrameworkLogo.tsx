@@ -22,6 +22,8 @@ const DOMAIN_RULES: Array<[RegExp, string]> = [
   [/soc\s*-?\s*2|soc2|aicpa|trust\s*service/i, 'aicpa.org'],
   [/sox|sarbanes|it general control/i, 'sec.gov'],
   [/iso|iec|27001|27002|27017|27018|9001|22301|20000|42001/i, 'iso.org'],
+  // SAMA must outrank NIST: "SAMA CSF" would otherwise match the generic "csf".
+  [/sama\b|saudi arabian monetary/i, 'sama.gov.sa'],
   [/nist|ai rmf|csf|800-?53|800-?171|cybersecurity framework/i, 'nist.gov'],
   [/cis\b|cis\s*control|critical security control|center for internet/i, 'cisecurity.org'],
   [/cmmc/i, 'cmmcab.org'],
@@ -58,11 +60,25 @@ function initials(name: string): string {
   return (cleaned.replace(/\s/g, '').slice(0, 3) || 'FW').toUpperCase();
 }
 
-export function FrameworkLogo({ name, size = 24, className = '' }: { name: string; size?: number; className?: string }) {
-  const [stage, setStage] = useState<0 | 1 | 2>(0); // 0=clearbit, 1=favicon, 2=badge
+export function FrameworkLogo({
+  name,
+  size = 24,
+  className = '',
+  eager = false,
+}: {
+  name: string;
+  size?: number;
+  className?: string;
+  /** Load immediately — required inside transform-animated containers
+   *  (marquees), where lazy-loading makes icons pop in and out. */
+  eager?: boolean;
+}) {
+  // 0 = bundled asset in /public/frameworks (works offline / behind strict
+  // networks), 1 = Google favicon service, 2 = Clearbit, 3 = initials badge.
+  const [stage, setStage] = useState<0 | 1 | 2 | 3>(0);
   const domain = domainFor(name);
 
-  if (!domain || stage === 2) {
+  if (!domain || stage === 3) {
     return (
       <span
         className={`flex shrink-0 items-center justify-center rounded bg-slate-100 font-bold text-slate-600 ${className}`}
@@ -76,8 +92,10 @@ export function FrameworkLogo({ name, size = 24, className = '' }: { name: strin
   }
 
   const src = stage === 0
-    ? `https://logo.clearbit.com/${domain}`
-    : `https://www.google.com/s2/favicons?sz=64&domain=${domain}`;
+    ? `/frameworks/${domain}.png`
+    : stage === 1
+      ? `https://www.google.com/s2/favicons?sz=128&domain=${domain}`
+      : `https://logo.clearbit.com/${domain}`;
 
   return (
     <img
@@ -88,9 +106,10 @@ export function FrameworkLogo({ name, size = 24, className = '' }: { name: strin
       height={size}
       className={`shrink-0 rounded object-contain ${className}`}
       style={{ width: size, height: size }}
-      loading="lazy"
+      loading={eager ? 'eager' : 'lazy'}
+      decoding="async"
       referrerPolicy="no-referrer"
-      onError={() => setStage((s) => (s + 1) as 0 | 1 | 2)}
+      onError={() => setStage((s) => (s + 1) as 0 | 1 | 2 | 3)}
     />
   );
 }

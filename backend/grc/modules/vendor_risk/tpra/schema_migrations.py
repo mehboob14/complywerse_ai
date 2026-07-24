@@ -19,8 +19,14 @@ _TPRA_ADDS = [
     ("grc_tpra_stage_instances", "checklist", "JSON"),
     ("grc_vendor_assessments", "team_roster", "JSON"),
     ("grc_tpra_findings", "linked_issue_id", "INTEGER"),
+    # Monitoring-signal acknowledgement + soft-delete/optimistic-lock columns
+    # added after initial provisioning. ADD COLUMN IF NOT EXISTS is idempotent,
+    # so listing the whole set is harmless on tenants that already have them.
+    ("grc_tpra_monitoring_signals", "acknowledged", "BOOLEAN"),
     ("grc_tpra_monitoring_signals", "acknowledged_by", "INTEGER"),
     ("grc_tpra_monitoring_signals", "acknowledged_at", "TIMESTAMP"),
+    ("grc_tpra_monitoring_signals", "row_version", "INTEGER"),
+    ("grc_tpra_monitoring_signals", "deleted_at", "TIMESTAMP"),
 ]
 
 

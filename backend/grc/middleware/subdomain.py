@@ -146,6 +146,11 @@ class TenantMiddleware(BaseHTTPMiddleware):
                     }
                     request.state.tenant_slug = tenant.slug
                     request.state.tenant_id = tenant.id
+                    try:
+                        from ..services.ai_tracing import set_ai_tenant_slug
+                        set_ai_tenant_slug(tenant.slug)
+                    except Exception:
+                        pass
             finally:
                 db.close()
 

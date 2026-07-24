@@ -75,7 +75,7 @@ def compute_kpi_metrics(db, now=None, tenant_ids=None):
                 "actual": _pct(len(decided), len(items)), "numerator": len(decided), "denominator": len(items),
                 "formula": "access items certified / sampled access items",
                 "target": 100, "direction": "higher",
-                "source": "Access review certification", "href": "/access-reviews",
+                "source": "Access review certification", "href": "/compliance/access-reviews",
             }
     except Exception:
         pass

@@ -232,7 +232,7 @@ function BiaPanel({ bia, planId, onClose }: { bia: any; planId: number; onClose:
           {bia.linked_risk_id ? (
             <div className="mt-1.5 flex items-center justify-between gap-2 rounded-md border border-slate-100 bg-slate-50 px-2.5 py-1.5">
               <span className="truncate text-xs text-slate-700"><span className="font-medium">{bia.linked_risk_title || `Risk #${bia.linked_risk_id}`}</span></span>
-              <Link href="/erm/risks" className="inline-flex shrink-0 items-center gap-0.5 text-[11px] text-primary-600 hover:underline">Open <ExternalLink className="h-3 w-3" /></Link>
+              <Link href={`/erm/risks/${bia.linked_risk_id}`} className="inline-flex shrink-0 items-center gap-0.5 text-[11px] text-primary-600 hover:underline">Open <ExternalLink className="h-3 w-3" /></Link>
             </div>
           ) : canEdit ? (
             <div className="mt-2 space-y-1.5">

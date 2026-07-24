@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
-import { AlertCircle, Building2, Lock } from 'lucide-react';
+import { AlertCircle, Lock, Mail, Eye, EyeOff, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { AuthShell } from '@/components/auth/AuthShell';
 
 // Bare IPv4 hosts (e.g. 68.183.198.54 in IP-only deployments) split into
 // 4 numeric parts — without the guard below, parts[0] would be treated
@@ -26,7 +27,7 @@ function getTenantSlugFromHost(): string | null {
 
 function getTenantSlug(): string | null {
   if (typeof window === 'undefined') return null;
-  
+
   const urlParams = new URLSearchParams(window.location.search);
   const urlTenant = urlParams.get('tenant');
   if (urlTenant) {
@@ -45,17 +46,43 @@ function getTenantSlug(): string | null {
   return null;
 }
 
+// Shared field styling — soft filled pill inputs with a leading icon, per the
+// design mockups. Split base so each field controls its own padding.
+const FIELD_BASE =
+  'block w-full rounded-full border bg-slate-50/80 py-3 text-[15px] text-slate-900 placeholder:font-normal placeholder:text-slate-400/70 outline-none transition-all focus:bg-white focus:ring-4';
+const FIELD_OK =
+  'border-slate-200 hover:border-slate-300 focus:border-primary-500 focus:ring-primary-500/15';
+const FIELD_BAD =
+  'border-rose-400 bg-rose-50/40 focus:border-rose-500 focus:ring-rose-500/15';
+// Visible field labels — small, quiet, left-aligned with the pill's padding.
+const FIELD_LABEL = 'mb-1 block pl-1 text-[13px] font-medium text-slate-700';
+
+// Microsoft 4-square mark, reused by the button and the SSO handoff card.
+function MicrosoftMark({ size = 18 }: { size?: number }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 23 23" aria-hidden>
+      <path fill="#f35325" d="M1 1h10v10H1z" />
+      <path fill="#81bc06" d="M12 1h10v10H12z" />
+      <path fill="#05a6f0" d="M1 12h10v10H1z" />
+      <path fill="#ffba08" d="M12 12h10v10H12z" />
+    </svg>
+  );
+}
+
 export default function LoginPage() {
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [passwordInvalid, setPasswordInvalid] = useState(false);
   const [info, setInfo] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [ssoRedirecting, setSsoRedirecting] = useState(false);
+  const ssoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [tenantSlug, setTenantSlug] = useState<string | null>(null);
   const [tenantName, setTenantName] = useState<string | null>(null);
-  const [ssoEnabled, setSsoEnabled] = useState(false);
 
   useEffect(() => {
     const slug = getTenantSlug();
@@ -67,7 +94,7 @@ export default function LoginPage() {
     if (searchParams?.get('registered') === '1') {
       const prefill = searchParams.get('email') || '';
       if (prefill) setEmail(prefill);
-      setInfo("Account created. Sign in with the password you just set.");
+      setInfo('Account created. Sign in with the password you just set.');
     }
 
     // Surface SSO callback errors (e.g. domain not allowed, token exchange failure)
@@ -75,36 +102,32 @@ export default function LoginPage() {
     if (ssoErr) {
       const map: Record<string, string> = {
         sso_not_provisioned: "Your Microsoft account isn't allowed to sign in to this organization. Contact your administrator.",
-        sso_state_mismatch: "Sign-in expired or was tampered with. Please try again.",
-        sso_state_expired: "Sign-in expired. Please try again.",
-        sso_invalid_callback: "Microsoft sign-in failed (invalid callback).",
-        sso_provider_error: "Microsoft returned an error. Please try again.",
-        sso_token_exchange_failed: "Microsoft rejected the sign-in request. Contact your administrator.",
-        sso_id_token_invalid: "Microsoft sign-in could not be verified. Contact your administrator.",
-        sso_disabled: "Microsoft sign-in is not enabled for this organization.",
-        sso_tenant_lost: "Could not resolve your organization. Please try again.",
+        sso_state_mismatch: 'Sign-in expired or was tampered with. Please try again.',
+        sso_state_expired: 'Sign-in expired. Please try again.',
+        sso_invalid_callback: 'Microsoft sign-in failed (invalid callback).',
+        sso_provider_error: 'Microsoft returned an error. Please try again.',
+        sso_token_exchange_failed: 'Microsoft rejected the sign-in request. Contact your administrator.',
+        sso_id_token_invalid: 'Microsoft sign-in could not be verified. Contact your administrator.',
+        sso_disabled: 'Microsoft sign-in is not enabled for this organization.',
+        sso_tenant_lost: 'Could not resolve your organization. Please try again.',
       };
       setError(map[ssoErr] || 'Microsoft sign-in failed.');
     }
-
-    // Check if SSO is configured for this tenant
-    (async () => {
-      try {
-        const headers: Record<string, string> = {};
-        const slugForHeader = getTenantSlugFromHost() || slug;
-        if (slugForHeader) headers['X-Tenant-Slug'] = slugForHeader;
-        const res = await fetch('/api/auth/entra/availability', { headers, credentials: 'include' });
-        if (!res.ok) {
-          setSsoEnabled(false);
-          return;
-        }
-        const data = await res.json();
-        setSsoEnabled(!!data?.enabled);
-      } catch {
-        setSsoEnabled(false);
-      }
-    })();
   }, [searchParams]);
+
+  // If the user comes BACK from the Microsoft page (browser back button /
+  // bfcache restore), the redirecting card would otherwise be stuck on
+  // screen. pageshow with persisted=true fires exactly in that case.
+  useEffect(() => {
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) setSsoRedirecting(false);
+    };
+    window.addEventListener('pageshow', onPageShow);
+    return () => {
+      window.removeEventListener('pageshow', onPageShow);
+      if (ssoTimer.current) clearTimeout(ssoTimer.current);
+    };
+  }, []);
 
   const handleSsoSignIn = () => {
     // Backend resolves tenant via subdomain or X-Tenant-Slug; we can't set
@@ -115,23 +138,38 @@ export default function LoginPage() {
     const url = slug
       ? `/api/auth/entra/login?tenant_slug=${encodeURIComponent(slug)}`
       : '/api/auth/entra/login';
-    window.location.href = url;
+    // Show the handoff card briefly before navigating so the user knows a
+    // Microsoft window is about to take over (and can cancel).
+    setError('');
+    setSsoRedirecting(true);
+    ssoTimer.current = setTimeout(() => {
+      window.location.href = url;
+    }, 900);
+  };
+
+  const cancelSsoSignIn = () => {
+    if (ssoTimer.current) {
+      clearTimeout(ssoTimer.current);
+      ssoTimer.current = null;
+    }
+    setSsoRedirecting(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError('');
+    setPasswordInvalid(false);
 
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      
+
       if (tenantSlug) {
         headers['X-Tenant-Slug'] = tenantSlug;
       } else {
         localStorage.removeItem('tenant_slug');
       }
-      
+
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers,
@@ -244,6 +282,9 @@ export default function LoginPage() {
           setError(data.detail || 'Multiple organizations found. Please select your company and try again.');
         } else {
           setError(data.detail || 'Invalid credentials');
+          // Outline the password field only for actual credential rejections
+          // (401), not for lockouts (423) or tenant-resolution errors.
+          if (response.status === 401) setPasswordInvalid(true);
         }
       }
     } catch {
@@ -252,7 +293,7 @@ export default function LoginPage() {
       setIsLoading(false);
     }
   };
-  
+
   const clearTenantContext = () => {
     // Clear ALL localStorage to ensure clean state
     localStorage.clear();
@@ -260,189 +301,202 @@ export default function LoginPage() {
     setTenantName(null);
   };
 
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
-      <div className="w-full max-w-sm">
-
-        {/* Logo */}
-        <div className="mb-6 text-center">
-          <div className="inline-flex items-center gap-1.5">
-            <span className="text-2xl font-bold text-slate-950 tracking-tight">
-              Compliverse
-            </span>
-            <span className="text-sm font-medium text-slate-950 self-end mb-0.5">AI</span>
+  // ── SSO handoff state — shown while we bounce to Microsoft ──────────────
+  if (ssoRedirecting) {
+    return (
+      <AuthShell>
+        <div className="auth-fade-up rounded-2xl border border-slate-100 bg-white px-8 py-10 text-center shadow-elevated">
+          <div className="relative mx-auto mb-6 h-16 w-16">
+            <div className="absolute inset-0 animate-spin rounded-full border-2 border-primary-100 border-t-primary-600" />
+            <div className="absolute inset-2 flex items-center justify-center rounded-full bg-white shadow-sm">
+              <MicrosoftMark size={22} />
+            </div>
           </div>
-          <p className="mt-1.5 text-xs text-slate-500">Sign in to your GRC workspace</p>
+          <h2 className="text-xl font-bold tracking-tight text-slate-900">Redirecting to Microsoft…</h2>
+          <p className="mx-auto mt-2 max-w-xs text-sm leading-relaxed text-slate-500">
+            A Microsoft window will open to sign you in
+            {tenantSlug ? (
+              <> to <span className="font-semibold text-slate-700">{tenantName || tenantSlug}</span></>
+            ) : null}
+            . Approve the request to continue.
+          </p>
+          <div className="mt-6 inline-flex items-center gap-1.5 rounded-full bg-primary-50 px-3.5 py-1.5 text-[11px] font-medium text-primary-800">
+            <Lock size={11} strokeWidth={2} />
+            Secure, audit-logged connection
+          </div>
+          <div className="mt-6">
+            <button
+              type="button"
+              onClick={cancelSsoSignIn}
+              className="text-xs font-medium text-slate-500 underline-offset-2 hover:text-slate-700 hover:underline"
+            >
+              Cancel and go back
+            </button>
+          </div>
         </div>
+      </AuthShell>
+    );
+  }
 
-        {/* Tenant badge */}
-        {tenantSlug && (
-          <div className="mb-3 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2.5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Building2 className="h-4 w-4 text-blue-500 shrink-0" />
-                <div>
-                  <p className="text-[11px] text-slate-500">Signing in to</p>
-                  <p className="text-xs font-semibold text-slate-800">{tenantName || tenantSlug}</p>
-                </div>
-              </div>
+  return (
+    <AuthShell>
+      {/* Heading */}
+      <div className="mb-5 text-center">
+        <h2 className="text-2xl font-bold leading-tight tracking-tight text-slate-900">Welcome back</h2>
+        <p className="mt-1 text-sm leading-relaxed text-slate-500">
+          {tenantSlug ? (
+            <>
+              Sign in to <span className="font-semibold text-slate-800">{tenantName || tenantSlug}</span>
+              <span className="mx-1.5 text-slate-300">·</span>
               <button
                 type="button"
                 onClick={clearTenantContext}
-                className="text-[11px] text-blue-600 hover:text-blue-700 underline"
+                className="font-semibold text-primary-700 underline-offset-2 hover:text-primary-800 hover:underline"
               >
                 Switch
               </button>
-            </div>
-          </div>
-        )}
-
-        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-
-          {/* Microsoft SSO */}
-          {ssoEnabled ? (
-            <>
-              <button
-                type="button"
-                onClick={handleSsoSignIn}
-                className="flex w-full items-center justify-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 mb-5"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 23 23">
-                  <path fill="#f3f3f3" d="M0 0h23v23H0z"/>
-                  <path fill="#f35325" d="M1 1h10v10H1z"/>
-                  <path fill="#81bc06" d="M12 1h10v10H12z"/>
-                  <path fill="#05a6f0" d="M1 12h10v10H1z"/>
-                  <path fill="#ffba08" d="M12 12h10v10H12z"/>
-                </svg>
-                <span>Sign in with Microsoft</span>
-              </button>
-              <div className="flex items-center gap-3 mb-5">
-                <div className="flex-1 h-px bg-slate-100" />
-                <span className="text-[11px] text-slate-400 font-medium">or sign in with email</span>
-                <div className="flex-1 h-px bg-slate-100" />
-              </div>
             </>
           ) : (
-            <>
+            'Sign in to your GRC workspace.'
+          )}
+        </p>
+      </div>
+
+      {/* Banners */}
+      {info && !error && (
+        <div className="mb-4 flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-3 text-emerald-700">
+          <CheckCircle2 size={15} className="mt-0.5 shrink-0" />
+          <span className="text-xs">{info}</span>
+        </div>
+      )}
+      {error && (
+        <div className="mb-4 flex items-start gap-2.5 rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-3">
+          <AlertCircle size={15} className="mt-0.5 shrink-0 text-rose-600" />
+          <div>
+            <p className="text-xs font-semibold text-rose-700">We couldn&apos;t sign you in</p>
+            <p className="mt-0.5 text-xs leading-relaxed text-rose-600">{error}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Microsoft SSO — always available; the backend handles configured vs. not. */}
+      <button
+        type="button"
+        onClick={handleSsoSignIn}
+        className="flex w-full items-center justify-center gap-3 rounded-full border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 shadow-[0_2px_10px_rgba(15,23,42,0.06),0_1px_3px_rgba(15,23,42,0.08)] transition-all hover:border-slate-300 hover:shadow-[0_4px_14px_rgba(15,23,42,0.1),0_1px_3px_rgba(15,23,42,0.08)]"
+      >
+        <MicrosoftMark />
+        <span>Sign in with Microsoft</span>
+      </button>
+
+      <div className="my-4 flex items-center gap-4">
+        <div className="h-px flex-1 bg-slate-200" />
+        <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-slate-400">or continue with email</span>
+        <div className="h-px flex-1 bg-slate-200" />
+      </div>
+
+      {/* Email + password */}
+      <form onSubmit={handleSubmit} className="space-y-3.5">
+        <div>
+          <label htmlFor="email" className={FIELD_LABEL}>Email</label>
+          <div className="relative">
+            <Mail className="pointer-events-none absolute top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" style={{ left: '1.125rem' }} strokeWidth={1.75} />
+            <input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className={`${FIELD_BASE} ${FIELD_OK} pl-11 pr-5`}
+              placeholder="you@company.com"
+              autoComplete="email"
+              required
+            />
+          </div>
+        </div>
+
+        <div>
+          <label htmlFor="password" className={FIELD_LABEL}>Password</label>
+          <div className="relative">
+            <Lock
+              className={`pointer-events-none absolute top-1/2 h-4 w-4 -translate-y-1/2 ${passwordInvalid ? 'text-rose-400' : 'text-slate-400'}`}
+              style={{ left: '1.125rem' }}
+              strokeWidth={1.75}
+            />
+            <input
+              id="password"
+              type={showPassword ? 'text' : 'password'}
+              value={password}
+              onChange={(e) => { setPassword(e.target.value); setPasswordInvalid(false); }}
+              className={`${FIELD_BASE} ${passwordInvalid ? FIELD_BAD : FIELD_OK} pl-11 pr-12`}
+              placeholder="Enter your password"
+              autoComplete="current-password"
+              required
+            />
+            <div className="absolute right-4 top-1/2 flex -translate-y-1/2 items-center gap-2.5">
               <button
                 type="button"
-                disabled
-                title="Microsoft SSO is not enabled for this organization."
-                className="flex w-full items-center justify-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-500 cursor-not-allowed opacity-60 mb-5"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                className="text-slate-400 hover:text-slate-600"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 23 23">
-                  <path fill="#f3f3f3" d="M0 0h23v23H0z"/>
-                  <path fill="#f35325" d="M1 1h10v10H1z"/>
-                  <path fill="#81bc06" d="M12 1h10v10H12z"/>
-                  <path fill="#05a6f0" d="M1 12h10v10H1z"/>
-                  <path fill="#ffba08" d="M12 12h10v10H12z"/>
-                </svg>
-                <span>Sign in with Microsoft</span>
-                <Lock size={13} className="ml-auto opacity-60" />
+                {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
               </button>
-              <div className="flex items-center gap-3 mb-5">
-                <div className="flex-1 h-px bg-slate-100" />
-                <span className="text-[11px] text-slate-400 font-medium">or sign in with email</span>
-                <div className="flex-1 h-px bg-slate-100" />
-              </div>
-            </>
+            </div>
+          </div>
+          {passwordInvalid && (
+            <p className="mt-1.5 flex items-center gap-1 text-xs text-rose-600">
+              <AlertCircle size={12} className="shrink-0" />
+              Incorrect password
+            </p>
           )}
+        </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {info && !error && (
-              <div className="flex items-start gap-2 rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2.5 text-emerald-700">
-                <span className="text-xs">{info}</span>
-              </div>
-            )}
-            {error && (
-              <div className="flex items-start gap-2 rounded-lg bg-rose-50 border border-rose-200 px-3 py-2.5 text-rose-700">
-                <AlertCircle size={15} className="mt-0.5 shrink-0" />
-                <span className="text-xs">{error}</span>
-              </div>
-            )}
-
-            <div>
-              <label htmlFor="email" className="block text-xs font-medium text-slate-600 mb-1">
-                Email address
-              </label>
-              <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="block w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 placeholder-slate-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400/20 focus:bg-white transition-colors"
-                placeholder="name@companydomain.com"
-                required
-              />
-            </div>
-
-            <div>
-              <label htmlFor="password" className="block text-xs font-medium text-slate-600 mb-1">
-                Password
-              </label>
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="block w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 placeholder-slate-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400/20 focus:bg-white transition-colors"
-                placeholder="Enter your password"
-                required
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50 transition-colors mt-1"
-            >
+        {/* pt wrapper gives the CTA a touch more separation than the fields
+            have between themselves, without fighting the form's space-y. */}
+        <div className="pt-1.5">
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="auth-cta group flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-primary-400 via-primary-600 to-primary-700 px-4 py-3 text-sm font-bold tracking-wide text-white shadow-[0_14px_30px_-14px_rgba(13,148,136,0.65)] transition-all hover:-translate-y-0.5 hover:shadow-[0_18px_36px_-14px_rgba(13,148,136,0.7)] disabled:translate-y-0 disabled:opacity-60"
+          >
+            <span className="inline-flex items-center gap-2">
               {isLoading ? (
                 <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
               ) : (
-                'Sign in'
+                <>
+                  Sign in
+                  <ArrowRight size={16} className="transition-transform group-hover:translate-x-0.5" />
+                </>
               )}
-            </button>
-          </form>
-
-          <p className="mt-5 text-center text-xs text-slate-400">
-            Want to join?{' '}
-            <a
-              href="/register"
-              className="font-medium text-blue-600 hover:text-blue-700"
-            >
-              Register your company
-            </a>
-            {' '}&mdash; or contact{' '}
-            <a href="mailto:support@compliverse.ai" className="text-blue-600 hover:text-blue-700">
-              support
-            </a>
-          </p>
+            </span>
+          </button>
         </div>
+      </form>
 
-        {/* Footer */}
-        <p className="mt-5 text-center text-[11px] text-slate-400 leading-relaxed px-2">
-          By signing in, you agree to Compliverse&apos;s{' '}
+      {/* Recovery path for locked accounts — support is the only reset
+          mechanism today (there is no self-service password-reset route). */}
+      {error && (
+        <p className="mt-4 text-center text-xs text-slate-500">
+          Locked out?{' '}
           <a
-            href="https://compliverse.ai/privacy-policy"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline hover:text-slate-600"
+            href="mailto:support@compliverse.ai?subject=Account%20locked%20—%20password%20reset"
+            className="font-semibold text-primary-700 hover:text-primary-800"
           >
-            Privacy Policy
+            Reset your password
           </a>
-          {' '}and{' '}
-          <a
-            href="https://compliverse.ai/terms"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline hover:text-slate-600"
-          >
-            Terms of Service
-          </a>
-          . Your data is protected with enterprise-grade security.
         </p>
+      )}
 
-      </div>
-    </div>
+      {/* Legal only — the security claim that used to live here was marketing
+          dressed as fine print, and is already made on the hero. */}
+      <p className="mt-5 text-center text-[11px] leading-relaxed text-slate-400">
+        By signing in you agree to our{' '}
+        <a href="https://compliverse.ai/terms" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-slate-600">Terms</a>
+        {' '}and{' '}
+        <a href="https://compliverse.ai/privacy-policy" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-slate-600">Privacy Policy</a>.
+        {' '}Trouble signing in?{' '}
+        <a href="mailto:support@compliverse.ai" className="underline underline-offset-2 hover:text-slate-600">Contact support</a>
+      </p>
+    </AuthShell>
   );
 }

@@ -17,8 +17,10 @@ import {
   FileText,
   Building2,
   Loader2,
+  Upload,
 } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 interface RegulatoryChange {
   id: number;
@@ -107,6 +109,10 @@ export default function RegulatoryChangesPage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [priorityFilter, setPriorityFilter] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isUploadOpen, setIsUploadOpen] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadSource, setUploadSource] = useState('custom');
+  const [uploadTitleHint, setUploadTitleHint] = useState('');
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -119,6 +125,7 @@ export default function RegulatoryChangesPage() {
     impact_summary: '',
   });
   const queryClient = useQueryClient();
+  const router = useRouter();
 
   const { data: dashboard, isLoading: dashboardLoading } = useQuery({
     queryKey: ['regulatory-dashboard'],
@@ -165,6 +172,31 @@ export default function RegulatoryChangesPage() {
       queryClient.invalidateQueries({ queryKey: ['regulatory-dashboard'] });
       setIsModalOpen(false);
       resetForm();
+    },
+  });
+
+  const uploadMutation = useMutation({
+    mutationFn: async () => {
+      if (!uploadFile) {
+        throw new Error('No file selected.');
+      }
+      const response = await regulatoryApi.uploadChangeDocument(uploadFile, {
+        source: uploadSource,
+        title_hint: uploadTitleHint || undefined,
+      });
+      return response.data as RegulatoryChange;
+    },
+    onSuccess: (created) => {
+      queryClient.invalidateQueries({ queryKey: ['regulatory-changes'] });
+      queryClient.invalidateQueries({ queryKey: ['regulatory-dashboard'] });
+      setIsUploadOpen(false);
+      setUploadFile(null);
+      setUploadTitleHint('');
+      setUploadSource('custom');
+      router.push(`/governance/regulatory-changes/${created.id}`);
+    },
+    onError: () => {
+      // keep UX simple — errors will surface via UI toast component used elsewhere
     },
   });
 
@@ -319,13 +351,23 @@ export default function RegulatoryChangesPage() {
         </div>
 
         {canCreate && (
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="btn-primary flex items-center gap-2"
-          >
-            <Plus className="h-4 w-4" />
-            New Change
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsUploadOpen(true)}
+              className="btn-primary flex items-center gap-2"
+              disabled={uploadMutation.isPending}
+            >
+              <Upload className="h-4 w-4" />
+              Upload Document
+            </button>
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="btn-primary flex items-center gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              New Change
+            </button>
+          </div>
         )}
       </div>
 
@@ -577,6 +619,108 @@ export default function RegulatoryChangesPage() {
                 </button>
               </div>
             </form>
+      </RightSlidePanel>
+
+      <RightSlidePanel
+        isOpen={isUploadOpen}
+        onClose={() => {
+          setIsUploadOpen(false);
+          setUploadFile(null);
+          setUploadTitleHint('');
+          setUploadSource('custom');
+        }}
+        title="Upload Regulatory Document"
+        width="w-full max-w-2xl"
+      >
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            uploadMutation.mutate();
+          }}
+          className="space-y-4"
+        >
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Document *</label>
+            <input
+              type="file"
+              accept=".pdf,.doc,.docx"
+              onChange={(e) => {
+                const f = e.target.files?.[0] ?? null;
+                setUploadFile(f);
+              }}
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700"
+            />
+            {uploadFile && (
+              <p className="mt-2 text-xs text-slate-500">Selected: {uploadFile.name}</p>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Source</label>
+              <select
+                value={uploadSource}
+                onChange={(e) => setUploadSource(e.target.value)}
+                className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+              >
+                {SOURCE_OPTIONS.filter((o) => o.value).map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Title hint</label>
+              <input
+                type="text"
+                value={uploadTitleHint}
+                onChange={(e) => setUploadTitleHint(e.target.value)}
+                placeholder="Optional short name"
+                className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+              />
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-amber-900">AI will do the heavy lifting</p>
+                <p className="text-xs text-amber-800 mt-0.5">
+                  We will extract requirements, map impacted controls to your platform, and generate implementation tasks and compliance gaps.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
+            <button
+              type="button"
+              onClick={() => {
+                setIsUploadOpen(false);
+                setUploadFile(null);
+                setUploadTitleHint('');
+                setUploadSource('custom');
+              }}
+              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={uploadMutation.isPending || !uploadFile}
+              className="btn-primary flex items-center gap-2 disabled:opacity-50"
+            >
+              {uploadMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Upload className="h-4 w-4" />
+              )}
+              Upload & Extract
+            </button>
+          </div>
+        </form>
       </RightSlidePanel>
     </div>
   );

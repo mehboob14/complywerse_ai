@@ -2487,3 +2487,93 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* ─── Auth screens (login / registration) — entrance + ambient motion ─────
+   Reduced-motion is handled globally by the block above (it clamps every
+   animation), so these are safe to run by default. */
+@keyframes authFadeUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes authFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes authFloat {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50%      { transform: translate(22px, -28px) scale(1.08); }
+}
+@keyframes authFloatAlt {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50%      { transform: translate(-28px, 20px) scale(1.1); }
+}
+/* --tilt keeps each chip's sticker rotation while it floats (an animation's
+   transform would otherwise wipe out an inline rotate). */
+@keyframes authDrift {
+  0%, 100% { transform: rotate(var(--tilt, 0deg)) translateY(0); }
+  50%      { transform: rotate(var(--tilt, 0deg)) translateY(-8px); }
+}
+/* Full-width framework marquee: the track holds two copies of the chip list
+   and slides -50% → 0 so chips travel left → right in a seamless loop. */
+@keyframes authMarquee {
+  from { transform: translateX(-50%); }
+  to   { transform: translateX(0); }
+}
+@keyframes authPulseDot {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-base, #14b8a6) 60%, transparent); }
+  50%      { box-shadow: 0 0 0 5px color-mix(in srgb, var(--color-base, #14b8a6) 0%, transparent); }
+}
+@keyframes authShimmer {
+  0%   { transform: translateX(-160%) skewX(-16deg); }
+  100% { transform: translateX(320%) skewX(-16deg); }
+}
+
+.auth-fade-up { opacity: 0; animation: authFadeUp 0.6s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.auth-fade-in { opacity: 0; animation: authFadeIn 0.9s ease both; }
+.auth-blob-1  { animation: authFloat 16s ease-in-out infinite; }
+.auth-blob-2  { animation: authFloatAlt 20s ease-in-out infinite; }
+.auth-blob-3  { animation: authFloat 24s ease-in-out infinite 2.5s; }
+.auth-chip    { animation: authDrift 6s ease-in-out infinite; }
+.auth-marquee-track { animation: authMarquee 55s linear infinite; }
+.auth-marquee-track:hover { animation-play-state: paused; }
+/* Hero modules strip: same loop, run backwards and a touch quicker so it
+   counters the framework marquee instead of echoing it. */
+.auth-marquee-track-reverse { animation: authMarquee 38s linear infinite reverse; }
+.auth-marquee-track-reverse:hover { animation-play-state: paused; }
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-marquee-track, .auth-marquee-track-reverse { animation: none; }
+}
+
+/* Auth form card: overflow stays reachable on very short viewports but the
+   scrollbar itself is never shown (it broke the clean card look). */
+.auth-no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.auth-no-scrollbar::-webkit-scrollbar { display: none; }
+
+/* Chrome/Edge paint autofilled inputs pale yellow, which fights the design.
+   Repaint the field's own background over it and keep the text color ours. */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+textarea:-webkit-autofill,
+select:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0 1000px #fff inset;
+  box-shadow: 0 0 0 1000px #fff inset;
+  -webkit-text-fill-color: #0f172a;
+  caret-color: #0f172a;
+  transition: background-color 999999s ease-in-out 0s;
+}
+.auth-dot     { animation: authPulseDot 2.6s ease-in-out infinite; }
+
+/* Shimmer sweep across a primary CTA on hover. */
+.auth-cta { position: relative; overflow: hidden; isolation: isolate; }
+.auth-cta > * { position: relative; z-index: 1; }
+.auth-cta::after {
+  content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  width: 45%; transform: translateX(-160%) skewX(-16deg);
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.38), transparent);
+}
+.auth-cta:hover::after { animation: authShimmer 0.85s ease; }

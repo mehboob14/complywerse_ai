@@ -117,3 +117,39 @@ def install_openai_compat_shim() -> bool:
 # Install at import time so every layer that imports this module — the running
 # app *and* standalone scripts (e.g. artifact generation) — gets the shim.
 install_openai_compat_shim()
+
+
+# ----- LangSmith (AI usage tracing / monitoring) ----------------------------
+def get_langsmith_api_key() -> str | None:
+    """Resolve LangSmith API key (LANGSMITH_API_KEY or LANGCHAIN_API_KEY)."""
+    return os.environ.get("LANGSMITH_API_KEY") or os.environ.get("LANGCHAIN_API_KEY")
+
+
+def get_langsmith_api_url() -> str | None:
+    """Optional custom LangSmith API host."""
+    return os.environ.get("LANGSMITH_ENDPOINT") or os.environ.get("LANGCHAIN_ENDPOINT")
+
+
+def get_langsmith_project(tenant_slug: str | None = None) -> str:
+    """Resolve the LangSmith project name for this deployment / tenant.
+
+    Supports ``LANGSMITH_PROJECT_TEMPLATE`` with ``{slug}`` for per-tenant
+    projects (e.g. ``compliverse-{slug}``). Falls back to ``LANGSMITH_PROJECT``
+    / ``LANGCHAIN_PROJECT`` / ``compliverse``.
+    """
+    template = (os.environ.get("LANGSMITH_PROJECT_TEMPLATE") or "").strip()
+    if template and tenant_slug:
+        try:
+            return template.format(slug=tenant_slug)
+        except Exception:
+            pass
+    return (
+        os.environ.get("LANGSMITH_PROJECT")
+        or os.environ.get("LANGCHAIN_PROJECT")
+        or "compliverse"
+    )
+
+
+def is_langsmith_configured() -> bool:
+    """True when an API key is present (tracing / usage queries can run)."""
+    return bool(get_langsmith_api_key())

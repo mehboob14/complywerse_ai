@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect, Fragment } from 'react';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { usePermissions } from '@/hooks/usePermissions';
 import * as XLSX from 'xlsx';
-import { adminApi, assetsApi, ermApi, teamsApi, aiRecommendationsApi } from '@/lib/api';
+import { adminApi, assetsApi, ermApi, teamsApi, aiRecommendationsApi, governanceApi } from '@/lib/api';
 import apiClient from '@/lib/api';
 import { ITAsset, Risk, RiskCategory, RiskStatus, RiskDashboard, HeatmapCell } from '@/types';
 import {
@@ -47,6 +47,7 @@ import NcaRiskRegisterTab from '@/components/risks/NcaRiskRegisterTab';
 import NcaRiskQuickAddModal from '@/components/risks/NcaRiskQuickAddModal';
 import RiskViewSwitcher from '@/components/risks/RiskViewSwitcher';
 import { useRouter as useNextRouter, useSearchParams } from 'next/navigation';
+import OneLinkRegisterFields, { initOneLinkValue, deriveCore, oneLinkHeatBand, type OneLinkValue } from '../_components/OneLinkRegisterFields';
 
 type ScoreFilter = 'all' | 'critical' | 'high' | 'medium' | 'low';
 const UBL_TEMPLATE_REGISTER_TYPE = 'UBL Template';
@@ -475,9 +476,13 @@ const UBL_DEFAULT_FIELD_SECTIONS: UBLFieldSection[] = [
 
 const NCA_TEMPLATE_REGISTER_TYPE = 'NCA Template';
 
+const ONELINK_REGISTER_TYPE = '1LINK';
+
 const REGISTER_TYPES = [
   { value: UBL_TEMPLATE_REGISTER_TYPE, label: 'Template' },
   { value: NCA_TEMPLATE_REGISTER_TYPE, label: 'NCA Template' },
+  { value: ONELINK_REGISTER_TYPE, label: '1LINK' },
+  { value: 'RCSA', label: 'RCSA' },
   { value: 'PCI-DSS', label: 'PCI-DSS' },
   { value: 'ISO 27001', label: 'ISO 27001' },
   { value: 'SOX', label: 'SOX' },
@@ -516,6 +521,11 @@ const isUBLRegisterTypeValue = (value: string | null | undefined) =>
 
 const isNcaRegisterTypeValue = (value: string | null | undefined) =>
   canonicalFilterValue(value) === canonicalFilterValue(NCA_TEMPLATE_REGISTER_TYPE);
+
+// Matches both the current '1LINK' label and the legacy '1LINK ERM RCSA' value
+// still stored on older rows.
+const isOneLinkRegisterTypeValue = (value: string | null | undefined) =>
+  canonicalFilterValue(value).includes(canonicalFilterValue(ONELINK_REGISTER_TYPE));
 
 const isUBLAllowedCategoryValue = (value: string | null | undefined) =>
   UBL_ONLY_RISK_CATEGORIES.some((allowed) => filterValuesMatch(value, allowed));
@@ -701,6 +711,17 @@ const getHeatmapCellColor = (likelihood: number, impact: number) => {
   return 'bg-emerald-500 hover:bg-emerald-600';
 };
 
+// 1LINK ERM Framework uses a 3×3 grid banded Low (1–2), Medium (3–4), High (6–9).
+const getOneLinkHeatmapCellColor = (likelihood: number, impact: number) => {
+  const score = likelihood * impact;
+  if (score >= 6) return 'bg-rose-500 hover:bg-rose-600';
+  if (score >= 3) return 'bg-amber-400 hover:bg-amber-500';
+  return 'bg-emerald-500 hover:bg-emerald-600';
+};
+
+/** Clamp a possibly 5-scale likelihood/impact onto the 1LINK 3-point scale. */
+const clampTo3 = (n: number) => Math.min(3, Math.max(1, n));
+
 export default function ERMRisksPage() {
   const { hasPermission } = usePermissions();
   const canCreate = hasPermission('erm:risks:create');
@@ -728,6 +749,14 @@ export default function ERMRisksPage() {
   const ncaAddRouter = useNextRouter();
   const isUBLFilterSelected = isUBLRegisterTypeValue(registerTypeFilter);
   const isNcaFilterSelected = isNcaRegisterTypeValue(registerTypeFilter);
+  // 1LINK register uses the framework's 3×3 assessment grid, not the 5×5.
+  const isOneLinkFilterSelected = isOneLinkRegisterTypeValue(registerTypeFilter);
+  const heatmapScale = isOneLinkFilterSelected ? 3 : 5;
+
+  // A cell selected on one grid size is meaningless on the other.
+  useEffect(() => {
+    setSelectedHeatmapCell(null);
+  }, [registerTypeFilter]);
 
   useEffect(() => {
     if (!isUBLFilterSelected) return;
@@ -786,6 +815,27 @@ export default function ERMRisksPage() {
     }
   }, [editIdParam, risks, isModalOpen]);
 
+  // Other deep-link params used by the register dashboard and sibling modules:
+  //   ?new=1            → open the Add Risk slide-over
+  //   ?upload=1         → open the Import modal
+  //   ?register_type=X  → preset the register-type filter
+  const newParam = searchParams?.get('new');
+  const uploadParam = searchParams?.get('upload');
+  const registerTypeParam = searchParams?.get('register_type');
+  useEffect(() => {
+    if (!newParam && !uploadParam && !registerTypeParam) return;
+    if (registerTypeParam) setRegisterTypeFilter(registerTypeParam);
+    if (newParam) {
+      setEditingRisk(null);
+      setIsModalOpen(true);
+    } else if (uploadParam) {
+      setIsUploadModalOpen(true);
+    }
+    // Strip the params so closing the modal doesn't re-open it on re-render.
+    window.history.replaceState({}, '', window.location.pathname);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [newParam, uploadParam, registerTypeParam]);
+
   const { data: dashboard } = useQuery({
     queryKey: ['erm-risks-dashboard'],
     queryFn: async () => {
@@ -839,6 +889,39 @@ export default function ERMRisksPage() {
 
     setIsUploading(true);
     setUploadResult(null);
+
+    // ─── 1LINK RCSA register — server-side import that preserves every column ─
+    if (selectedRegisterType === ONELINK_REGISTER_TYPE) {
+      try {
+        const form = new FormData();
+        form.append('file', file);
+        const { data } = await apiClient.post('/erm/onboarding/import-register', form, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        setUploadResult({
+          message: `1LINK register: imported ${data.created} risk${data.created === 1 ? '' : 's'}${data.skipped ? `, skipped ${data.skipped} already present` : ''}`,
+          created: data.created ?? 0,
+          skipped: data.skipped ?? 0,
+          errors: data.errors ?? [],
+        });
+        queryClient.invalidateQueries({ queryKey: ['erm-risks'] });
+        queryClient.invalidateQueries({ queryKey: ['erm-risks-dashboard'] });
+        queryClient.invalidateQueries({ queryKey: ['erm-risks-heatmap'] });
+        setIsUploadModalOpen(false);
+        setSelectedRegisterType('');
+      } catch (err: any) {
+        setUploadResult({
+          message: err?.response?.data?.detail || err?.message || '1LINK register upload failed',
+          created: 0,
+          skipped: 0,
+          errors: [err?.message || 'Upload failed'],
+        });
+      } finally {
+        setIsUploading(false);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      }
+      return;
+    }
 
     // ─── NCA Template path — parse client-side, POST each row to /risks/nca ─
     // The backend `upload_risk_register` is UBL-format-specific (looks for
@@ -1024,12 +1107,30 @@ export default function ERMRisksPage() {
 
   const heatmapMatrix = useMemo(() => {
     const matrix: Record<string, { count: number; risks: Array<{id: number; title: string; score: number}> }> = {};
-    for (let l = 1; l <= 5; l++) {
-      for (let i = 1; i <= 5; i++) {
+    for (let l = 1; l <= heatmapScale; l++) {
+      for (let i = 1; i <= heatmapScale; i++) {
         matrix[`${l}-${i}`] = { count: 0, risks: [] };
       }
     }
-    
+
+    // 1LINK view: build the 3×3 from the register's own risks only. The API
+    // heatmap aggregates every register on a 5-point scale, so it can't be
+    // reused here; legacy entries scored >3 are clamped onto the 3-point grid.
+    if (isOneLinkFilterSelected) {
+      (risks || []).forEach((risk: Risk) => {
+        if (!isOneLinkRegisterTypeValue(risk.register_type)) return;
+        const likelihood = heatmapType === 'inherent' ? risk.inherent_likelihood : risk.residual_likelihood;
+        const impact = heatmapType === 'inherent' ? risk.inherent_impact : risk.residual_impact;
+        const score = heatmapType === 'inherent' ? risk.inherent_score : risk.residual_score;
+        if (likelihood && impact) {
+          const key = `${clampTo3(likelihood)}-${clampTo3(impact)}`;
+          matrix[key].count++;
+          matrix[key].risks.push({ id: risk.id, title: risk.title, score: score || 0 });
+        }
+      });
+      return matrix;
+    }
+
     if (heatmapData) {
       heatmapData.forEach((cell: HeatmapCell) => {
         matrix[`${cell.likelihood}-${cell.impact}`] = { count: cell.count, risks: cell.risks };
@@ -1049,7 +1150,7 @@ export default function ERMRisksPage() {
       });
     }
     return matrix;
-  }, [risks, heatmapData, heatmapType]);
+  }, [risks, heatmapData, heatmapType, heatmapScale, isOneLinkFilterSelected]);
 
   const computedDashboard = useMemo(() => {
     if (dashboard) return dashboard;
@@ -1114,15 +1215,26 @@ export default function ERMRisksPage() {
       
       let matchesScore = true;
       const score = risk.inherent_score || 0;
-      if (scoreFilter === 'critical') matchesScore = score >= 20;
-      else if (scoreFilter === 'high') matchesScore = score >= 12 && score < 20;
-      else if (scoreFilter === 'medium') matchesScore = score >= 6 && score < 12;
-      else if (scoreFilter === 'low') matchesScore = score < 6;
+      if (isOneLinkFilterSelected) {
+        // 1LINK 3×3 bands: High 6–9, Medium 3–5, Low 1–2.
+        if (scoreFilter === 'critical' || scoreFilter === 'high') matchesScore = score >= 6;
+        else if (scoreFilter === 'medium') matchesScore = score >= 3 && score < 6;
+        else if (scoreFilter === 'low') matchesScore = score > 0 && score < 3;
+      } else {
+        if (scoreFilter === 'critical') matchesScore = score >= 20;
+        else if (scoreFilter === 'high') matchesScore = score >= 12 && score < 20;
+        else if (scoreFilter === 'medium') matchesScore = score >= 6 && score < 12;
+        else if (scoreFilter === 'low') matchesScore = score < 6;
+      }
       
       let matchesHeatmap = true;
       if (selectedHeatmapCell) {
-        const likelihood = heatmapType === 'inherent' ? risk.inherent_likelihood : risk.residual_likelihood;
-        const impact = heatmapType === 'inherent' ? risk.inherent_impact : risk.residual_impact;
+        let likelihood = heatmapType === 'inherent' ? risk.inherent_likelihood : risk.residual_likelihood;
+        let impact = heatmapType === 'inherent' ? risk.inherent_impact : risk.residual_impact;
+        if (isOneLinkFilterSelected) {
+          likelihood = likelihood ? clampTo3(likelihood) : likelihood;
+          impact = impact ? clampTo3(impact) : impact;
+        }
         matchesHeatmap = likelihood === selectedHeatmapCell.l && impact === selectedHeatmapCell.i;
       }
       
@@ -1259,7 +1371,14 @@ export default function ERMRisksPage() {
 
       <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg sm:text-xl font-semibold text-slate-900">Risk Heatmap</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg sm:text-xl font-semibold text-slate-900">Risk Heatmap</h2>
+              {isOneLinkFilterSelected && (
+                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                  1LINK 3×3 · Low / Medium / High
+                </span>
+              )}
+            </div>
             <div className="flex gap-1">
               <button
                 onClick={() => {
@@ -1292,16 +1411,14 @@ export default function ERMRisksPage() {
 
           <div className="flex">
             <div className="flex flex-col justify-between pr-2 text-xs text-slate-500">
-              <span>5</span>
-              <span>4</span>
-              <span>3</span>
-              <span>2</span>
-              <span>1</span>
+              {Array.from({ length: heatmapScale }, (_, idx) => heatmapScale - idx).map((n) => (
+                <span key={n}>{n}</span>
+              ))}
             </div>
             <div className="flex-1">
-              <div className="grid grid-cols-5 gap-1">
-                {[5, 4, 3, 2, 1].map((likelihood) =>
-                  [1, 2, 3, 4, 5].map((impact) => {
+              <div className={`grid gap-1 ${heatmapScale === 3 ? 'grid-cols-3' : 'grid-cols-5'}`}>
+                {Array.from({ length: heatmapScale }, (_, idx) => heatmapScale - idx).map((likelihood) =>
+                  Array.from({ length: heatmapScale }, (_, idx) => idx + 1).map((impact) => {
                     const cell = heatmapMatrix[`${likelihood}-${impact}`];
                     const isSelected = selectedHeatmapCell?.l === likelihood && selectedHeatmapCell?.i === impact;
                     return (
@@ -1314,10 +1431,16 @@ export default function ERMRisksPage() {
                             setSelectedHeatmapCell({ l: likelihood, i: impact });
                           }
                         }}
-                        className={`h-12 w-full flex items-center justify-center rounded text-xs font-medium transition-all ${
-                          getHeatmapCellColor(likelihood, impact)
+                        className={`${heatmapScale === 3 ? 'h-16' : 'h-12'} w-full flex items-center justify-center rounded text-xs font-medium transition-all ${
+                          isOneLinkFilterSelected
+                            ? getOneLinkHeatmapCellColor(likelihood, impact)
+                            : getHeatmapCellColor(likelihood, impact)
                         } ${isSelected ? 'ring-2 ring-white ring-offset-1 ring-offset-white' : ''}`}
-                        title={`L${likelihood} x I${impact} = ${likelihood * impact}`}
+                        title={
+                          isOneLinkFilterSelected
+                            ? `L${likelihood} x I${impact} = ${likelihood * impact} (${oneLinkHeatBand(likelihood * impact)})`
+                            : `L${likelihood} x I${impact} = ${likelihood * impact}`
+                        }
                       >
                         {cell?.count > 0 && (
                           <span className="text-white">{cell.count}</span>
@@ -1330,7 +1453,7 @@ export default function ERMRisksPage() {
               <div className="mt-2 flex justify-between text-xs text-slate-500">
                 <span>1</span>
                 <span>Impact</span>
-                <span>5</span>
+                <span>{heatmapScale}</span>
               </div>
             </div>
           </div>
@@ -1376,12 +1499,20 @@ export default function ERMRisksPage() {
 
           <MultiSelectDropdown
             title="Score"
-            items={[
-              { value: 'critical', label: 'Critical (>=20)' },
-              { value: 'high', label: 'High (12-19)' },
-              { value: 'medium', label: 'Medium (6-11)' },
-              { value: 'low', label: 'Low (<6)' },
-            ]}
+            items={
+              isOneLinkFilterSelected
+                ? [
+                    { value: 'high', label: 'High (6-9)' },
+                    { value: 'medium', label: 'Medium (3-5)' },
+                    { value: 'low', label: 'Low (1-2)' },
+                  ]
+                : [
+                    { value: 'critical', label: 'Critical (>=20)' },
+                    { value: 'high', label: 'High (12-19)' },
+                    { value: 'medium', label: 'Medium (6-11)' },
+                    { value: 'low', label: 'Low (<6)' },
+                  ]
+            }
             selectedValues={scoreFilter === 'all' ? [] : [scoreFilter]}
             onApply={(values) => setScoreFilter((values[0] as ScoreFilter) || 'all')}
             multiSelect={false}
@@ -1859,11 +1990,13 @@ export default function ERMRisksPage() {
         <RiskModal
           isOpen={isModalOpen}
           risk={editingRisk}
+          initialRegisterType={registerTypeFilter !== 'all' ? registerTypeFilter : ''}
+          nextOneLinkSeq={(risks || []).filter((r) => isOneLinkRegisterTypeValue(r.register_type)).length + 1}
           onClose={() => {
             setIsModalOpen(false);
             setEditingRisk(null);
           }}
-          onSubmit={async ({ riskData, linkedAssetIds }) => {
+          onSubmit={async ({ riskData, linkedAssetIds, aiSuggestions: createdAi }) => {
             if (editingRisk) {
               const updated = await updateMutation.mutateAsync({ id: editingRisk.id, data: riskData });
               const updatedRiskId = updated?.data?.id || editingRisk.id;
@@ -1888,6 +2021,19 @@ export default function ERMRisksPage() {
                 }
               }
               queryClient.invalidateQueries({ queryKey: ['erm-risks'] });
+            }
+            // Lock AI Assist for this new risk by persisting the one-shot suggestion.
+            if (createdRiskId && createdAi) {
+              aiRecommendationsApi
+                .save({
+                  module: 'erm_risk_suggestion',
+                  recommendation_type: 'ai_suggestion',
+                  entity_type: 'risk',
+                  entity_id: String(createdRiskId),
+                  title: `AI suggestion · ${(riskData as { title?: string }).title || 'risk'}`,
+                  output: createdAi as unknown as Record<string, unknown>,
+                })
+                .catch(() => {});
             }
           }}
           isLoading={createMutation.isPending || updateMutation.isPending}
@@ -1996,6 +2142,7 @@ interface AISuggestion {
 interface RiskModalSubmitPayload {
   riskData: Partial<Risk>;
   linkedAssetIds?: number[];
+  aiSuggestions?: AISuggestion | null;
 }
 
 function RiskModal({
@@ -2004,17 +2151,23 @@ function RiskModal({
   onClose,
   onSubmit,
   isLoading,
+  initialRegisterType = '',
+  nextOneLinkSeq = 1,
 }: {
   isOpen?: boolean;
   risk: Risk | null;
   onClose: () => void;
   onSubmit: (payload: RiskModalSubmitPayload) => Promise<void> | void;
   isLoading: boolean;
+  /** Preselect the register type (e.g. from the list's active filter). */
+  initialRegisterType?: string;
+  /** Next sequence number for system-generated 1LINK S.No. / RISK ID. */
+  nextOneLinkSeq?: number;
 }) {
   const [formData, setFormData] = useState({
     title: risk?.title || '',
     description: risk?.description || '',
-    register_type: risk?.register_type || '',
+    register_type: risk?.register_type || initialRegisterType || '',
     risk_category: risk?.risk_category || 'operational' as RiskCategory,
     risk_sub_category: risk?.risk_sub_category || toInputString((risk?.ubl_fields as Record<string, unknown> | undefined)?.sub_source_activity || ''),
     business_owner_id: risk?.business_owner_id || undefined as number | undefined,
@@ -2056,21 +2209,33 @@ function RiskModal({
     return defaults;
   });
 
+  // 1LINK template fields (seeded from the risk's template_fields on edit).
+  const [templateFields, setTemplateFields] = useState<OneLinkValue>(() =>
+    initOneLinkValue(risk?.template_fields as Record<string, unknown> | undefined),
+  );
+
   const [aiSuggestions, setAiSuggestions] = useState<AISuggestion | null>(null);
   const [isLoadingAI, setIsLoadingAI] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
-  // Which AI sections the user has "saved to field" — the button flips to "Saved".
+  // Which AI sections the user has "saved to field" — the button flips to "Saved"
+  // briefly, then that suggestion block auto-hides from the panel.
   const [savedSections, setSavedSections] = useState<Set<string>>(new Set());
+  const [hiddenSections, setHiddenSections] = useState<Set<string>>(new Set());
+  // AI Assist is one-shot per risk entry: once generated (or rehydrated), the
+  // button stays disabled on this entry; other risks can still use Assist.
+  const [aiAssistUsed, setAiAssistUsed] = useState(false);
   // Recommended Controls is collapsed by default (it otherwise consumes space).
   const [showControls, setShowControls] = useState(false);
 
-  // Rehydrate a previously "Saved for team" AI suggestion when the modal reopens
-  // for an existing risk. The modal unmounts on close and resets state, so
-  // without this the saved panel is blank until the user re-runs AI Assist.
+  // Rehydrate a previously generated AI suggestion when the modal reopens for
+  // an existing risk. Presence of a saved record also locks AI Assist (atomic).
   useEffect(() => {
     const rid = risk?.id;
-    if (!rid) return;
+    if (!rid) {
+      setAiAssistUsed(false);
+      return;
+    }
     let cancelled = false;
     aiRecommendationsApi
       .list({ module: 'erm_risk_suggestion', recommendation_type: 'ai_suggestion', entity_type: 'risk', entity_id: String(rid) })
@@ -2093,6 +2258,8 @@ function RiskModal({
           });
           setShowSuggestions(true);
           setSavedSections(new Set());
+          setHiddenSections(new Set());
+          setAiAssistUsed(true);
         }
       })
       .catch(() => {});
@@ -2127,11 +2294,8 @@ function RiskModal({
     },
   });
 
-  // Active teams from admin/teams. These now drive the "Assigned Team"
-  // and "Affected Departments" pickers — replacing the hardcoded list
-  // that the tenant couldn't edit. The same Team list is used for RCSA
-  // campaign seeding, so a risk assigned to a team here matches the
-  // assessment row that team will fill out.
+  // Active teams from admin/teams. These drive the "Assigned Team / Department"
+  // picker — replacing the hardcoded list that the tenant couldn't edit.
   const { data: teams } = useQuery({
     queryKey: ['risk-modal-teams'],
     queryFn: async () => {
@@ -2170,6 +2334,78 @@ function RiskModal({
   }, [assets, selectedAssetIds]);
 
   const isUBLTemplateSelected = canonicalFilterValue(formData.register_type) === canonicalFilterValue(UBL_TEMPLATE_REGISTER_TYPE);
+  const isOneLinkSelected = isOneLinkRegisterTypeValue(formData.register_type);
+
+  // 1LINK: S.No. / RISK ID are system-generated on create (RK-001, RK-002, …).
+  useEffect(() => {
+    if (!isOneLinkSelected || risk) return;
+    setTemplateFields((prev) => {
+      if (prev.risk_id && prev.serial_no) return prev;
+      return {
+        ...prev,
+        serial_no: prev.serial_no || String(nextOneLinkSeq),
+        risk_id: prev.risk_id || `RK-${String(nextOneLinkSeq).padStart(3, '0')}`,
+      };
+    });
+  }, [isOneLinkSelected, risk, nextOneLinkSeq]);
+
+  // Platform entities for the 1LINK linkage dropdowns (incidents, internal
+  // controls, governance documents). Only fetched while the 1LINK template
+  // is active in the form.
+  const { data: oneLinkIncidents } = useQuery({
+    queryKey: ['erm-incidents-for-onelink'],
+    queryFn: async () => {
+      try {
+        const response = await ermApi.incidents.getAll();
+        return response.data || [];
+      } catch {
+        return [];
+      }
+    },
+    enabled: isOneLinkSelected,
+    staleTime: 60 * 1000,
+  });
+  const { data: oneLinkControls } = useQuery({
+    queryKey: ['erm-internal-controls-for-onelink'],
+    queryFn: async () => {
+      try {
+        const response = await ermApi.internalControls.getAll();
+        const data: any = response.data;
+        return (Array.isArray(data) ? data : data?.items || []) as Array<{ id: number; control_id?: string; name?: string }>;
+      } catch {
+        return [];
+      }
+    },
+    enabled: isOneLinkSelected,
+    staleTime: 60 * 1000,
+  });
+  const { data: oneLinkDocuments } = useQuery({
+    queryKey: ['governance-documents-for-onelink'],
+    queryFn: async () => {
+      try {
+        const response = await governanceApi.getDocuments({ limit: 500 });
+        const data: any = response.data;
+        return (Array.isArray(data) ? data : data?.items || []) as Array<{ id: number; title?: string }>;
+      } catch {
+        return [];
+      }
+    },
+    enabled: isOneLinkSelected,
+    staleTime: 60 * 1000,
+  });
+
+  const oneLinkLookups = useMemo(() => ({
+    users: (users || []).map((u) => u.full_name || u.email).filter(Boolean),
+    departments: ((teams || []) as Array<{ name?: string }>).map((t) => t.name || '').filter(Boolean),
+    incidents: ((oneLinkIncidents || []) as Array<{ id: number; title?: string }>).map(
+      (i) => `INC-${i.id}${i.title ? ` · ${i.title}` : ''}`,
+    ),
+    controls: (oneLinkControls || []).map(
+      (c) => `${c.control_id || `IC-${c.id}`}${c.name ? ` · ${c.name}` : ''}`,
+    ),
+    documents: (oneLinkDocuments || []).map((d) => d.title || `Document #${d.id}`).filter(Boolean),
+  }), [users, teams, oneLinkIncidents, oneLinkControls, oneLinkDocuments]);
+
   const categoryOptions = isUBLTemplateSelected
     ? RISK_CATEGORIES.filter((category) => UBL_ONLY_RISK_CATEGORIES.includes(category.value))
     : STANDARD_RISK_CATEGORIES;
@@ -2228,15 +2464,6 @@ function RiskModal({
     });
   };
 
-  const handleDepartmentToggle = (deptId: number) => {
-    const current = formData.affected_department_ids;
-    if (current.includes(deptId)) {
-      setFormData({ ...formData, affected_department_ids: current.filter(id => id !== deptId) });
-    } else {
-      setFormData({ ...formData, affected_department_ids: [...current, deptId] });
-    }
-  };
-
   const toggleAssetSelection = (assetId: number) => {
     setSelectedAssetIds((current) =>
       current.includes(assetId) ? current.filter((id) => id !== assetId) : [...current, assetId]
@@ -2259,6 +2486,7 @@ function RiskModal({
   };
 
   const handleGetAISuggestions = async () => {
+    if (aiAssistUsed) return;
     if (formData.title.trim().length < 3) {
       setAiError('Please enter at least 3 characters for the risk title');
       return;
@@ -2274,9 +2502,25 @@ function RiskModal({
         sub_category: formData.risk_sub_category || undefined,
         description: formData.description || undefined,
       });
-      setAiSuggestions(response.data);
+      const data = response.data as AISuggestion;
+      setAiSuggestions(data);
       setShowSuggestions(true);
       setSavedSections(new Set());
+      setHiddenSections(new Set());
+      setAiAssistUsed(true);
+      // Persist so reopen + other sessions treat this entry as already assisted.
+      if (risk?.id) {
+        aiRecommendationsApi
+          .save({
+            module: 'erm_risk_suggestion',
+            recommendation_type: 'ai_suggestion',
+            entity_type: 'risk',
+            entity_id: String(risk.id),
+            title: `AI suggestion · ${formData.title || 'risk'}`,
+            output: data as unknown as Record<string, unknown>,
+          })
+          .catch(() => {});
+      }
     } catch (err) {
       console.error('AI suggestion error:', err);
       setAiError('Failed to get AI suggestions. Please try again.');
@@ -2285,63 +2529,56 @@ function RiskModal({
     }
   };
 
-  const applyDescription = () => {
-    if (aiSuggestions?.suggested_description) {
-      setFormData({ ...formData, description: aiSuggestions.suggested_description });
-    }
+  // Save an AI section into its OWN field as a NUMBERED list (1. 2. 3.),
+  // flip the button to "Saved", then auto-hide that suggestion block shortly after.
+  const markSaved = (key: string) => {
+    setSavedSections((prev) => new Set(prev).add(key));
+    window.setTimeout(() => {
+      setHiddenSections((prev) => new Set(prev).add(key));
+    }, 900);
   };
-
-  // Save an AI section into its OWN field as a NUMBERED list (1. 2. 3.) and flip
-  // that section's "Save to field" button to "Saved".
-  const markSaved = (key: string) => setSavedSections((prev) => new Set(prev).add(key));
+  const isSectionVisible = (key: string) => !hiddenSections.has(key);
   const numbered = (items: string[]) => items.map((t, i) => `${i + 1}. ${t}`).join('\n');
+  const applyDescription = () => {
+    if (!aiSuggestions?.suggested_description || savedSections.has('description')) return;
+    setFormData((prev) => ({ ...prev, description: aiSuggestions.suggested_description }));
+    markSaved('description');
+  };
   const applyRootCauses = () => {
+    if (savedSections.has('rootCauses')) return;
     const causes = aiSuggestions?.suggested_causes || [];
     if (causes.length) { setFormData((prev) => ({ ...prev, root_cause: numbered(causes) })); markSaved('rootCauses'); }
   };
   const applyRecommendations = () => {
+    if (savedSections.has('recommendations')) return;
     const recs = aiSuggestions?.suggested_recommendations || [];
     if (recs.length) { setFormData((prev) => ({ ...prev, recommendations: numbered(recs) })); markSaved('recommendations'); }
   };
   const applyConsequences = () => {
+    if (savedSections.has('consequences')) return;
     const cons = aiSuggestions?.suggested_consequences || [];
     if (cons.length) { setFormData((prev) => ({ ...prev, consequences: numbered(cons) })); markSaved('consequences'); }
   };
   const applyTreatmentOptions = () => {
+    if (savedSections.has('treatment')) return;
     const opts = aiSuggestions?.risk_treatment_options || [];
     if (opts.length) { setFormData((prev) => ({ ...prev, treatment_plan: numbered(opts) })); markSaved('treatment'); }
   };
   // Per-section "Save to field" button styling + label (flips to "Saved").
-  const savedBtnClass = (k: string) => `flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium ${savedSections.has(k) ? 'text-emerald-600' : 'text-primary-600 hover:bg-primary-50'}`;
+  const savedBtnClass = (k: string) =>
+    `flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium ${
+      savedSections.has(k) ? 'text-emerald-700 bg-emerald-50 cursor-default' : 'text-primary-600 hover:bg-primary-50'
+    }`;
   const savedBtnLabel = (k: string) => (savedSections.has(k) ? 'Saved' : 'Save to field');
 
   const applyLikelihoodImpact = () => {
-    if (aiSuggestions) {
-      setFormData({
-        ...formData,
-        inherent_likelihood: aiSuggestions.suggested_likelihood,
-        inherent_impact: aiSuggestions.suggested_impact,
-      });
-    }
-  };
-
-  // Clicking a single AI chip appends that one item into its OWN dedicated
-  // field (Root Cause / Consequences), NOT the description — so the field the
-  // user is about to save visibly fills up. Deduped against lines already there.
-  const appendCauseToRootCause = (cause: string) => {
-    setFormData((prev) => {
-      const entry = `• ${cause}`;
-      if (prev.root_cause.split('\n').some((l) => l.trim() === entry)) return prev;
-      return { ...prev, root_cause: prev.root_cause ? `${prev.root_cause}\n${entry}` : entry };
-    });
-  };
-
-  const appendConsequenceToField = (consequence: string) => {
-    setFormData((prev) => {
-      const entry = `• ${consequence}`;
-      if (prev.consequences.split('\n').some((l) => l.trim() === entry)) return prev;
-      return { ...prev, consequences: prev.consequences ? `${prev.consequences}\n${entry}` : entry };
-    });
+    if (!aiSuggestions || savedSections.has('rating')) return;
+    setFormData((prev) => ({
+      ...prev,
+      inherent_likelihood: aiSuggestions.suggested_likelihood,
+      inherent_impact: aiSuggestions.suggested_impact,
+    }));
+    markSaved('rating');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -2367,8 +2604,11 @@ function RiskModal({
         inherent_score: formData.inherent_likelihood * formData.inherent_impact,
         residual_score: formData.residual_likelihood * formData.residual_impact,
         ubl_fields: isUBLTemplateSelected ? cleanedUblFields : undefined,
+        ...(isOneLinkSelected ? deriveCore(templateFields) : {}),
+        template_fields: isOneLinkSelected ? templateFields : undefined,
       },
       linkedAssetIds: selectedAssetIds,
+      aiSuggestions: aiAssistUsed ? aiSuggestions : null,
     });
   };
 
@@ -2479,7 +2719,8 @@ function RiskModal({
               <button
                 type="button"
                 onClick={handleGetAISuggestions}
-                disabled={isLoadingAI || formData.title.trim().length < 3}
+                disabled={aiAssistUsed || isLoadingAI || formData.title.trim().length < 3}
+                title={aiAssistUsed ? 'AI Assist already used for this risk' : 'Generate AI suggestions once for this risk'}
                 className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-[#0a0a0a] hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
               >
                 {isLoadingAI ? (
@@ -2487,7 +2728,7 @@ function RiskModal({
                 ) : (
                   <Sparkles className="h-4 w-4" />
                 )}
-                AI Assist
+                {aiAssistUsed ? 'AI Used' : 'AI Assist'}
               </button>
             </div>
             {aiError && (
@@ -2526,24 +2767,31 @@ function RiskModal({
                         output={aiSuggestions as unknown as Record<string, unknown>}
                       />
                     )}
+                    {isSectionVisible('description') && aiSuggestions.suggested_description && (
                     <div>
                       <div className="flex items-center justify-between">
                         <h4 className="text-xs font-medium text-slate-600 uppercase tracking-wider">Suggested Description</h4>
                         <button
                           type="button"
                           onClick={applyDescription}
-                          className="flex items-center gap-1 rounded px-2 py-1 text-xs text-primary-600 hover:bg-primary-50 font-medium"
+                          className={savedBtnClass('description')}
                         >
                           <Check className="h-3 w-3" />
-                          Use this
+                          {savedBtnLabel('description')}
                         </button>
                       </div>
                       <p className="mt-1 text-sm text-slate-700 bg-slate-100/50 rounded-lg p-3">
                         {aiSuggestions.suggested_description}
                       </p>
                     </div>
+                    )}
 
+                    {(
+                      (isSectionVisible('rootCauses') && (aiSuggestions.suggested_causes?.length || 0) > 0) ||
+                      (isSectionVisible('consequences') && (aiSuggestions.suggested_consequences?.length || 0) > 0)
+                    ) && (
                     <div className="grid grid-cols-2 gap-4">
+                      {isSectionVisible('rootCauses') && (aiSuggestions.suggested_causes?.length || 0) > 0 && (
                       <div>
                         <div className="flex items-center justify-between mb-2">
                           <h4 className="text-xs font-medium text-slate-600 uppercase tracking-wider">Root Causes</h4>
@@ -2551,15 +2799,20 @@ function RiskModal({
                             <Check className="h-3 w-3" /> {savedBtnLabel('rootCauses')}
                           </button>
                         </div>
-                        <ol className="space-y-1">
+                        <ol className="space-y-1.5">
                           {aiSuggestions.suggested_causes.map((cause, idx) => (
-                            <li key={idx} className="flex gap-2 rounded-md border border-rose-100 bg-rose-50 px-2.5 py-1.5 text-xs text-rose-800">
-                              <span className="font-semibold text-rose-500">{idx + 1}.</span>
-                              <span>{cause}</span>
+                            <li
+                              key={idx}
+                              className="flex gap-2 rounded-md border border-slate-200 border-l-4 border-l-rose-500 bg-white px-2.5 py-1.5 text-xs text-slate-800"
+                            >
+                              <span className="font-semibold text-rose-600 tabular-nums">{idx + 1}.</span>
+                              <span className="leading-snug">{cause}</span>
                             </li>
                           ))}
                         </ol>
                       </div>
+                      )}
+                      {isSectionVisible('consequences') && (aiSuggestions.suggested_consequences?.length || 0) > 0 && (
                       <div>
                         <div className="flex items-center justify-between mb-2">
                           <h4 className="text-xs font-medium text-slate-600 uppercase tracking-wider">Consequences</h4>
@@ -2567,18 +2820,23 @@ function RiskModal({
                             <Check className="h-3 w-3" /> {savedBtnLabel('consequences')}
                           </button>
                         </div>
-                        <ol className="space-y-1">
+                        <ol className="space-y-1.5">
                           {aiSuggestions.suggested_consequences.map((consequence, idx) => (
-                            <li key={idx} className="flex gap-2 rounded-md border border-orange-100 bg-orange-50 px-2.5 py-1.5 text-xs text-orange-800">
-                              <span className="font-semibold text-orange-500">{idx + 1}.</span>
-                              <span>{consequence}</span>
+                            <li
+                              key={idx}
+                              className="flex gap-2 rounded-md border border-slate-200 border-l-4 border-l-amber-500 bg-white px-2.5 py-1.5 text-xs text-slate-800"
+                            >
+                              <span className="font-semibold text-amber-600 tabular-nums">{idx + 1}.</span>
+                              <span className="leading-snug">{consequence}</span>
                             </li>
                           ))}
                         </ol>
                       </div>
+                      )}
                     </div>
+                    )}
 
-                    {Array.isArray(aiSuggestions.suggested_recommendations) && aiSuggestions.suggested_recommendations.length > 0 && (
+                    {isSectionVisible('recommendations') && Array.isArray(aiSuggestions.suggested_recommendations) && aiSuggestions.suggested_recommendations.length > 0 && (
                       <div>
                         <div className="flex items-center justify-between mb-2">
                           <h4 className="text-xs font-medium text-slate-600 uppercase tracking-wider">Recommendations</h4>
@@ -2586,27 +2844,31 @@ function RiskModal({
                             <Check className="h-3 w-3" /> {savedBtnLabel('recommendations')}
                           </button>
                         </div>
-                        <ol className="space-y-1">
+                        <ol className="space-y-1.5">
                           {aiSuggestions.suggested_recommendations.map((rec, idx) => (
-                            <li key={idx} className="flex items-start gap-2 text-sm text-slate-700">
-                              <span className="font-semibold text-emerald-500">{idx + 1}.</span>
-                              <span>{rec}</span>
+                            <li
+                              key={idx}
+                              className="flex items-start gap-2 rounded-md border border-slate-200 border-l-4 border-l-emerald-500 bg-white px-2.5 py-1.5 text-sm text-slate-800"
+                            >
+                              <span className="font-semibold text-emerald-600 tabular-nums">{idx + 1}.</span>
+                              <span className="leading-snug text-xs">{rec}</span>
                             </li>
                           ))}
                         </ol>
                       </div>
                     )}
 
+                    {isSectionVisible('rating') && (
                     <div>
                       <div className="flex items-center justify-between">
                         <h4 className="text-xs font-medium text-slate-600 uppercase tracking-wider">Suggested Risk Rating</h4>
                         <button
                           type="button"
                           onClick={applyLikelihoodImpact}
-                          className="flex items-center gap-1 rounded px-2 py-1 text-xs text-primary-600 hover:bg-primary-50 font-medium"
+                          className={savedBtnClass('rating')}
                         >
                           <Check className="h-3 w-3" />
-                          Apply
+                          {savedBtnLabel('rating') === 'Saved' ? 'Saved' : 'Apply'}
                         </button>
                       </div>
                       <div className="mt-2 flex items-center gap-4">
@@ -2630,6 +2892,7 @@ function RiskModal({
                         </div>
                       </div>
                     </div>
+                    )}
 
                     {aiSuggestions.recommended_controls.length > 0 && (
                       <div>
@@ -2687,6 +2950,7 @@ function RiskModal({
                       </div>
                     )}
 
+                    {isSectionVisible('treatment') && (aiSuggestions.risk_treatment_options?.length || 0) > 0 && (
                     <div>
                       <div className="flex items-center justify-between mb-2">
                         <h4 className="text-xs font-medium text-slate-600 uppercase tracking-wider">Treatment Options</h4>
@@ -2694,15 +2958,19 @@ function RiskModal({
                           <Check className="h-3 w-3" /> {savedBtnLabel('treatment')}
                         </button>
                       </div>
-                      <ol className="space-y-1">
+                      <ol className="space-y-1.5">
                         {aiSuggestions.risk_treatment_options.map((option, idx) => (
-                          <li key={idx} className="flex gap-2 rounded-md border border-primary-100 bg-primary-50 px-2.5 py-1.5 text-xs text-primary-800">
-                            <span className="font-semibold text-primary-500">{idx + 1}.</span>
-                            <span>{option}</span>
+                          <li
+                            key={idx}
+                            className="flex gap-2 rounded-md border border-slate-200 border-l-4 border-l-primary-500 bg-white px-2.5 py-1.5 text-xs text-slate-800"
+                          >
+                            <span className="font-semibold text-primary-600 tabular-nums">{idx + 1}.</span>
+                            <span className="leading-snug">{option}</span>
                           </li>
                         ))}
                       </ol>
                     </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -2786,6 +3054,10 @@ function RiskModal({
                 )}
               </div>
             </div>
+          )}
+
+          {isOneLinkSelected && (
+            <OneLinkRegisterFields value={templateFields} onChange={setTemplateFields} lookups={oneLinkLookups} />
           )}
 
           <div className="grid grid-cols-2 gap-3">
@@ -2942,38 +3214,6 @@ function RiskModal({
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-slate-800 mb-1">Affected Departments</label>
-            {/* Previously a hardcoded list (IT/Finance/Operations/...) that
-                tenants couldn't edit. Now sourced from admin/teams so the
-                same definitions flow through the risk register, RCSA
-                campaigns, and dashboard BU progress. Stores team ids in
-                affected_department_ids (the column itself is just a JSON
-                int-list — semantics moved from a fake DEPARTMENTS index
-                to real Team primary keys). */}
-            <div className="flex flex-wrap gap-2">
-              {(teams || []).length === 0 && (
-                <p className="text-xs text-slate-500 italic">
-                  No teams configured yet. Add them in Admin → Teams.
-                </p>
-              )}
-              {(teams || []).map((dept: any) => (
-                <button
-                  key={dept.id}
-                  type="button"
-                  onClick={() => handleDepartmentToggle(dept.id)}
-                  className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                    formData.affected_department_ids.includes(dept.id)
-                      ? 'bg-primary-600 text-[#0a0a0a]'
-                      : 'bg-slate-200 text-slate-700 hover:bg-slate-500'
-                  }`}
-                >
-                  {dept.name}
-                </button>
-              ))}
-            </div>
-          </div>
-
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-slate-800 mb-1">Inherent Likelihood (1-5)</label>
@@ -3024,20 +3264,7 @@ function RiskModal({
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-slate-800 mb-1">Treatment Plan</label>
-            <textarea
-              value={formData.treatment_plan}
-              onChange={(e) => setFormData({ ...formData, treatment_plan: e.target.value })}
-              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-              rows={formData.treatment_plan.length > 200 ? 8 : 2}
-              placeholder="Treatment approach (use AI Assist → Treatment Options → Save to field, or write your own)…"
-            />
-          </div>
-
-          {/* Root Cause + Consequences + Recommendations — reviewable AI-assist
-              fields, also free-text editable. AI panel chips append into these
-              fields, and "Save to field" fills them wholesale. */}
+          {/* Field sequence: Root Cause → Consequences → Recommendations → Treatment Plan */}
           <div>
             <label className="block text-sm font-medium text-slate-800 mb-1">Root Cause</label>
             <textarea
@@ -3066,6 +3293,16 @@ function RiskModal({
               className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               rows={formData.recommendations.length > 200 ? 6 : 2}
               placeholder="Recommended actions to reduce this risk (AI Assist → Recommendations → Save to field, or write your own)…"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-800 mb-1">Treatment Plan</label>
+            <textarea
+              value={formData.treatment_plan}
+              onChange={(e) => setFormData({ ...formData, treatment_plan: e.target.value })}
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              rows={formData.treatment_plan.length > 200 ? 8 : 2}
+              placeholder="Treatment approach (use AI Assist → Treatment Options → Save to field, or write your own)…"
             />
           </div>
 

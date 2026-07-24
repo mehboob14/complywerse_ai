@@ -13,6 +13,8 @@ export interface ColumnDef {
   href?: (row: Row) => string | null; // drill-down link for this cell
   align?: 'left' | 'right';
   agg?: 'sum' | 'avg';                // group-aggregate for numeric columns
+  linkageKey?: string;                // cross-module linkage id (enrichment)
+  linkageModule?: string;             // module label for grouping in the picker
 }
 
 export type Row = Record<string, unknown>;
@@ -67,15 +69,23 @@ export interface ReportSpec {
   search: string;
   view: 'table' | ChartKind;
   measureIdx: number;          // which measure the chart plots (charts show one)
+  visibleColumns?: string[];     // flat table columns (Build mode primary)
+  columnWidths?: Record<string, number>;
+  columnAlign?: Record<string, 'left' | 'right'>;
+  pinnedColumns?: string[];
+  sorts?: SortSpec[];
+  includes?: string[];         // cross-module linkage keys to enrich (e.g. vulnerabilities, risks)
   showLegend?: boolean;        // chart option (default on)
   showLabels?: boolean;        // data labels on marks (default off)
   shared?: boolean;            // visible to everyone in the tenant
   mine?: boolean;              // false for someone else's shared report (read-only to us)
+  updatedAt?: string | null;   // ISO timestamp from server (local saves may omit)
 }
 
 export const emptySpec = (dataset: string): ReportSpec => ({
   id: '', name: '', dataset, rows: [], col: null, measures: [],
   rules: { logic: 'AND', conditions: [] }, search: '', view: 'table', measureIdx: 0,
+  includes: [], visibleColumns: [], columnWidths: {}, columnAlign: {}, pinnedColumns: [], sorts: [],
 });
 
 /** One condition in the advanced AND/OR filter builder. */

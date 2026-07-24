@@ -97,8 +97,11 @@ def _load_baseline() -> Optional[dict]:
 
 
 def _first_user_id(db: Session) -> int:
-    user_id = db.query(GRCUser.id).order_by(GRCUser.id.asc()).scalar()
-    return int(user_id or 1)
+    # NOTE: use .first() (LIMIT 1), not .scalar() — .scalar() delegates to
+    # .one() in this SQLAlchemy version and raises MultipleResultsFound once a
+    # tenant has more than one user, which broke startup seeding.
+    row = db.query(GRCUser.id).order_by(GRCUser.id.asc()).first()
+    return int(row[0] if row else 1)
 
 
 def _tenant_payload(row: Tenant) -> dict:
@@ -1029,6 +1032,11 @@ def ensure_vendor_risk_portfolio_seed(db: Session, tenant_id: int) -> dict:
     try:
         from grc.modules.vendor_risk.tpra.seed import seed_templates, seed_portfolio
         from grc.modules.vendor_risk.tpra.bootstrap import ensure_tpra_tenant_defaults
+        from grc.modules.vendor_risk.tpra.schema_migrations import ensure_tpra_columns
+        # Startup seeding runs before any request, so TPRA's request-path column
+        # self-heal hasn't added post-provisioning columns yet. Heal first so the
+        # monitoring-signal insert below has acknowledged_by/_at etc.
+        ensure_tpra_columns(db)
         ensure_tpra_tenant_defaults(db, tenant_id)
         templates = seed_templates(db, tenant_id)
         portfolio = seed_portfolio(db, tenant_id, months=12)

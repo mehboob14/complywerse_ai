@@ -177,7 +177,16 @@ class RiskKRI(Base):
     __tablename__ = "grc_risk_kris"
     
     id = Column(Integer, primary_key=True, index=True)
-    risk_id = Column(Integer, ForeignKey("grc_risks.id"), nullable=False, index=True)
+    # risk_id is now optional: a KRI can be enterprise/standalone (governance-level,
+    # or live-fed from a platform metric) rather than tied to a single risk.
+    risk_id = Column(Integer, ForeignKey("grc_risks.id"), nullable=True, index=True)
+    # Direct tenancy. KRIs were previously scoped only via risk_id → Risk, which
+    # orphaned standalone / uploaded KRIs (they never appeared in any list). Backfilled
+    # from the parent risk by ensure_kri_columns for existing rows.
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=True, index=True)
+    # When set, the KRI is LIVE-FED: its value resolves from the cross-module metric
+    # layer (a metric_catalog key) instead of manual measurements.
+    metric_key = Column(String(60), nullable=True)
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     metric_type = Column(String(50), default="numeric")  # numeric, percentage, count, boolean
@@ -192,9 +201,22 @@ class RiskKRI(Base):
     is_active = Column(Boolean, default=True)
     last_measured_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
-    
+
+    # ── Full metric lifecycle (unifies KPI + KRI management) ──────────────────
+    kind = Column(String(10), default="kri")              # 'kri' | 'kpi'
+    category = Column(String(100), nullable=True)         # domain / grouping
+    formula = Column(Text, nullable=True)                 # methodology / how it's calculated
+    target = Column(Float, nullable=True)                 # target value (distinct from RAG thresholds)
+    reporting_period = Column(String(40), nullable=True)  # current period label, e.g. 2026-Q1
+    next_due_date = Column(DateTime, nullable=True)       # when the next measurement is due
+    data_provider_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)  # enters the value
+    reviewer_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)        # reviews / signs off
+    linked_control_ids = Column(JSON, default=list)       # cross-platform linkage
+    linked_objective_ids = Column(JSON, default=list)
+    linked_framework_id = Column(Integer, nullable=True)
+
     risk = relationship("Risk", back_populates="kris")
-    owner = relationship("GRCUser")
+    owner = relationship("GRCUser", foreign_keys=[owner_id])
     measurements = relationship("RiskKRIMeasurement", back_populates="kri", cascade="all, delete-orphan")
     
     __table_args__ = (
@@ -213,9 +235,15 @@ class RiskKRIMeasurement(Base):
     measured_at = Column(DateTime, default=datetime.utcnow)
     measured_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
     notes = Column(Text, nullable=True)
-    
+    # Period + review/approval workflow
+    period_label = Column(String(40), nullable=True)        # e.g. 2026-Q1, 2026-07
+    target = Column(Float, nullable=True)                   # target for this period (snapshot)
+    review_status = Column(String(20), default="approved")  # draft | submitted | approved
+    reviewed_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
+
     kri = relationship("RiskKRI", back_populates="measurements")
-    measurer = relationship("GRCUser")
+    measurer = relationship("GRCUser", foreign_keys=[measured_by])
     
     __table_args__ = (
         Index("ix_kri_measurement_time", "kri_id", "measured_at"),
@@ -242,6 +270,8 @@ class RiskIncident(Base):
     lessons_learned = Column(Text, nullable=True)
     reported_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
     assigned_to = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    # Free-form labels for triage / filtering (list of strings). Additive + nullable.
+    tags = Column(JSON, nullable=True)
     resolved_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -251,10 +281,76 @@ class RiskIncident(Base):
     reporter = relationship("GRCUser", foreign_keys=[reported_by])
     assignee = relationship("GRCUser", foreign_keys=[assigned_to])
     evidence_links = relationship("EvidenceIncidentLink", back_populates="incident", cascade="all, delete-orphan")
+    asset_links = relationship("IncidentAssetLink", back_populates="incident", cascade="all, delete-orphan")
+    vulnerability_links = relationship("IncidentVulnerabilityLink", back_populates="incident", cascade="all, delete-orphan")
+    risk_links = relationship("IncidentRiskLink", back_populates="incident", cascade="all, delete-orphan")
     
     __table_args__ = (
         Index("ix_incident_tenant_status", "tenant_id", "status"),
         Index("ix_incident_risk", "risk_id"),
+    )
+
+
+class IncidentAssetLink(Base):
+    """Cross-module link: incident ↔ IT asset."""
+    __tablename__ = "grc_incident_asset_links"
+
+    id = Column(Integer, primary_key=True, index=True)
+    incident_id = Column(Integer, ForeignKey("grc_risk_incidents.id"), nullable=False, index=True)
+    asset_id = Column(Integer, ForeignKey("grc_it_assets.id"), nullable=False, index=True)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    created_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+
+    incident = relationship("RiskIncident", back_populates="asset_links")
+    asset = relationship("ITAsset")
+    creator = relationship("GRCUser", foreign_keys=[created_by])
+
+    __table_args__ = (
+        UniqueConstraint("incident_id", "asset_id", name="uq_incident_asset_link"),
+        Index("ix_incident_asset_link", "incident_id", "asset_id"),
+    )
+
+
+class IncidentVulnerabilityLink(Base):
+    """Cross-module link: incident ↔ vulnerability."""
+    __tablename__ = "grc_incident_vulnerability_links"
+
+    id = Column(Integer, primary_key=True, index=True)
+    incident_id = Column(Integer, ForeignKey("grc_risk_incidents.id"), nullable=False, index=True)
+    vulnerability_id = Column(Integer, ForeignKey("grc_vulnerabilities.id"), nullable=False, index=True)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    created_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+
+    incident = relationship("RiskIncident", back_populates="vulnerability_links")
+    vulnerability = relationship("Vulnerability")
+    creator = relationship("GRCUser", foreign_keys=[created_by])
+
+    __table_args__ = (
+        UniqueConstraint("incident_id", "vulnerability_id", name="uq_incident_vuln_link"),
+        Index("ix_incident_vuln_link", "incident_id", "vulnerability_id"),
+    )
+
+
+class IncidentRiskLink(Base):
+    """Additional risks related to an incident (beyond the primary risk_id FK)."""
+    __tablename__ = "grc_incident_risk_links"
+
+    id = Column(Integer, primary_key=True, index=True)
+    incident_id = Column(Integer, ForeignKey("grc_risk_incidents.id"), nullable=False, index=True)
+    risk_id = Column(Integer, ForeignKey("grc_risks.id"), nullable=False, index=True)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    created_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+
+    incident = relationship("RiskIncident", back_populates="risk_links")
+    risk = relationship("Risk")
+    creator = relationship("GRCUser", foreign_keys=[created_by])
+
+    __table_args__ = (
+        UniqueConstraint("incident_id", "risk_id", name="uq_incident_risk_link"),
+        Index("ix_incident_risk_link", "incident_id", "risk_id"),
     )
 
 

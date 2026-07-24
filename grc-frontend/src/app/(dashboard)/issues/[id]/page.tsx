@@ -3,6 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
@@ -454,11 +455,16 @@ function CAPATab({ issueId }: { issueId: number }) {
   const patchMutation = useMutation({
     mutationFn: ({ actionId, body }: { actionId: number; body: Record<string, unknown> }) =>
       issuesApi.actions.patch(actionId, body),
-    onSuccess: () => {
+    onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ['issue-actions', issueId] });
       qc.invalidateQueries({ queryKey: ['issue-detail', issueId] });
       qc.invalidateQueries({ queryKey: ['capa-actions'] });
-      setSelectedAction(null);
+      qc.invalidateQueries({ queryKey: ['issues'] });
+      // Only close the detail modal when a full save was done from it
+      // (modal saves send multiple fields). Quick Start/Complete keep the list open.
+      if (vars.body && Object.keys(vars.body).length > 1) {
+        setSelectedAction(null);
+      }
     },
   });
 
@@ -634,6 +640,42 @@ function CAPATab({ issueId }: { issueId: number }) {
                 </div>
                 <div className="flex flex-col items-end gap-1 shrink-0">
                   <CAPAStatusBadge status={a.status} />
+                  {a.status === 'planned' && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        patchMutation.mutate({ actionId: a.id, body: { status: 'in_progress' } });
+                      }}
+                      disabled={patchMutation.isPending}
+                      className="rounded border border-primary-200 bg-white px-1.5 py-px text-[10px] font-medium text-primary-700 hover:bg-primary-50 disabled:opacity-50"
+                    >
+                      Start
+                    </button>
+                  )}
+                  {a.status === 'in_progress' && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        patchMutation.mutate({ actionId: a.id, body: { status: 'completed' } });
+                      }}
+                      disabled={patchMutation.isPending}
+                      className="rounded border border-emerald-200 bg-white px-1.5 py-px text-[10px] font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+                    >
+                      Complete
+                    </button>
+                  )}
+                  {a.status === 'completed' && !a.verified_at && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        verifyMutation.mutate({ actionId: a.id, body: {} });
+                      }}
+                      disabled={verifyMutation.isPending}
+                      className="rounded border border-emerald-300 bg-white px-1.5 py-px text-[10px] font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+                    >
+                      Verify
+                    </button>
+                  )}
                   {!a.linked_critical_task_id && (
                     <button
                       onClick={(e) => {
@@ -738,9 +780,10 @@ function CAPADetailModal({
   const dueIn = daysUntil(action.due_date);
   const isOverdue = dueIn !== null && dueIn < 0 && status !== 'completed' && status !== 'verified' && status !== 'cancelled';
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-3">
-      <div className="w-full max-w-2xl max-h-[92vh] overflow-y-auto rounded-xl bg-white shadow-2xl">
+  // Portal to document.body so Save/Verify aren't trapped inside the CAPA section popup.
+  const modal = (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/40 p-3">
+      <div className="w-full max-w-2xl max-h-[92vh] overflow-y-auto rounded-xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="sticky top-0 z-10 flex items-start justify-between border-b border-slate-200 bg-white px-5 py-3">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 mb-1">
@@ -948,6 +991,9 @@ function CAPADetailModal({
       </div>
     </div>
   );
+
+  if (typeof document === 'undefined') return modal;
+  return createPortal(modal, document.body);
 }
 
 // ─── Tab: Linked Items ──────────────────────────────────────────────────

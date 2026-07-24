@@ -563,7 +563,7 @@ export default function FrameworkRiskAssessmentDetailPage() {
                 {question.linked_risk_id ? (
                   <div className="inline-flex items-center gap-2 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
                     Moved to Risk Register: #{question.linked_risk_id}
-                    <Link className="underline" href={`/erm/risks`}>Open Register</Link>
+                    <Link className="underline" href={`/erm/risks/${question.linked_risk_id}`}>Open Risk</Link>
                   </div>
                 ) : (
                   <button

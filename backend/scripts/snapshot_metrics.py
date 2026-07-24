@@ -38,9 +38,17 @@ def run_for_slug(slug: str, months: int, daily_only: bool) -> None:
             print(f"[snapshot] {slug}: no tenant row; skipped", flush=True)
             return
         ms.ensure_table(db)
-        bf = 0 if daily_only else ms.backfill(db, tenant.id, months=months)
+        bf = xbf = 0
+        if not daily_only:
+            bf = ms.backfill(db, tenant.id, months=months)
+            # Cross-module history (compliance + vendor, where a source table exists).
+            try:
+                from grc.services import metrics_cross
+                xbf = metrics_cross.backfill_cross(db, tenant.id, months=months)
+            except Exception as exc:  # noqa: BLE001
+                print(f"[snapshot] {slug}: cross-module backfill skipped — {exc}", flush=True)
         wd = ms.write_daily(db, tenant.id)
-        print(f"[snapshot] {slug}: backfilled={bf} rows, wrote_today={wd} metrics", flush=True)
+        print(f"[snapshot] {slug}: backfilled={bf}+{xbf} rows, wrote_today={wd} metrics", flush=True)
     finally:
         db.close()
 

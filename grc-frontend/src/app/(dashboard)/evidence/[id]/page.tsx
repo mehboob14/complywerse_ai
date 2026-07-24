@@ -227,6 +227,7 @@ export default function EvidenceDetailPage() {
   const queryClient = useQueryClient();
   const { hasPermission } = usePermissions();
   const canEdit = hasPermission('evidence:evidence_library:edit');
+  const canDelete = hasPermission('evidence:evidence_library:delete');
   const [reviewAction, setReviewAction] = useState<'approve' | 'reject' | null>(null);
   const [rejectComments, setRejectComments] = useState('');
   const [ocrProcessMessage, setOcrProcessMessage] = useState<string | null>(null);
@@ -460,6 +461,23 @@ export default function EvidenceDetailPage() {
     runAssessmentMutation.mutate();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [evidence, latestAssessment]);
+
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiClient.delete(`/evidence-mgmt/items/${evidenceId}`, { params: { force: false } });
+      const data = res.data as { warning?: boolean; message?: string } | undefined;
+      if (data?.warning) {
+        if (!window.confirm(`${data.message}\n\nDelete it anyway?`)) return { cancelled: true };
+        await apiClient.delete(`/evidence-mgmt/items/${evidenceId}`, { params: { force: true } });
+      }
+      return { cancelled: false };
+    },
+    onSuccess: (r) => {
+      if ((r as { cancelled?: boolean })?.cancelled) return;
+      queryClient.invalidateQueries({ queryKey: ['evidence-items'] });
+      router.push('/evidence');
+    },
+  });
 
   const submitForReviewMutation = useMutation({
     mutationFn: () => apiClient.post(`/evidence-mgmt/lifecycle/${evidenceId}/submit`),
@@ -821,6 +839,17 @@ export default function EvidenceDetailPage() {
               <Edit className="h-3.5 w-3.5" />
               Edit
             </button>
+            )}
+            {canDelete && (
+              <button
+                onClick={() => { if (window.confirm(`Delete "${evidence.name}"? This cannot be undone.`)) deleteMutation.mutate(); }}
+                disabled={deleteMutation.isPending}
+                className="flex items-center gap-1.5 rounded-md border border-rose-200 bg-white px-3 py-1.5 text-sm text-rose-600 hover:bg-rose-50 disabled:opacity-50"
+                title="Delete Evidence"
+              >
+                {deleteMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                Delete
+              </button>
             )}
             {evidence.status === 'draft' && (
               <button

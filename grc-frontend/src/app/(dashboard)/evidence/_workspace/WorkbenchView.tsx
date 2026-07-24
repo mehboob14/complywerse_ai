@@ -19,7 +19,9 @@ export function WorkbenchView({
   onApprove,
   onReassess,
   onOpenFile,
+  onDelete,
   canReview,
+  canDelete,
 }: {
   items: EvidenceItem[];
   selectedId: number | null;
@@ -28,7 +30,9 @@ export function WorkbenchView({
   onApprove: (id: number) => void;
   onReassess: (id: number) => void;
   onOpenFile: (id: number) => void;
+  onDelete?: (id: number) => void;
   canReview?: boolean;
+  canDelete?: boolean;
 }) {
   const list = items ?? [];
 
@@ -65,7 +69,9 @@ export function WorkbenchView({
             onApprove={onApprove}
             onReassess={onReassess}
             onOpenFile={onOpenFile}
+            onDelete={onDelete}
             canReview={canReview}
+            canDelete={canDelete}
           />
         </div>
       </div>

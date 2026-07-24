@@ -101,12 +101,13 @@ def get_openai_client() -> OpenAI:
     # blocks the (solo-pool) worker indefinitely, freezing auto-group /
     # normalization mid-run (the classic "stuck at 85%"). max_retries lets the
     # SDK transparently retry transient errors / rate limits with backoff.
-    return OpenAI(
+    from ....services.ai_tracing import wrap_openai_for_tracing
+    return wrap_openai_for_tracing(OpenAI(
         api_key=api_key,
         base_url=base_url,
         timeout=90.0,
         max_retries=2,
-    )
+    ))
 
 
 def generate_keywords_for_group(name: str, description: str) -> List[str]:

@@ -25,6 +25,7 @@ interface IssueRow {
   target_closure_date: string | null;
   sla_breached: boolean;
   created_at: string;
+  action_count?: number;
 }
 
 interface Props {
@@ -133,6 +134,7 @@ export function IssueList({ defaultFilters }: Props) {
                 <th className="px-3 py-2 font-semibold">Type</th>
                 <th className="px-3 py-2 font-semibold">Source</th>
                 <th className="px-3 py-2 font-semibold">Assignee</th>
+                <th className="px-3 py-2 font-semibold">CAPA</th>
                 <th className="px-3 py-2 font-semibold">Target</th>
               </tr>
             </thead>
@@ -154,6 +156,19 @@ export function IssueList({ defaultFilters }: Props) {
                     <td className="px-3 py-2 text-[11px] text-slate-600">{i.issue_type ? i.issue_type.replace(/_/g, ' ') : '—'}</td>
                     <td className="px-3 py-2"><SourceChip sourceType={i.source_type} /></td>
                     <td className="px-3 py-2 text-[11px] text-slate-700">{i.assignee?.display_name || '—'}</td>
+                    <td className="px-3 py-2 text-[11px] text-slate-700">
+                      {(i.action_count ?? 0) > 0 ? (
+                        <Link
+                          href={`/issues/${i.id}`}
+                          className="inline-flex items-center rounded-full border border-primary-200 bg-primary-50 px-1.5 py-0.5 text-[10px] font-semibold text-primary-700 hover:bg-primary-100"
+                          title="Open issue → CAPA Actions"
+                        >
+                          {i.action_count} action{i.action_count === 1 ? '' : 's'}
+                        </Link>
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
+                    </td>
                     <td className="px-3 py-2 text-[11px] text-slate-600">
                       {formatDate(i.target_closure_date)}
                       {i.sla_breached && (

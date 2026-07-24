@@ -25,6 +25,7 @@ from ....schemas import (
     MessageResponse
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from ....services import kri_feeds, metric_catalog
 
 router = APIRouter(prefix="/kris", tags=["ERM - Key Risk Indicators"])
 
@@ -163,6 +164,29 @@ def calculate_kri_status(value: float, kri: RiskKRI) -> str:
             return "red"
 
 
+def _hydrate(db: Session, kri: RiskKRI, tenant_ids: List[int]) -> RiskKRIResponse:
+    """Build the response for a KRI, resolving its value LIVE from the platform
+    metric layer when it's bound to a metric_key, then computing RAG status."""
+    data = RiskKRIResponse.model_validate(kri)
+    value = kri.current_value
+    metric_key = getattr(kri, "metric_key", None)
+    if metric_key:
+        data.is_live = True
+        meta = kri_feeds.catalog_meta(metric_key)
+        if meta:
+            data.module = meta.module
+            data.module_label = metric_catalog.MODULE_LABELS.get(meta.module, meta.module)
+            if not data.unit:
+                data.unit = meta.unit
+        live = kri_feeds.current_value(db, tenant_ids, metric_key)
+        if live is not None:
+            value = live
+            data.current_value = live
+    if value is not None:
+        data.current_status = calculate_kri_status(value, kri)
+    return data
+
+
 @router.get("", response_model=List[RiskKRIResponse])
 def list_kris(
     risk_id: Optional[int] = None,
@@ -176,28 +200,23 @@ def list_kris(
     user_tenants = get_user_tenants(current_user, db)
     if not user_tenants:
         return []
-    
-    query = db.query(RiskKRI).join(Risk).filter(
-        Risk.tenant_id.in_(user_tenants)
-    )
-    
+    kri_feeds.ensure_kri_columns(db)
+
+    # Scope directly on RiskKRI.tenant_id (backfilled from the parent risk) so
+    # standalone / live / uploaded KRIs are included, not just risk-linked ones.
+    query = db.query(RiskKRI).filter(RiskKRI.tenant_id.in_(user_tenants))
+
     if risk_id:
         query = query.filter(RiskKRI.risk_id == risk_id)
     if is_active is not None:
         query = query.filter(RiskKRI.is_active == is_active)
-    
+
     kris = query.offset(skip).limit(limit).all()
-    
-    result = []
-    for kri in kris:
-        kri_data = RiskKRIResponse.model_validate(kri)
-        if kri.current_value is not None:
-            kri_data.current_status = calculate_kri_status(kri.current_value, kri)
-        result.append(kri_data)
-    
+    result = [_hydrate(db, kri, user_tenants) for kri in kris]
+
     if status_filter:
         result = [k for k in result if k.current_status == status_filter]
-    
+
     return result
 
 
@@ -210,7 +229,8 @@ def create_kri(
 ):
     user_tenants = get_user_tenants(current_user, db)
     tenant_id = get_user_primary_tenant(current_user, db)
-    
+    kri_feeds.ensure_kri_columns(db)
+
     if kri.risk_id:
         risk = db.query(Risk).filter(
             Risk.id == kri.risk_id,
@@ -245,6 +265,8 @@ def create_kri(
     
     db_kri = RiskKRI(
         risk_id=kri.risk_id,
+        tenant_id=tenant_id,
+        metric_key=kri.metric_key,
         name=kri.name,
         description=description,
         metric_type=metric_type,
@@ -254,12 +276,23 @@ def create_kri(
         threshold_direction=threshold_direction,
         frequency=frequency,
         data_source=data_source,
-        owner_id=kri.owner_id
+        owner_id=kri.owner_id,
+        kind=kri.kind or "kri",
+        category=kri.category,
+        formula=kri.formula,
+        target=kri.target,
+        reporting_period=kri.reporting_period,
+        next_due_date=kri.next_due_date,
+        data_provider_id=kri.data_provider_id,
+        reviewer_id=kri.reviewer_id,
+        linked_control_ids=kri.linked_control_ids or [],
+        linked_objective_ids=kri.linked_objective_ids or [],
+        linked_framework_id=kri.linked_framework_id,
     )
     db.add(db_kri)
     db.commit()
     db.refresh(db_kri)
-    return db_kri
+    return _hydrate(db, db_kri, user_tenants)
 
 
 @router.post("/ai-suggest")
@@ -302,21 +335,102 @@ def get_kri_alerts(
     if not user_tenants:
         return []
     
-    kris = db.query(RiskKRI).join(Risk).filter(
-        Risk.tenant_id.in_(user_tenants),
+    kri_feeds.ensure_kri_columns(db)
+    kris = db.query(RiskKRI).filter(
+        RiskKRI.tenant_id.in_(user_tenants),
         RiskKRI.is_active == True,
-        RiskKRI.current_value.isnot(None)
     ).all()
-    
-    alerts = []
-    for kri in kris:
-        kri_status = calculate_kri_status(kri.current_value, kri)
-        if kri_status in ["red", "amber"]:
-            kri_data = RiskKRIResponse.model_validate(kri)
-            kri_data.current_status = kri_status
-            alerts.append(kri_data)
-    
+
+    alerts = [_hydrate(db, kri, user_tenants) for kri in kris]
+    alerts = [k for k in alerts if k.current_status in ("red", "amber")]
     return sorted(alerts, key=lambda x: 0 if x.current_status == "red" else 1)
+
+
+@router.get("/metric-options")
+def kri_metric_options(current_user: GRCUser = Depends(require_auth)):
+    """The catalog of platform metrics a KRI can bind to for a live value."""
+    return {"metrics": kri_feeds.metric_options()}
+
+
+@router.get("/templates")
+def kri_templates(current_user: GRCUser = Depends(require_auth)):
+    """Ready-made KPI/KRI definitions for the create-from-dropdown picker."""
+    from ....services import metric_templates
+    return {"templates": metric_templates.templates()}
+
+
+@router.get("/due")
+def kri_due(db: Session = Depends(get_db), current_user: GRCUser = Depends(require_auth)):
+    """Manual KRIs/KPIs whose next measurement is due or overdue."""
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        return {"due": []}
+    kri_feeds.ensure_kri_columns(db)
+    now = datetime.utcnow()
+    kris = (db.query(RiskKRI)
+            .filter(RiskKRI.tenant_id.in_(user_tenants), RiskKRI.is_active == True,
+                    RiskKRI.metric_key.is_(None), RiskKRI.next_due_date.isnot(None),
+                    RiskKRI.next_due_date <= now)
+            .order_by(RiskKRI.next_due_date.asc()).all())
+    return {"due": [
+        {"id": k.id, "name": k.name, "kind": k.kind, "frequency": k.frequency,
+         "next_due_date": k.next_due_date.isoformat() if k.next_due_date else None,
+         "data_provider_id": k.data_provider_id,
+         "days_overdue": (now - k.next_due_date).days if k.next_due_date else None}
+        for k in kris]}
+
+
+@router.get("/report")
+def kri_report(days: int = 90, kind: Optional[str] = None, db: Session = Depends(get_db),
+               current_user: GRCUser = Depends(require_auth)):
+    """Governance KRI rollup: every active KRI with its live (or manual) value, RAG
+    status, source module, and a trend series — plus a summary for the board view."""
+    user_tenants = get_user_tenants(current_user, db)
+    empty = {"kris": [], "days": days,
+             "summary": {"total": 0, "green": 0, "amber": 0, "red": 0, "unknown": 0, "live": 0, "breached": 0}}
+    if not user_tenants:
+        return empty
+    kri_feeds.ensure_kri_columns(db)
+    q = db.query(RiskKRI).filter(RiskKRI.tenant_id.in_(user_tenants), RiskKRI.is_active == True)
+    if kind in ("kpi", "kri"):
+        q = q.filter(RiskKRI.kind == kind)
+    kris = q.all()
+
+    items = []
+    counts = {"green": 0, "amber": 0, "red": 0, "unknown": 0}
+    by_category: dict = {}
+    for kri in kris:
+        data = _hydrate(db, kri, user_tenants)
+        st = data.current_status or "unknown"
+        counts[st] = counts.get(st, 0) + 1
+        cat = data.category or "Uncategorized"
+        bc = by_category.setdefault(cat, {"green": 0, "amber": 0, "red": 0, "unknown": 0, "total": 0})
+        bc[st] = bc.get(st, 0) + 1
+        bc["total"] += 1
+        d = data.model_dump()
+        if getattr(kri, "metric_key", None):
+            d["history"] = kri_feeds.history(db, user_tenants, kri.metric_key, days=days)
+        else:
+            d["history"] = [
+                {"date": m.measured_at.date().isoformat() if m.measured_at else None, "value": m.value}
+                for m in sorted(kri.measurements, key=lambda x: x.measured_at or datetime.min)
+                if m.value is not None
+            ]
+        items.append(d)
+
+    return {
+        "kris": items,
+        "days": days,
+        "summary": {
+            "total": len(kris), **counts,
+            "kpi": sum(1 for k in kris if (getattr(k, "kind", None) or "kri") == "kpi"),
+            "kri": sum(1 for k in kris if (getattr(k, "kind", None) or "kri") != "kpi"),
+            "live": sum(1 for k in kris if getattr(k, "metric_key", None)),
+            "manual": sum(1 for k in kris if not getattr(k, "metric_key", None)),
+            "breached": counts["red"] + counts["amber"],
+        },
+        "by_category": [{"category": c, **v} for c, v in sorted(by_category.items())],
+    }
 
 
 @router.get("/{kri_id}", response_model=RiskKRIResponse)
@@ -327,23 +441,20 @@ def get_kri(
 ):
     user_tenants = get_user_tenants(current_user, db)
     
+    kri_feeds.ensure_kri_columns(db)
     kri = db.query(RiskKRI).options(
         joinedload(RiskKRI.measurements)
-    ).join(Risk).filter(
+    ).filter(
         RiskKRI.id == kri_id,
-        Risk.tenant_id.in_(user_tenants)
+        RiskKRI.tenant_id.in_(user_tenants)
     ).first()
-    
+
     if not kri:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="KRI not found"
         )
-    
-    kri_data = RiskKRIResponse.model_validate(kri)
-    if kri.current_value is not None:
-        kri_data.current_status = calculate_kri_status(kri.current_value, kri)
-    return kri_data
+    return _hydrate(db, kri, user_tenants)
 
 
 @router.put("/{kri_id}", response_model=RiskKRIResponse)
@@ -355,28 +466,25 @@ def update_kri(
 ):
     user_tenants = get_user_tenants(current_user, db)
     
-    kri = db.query(RiskKRI).join(Risk).filter(
+    kri_feeds.ensure_kri_columns(db)
+    kri = db.query(RiskKRI).filter(
         RiskKRI.id == kri_id,
-        Risk.tenant_id.in_(user_tenants)
+        RiskKRI.tenant_id.in_(user_tenants)
     ).first()
-    
+
     if not kri:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="KRI not found"
         )
-    
+
     update_data = kri_update.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(kri, key, value)
-    
+
     db.commit()
     db.refresh(kri)
-    
-    kri_data = RiskKRIResponse.model_validate(kri)
-    if kri.current_value is not None:
-        kri_data.current_status = calculate_kri_status(kri.current_value, kri)
-    return kri_data
+    return _hydrate(db, kri, user_tenants)
 
 
 @router.delete("/{kri_id}", response_model=MessageResponse)
@@ -387,17 +495,18 @@ def delete_kri(
 ):
     user_tenants = get_user_tenants(current_user, db)
     
-    kri = db.query(RiskKRI).join(Risk).filter(
+    kri_feeds.ensure_kri_columns(db)
+    kri = db.query(RiskKRI).filter(
         RiskKRI.id == kri_id,
-        Risk.tenant_id.in_(user_tenants)
+        RiskKRI.tenant_id.in_(user_tenants)
     ).first()
-    
+
     if not kri:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="KRI not found"
         )
-    
+
     db.delete(kri)
     db.commit()
     return {"message": "KRI deleted successfully", "id": kri_id}
@@ -411,26 +520,33 @@ def record_kri_measurement(
     current_user: GRCUser = Depends(require_auth)
 ):
     user_tenants = get_user_tenants(current_user, db)
-    
-    kri = db.query(RiskKRI).join(Risk).filter(
+    kri_feeds.ensure_kri_columns(db)
+
+    kri = db.query(RiskKRI).filter(
         RiskKRI.id == kri_id,
-        Risk.tenant_id.in_(user_tenants)
+        RiskKRI.tenant_id.in_(user_tenants)
     ).first()
-    
+
     if not kri:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="KRI not found"
         )
-    
+
     status_val = calculate_kri_status(measurement.value, kri)
-    
+    review_status = measurement.review_status or "approved"
+
     db_measurement = RiskKRIMeasurement(
         kri_id=kri_id,
         value=measurement.value,
         status=status_val,
         measured_by=current_user.id,
-        notes=measurement.notes
+        notes=measurement.notes,
+        period_label=measurement.period_label,
+        target=measurement.target if measurement.target is not None else kri.target,
+        review_status=review_status,
+        reviewed_by=current_user.id if review_status == "approved" else None,
+        reviewed_at=datetime.utcnow() if review_status == "approved" else None,
     )
     db.add(db_measurement)
 
@@ -446,8 +562,8 @@ def record_kri_measurement(
     if status_val == "red":
         try:
             from ....modules.issue_management.services.auto_create import from_event
-            risk_for_tenant = db.query(Risk).filter(Risk.id == kri.risk_id).first()
-            tenant_id = risk_for_tenant.tenant_id if risk_for_tenant else None
+            risk_for_tenant = db.query(Risk).filter(Risk.id == kri.risk_id).first() if kri.risk_id else None
+            tenant_id = kri.tenant_id or (risk_for_tenant.tenant_id if risk_for_tenant else None)
             if tenant_id:
                 from_event(
                     db=db,

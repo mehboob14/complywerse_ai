@@ -2,7 +2,7 @@
 
 import { useRef, useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { committeeApi, apiClient, frameworkUploadApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
@@ -243,6 +243,7 @@ function getScoreRingColor(score: number) {
 
 export default function CommitteeDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const committeeId = parseInt(params.id as string);
   const { hasPermission } = usePermissions();
   const canCreate = hasPermission('governance:committees:create');
@@ -441,6 +442,15 @@ export default function CommitteeDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['committee', committeeId] });
       setIsEditCommitteeOpen(false);
+    },
+  });
+
+  const deleteCommitteeMutation = useMutation({
+    mutationFn: () => committeeApi.deleteCommittee(committeeId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['committee-overview'] });
+      queryClient.invalidateQueries({ queryKey: ['committees'] });
+      router.push('/governance/committees');
     },
   });
 
@@ -772,27 +782,53 @@ export default function CommitteeDetailPage() {
               )}
             </div>
           </div>
-          {canCreate && (
-            <button
-              type="button"
-              onClick={() => {
-                setEditCommitteeDraft({
-                  name: committee.name,
-                  description: committee.description ?? '',
-                  committee_type: committee.committee_type,
-                  chair_id: committee.chair_id ?? '',
-                  secretary_id: committee.secretary_id ?? '',
-                  meeting_frequency: committee.meeting_frequency ?? 'monthly',
-                });
-                setIsEditCommitteeOpen(true);
-              }}
-              className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
-              title="Edit committee details"
-            >
-              <Edit2 className="h-4 w-4" />
-              Edit Committee
-            </button>
-          )}
+          <div className="flex flex-wrap items-center gap-2">
+            {canCreate && (
+              <button
+                type="button"
+                onClick={() => {
+                  setEditCommitteeDraft({
+                    name: committee.name,
+                    description: committee.description ?? '',
+                    committee_type: committee.committee_type,
+                    chair_id: committee.chair_id ?? '',
+                    secretary_id: committee.secretary_id ?? '',
+                    meeting_frequency: committee.meeting_frequency ?? 'monthly',
+                  });
+                  setIsEditCommitteeOpen(true);
+                }}
+                className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                title="Edit committee details"
+              >
+                <Edit2 className="h-4 w-4" />
+                Edit Committee
+              </button>
+            )}
+            {canDelete && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (
+                    confirm(
+                      `Delete “${committee.name}”? This removes the committee and cannot be undone.`,
+                    )
+                  ) {
+                    deleteCommitteeMutation.mutate();
+                  }
+                }}
+                disabled={deleteCommitteeMutation.isPending}
+                className="flex items-center gap-2 rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-sm font-medium text-rose-600 hover:bg-rose-50 disabled:opacity-60"
+                title="Delete committee"
+              >
+                {deleteCommitteeMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Trash2 className="h-4 w-4" />
+                )}
+                Delete
+              </button>
+            )}
+          </div>
         </div>
       </div>
 

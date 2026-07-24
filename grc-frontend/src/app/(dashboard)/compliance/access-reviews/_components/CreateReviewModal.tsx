@@ -1,5 +1,5 @@
 'use client';
-// src/app/(dashboard)/admin/access-reviews/_components/CreateReviewModal.tsx
+// src/app/(dashboard)/compliance/access-reviews/_components/CreateReviewModal.tsx
 import { useState } from 'react';
 import { X, Search } from 'lucide-react';
 import { useCreateCampaign } from '../api';

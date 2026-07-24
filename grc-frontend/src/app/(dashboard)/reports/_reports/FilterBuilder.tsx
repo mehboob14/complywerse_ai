@@ -11,6 +11,7 @@ import { distinctValues } from './grid-utils';
 
 export default function FilterBuilder({
   cols, rows, rules, onChange, onClose, compact = false,
+  staged = false, onApply, onReset, dirty = false,
 }: {
   cols: ColumnDef[];
   rows: Row[];
@@ -18,6 +19,10 @@ export default function FilterBuilder({
   onChange: (rules: FilterRules) => void;
   onClose?: () => void;
   compact?: boolean;
+  staged?: boolean;
+  onApply?: () => void;
+  onReset?: () => void;
+  dirty?: boolean;
 }) {
   const ruleId = useRef(0);
   const seeded = useRef(false);
@@ -52,11 +57,22 @@ export default function FilterBuilder({
         </div>
         <div className="flex items-center gap-2">
           {rules.conditions.length > 0 && (
-            <button onClick={() => onChange({ logic: rules.logic, conditions: [] })} className="text-[11px] font-medium text-slate-400 hover:text-rose-600">Clear all</button>
+            <button
+              onClick={() => onChange({ logic: rules.logic, conditions: [] })}
+              className="text-[11px] font-medium text-slate-400 hover:text-rose-600"
+            >
+              Clear all
+            </button>
           )}
           {onClose && <button onClick={onClose} aria-label="Close filters" className="rounded p-0.5 text-slate-400 hover:text-slate-600"><X className="h-3.5 w-3.5" /></button>}
         </div>
       </div>
+
+      {staged && dirty && (
+        <p className="mb-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[10px] text-amber-800">
+          Unapplied changes — click Apply to update the report.
+        </p>
+      )}
 
       <div className="space-y-1.5">
         {rules.conditions.map((c, i) => {
@@ -96,6 +112,26 @@ export default function FilterBuilder({
       <button onClick={add} className="mt-2 inline-flex items-center gap-1 rounded-md border border-dashed border-slate-300 px-2 py-1 text-[11px] font-medium text-slate-500 hover:border-primary-400 hover:text-primary-700">
         <Plus className="h-3 w-3" /> Add condition
       </button>
+
+      {staged && (
+        <div className="mt-3 flex items-center gap-2 border-t border-primary-200/60 pt-3">
+          <button
+            type="button"
+            onClick={onApply}
+            disabled={!dirty}
+            className="inline-flex flex-1 items-center justify-center rounded-lg bg-primary-500 px-3 py-1.5 text-xs font-semibold text-[#0a0a0a] hover:bg-primary-600 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Apply filters
+          </button>
+          <button
+            type="button"
+            onClick={onReset}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
+          >
+            Reset
+          </button>
+        </div>
+      )}
     </div>
   );
 }

@@ -95,8 +95,8 @@ export default function PivotTable({
     });
 
   return (
-    <div className="min-h-0 flex-1 overflow-auto rounded-xl border border-slate-200 bg-white">
-      <table className="w-max min-w-full border-collapse">
+    <div className="min-h-0 min-w-0 flex-1 overflow-auto rounded-xl border border-slate-200 bg-white">
+      <table className="w-max min-w-full table-fixed border-collapse">
         <thead className="sticky top-0 z-20">
           {twoTier ? (
             <>

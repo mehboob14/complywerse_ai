@@ -76,6 +76,7 @@ from .modules.onboarding import onboarding_router
 from .modules.compliance_plugins import compliance_plugins_router
 from .routers.connect_wizard_router import router as connect_wizard_router
 from .routers.access_review_router import router as access_review_router
+from .routers.admin_ai_usage_router import router as admin_ai_usage_router
 from .routers.ai_recommendations_router import router as ai_recommendations_router
 from .routers.reporting_router import router as reporting_router
 from .middleware.subdomain import TenantMiddleware
@@ -247,6 +248,7 @@ app.include_router(onboarding_router)
 app.include_router(compliance_plugins_router)
 app.include_router(connect_wizard_router)
 app.include_router(access_review_router)
+app.include_router(admin_ai_usage_router)
 
 
 @app.on_event("startup")

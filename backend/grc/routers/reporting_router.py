@@ -36,10 +36,12 @@ from sqlalchemy import Boolean, String, and_, func, or_
 from sqlalchemy.orm import Session
 
 from ..models import (
-    Evidence, ITAsset, Permission, ReportDefinition, Risk, Role, RolePermission,
-    Tenant, UserRole, Vulnerability, get_db,
+    Evidence, ITAsset, MetricSnapshot, MetricTarget, Permission, ReportDefinition,
+    Risk, Role, RolePermission, Tenant, UserRole, Vulnerability, get_db,
 )
-from .auth_router import get_user_primary_tenant, require_auth
+from ..services import metric_catalog, metric_snapshots
+from ..services import report_linkages
+from .auth_router import get_user_primary_tenant, get_user_tenants, require_auth
 
 router = APIRouter(prefix="/reporting", tags=["Reporting Engine"])
 
@@ -491,3 +493,282 @@ def delete_report(slug: str, db: Session = Depends(get_db), user=Depends(require
     db.delete(row)
     db.commit()
     return {"deleted": slug}
+
+
+# ── Cross-module linkage enrichment ───────────────────────────────────────────
+
+class EnrichBody(BaseModel):
+    dataset: str
+    rows: List[Dict[str, Any]] = Field(default_factory=list)
+    includes: List[str] = Field(default_factory=list)
+
+
+@router.get("/linkages")
+def list_linkages(dataset: str, db: Session = Depends(get_db), user=Depends(require_auth)) -> Dict[str, Any]:
+    """Return linkable modules + generated column definitions for a dataset."""
+    catalog = report_linkages.get_linkage_catalog(dataset)
+    if not catalog:
+        return {"dataset": dataset, "linkages": []}
+    spec = SERVER_DATASETS.get(dataset)
+    if spec and not _user_can(user, db, spec.permissions):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You cannot access this dataset.")
+    return {"dataset": dataset, "linkages": catalog}
+
+
+@router.post("/enrich")
+def enrich_dataset_rows(body: EnrichBody, db: Session = Depends(get_db), user=Depends(require_auth)) -> Dict[str, Any]:
+    """Merge cross-module linkage columns into report rows (batch, tenant-scoped)."""
+    spec = SERVER_DATASETS.get(body.dataset)
+    if spec and not _user_can(user, db, spec.permissions):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You cannot access this dataset.")
+    enriched = report_linkages.enrich_rows(
+        db, dataset=body.dataset, rows=body.rows, includes=body.includes,
+    )
+    return {"rows": enriched, "includes": body.includes}
+
+
+# ── Trends (cross-module time-series) ──────────────────────────────────────────
+# Historical snapshots live in grc_metric_snapshot (written daily by the same
+# per-tenant sweep that writes the risk KPIs). These endpoints read that history,
+# compute period-over-period deltas + a RAG status against each metric's target,
+# and let a user set targets or capture a snapshot on demand. Every metric is
+# gated by the SAME module permission its /reports dataset uses.
+
+_TARGET_ENSURED: set = set()
+
+
+def _ensure_target_table(db: Session) -> None:
+    try:
+        key = str(getattr(db.get_bind(), "url", "default"))
+    except Exception:  # noqa: BLE001
+        key = "default"
+    if key in _TARGET_ENSURED:
+        return
+    try:
+        MetricTarget.__table__.create(bind=db.get_bind(), checkfirst=True)
+        _TARGET_ENSURED.add(key)
+    except Exception:  # noqa: BLE001 — never block the caller
+        pass
+
+
+def _tenant_id(user: Any, db: Session) -> int:
+    tids = get_user_tenants(user, db)
+    if tids:
+        return tids[0]
+    try:
+        return get_user_primary_tenant(user, db) or 0
+    except Exception:  # noqa: BLE001
+        return 0
+
+
+def _targets_map(db: Session, tenant_id: int) -> Dict[tuple, MetricTarget]:
+    _ensure_target_table(db)
+    rows = db.query(MetricTarget).filter(MetricTarget.tenant_id == tenant_id).all()
+    return {(r.metric, r.dimension, r.dimension_value): r for r in rows}
+
+
+def _effective_target(mdef, targets: Dict[tuple, MetricTarget],
+                      dimension: str = "overall", dimension_value: str = "all"):
+    """A tenant override for this exact scope, else the overall override, else the
+    catalog default."""
+    row = targets.get((mdef.key, dimension, dimension_value)) or targets.get((mdef.key, "overall", "all"))
+    if row is not None:
+        return row.target, row.warn, row.critical
+    return mdef.target, mdef.warn, mdef.critical
+
+
+def _series_stats(points: List[dict], mdef, target, warn) -> Dict[str, Any]:
+    """Current value, period-over-period delta (vs ~30 days earlier, else the
+    earliest point) and RAG status for a single series."""
+    if not points:
+        return {"current": None, "previous": None, "delta_abs": None,
+                "delta_pct": None, "status": "none", "as_of": None}
+    current = points[-1]["value"]
+    as_of = points[-1]["date"]
+    previous = None
+    try:
+        cutoff = date.fromisoformat(as_of[:10]) - timedelta(days=30)
+        for p in points[:-1]:
+            if date.fromisoformat(p["date"][:10]) <= cutoff:
+                previous = p["value"]
+    except (ValueError, TypeError):
+        previous = None
+    if previous is None and len(points) > 1:
+        previous = points[0]["value"]
+    delta_abs = (current - previous) if (current is not None and previous is not None) else None
+    delta_pct = (round(delta_abs / previous * 100, 1)
+                 if (delta_abs is not None and previous not in (None, 0)) else None)
+    return {
+        "current": current,
+        "previous": previous,
+        "delta_abs": round(delta_abs, 1) if delta_abs is not None else None,
+        "delta_pct": delta_pct,
+        "status": metric_catalog.rag_status(current, mdef.direction, target, warn),
+        "as_of": as_of,
+    }
+
+
+def _metric_meta(mdef, target, warn, critical) -> Dict[str, Any]:
+    return {
+        "key": mdef.key, "label": mdef.label, "module": mdef.module,
+        "module_label": metric_catalog.MODULE_LABELS.get(mdef.module, mdef.module),
+        "unit": mdef.unit, "direction": mdef.direction, "dimension": mdef.dimension,
+        "definition": mdef.definition, "target": target, "warn": warn, "critical": critical,
+    }
+
+
+@router.get("/trends/catalog")
+def trends_catalog(db: Session = Depends(get_db), user=Depends(require_auth)) -> Dict[str, Any]:
+    """Metrics the caller can trend, with metadata + effective targets, grouped by module."""
+    tenant_id = _tenant_id(user, db)
+    granted = _user_perm_names(user, db)
+    targets = _targets_map(db, tenant_id)
+    metrics_out = []
+    for m in metric_catalog.METRICS:
+        if not any(_satisfies(granted, r) for r in m.permissions):
+            continue
+        t, w, c = _effective_target(m, targets)
+        metrics_out.append(_metric_meta(m, t, w, c))
+    modules = [{"key": k, "label": metric_catalog.MODULE_LABELS[k]}
+               for k in metric_catalog.MODULE_ORDER
+               if any(x["module"] == k for x in metrics_out)]
+    return {"modules": modules, "metrics": metrics_out}
+
+
+@router.get("/trends/overview")
+def trends_overview(days: int = 180, db: Session = Depends(get_db),
+                    user=Depends(require_auth)) -> Dict[str, Any]:
+    """One card per accessible overall metric: current value, delta, RAG status,
+    target and the full series — enough to render the whole Trends board."""
+    days = max(7, min(days, 730))
+    tenant_id = _tenant_id(user, db)
+    tids = [tenant_id]
+    metric_snapshots.ensure_table(db)
+    granted = _user_perm_names(user, db)
+    targets = _targets_map(db, tenant_id)
+    cards = []
+    for m in metric_catalog.METRICS:
+        if not any(_satisfies(granted, r) for r in m.permissions):
+            continue
+        points = metric_snapshots.read_trend(db, tids, m.key, days)
+        t, w, c = _effective_target(m, targets)
+        card = _metric_meta(m, t, w, c)
+        card.update(_series_stats(points, m, t, w))
+        card["points"] = points
+        cards.append(card)
+    return {"days": days, "cards": cards}
+
+
+@router.get("/trends/series")
+def trends_series(metric: str, days: int = 180, dimension: str = "overall",
+                  dimension_value: str = "all", db: Session = Depends(get_db),
+                  user=Depends(require_auth)) -> Dict[str, Any]:
+    """One metric's time-series (optionally a single dimension slice) + stats."""
+    m = metric_catalog.get(metric)
+    if m is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Unknown metric '{metric}'.")
+    if not _user_can(user, db, m.permissions):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You cannot view this metric.")
+    days = max(7, min(days, 730))
+    tenant_id = _tenant_id(user, db)
+    metric_snapshots.ensure_table(db)
+    points = metric_snapshots.read_trend(db, [tenant_id], metric, days, dimension, dimension_value)
+    targets = _targets_map(db, tenant_id)
+    t, w, c = _effective_target(m, targets, dimension, dimension_value)
+    out = _metric_meta(m, t, w, c)
+    out.update(_series_stats(points, m, t, w))
+    out["points"] = points
+    out["dimension_value"] = dimension_value
+    return out
+
+
+@router.get("/trends/breakdown")
+def trends_breakdown(metric: str, days: int = 180, db: Session = Depends(get_db),
+                     user=Depends(require_auth)) -> Dict[str, Any]:
+    """Every dimension slice of a dimensional metric as parallel series — e.g.
+    open vulnerabilities by severity, or completion by framework, over time."""
+    m = metric_catalog.get(metric)
+    if m is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Unknown metric '{metric}'.")
+    if not _user_can(user, db, m.permissions):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You cannot view this metric.")
+    if not m.dimension:
+        return {"metric": metric, "dimension": None, "label": m.label, "unit": m.unit, "series": []}
+    days = max(7, min(days, 730))
+    tenant_id = _tenant_id(user, db)
+    metric_snapshots.ensure_table(db)
+    cutoff = date.today() - timedelta(days=days)
+    values = [r[0] for r in (
+        db.query(MetricSnapshot.dimension_value)
+        .filter(MetricSnapshot.tenant_id == tenant_id, MetricSnapshot.metric == metric,
+                MetricSnapshot.dimension == m.dimension, MetricSnapshot.as_of_date >= cutoff)
+        .distinct().all()) if r[0] is not None]
+    series = [{"key": dv, "points": metric_snapshots.read_trend(db, [tenant_id], metric, days, m.dimension, dv)}
+              for dv in sorted(values)]
+    return {"metric": metric, "dimension": m.dimension, "label": m.label, "unit": m.unit, "series": series}
+
+
+class TargetIn(BaseModel):
+    metric: str
+    dimension: str = "overall"
+    dimension_value: str = "all"
+    target: Optional[float] = None
+    warn: Optional[float] = None
+    critical: Optional[float] = None
+
+
+@router.put("/trends/targets")
+def set_target(body: TargetIn, db: Session = Depends(get_db), user=Depends(require_auth)) -> Dict[str, Any]:
+    """Set (or clear) the target/thresholds for one metric scope. Anyone who can
+    view the metric can tune its target."""
+    m = metric_catalog.get(body.metric)
+    if m is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Unknown metric '{body.metric}'.")
+    if not _user_can(user, db, m.permissions):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You cannot set this metric's target.")
+    tenant_id = _tenant_id(user, db)
+    _ensure_target_table(db)
+    row = (db.query(MetricTarget)
+           .filter(MetricTarget.tenant_id == tenant_id, MetricTarget.metric == body.metric,
+                   MetricTarget.dimension == body.dimension,
+                   MetricTarget.dimension_value == body.dimension_value).first())
+    if row is None:
+        row = MetricTarget(tenant_id=tenant_id, metric=body.metric,
+                           dimension=body.dimension, dimension_value=body.dimension_value)
+        db.add(row)
+    row.target = body.target
+    row.warn = body.warn
+    row.critical = body.critical
+    row.updated_by = getattr(user, "id", None)
+    db.commit()
+    return {"ok": True, "metric": body.metric, "target": row.target, "warn": row.warn, "critical": row.critical}
+
+
+@router.delete("/trends/targets")
+def reset_target(metric: str, dimension: str = "overall", dimension_value: str = "all",
+                 db: Session = Depends(get_db), user=Depends(require_auth)) -> Dict[str, Any]:
+    """Remove a tenant override so the metric falls back to its catalog default."""
+    m = metric_catalog.get(metric)
+    if m is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Unknown metric '{metric}'.")
+    if not _user_can(user, db, m.permissions):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You cannot reset this metric's target.")
+    tenant_id = _tenant_id(user, db)
+    _ensure_target_table(db)
+    row = (db.query(MetricTarget)
+           .filter(MetricTarget.tenant_id == tenant_id, MetricTarget.metric == metric,
+                   MetricTarget.dimension == dimension,
+                   MetricTarget.dimension_value == dimension_value).first())
+    if row is not None:
+        db.delete(row)
+        db.commit()
+    return {"ok": True, "metric": metric, "target": m.target, "warn": m.warn, "critical": m.critical}
+
+
+@router.post("/trends/snapshot")
+def capture_snapshot(db: Session = Depends(get_db), user=Depends(require_auth)) -> Dict[str, Any]:
+    """Capture today's cross-module snapshot on demand (idempotent per day) so a
+    user doesn't have to wait for the nightly sweep to see a fresh point."""
+    tenant_id = _tenant_id(user, db)
+    written = metric_snapshots.write_daily(db, tenant_id)
+    return {"written": written, "as_of": date.today().isoformat()}

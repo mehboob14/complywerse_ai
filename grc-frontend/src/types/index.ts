@@ -236,6 +236,7 @@ export interface Risk {
   risk_sub_category?: string;
   register_type?: string;
   ubl_fields?: Record<string, unknown>;
+  template_fields?: Record<string, unknown>;
   business_owner_id?: number;
   business_owner?: { id: number; email: string; full_name?: string };
   affected_department_ids?: number[];
@@ -712,6 +713,14 @@ export interface RiskIncident {
   lessons_learned?: string;
   reported_by?: number;
   assigned_to?: number;
+  assignee_name?: string;
+  tags?: string[];
+  link_counts?: {
+    assets?: number;
+    vulnerabilities?: number;
+    risks?: number;
+    evidence?: number;
+  };
   resolved_at?: string;
   created_at: string;
   updated_at: string;
@@ -728,6 +737,11 @@ export interface RiskIncidentCreate {
   root_cause?: string;
   corrective_actions?: string;
   assigned_to?: number;
+  tags?: string[];
+  linked_asset_ids?: number[];
+  linked_vulnerability_ids?: number[];
+  linked_risk_ids?: number[];
+  linked_evidence_ids?: number[];
 }
 
 export interface RiskIncidentUpdate {
@@ -741,6 +755,26 @@ export interface RiskIncidentUpdate {
   corrective_actions?: string;
   lessons_learned?: string;
   assigned_to?: number;
+  risk_id?: number;
+  tags?: string[];
+  linked_asset_ids?: number[];
+  linked_vulnerability_ids?: number[];
+  linked_risk_ids?: number[];
+  linked_evidence_ids?: number[];
+}
+
+export interface IncidentLinks {
+  assets: Array<{ id: number; asset_id: number; name?: string; asset_type?: string; notes?: string }>;
+  vulnerabilities: Array<{
+    id: number;
+    vulnerability_id: number;
+    title?: string;
+    cve_id?: string;
+    severity?: string;
+    notes?: string;
+  }>;
+  risks: Array<{ id: number; risk_id: number; title?: string; category?: string; notes?: string }>;
+  evidence: Array<{ id: number; evidence_id: number; name?: string; link_type?: string }>;
 }
 
 export type ReviewCycle = 'monthly' | 'quarterly' | 'semi_annual' | 'annual';

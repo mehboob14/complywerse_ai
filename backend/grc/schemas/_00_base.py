@@ -453,6 +453,7 @@ class RiskBase(BaseModel):
     risk_sub_category: Optional[str] = None
     register_type: Optional[str] = None  # PCI-DSS, ISO 27001, SOX, Internal, etc.
     ubl_fields: Optional[Dict[str, Any]] = None
+    template_fields: Optional[Dict[str, Any]] = None  # verbatim register-template fields (e.g. 1LINK RCSA)
     owner_id: Optional[int] = None
     business_owner_id: Optional[int] = None
     affected_department_ids: Optional[List[int]] = []
@@ -495,6 +496,7 @@ class RiskUpdate(BaseModel):
     risk_sub_category: Optional[str] = None
     register_type: Optional[str] = None
     ubl_fields: Optional[Dict[str, Any]] = None
+    template_fields: Optional[Dict[str, Any]] = None  # verbatim register-template fields
     owner_id: Optional[int] = None
     business_owner_id: Optional[int] = None
     affected_department_ids: Optional[List[int]] = None

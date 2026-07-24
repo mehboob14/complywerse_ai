@@ -10,7 +10,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ExternalLink, FileText, CheckCircle2, ScanText, Loader2 } from 'lucide-react';
+import { ExternalLink, FileText, CheckCircle2, ScanText, Loader2, Trash2 } from 'lucide-react';
 import { PageLoader } from '@/components/ui';
 import QualityBreakdownModal from '../_QualityBreakdownModal';
 import OcrContentModal from '../_OcrContentModal';
@@ -102,14 +102,18 @@ export function DetailPreview({
   onApprove,
   onReassess,
   onOpenFile,
+  onDelete,
   canReview,
+  canDelete,
 }: {
   evidenceId: number | null;
   onOpenFull: (id: number) => void;
   onApprove: (id: number) => void;
   onReassess: (id: number) => void;
   onOpenFile: (id: number) => void;
+  onDelete?: (id: number) => void;
   canReview?: boolean;
+  canDelete?: boolean;
 }) {
   const enabled = evidenceId != null;
 
@@ -330,6 +334,16 @@ export function DetailPreview({
           <FileText strokeWidth={1.75} className="h-4 w-4" />
           Open file
         </button>
+        {canDelete && onDelete && (
+          <button
+            type="button"
+            onClick={() => onDelete(evidenceId)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-xs font-medium text-rose-600 transition-colors hover:bg-rose-50"
+          >
+            <Trash2 strokeWidth={1.75} className="h-4 w-4" />
+            Delete
+          </button>
+        )}
         <button
           type="button"
           onClick={() => onOpenFull(evidenceId)}

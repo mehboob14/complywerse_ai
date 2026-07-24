@@ -1,122 +1,186 @@
 'use client';
 
-/**
- * Report Builder — compose a report from any dataset: pick fields into Rows
- * (nested = tree levels), Columns (pivot across), and Values (aggregations),
- * filter it, then read it as a pivot table or a chart. Everything is live: the
- * preview re-runs on each change, so there is no "generate" step to wait on.
- */
-
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
-  Calendar, Check, ChevronDown, ChevronUp, Download, FileSpreadsheet, FileText,
-  Filter, Hash, Loader2, AlertCircle, PieChart as PieIcon, Save, Search, Sigma,
-  Table2, Tag, Type, X, BarChart3, LineChart as LineIcon, ChevronsDownUp, ChevronsUpDown,
-  Printer, FileType2, Users, Lock, Settings2, BarChartHorizontal, Layers, Percent,
-  AreaChart as AreaIcon, CircleDashed, Boxes, Radar as RadarIcon, ScatterChart as ScatterIcon, Grid3x3,
+  AlertCircle, AlertTriangle, Check, Columns3, Download, FileSpreadsheet,
+  FileText, FileType2, Filter, Link2, Loader2, Lock, Printer, Save, Search, Sigma, Users,
 } from 'lucide-react';
-import type { AggFn, ChartKind, ColType, ColumnDef, ReportDataset, ReportSpec } from './types';
+import type { AggFn, ChartKind, ReportDataset, ReportSpec, SortSpec } from './types';
 import { emptySpec } from './types';
-import { describeRules, isActiveCondition, rowMatchesRules, rowMatchesSearch } from './grid-utils';
-import { AGG_LABEL, allNodeKeys, buildPivot, fieldDomain, flattenPivot } from './pivot';
-import PivotTable from './PivotTable';
-import PivotChart, { CHART_TYPES } from './PivotChart';
+import { asRows, compareRows, describeRules, isActiveCondition, rowMatchesRules, rowMatchesSearch } from './grid-utils';
+import { AGG_LABEL, buildPivot, fieldDomain } from './pivot';
+import PivotChart from './PivotChart';
+import ChartViewStrip from './ChartViewStrip';
+import ReportDataTable from './ReportDataTable';
 import FilterBuilder from './FilterBuilder';
+import ColumnPicker from './ColumnPicker';
+import SelectedColumnList from './SelectedColumnList';
+import { allLinkageColumns, enrichReportRows, fetchLinkageCatalog, linkageKeysForFields } from './linkages';
+import { chartGroupCandidates, chartReadiness, defaultVisibleColumns, effectiveChartKind } from './builderUtils';
 import { exportCSV, exportExcelMulti, exportWord } from './exporters';
 import { newSpecId, persistSpec, type SpecSource } from './savedReports';
 import { stashPrintSpec } from './printPayload';
 
 const seedSpec = (ds: string): ReportSpec => ({ ...emptySpec(ds), measures: [{ id: 'm0', key: '', agg: 'count' }] });
-const nextMid = (measures?: { id: string }[]): number =>
-  Math.max(-1, ...(measures ?? []).map((m) => { const n = /^m(\d+)$/.exec(m.id); return n ? Number(n[1]) : -1; })) + 1;
-
-const typeIcon = (t?: ColType) => (t === 'number' ? Hash : t === 'date' ? Calendar : t === 'badge' ? Tag : Type);
 const NUM_AGGS: AggFn[] = ['sum', 'avg', 'min', 'max', 'count'];
 
-const CHART_ICON: Record<ChartKind, typeof BarChart3> = {
-  bar: BarChart3, hbar: BarChartHorizontal, stacked: Layers, stacked100: Percent,
-  line: LineIcon, area: AreaIcon, pie: PieIcon, donut: CircleDashed, treemap: Boxes,
-  radar: RadarIcon, scatter: ScatterIcon, heatmap: Grid3x3,
-};
-const CHART_GROUPS = ['Bars', 'Trends', 'Proportion', 'Compare'];
-
-export default function ReportBuilder({
-  dataset, initialSpec, onSavedChange,
-}: {
+export default function ReportBuilder({ dataset, initialSpec, onSavedChange }: {
   dataset: ReportDataset;
   initialSpec?: ReportSpec | null;
   onSavedChange?: () => void;
 }) {
-  // The builder aggregates across the whole set, so it always reads the full
-  // dataset (server mode paginates, which can't answer "sum over everything").
-  const { data: rows = [], isLoading, error, refetch } = useQuery({
-    queryKey: ['report', dataset.key], queryFn: dataset.fetch, staleTime: 30_000,
-  });
-
-  const [spec, setSpec] = useState<ReportSpec>(initialSpec ?? seedSpec(dataset.key));
+  const initial = initialSpec ?? seedSpec(dataset.key);
+  const [spec, setSpec] = useState<ReportSpec>(() => ({
+    ...initial,
+    visibleColumns: initial.visibleColumns?.length ? initial.visibleColumns : [],
+    columnWidths: initial.columnWidths ?? {},
+    columnAlign: initial.columnAlign ?? {},
+    pinnedColumns: initial.pinnedColumns ?? [],
+    sorts: initial.sorts ?? [],
+  }));
+  const [draftRules, setDraftRules] = useState(initial.rules);
+  const [draftSearch, setDraftSearch] = useState(initial.search);
   const [fieldQ, setFieldQ] = useState('');
   const [showFilters, setShowFilters] = useState(false);
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [menu, setMenu] = useState(false);
   const [savedAt, setSavedAt] = useState(false);
   const [savedSource, setSavedSource] = useState<SpecSource>('server');
-  const [menu, setMenu] = useState(false);
-  const [chartMenu, setChartMenu] = useState(false);
-  const [optMenu, setOptMenu] = useState(false);
   const [exporting, setExporting] = useState(false);
-  // Seed the measure-id counter past any ids already in the spec (templates and
-  // saved reports contain m0/m1…), so a newly added value can't collide with one.
-  const mid = useRef(nextMid((initialSpec ?? seedSpec(dataset.key)).measures));
 
-  const cols = dataset.columns;
+  useEffect(() => {
+    const next = initialSpec ?? seedSpec(dataset.key);
+    setSpec({
+      ...next,
+      visibleColumns: next.visibleColumns?.length ? next.visibleColumns : [],
+      columnWidths: next.columnWidths ?? {},
+      columnAlign: next.columnAlign ?? {},
+      pinnedColumns: next.pinnedColumns ?? [],
+      sorts: next.sorts ?? [],
+    });
+    setDraftRules(next.rules);
+    setDraftSearch(next.search);
+  }, [dataset.key, initialSpec]);
+
   const patch = (p: Partial<ReportSpec>) => setSpec((s) => ({ ...s, ...p }));
-  const labelFor = (key: string) => cols.find((c) => c.key === key)?.label ?? 'rows';
 
-  const filteredRows = useMemo(
-    () => rows.filter((r) => rowMatchesSearch(cols, r, spec.search) && rowMatchesRules(cols, r, spec.rules)),
-    [rows, cols, spec.search, spec.rules],
+  const { data: linkageCatalog = [] } = useQuery({
+    queryKey: ['report-linkages', dataset.key],
+    queryFn: () => fetchLinkageCatalog(dataset.key),
+    staleTime: 60_000,
+  });
+
+  const visibleKeys = useMemo(
+    () => (spec.visibleColumns?.length ? spec.visibleColumns : defaultVisibleColumns(dataset.columns)),
+    [spec.visibleColumns, dataset.columns],
   );
+  const groupBy = spec.rows[0] ?? null;
+  const splitBy = spec.col;
+
+  const linkageColDefs = useMemo(() => allLinkageColumns(linkageCatalog), [linkageCatalog]);
+  const allCols = useMemo(() => [...dataset.columns, ...linkageColDefs], [dataset.columns, linkageColDefs]);
+  const labelFor = (key: string) => allCols.find((c) => c.key === key)?.label ?? key;
+
+  const appliedFieldKeys = useMemo(() => {
+    const keys = new Set<string>([
+      ...visibleKeys,
+      ...spec.rules.conditions.map((c) => c.col),
+      ...(groupBy ? [groupBy] : []),
+      ...(splitBy ? [splitBy] : []),
+      ...spec.measures.map((m) => m.key).filter(Boolean),
+    ]);
+    return Array.from(keys);
+  }, [visibleKeys, spec.rules.conditions, groupBy, splitBy, spec.measures]);
+  const includes = useMemo(
+    () => linkageKeysForFields(appliedFieldKeys, linkageCatalog),
+    [appliedFieldKeys, linkageCatalog],
+  );
+
+  const { data: rawRows = [], isLoading, error, refetch, isFetching } = useQuery({
+    queryKey: ['report', dataset.key, includes.join(',')],
+    queryFn: async () => {
+      const base = asRows(await dataset.fetch());
+      if (!includes.length) return base;
+      return enrichReportRows(dataset.key, base, includes);
+    },
+    staleTime: 30_000,
+  });
+  const rows = asRows(rawRows);
+
+  const cols = useMemo(() => {
+    const inc = new Set(includes);
+    return [...dataset.columns, ...linkageColDefs.filter((c) => c.linkageKey && inc.has(c.linkageKey))];
+  }, [dataset.columns, linkageColDefs, includes]);
+
+  const filtersDirty = useMemo(
+    () => JSON.stringify(draftRules) !== JSON.stringify(spec.rules) || draftSearch !== spec.search,
+    [draftRules, spec.rules, draftSearch, spec.search],
+  );
+  const applyFilters = () => patch({ rules: draftRules, search: draftSearch });
+  const resetFilters = () => {
+    const empty = { logic: 'AND' as const, conditions: [] };
+    setDraftRules(empty);
+    setDraftSearch('');
+    patch({ rules: empty, search: '' });
+  };
+
+  const filteredRows = useMemo(() => {
+    const matched = rows.filter((r) => rowMatchesSearch(cols, r, spec.search) && rowMatchesRules(cols, r, spec.rules));
+    if (!spec.sorts?.length) return matched;
+    return [...matched].sort((a, b) => compareRows(cols, a, b, spec.sorts as SortSpec[]));
+  }, [rows, cols, spec.search, spec.rules, spec.sorts]);
+
   const result = useMemo(
     () => buildPivot(cols, filteredRows, spec.rows, spec.col, spec.measures),
     [cols, filteredRows, spec.rows, spec.col, spec.measures],
   );
-  // Colour domains come from the UNFILTERED rows so a filter never repaints series.
   const colDomain = useMemo(() => fieldDomain(cols.find((c) => c.key === spec.col), rows), [cols, spec.col, rows]);
-  const rowDomain = useMemo(() => fieldDomain(cols.find((c) => c.key === spec.rows[0]), rows), [cols, spec.rows, rows]);
+  const rowDomain = useMemo(() => fieldDomain(cols.find((c) => c.key === groupBy), rows), [cols, groupBy, rows]);
+  const chartKind = useMemo(
+    () => effectiveChartKind(spec.view as ChartKind, result.nodes.length, cols.find((c) => c.key === groupBy)),
+    [spec.view, result.nodes.length, cols, groupBy],
+  );
+  const readiness = useMemo(() => chartReadiness(spec, cols, filteredRows), [spec, cols, filteredRows]);
+  const chartOk = spec.view === 'table' || readiness.ok;
 
-  const shownFields = cols.filter((c) => c.label.toLowerCase().includes(fieldQ.trim().toLowerCase()));
   const ruleCount = spec.rules.conditions.filter(isActiveCondition).length;
-  const removeMeasure = (id: string) => setSpec((s) => {
-    const measures = s.measures.filter((x) => x.id !== id);
-    return { ...s, measures, measureIdx: Math.min(s.measureIdx, Math.max(0, measures.length - 1)) };
-  });
+  const draftRuleCount = draftRules.conditions.filter(isActiveCondition).length;
+  const groupCandidates = useMemo(() => chartGroupCandidates(cols), [cols]);
+  const splitCandidates = useMemo(
+    () => cols.filter((c) => c.key !== groupBy && c.type !== 'number'),
+    [cols, groupBy],
+  );
 
-  // ── Field → well ─────────────────────────────────────────────────────────
-  const addRow = (k: string) => !spec.rows.includes(k) && patch({ rows: [...spec.rows, k] });
-  const addCol = (k: string) => patch({ col: spec.col === k ? null : k });
-  const addValue = (c: ColumnDef) =>
-    patch({ measures: [...spec.measures, { id: `m${mid.current++}`, key: c.key, agg: c.type === 'number' ? 'sum' : 'count' }] });
-  const moveRow = (i: number, d: -1 | 1) => {
-    const next = [...spec.rows];
-    const j = i + d;
-    if (j < 0 || j >= next.length) return;
-    [next[i], next[j]] = [next[j], next[i]];
-    patch({ rows: next });
+  const setGroupBy = (key: string | null) => patch({ rows: key ? [key] : [], col: key && spec.col === key ? null : spec.col });
+  const setSplitBy = (key: string | null) => { if (key !== groupBy) patch({ col: key }); };
+  const setPrimaryMeasure = (key: string, agg: AggFn) => patch({ measures: [{ id: spec.measures[0]?.id ?? 'm0', key, agg }], measureIdx: 0 });
+
+  const toggleSort = (key: string, additive: boolean) => {
+    patch({
+      sorts: (() => {
+        const cur = spec.sorts ?? [];
+        const ex = cur.find((s) => s.key === key);
+        if (!additive) {
+          if (!ex) return [{ key, dir: 'asc' as const }];
+          if (ex.dir === 'asc') return [{ key, dir: 'desc' as const }];
+          return [];
+        }
+        if (!ex) return [...cur, { key, dir: 'asc' as const }];
+        if (ex.dir === 'asc') return cur.map((s) => (s.key === key ? { ...s, dir: 'desc' as const } : s));
+        return cur.filter((s) => s.key !== key);
+      })(),
+    });
   };
 
-  const toggleNode = (k: string) => setExpanded((s) => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n; });
-  const expandAll = () => setExpanded(new Set(allNodeKeys(result.nodes)));
-  const collapseAll = () => setExpanded(new Set());
-
   const doSave = async () => {
-    // Fork a teammate's shared report under a NEW id, so my copy never shares a
-    // slug with theirs (which would collide as a duplicate React key + overwrite).
     const isFork = spec.mine === false;
     const s: ReportSpec = {
       ...spec,
+      visibleColumns: visibleKeys,
+      includes,
       id: (spec.id && !isFork) ? spec.id : newSpecId(),
       name: isFork ? `${spec.name} (copy)` : (spec.name.trim() || `${dataset.label} report`),
-      shared: isFork ? false : spec.shared,   // my fork starts private
+      shared: isFork ? false : spec.shared,
       mine: true,
     };
     setSpec(s);
@@ -126,41 +190,39 @@ export default function ReportBuilder({
     onSavedChange?.();
   };
 
-  /** Provenance — every export carries the slice that produced its numbers. */
   const factLines = () => [
     { label: 'Dataset', value: `${dataset.module} · ${dataset.label}` },
     { label: 'Generated', value: new Date().toLocaleString() },
     { label: 'Rows', value: `${filteredRows.length.toLocaleString()}${filteredRows.length !== rows.length ? ` of ${rows.length.toLocaleString()}` : ''}` },
-    { label: 'Grouped by', value: spec.rows.length ? spec.rows.map(labelFor).join(' › ') : '—' },
-    { label: 'Pivoted by', value: spec.col ? labelFor(spec.col) : '—' },
-    { label: 'Values', value: spec.measures.map((m) => (m.agg === 'count' ? 'Count' : `${AGG_LABEL[m.agg]} ${labelFor(m.key)}`)).join(', ') || '—' },
+    { label: 'Columns', value: visibleKeys.map(labelFor).join(', ') || '—' },
+    { label: 'Grouped by', value: groupBy ? labelFor(groupBy) : '—' },
+    { label: 'Split by', value: splitBy ? labelFor(splitBy) : '—' },
+    { label: 'Values', value: spec.measures.map((m) => (m.agg === 'count' && !m.key ? 'Count' : `${AGG_LABEL[m.agg]} ${labelFor(m.key)}`)).join(', ') || '—' },
     { label: 'Filters', value: describeRules(cols, spec.rules) },
+    ...(includes.length ? [{ label: 'Cross-module links', value: includes.map((k) => linkageCatalog.find((l) => l.key === k)?.label ?? k).join(', ') }] : []),
     ...(spec.search.trim() ? [{ label: 'Search', value: `“${spec.search.trim()}”` }] : []),
   ];
+  const exportCols = visibleKeys.map((k) => cols.find((c) => c.key === k)).filter(Boolean) as typeof cols;
 
   const doExport = async (kind: 'pdf' | 'excel' | 'csv' | 'word') => {
     setMenu(false);
     const name = spec.name.trim() || dataset.label;
-
-    // PDF goes through the print route (real vector text, no extra dependency).
     if (kind === 'pdf') {
-      stashPrintSpec({ ...spec, name });
+      stashPrintSpec({ ...spec, name, visibleColumns: visibleKeys, includes });
       window.open('/reports/print', '_blank', 'noopener');
       return;
     }
-
-    const { cols: outCols, rows: outRows } = flattenPivot(result, labelFor);
-    if (kind === 'csv') { exportCSV(name, outCols, outRows); return; }
+    if (kind === 'csv') { exportCSV(name, exportCols, filteredRows); return; }
     if (kind === 'excel') {
       exportExcelMulti(name, [
-        { name: 'Report', cols: outCols, rows: outRows },
+        { name: 'Report', cols: exportCols, rows: filteredRows },
         { name: 'Definition', aoa: [['Field', 'Value'], ...factLines().map((f) => [f.label, f.value])] },
       ]);
       return;
     }
     setExporting(true);
     try {
-      await exportWord(name, { title: name, subtitle: `${dataset.module} · ${dataset.label}`, facts: factLines() }, outCols, outRows);
+      await exportWord(name, { title: name, subtitle: `${dataset.module} · ${dataset.label}`, facts: factLines() }, exportCols, filteredRows);
     } finally { setExporting(false); }
   };
 
@@ -174,257 +236,200 @@ export default function ReportBuilder({
     );
   }
 
-  const seg = (active: boolean) => `inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium ${active ? 'bg-primary-500 text-[#0a0a0a]' : 'text-slate-600 hover:bg-slate-50'}`;
+  const primaryMeasure = spec.measures[0] ?? { id: 'm0', key: '', agg: 'count' as AggFn };
 
   return (
-    <div className="flex min-h-0 flex-1 gap-4">
-      {/* ── Config panel ─────────────────────────────────────────────── */}
-      <aside className="flex w-[286px] flex-shrink-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white">
-        <div className="border-b border-slate-100 p-2.5">
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-400" />
-            <input value={fieldQ} onChange={(e) => setFieldQ(e.target.value)} placeholder="Search fields…"
-              className="w-full rounded-lg border border-slate-200 py-1.5 pl-8 pr-2 text-xs focus:border-primary-500 focus:outline-none" />
-          </div>
+    <div className="flex min-h-0 min-w-0 flex-1 gap-3 overflow-hidden">
+      <aside className="flex w-[280px] shrink-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <div className="shrink-0 border-b border-slate-100 bg-slate-50/80 px-3 py-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Build report</p>
+          <p className="truncate text-xs text-slate-600">{dataset.label}</p>
         </div>
+        <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
+          <BuilderSection step={1} title="Columns" count={visibleKeys.length} hint="Add base and linkage columns, then arrange layout">
+            <div className="mb-2 flex gap-1">
+              <button type="button" onClick={() => patch({ visibleColumns: allCols.map((c) => c.key) })} className="rounded px-2 py-0.5 text-[10px] font-medium text-slate-500 hover:bg-slate-100">All</button>
+              <button type="button" onClick={() => patch({ visibleColumns: defaultVisibleColumns(dataset.columns), pinnedColumns: [], columnWidths: {}, columnAlign: {} })} className="rounded px-2 py-0.5 text-[10px] font-medium text-slate-500 hover:bg-slate-100">Reset</button>
+            </div>
+            <ColumnPicker
+              baseColumns={dataset.columns}
+              linkageCatalog={linkageCatalog}
+              linkageColumns={linkageColDefs}
+              visibleKeys={visibleKeys}
+              onChange={(keys) => patch({ visibleColumns: keys })}
+              fieldQ={fieldQ}
+              onFieldQChange={setFieldQ}
+            />
+            <div className="mt-3">
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Selected order</p>
+              <SelectedColumnList
+                cols={allCols}
+                visibleKeys={visibleKeys}
+                align={spec.columnAlign ?? {}}
+                pinned={spec.pinnedColumns ?? []}
+                onReorder={(keys) => patch({ visibleColumns: keys })}
+                onRemove={(key) => patch({ visibleColumns: visibleKeys.filter((k) => k !== key), pinnedColumns: (spec.pinnedColumns ?? []).filter((k) => k !== key) })}
+                onAlign={(key, align) => patch({ columnAlign: { ...(spec.columnAlign ?? {}), [key]: align } })}
+                onPin={(key) => patch({ pinnedColumns: (spec.pinnedColumns ?? []).includes(key) ? (spec.pinnedColumns ?? []).filter((k) => k !== key) : [...(spec.pinnedColumns ?? []), key] })}
+              />
+            </div>
+          </BuilderSection>
 
-        <div className="min-h-0 flex-1 overflow-auto">
-          {/* Fields */}
-          <Section title="Fields" count={shownFields.length}>
-            {shownFields.map((c) => {
-              const Icon = typeIcon(c.type);
-              const inRows = spec.rows.includes(c.key);
-              const isCol = spec.col === c.key;
-              return (
-                <div key={c.key} className="group flex items-center gap-1.5 rounded-md px-1.5 py-1 hover:bg-slate-50">
-                  <Icon className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-                  <span className="min-w-0 flex-1 truncate text-xs text-slate-700">{c.label}</span>
-                  <div className="flex shrink-0 items-center gap-0.5 text-slate-300 transition-colors group-hover:text-slate-500">
-                    <MiniBtn label="Row" title={`Group rows by ${c.label}`} active={inRows} onClick={() => addRow(c.key)} />
-                    <MiniBtn label="Col" title={`Pivot ${c.label} across columns`} active={isCol} onClick={() => addCol(c.key)} />
-                    <MiniBtn label="Σ" title={`Aggregate ${c.label}`} onClick={() => addValue(c)} />
-                  </div>
-                </div>
-              );
-            })}
-            {!shownFields.length && <p className="px-2 py-3 text-center text-[11px] text-slate-400">No fields match.</p>}
-          </Section>
-
-          {/* Rows */}
-          <Section title="Rows" count={spec.rows.length} hint="Nest fields to build a drill-down tree">
-            {!spec.rows.length && <Empty>Add a field to group rows</Empty>}
-            {spec.rows.map((k, i) => (
-              <WellItem key={k} icon={typeIcon(cols.find((c) => c.key === k)?.type)} label={labelFor(k)} onRemove={() => patch({ rows: spec.rows.filter((x) => x !== k) })}>
-                {spec.rows.length > 1 && (
-                  <>
-                    <IconBtn title="Move up" disabled={i === 0} onClick={() => moveRow(i, -1)}><ChevronUp className="h-3 w-3" /></IconBtn>
-                    <IconBtn title="Move down" disabled={i === spec.rows.length - 1} onClick={() => moveRow(i, 1)}><ChevronDown className="h-3 w-3" /></IconBtn>
-                  </>
-                )}
-              </WellItem>
-            ))}
-          </Section>
-
-          {/* Columns */}
-          <Section title="Columns" count={spec.col ? 1 : 0} hint="One field, pivoted across the top">
-            {!spec.col ? <Empty>Add a field to pivot across</Empty> : (
-              <WellItem icon={typeIcon(cols.find((c) => c.key === spec.col)?.type)} label={labelFor(spec.col)} onRemove={() => patch({ col: null })} />
-            )}
-          </Section>
-
-          {/* Values */}
-          <Section title="Values" count={spec.measures.length} hint="What gets counted or totalled">
-            {!spec.measures.length && <Empty>Add a value to see numbers</Empty>}
-            {spec.measures.map((m) => {
-              const col = cols.find((c) => c.key === m.key);
-              const numeric = col?.type === 'number';
-              return (
-                <WellItem key={m.id} icon={typeIcon(col?.type)} label={m.key ? labelFor(m.key) : 'Count of rows'}
-                  onRemove={() => removeMeasure(m.id)}>
-                  {m.key !== '' && (
-                    <select value={m.agg} onChange={(e) => patch({ measures: spec.measures.map((x) => (x.id === m.id ? { ...x, agg: e.target.value as AggFn } : x)) })}
-                      className="rounded border border-slate-200 bg-white px-1 py-0.5 text-[10px] font-medium text-slate-600 focus:border-primary-500 focus:outline-none">
-                      {(numeric ? NUM_AGGS : (['count'] as AggFn[])).map((a) => <option key={a} value={a}>{AGG_LABEL[a]}</option>)}
-                    </select>
-                  )}
-                </WellItem>
-              );
-            })}
-          </Section>
-
-          {/* Filters */}
-          <Section title="Filters" count={ruleCount}>
-            <button onClick={() => setShowFilters((s) => !s)}
-              className={`mb-1.5 flex w-full items-center gap-1.5 rounded-md border px-2 py-1.5 text-xs font-medium ${ruleCount || showFilters ? 'border-primary-300 bg-primary-50 text-primary-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
-              <Filter className="h-3.5 w-3.5" /> {ruleCount ? `${ruleCount} condition${ruleCount > 1 ? 's' : ''}` : 'Add filters'}
+          <BuilderSection step={2} title="Filters" count={ruleCount + (spec.search.trim() ? 1 : 0)} hint="Multiple filters with apply and reset">
+            <button type="button" onClick={() => setShowFilters((s) => !s)} className={`mb-1.5 flex w-full items-center gap-1.5 rounded-md border px-2.5 py-2 text-xs font-medium ${ruleCount || showFilters ? 'border-primary-300 bg-primary-50 text-primary-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+              <Filter className="h-3.5 w-3.5" />
+              {draftRuleCount ? `${draftRuleCount} draft rule${draftRuleCount > 1 ? 's' : ''}` : 'Add filter rules'}
             </button>
             {showFilters && (
-              <FilterBuilder compact cols={cols} rows={rows} rules={spec.rules} onChange={(rules) => patch({ rules })} onClose={() => setShowFilters(false)} />
+              <>
+                <div className="relative mb-2">
+                  <Search className="pointer-events-none absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-400" />
+                  <input value={draftSearch} onChange={(e) => setDraftSearch(e.target.value)} placeholder="Search all columns…" className="w-full rounded-lg border border-slate-200 py-1.5 pl-8 pr-2 text-xs focus:border-primary-500 focus:outline-none" />
+                </div>
+                <FilterBuilder compact staged dirty={filtersDirty} cols={cols} rows={rows} rules={draftRules} onChange={setDraftRules} onApply={applyFilters} onReset={resetFilters} onClose={() => setShowFilters(false)} />
+              </>
             )}
-          </Section>
+          </BuilderSection>
+
+          {spec.view !== 'table' && (
+            <BuilderSection step={3} title="Chart setup" hint="How to aggregate for charts">
+              <label className="mb-2 block">
+                <span className="mb-1 block text-[10px] font-medium text-slate-500">Group by *</span>
+                <select value={groupBy ?? ''} onChange={(e) => setGroupBy(e.target.value || null)} className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs focus:border-primary-500 focus:outline-none">
+                  <option value="">Select field…</option>
+                  {groupCandidates.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+                </select>
+              </label>
+              <label className="mb-2 block">
+                <span className="mb-1 block text-[10px] font-medium text-slate-500">Split by (optional)</span>
+                <select value={splitBy ?? ''} onChange={(e) => setSplitBy(e.target.value || null)} className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs focus:border-primary-500 focus:outline-none">
+                  <option value="">None — single series</option>
+                  {splitCandidates.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-[10px] font-medium text-slate-500">Value</span>
+                <div className="flex gap-1">
+                  <select value={primaryMeasure.key} onChange={(e) => setPrimaryMeasure(e.target.value, primaryMeasure.agg)} className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs focus:border-primary-500 focus:outline-none">
+                    <option value="">Count of rows</option>
+                    {cols.filter((c) => c.type === 'number').map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+                  </select>
+                  {primaryMeasure.key && (
+                    <select value={primaryMeasure.agg} onChange={(e) => setPrimaryMeasure(primaryMeasure.key, e.target.value as AggFn)} className="w-16 rounded-lg border border-slate-200 bg-white px-1 py-1.5 text-xs">
+                      {NUM_AGGS.map((a) => <option key={a} value={a}>{AGG_LABEL[a]}</option>)}
+                    </select>
+                  )}
+                </div>
+              </label>
+            </BuilderSection>
+          )}
         </div>
       </aside>
 
-      {/* ── Preview ──────────────────────────────────────────────────── */}
-      <section className="flex min-h-0 flex-1 flex-col">
-        <div className="mb-3 flex flex-wrap items-center gap-2">
-          <input value={spec.name} onChange={(e) => patch({ name: e.target.value })} placeholder="Untitled report"
-            className="min-w-[140px] flex-1 rounded-lg border border-transparent bg-transparent px-2 py-1.5 text-base font-semibold text-slate-900 placeholder:font-normal placeholder:text-slate-400 hover:border-slate-200 focus:border-primary-500 focus:bg-white focus:outline-none" />
-
-          {/* View: Table + a 12-type chart picker */}
-          <div className="inline-flex overflow-hidden rounded-lg border border-slate-200 bg-white">
-            <button onClick={() => patch({ view: 'table' })} className={seg(spec.view === 'table')} title="Table"><Table2 className="h-3.5 w-3.5" /> Table</button>
-            <div className="relative">
-              <button onClick={() => { setChartMenu((v) => !v); setOptMenu(false); }} className={seg(spec.view !== 'table')} title="Chart type">
-                {(() => { const cur = CHART_TYPES.find((c) => c.kind === spec.view); const Icon = cur ? CHART_ICON[cur.kind] : BarChart3; return <><Icon className="h-3.5 w-3.5" /> {cur ? cur.label : 'Chart'} <ChevronDown className="h-3 w-3 opacity-60" /></>; })()}
-              </button>
-              {chartMenu && (
-                <div className="absolute right-0 top-full z-40 mt-1 w-64 rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
-                  {CHART_GROUPS.map((group) => (
-                    <div key={group} className="mb-1.5 last:mb-0">
-                      <div className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">{group}</div>
-                      <div className="grid grid-cols-2 gap-1">
-                        {CHART_TYPES.filter((c) => c.group === group).map((c) => { const Icon = CHART_ICON[c.kind]; return (
-                          <button key={c.kind} onClick={() => { patch({ view: c.kind }); setChartMenu(false); }}
-                            className={`flex items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs ${spec.view === c.kind ? 'bg-primary-50 font-semibold text-primary-700' : 'text-slate-600 hover:bg-slate-50'}`}>
-                            <Icon className="h-3.5 w-3.5 shrink-0" /> <span className="truncate">{c.label}</span>
-                          </button>
-                        ); })}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Chart options: legend + data labels */}
-          {spec.view !== 'table' && (
-            <div className="relative">
-              <button onClick={() => { setOptMenu((v) => !v); setChartMenu(false); }} title="Chart options"
-                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"><Settings2 className="h-3.5 w-3.5" /></button>
-              {optMenu && (
-                <div className="absolute right-0 top-full z-40 mt-1 w-44 rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg">
-                  <label className="flex cursor-pointer items-center justify-between gap-2 rounded-md px-2 py-1.5 text-xs text-slate-700 hover:bg-slate-50">
-                    Legend <input type="checkbox" checked={spec.showLegend !== false} onChange={(e) => patch({ showLegend: e.target.checked })} className="h-3.5 w-3.5 accent-primary-500" />
-                  </label>
-                  <label className="flex cursor-pointer items-center justify-between gap-2 rounded-md px-2 py-1.5 text-xs text-slate-700 hover:bg-slate-50">
-                    Data labels <input type="checkbox" checked={!!spec.showLabels} onChange={(e) => patch({ showLabels: e.target.checked })} className="h-3.5 w-3.5 accent-primary-500" />
-                  </label>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* One measure per chart — two scales on one axis would invent a correlation. */}
-          {spec.view !== 'table' && spec.view !== 'scatter' && spec.measures.length > 1 && (
-            <select value={spec.measureIdx} onChange={(e) => patch({ measureIdx: Number(e.target.value) })}
-              className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-medium text-slate-600 focus:border-primary-500 focus:outline-none">
-              {spec.measures.map((m, i) => <option key={m.id} value={i}>{m.agg === 'count' ? 'Count' : `${AGG_LABEL[m.agg]} ${labelFor(m.key)}`}</option>)}
-            </select>
-          )}
-
-          {spec.view === 'table' && spec.rows.length > 1 && (
-            <div className="inline-flex overflow-hidden rounded-lg border border-slate-200 bg-white">
-              <button onClick={expandAll} title="Expand all" className="px-2 py-1.5 text-slate-500 hover:bg-slate-50"><ChevronsUpDown className="h-3.5 w-3.5" /></button>
-              <button onClick={collapseAll} title="Collapse all" className="px-2 py-1.5 text-slate-500 hover:bg-slate-50"><ChevronsDownUp className="h-3.5 w-3.5" /></button>
-            </div>
-          )}
-
+      <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <div className="mb-2 flex shrink-0 flex-wrap items-center gap-2">
+          <input value={spec.name} onChange={(e) => patch({ name: e.target.value })} placeholder="Untitled report" className="min-w-0 flex-1 basis-[8rem] rounded-lg border border-transparent bg-transparent px-2 py-1.5 text-base font-semibold text-slate-900 placeholder:font-normal placeholder:text-slate-400 hover:border-slate-200 focus:border-primary-500 focus:bg-white focus:outline-none" />
           <div className="relative">
-            <button onClick={() => setMenu((m) => !m)} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50">
+            <button type="button" onClick={() => setMenu((m) => !m)} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50">
               {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />} Export
             </button>
             {menu && (
-              <div className="absolute right-0 top-full z-40 mt-1 w-60 rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg">
-                <p className="px-2 pb-1 pt-1 text-[11px] text-slate-400">Exports the pivot as shown, with the filters that produced it.</p>
-                <button onClick={() => doExport('pdf')} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-slate-700 hover:bg-slate-50"><Printer className="h-4 w-4 text-rose-600" /> PDF <span className="ml-auto text-[10px] text-slate-400">summary + chart</span></button>
-                <button onClick={() => doExport('excel')} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-slate-700 hover:bg-slate-50"><FileSpreadsheet className="h-4 w-4 text-emerald-600" /> Excel <span className="ml-auto text-[10px] text-slate-400">2 sheets</span></button>
-                <button onClick={() => doExport('word')} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-slate-700 hover:bg-slate-50"><FileType2 className="h-4 w-4 text-sky-700" /> Word (.docx)</button>
-                <button onClick={() => doExport('csv')} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-slate-700 hover:bg-slate-50"><FileText className="h-4 w-4 text-slate-500" /> CSV (.csv)</button>
+              <div className="absolute right-0 top-full z-40 mt-1 w-56 rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg">
+                <button type="button" onClick={() => doExport('pdf')} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-slate-50"><Printer className="h-4 w-4 text-rose-600" /> PDF</button>
+                <button type="button" onClick={() => doExport('excel')} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-slate-50"><FileSpreadsheet className="h-4 w-4 text-emerald-600" /> Excel</button>
+                <button type="button" onClick={() => doExport('word')} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-slate-50"><FileType2 className="h-4 w-4 text-sky-700" /> Word</button>
+                <button type="button" onClick={() => doExport('csv')} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-slate-50"><FileText className="h-4 w-4 text-slate-500" /> CSV</button>
               </div>
             )}
           </div>
-
-          <button
-            onClick={() => patch({ shared: !spec.shared })}
-            title={spec.shared ? 'Shared — everyone in your tenant can open this report' : 'Private to you. Click to share with your tenant.'}
-            className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium ${spec.shared ? 'border-primary-300 bg-primary-50 text-primary-700' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}
-          >
+          <button type="button" onClick={() => patch({ shared: !spec.shared })} className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium ${spec.shared ? 'border-primary-300 bg-primary-50 text-primary-700' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}>
             {spec.shared ? <Users className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />} {spec.shared ? 'Shared' : 'Private'}
           </button>
-
-          <button onClick={doSave} className="inline-flex items-center gap-1.5 rounded-lg bg-primary-500 px-3 py-1.5 text-xs font-semibold text-[#0a0a0a] hover:bg-primary-600">
-            {savedAt
-              ? <><Check className="h-3.5 w-3.5" strokeWidth={3} /> {savedSource === 'local' ? 'Saved locally' : 'Saved'}</>
-              : <><Save className="h-3.5 w-3.5" /> Save</>}
+          <button type="button" onClick={doSave} className="inline-flex items-center gap-1.5 rounded-lg bg-primary-500 px-3 py-1.5 text-xs font-semibold text-[#0a0a0a] hover:bg-primary-600">
+            {savedAt ? <><Check className="h-3.5 w-3.5" strokeWidth={3} /> Saved ({savedSource})</> : <><Save className="h-3.5 w-3.5" /> Save</>}
           </button>
         </div>
 
-        {/* A teammate's shared report is theirs — editing it here forks your own copy. */}
-        {spec.id && spec.mine === false && (
-          <p className="-mt-1 mb-2 text-[11px] text-slate-400">Shared by a teammate — saving keeps their copy untouched and stores your own.</p>
-        )}
-
-        <div className="mb-2 flex items-center gap-2 text-xs text-slate-400">
-          <Sigma className="h-3.5 w-3.5" />
-          <span>{filteredRows.length.toLocaleString()}{filteredRows.length !== rows.length ? ` of ${rows.length.toLocaleString()}` : ''} rows{spec.rows.length ? ` · ${result.nodes.length} groups` : ''}</span>
+        <div className="mb-1.5 flex shrink-0 flex-wrap items-center gap-3 text-xs text-slate-500">
+          <span className="inline-flex items-center gap-1"><Columns3 className="h-3.5 w-3.5" /> {visibleKeys.length} columns</span>
+          <span className="inline-flex items-center gap-1"><Sigma className="h-3.5 w-3.5" /> {filteredRows.length.toLocaleString()} rows</span>
+          {ruleCount > 0 && <span className="inline-flex items-center gap-1"><Filter className="h-3.5 w-3.5" /> {ruleCount} filter{ruleCount > 1 ? 's' : ''}</span>}
+          {includes.length > 0 && <span className="inline-flex items-center gap-1"><Link2 className="h-3.5 w-3.5" /> {includes.length} link{includes.length > 1 ? 's' : ''}</span>}
+          {isFetching && <span className="inline-flex items-center gap-1 text-slate-400"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Enriching linked columns…</span>}
         </div>
 
-        {spec.view === 'table'
-          ? <PivotTable result={result} expanded={expanded} onToggle={toggleNode} labelFor={labelFor} />
-          : <div className="min-h-0 flex-1 rounded-xl border border-slate-200 bg-white p-3">
-              <PivotChart result={result} kind={spec.view as ChartKind} measureIdx={Math.min(spec.measureIdx, Math.max(0, spec.measures.length - 1))}
-                colDomain={colDomain} rowDomain={rowDomain} options={{ legend: spec.showLegend !== false, labels: !!spec.showLabels }} />
-            </div>}
+        <div className="mb-2 shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-white">
+          <ChartViewStrip
+            view={spec.view}
+            onChange={(v) => {
+              patch({ view: v });
+              if (v !== 'table' && !groupBy) {
+                const first = chartGroupCandidates(cols)[0];
+                if (first) patch({ view: v, rows: [first.key], col: null });
+              }
+            }}
+          />
+        </div>
+
+        {!chartOk && spec.view !== 'table' && (
+          <div className="mb-2 flex shrink-0 gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+            <div className="min-w-0">
+              <p className="font-medium">Chart needs a clearer setup</p>
+              <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                {readiness.issues.map((issue) => <li key={issue}>{issue}</li>)}
+              </ul>
+              {readiness.suggestion && <p className="mt-1.5 text-amber-800">{readiness.suggestion}</p>}
+            </div>
+          </div>
+        )}
+
+        {spec.view === 'table' ? (
+          <ReportDataTable
+            cols={cols}
+            rows={filteredRows}
+            visibleKeys={visibleKeys}
+            widths={spec.columnWidths ?? {}}
+            align={spec.columnAlign ?? {}}
+            pinned={spec.pinnedColumns ?? []}
+            sorts={spec.sorts ?? []}
+            labelFor={labelFor}
+            onWidthsChange={(w) => patch({ columnWidths: w })}
+            onReorder={(keys) => patch({ visibleColumns: keys })}
+            onSort={toggleSort}
+          />
+        ) : chartOk ? (
+          <div className="min-h-0 min-w-0 flex-1 overflow-hidden rounded-xl border border-slate-200 bg-white p-3">
+            <PivotChart result={result} kind={chartKind} measureIdx={0} colDomain={colDomain} rowDomain={rowDomain} options={{ legend: spec.showLegend !== false, labels: !!spec.showLabels }} />
+          </div>
+        ) : (
+          <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm text-slate-500">
+            Fix chart setup in the left panel, or switch to Table view.
+          </div>
+        )}
       </section>
     </div>
   );
 }
 
-/* ── Small pieces ──────────────────────────────────────────────────────── */
-function Section({ title, count, hint, children }: { title: string; count?: number; hint?: string; children: React.ReactNode }) {
+function BuilderSection({ step, title, count, hint, children }: {
+  step: number;
+  title: string;
+  count?: number;
+  hint?: string;
+  children: ReactNode;
+}) {
   return (
-    <div className="border-b border-slate-100 p-2.5 last:border-0">
-      <div className="flex items-baseline justify-between px-1 pb-1.5">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{title}</span>
-        {count != null && count > 0 && <span className="text-[10px] font-medium tabular-nums text-slate-400">{count}</span>}
+    <div className="border-b border-slate-100 p-3 last:border-0">
+      <div className="mb-2 flex items-center gap-2">
+        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[10px] font-bold text-slate-600">{step}</span>
+        <span className="text-xs font-semibold text-slate-800">{title}</span>
+        {count != null && count > 0 && (
+          <span className="ml-auto rounded-full bg-primary-100 px-1.5 py-0.5 text-[10px] font-semibold text-primary-800">{count}</span>
+        )}
       </div>
-      {hint && <p className="px-1 pb-1.5 text-[10px] leading-snug text-slate-400">{hint}</p>}
+      {hint && <p className="mb-2 text-[10px] leading-snug text-slate-400">{hint}</p>}
       {children}
-    </div>
-  );
-}
-
-function Empty({ children }: { children: React.ReactNode }) {
-  return <div className="rounded-md border border-dashed border-slate-200 px-2 py-2 text-center text-[11px] text-slate-400">{children}</div>;
-}
-
-function MiniBtn({ label, title, active, onClick }: { label: string; title: string; active?: boolean; onClick: () => void }) {
-  return (
-    <button onClick={onClick} title={title}
-      className={`rounded px-1 py-0.5 text-[10px] font-semibold leading-none ${active ? 'bg-primary-100 text-primary-700' : 'hover:bg-slate-200 hover:text-slate-700'}`}>
-      {label}
-    </button>
-  );
-}
-
-function IconBtn({ title, disabled, onClick, children }: { title: string; disabled?: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button title={title} disabled={disabled} onClick={onClick}
-      className="rounded p-0.5 text-slate-400 hover:bg-slate-200 hover:text-slate-700 disabled:opacity-30 disabled:hover:bg-transparent">
-      {children}
-    </button>
-  );
-}
-
-function WellItem({ icon: Icon, label, onRemove, children }: { icon: React.ElementType; label: string; onRemove: () => void; children?: React.ReactNode }) {
-  return (
-    <div className="mb-1 flex items-center gap-1.5 rounded-md border border-primary-200 bg-primary-50/60 px-1.5 py-1 last:mb-0">
-      <Icon className="h-3.5 w-3.5 shrink-0 text-primary-600" />
-      <span className="min-w-0 flex-1 truncate text-xs font-medium text-slate-700">{label}</span>
-      {children}
-      <button onClick={onRemove} aria-label={`Remove ${label}`} className="rounded p-0.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600"><X className="h-3 w-3" /></button>
     </div>
   );
 }

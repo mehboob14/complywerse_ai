@@ -315,7 +315,7 @@ function FindingsCard({ drill, canFinding }: { drill: any; canFinding: boolean }
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="w-16 shrink-0 text-slate-400">Risk</span>
                   {fd.linked_risk_id ? (
-                    <Link href="/erm/risks" className="inline-flex items-center gap-1 text-primary-600 hover:underline"><Link2 className="h-3 w-3" /> {fd.linked_risk_title || `Risk #${fd.linked_risk_id}`}</Link>
+                    <Link href={`/erm/risks/${fd.linked_risk_id}`} className="inline-flex items-center gap-1 text-primary-600 hover:underline"><Link2 className="h-3 w-3" /> {fd.linked_risk_title || `Risk #${fd.linked_risk_id}`}</Link>
                   ) : canEditFinding ? (
                     <span className="inline-flex items-center gap-1.5">
                       <div className="w-[200px]"><BcmEntitySelect kind="risks" value={null} onChange={(id) => id && riskMut.mutate({ id: fd.id, risk_id: id })} placeholder="Link a risk…" /></div>

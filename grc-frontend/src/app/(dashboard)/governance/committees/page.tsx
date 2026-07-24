@@ -428,6 +428,18 @@ export default function CommitteesDashboardPage() {
                   selected={selected}
                   meetings={selected ? panelMeetings : overview!.upcoming_meetings}
                   actions={panelActions}
+                  canDelete={canDelete}
+                  deleting={deleteMutation.isPending}
+                  onDelete={(id) => {
+                    const name = committees.find((c) => c.id === id)?.name;
+                    if (
+                      confirm(
+                        `Delete “${name || 'this committee'}”? This removes the committee and cannot be undone.`,
+                      )
+                    ) {
+                      deleteMutation.mutate(id);
+                    }
+                  }}
                   onClear={() => setSelectedId(null)}
                 />
               </div>
@@ -588,10 +600,13 @@ function CommitteeTile({ c, selected, onSelect }: {
 // ─────────────────────────────────────────────────────────────────────────────
 // Context panel (sticky right — meetings + actions for selection)
 // ─────────────────────────────────────────────────────────────────────────────
-function ContextPanel({ selected, meetings, actions, onClear }: {
+function ContextPanel({ selected, meetings, actions, canDelete, deleting, onDelete, onClear }: {
   selected: OverviewCommittee | null;
   meetings: OverviewMeeting[];
   actions: ActionRow[];
+  canDelete?: boolean;
+  deleting?: boolean;
+  onDelete?: (id: number) => void;
   onClear: () => void;
 }) {
   // `meetings` is already committee-scoped by the parent when a committee is
@@ -611,6 +626,17 @@ function ContextPanel({ selected, meetings, actions, onClear }: {
             <Link href={`/governance/committees/${selected.id}`} className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-primary-600" title="Open committee">
               <ArrowUpRight size={16} />
             </Link>
+            {canDelete && onDelete && (
+              <button
+                type="button"
+                onClick={() => onDelete(selected.id)}
+                disabled={deleting}
+                className="rounded-md p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50"
+                title="Delete committee"
+              >
+                <Trash2 size={16} />
+              </button>
+            )}
             <button onClick={onClear} className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700" title="Clear selection">
               <X size={16} />
             </button>

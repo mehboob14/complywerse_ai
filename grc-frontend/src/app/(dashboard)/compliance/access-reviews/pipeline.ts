@@ -1,4 +1,4 @@
-// src/app/(dashboard)/admin/access-reviews/pipeline.ts
+// src/app/(dashboard)/compliance/access-reviews/pipeline.ts
 // Single source of truth for the gated 6-stage pipeline + display helpers.
 // Keep this in lockstep with the backend status machine in
 // access_review_router.py (_assert_not_completed and the stage endpoints).

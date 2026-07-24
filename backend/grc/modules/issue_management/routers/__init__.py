@@ -7,6 +7,7 @@ from .matrices import router as matrices_router
 from .auto_create import router as auto_create_router
 from .by_source import router as by_source_router
 from .automation_flags import router as automation_flags_router
+from .import_export import router as import_export_router
 
 __all__ = [
     "issues_router",
@@ -19,4 +20,5 @@ __all__ = [
     "auto_create_router",
     "by_source_router",
     "automation_flags_router",
+    "import_export_router",
 ]
