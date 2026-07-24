@@ -22,7 +22,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from . import catalog
+from . import catalog, threat_intel
 from .reachability import evaluate, REMEDIATED_STATUSES
 
 
@@ -124,6 +124,12 @@ def build_view(vuln, asset, *, control_coverage: Optional[float] = None,
             {"shortname": tt.get("shortname"), "name": tt.get("name")}
             for tt in catalog.kill_chain_tactics()
         ],
+        # Technique-level threat-intel association (derived, read-only): which actors
+        # and malware/tools MITRE records as USING the techniques in this chain. This
+        # is NOT "actors who exploited this CVE" — no such link exists in the data;
+        # the UI binds each actor list to the specific technique that carries it.
+        # Derived from the chain, so it never enters the assessment hash.
+        "threat_intel": threat_intel.for_chain(result["chain"]),
         # Vuln-specific remediation: the M-codes on each technique are the grounded
         # backbone ("what stops this step"); this is the one line true of THIS CVE,
         # not of the technique in general. Kept alongside, not instead of, M-codes.
