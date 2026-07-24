@@ -254,14 +254,9 @@ export function AssetLetterTile({ name, size = 'md' }: { name: string; size?: 's
     size === 'lg' ? 'h-10 w-10 text-base rounded-[10px]'
     : size === 'sm' ? 'h-7 w-7 text-xs rounded-lg'
     : 'h-8 w-8 text-sm rounded-lg';
-  // First alphanumeric char — skips brackets/symbols so "[DEMO] Asset 03" → "D".
-  const letter = (name?.match(/[a-z0-9]/i)?.[0] || '?').toUpperCase();
+  const letter = (name?.trim()?.[0] || '?').toUpperCase();
   return (
-    <span
-      className={`inline-flex shrink-0 items-center justify-center border border-slate-200 bg-slate-100 font-bold text-slate-500 ${dim}`}
-      title={name}
-      aria-label={`Asset ${name}`}
-    >
+    <span className={`inline-flex shrink-0 items-center justify-center bg-slate-100 font-bold text-slate-500 ${dim}`}>
       {letter}
     </span>
   );
