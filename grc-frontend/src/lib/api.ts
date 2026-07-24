@@ -2442,7 +2442,12 @@ export const vulnManagementApi = {
         } : undefined
       }),
     getById: (id: number) => apiClient.get(`/vuln-management/vulnerabilities/${id}`),
-    create: (data: Record<string, unknown>) => 
+    // ATT&CK exploitability assessment for one finding on one asset (the Exploit
+    // Test tab). Returns the computed attack chain + verdict + graded exploit
+    // evidence + remediation. Per-asset: the verdict differs by which host.
+    exploitability: (id: number, assetId: number) =>
+      apiClient.get(`/vuln-management/vulnerabilities/${id}/exploitability`, { params: { asset_id: assetId } }),
+    create: (data: Record<string, unknown>) =>
       apiClient.post('/vuln-management/vulnerabilities', data),
     bulkUpload: (file: File) => {
       const formData = new FormData();
@@ -2459,6 +2464,11 @@ export const vulnManagementApi = {
       apiClient.post(`/vuln-management/vulnerabilities/${id}/assign`, { user_id: userId }),
     changeStatus: (id: number, status: string, notes?: string) =>
       apiClient.post(`/vuln-management/vulnerabilities/${id}/status`, { status, notes }),
+    // Accepting risk is deliberately NOT a changeStatus('accepted') call: this
+    // endpoint also records the exception and its review date, which is what
+    // makes the acceptance expire instead of hiding the finding forever.
+    acceptRisk: (id: number, body: { justification: string; review_by?: string | null }) =>
+      apiClient.post(`/vuln-management/vulnerabilities/${id}/accept-risk`, body),
     // CVE auto-fill from a free-text title. Returns matched CVE metadata
     // (cvss, severity, cwe, description) when the title either contains a
     // CVE-ID outright or matches a curated nickname (Log4Shell, etc.). The
@@ -2659,8 +2669,27 @@ export const vulnManagementApi = {
     bulkAssign: (data: { vulnerability_ids: number[]; department_id: number; priority?: string; notes?: string }) =>
       apiClient.post('/vuln-management/vulnerabilities/bulk-assign', data),
   },
+  // Remediation plans — generate, then walk recommended → approved →
+  // applied → verified. `get` 404s when no plan has been generated yet.
+  remediationPlans: {
+    get: (vulnId: number) =>
+      apiClient.get(`/vuln-management/vulnerabilities/${vulnId}/remediation-plan`),
+    generate: (vulnId: number) =>
+      apiClient.post(`/vuln-management/vulnerabilities/${vulnId}/remediation-plan`),
+    approve: (planId: number, body: { auto_apply?: boolean }) =>
+      apiClient.post(`/vuln-management/remediation-plans/${planId}/approve`, body),
+    apply: (planId: number) =>
+      apiClient.post(`/vuln-management/remediation-plans/${planId}/apply`),
+    // Evidence is required by the API: verification is an attestation by a
+    // named person, not a system claim.
+    verify: (planId: number, body: { evidence: string }) =>
+      apiClient.post(`/vuln-management/remediation-plans/${planId}/verify`, body),
+    // Stopping a plan is a recorded decision. The finding stays open.
+    cancel: (planId: number, body: { reason: string }) =>
+      apiClient.post(`/vuln-management/remediation-plans/${planId}/cancel`, body),
+  },
   workflows: {
-    getAvailableTransitions: (vulnId: number) => 
+    getAvailableTransitions: (vulnId: number) =>
       apiClient.get(`/vuln-management/workflows/vulnerabilities/${vulnId}/available-transitions`),
     getHistory: (vulnId: number) => 
       apiClient.get(`/vuln-management/workflows/vulnerabilities/${vulnId}/history`),
@@ -3673,6 +3702,143 @@ export interface AdminRole {
   created_at: string;
 }
 
+export interface AIUsageSummary {
+  calls: number;
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  cached_tokens: number;
+  reasoning_tokens: number;
+  estimated_cost: number;
+  currency: string;
+  active_users: number;
+  failed_calls: number;
+  failure_rate: number;
+  cost_configured: boolean;
+}
+
+export interface AIUsageBreakdown {
+  module_key: string;
+  feature_key: string;
+  calls: number;
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  estimated_cost: number;
+}
+
+export interface AIUsageEvent {
+  id: number;
+  occurred_at: string;
+  username?: string;
+  module_key: string;
+  feature_key: string;
+  endpoint?: string;
+  provider: string;
+  model?: string;
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  estimated_cost: number;
+  status: string;
+  duration_ms: number;
+  operation_id?: string;
+  attempt_number: number;
+}
+
+export interface TokenUsageFeature {
+  feature_key: string;
+  label: string;
+  tokens: number;
+  cost: number;
+  share: number;
+  trend: number;
+}
+
+export interface TokenUsageModule {
+  module_key: string;
+  label: string;
+  color: string;
+  tokens: number;
+  cost: number;
+  share: number;
+  trend: number;
+  budget: number;
+  budget_used_cycle: number;
+  budget_pct: number | null;
+  features: TokenUsageFeature[];
+}
+
+export interface TokenUsageConsumer {
+  user_id?: number | null;
+  username: string;
+  display_name: string;
+  department?: string | null;
+  initials: string;
+  tokens: number;
+}
+
+export interface TokenUsageSeriesPoint {
+  date: string;
+  values: Record<string, number>;
+}
+
+export interface TokenUsageOverview {
+  range: string;
+  range_label: string;
+  granularity: string;
+  generated_at: string;
+  currency: string;
+  blended_rate_per_million: number;
+  cost_configured: boolean;
+  summary: {
+    total_tokens: number;
+    total_cost: number;
+    calls: number;
+    active_users: number;
+    daily_average: number;
+    trend_pct: number;
+  };
+  quota: {
+    monthly_quota: number;
+    cycle_used: number;
+    cycle_pct: number;
+    projection: number;
+    projection_over: boolean;
+  };
+  top_module: { module_key: string; label: string; color: string; tokens: number; share: number } | null;
+  alert: { module_label: string; pct: number; days_left: number; others: number; text: string } | null;
+  modules: TokenUsageModule[];
+  utilization: Array<{ module_key: string; label: string; color: string; used: number; budget: number; pct: number }>;
+  projection_note: { value: number; quota: number; over: boolean };
+  series: TokenUsageSeriesPoint[];
+  consumers: TokenUsageConsumer[];
+  active_user_count: number;
+}
+
+export interface TokenBudgetModule {
+  module_key: string;
+  label: string;
+  color: string;
+  monthly_budget: number;
+}
+
+export interface TokenBudgets {
+  monthly_quota: number;
+  blended_rate_per_million: number;
+  billing_cycle_day: number;
+  updated_at: string | null;
+  updated_by: string | null;
+  modules: TokenBudgetModule[];
+}
+
+export interface TokenBudgetsUpdate {
+  monthly_quota?: number;
+  blended_rate_per_million?: number;
+  billing_cycle_day?: number;
+  modules?: Array<{ module_key: string; monthly_budget: number }>;
+}
+
 export interface OrganizationProfile {
   id: number | null;
   name: string;
@@ -3731,6 +3897,24 @@ export const adminApi = {
     role_ids?: number[] 
   }) => apiClient.put(`/admin/users/${id}`, data),
   deleteUser: (id: number) => apiClient.delete(`/admin/users/${id}`),
+
+  getAIUsageSummary: (params?: Record<string, string | number | undefined>) =>
+    apiClient.get<AIUsageSummary>('/admin/ai-usage/summary', { params }),
+  getAIUsageByModule: (params?: Record<string, string | number | undefined>) =>
+    apiClient.get<AIUsageBreakdown[]>('/admin/ai-usage/by-module', { params }),
+  getAIUsageByUser: (params?: Record<string, string | number | undefined>) =>
+    apiClient.get<Array<{ user_id?: number; username: string; calls: number; total_tokens: number; estimated_cost: number }>>('/admin/ai-usage/by-user', { params }),
+  getAIUsageForUser: (id: number, params?: Record<string, string | number | undefined>) =>
+    apiClient.get<{ user: AdminUser; summary: AIUsageSummary; modules: AIUsageBreakdown[]; recent: AIUsageEvent[] }>(`/admin/ai-usage/users/${id}`, { params }),
+  getAIUsageEvents: (params?: Record<string, string | number | undefined>) =>
+    apiClient.get<{ total: number; items: AIUsageEvent[] }>('/admin/ai-usage/events', { params }),
+  exportAIUsage: (params?: Record<string, string | number | undefined>) =>
+    apiClient.get('/admin/ai-usage/export', { params, responseType: 'blob' }),
+  getTokenUsageOverview: (range: string) =>
+    apiClient.get<TokenUsageOverview>('/admin/ai-usage/overview', { params: { range } }),
+  getTokenBudgets: () => apiClient.get<TokenBudgets>('/admin/ai-usage/budgets'),
+  updateTokenBudgets: (data: TokenBudgetsUpdate) =>
+    apiClient.put<TokenBudgets>('/admin/ai-usage/budgets', data),
 
   getRoles: () => apiClient.get<AdminRole[]>('/admin/roles'),
   getRole: (id: number) => apiClient.get<AdminRole>(`/admin/roles/${id}`),
@@ -4420,6 +4604,38 @@ export const connectWizardApi = {
    *  encrypted + auto-creates the asset record + probes the OS. */
   handshake: (body: Record<string, unknown>) =>
     apiClient.post('/connect-wizard/handshake', body),
+};
+
+// Notes / History / derived Alerts — shared across assets and vulnerabilities.
+export const entityExtrasApi = {
+  listNotes: (entityType: 'asset' | 'vulnerability', entityId: number) =>
+    apiClient.get<Array<{ id: number; body: string; author_name?: string; created_at: string }>>(`/notes/${entityType}/${entityId}`),
+  addNote: (entityType: 'asset' | 'vulnerability', entityId: number, body: string) =>
+    apiClient.post(`/notes/${entityType}/${entityId}`, { body }),
+  history: (entityType: 'asset' | 'vulnerability', entityId: number) =>
+    apiClient.get<Array<{ id: number; action: string; detail?: string; actor_name?: string; created_at?: string }>>(`/history/${entityType}/${entityId}`),
+  assetAlerts: (assetId: number) =>
+    apiClient.get<Array<{
+      severity: string; title: string; detail: string; kind: string;
+      status?: string; acknowledged_by_name?: string; resolved_by_name?: string;
+    }>>(`/asset-alerts/${assetId}`),
+  // The alert is derived; only the human response to it is stored.
+  setAlertState: (assetId: number, kind: string, action: 'acknowledge' | 'resolve') =>
+    apiClient.post(`/asset-alerts/${assetId}/${kind}/${action}`),
+
+  // Asset-to-asset relationships — real typed edges (the CMDB graph), as
+  // opposed to the IP-address inference we used to show.
+  relationshipTypes: () => apiClient.get<string[]>('/asset-relationship-types'),
+  listRelationships: (assetId: number) =>
+    apiClient.get<Array<{
+      id: number; relationship_type: string; direction: 'outgoing' | 'incoming';
+      other_asset_id: number; other_asset_name?: string; other_asset_criticality?: string;
+      notes?: string; created_by_name?: string;
+    }>>(`/assets/${assetId}/relationships`),
+  createRelationship: (assetId: number, body: { target_asset_id: number; relationship_type: string; notes?: string }) =>
+    apiClient.post(`/assets/${assetId}/relationships`, body),
+  deleteRelationship: (assetId: number, relId: number) =>
+    apiClient.delete(`/assets/${assetId}/relationships/${relId}`),
 };
 
 export const riskPostureApi = {
