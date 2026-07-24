@@ -75,7 +75,17 @@ def _validate_entry_tactics() -> None:
 
 
 def _entry_techniques(chain: List[dict]) -> List[dict]:
-    return [t for t in chain if ENTRY_TACTICS & set(t.get("tactics") or [])]
+    # PRIMARY tactic only — the SAME definition reachability._is_entry_technique uses
+    # for escalation. A technique is a "way in" iff its primary (displayed) tactic is
+    # an entry tactic; a mere SECONDARY entry tag does NOT make a post-foothold
+    # technique a door (T1078 Valid Accounts, T1574 Hijack Execution Flow, … carry
+    # 'initial-access'/'execution' as a secondary tag but render under 'persistence'/
+    # 'stealth'). Keying on ANY tactic double-counted those as entry steps: a CWE-20
+    # finding on a NOT-internet-facing asset read 'possible' even though its only real
+    # entry step (T1190) was blocked — contradicting the reachability layer, which had
+    # already been fixed to primary-tactic. The chain carries the catalogue's tactic
+    # list, so tactics[0] is the same primary the badge and view render.
+    return [t for t in chain if (t.get("tactics") or [None])[0] in ENTRY_TACTICS]
 
 
 def roll_up(chain: List[dict], signals) -> dict:
@@ -103,6 +113,23 @@ def roll_up(chain: List[dict], signals) -> dict:
         verdict = VERDICT_UNLIKELY
         reason = "Every way in is blocked on this asset, so the attack chain is severed at the door."
         entry_state = "severed"
+
+    # ── assumed-chain guard ──────────────────────────────────────────────────
+    # A chain built ENTIRELY from the no-data fallback (no CWE, no CVSS vector — every
+    # technique carries assumed=True) is a guess, not evidence. Left alone it can read
+    # 'possible' on an internet-facing asset — which dresses "we know nothing about
+    # this finding" up as a partial finding. Cap it at 'unlikely' with an honest
+    # insufficient-data reason, UNLESS real exploit evidence (KEV or a public exploit)
+    # corroborates it — in which case that evidence, not the assumed mapping, carries
+    # the verdict and will already have escalated the entry step to LIKELY above.
+    if (chain and all(t.get("assumed") for t in chain)
+            and verdict == VERDICT_POSSIBLE
+            and not (signals.in_kev is True or signals.has_public_exploit is True)):
+        verdict = VERDICT_UNLIKELY
+        reason = ("No CWE or CVSS vector is recorded for this finding, so the attack path "
+                  "is assumed, not derived — and no public exploit or KEV listing "
+                  "corroborates it. Treated as unlikely until the finding is enriched.")
+        entry_state = "assumed_insufficient"
 
     # ── signal % — positive exploitability signals that are ON (kept separate) ──
     positive = {
