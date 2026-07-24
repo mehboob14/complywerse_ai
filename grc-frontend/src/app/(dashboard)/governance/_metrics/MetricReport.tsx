@@ -1,8 +1,8 @@
 'use client';
 
 // Shared metric-report surface, parameterised by kind so KPI and KRI stay SEPARATE
-// modules (different pages, different nav) while reusing one engine (/erm/kris/*).
-//   kind="kri" → Governance → KRI Report (risk exposure / early warning)
+// while reusing one engine (/erm/kris/*).
+//   kind="kri" → Key Risk Indicators (risk exposure / early warning)
 //   kind="kpi" → Governance → KPI Report (performance vs target)
 // Define (manual or live-fed) → measure each period → RAG → scorecard.
 

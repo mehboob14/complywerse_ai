@@ -111,7 +111,6 @@ const navigation: NavEntry[] = [
       { name: 'Document Management', href: '/governance/documents', icon: ScrollText, requiredPermissions: ['governance:policies:*'] },
       { name: 'Committees', href: '/governance/committees', icon: Users, requiredPermissions: ['governance:committees:*'] },
       { name: 'KRIs', href: '/erm/kris', icon: Activity, requiredPermissions: ['erm:kris:*'] },
-      { name: 'KRI Report', href: '/governance/kri-report', icon: ShieldAlert, requiredPermissions: ['erm:kris:*'] },
       { name: 'KPI Report', href: '/governance/kpi-report', icon: Target, requiredPermissions: ['erm:kris:*'] },
       { name: 'Projects', href: '/is-projects', icon: FolderKanban, requiredPermissions: ['is_projects:projects:*', 'is_projects:dashboard:view'] },
     ],
