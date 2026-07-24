@@ -337,7 +337,13 @@ def evaluate(vuln, asset, *, control_coverage: Optional[float] = None) -> dict:
     against (for the evidence panel). Selection reads the vuln's CWE + CVSS;
     reachability reads the asset's exposure + the vuln's exploit intel.
     """
-    selected = select_techniques(getattr(vuln, "cwe_id", None), getattr(vuln, "cvss_vector", None))
+    # Prefer the full CWE list (all NVD weaknesses — a Secondary is often the more
+    # specific, better-mapping one); fall back to the single Primary. select_techniques
+    # accepts either a list or a scalar.
+    selected = select_techniques(
+        getattr(vuln, "cwe_ids", None) or getattr(vuln, "cwe_id", None),
+        getattr(vuln, "cvss_vector", None),
+    )
     signals = build_signals(vuln, asset, control_coverage=control_coverage)
     chain = assess_chain(selected, signals)
     return {

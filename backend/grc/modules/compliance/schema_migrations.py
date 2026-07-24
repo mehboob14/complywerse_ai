@@ -354,6 +354,12 @@ _COLUMN_ADDS = [
      "ix_vuln_epss_percentile"),
     ("grc_vulnerabilities", "kev_flag", "BOOLEAN DEFAULT FALSE",
      "ix_vuln_kev_flag"),
+    # Phase 1 — real-tenant enrichment inputs. cwe_ids = all NVD weaknesses (the
+    # selector reads these); cvss_version = which spec the vector is; the KEV
+    # ransomware sub-flag CISA already ships (sharper than bare KEV membership).
+    ("grc_vulnerabilities", "cwe_ids", "JSON DEFAULT '[]'::json", None),
+    ("grc_vulnerabilities", "cvss_version", "VARCHAR(10)", None),
+    ("grc_vulnerabilities", "kev_ransomware_flag", "BOOLEAN", None),
     ("grc_vulnerabilities", "kev_date_added", "TIMESTAMP", None),
     ("grc_vulnerabilities", "nvd_published_at", "TIMESTAMP", None),
     ("grc_vulnerabilities", "nvd_last_modified_at", "TIMESTAMP", None),

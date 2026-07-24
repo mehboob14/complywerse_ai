@@ -251,6 +251,16 @@ def enrich_vulnerability(vuln: Vulnerability, db: Session) -> dict:
             vuln.cvss_vector = nvd.cvss_vector
             if vuln.cvss_score is None and nvd.cvss_score is not None:
                 vuln.cvss_score = nvd.cvss_score
+        # CWE backfill — the engine's core input, and the gap that made every real
+        # tenant map generically. Never overwrite a CWE a scanner already recorded;
+        # fill the single Primary (cwe_id, back-compat) and the full list (cwe_ids,
+        # which the technique selector reads).
+        if nvd.cwe_ids:
+            if not (vuln.cwe_id or "").strip():
+                vuln.cwe_id = nvd.cwe_ids[0]
+            if not (getattr(vuln, "cwe_ids", None) or []):
+                vuln.cwe_ids = list(nvd.cwe_ids)
+            summary["cwe_ids"] = list(nvd.cwe_ids)
         if nvd.references:
             vuln.exploit_references = nvd.references
         summary["nvd_synced"] = True
@@ -280,6 +290,15 @@ def enrich_vulnerability(vuln: Vulnerability, db: Session) -> dict:
     else:
         summary["errors"].append("nvd_unavailable")
 
+    # ---- CVSS spec version (record/display only) ---------------------------
+    # Which spec the vector is written in (3.1 / 4.0). Derived from the vector's
+    # own prefix, so it covers a scanner-supplied vector as well as an NVD one.
+    # Record-only: the reachability rules are unchanged (v4 Attack-Requirements /
+    # Automatable are deliberately out of scope here).
+    vec = (getattr(vuln, "cvss_vector", None) or "").strip()
+    if vec and not (getattr(vuln, "cvss_version", None) or "").strip() and vec.upper().startswith("CVSS:"):
+        vuln.cvss_version = vec.split("/", 1)[0].split(":", 1)[1]
+
     # ---- EPSS exploit probability ------------------------------------------
     try:
         epss = fetch_epss(cve_id)
@@ -306,10 +325,15 @@ def enrich_vulnerability(vuln: Vulnerability, db: Session) -> dict:
         meta = kev_metadata(cve_id)
         if meta and meta.get("date_added"):
             vuln.kev_date_added = meta["date_added"]
+        # CISA KEV ships a "known ransomware campaign use" sub-flag — sharper than
+        # bare KEV membership. The cache already parses it; just record it.
+        vuln.kev_ransomware_flag = bool(meta and meta.get("known_ransomware_campaign_use") == "Known")
+        summary["kev_ransomware"] = vuln.kev_ransomware_flag
     else:
         # Explicitly clear stale KEV metadata when the CVE has been removed
         # from the catalogue (rare but happens during CISA cleanups).
         vuln.kev_date_added = None
+        vuln.kev_ransomware_flag = False
 
     vuln.nvd_last_synced_at = datetime.utcnow()
 
