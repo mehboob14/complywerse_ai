@@ -83,6 +83,10 @@ def build_view(vuln, asset, *, control_coverage: Optional[float] = None,
     return {
         "vuln_id": getattr(vuln, "id", None),
         "cve_id": getattr(vuln, "cve_id", None),
+        # The weakness class — the narrator grounds the attacker's concrete actions
+        # in it (CWE-22 → "escape the web root"), so a story can be told, not just
+        # the badges restated.
+        "cwe_id": getattr(vuln, "cwe_id", None),
         "evaluated_at": evaluated_at or datetime.now(timezone.utc).isoformat(),
         "asset": {
             "id": getattr(asset, "id", None),

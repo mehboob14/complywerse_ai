@@ -35,43 +35,57 @@ import os
 import re
 from typing import Optional, Tuple
 
+from . import catalog
+
 logger = logging.getLogger(__name__)
 
 MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 
-SYSTEM_PROMPT = """You are a security analyst writing for a defender who is reading a GRC tool. \
-You narrate how an attacker could (or could not) exploit ONE specific vulnerability on ONE specific asset.
+SYSTEM_PROMPT = """You are a red-team analyst writing a short attacker walkthrough for a defender reading a GRC \
+tool. For ONE weakness on ONE asset, tell the STORY of what an attacker DOES, stage by stage.
 
-You are given a PRE-COMPUTED assessment: an ordered MITRE ATT&CK attack chain where every technique already \
-carries a status (likely / possible / blocked) and the reason for that status, plus the overall verdict, the \
-public-exploit evidence, and the remediation. You did not compute any of this and you must not second-guess it.
+You are given a pre-computed assessment: the weakness (CWE), the asset, and an ordered MITRE ATT&CK chain where each \
+technique carries WHAT IT IS, a STATUS (likely / possible / blocked), and the reason. You did not compute any of this \
+and must not second-guess it.
 
-HARD RULES — follow every one:
-- Use ONLY the techniques, statuses, reasons and evidence provided. Never invent a technique, CVE, tool, \
-capability, or step that is not in the data. If it is not in the assessment, it does not exist.
-- Walk the chain in the given order, one stage at a time. For each technique say, in plain language, what the \
-attacker would attempt, and then state whether it is likely / possible / blocked and WHY, using the provided reason.
-- If a technique is BLOCKED, say that specific path is closed and why. But a blocked step does NOT by itself end \
-the attack. Initial Access and Execution are ALTERNATIVE ways in — exploiting an internet-facing service (Initial \
-Access) versus a client-side exploit via a malicious file (Execution) are different doors, not one sequence. So when \
-one entry technique is blocked while another is still likely or possible, the attacker DOES have a way in — narrate \
-it, do not declare the attack over.
-- Do NOT author an overall verdict, and do NOT say whether the attack ultimately succeeds or fails. The engine \
-already computed the verdict and the tool shows it right beside your walkthrough; your job is the STAGES, not the \
-judgment. In particular NEVER write that the attack is "thwarted", "stopped", or "prevented", that the attacker \
-"cannot proceed", or that the target is "safe" / "not exploitable" — a blocked step closes one door, not the attack.
-- Ground confidence in the evidence: if a verified public exploit or a CISA-KEV listing is present, say so plainly \
-as the reason a step is likely. If the attack vector or CWE is missing (an "assumed" mapping), say the reachability \
-is unproven rather than asserting it.
-- Honest and concrete, not dramatic. No fear-mongering, no filler, no invented specifics (no fake IPs, payloads, \
-timelines). A defender should trust every sentence because it traces to the data.
-- End with ONE line: the single most useful defensive action (the remediation). Do not add a verdict line.
-- Then, on a FINAL separate line, output exactly one machine-check token — `SELFCHECK: reachable` if at least one \
-step in the chain is a viable way in (any step is likely or possible), or `SELFCHECK: blocked` if every step is \
-blocked. This line is validated and then removed before display; it must reflect the chain you were given.
+Write it as an ATTACKER'S STORY, never as a description of the assessment:
+- For each stage, describe what the attacker concretely DOES — the action, what they target, what they are trying to \
+achieve — grounded in that technique's "what it is" and in the weakness. LEAD WITH THE ACTION.
+- Then fold reachability into the SAME sentence: if the step is LIKELY, name the evidence that makes it work (a \
+verified or public exploit, a KEV listing); if BLOCKED, name the concrete fact that stops them (not internet-exposed, \
+a local-only attack vector, the fix is applied); if POSSIBLE, say the door is open but nothing yet confirms they walk \
+through it. The status COLOURS the sentence — it is never the subject of it.
 
-Format: a short intro sentence, then one short paragraph per stage prefixed with the tactic name in bold \
-(e.g. **Initial Access —**), then the one defensive-action line, then the SELFCHECK line. Keep it tight."""
+Concrete but not fabricated — this is the line you must not cross:
+- DESCRIBE the KIND of action the technique + weakness entail, in plain attacker terms. GOOD: "The attacker feeds \
+crafted ../ sequences to the app, trying to climb out of the web root and read files the server should never expose." \
+GOOD: "Using the SQL-injection flaw, the attacker rewrites the query to dump the user table."
+- DO NOT invent environment specifics as if they were observed — no made-up IP addresses, hostnames, usernames, \
+filenames, ports, or timelines presented as real. The weakness CLASS is real; a specific stolen file at 03:00 from \
+10.0.0.5 is a fabrication. Describe the technique, don't script a fake incident.
+
+BANNED — you are narrating the attack, not the tool. NEVER write "this step is marked as…", "this step is possible", \
+"the earlier steps hold", "it is not / hasn't been confirmed exploited in the wild", "mapped via…", "STATUS=", or any \
+phrase about the assessment itself. The defender can already see the badges; your job is the story behind them. For a \
+POSSIBLE step, describe the avenue the attacker WOULD try and say plainly that nothing yet proves they have used it \
+here — do not narrate the word "possible".
+
+Chain rules:
+- Use ONLY the techniques given, in the given order. Never invent a technique, CVE, or tool that is not in the data.
+- Initial Access and Execution are ALTERNATIVE ways in — a blocked one does not end the attack if another entry step \
+is likely or possible; say which door is open.
+- Do NOT author an overall verdict or say whether the attack ultimately succeeds. The engine owns that and the tool \
+shows it beside your walkthrough. NEVER call the attack "thwarted", "stopped", "prevented", or the target "safe" when \
+an entry step is likely or possible — a blocked step closes one door, not the attack.
+
+End with ONE line: the single most useful defensive action (the remediation) — no verdict line.
+Then a FINAL separate line that reports the ENGINE'S finding (given to you as "Engine finding"): exactly \
+`SELFCHECK: reachable` if that finding is likely or possible, or `SELFCHECK: blocked` if it is unlikely. It is \
+validated then removed before display — it must match the engine finding, not your own read of the steps.
+
+Format: a one-sentence scene-setter (the attacker's goal on this asset), then one short paragraph per stage prefixed \
+with the tactic in bold (e.g. **Initial Access —**), then the defensive-action line, then the SELFCHECK line. Tight \
+and concrete — every sentence is something the attacker does."""
 
 
 # ── verdict-consistency gate ────────────────────────────────────────────────
@@ -102,21 +116,29 @@ _ATTACK_SUCCEEDS_PHRASES = (
     "is exploitable",
 )
 
-_MACHINE_LINE = re.compile(r"^\s*(?:SELFCHECK\s*:\s*(reachable|blocked)|VERDICT\s*:.*)\s*$", re.I)
+# Any SELFCHECK/VERDICT line the model emits is machine-only and stripped before
+# display. The token is normalised: the model is asked for reachable/blocked but
+# sometimes echoes the verdict word (likely/possible/unlikely) — accept both so a
+# stray token neither leaks to the screen nor misfires the gate.
+_MACHINE_LINE = re.compile(r"^\s*(?:SELFCHECK\s*:\s*(\w+)|VERDICT\s*:.*)\s*$", re.I)
+_REACHABLE_TOKENS = {"reachable", "likely", "possible", "yes", "true"}
+_BLOCKED_TOKENS = {"blocked", "unlikely", "severed", "no", "false"}
 
 
 def _strip_machine_lines(text: str) -> Tuple[Optional[str], str]:
-    """Pull the SELFCHECK value out and drop any machine-only lines (SELFCHECK and
-    any stray VERDICT line the model shouldn't have written) from what we display.
-    Returns (selfcheck_value_or_None, cleaned_text)."""
+    """Pull the SELFCHECK value out (normalised to reachable/blocked) and drop every
+    machine-only line (SELFCHECK + any stray VERDICT line) from what we display."""
     selfcheck: Optional[str] = None
     kept = []
     for line in text.splitlines():
         m = _MACHINE_LINE.match(line)
         if m:
-            if m.group(1):
-                selfcheck = m.group(1).lower()
-            continue  # drop SELFCHECK and stray VERDICT lines from the display
+            tok = (m.group(1) or "").lower()
+            if tok in _REACHABLE_TOKENS:
+                selfcheck = "reachable"
+            elif tok in _BLOCKED_TOKENS:
+                selfcheck = "blocked"
+            continue  # drop SELFCHECK / stray VERDICT lines from the display
         kept.append(line)
     return selfcheck, "\n".join(kept).strip()
 
@@ -148,36 +170,85 @@ def _consistency_error(narrative: str, verdict: Optional[str], selfcheck: Option
     return None
 
 
+# Human labels for the weakness classes — so the narrator can ground the attacker's
+# actions in the actual flaw (CWE-22 → "escape the web root") instead of echoing a
+# number. Unmapped CWEs fall through to the bare id; the model knows the common ones.
+CWE_NAMES = {
+    "CWE-306": "Authentication Bypass", "CWE-287": "Improper Authentication", "CWE-862": "Missing Authorization",
+    "CWE-94": "Code Injection", "CWE-89": "SQL Injection", "CWE-79": "Cross-Site Scripting",
+    "CWE-22": "Path Traversal", "CWE-918": "Server-Side Request Forgery", "CWE-200": "Information Disclosure",
+    "CWE-269": "Privilege Escalation", "CWE-502": "Insecure Deserialization", "CWE-352": "Cross-Site Request Forgery",
+    "CWE-798": "Hard-coded Credentials", "CWE-78": "OS Command Injection", "CWE-77": "Command Injection",
+    "CWE-434": "Unrestricted File Upload", "CWE-327": "Weak Cryptography", "CWE-120": "Buffer Overflow",
+    "CWE-787": "Out-of-bounds Write", "CWE-119": "Memory Corruption", "CWE-20": "Improper Input Validation",
+}
+
+
+def _weakness_label(cwe: Optional[str]) -> Optional[str]:
+    if not cwe:
+        return None
+    name = CWE_NAMES.get(cwe)
+    return f"{name} ({cwe})" if name else cwe
+
+
+def _technique_gist(technique_id: str) -> str:
+    """A one-sentence "what it is" for a technique, from the ATT&CK catalogue — the
+    material the narrator needs to describe a concrete attacker action rather than
+    restate the badge. Trimmed to the first sentence so the prompt stays compact."""
+    tech = catalog.get_technique(technique_id)
+    desc = ((tech or {}).get("description") or "").strip()
+    if not desc:
+        return ""
+    first = desc.split("\n", 1)[0].strip()
+    if len(first) > 260:
+        cut = first[:260]
+        dot = cut.rfind(". ")
+        first = cut[:dot + 1] if dot > 60 else cut.rstrip() + "…"
+    return first
+
+
 def _assessment_facts(view: dict) -> str:
-    """Distil the build_view payload into the compact fact sheet the model reads.
-    Only what it's allowed to narrate from — nothing extra to hallucinate around.
+    """Distil the build_view payload into the fact sheet the model narrates from —
+    now carrying the WEAKNESS and each technique's "what it is", the raw material a
+    real attacker story needs (without it, the model can only restate the status).
+    The engine verdict rides along for SELFCHECK only; the model is told not to
+    restate it in prose.
     """
     ev = view.get("evidence", {}) or {}
+    asset = view.get("asset", {}) or {}
+    weakness = _weakness_label(view.get("cwe_id"))
     lines = [
+        f"Weakness: {weakness or 'unknown'}",
         f"CVE: {view.get('cve_id')}",
-        f"Asset: {view.get('asset', {}).get('name')} "
-        f"(internet_facing={view.get('asset', {}).get('internet_facing')}, "
-        f"criticality={view.get('asset', {}).get('criticality')})",
+        f"Asset: {asset.get('name')} (internet_facing={asset.get('internet_facing')}, "
+        f"criticality={asset.get('criticality')})",
         f"Other linked assets not covered by this verdict: {len(view.get('other_assets') or [])}",
-        f"VERDICT: {view.get('verdict', {}).get('verdict')} — {view.get('verdict', {}).get('verdict_reason')}",
-        f"Signals present: {view.get('verdict', {}).get('signal_pct')}%  "
-        f"Data completeness: {view.get('verdict', {}).get('data_completeness')}%",
         "Public-exploit evidence: "
         f"source={ev.get('exploit_source')!r}, verified_exploit={ev.get('exploit_verified')}, "
         f"kev={ev.get('kev')}, epss={ev.get('epss')}",
         f"Remediation: {view.get('remediation', {}).get('line')}",
+        f"Engine finding (do NOT restate in prose — use ONLY to set the SELFCHECK line): "
+        f"{view.get('verdict', {}).get('verdict')}",
         "",
-        "ATTACK CHAIN (in order — narrate exactly these, no more):",
+        "ATTACK CHAIN (in order — narrate exactly these, no more; describe the ACTION, "
+        "let the reachability only colour it):",
     ]
     for t in view.get("chain", []):
-        prov = t.get("mapping_source")
-        assumed = " [assumed/unproven mapping]" if t.get("assumed") else ""
-        mits = ", ".join(m.get("id") for m in (t.get("mitigations") or [])[:4])
-        lines.append(
-            f"- [{(t.get('tactic_name') or t.get('tactic'))}] {t.get('technique_id')} {t.get('name')} "
-            f"=> STATUS={t.get('status', '').upper()}. Reason: {t.get('why')} "
-            f"(mapped via {prov}{assumed}; mitigations: {mits or 'none listed'})"
-        )
+        assumed = " [mapping assumed / unproven]" if t.get("assumed") else ""
+        gist = _technique_gist(t.get("technique_id", ""))
+        status = (t.get("status") or "").lower()
+        lines.append(f"- {(t.get('tactic_name') or t.get('tactic'))}: {t.get('technique_id')} {t.get('name')}{assumed}")
+        if gist:
+            lines.append(f"    what it is: {gist}")
+        # The engine's "why" for POSSIBLE is generic boilerplate ("earlier steps
+        # hold; not confirmed exploited in the wild") — passing it verbatim is what
+        # leaks assessment-voice into the story. Give a clean cue instead; keep the
+        # specific, informative reasons for LIKELY (the exploit) and BLOCKED (the fact).
+        if status == "possible":
+            reach = "POSSIBLE — nothing blocks this step; no exploit or KEV confirms the attacker uses it here (an open, unproven avenue)"
+        else:
+            reach = f"{status.upper()} — {t.get('why')}"
+        lines.append(f"    reachability on this asset: {reach}")
     return "\n".join(lines)
 
 
