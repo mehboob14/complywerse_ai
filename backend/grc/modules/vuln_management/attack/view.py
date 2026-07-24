@@ -62,6 +62,15 @@ def build_view(vuln, asset, *, control_coverage: Optional[float] = None,
             {"id": m["mitigation_id"], "name": m["name"], "url": m.get("url")}
             for m in catalog.mitigations_for(t["technique_id"])
         ]
+        # Sub-technique legibility: tie e.g. "T1505.003 Web Shell" to its parent
+        # "T1505 Server Software Component" so the reader sees the hierarchy. We do
+        # NOT expand a parent into its subs or list variants — that would assert
+        # specificity the CWE + vector can't derive (the "blocked only on a definite
+        # fact" invariant, applied to selection).
+        if t.get("is_subtechnique") and t.get("parent"):
+            par = catalog.get_technique(t["parent"])
+            t["parent_id"] = t["parent"]
+            t["parent_name"] = par.get("name") if par else None
 
     # Vuln-specific remediation — the single most actionable line on the panel,
     # and unlike a technique-generic ATT&CK mitigation it is true of THIS CVE.
@@ -107,6 +116,14 @@ def build_view(vuln, asset, *, control_coverage: Optional[float] = None,
         "counts": result["counts"],
         # Layer 2+3 — the per-step chain (already kill-chain ordered).
         "chain": result["chain"],
+        # The full ordered ATT&CK tactic spine (all 15). The UI renders every stage
+        # and greys the ones no technique maps to ("no technique applies"), so a
+        # short chain reads as HONEST (only what the evidence justifies) rather than
+        # REDUCED — completeness without inventing a technique.
+        "tactic_spine": [
+            {"shortname": tt.get("shortname"), "name": tt.get("name")}
+            for tt in catalog.kill_chain_tactics()
+        ],
         # Vuln-specific remediation: the M-codes on each technique are the grounded
         # backbone ("what stops this step"); this is the one line true of THIS CVE,
         # not of the technique in general. Kept alongside, not instead of, M-codes.
