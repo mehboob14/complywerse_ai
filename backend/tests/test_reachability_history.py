@@ -99,6 +99,29 @@ def test_material_change_appends_new(db):
     assert latest_snapshot(db, 1, 2).verdict == "unlikely"  # history keeps both; latest is the flip
 
 
+def test_reflip_writes_fresh_row_not_dedup_against_all_history(db):
+    # A → B → A: a finding flips likely, gets mis-remediated, flips back. The second A
+    # is a GENUINE new event and must write a fresh row despite matching the first A's
+    # hash — dedup is against the LAST snapshot only, never exists-anywhere. Three rows.
+    record_snapshot(db, 7, VULN, ASSET, _view(verdict="likely"))    # A
+    record_snapshot(db, 7, VULN, ASSET, _view(verdict="unlikely"))  # B
+    _, created = record_snapshot(db, 7, VULN, ASSET, _view(verdict="likely"))  # A again
+    assert created is True
+    assert db.query(ReachabilitySnapshot).count() == 3
+    verdicts = [s.verdict for s in db.query(ReachabilitySnapshot).order_by(ReachabilitySnapshot.id).all()]
+    assert verdicts == ["likely", "unlikely", "likely"]  # not collapsed to two
+
+
+def test_unchanged_reassessment_keeps_first_timestamp(db):
+    # The FIRST appearance of a state is the event ("when did it flip"). A later
+    # identical re-render must not push assessed_at forward — that would answer "when
+    # did I last look", useless for audit.
+    snap, _ = record_snapshot(db, 7, VULN, ASSET, _view())
+    first_ts = snap.assessed_at
+    same, created = record_snapshot(db, 7, VULN, ASSET, _view())  # identical material
+    assert created is False and same.assessed_at == first_ts
+
+
 def test_steps_carry_provenance(db):
     snap, _ = record_snapshot(db, 7, VULN, ASSET, _view())
     steps = db.query(ReachabilityStep).filter_by(snapshot_id=snap.id).all()
