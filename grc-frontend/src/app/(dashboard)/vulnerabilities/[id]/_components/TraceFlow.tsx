@@ -14,6 +14,7 @@
  * now on live data. Motion, if it comes, is a reveal layered over this; the frame is
  * always here at rest.
  */
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { vulnManagementApi } from '@/lib/api';
 import styles from './TraceFlow.module.css';
@@ -45,6 +46,12 @@ export default function TraceFlow({
     enabled: !!assetId,
     staleTime: 60 * 1000,
   });
+  // Replay key: bumping it remounts the flow, which restarts the CSS reveal from the
+  // top. The reveal is a stagger over DOM order — and DOM order IS the trace's real
+  // order — so the motion can only ever walk the stages the engine actually emitted;
+  // it can't perform a beat the trace didn't produce. prefers-reduced-motion (handled
+  // in the stylesheet) drops the animation entirely and shows the full frame at rest.
+  const [playKey, setPlayKey] = useState(0);
 
   if (!assetId) {
     return (
@@ -86,10 +93,13 @@ export default function TraceFlow({
     <div className={styles.wrap}>
       <div className={styles.head}>
         <h3>How the engine reached this verdict</h3>
-        <span className={styles.subtle}>the real trace, standing still — every node is the engine&apos;s output, verbatim</span>
+        <span className={styles.subtle}>the engine&apos;s real path — it plays once, then rests. every node is its output, verbatim.</span>
+        <button type="button" className={styles.replay} onClick={() => setPlayKey((k) => k + 1)} aria-label="Replay the reveal">
+          &#9654; Replay
+        </button>
       </div>
 
-      <div className={styles.flow}>
+      <div className={styles.flow} key={playKey}>
         <StageRow label="finding" dot={styles.dot}>
           <div className={`${styles.card} ${styles.row}`}>
             <span className={styles.cve}>{cveId || `VULN-${vulnId}`}</span>

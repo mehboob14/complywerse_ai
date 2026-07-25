@@ -12,7 +12,7 @@
   background:var(--ground); color:var(--text); border:1px solid var(--border);
   border-radius:14px; padding:22px 22px 26px; line-height:1.55;
 }
-.head { display:flex; flex-wrap:wrap; align-items:baseline; gap:6px 12px; margin-bottom:20px; }
+.head { display:flex; flex-wrap:wrap; align-items:center; gap:6px 12px; margin-bottom:20px; }
 .head h3 { margin:0; font-size:16px; font-weight:600; color:var(--text); }
 .head .subtle { font-size:12.5px; color:var(--text-2); }
 .mono { font-family:var(--mono); }
@@ -118,3 +118,25 @@
 .retry { font-family:var(--mono); font-size:11.5px; color:var(--live); background:transparent; border:1px solid var(--border);
   border-radius:6px; padding:3px 10px; cursor:pointer; }
 @media (max-width:620px){ .stage{ grid-template-columns:84px 1fr; gap:11px; } }
+
+/* reveal - a stagger over DOM order, which IS the trace's real order, so the motion can
+   only walk stages the engine actually emitted. Plays on mount and on Replay (the flow
+   remounts via its key). fill:backwards keeps each stage hidden until its turn; after it
+   plays it rests at its normal (visible) state - the static frame. */
+.flow .stage { animation: tf-reveal .5s ease backwards; }
+.flow .stage:nth-child(1){ animation-delay:.05s; }
+.flow .stage:nth-child(2){ animation-delay:.48s; }
+.flow .stage:nth-child(3){ animation-delay:.91s; }
+.flow .stage:nth-child(4){ animation-delay:1.34s; }
+.flow .stage:nth-child(5){ animation-delay:1.77s; }
+.flow .stage:nth-child(6){ animation-delay:2.20s; }
+.flow .stage:nth-child(7){ animation-delay:2.63s; }
+.flow .stage:nth-child(8){ animation-delay:3.06s; }
+.flow .stage:nth-child(9){ animation-delay:3.49s; }
+@keyframes tf-reveal { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:none; } }
+/* the whole point of "static stays reachable": no motion, full frame immediately */
+@media (prefers-reduced-motion: reduce){ .flow .stage { animation:none; } }
+
+.replay { margin-left:auto; font-family:var(--mono); font-size:11px; letter-spacing:.03em; color:var(--live);
+  background:transparent; border:1px solid var(--border); border-radius:7px; padding:4px 11px; cursor:pointer; }
+.replay:hover { background:var(--elev); border-color:var(--rail); }
