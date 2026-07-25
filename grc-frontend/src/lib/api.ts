@@ -2456,6 +2456,12 @@ export const vulnManagementApi = {
     // recorded on each material change, annotated with the transition from the prior.
     exploitabilityHistory: (id: number, assetId: number) =>
       apiClient.get(`/vuln-management/vulnerabilities/${id}/exploitability/history`, { params: { asset_id: assetId } }),
+    // Reasoning trace for the same (finding × asset): the stage-by-stage path the
+    // engine took to its verdict — classify → map (CAPEC hit/miss) → cvss/assumed →
+    // select → reach → verdict. Read-only (the endpoint never writes a snapshot);
+    // drives the "show the reasoning" flow view.
+    exploitabilityTrace: (id: number, assetId: number) =>
+      apiClient.get(`/vuln-management/vulnerabilities/${id}/exploitability/trace`, { params: { asset_id: assetId } }),
     create: (data: Record<string, unknown>) =>
       apiClient.post('/vuln-management/vulnerabilities', data),
     bulkUpload: (file: File) => {
