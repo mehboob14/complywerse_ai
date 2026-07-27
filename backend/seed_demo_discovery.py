@@ -15,6 +15,8 @@ Usage (from backend/):  python seed_demo_discovery.py seed|cleanup [--tenant com
 import argparse
 from datetime import datetime, timedelta
 
+from sqlalchemy.exc import IntegrityError
+
 from grc.models import (
     GRCUser, ITAsset,
     DiscoveryCampaign, DiscoveryScope, DiscoveryRun, DiscoveryObservation,
@@ -67,13 +69,45 @@ def seed(db, tids):
         (f"{TAG} Windows domain", "winrm", "CORP\\svc_scan", ["10.10.0.0/24"]),
         (f"{TAG} Linux fleet", "ssh", "svc_scan", ["10.20.0.0/24"]),
     ]:
+        # Idempotency + concurrency safety:
+        # On production we can have multiple backend workers starting at once.
+        # Without an existence check, both can attempt the same insert and the
+        # second one will hit uq_grc_credential_profile_tenant_name.
+        if db.query(CredentialProfile.id).filter(
+            CredentialProfile.tenant_id == tid,
+            CredentialProfile.name == name,
+        ).first() is not None:
+            continue
+
         db.add(CredentialProfile(
             tenant_id=tid, name=name, kind=kind, username=uname,
             secret_kind="password", secret_encrypted=encrypt_secret("demo-not-a-real-secret"),
             applies_to_cidrs=cidrs, priority=50, is_active=True,
             created_by_id=getattr(user, "id", None), created_by_name="Demo",
         ))
-    db.commit()
+
+    # Even with checks above, a race can still happen between "exists?" and
+    # "INSERT". If we hit a unique violation, rollback and retry only the
+    # rows that are still missing.
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        for name, kind, uname, cidrs in [
+            (f"{TAG} Windows domain", "winrm", "CORP\\svc_scan", ["10.10.0.0/24"]),
+            (f"{TAG} Linux fleet", "ssh", "svc_scan", ["10.20.0.0/24"]),
+        ]:
+            if db.query(CredentialProfile.id).filter(
+                CredentialProfile.tenant_id == tid,
+                CredentialProfile.name == name,
+            ).first() is None:
+                db.add(CredentialProfile(
+                    tenant_id=tid, name=name, kind=kind, username=uname,
+                    secret_kind="password", secret_encrypted=encrypt_secret("demo-not-a-real-secret"),
+                    applies_to_cidrs=cidrs, priority=50, is_active=True,
+                    created_by_id=getattr(user, "id", None), created_by_name="Demo",
+                ))
+        db.commit()
 
     # ---- campaigns + scopes ----
     corp = DiscoveryCampaign(
