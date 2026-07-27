@@ -35,7 +35,6 @@ import {
 // from elsewhere in the app are unaffected.
 import RuleLibraryPage from '../compliance-plugins/library/page';
 import RiskPosturePage from '../risk-posture/page';
-import AgentsAdminPage from '../admin/agents/page';
 
 type AssetRow = {
   id: number;
@@ -217,12 +216,11 @@ function prettyVariant(v: string): string {
 // URL sync) matches the pattern we used for the Vulnerabilities Overview
 // move — conditional mount means inactive tabs incur no fetch cost.
 
-type ComplianceScansTab = 'overview' | 'rules' | 'risk-posture' | 'scanners';
+type ComplianceScansTab = 'overview' | 'rules' | 'risk-posture';
 
 const COMPLIANCE_TABS: { id: ComplianceScansTab; label: string; icon: LucideIcon }[] = [
   { id: 'overview',      label: 'Compliance Overview', icon: BarChart3 },
   { id: 'rules',         label: 'Compliance Rules',    icon: BookOpen },
-  { id: 'scanners',      label: 'Scanners',            icon: Cpu },
 ];
 
 export default function ComplianceOverviewPage() {
@@ -255,7 +253,6 @@ export default function ComplianceOverviewPage() {
 
       {activeTab === 'overview' && <OverviewTabContent />}
       {activeTab === 'rules' && <RuleLibraryPage />}
-      {activeTab === 'scanners' && <AgentsAdminPage />}
     </div>
   );
 }

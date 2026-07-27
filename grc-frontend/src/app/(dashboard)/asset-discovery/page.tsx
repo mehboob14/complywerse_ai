@@ -12,12 +12,13 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Radar, Inbox, Network, History, KeyRound, Play, Plus, Trash2, X,
-  ShieldCheck, RefreshCw, Check,
+  ShieldCheck, RefreshCw, Check, Cpu,
 } from 'lucide-react';
 import { discoveryApi } from '@/lib/api';
+import AgentsAdminPage from '../admin/agents/page';
 import '../assets/_suite/asset-suite.css';
 
-type Tab = 'overview' | 'campaigns' | 'inbox' | 'runs' | 'credentials';
+type Tab = 'overview' | 'campaigns' | 'inbox' | 'runs' | 'credentials' | 'scanners';
 
 const TABS: { id: Tab; label: string; icon: any }[] = [
   { id: 'overview',    label: 'Overview',     icon: Radar },
@@ -25,6 +26,7 @@ const TABS: { id: Tab; label: string; icon: any }[] = [
   { id: 'inbox',       label: 'Inbox',        icon: Inbox },
   { id: 'runs',        label: 'Scan history', icon: History },
   { id: 'credentials', label: 'Credentials',  icon: KeyRound },
+  { id: 'scanners',    label: 'Scanners',     icon: Cpu },
 ];
 
 /* ─── shared bits ──────────────────────────────────────────────────── */
@@ -484,6 +486,7 @@ export default function AssetDiscoveryPage() {
       {tab === 'inbox' && <InboxView />}
       {tab === 'runs' && <Runs />}
       {tab === 'credentials' && <Credentials />}
+      {tab === 'scanners' && <AgentsAdminPage />}
     </div>
   );
 }
