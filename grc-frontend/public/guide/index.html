@@ -1,0 +1,561 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cybersecurity Assurance — How It Works</title>
+<style>
+  :root{
+    --bg:#fbfcfc;--panel:#fff;--ink:#12201f;--ink2:#3d5250;--ink3:#6d817f;
+    --line:#e2e9e8;--line2:#eef3f2;--accent:#0f8f78;--soft:#e6f5f1;--aink:#0a6d5c;
+    --crit:#b3261e;--high:#c2410c;--med:#a16207;--low:#0f766e;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  :root[data-theme="dark"]{
+    --bg:#0d1413;--panel:#131c1b;--ink:#e8efee;--ink2:#b3c2c0;--ink3:#829895;
+    --line:#243230;--line2:#1b2624;--accent:#3ddfc2;--soft:#12312b;--aink:#6de8d4;
+    --crit:#ff8a80;--high:#ffab70;--med:#e8c168;--low:#5ecfba;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.62}
+  .shell{display:grid;grid-template-columns:270px minmax(0,1fr)}
+  @media(max-width:900px){.shell{grid-template-columns:1fr}}
+  .nav{border-right:1px solid var(--line);background:var(--panel);position:sticky;top:0;height:100vh;overflow-y:auto;padding:26px 20px 60px}
+  @media(max-width:900px){.nav{position:static;height:auto;border-right:0;border-bottom:1px solid var(--line)}}
+  .brand{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--aink);font-weight:700}
+  .bsub{font-size:18px;font-weight:650;line-height:1.25;margin:6px 0 20px}
+  .grp{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink3);font-weight:700;margin:20px 0 6px}
+  .nav a{display:block;padding:5px 10px;margin:1px -10px;border-radius:6px;color:var(--ink2);text-decoration:none;font-size:14px;cursor:pointer;border-left:2px solid transparent}
+  .nav a:hover{background:var(--line2);color:var(--ink)}
+  .nav a.on{background:var(--soft);color:var(--aink);font-weight:600;border-left-color:var(--accent)}
+  .main{padding:52px 46px 120px;max-width:940px}
+  @media(max-width:640px){.main{padding:28px 18px 70px}}
+  section{display:none}section.on{display:block}
+  .eyebrow{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--aink);font-weight:700;margin-bottom:9px}
+  h1{font-size:34px;line-height:1.15;font-weight:660;margin:0 0 14px;letter-spacing:-.02em;text-wrap:balance}
+  h2{font-size:21px;font-weight:640;margin:44px 0 12px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+  h3{font-size:16.5px;font-weight:640;margin:28px 0 8px}
+  p{margin:0 0 14px;max-width:68ch}
+  .lede{font-size:18px;color:var(--ink2);max-width:64ch;margin-bottom:26px}
+  ul,ol{max-width:66ch;padding-left:22px;margin:0 0 14px}li{margin-bottom:6px}
+  code{font-family:var(--mono);font-size:.87em;background:var(--line2);padding:1.5px 5px;border-radius:4px;color:var(--aink)}
+  strong{font-weight:640}
+  .wrap{overflow-x:auto;margin:0 0 18px;border:1px solid var(--line);border-radius:9px}
+  table{border-collapse:collapse;width:100%;font-size:14px;min-width:500px}
+  th{text-align:left;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);font-weight:700;padding:10px 13px;background:var(--line2);border-bottom:1px solid var(--line);white-space:nowrap}
+  td{padding:10px 13px;border-bottom:1px solid var(--line2);vertical-align:top}
+  tr:last-child td{border-bottom:0}
+  td.n{font-variant-numeric:tabular-nums;white-space:nowrap}
+  .fig{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:20px;margin:0 0 10px;overflow-x:auto}
+  .cap{font-size:13px;color:var(--ink3);margin:0 0 24px;max-width:64ch}
+  .note{border-left:3px solid var(--accent);background:var(--soft);padding:13px 17px;border-radius:0 8px 8px 0;margin:0 0 18px;font-size:14.6px}
+  .note.warn{border-left-color:var(--med);background:color-mix(in srgb,var(--med) 9%,transparent)}
+  .note.bad{border-left-color:var(--crit);background:color-mix(in srgb,var(--crit) 9%,transparent)}
+  .note p:last-child{margin:0}
+  .note .l{display:block;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;font-weight:700;margin-bottom:5px}
+  .biz{border:1px dashed var(--line);border-radius:9px;padding:14px 17px;margin:0 0 18px;background:var(--panel)}
+  .biz .l{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;font-weight:700;color:var(--ink3);display:block;margin-bottom:5px}
+  pre{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:15px 17px;overflow-x:auto;font-family:var(--mono);font-size:13px;margin:0 0 18px}
+  .tog{position:fixed;top:14px;right:16px;z-index:20;background:var(--panel);border:1px solid var(--line);color:var(--ink2);border-radius:7px;padding:6px 11px;font-size:12.5px;cursor:pointer;font-family:inherit}
+  .tog:focus-visible,.nav a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  svg text{font-family:var(--sans)}
+  .foot{color:var(--ink3);font-size:13.4px;margin-top:44px;padding-top:18px;border-top:1px solid var(--line)}
+</style>
+</head>
+<body>
+<button class="tog" id="tt">Theme</button>
+<div class="shell">
+<nav class="nav">
+  <div class="brand">Compliverse</div>
+  <div class="bsub">Cybersecurity Assurance<br>How It Works</div>
+  <div class="grp">For the decision maker</div>
+  <a data-go="s1" class="on">The one-minute version</a>
+  <a data-go="s2">How the pieces connect</a>
+  <div class="grp">How it thinks</div>
+  <a data-go="s3">Where the data comes from</a>
+  <a data-go="s4">How a finding is scored</a>
+  <a data-go="s5">Exploits &amp; "weaponised"</a>
+  <a data-go="s6">What triggers action</a>
+  <div class="grp">How work gets done</div>
+  <a data-go="s7">The remediation lifecycle</a>
+  <a data-go="s8">Accepting risk</a>
+  <a data-go="s9">Asset risk posture</a>
+  <div class="grp">Straight talk</div>
+  <a data-go="s10">What is real, what is not</a>
+</nav>
+<main class="main">
+
+<!-- 1 -->
+<section id="s1" class="on">
+  <div class="eyebrow">For the decision maker</div>
+  <h1>The one-minute version</h1>
+  <p class="lede">A scanner tells you there are 4,000 problems. This module turns that into an ordered list with owners, deadlines and evidence — and can prove months later who decided what.</p>
+
+  <div class="fig">
+    <svg viewBox="0 0 760 200" width="100%" height="200" role="img" aria-label="Four thousand raw findings narrowing to a small ranked queue">
+      <defs><marker id="a1" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="currentColor" opacity=".45"/></marker></defs>
+      <g fill="currentColor" opacity=".45"><text x="52" y="24" font-size="11" font-weight="700" letter-spacing="1.2">RAW</text></g>
+      <rect x="20" y="34" width="140" height="130" rx="8" fill="var(--crit)" opacity=".1"/>
+      <text x="90" y="94" font-size="30" font-weight="700" text-anchor="middle" fill="var(--crit)">4,000</text>
+      <text x="90" y="116" font-size="12" text-anchor="middle" fill="currentColor" opacity=".65">scanner findings</text>
+
+      <line x1="172" y1="99" x2="222" y2="99" stroke="currentColor" opacity=".45" stroke-width="1.5" marker-end="url(#a1)"/>
+      <rect x="232" y="34" width="150" height="130" rx="8" fill="var(--med)" opacity=".12"/>
+      <text x="307" y="88" font-size="12" text-anchor="middle" fill="currentColor" opacity=".8" font-weight="650">context applied</text>
+      <text x="307" y="108" font-size="11.5" text-anchor="middle" fill="currentColor" opacity=".6">exploit · exposure</text>
+      <text x="307" y="124" font-size="11.5" text-anchor="middle" fill="currentColor" opacity=".6">criticality · deadline</text>
+
+      <line x1="394" y1="99" x2="444" y2="99" stroke="currentColor" opacity=".45" stroke-width="1.5" marker-end="url(#a1)"/>
+      <rect x="454" y="34" width="140" height="130" rx="8" fill="var(--accent)" opacity=".13"/>
+      <text x="524" y="94" font-size="30" font-weight="700" text-anchor="middle" fill="var(--accent)">12</text>
+      <text x="524" y="116" font-size="12" text-anchor="middle" fill="currentColor" opacity=".65">act on today</text>
+
+      <line x1="606" y1="99" x2="656" y2="99" stroke="currentColor" opacity=".45" stroke-width="1.5" marker-end="url(#a1)"/>
+      <rect x="666" y="34" width="80" height="130" rx="8" fill="none" stroke="var(--line)" stroke-width="1.5"/>
+      <text x="706" y="88" font-size="12" text-anchor="middle" fill="currentColor" opacity=".8" font-weight="650">evidence</text>
+      <text x="706" y="108" font-size="11" text-anchor="middle" fill="currentColor" opacity=".6">who · when</text>
+      <text x="706" y="124" font-size="11" text-anchor="middle" fill="currentColor" opacity=".6">on what basis</text>
+    </svg>
+  </div>
+  <p class="cap">The narrowing is the product. Anyone can list 4,000 problems; the value is defending which twelve you chose.</p>
+
+  <h2>Three questions, three parts</h2>
+  <div class="wrap"><table>
+    <thead><tr><th>Part</th><th>Answers</th></tr></thead>
+    <tbody>
+      <tr><td><strong>IT Asset Inventory</strong></td><td>What do we own, who owns it, how much does it matter?</td></tr>
+      <tr><td><strong>Vulnerabilities</strong></td><td>What is wrong with it, and how urgent is each one?</td></tr>
+      <tr><td><strong>Risk Posture</strong></td><td>Putting both together — how exposed is this asset?</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="biz">
+    <span class="l">If you remember one thing</span>
+    <p><strong>Severity is not priority.</strong> A CVSS 9.8 with no published exploit, on an internal test box, behind a patch you already applied, is not your most urgent problem. Severity describes the flaw. Priority describes your exposure to it.</p>
+  </div>
+</section>
+
+<!-- 2 -->
+<section id="s2">
+  <div class="eyebrow">For the decision maker</div>
+  <h1>How the pieces connect</h1>
+  <p class="lede">Three objects, and the relationships between them are where the meaning lives.</p>
+
+  <div class="fig">
+    <svg viewBox="0 0 720 320" width="100%" height="320" role="img" aria-label="Assets link to vulnerabilities; both feed risk posture">
+      <defs><marker id="a2" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="currentColor" opacity=".5"/></marker></defs>
+
+      <rect x="30" y="40" width="180" height="96" rx="10" fill="var(--panel)" stroke="var(--accent)" stroke-width="1.8"/>
+      <text x="120" y="70" font-size="14.5" font-weight="700" text-anchor="middle" fill="var(--accent)">ASSET</text>
+      <text x="120" y="92" font-size="12" text-anchor="middle" fill="currentColor" opacity=".7">owner · criticality</text>
+      <text x="120" y="110" font-size="12" text-anchor="middle" fill="currentColor" opacity=".7">exposure · C/I/A</text>
+
+      <rect x="270" y="40" width="180" height="96" rx="10" fill="var(--panel)" stroke="var(--crit)" stroke-width="1.8"/>
+      <text x="360" y="70" font-size="14.5" font-weight="700" text-anchor="middle" fill="var(--crit)">VULNERABILITY</text>
+      <text x="360" y="92" font-size="12" text-anchor="middle" fill="currentColor" opacity=".7">CVE · CVSS · EPSS</text>
+      <text x="360" y="110" font-size="12" text-anchor="middle" fill="currentColor" opacity=".7">KEV · exploits</text>
+
+      <line x1="212" y1="88" x2="266" y2="88" stroke="currentColor" opacity=".5" stroke-width="1.5"/>
+      <text x="239" y="80" font-size="10.5" text-anchor="middle" fill="currentColor" opacity=".6">many↔many</text>
+
+      <rect x="510" y="40" width="180" height="96" rx="10" fill="var(--panel)" stroke="var(--med)" stroke-width="1.8"/>
+      <text x="600" y="70" font-size="14.5" font-weight="700" text-anchor="middle" fill="var(--med)">RISK POSTURE</text>
+      <text x="600" y="92" font-size="12" text-anchor="middle" fill="currentColor" opacity=".7">one score, 0–100</text>
+      <text x="600" y="110" font-size="12" text-anchor="middle" fill="currentColor" opacity=".7">per asset</text>
+
+      <path d="M120,140 L120,196 L560,196 L560,140" fill="none" stroke="currentColor" opacity=".5" stroke-width="1.5" marker-end="url(#a2)"/>
+      <path d="M360,140 L360,172 L588,172 L588,140" fill="none" stroke="currentColor" opacity=".5" stroke-width="1.5" marker-end="url(#a2)"/>
+
+      <rect x="30" y="230" width="660" height="66" rx="9" fill="var(--line2)"/>
+      <text x="48" y="256" font-size="12.5" font-weight="700" fill="currentColor" opacity=".75">The distinction people trip on</text>
+      <text x="48" y="278" font-size="12.5" fill="currentColor" opacity=".7">Vulnerability priority ranks findings against each other. Risk posture rates an asset. Different scales, different questions — they will not match.</text>
+    </svg>
+  </div>
+  <p class="cap">One CVE can affect many assets; one asset carries many CVEs. That many-to-many link is why "how bad is this CVE" and "how bad is this for us" are separate questions.</p>
+
+  <h2>How a change travels</h2>
+  <div class="wrap"><table>
+    <thead><tr><th>Change this</th><th>And this moves</th></tr></thead>
+    <tbody>
+      <tr><td>Asset criticality</td><td>Priority of every finding on it · asset posture</td></tr>
+      <tr><td>Internet-facing flag</td><td>Priority · exploit-test verdict · business multiplier</td></tr>
+      <tr><td>Link a control</td><td>Coverage % · posture score</td></tr>
+      <tr><td>Close a finding</td><td>Open count · posture · register</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- 3 -->
+<section id="s3">
+  <div class="eyebrow">How it thinks</div>
+  <h1>Where the data comes from</h1>
+  <p class="lede">Four public feeds describe the flaw. Your own records describe what it means to you. Nothing is invented.</p>
+
+  <div class="fig">
+    <svg viewBox="0 0 740 350" width="100%" height="350" role="img" aria-label="External feeds and internal records combine into a priority score">
+      <defs><marker id="a3" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="currentColor" opacity=".45"/></marker></defs>
+      <text x="20" y="24" font-size="11" font-weight="700" letter-spacing="1.2" fill="currentColor" opacity=".5">PUBLIC THREAT DATA</text>
+      <g font-size="12.5" fill="currentColor">
+        <rect x="20" y="36" width="150" height="42" rx="7" fill="var(--panel)" stroke="var(--line)"/><text x="34" y="55" font-weight="650">NVD</text><text x="34" y="70" font-size="11" opacity=".6">CVSS · vector · dates</text>
+        <rect x="20" y="86" width="150" height="42" rx="7" fill="var(--panel)" stroke="var(--line)"/><text x="34" y="105" font-weight="650">FIRST EPSS</text><text x="34" y="120" font-size="11" opacity=".6">exploit probability</text>
+        <rect x="20" y="136" width="150" height="42" rx="7" fill="var(--panel)" stroke="var(--line)"/><text x="34" y="155" font-weight="650">CISA KEV</text><text x="34" y="170" font-size="11" opacity=".6">exploited in the wild</text>
+        <rect x="20" y="186" width="150" height="42" rx="7" fill="var(--panel)" stroke="var(--line)"/><text x="34" y="205" font-weight="650">GitHub</text><text x="34" y="220" font-size="11" opacity=".6">public exploit repos</text>
+      </g>
+      <text x="20" y="262" font-size="11" font-weight="700" letter-spacing="1.2" fill="currentColor" opacity=".5">YOUR ESTATE</text>
+      <g font-size="12.5" fill="currentColor">
+        <rect x="20" y="274" width="150" height="42" rx="7" fill="var(--soft)" stroke="var(--accent)"/><text x="34" y="293" font-weight="650">Asset records</text><text x="34" y="308" font-size="11" opacity=".65">criticality · exposure</text>
+      </g>
+
+      <g stroke="currentColor" opacity=".45" stroke-width="1.4" fill="none" marker-end="url(#a3)">
+        <path d="M174,57 L250,140"/><path d="M174,107 L250,150"/><path d="M174,157 L250,160"/><path d="M174,207 L250,172"/><path d="M174,295 L250,192"/>
+      </g>
+
+      <rect x="256" y="120" width="150" height="86" rx="9" fill="var(--panel)" stroke="var(--accent)" stroke-width="1.8"/>
+      <text x="331" y="150" font-size="13" font-weight="700" text-anchor="middle" fill="var(--accent)">ENRICHMENT</text>
+      <text x="331" y="170" font-size="11.5" text-anchor="middle" fill="currentColor" opacity=".65">pulled on demand,</text>
+      <text x="331" y="186" font-size="11.5" text-anchor="middle" fill="currentColor" opacity=".65">cached, never pushed</text>
+
+      <line x1="410" y1="163" x2="466" y2="163" stroke="currentColor" opacity=".45" stroke-width="1.4" marker-end="url(#a3)"/>
+      <rect x="472" y="120" width="150" height="86" rx="9" fill="var(--panel)" stroke="var(--med)" stroke-width="1.8"/>
+      <text x="547" y="150" font-size="13" font-weight="700" text-anchor="middle" fill="var(--med)">7 SIGNALS</text>
+      <text x="547" y="170" font-size="11.5" text-anchor="middle" fill="currentColor" opacity=".65">weighted &amp; summed</text>
+      <text x="547" y="186" font-size="11.5" text-anchor="middle" fill="currentColor" opacity=".65">KEV floor applied</text>
+
+      <line x1="626" y1="163" x2="666" y2="163" stroke="currentColor" opacity=".45" stroke-width="1.4" marker-end="url(#a3)"/>
+      <circle cx="700" cy="163" r="34" fill="var(--soft)" stroke="var(--accent)" stroke-width="2"/>
+      <text x="700" y="160" font-size="17" font-weight="700" text-anchor="middle" fill="var(--accent)">41</text>
+      <text x="700" y="176" font-size="10" text-anchor="middle" fill="currentColor" opacity=".6">/100</text>
+    </svg>
+  </div>
+  <p class="cap">Enrichment is pulled, not pushed. A CVE added to KEV this morning does not change your scores until enrichment next runs — and the page flags when a stored score has drifted from current evidence.</p>
+
+  <div class="note">
+    <span class="l">Why this matters in a demo</span>
+    <p>Every number can be traced to a named public source. When someone asks "where did 41 come from", the answer is a chain of citable facts, not a black box.</p>
+  </div>
+</section>
+
+<!-- 4 -->
+<section id="s4">
+  <div class="eyebrow">How it thinks</div>
+  <h1>How a finding is scored</h1>
+  <p class="lede">Seven signals, weighted. CVSS is deliberately only a fifth of it.</p>
+
+  <div class="fig">
+    <svg viewBox="0 0 720 300" width="100%" height="300" role="img" aria-label="Seven weighted scoring signals">
+      <g font-size="12.5" fill="currentColor">
+        <text x="10" y="26" font-weight="650">CVSS severity</text>
+        <rect x="180" y="14" width="200" height="16" rx="4" fill="var(--crit)" opacity=".8"/><text x="392" y="27" font-size="12" opacity=".7">20%</text>
+        <text x="10" y="60" font-weight="650">EPSS probability</text>
+        <rect x="180" y="48" width="200" height="16" rx="4" fill="var(--crit)" opacity=".65"/><text x="392" y="61" font-size="12" opacity=".7">20%</text>
+        <text x="10" y="94" font-weight="650">Exploit maturity</text>
+        <rect x="180" y="82" width="150" height="16" rx="4" fill="var(--high)" opacity=".8"/><text x="342" y="95" font-size="12" opacity=".7">15%</text>
+        <text x="10" y="128" font-weight="650">CISA KEV</text>
+        <rect x="180" y="116" width="150" height="16" rx="4" fill="var(--high)" opacity=".65"/><text x="342" y="129" font-size="12" opacity=".7">15%</text>
+        <text x="10" y="162" font-weight="650">Attack vector</text>
+        <rect x="180" y="150" width="100" height="16" rx="4" fill="var(--med)" opacity=".75"/><text x="292" y="163" font-size="12" opacity=".7">10%</text>
+        <text x="10" y="196" font-weight="650">Internet exposure</text>
+        <rect x="180" y="184" width="100" height="16" rx="4" fill="var(--med)" opacity=".6"/><text x="292" y="197" font-size="12" opacity=".7">10%</text>
+        <text x="10" y="230" font-weight="650">Asset criticality</text>
+        <rect x="180" y="218" width="100" height="16" rx="4" fill="var(--low)" opacity=".75"/><text x="292" y="231" font-size="12" opacity=".7">10%</text>
+      </g>
+      <line x1="180" y1="250" x2="600" y2="250" stroke="var(--line)" stroke-width="1"/>
+      <text x="180" y="274" font-size="12.5" fill="currentColor" opacity=".75">
+        <tspan font-weight="700">60%</tspan> of the weight is exploitability and context — not raw severity.
+      </text>
+    </svg>
+  </div>
+  <p class="cap">Two findings with identical CVSS can differ enormously in real risk, depending on whether an exploit is weaponised, whether the flaw is network-reachable, and whether the host faces the internet.</p>
+
+  <h2>A worked example</h2>
+  <pre>signal                value/10   weight   points
+CVSS severity            7.100     0.20    1.420
+EPSS probability         0.045     0.20    0.009
+Exploit maturity        10.000     0.15    1.500
+CISA KEV                 0.000     0.15    0.000
+Attack vector            5.000     0.10    0.500   ← assumed, no vector stored
+Internet exposure        0.000     0.10    0.000
+Asset criticality        7.000     0.10    0.700
+                                  TOTAL    4.129   →  41 / 100</pre>
+
+  <div class="note warn">
+    <span class="l">The KEV floor</span>
+    <p>Anything on CISA's actively-exploited list is floored at <strong>80/100</strong> regardless of the arithmetic. A bug being used in the wild right now is never a medium priority.</p>
+  </div>
+</section>
+
+<!-- 5 -->
+<section id="s5">
+  <div class="eyebrow">How it thinks</div>
+  <h1>Exploits and "weaponised"</h1>
+  <p class="lede">Whether ready-made attack code exists changes everything — so how we decide that has to be defensible.</p>
+
+  <div class="fig">
+    <svg viewBox="0 0 720 210" width="100%" height="210" role="img" aria-label="Exploit maturity ladder and its effect on score">
+      <g font-size="12.5" fill="currentColor">
+        <rect x="16" y="30" width="150" height="58" rx="8" fill="var(--low)" opacity=".14"/>
+        <text x="91" y="54" font-size="13" font-weight="700" text-anchor="middle" fill="var(--low)">UNPROVEN</text>
+        <text x="91" y="74" font-size="11.5" text-anchor="middle" opacity=".7">no public exploit</text>
+        <text x="91" y="108" font-size="20" font-weight="700" text-anchor="middle" fill="currentColor" opacity=".8">29</text>
+
+        <rect x="182" y="30" width="150" height="58" rx="8" fill="var(--med)" opacity=".16"/>
+        <text x="257" y="54" font-size="13" font-weight="700" text-anchor="middle" fill="var(--med)">PROOF OF CONCEPT</text>
+        <text x="257" y="74" font-size="11.5" text-anchor="middle" opacity=".7">1–2 repos</text>
+        <text x="257" y="108" font-size="20" font-weight="700" text-anchor="middle" fill="currentColor" opacity=".8">34</text>
+
+        <rect x="348" y="30" width="150" height="58" rx="8" fill="var(--high)" opacity=".16"/>
+        <text x="423" y="54" font-size="13" font-weight="700" text-anchor="middle" fill="var(--high)">WEAPONISED</text>
+        <text x="423" y="74" font-size="11.5" text-anchor="middle" opacity=".7">&gt;2 repos</text>
+        <text x="423" y="108" font-size="20" font-weight="700" text-anchor="middle" fill="currentColor" opacity=".8">41</text>
+
+        <rect x="514" y="30" width="190" height="58" rx="8" fill="var(--crit)" opacity=".18"/>
+        <text x="609" y="54" font-size="13" font-weight="700" text-anchor="middle" fill="var(--crit)">ON CISA KEV</text>
+        <text x="609" y="74" font-size="11.5" text-anchor="middle" opacity=".7">exploited in the wild</text>
+        <text x="609" y="108" font-size="20" font-weight="700" text-anchor="middle" fill="var(--crit)">80+</text>
+      </g>
+      <text x="16" y="146" font-size="12" fill="currentColor" opacity=".6">Same flaw. Same CVSS 7.1. Four different places in your queue.</text>
+      <line x1="16" y1="162" x2="704" y2="162" stroke="var(--line)"/>
+      <text x="16" y="186" font-size="12.5" fill="currentColor" opacity=".75">Business translation: a flaw only a state actor could use is a patching-cycle item. One with a working script on GitHub is reachable by anyone who can copy and paste.</text>
+    </svg>
+  </div>
+
+  <h2>How we know an exploit exists</h2>
+  <p>Two independent sources: <strong>CISA KEV</strong> (authoritative, binary — enough on its own for weaponised), and <strong>public repositories named after the CVE</strong>.</p>
+
+  <div class="note bad">
+    <span class="l">Why the repository search is narrow on purpose</span>
+    <p>Searching names, descriptions <em>and</em> readmes matches every CVE catalogue and security link-list on GitHub. A CVE that <strong>does not exist</strong> returned 258 hits that way — which then read as 258 public exploits and stamped the finding weaponised.</p>
+    <p>Repositories that genuinely target a CVE almost always name themselves after it; catalogues do not. Measured on the same two CVEs: name-only search gives Log4Shell <strong>183</strong> and a nonexistent CVE <strong>0</strong>.</p>
+  </div>
+</section>
+
+<!-- 6 -->
+<section id="s6">
+  <div class="eyebrow">How it thinks</div>
+  <h1>What actually triggers action</h1>
+  <p class="lede">Not the score. Six red flags, each naming a specific fact.</p>
+
+  <div class="biz">
+    <span class="l">The emergency-room analogy</span>
+    <p>Every patient gets a triage score deciding who is seen first — that is <strong>priority</strong>. But some things take you straight through regardless: chest pain, bleeding. Those are <strong>red flags</strong>. A finding can score modestly and still jump the queue.</p>
+  </div>
+
+  <div class="wrap"><table>
+    <thead><tr><th>Red flag</th><th>Fires when</th><th>Source</th></tr></thead>
+    <tbody>
+      <tr><td>Actively exploited</td><td>Listed in CISA KEV</td><td>CISA</td></tr>
+      <tr><td>Public exploit</td><td>Exploit count &gt; 0</td><td>GitHub</td></tr>
+      <tr><td>High exploitation probability</td><td>EPSS ≥ 10%</td><td>FIRST</td></tr>
+      <tr><td>SLA breach</td><td>Past its due date</td><td>Your policy</td></tr>
+      <tr><td>Internet-facing</td><td>Reachable externally</td><td>Asset record</td></tr>
+      <tr><td>Business-critical</td><td>Criticality = critical</td><td>Asset record</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="note">
+    <span class="l">An empty list is a real answer</span>
+    <p>A CVSS 9.8 that is not due yet, has no published exploit, low EPSS, and sits on an internal non-critical box raises <em>nothing</em> — correctly. It goes into the normal patch cycle. That restraint is what stops a queue from being 4,000 items of equal urgency.</p>
+  </div>
+</section>
+
+<!-- 7 -->
+<section id="s7">
+  <div class="eyebrow">How work gets done</div>
+  <h1>The remediation lifecycle</h1>
+  <p class="lede">Four stages, each recording who and when — so "we fixed it" becomes evidence rather than a claim.</p>
+
+  <div class="fig">
+    <svg viewBox="0 0 740 250" width="100%" height="250" role="img" aria-label="Four stage remediation lifecycle with gates">
+      <defs><marker id="a4" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="currentColor" opacity=".5"/></marker></defs>
+      <g font-size="12.5" fill="currentColor">
+        <circle cx="70" cy="60" r="26" fill="var(--soft)" stroke="var(--accent)" stroke-width="2"/><text x="70" y="66" font-size="15" font-weight="700" text-anchor="middle" fill="var(--accent)">1</text>
+        <text x="70" y="106" font-size="12.5" font-weight="650" text-anchor="middle">Recommended</text>
+        <text x="70" y="123" font-size="11" text-anchor="middle" opacity=".6">plan drafted</text>
+
+        <line x1="100" y1="60" x2="164" y2="60" stroke="currentColor" opacity=".5" stroke-width="1.5" marker-end="url(#a4)"/>
+        <circle cx="200" cy="60" r="26" fill="var(--panel)" stroke="var(--line)" stroke-width="2"/><text x="200" y="66" font-size="15" font-weight="700" text-anchor="middle">2</text>
+        <text x="200" y="106" font-size="12.5" font-weight="650" text-anchor="middle">Approved</text>
+        <text x="200" y="123" font-size="11" text-anchor="middle" opacity=".6">who authorised</text>
+
+        <line x1="230" y1="60" x2="294" y2="60" stroke="currentColor" opacity=".5" stroke-width="1.5" marker-end="url(#a4)"/>
+        <circle cx="330" cy="60" r="26" fill="var(--panel)" stroke="var(--line)" stroke-width="2"/><text x="330" y="66" font-size="15" font-weight="700" text-anchor="middle">3</text>
+        <text x="330" y="106" font-size="12.5" font-weight="650" text-anchor="middle">Applied</text>
+        <text x="330" y="123" font-size="11" text-anchor="middle" opacity=".6">steps recorded</text>
+
+        <line x1="360" y1="60" x2="424" y2="60" stroke="currentColor" opacity=".5" stroke-width="1.5" marker-end="url(#a4)"/>
+        <circle cx="460" cy="60" r="26" fill="var(--panel)" stroke="var(--low)" stroke-width="2"/><text x="460" y="66" font-size="15" font-weight="700" text-anchor="middle" fill="var(--low)">4</text>
+        <text x="460" y="106" font-size="12.5" font-weight="650" text-anchor="middle">Verified</text>
+        <text x="460" y="123" font-size="11" text-anchor="middle" opacity=".6">attested + evidence</text>
+      </g>
+
+      <rect x="150" y="150" width="120" height="34" rx="6" fill="var(--med)" opacity=".14"/>
+      <text x="210" y="171" font-size="11.5" text-anchor="middle" fill="var(--med)" font-weight="650">needs an owner</text>
+      <line x1="210" y1="150" x2="205" y2="92" stroke="var(--med)" opacity=".5" stroke-width="1.3" stroke-dasharray="3 3"/>
+
+      <rect x="405" y="150" width="120" height="34" rx="6" fill="var(--low)" opacity=".14"/>
+      <text x="465" y="171" font-size="11.5" text-anchor="middle" fill="var(--low)" font-weight="650">needs evidence</text>
+      <line x1="465" y1="150" x2="462" y2="92" stroke="var(--low)" opacity=".5" stroke-width="1.3" stroke-dasharray="3 3"/>
+
+      <rect x="20" y="204" width="700" height="34" rx="7" fill="var(--line2)"/>
+      <text x="36" y="226" font-size="12" fill="currentColor" opacity=".72">Stage 3 runs a simulated executor — no command touches a host. Stage 4 records a human attestation — nothing re-scans.</text>
+    </svg>
+  </div>
+
+  <div class="note bad">
+    <span class="l">Two claims this deliberately does not make</span>
+    <p><strong>"Applied" does not patch anything.</strong> A real executor is a separate, deliberate decision — it must not be something you get by accident.</p>
+    <p><strong>"Verified" does not re-scan.</strong> It records that a named person, on a named date, asserted the fix is in place — and what they offered as grounds. Evidence text is mandatory, because a confirmation with nothing behind it looks like proof in an audit export.</p>
+  </div>
+
+  <div class="biz">
+    <span class="l">Why the gates exist</span>
+    <p>Approval without an owner is an instruction addressed to nobody — a plan can sit approved, breach its deadline, and no one was ever asked. Verification without evidence is the more dangerous one: it manufactures something that reads like proof.</p>
+  </div>
+</section>
+
+<!-- 8 -->
+<section id="s8">
+  <div class="eyebrow">How work gets done</div>
+  <h1>Accepting risk — and why it must expire</h1>
+  <p class="lede">There are only three answers to a finding, and the third one is the one organisations get wrong.</p>
+
+  <div class="wrap"><table>
+    <thead><tr><th>Answer</th><th>What happens to the flaw</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Remediate</strong></td><td><strong>Gone.</strong> You fixed it.</td></tr>
+      <tr><td><strong>Mitigate</strong></td><td><strong>Still there.</strong> You put a guard on it — segmentation, WAF, monitoring.</td></tr>
+      <tr><td><strong>Accept</strong></td><td><strong>Still there</strong>, and you have decided to live with it — on the record, with a date.</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="fig">
+    <svg viewBox="0 0 720 170" width="100%" height="170" role="img" aria-label="Exception state machine with expiry returning to open">
+      <defs><marker id="a5" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="currentColor" opacity=".5"/></marker></defs>
+      <g font-size="12" fill="currentColor" text-anchor="middle">
+        <rect x="20" y="46" width="104" height="40" rx="7" fill="var(--panel)" stroke="var(--line)" stroke-width="1.6"/><text x="72" y="71" font-weight="650">none</text>
+        <line x1="126" y1="66" x2="166" y2="66" stroke="currentColor" opacity=".5" stroke-width="1.4" marker-end="url(#a5)"/>
+        <rect x="170" y="46" width="104" height="40" rx="7" fill="var(--panel)" stroke="var(--line)" stroke-width="1.6"/><text x="222" y="71" font-weight="650">requested</text>
+        <line x1="276" y1="66" x2="316" y2="66" stroke="currentColor" opacity=".5" stroke-width="1.4" marker-end="url(#a5)"/>
+        <rect x="320" y="46" width="104" height="40" rx="7" fill="var(--low)" opacity=".16"/>
+        <rect x="320" y="46" width="104" height="40" rx="7" fill="none" stroke="var(--low)" stroke-width="1.6"/><text x="372" y="71" font-weight="650" fill="var(--low)">approved</text>
+        <line x1="426" y1="66" x2="466" y2="66" stroke="currentColor" opacity=".5" stroke-width="1.4" marker-end="url(#a5)"/>
+        <rect x="470" y="46" width="104" height="40" rx="7" fill="var(--crit)" opacity=".16"/>
+        <rect x="470" y="46" width="104" height="40" rx="7" fill="none" stroke="var(--crit)" stroke-width="1.6"/><text x="522" y="71" font-weight="650" fill="var(--crit)">expired</text>
+      </g>
+      <path d="M522,90 L522,124 L72,124 L72,90" fill="none" stroke="var(--crit)" opacity=".65" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#a5)"/>
+      <text x="300" y="142" font-size="12" text-anchor="middle" fill="var(--crit)" opacity=".85" font-weight="650">review date passes → the finding reopens</text>
+      <text x="612" y="71" font-size="11.5" fill="currentColor" opacity=".55">revoked = terminal</text>
+    </svg>
+  </div>
+
+  <div class="note warn">
+    <span class="l">The failure mode this prevents</span>
+    <p>An acceptance without a review date is <strong>accepted forever</strong> — and nobody consciously decides that. It is what you get when a field was left blank. Six months later it is invisible and unreviewed, and the risk is being carried with no current sign-off. The system flags undated acceptances by name.</p>
+  </div>
+</section>
+
+<!-- 9 -->
+<section id="s9">
+  <div class="eyebrow">How work gets done</div>
+  <h1>Asset risk posture</h1>
+  <p class="lede">Five dimensions, one score — and a confidence figure that matters as much as the score.</p>
+
+  <div class="fig">
+    <svg viewBox="0 0 720 250" width="100%" height="250" role="img" aria-label="Five weighted risk posture dimensions">
+      <g font-size="12.5" fill="currentColor">
+        <text x="10" y="30" font-weight="650">Vulnerabilities</text><rect x="180" y="18" width="180" height="16" rx="4" fill="var(--crit)" opacity=".75"/><text x="372" y="31" font-size="12" opacity=".7">30%</text>
+        <text x="10" y="64" font-weight="650">CIS benchmark</text><rect x="180" y="52" width="150" height="16" rx="4" fill="var(--high)" opacity=".7"/><text x="342" y="65" font-size="12" opacity=".7">25%</text>
+        <text x="10" y="98" font-weight="650">CIA value</text><rect x="180" y="86" width="90" height="16" rx="4" fill="var(--med)" opacity=".7"/><text x="282" y="99" font-size="12" opacity=".7">15%</text>
+        <text x="10" y="132" font-weight="650">Control coverage</text><rect x="180" y="120" width="90" height="16" rx="4" fill="var(--low)" opacity=".75"/><text x="282" y="133" font-size="12" opacity=".7">15%</text>
+        <text x="10" y="166" font-weight="650">Linked risks</text><rect x="180" y="154" width="90" height="16" rx="4" fill="var(--accent)" opacity=".65"/><text x="282" y="167" font-size="12" opacity=".7">15%</text>
+      </g>
+      <rect x="20" y="190" width="680" height="46" rx="8" fill="var(--crit)" opacity=".09"/>
+      <text x="38" y="212" font-size="12.5" font-weight="700" fill="var(--crit)">Read the score AND the data quality together</text>
+      <text x="38" y="230" font-size="12.5" fill="currentColor" opacity=".75">A dimension with no evidence is excluded, not scored zero. A low score at 20% data quality means "we don't know" — not "it's fine".</text>
+    </svg>
+  </div>
+
+  <h2>Bands</h2>
+  <div class="wrap"><table>
+    <thead><tr><th>Score</th><th>Band</th><th>Means</th></tr></thead>
+    <tbody>
+      <tr><td class="n">0–25</td><td>contained</td><td>Healthy posture</td></tr>
+      <tr><td class="n">25–50</td><td>watch</td><td>Watch list</td></tr>
+      <tr><td class="n">50–75</td><td>elevated</td><td>Remediate soon</td></tr>
+      <tr><td class="n">75–100</td><td>severe</td><td>Immediate action</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="biz">
+    <span class="l">Business impact inputs</span>
+    <p>Customer-facing (1.2×), internet-facing (1.3×), regulated data (1.4×) and operational dependency (0.8×–1.5×) are <em>multipliers</em>. They are the point where business context enters a technical scoring system — nobody can scan for "this holds regulated data". It is why the same CVE ranks differently across your estate.</p>
+  </div>
+</section>
+
+<!-- 10 -->
+<section id="s10">
+  <div class="eyebrow">Straight talk</div>
+  <h1>What is real, and what is not</h1>
+  <p class="lede">Say this before someone discovers it. Credibility is cheaper to keep than to rebuild.</p>
+
+  <h2>Working today</h2>
+  <ul>
+    <li>The scoring engine, fed by <strong>live public data</strong> — NVD, FIRST, CISA and GitHub are genuinely connected and verified against real CVEs.</li>
+    <li>The full remediation lifecycle, with its approval and evidence gates.</li>
+    <li>Exception handling with real expiry — a lapsed acceptance reopens the finding.</li>
+    <li>The audit trail behind every state change.</li>
+  </ul>
+
+  <h2>Not yet connected</h2>
+  <div class="wrap"><table>
+    <thead><tr><th>Input</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td>Vulnerability findings</td><td>Demo data — scanner adapters exist but no live instance</td></tr>
+      <tr><td>Asset discovery</td><td>Demo records</td></tr>
+      <tr><td>CIS benchmark scans</td><td>Only a few assets have runs</td></tr>
+      <tr><td>Control links · relationships</td><td>None seeded</td></tr>
+      <tr><td>Applying a fix</td><td>Simulated — never touches a host</td></tr>
+      <tr><td>Verifying a fix</td><td>Human attestation — nothing re-scans</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="note">
+    <span class="l">The honest summary</span>
+    <p><strong>The machine is built and correct. It is currently grinding demo data.</strong> That is why so much reads as empty — 0% coverage, empty blast radius, "no vendor patch published". Those are accurate answers about an estate that does not exist yet, not defects.</p>
+  </div>
+
+  <h2>What connecting one real scanner would prove</h2>
+  <p>Right now we know the scoring is <em>arithmetically</em> correct. We do not yet know it is <em>sensible</em>. Point it at one real subnet and within a day you learn:</p>
+  <ul>
+    <li>Do the priorities match what your engineers would have picked by hand?</li>
+    <li>Is 12 controls the right coverage target, or does every real asset sit at 4?</li>
+    <li>Does "more than two exploit repos means weaponised" hold up against real CVEs?</li>
+    <li>Do the risk bands spread sensibly, or does everything land in "watch"?</li>
+  </ul>
+  <p>Those are calibration questions, and no amount of demo data answers them. <strong>That is the last real gap — not features, calibration against reality.</strong></p>
+
+  <div class="foot">
+    Cybersecurity Assurance — IT Asset Inventory · Risk Posture · Criticality · Vulnerability Management.
+    Weights, thresholds and formulas reflect the current scoring engine.
+  </div>
+</section>
+
+</main>
+</div>
+<script>
+  var links=document.querySelectorAll('.nav a[data-go]'),secs=document.querySelectorAll('main section');
+  function go(id){
+    secs.forEach(function(s){s.classList.toggle('on',s.id===id)});
+    links.forEach(function(a){a.classList.toggle('on',a.dataset.go===id)});
+    window.scrollTo(0,0);
+  }
+  links.forEach(function(a){a.addEventListener('click',function(e){e.preventDefault();go(a.dataset.go)})});
+  var root=document.documentElement;
+  if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)root.setAttribute('data-theme','dark');
+  document.getElementById('tt').addEventListener('click',function(){
+    root.setAttribute('data-theme',root.getAttribute('data-theme')==='dark'?'light':'dark');
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,202 @@
+{
+  "version": 1,
+  "note": "Fixed canonical control-family taxonomy. The normalization classifier maps every control into ONE of these families per domain. It may NOT invent new family names. New topics from new frameworks get flagged 'unmatched' and added here through review (bump version).",
+  "domains": {
+    "Access Control & Identity Management": [
+      "Identity & Access Management",
+      "Authentication",
+      "Authorization",
+      "Privileged Access Management",
+      "Password & Credential Management",
+      "Access Provisioning & Deprovisioning",
+      "Access Review & Recertification",
+      "Role-Based Access Control & Least Privilege",
+      "Segregation of Duties",
+      "Session Management",
+      "Network & Database Access Control",
+      "Remote Access Control",
+      "BYOD & Mobile Device Access",
+      "Cloud Access Security"
+    ],
+    "Application & Software Security": [
+      "Secure Development Lifecycle (SDLC)",
+      "Secure Coding Standards",
+      "Application Hardening",
+      "Web Application Security",
+      "Application Allow-listing",
+      "Security Testing & Code Review",
+      "Penetration Testing",
+      "System Acceptance & Migration Testing",
+      "Architecture & Design Review",
+      "Test Environment Separation"
+    ],
+    "Asset Management": [
+      "Asset Inventory & Ownership",
+      "Hardware & Network Asset Management",
+      "Software Inventory Management",
+      "Data Inventory & Identification",
+      "Media Storage",
+      "Capacity & Availability Management",
+      "Equipment Maintenance",
+      "System Documentation"
+    ],
+    "Audit & Assurance": [
+      "Internal Audit",
+      "Independent Security Review",
+      "Management Review",
+      "Control Effectiveness Evaluation",
+      "Quality Assurance",
+      "Audit Recommendation Tracking"
+    ],
+    "Awareness & Training": [
+      "Security Awareness Program",
+      "Role-Based Training",
+      "Cyber Hygiene & Phishing Training",
+      "Privileged User Training",
+      "Customer & Third-Party Awareness"
+    ],
+    "Business Continuity & Resilience": [
+      "Business Continuity Planning",
+      "BCP Testing & Maintenance",
+      "Business Impact Analysis",
+      "Disaster Recovery Planning",
+      "Backup & Recovery",
+      "System Recovery & Reconstitution",
+      "Redundancy & Fault Tolerance",
+      "Alternate Processing Site",
+      "Contingency Planning"
+    ],
+    "Configuration & Change Management": [
+      "Change Management",
+      "Baseline Configuration",
+      "Secure Configuration & Hardening",
+      "Patch Management",
+      "Version Control",
+      "Software Installation Control",
+      "System Testing & Approval",
+      "Virtualization Security",
+      "Time Synchronization"
+    ],
+    "Cryptography & Key Management": [
+      "Cryptographic Controls & Standards",
+      "Key Management",
+      "Data Encryption",
+      "Secure Data Transfer"
+    ],
+    "Data Protection & Privacy": [
+      "Data Classification & Labelling",
+      "Data Loss / Leakage Prevention",
+      "Data Retention & Disposal",
+      "Media Sanitization & Disposal",
+      "Consent Management",
+      "Data Subject Rights",
+      "Cross-Border Data Transfer",
+      "Privacy Impact Assessment",
+      "Privacy Governance & Monitoring",
+      "Data Minimization",
+      "Data Quality & Integrity",
+      "Information Transfer & Exchange Security",
+      "Backup Management",
+      "Records Protection",
+      "Input & Output Validation",
+      "Intellectual Property Protection"
+    ],
+    "Governance, Risk & Compliance": [
+      "Information Security Governance",
+      "Security Roles & Responsibilities",
+      "Security Policy Management",
+      "Leadership & Commitment",
+      "Risk Management Framework",
+      "Risk Assessment",
+      "Risk Treatment & Mitigation",
+      "Risk Register Management",
+      "Compliance Management",
+      "Legal & Regulatory Compliance",
+      "Continual Improvement",
+      "Performance Monitoring",
+      "Security Strategy & Planning",
+      "Competence Management",
+      "Outsourcing & Service Provider Governance",
+      "AI Governance & Management System"
+    ],
+    "Human Resources Security": [
+      "Background Verification & Screening",
+      "Terms & Conditions of Employment",
+      "Disciplinary Process",
+      "Termination & Role Change",
+      "Personnel Competency",
+      "HR Security Responsibilities"
+    ],
+    "Incident Management": [
+      "Incident Response Management",
+      "Incident Handling Procedures",
+      "Incident Reporting & Notification",
+      "Breach Notification",
+      "Evidence Collection & Investigation",
+      "Post-Incident Learning",
+      "Security Weakness Reporting",
+      "Problem Management"
+    ],
+    "Logging, Monitoring & Detection": [
+      "Audit Logging",
+      "Log Monitoring & Review",
+      "Continuous Monitoring",
+      "Security Event Monitoring (SIEM)",
+      "Anomaly & Intrusion Detection",
+      "Network Monitoring",
+      "Fraud Monitoring",
+      "Audit Log Protection"
+    ],
+    "Network Security": [
+      "Firewall Management",
+      "Network Segmentation",
+      "Network Access & Connection Control",
+      "Intrusion Detection & Prevention",
+      "Malware Protection",
+      "Email Security",
+      "Anti-Phishing",
+      "Endpoint Security",
+      "Remote Access & VPN Security",
+      "Wireless Security",
+      "DNS Security",
+      "Denial-of-Service Protection",
+      "Web & Transaction Security"
+    ],
+    "Physical & Environmental Security": [
+      "Physical Access Control",
+      "Physical Security Perimeter",
+      "Secure Areas",
+      "Data Center Security",
+      "Environmental Controls",
+      "Fire Protection & Suppression",
+      "Equipment Security",
+      "Cabling Security",
+      "Clear Desk & Screen",
+      "Visitor Management",
+      "Removable Media Handling"
+    ],
+    "Third-Party & Supply Chain Risk": [
+      "Third-Party Risk Management",
+      "Supplier Assessment & Monitoring",
+      "Third-Party Agreements",
+      "Cloud Provider Oversight",
+      "Cloud Security Assessment",
+      "Outsourcing Compliance",
+      "Supply Chain Controls"
+    ],
+    "Vulnerability & Threat Management": [
+      "Vulnerability Management",
+      "Threat Detection & Response",
+      "Threat Intelligence",
+      "Remediation Management"
+    ],
+    "IT & Service Management": [
+      "IT Service Management",
+      "Documented Operating Procedures",
+      "Project Management",
+      "Resource Management",
+      "Service Level Agreement Management",
+      "AI System Lifecycle Management"
+    ]
+  }
+}

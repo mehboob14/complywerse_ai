@@ -1,0 +1,1029 @@
+{
+ "stage": 2,
+ "title": "Stage 2 - Master categories merged from framework categories",
+ "logic": [
+  "HOW 306 BECOMES 20 - ONE single merge:",
+  "",
+  "306 = every category from all 30 frameworks, added up (each framework has 4-20 categories).",
+  "      306 is FULL of repeats and look-alikes: 'Governance' appears in 11 frameworks,",
+  "      'Access Control' in 8, 'Risk' in 7, 'Incident' in 6, and so on.",
+  "",
+  "20  = master domains. We do ONE merge - group every category that is the SAME thing:",
+  "        - SAME NAME across frameworks  (e.g. 'Governance' x 11 frameworks), AND",
+  "        - SAME MEANING in different words (e.g. 'Governance' = 'Leadership' = 'GOVERN' =",
+  "          'Internal Organization').",
+  "      Name-match and context-match are the SAME action: 'same topic -> one box.'",
+  "      (No in-between step - matching by name and by meaning happen together, in one pass.)",
+  "",
+  "WHY it drops so far (306 -> 20): because 30 frameworks all describe the SAME ~20 security",
+  "      topics over and over, each in their own words. Merge the repeats + the synonyms",
+  "      together in one go, and 306 entries fold into ~20 real domains.",
+  "",
+  "9 BROAD categories (Security, Enterprise security, Systems Security, Protect, Identify,",
+  "      Technical/Technological/Organizational Controls, Administrative Safeguards) are too",
+  "      broad to drop in one box (one label hides many topics) - they get SPLIT by their",
+  "      controls in Stage 3, not merged here.",
+  "",
+  "FUNNEL (one merge):   306 category-entries  ->  20 master domains  (+9 broad to split)"
+ ],
+ "counts": {
+  "category_slots_with_repeats": 306,
+  "distinct_category_names": 200,
+  "master_categories": 20,
+  "broad_to_split_in_stage3": 9,
+  "frameworks": 30,
+  "controls": 3419
+ },
+ "reconciliation": "306 slots (each framework counted) -> 200 distinct names (dedup spelling) -> 20 master categories (merge by meaning) + 9 broad to split",
+ "master_categories": [
+  {
+   "id": "01",
+   "name": "Governance, Leadership & Policy",
+   "category_slots_merged": 43,
+   "distinct_category_names": 29,
+   "is_broad_bucket": false,
+   "merged_from": [
+    {
+     "name": "Governance",
+     "frameworks_using_it": 11
+    },
+    {
+     "name": "GOVERN (Function)",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Leadership",
+     "frameworks_using_it": 2
+    },
+    {
+     "name": "Internal Organization",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Context of the Organization",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Organization of Information Security",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Organization of Information Security Management",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Information Security Management Program",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Information Security Policy",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Security Policy",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "AI Policy",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "AI Lifecycle",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Use of AI Systems",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Align, Plan and Organize",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Evaluate, Direct and Monitor",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Planning",
+     "frameworks_using_it": 2
+    },
+    {
+     "name": "Support",
+     "frameworks_using_it": 2
+    },
+    {
+     "name": "Improvement",
+     "frameworks_using_it": 2
+    },
+    {
+     "name": "Manage and Oversee",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Cyber security within the organization",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Procedural Roles and Responsibilities",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Implementation - Roles and Responsibilities",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Universal Stakeholder Participation",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Information for Interested Parties",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Entity-Level Controls",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Program Management",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Information Systems Acceptable Use",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Organizational Requirements",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Resources for AI Systems",
+     "frameworks_using_it": 1
+    }
+   ]
+  },
+  {
+   "id": "02",
+   "name": "Risk Management",
+   "category_slots_merged": 18,
+   "distinct_category_names": 9,
+   "is_broad_bucket": false,
+   "merged_from": [
+    {
+     "name": "Risk",
+     "frameworks_using_it": 7
+    },
+    {
+     "name": "Risk Management",
+     "frameworks_using_it": 4
+    },
+    {
+     "name": "Risk Assessment",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "ICT Risk Management",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Cyber security in the Risk department",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Impact Assessment",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "MAP (Function)",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "MEASURE (Function)",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "MANAGE (Function)",
+     "frameworks_using_it": 1
+    }
+   ]
+  },
+  {
+   "id": "03",
+   "name": "Compliance & Legal",
+   "category_slots_merged": 14,
+   "distinct_category_names": 6,
+   "is_broad_bucket": false,
+   "merged_from": [
+    {
+     "name": "Compliance",
+     "frameworks_using_it": 9
+    },
+    {
+     "name": "Compliance with QCB circular",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Cyber security in the Legal and Compliance department",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Remedies, Liability and Penalties",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Freedom of Information",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Financial Close Controls",
+     "frameworks_using_it": 1
+    }
+   ]
+  },
+  {
+   "id": "04",
+   "name": "Audit & Assurance",
+   "category_slots_merged": 8,
+   "distinct_category_names": 5,
+   "is_broad_bucket": false,
+   "merged_from": [
+    {
+     "name": "Audit",
+     "frameworks_using_it": 3
+    },
+    {
+     "name": "Monitor, Evaluate and Assess",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Assessment, Authorization, and Monitoring",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Performance Evaluation",
+     "frameworks_using_it": 2
+    },
+    {
+     "name": "Implementation - Monitoring and Evaluation",
+     "frameworks_using_it": 1
+    }
+   ]
+  },
+  {
+   "id": "05",
+   "name": "Access Control & Identity",
+   "category_slots_merged": 20,
+   "distinct_category_names": 10,
+   "is_broad_bucket": false,
+   "merged_from": [
+    {
+     "name": "Access",
+     "frameworks_using_it": 4
+    },
+    {
+     "name": "Access Control",
+     "frameworks_using_it": 8
+    },
+    {
+     "name": "Access Control Management",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Access to Programs and Data",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Account Management",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Authentication",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Identification and Authentication",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Identity Management",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Know and Limit Access",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Segregation of Duties",
+     "frameworks_using_it": 1
+    }
+   ]
+  },
+  {
+   "id": "06",
+   "name": "Data Protection & Privacy",
+   "category_slots_merged": 39,
+   "distinct_category_names": 30,
+   "is_broad_bucket": false,
+   "merged_from": [
+    {
+     "name": "Data",
+     "frameworks_using_it": 5
+    },
+    {
+     "name": "Data Protection",
+     "frameworks_using_it": 3
+    },
+    {
+     "name": "Data Management",
+     "frameworks_using_it": 2
+    },
+    {
+     "name": "Data Governance",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Data Classification",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Data Quality",
+     "frameworks_using_it": 2
+    },
+    {
+     "name": "Data Operations",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Data Catalog and Metadata",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Data Architecture and Modeling",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Data Security and Protection",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Data Sharing and Interoperability",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Data Transfer",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Data Value Realization",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Reference and Master Data Management",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Document and Content Management",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Business Intelligence and Analytics",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Open Data",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Personal Data Protection",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Privacy",
+     "frameworks_using_it": 2
+    },
+    {
+     "name": "Privacy Practices",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Privacy Rule",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Principles",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Controller and Processor",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Rights of Data Subjects",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Transfers of Personal Data",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Confidentiality",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "PII Processing and Transparency",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Processing Integrity",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Health Information and Security",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Universal Patient Participation",
+     "frameworks_using_it": 1
+    }
+   ]
+  },
+  {
+   "id": "07",
+   "name": "Cryptography",
+   "category_slots_merged": 4,
+   "distinct_category_names": 1,
+   "is_broad_bucket": false,
+   "merged_from": [
+    {
+     "name": "Cryptography",
+     "frameworks_using_it": 4
+    }
+   ]
+  },
+  {
+   "id": "08",
+   "name": "Network & Communications Security",
+   "category_slots_merged": 13,
+   "distinct_category_names": 12,
+   "is_broad_bucket": false,
+   "merged_from": [
+    {
+     "name": "Network",
+     "frameworks_using_it": 2
+    },
+    {
+     "name": "Network Security",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Network Infrastructure Management",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Network Monitoring and Defense",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Communications",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Communications Security",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Internet and E-mail Security",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Email and Web Browser Protections",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Malware Defenses",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Malware Protection",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Secure your Environment",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "System and Communications Protection",
+     "frameworks_using_it": 1
+    }
+   ]
+  },
+  {
+   "id": "09",
+   "name": "Application & Software Security",
+   "category_slots_merged": 10,
+   "distinct_category_names": 9,
+   "is_broad_bucket": false,
+   "merged_from": [
+    {
+     "name": "Application Security",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Application Software Security",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Business applications",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Program Development / SDLC",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Systems Acquisition, Development and Maintenance",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Information Systems Acquisition, Development, and Maintenance",
+     "frameworks_using_it": 2
+    },
+    {
+     "name": "System and Services Acquisition",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Penetration Testing",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Security Testing",
+     "frameworks_using_it": 1
+    }
+   ]
+  },
+  {
+   "id": "10",
+   "name": "Configuration & Change Management",
+   "category_slots_merged": 6,
+   "distinct_category_names": 5,
+   "is_broad_bucket": false,
+   "merged_from": [
+    {
+     "name": "Change Management",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Program Changes / Change Management",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Configuration Management",
+     "frameworks_using_it": 2
+    },
+    {
+     "name": "Secure Configuration of Enterprise Assets and Software",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Build, Acquire and Implement",
+     "frameworks_using_it": 1
+    }
+   ]
+  },
+  {
+   "id": "11",
+   "name": "Asset Management",
+   "category_slots_merged": 11,
+   "distinct_category_names": 6,
+   "is_broad_bucket": false,
+   "merged_from": [
+    {
+     "name": "Asset",
+     "frameworks_using_it": 2
+    },
+    {
+     "name": "Asset Management",
+     "frameworks_using_it": 5
+    },
+    {
+     "name": "Information Asset Management",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Inventory and Control of Enterprise Assets",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Inventory and Control of Software Assets",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Media Protection",
+     "frameworks_using_it": 1
+    }
+   ]
+  },
+  {
+   "id": "12",
+   "name": "Logging, Monitoring & Detection",
+   "category_slots_merged": 7,
+   "distinct_category_names": 7,
+   "is_broad_bucket": false,
+   "merged_from": [
+    {
+     "name": "Logging and Monitoring",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Monitoring",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Audit Log Management",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Audit and Accountability",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Detect",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Detect and Respond",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "System and Information Integrity",
+     "frameworks_using_it": 1
+    }
+   ]
+  },
+  {
+   "id": "13",
+   "name": "Incident Management",
+   "category_slots_merged": 21,
+   "distinct_category_names": 12,
+   "is_broad_bucket": false,
+   "merged_from": [
+    {
+     "name": "Incident",
+     "frameworks_using_it": 6
+    },
+    {
+     "name": "Incident Management",
+     "frameworks_using_it": 3
+    },
+    {
+     "name": "Incident Reporting",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Incident Response",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Incident Response Management",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "ICT Incident Management",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Information Security Incident Management",
+     "frameworks_using_it": 3
+    },
+    {
+     "name": "Breach Notification",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Respond",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Fraud",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Implementation - Escalation and Enforcement",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Share and Prepare",
+     "frameworks_using_it": 1
+    }
+   ]
+  },
+  {
+   "id": "14",
+   "name": "Business Continuity & Resilience",
+   "category_slots_merged": 16,
+   "distinct_category_names": 10,
+   "is_broad_bucket": false,
+   "merged_from": [
+    {
+     "name": "BCP",
+     "frameworks_using_it": 5
+    },
+    {
+     "name": "Business Continuity",
+     "frameworks_using_it": 2
+    },
+    {
+     "name": "Business Continuity Management",
+     "frameworks_using_it": 2
+    },
+    {
+     "name": "Business continuity management",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Information Systems Continuity Management",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Contingency Planning",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Data Recovery",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Recover",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Digital Operational Resilience Testing",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Availability",
+     "frameworks_using_it": 1
+    }
+   ]
+  },
+  {
+   "id": "15",
+   "name": "Physical & Environmental Security",
+   "category_slots_merged": 13,
+   "distinct_category_names": 6,
+   "is_broad_bucket": false,
+   "merged_from": [
+    {
+     "name": "Physical",
+     "frameworks_using_it": 3
+    },
+    {
+     "name": "Physical Controls",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Physical Safeguards",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Physical Security",
+     "frameworks_using_it": 4
+    },
+    {
+     "name": "Physical and Environmental Protection",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Physical and Environmental Security",
+     "frameworks_using_it": 3
+    }
+   ]
+  },
+  {
+   "id": "16",
+   "name": "Human Resources Security",
+   "category_slots_merged": 12,
+   "distinct_category_names": 7,
+   "is_broad_bucket": false,
+   "merged_from": [
+    {
+     "name": "HR",
+     "frameworks_using_it": 5
+    },
+    {
+     "name": "Human Resource Security",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Human Resources Security",
+     "frameworks_using_it": 2
+    },
+    {
+     "name": "Human Security",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "People Controls",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Personnel Security",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Cyber security in the Human Resources (HR) department",
+     "frameworks_using_it": 1
+    }
+   ]
+  },
+  {
+   "id": "17",
+   "name": "Awareness & Training",
+   "category_slots_merged": 2,
+   "distinct_category_names": 2,
+   "is_broad_bucket": false,
+   "merged_from": [
+    {
+     "name": "Awareness and Training",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Security Awareness and Skills Training",
+     "frameworks_using_it": 1
+    }
+   ]
+  },
+  {
+   "id": "18",
+   "name": "Third-Party / Supply Chain",
+   "category_slots_merged": 16,
+   "distinct_category_names": 11,
+   "is_broad_bucket": false,
+   "merged_from": [
+    {
+     "name": "Vendor",
+     "frameworks_using_it": 6
+    },
+    {
+     "name": "Third Parties",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Third Party Security",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Third-Party Management",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Supply Chain",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Supply Chain Risk Management",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "ICT Third-Party Risk Management",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Service Provider Management",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Cloud",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Cyber security in the Procurement department",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Customer",
+     "frameworks_using_it": 1
+    }
+   ]
+  },
+  {
+   "id": "19",
+   "name": "Vulnerability & Threat Management",
+   "category_slots_merged": 4,
+   "distinct_category_names": 3,
+   "is_broad_bucket": false,
+   "merged_from": [
+    {
+     "name": "Vulnerability Management",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Continuous Vulnerability Management",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Information Sharing",
+     "frameworks_using_it": 2
+    }
+   ]
+  },
+  {
+   "id": "20",
+   "name": "Operations & IT Service Management",
+   "category_slots_merged": 15,
+   "distinct_category_names": 11,
+   "is_broad_bucket": false,
+   "merged_from": [
+    {
+     "name": "Operations",
+     "frameworks_using_it": 2
+    },
+    {
+     "name": "Operational",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Operations Management",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Operations Security",
+     "frameworks_using_it": 3
+    },
+    {
+     "name": "Operation",
+     "frameworks_using_it": 2
+    },
+    {
+     "name": "Computer Operations",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "IT operations",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Communications and Operations Management",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Deliver, Service and Support",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Maintenance",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "End-User Computing",
+     "frameworks_using_it": 1
+    }
+   ]
+  },
+  {
+   "id": "21",
+   "name": "BROAD - must be split in Stage 3",
+   "category_slots_merged": 14,
+   "distinct_category_names": 9,
+   "is_broad_bucket": true,
+   "merged_from": [
+    {
+     "name": "Security",
+     "frameworks_using_it": 6
+    },
+    {
+     "name": "Enterprise security",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Systems Security",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Protect",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Identify",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Technical Safeguards",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Technological Controls",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Organizational Controls",
+     "frameworks_using_it": 1
+    },
+    {
+     "name": "Administrative Safeguards",
+     "frameworks_using_it": 1
+    }
+   ]
+  }
+ ]
+}

@@ -1,0 +1,567 @@
+from typing import List, Optional
+from datetime import datetime, timedelta
+import json
+import logging
+import os
+from fastapi import APIRouter, Depends, HTTPException, status, Query
+from sqlalchemy.orm import Session
+
+from ..models import PolicyException, PolicyExceptionComment, GovernanceDocument, GRCUser, get_db
+from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+
+router = APIRouter(prefix="/policy-exceptions", tags=["Policy Exceptions"])
+logger = logging.getLogger(__name__)
+
+
+def _check_ai_available() -> bool:
+    base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
+    if base_url and "modelfarm" in base_url:
+        return True
+
+    api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        return False
+    if api_key.startswith("_DUMMY") or api_key == "your-api-key-here" or len(api_key) < 20:
+        return False
+    return True
+
+
+def _fallback_exception_suggestion(title: str, document: GovernanceDocument) -> dict:
+    policy_name = (document.title or "selected policy").strip()
+    policy_scope = (document.description or "the documented policy controls and governance expectations").strip()
+
+    return {
+        "justification": (
+            f"The exception request '{title}' is being raised against '{policy_name}' due to a temporary operational constraint. "
+            f"Business continuity and service delivery requirements require short-term deviation while remediation activities are executed. "
+            f"Scope impacted: {policy_scope}."
+        ),
+        "risk_assessment": (
+            "Key risks include control non-conformance, elevated compliance exposure, and potential audit observations if unmanaged. "
+            "Residual risk is expected to remain moderate provided the exception remains time-bound, monitored, and approved through governance workflow."
+        ),
+        "compensating_controls": (
+            "Apply enhanced management oversight, implement interim manual review checks, maintain exception activity logs, "
+            "perform periodic compliance monitoring, and enforce a defined remediation target date with accountable owner tracking."
+        ),
+        "source": "template"
+    }
+
+
+def _parse_json_response(raw_text: str) -> Optional[dict]:
+    if not raw_text:
+        return None
+    cleaned = raw_text.strip()
+    if cleaned.startswith("```json"):
+        cleaned = cleaned[7:]
+    if cleaned.startswith("```"):
+        cleaned = cleaned[3:]
+    if cleaned.endswith("```"):
+        cleaned = cleaned[:-3]
+    try:
+        return json.loads(cleaned.strip())
+    except Exception:
+        return None
+
+
+def _generate_exception_suggestion(title: str, document: GovernanceDocument) -> dict:
+    if not _check_ai_available():
+        return _fallback_exception_suggestion(title, document)
+
+    try:
+        from openai import OpenAI
+
+        api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+        base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
+        model = os.environ.get("AI_INTEGRATIONS_OPENAI_MODEL") or os.environ.get("OPENAI_MODEL") or "gpt-4o"
+
+        client = OpenAI(api_key=api_key, base_url=base_url)
+
+        policy_context = "\n\n".join([
+            f"Policy title: {document.title or ''}",
+            f"Policy type: {document.doc_type or ''}",
+            f"Policy description: {document.description or ''}",
+            f"Policy content excerpt: {(document.content or '')[:3500]}",
+        ]).strip()
+
+        prompt = (
+            "You are a GRC governance specialist. Generate concise policy exception draft content as strict JSON only with keys: "
+            "justification, risk_assessment, compensating_controls. "
+            "Use professional audit/compliance language, be practical and specific to the provided exception title and policy context.\n\n"
+            f"Exception title: {title}\n\n"
+            f"Policy context:\n{policy_context}"
+        )
+
+        completion = client.chat.completions.create(
+            model=model,
+            temperature=0.3,
+            messages=[
+                {"role": "system", "content": "Respond with valid JSON only."},
+                {"role": "user", "content": prompt},
+            ],
+        )
+
+        content = completion.choices[0].message.content if completion.choices else ""
+        parsed = _parse_json_response(content or "") or {}
+
+        justification = str(parsed.get("justification") or "").strip()
+        risk_assessment = str(parsed.get("risk_assessment") or "").strip()
+        compensating_controls = str(parsed.get("compensating_controls") or "").strip()
+
+        if not justification or not risk_assessment or not compensating_controls:
+            return _fallback_exception_suggestion(title, document)
+
+        return {
+            "justification": justification,
+            "risk_assessment": risk_assessment,
+            "compensating_controls": compensating_controls,
+            "source": "ai"
+        }
+    except Exception as exc:
+        logger.warning(f"Policy exception suggestion fallback used: {exc}")
+        return _fallback_exception_suggestion(title, document)
+
+
+@router.get("/expiring-soon")
+def get_expiring_soon(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        return []
+
+    now = datetime.utcnow()
+    threshold = now + timedelta(days=30)
+
+    exceptions = db.query(PolicyException).filter(
+        PolicyException.tenant_id.in_(user_tenants),
+        PolicyException.status == "approved",
+        PolicyException.expiry_date != None,
+        PolicyException.expiry_date <= threshold,
+        PolicyException.expiry_date >= now
+    ).order_by(PolicyException.expiry_date.asc()).all()
+    return [_exception_to_dict(e, db) for e in exceptions]
+
+
+@router.get("/summary")
+def get_summary(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        return {"total": 0, "by_status": {}, "by_priority": {}}
+
+    exceptions = db.query(PolicyException).filter(
+        PolicyException.tenant_id.in_(user_tenants)
+    ).all()
+
+    by_status = {}
+    by_priority = {}
+    for e in exceptions:
+        by_status[e.status] = by_status.get(e.status, 0) + 1
+        by_priority[e.priority] = by_priority.get(e.priority, 0) + 1
+
+    now = datetime.utcnow()
+    expiring_soon = sum(1 for e in exceptions if e.status == "approved" and e.expiry_date and e.expiry_date <= now + timedelta(days=30) and e.expiry_date >= now)
+
+    return {
+        "total": len(exceptions),
+        "pending_approval": by_status.get("pending_approval", 0),
+        "approved": by_status.get("approved", 0),
+        "expiring_soon": expiring_soon,
+        "by_status": by_status,
+        "by_priority": by_priority
+    }
+
+
+@router.get("")
+def list_exceptions(
+    status_filter: Optional[str] = Query(None, alias="status"),
+    document_id: Optional[int] = Query(None),
+    priority: Optional[str] = Query(None),
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        return []
+
+    query = db.query(PolicyException).filter(
+        PolicyException.tenant_id.in_(user_tenants)
+    )
+
+    if status_filter:
+        query = query.filter(PolicyException.status == status_filter)
+    if document_id:
+        query = query.filter(PolicyException.document_id == document_id)
+    if priority:
+        query = query.filter(PolicyException.priority == priority)
+
+    exceptions = query.order_by(PolicyException.created_at.desc()).offset(skip).limit(limit).all()
+    return [_exception_to_dict(e, db) for e in exceptions]
+
+
+@router.post("", status_code=status.HTTP_201_CREATED)
+def create_exception(
+    data: dict,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    tenant_id = get_user_primary_tenant(current_user, db)
+    if not tenant_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User is not assigned to any tenant")
+
+    user_tenants = get_user_tenants(current_user, db)
+    
+    if data.get("document_id"):
+        doc = db.query(GovernanceDocument).filter(
+            GovernanceDocument.id == data["document_id"],
+            GovernanceDocument.tenant_id.in_(user_tenants)
+        ).first()
+        if not doc:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+
+    exception = PolicyException(
+        tenant_id=tenant_id,
+        document_id=data.get("document_id"),
+        title=data.get("title"),
+        description=data.get("description"),
+        justification=data.get("justification"),
+        risk_assessment=data.get("risk_assessment"),
+        compensating_controls=data.get("compensating_controls"),
+        requested_by=current_user.id,
+        status="draft",
+        priority=data.get("priority", "medium"),
+        effective_date=datetime.fromisoformat(data["effective_date"]) if data.get("effective_date") else None,
+        expiry_date=datetime.fromisoformat(data["expiry_date"]) if data.get("expiry_date") else None,
+        review_date=datetime.fromisoformat(data["review_date"]) if data.get("review_date") else None,
+        metadata_=data.get("metadata", {})
+    )
+    db.add(exception)
+    db.commit()
+    db.refresh(exception)
+    return _exception_to_dict(exception, db)
+
+
+@router.post("/suggest-content")
+def suggest_exception_content(
+    data: dict,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tenant access")
+
+    title = str((data or {}).get("title") or "").strip()
+    if not title:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Title is required")
+
+    document_id = (data or {}).get("document_id")
+    if not document_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="document_id is required")
+
+    doc = db.query(GovernanceDocument).filter(
+        GovernanceDocument.id == int(document_id),
+        GovernanceDocument.tenant_id.in_(user_tenants)
+    ).first()
+    if not doc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+
+    suggestion = _generate_exception_suggestion(title, doc)
+    return {
+        "title": title,
+        "document_id": doc.id,
+        "document_title": doc.title,
+        "justification": suggestion.get("justification", ""),
+        "risk_assessment": suggestion.get("risk_assessment", ""),
+        "compensating_controls": suggestion.get("compensating_controls", ""),
+        "source": suggestion.get("source", "template"),
+    }
+
+
+@router.get("/{exception_id}")
+def get_exception(
+    exception_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    exception = db.query(PolicyException).filter(
+        PolicyException.id == exception_id,
+        PolicyException.tenant_id.in_(user_tenants)
+    ).first()
+    if not exception:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exception not found")
+    return _exception_to_dict(exception, db)
+
+
+@router.put("/{exception_id}")
+def update_exception(
+    exception_id: int,
+    data: dict,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    exception = db.query(PolicyException).filter(
+        PolicyException.id == exception_id,
+        PolicyException.tenant_id.in_(user_tenants)
+    ).first()
+    if not exception:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exception not found")
+
+    # Validate document_id if provided
+    if "document_id" in data and data["document_id"]:
+        doc = db.query(GovernanceDocument).filter(
+            GovernanceDocument.id == data["document_id"],
+            GovernanceDocument.tenant_id.in_(user_tenants)
+        ).first()
+        if not doc:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+
+    updatable = ["title", "description", "justification", "risk_assessment",
+                 "compensating_controls", "priority", "document_id"]
+    for field in updatable:
+        if field in data:
+            setattr(exception, field, data[field])
+
+    for date_field in ["effective_date", "expiry_date", "review_date"]:
+        if date_field in data:
+            setattr(exception, date_field, datetime.fromisoformat(data[date_field]) if data[date_field] else None)
+
+    if "metadata" in data:
+        exception.metadata_ = data["metadata"]
+
+    exception.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(exception)
+    return _exception_to_dict(exception, db)
+
+
+@router.delete("/{exception_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_exception(
+    exception_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    exception = db.query(PolicyException).filter(
+        PolicyException.id == exception_id,
+        PolicyException.tenant_id.in_(user_tenants)
+    ).first()
+    if not exception:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exception not found")
+    if exception.status != "draft":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only draft exceptions can be deleted")
+    db.delete(exception)
+    db.commit()
+    return None
+
+
+@router.post("/{exception_id}/submit")
+def submit_exception(
+    exception_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    exception = db.query(PolicyException).filter(
+        PolicyException.id == exception_id,
+        PolicyException.tenant_id.in_(user_tenants)
+    ).first()
+    if not exception:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exception not found")
+    if exception.status != "draft":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only draft exceptions can be submitted")
+
+    exception.status = "pending_approval"
+    exception.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(exception)
+    return _exception_to_dict(exception, db)
+
+
+@router.post("/{exception_id}/approve")
+def approve_exception(
+    exception_id: int,
+    data: dict = None,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    exception = db.query(PolicyException).filter(
+        PolicyException.id == exception_id,
+        PolicyException.tenant_id.in_(user_tenants)
+    ).first()
+    if not exception:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exception not found")
+    if exception.status != "pending_approval":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only pending exceptions can be approved")
+    if exception.requested_by == current_user.id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot approve your own exception request")
+
+    exception.status = "approved"
+    exception.approved_by = current_user.id
+    exception.approved_at = datetime.utcnow()
+    exception.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(exception)
+    return _exception_to_dict(exception, db)
+
+
+@router.post("/{exception_id}/reject")
+def reject_exception(
+    exception_id: int,
+    data: dict,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    exception = db.query(PolicyException).filter(
+        PolicyException.id == exception_id,
+        PolicyException.tenant_id.in_(user_tenants)
+    ).first()
+    if not exception:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exception not found")
+    if exception.status != "pending_approval":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only pending exceptions can be rejected")
+
+    exception.status = "rejected"
+    exception.rejected_by = current_user.id
+    exception.rejected_at = datetime.utcnow()
+    exception.rejection_reason = data.get("rejection_reason") or data.get("reason", "")
+    exception.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(exception)
+    return _exception_to_dict(exception, db)
+
+
+@router.post("/{exception_id}/revoke")
+def revoke_exception(
+    exception_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    exception = db.query(PolicyException).filter(
+        PolicyException.id == exception_id,
+        PolicyException.tenant_id.in_(user_tenants)
+    ).first()
+    if not exception:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exception not found")
+    if exception.status != "approved":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only approved exceptions can be revoked")
+
+    exception.status = "revoked"
+    exception.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(exception)
+    return _exception_to_dict(exception, db)
+
+
+@router.get("/{exception_id}/comments")
+def list_comments(
+    exception_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    exception = db.query(PolicyException).filter(
+        PolicyException.id == exception_id,
+        PolicyException.tenant_id.in_(user_tenants)
+    ).first()
+    if not exception:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exception not found")
+
+    comments = db.query(PolicyExceptionComment).filter(
+        PolicyExceptionComment.exception_id == exception_id
+    ).order_by(PolicyExceptionComment.created_at.asc()).all()
+
+    result = []
+    for c in comments:
+        user = db.query(GRCUser).filter(GRCUser.id == c.user_id).first()
+        result.append({
+            "id": c.id,
+            "exception_id": c.exception_id,
+            "user_id": c.user_id,
+            "user_name": (user.display_name or user.username) if user else None,
+            "comment": c.comment,
+            "created_at": c.created_at.isoformat() if c.created_at else None
+        })
+    return result
+
+
+@router.post("/{exception_id}/comments", status_code=status.HTTP_201_CREATED)
+def add_comment(
+    exception_id: int,
+    data: dict,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    exception = db.query(PolicyException).filter(
+        PolicyException.id == exception_id,
+        PolicyException.tenant_id.in_(user_tenants)
+    ).first()
+    if not exception:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exception not found")
+
+    comment = PolicyExceptionComment(
+        exception_id=exception_id,
+        user_id=current_user.id,
+        comment=data.get("comment", "")
+    )
+    db.add(comment)
+    db.commit()
+    db.refresh(comment)
+
+    return {
+        "id": comment.id,
+        "exception_id": comment.exception_id,
+        "user_id": comment.user_id,
+        "user_name": current_user.display_name or current_user.username,
+        "comment": comment.comment,
+        "created_at": comment.created_at.isoformat() if comment.created_at else None
+    }
+
+
+def _exception_to_dict(exc: PolicyException, db: Session) -> dict:
+    requester = db.query(GRCUser).filter(GRCUser.id == exc.requested_by).first() if exc.requested_by else None
+    approver = db.query(GRCUser).filter(GRCUser.id == exc.approved_by).first() if exc.approved_by else None
+    doc = db.query(GovernanceDocument).filter(GovernanceDocument.id == exc.document_id).first() if exc.document_id else None
+
+    return {
+        "id": exc.id,
+        "tenant_id": exc.tenant_id,
+        "document_id": exc.document_id,
+        "document_title": doc.title if doc else None,
+        "title": exc.title,
+        "description": exc.description,
+        "justification": exc.justification,
+        "risk_assessment": exc.risk_assessment,
+        "compensating_controls": exc.compensating_controls,
+        "requested_by": exc.requested_by,
+        "requester_name": (requester.display_name or requester.username) if requester else None,
+        "status": exc.status,
+        "priority": exc.priority,
+        "requested_at": exc.requested_at.isoformat() if exc.requested_at else None,
+        "approved_by": exc.approved_by,
+        "approver_name": (approver.display_name or approver.username) if approver else None,
+        "approved_at": exc.approved_at.isoformat() if exc.approved_at else None,
+        "rejected_by": exc.rejected_by,
+        "rejected_at": exc.rejected_at.isoformat() if exc.rejected_at else None,
+        "rejection_reason": exc.rejection_reason,
+        "effective_date": exc.effective_date.isoformat() if exc.effective_date else None,
+        "expiry_date": exc.expiry_date.isoformat() if exc.expiry_date else None,
+        "review_date": exc.review_date.isoformat() if exc.review_date else None,
+        "is_expired": exc.is_expired,
+        "created_at": exc.created_at.isoformat() if exc.created_at else None,
+        "updated_at": exc.updated_at.isoformat() if exc.updated_at else None,
+        "metadata": exc.metadata_,
+        "comments_count": len(exc.comments) if exc.comments else 0
+    }

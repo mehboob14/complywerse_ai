@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>EV-SCR-019 — Firewall Rule-base Export Palo Alto</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { font-family: -apple-system, 'Segoe UI', Arial, sans-serif; background: #f4f6f8; color: #222; }
+  .page { max-width: 1280px; margin: 24px auto; padding: 0 24px 48px; }
+  /* COVER */
+  .cover { background: linear-gradient(135deg, #1F4E79 0%, #2E75B6 100%); color: #fff; border-radius: 10px; padding: 32px 36px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); }
+  .cover h1 { font-size: 28px; margin-bottom: 6px; letter-spacing: 0.5px; }
+  .cover h2 { font-size: 16px; font-weight: 400; opacity: 0.92; margin-bottom: 18px; }
+  .cover .meta { display: grid; grid-template-columns: 180px 1fr 180px 1fr; gap: 10px 16px; font-size: 13px; margin-top: 12px; }
+  .cover .meta b { opacity: 0.85; font-weight: 500; }
+  .cover .ev-id { position: absolute; top: 20px; right: 36px; background: rgba(255,255,255,0.15); padding: 6px 14px; border-radius: 20px; font-size: 12px; letter-spacing: 1px; }
+  .cover-wrap { position: relative; }
+  .fwgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 20px; margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.25); font-size: 12px; }
+  .fwgrid div { padding: 6px 10px; background: rgba(255,255,255,0.10); border-radius: 4px; }
+  .fwgrid b { font-weight: 600; }
+
+  /* LABEL ABOVE SCREENSHOT */
+  .shot-label { margin: 28px 0 8px; padding: 8px 14px; background: #fff; border-left: 4px solid #2E75B6; border-radius: 0 4px 4px 0; font-size: 13px; color: #555; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+  .shot-label b { color: #1F4E79; }
+
+  /* SCREENSHOT FRAME */
+  .screenshot { background: #fff; border: 1px solid #d8dde3; border-radius: 6px; overflow: hidden; box-shadow: 0 2px 12px rgba(0,0,0,0.10); }
+  .browser-bar { background: #e7e9ed; padding: 8px 12px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid #d0d4d9; }
+  .browser-bar .dot { width: 12px; height: 12px; border-radius: 50%; }
+  .browser-bar .dot.r { background: #ff5f57; } .browser-bar .dot.y { background: #ffbd2e; } .browser-bar .dot.g { background: #28c840; }
+  .browser-bar .url { flex: 1; background: #fff; border: 1px solid #c8cdd3; border-radius: 4px; padding: 4px 10px; font-size: 12px; color: #555; }
+  .content { padding: 20px; font-size: 13px; }
+
+  /* AUDIT STAMP */
+  .audit-stamp { margin-top: 10px; padding: 10px 14px; background: #e8f4ea; border-left: 4px solid #2d7a3f; font-size: 12px; color: #1a4d26; border-radius: 0 4px 4px 0; }
+  .audit-stamp b { color: #0f3d1a; }
+
+  /* COMMON UI */
+  table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 12.5px; }
+  th { background: #f3f5f7; text-align: left; padding: 8px 10px; border-bottom: 2px solid #ccd4dc; font-weight: 600; color: #333; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.4px; }
+  td { padding: 8px 10px; border-bottom: 1px solid #e8ecf0; color: #333; }
+  tr:last-child td { border-bottom: none; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+  .badge.ok { background: #e0f4e3; color: #1e7a30; }
+  .badge.warn { background: #fff2cc; color: #8a6215; }
+  .badge.bad { background: #fadbd8; color: #9c1414; }
+  .badge.info { background: #d6e4f0; color: #1F4E79; }
+  .kv { display: grid; grid-template-columns: 200px 1fr; gap: 6px 14px; font-size: 13px; }
+  .kv b { color: #555; font-weight: 500; }
+  .kv .val { color: #222; }
+  .hdr { font-size: 18px; font-weight: 600; color: #1F4E79; margin-bottom: 6px; }
+  .sub { color: #666; font-size: 12px; margin-bottom: 16px; }
+  .section { margin: 20px 0; padding: 12px 14px; background: #f8f9fb; border-radius: 4px; border: 1px solid #e1e5ea; }
+  .flex { display: flex; gap: 20px; align-items: flex-start; }
+  .flex > div { flex: 1; }
+  code { background: #f0f2f5; padding: 1px 6px; border-radius: 3px; font-family: 'Consolas','Monaco',monospace; font-size: 12px; color: #333; }
+  .timestamp { color: #888; font-size: 11px; }
+
+  /* PRINT */
+  @media print { .page { margin: 0; padding: 0; } .cover { break-after: page; } .screenshot { break-inside: avoid; } }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="cover-wrap">
+    <div class="cover">
+      <div class="ev-id">EV-SCR-019</div>
+      <h1>[Bank Name]</h1>
+      <h2>Firewall Rule-base Export Palo Alto</h2>
+      <div class="meta">
+        <b>Evidence ID:</b><div>EV-SCR-019</div>
+        <b>Captured On:</b><div>20-Mar-2026 15:28 GST</div>
+        <b>Classification:</b><div>CONFIDENTIAL</div>
+        <b>Retention:</b><div>1 year</div>
+        <b>Captured By:</b><div>Khaled Al Awadhi</div>
+        <b>Reviewed By:</b><div>CISO Office</div>
+        <b>System / Tool:</b><div>Palo Alto Panorama</div>
+        <b>Document Type:</b><div>Configuration Screenshot</div>
+      </div>
+      <div class="fwgrid">
+        <div><b>CBUAE Ch.14:</b> 14.10.4 Firewall</div>
+        <div><b>SBP ETGRMF:</b> 2.4.6 Network Security</div>
+        <div><b>ISO 27001:</b> A.8.20 Network Security</div>
+        <div><b>PCI-DSS:</b> Req 1 Network Security Controls</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="shot-label">Palo Alto firewall policy showing default-deny posture and threat prevention. <br/><b>Purpose:</b> Demonstrates network security controls per CBUAE 14.10.4 / PCI Req 1.</div>
+
+  <div class="screenshot">
+    <div style="background:#1F4E79;color:#fff;padding:10px 16px;font-weight:600;font-size:14px;">Palo Alto Panorama › Policies › Security Rules (Production DC)</div>
+    <div class="content"><div class="hdr">Firewall Rule-base — Production (Summary)</div>
+    <div class="sub">Device Group: DC-PROD · Total rules: 847 · Last commit: 14-Mar-2026 15:22 by khaled.alawadhi</div>
+    <div class="section">
+      <b>Security Rules (top priority extract):</b>
+      <table><tr><th>#</th><th>Name</th><th>Source Zone</th><th>Dest Zone</th><th>App/Svc</th><th>Action</th><th>Log</th></tr>
+      <tr><td>1</td><td>Block-CBUAE-IOCs</td><td>Any</td><td>Any</td><td>Any</td><td><span class="badge bad">DENY</span></td><td>Session-end</td></tr>
+      <tr><td>2</td><td>Allow-DNS-to-Umbrella</td><td>Trust</td><td>Untrust</td><td>dns (53/udp/tcp)</td><td><span class="badge ok">ALLOW</span></td><td>Session-end</td></tr>
+      <tr><td>3</td><td>Deny-Telnet-FTP-SMB1-Cleartext</td><td>Any</td><td>Any</td><td>telnet, ftp, smbv1</td><td><span class="badge bad">DENY</span></td><td>Session-start</td></tr>
+      <tr><td>4</td><td>Allow-Web-Browsing-Via-Proxy</td><td>Trust</td><td>Untrust</td><td>web-browsing, ssl</td><td><span class="badge ok">ALLOW</span></td><td>Session-end</td></tr>
+      <tr><td>5</td><td>Allow-CBS-App-to-DB</td><td>App-Tier</td><td>DB-Tier</td><td>oracle-sqlnet</td><td><span class="badge ok">ALLOW</span></td><td>Session-end</td></tr>
+      <tr><td>6</td><td>Allow-M365-Outbound</td><td>Trust</td><td>Untrust</td><td>office365-urls</td><td><span class="badge ok">ALLOW</span></td><td>Session-end</td></tr>
+      <tr><td>...</td><td>(841 more rules)</td><td>...</td><td>...</td><td>...</td><td>...</td><td>...</td></tr>
+      <tr><td>847</td><td>Default-Deny-All</td><td>Any</td><td>Any</td><td>Any</td><td><span class="badge bad">DENY</span></td><td>Session-start + Session-end</td></tr>
+      </table>
+    </div>
+    <div class="section">
+      <b>Firewall Configuration Metrics:</b>
+      <table><tr><th>Metric</th><th>Value</th></tr>
+      <tr><td>Total rules (active)</td><td>847</td></tr>
+      <tr><td>Default policy</td><td>Deny-All (explicit)</td></tr>
+      <tr><td>Overly-permissive rules (Any-Any-Any)</td><td>0</td></tr>
+      <tr><td>Unused rules (>90 days no hit)</td><td>17 (pending review)</td></tr>
+      <tr><td>Last semi-annual rule review</td><td>15-Jan-2026 — 42 rules retired</td></tr>
+      <tr><td>Threat Prevention Profile applied</td><td>All rules (strict)</td></tr>
+      </table>
+    </div></div>
+  </div>
+
+  <div class="audit-stamp"><b>Control Assurance:</b> Explicit default-deny at rule 847. No Any-Any-Any rules. 17 unused rules flagged for retirement. Semi-annual review on 15-Jan-2026.</div>
+
+</div>
+</body>
+</html>
