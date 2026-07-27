@@ -90,7 +90,6 @@ _PATH_TO_RESOURCE = [
     ("auditor_portal",             "audits"),
 
     # ── Other modules ──
-    ("audit_management",           "audits"),
     ("evidence_mgmt",              "compliance.evidence"),
     ("evidence",                   "compliance.evidence"),
     ("assets",                     "assets"),
@@ -167,7 +166,7 @@ _PRIMARY_TRIGGER: dict[tuple[str, str], str] = {
     ("compliance",      "update"):  "assessment_status_change",
     ("compliance",      "delete"):  "compliance.delete",
     ("compliance",      "trigger"): "compliance_gap_detected",
-    ("audits",          "create"):  "audit_finding_created",
+    ("audits",          "create"):  "audits.create",
     ("audits",          "update"):  "audits.update",
     ("audits",          "delete"):  "audits.delete",
 

@@ -1005,7 +1005,7 @@ function WorkflowEngineContent() {
       } else if (cat.includes('audit')) {
         rawNodes = [
           startNode,
-          { node_key: 'create_finding', node_type: 'action', name: 'Create Audit Scope', config: { action_name: 'create_audit_finding' }, x: 350, y: 160 },
+          { node_key: 'request_scope', node_type: 'action', name: 'Request Scope Evidence', config: { action_name: 'request_evidence_upload' }, x: 350, y: 160 },
           { node_key: 'approval', node_type: 'approval', name: 'Audit Plan Approval', config: { approval_type: 'multi_level', levels: ['Audit Manager', 'CAE'] }, x: 350, y: 300 },
           { node_key: 'assign', node_type: 'action', name: 'Assign Auditors', config: { action_name: 'assign_control_owner' }, x: 350, y: 440 },
           { node_key: 'evidence', node_type: 'action', name: 'Request Workpapers', config: { action_name: 'request_evidence_upload' }, x: 350, y: 570 },
@@ -1013,8 +1013,8 @@ function WorkflowEngineContent() {
           { ...endNode, y: 830 },
         ];
         rawEdges = [
-          { source_node_key: 'start', target_node_key: 'create_finding' },
-          { source_node_key: 'create_finding', target_node_key: 'approval' },
+          { source_node_key: 'start', target_node_key: 'request_scope' },
+          { source_node_key: 'request_scope', target_node_key: 'approval' },
           { source_node_key: 'approval', target_node_key: 'assign', condition: { _label: 'Approved' } },
           { source_node_key: 'assign', target_node_key: 'evidence' },
           { source_node_key: 'evidence', target_node_key: 'report' },

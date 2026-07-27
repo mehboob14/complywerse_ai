@@ -177,7 +177,7 @@ const complianceGapEdges: BackendEdge[] = [
 const annualAuditNodes: BackendNode[] = [
   { node_key: 'start', node_type: 'trigger', name: 'Annual Audit Schedule', config: { trigger_type: 'schedule_recurring', schedule: 'annual' }, is_start: true, x: 350, y: 30 },
   { node_key: 'notify_audit', node_type: 'action', name: 'Announce Audit Campaign', config: { action_name: 'send_notification_email', subject: 'Annual Audit Planning Initiated', body: 'The annual audit planning cycle has begun. Please prepare relevant documentation.' }, x: 350, y: 160 },
-  { node_key: 'create_finding', node_type: 'action', name: 'Create Audit Scope', config: { action_name: 'create_audit_finding', finding_type: 'scope_definition', description: 'Define audit universe and scope for this cycle' }, x: 350, y: 290 },
+  { node_key: 'request_scope', node_type: 'action', name: 'Request Scope Evidence', config: { action_name: 'request_evidence_upload', evidence_type: 'audit_scope', description: 'Define audit universe and scope for this cycle' }, x: 350, y: 290 },
   { node_key: 'multi_approval', node_type: 'approval', name: 'Audit Plan Approval', config: { approval_type: 'multi_level', levels: ['Audit Manager', 'Chief Audit Executive'], timeout_hours: 120 }, x: 350, y: 420 },
   { node_key: 'assign_auditors', node_type: 'action', name: 'Assign Audit Owners', config: { action_name: 'assign_control_owner' }, x: 350, y: 550 },
   { node_key: 'request_evidence', node_type: 'action', name: 'Request Audit Evidence', config: { action_name: 'request_evidence_upload', evidence_type: 'audit_workpapers', description: 'Upload audit workpapers and supporting documents' }, x: 350, y: 680 },
@@ -189,8 +189,8 @@ const annualAuditNodes: BackendNode[] = [
 
 const annualAuditEdges: BackendEdge[] = [
   { source_node_key: 'start', target_node_key: 'notify_audit' },
-  { source_node_key: 'notify_audit', target_node_key: 'create_finding' },
-  { source_node_key: 'create_finding', target_node_key: 'multi_approval' },
+  { source_node_key: 'notify_audit', target_node_key: 'request_scope' },
+  { source_node_key: 'request_scope', target_node_key: 'multi_approval' },
   { source_node_key: 'multi_approval', target_node_key: 'assign_auditors', condition: { _label: 'Approved' } },
   { source_node_key: 'assign_auditors', target_node_key: 'request_evidence' },
   { source_node_key: 'request_evidence', target_node_key: 'sla_timer' },

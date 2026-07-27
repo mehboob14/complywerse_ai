@@ -52,7 +52,6 @@ const NODE_ICONS: Record<string, LucideIcon> = {
   send_notification_email: Bell,
   generate_report: FileText,
   update_compliance_status: Shield,
-  create_audit_finding: ClipboardList,
   escalate_to_management: ChevronRight,
   call_webhook_api: Globe,
   // Conditions

@@ -27,7 +27,7 @@ def _env_bool(name: str, default: bool) -> bool:
 _EVENT_MAP: Dict[str, Dict[str, List[str]]] = {
     "incidents": {
         "create": ["incident_reported", "incidents.create", "erm.incident_reported"],
-        "update": ["incidents.update"],
+        "update": ["incident_updated", "incidents.update"],
     },
     "risks": {
         "create": ["risk_created", "risks.create", "risks.created"],
@@ -39,6 +39,7 @@ _EVENT_MAP: Dict[str, Dict[str, List[str]]] = {
         "create": ["evidence_uploaded", "evidence.create", "evidence.uploaded"],
         "update": ["evidence_approved", "evidence_expires", "evidence.update",
                    "evidence.approved", "evidence.expires"],
+        "submit": ["evidence_submitted", "evidence.submit"],
         "delete": ["evidence.delete"],
     },
     "vulnerabilities": {
@@ -51,6 +52,13 @@ _EVENT_MAP: Dict[str, Dict[str, List[str]]] = {
         "create": ["kri_breach", "kri.create", "erm.kri_breach"],
         "update": ["kri_breach", "kri.update", "erm.kri_breach"],
     },
+    # KRI / KPI measurement writes under /erm/kris/... (audit_logger emits
+    # resource_type="kris" for those sub-entity routes).
+    "kris": {
+        "measure": ["kri_measured", "kri_breach_resolved", "kris.measure"],
+        "create": ["kri_breach", "kris.create"],
+        "update": ["kri_breach", "kris.update"],
+    },
     "policies": {
         "create": ["policies.create"],
         "update": ["policy_approved", "policies.update", "governance.policy_approved"],
@@ -61,6 +69,15 @@ _EVENT_MAP: Dict[str, Dict[str, List[str]]] = {
         "update": ["assessment_status_change", "control_review_due", "attestation_overdue",
                    "governance.update", "compliance.assessment_status_change",
                    "governance.control_review_due", "governance.attestation_overdue"],
+        # Governance documents / sign-off are driven by action sub-keys that
+        # audit_logger derives directly from the trailing path segments or from
+        # internal create_audit_log calls.
+        "start_review": ["document_review_started"],
+        "complete_review": ["document_review_completed"],
+        "review_completed": ["document_review_completed"],
+        "sent_for_review": ["document_signoff_requested"],
+        "sent_for_approval": ["document_signoff_requested"],
+        "signed": ["document_signoff_completed"],
     },
     "compliance": {
         "create": ["compliance.create", "compliance_gap_detected", "compliance.gap_detected"],
@@ -95,6 +112,45 @@ _EVENT_MAP: Dict[str, Dict[str, List[str]]] = {
                    "issue-management.issues.update"],
         "delete": ["issue-management.issues.delete"],
     },
+    # ── ERM / Risk sub-entity resource types ─────────────────────────────
+    "mitigation-actions": {
+        "create": ["mitigation_action_created"],
+        "complete": ["mitigation_action_completed"],
+    },
+    "internal-controls": {
+        "submit": ["internal_control_submitted"],
+        "approve": ["internal_control_approved"],
+    },
+    "reviews": {
+        "create": ["risk_review_scheduled"],
+    },
+    "risk-assessments": {
+        "create": ["risk_assessment_created"],
+    },
+    "rcsa": {
+        "activate": ["rcsa_campaign_activated"],
+        "submit": ["rcsa_assessment_submitted"],
+        "approve": ["rcsa_assessment_approved"],
+    },
+    "vendor_risk": {
+        "send": ["vendor_questionnaire_sent"],
+        "approve": ["vendor_assessment_approved"],
+        "schedule_reassessment": ["vendor_reassessment_scheduled"],
+    },
+    # ── BCM: internal audit() writes directly with resource_type like
+    # `bcm_plan` / `bcm_drill` / `bcm_bia`.
+    "bcm_plan": {
+        "create": ["bcm_plan_created"],
+        "status_change": ["bcm_plan_activated"],
+    },
+    "bcm_drill": {
+        "create": ["bcm_drill_scheduled"],
+        "status_change": ["bcm_drill_completed"],
+    },
+    "bcm_bia": {
+        "create": ["bcm_bia_updated"],
+        "update": ["bcm_bia_updated"],
+    },
     # ── CIS Compliance Plugins ───────────────────────────────────────────
     # plugin-run rows: created when a scan starts; the per-run check pass/
     # fail status comes through as an update.  cis_scan_completed is the
@@ -128,8 +184,9 @@ _MODULE_ALIASES: Dict[str, str] = {
     "framework-upload": "frameworks",
     "compliance": "compliance",
     "governance": "governance",
-    "audit-management": "audits",
     "control-library": "controls",
+    "vendor-risk": "vendor_risk",
+    "vendor_risk": "vendor_risk",
 }
 
 
@@ -639,6 +696,14 @@ class TriggerDispatcher:
                 if req.get("status") == "closed" or req.get("to_state") == "closed":
                     if "issue_closed" not in event_names:
                         event_names.append("issue_closed")
+                # If the request transitioned to reopened/open, fire reopened too.
+                if req.get("status") in {"reopened", "open"} or req.get("to_state") in {"reopened", "open"}:
+                    if "issue_reopened" not in event_names:
+                        event_names.append("issue_reopened")
+                # If an assignee was provided/changed, fire assigned.
+                if any(k in req for k in ("assignee_id", "assigned_to", "new_assignee_id")):
+                    if "issue_assigned" not in event_names:
+                        event_names.append("issue_assigned")
 
         # Path-based enrichment
         changes = (log.changes or {}) if isinstance(log.changes, dict) else {}
@@ -648,6 +713,11 @@ class TriggerDispatcher:
             if len(parts) >= 2:
                 module = parts[0].lower()
                 entity = parts[1].lower()
+                path_lower = path.lower()
+                req_body = changes.get("request") if isinstance(changes, dict) else None
+                req_body = req_body if isinstance(req_body, dict) else {}
+                after_dict = changes.get("after") if isinstance(changes, dict) else None
+                after_dict = after_dict if isinstance(after_dict, dict) else {}
 
                 # v6 Workflow integration — Nested sub-resource handling.
                 # Paths like /erm/risks/65/mitigation-actions log
@@ -714,6 +784,245 @@ class TriggerDispatcher:
                     for mapped in _EVENT_MAP.get("incidents", {}).get(action, []):
                         if mapped not in event_names:
                             event_names.append(mapped)
+
+                # Curated legacy snake-case triggers (path + payload heuristics)
+                path_tags = set()
+                for t in (
+                    "governance",
+                    "documents",
+                    "committees",
+                    "attestations",
+                    "attestation-campaigns",
+                    "regulatory-changes",
+                    "policy-exceptions",
+                    "mitigation-actions",
+                    "incidents",
+                    "kris",
+                    "reviews",
+                    "risk-assessments",
+                    "rcsa",
+                    "internal-controls",
+                    "vendor-risk",
+                    "evidence-mgmt",
+                    "audit-packages",
+                    "access-reviews",
+                    "issue-management",
+                    "criticality-assessments",
+                    "admin",
+                    "critical-tasks",
+                ):
+                    if f"/{t}" in path_lower:
+                        path_tags.add(t)
+
+                # ── Governance: committees ──────────────────────────────
+                if module == "governance" and entity == "committees":
+                    if action == "create" and "committee_created" not in event_names:
+                        event_names.append("committee_created")
+                    if action == "update" and "committee_updated" not in event_names:
+                        event_names.append("committee_updated")
+                if "/committees/" in path_lower and "/meetings" in path_lower:
+                    if path_lower.rstrip("/").endswith("/meetings") and action == "create":
+                        if "committee_meeting_scheduled" not in event_names:
+                            event_names.append("committee_meeting_scheduled")
+                    if "/meetings/" in path_lower and action == "update":
+                        if str(req_body.get("status") or "").lower() == "completed":
+                            if "committee_meeting_completed" not in event_names:
+                                event_names.append("committee_meeting_completed")
+                    if "/actions/" in path_lower and action == "update":
+                        if str(req_body.get("status") or "").lower() == "overdue":
+                            if "committee_action_overdue" not in event_names:
+                                event_names.append("committee_action_overdue")
+
+                # ── Governance: attestations ─────────────────────────────
+                if module == "governance" and entity == "attestations":
+                    if action == "request" and "attestation_requested" not in event_names:
+                        event_names.append("attestation_requested")
+                    if action == "complete" and "attestation_completed" not in event_names:
+                        event_names.append("attestation_completed")
+
+                if module == "governance" and entity in {"attestation-campaigns", "attestation_campaigns"}:
+                    if action == "activate" and "attestation_campaign_activated" not in event_names:
+                        event_names.append("attestation_campaign_activated")
+                    if action in {"complete", "completed"} and "attestation_campaign_completed" not in event_names:
+                        event_names.append("attestation_campaign_completed")
+                    if action == "escalate" and "attestation_campaign_escalated" not in event_names:
+                        event_names.append("attestation_campaign_escalated")
+
+                # ── Governance: regulatory changes + tasks ─────────────
+                if module == "governance" and entity in {"regulatory-changes", "regulatory_changes"}:
+                    if action == "create" and path_lower.rstrip("/").endswith("/changes"):
+                        if "regulatory_change_created" not in event_names:
+                            event_names.append("regulatory_change_created")
+                    if "/close" in path_lower and "regulatory_change_closed" not in event_names:
+                        event_names.append("regulatory_change_closed")
+                    if "/tasks" in path_lower and action == "create" and "regulatory_task_created" not in event_names:
+                        event_names.append("regulatory_task_created")
+
+                # ── Governance: policy exceptions ──────────────────────
+                if module == "governance" and entity in {"policy-exceptions", "policy_exceptions"}:
+                    if action == "create" and "policy_exception_created" not in event_names:
+                        event_names.append("policy_exception_created")
+                    if action == "approve" and "policy_exception_approved" not in event_names:
+                        event_names.append("policy_exception_approved")
+                    if "/revoke" in path_lower and "policy_exception_revoked" not in event_names:
+                        event_names.append("policy_exception_revoked")
+
+                # ── ERM: mitigation actions (overdue needs payload) ─────
+                if "/mitigation-actions" in path_lower:
+                    if action in {"create", "mitigation_actions"} and "mitigation_action_created" not in event_names:
+                        event_names.append("mitigation_action_created")
+                    if action == "complete" and "mitigation_action_completed" not in event_names:
+                        event_names.append("mitigation_action_completed")
+                    if action == "update" and str(req_body.get("status") or "").lower() == "overdue" and "mitigation_action_overdue" not in event_names:
+                        event_names.append("mitigation_action_overdue")
+
+                # ── ERM: incidents (closed needs payload) ──────────────
+                if "/incidents" in path_lower:
+                    if action == "update" and "incident_updated" not in event_names:
+                        event_names.append("incident_updated")
+                    inc_status = str(req_body.get("status") or req_body.get("to_state") or "").lower()
+                    if (inc_status in {"closed", "resolved"} or "/close" in path_lower) and "incident_closed" not in event_names:
+                        event_names.append("incident_closed")
+
+                # ── ERM: risk reviews ─────────────────────────────────
+                if "/reviews/" in path_lower and action == "update":
+                    if str(req_body.get("status") or "").lower() in {"approved", "rejected", "completed"}:
+                        if "risk_review_completed" not in event_names:
+                            event_names.append("risk_review_completed")
+
+                # ── ERM: risk close/reopen (payload-driven) ───────────
+                if resource_type == "risks" and action == "update":
+                    rstatus = str(req_body.get("status") or req_body.get("to_state") or "").lower()
+                    if rstatus == "closed" and "risk_closed" not in event_names:
+                        event_names.append("risk_closed")
+                    if rstatus in {"reopened", "open"} and "risk_reopened" not in event_names:
+                        event_names.append("risk_reopened")
+
+                # ── ERM: risk assessments (status endpoint) ───────────
+                if resource_type == "risk-assessments" and action == "create" and path_lower.endswith("/status"):
+                    if str(req_body.get("status") or "").lower() in {"closed", "approved"}:
+                        if "risk_assessment_completed" not in event_names:
+                            event_names.append("risk_assessment_completed")
+                    # Prevent the create-based node from firing on status updates.
+                    if "risk_assessment_created" in event_names:
+                        event_names = [e for e in event_names if e != "risk_assessment_created"]
+
+                # ── ERM: internal-control tests (result-driven) ───────
+                if "/internal-controls" in path_lower and "/tests" in path_lower and action in {"create", "update"}:
+                    result = str(req_body.get("result") or "").lower()
+                    if result in {"fail", "failed"} and "internal_control_test_failed" not in event_names:
+                        event_names.append("internal_control_test_failed")
+
+                # ── ERM: appetite breach (best-effort) ────────────────
+                if resource_type == "risks" and action == "update":
+                    tstatus = str(req_body.get("threshold_status") or req_body.get("status") or "").lower()
+                    if tstatus == "breached" and "appetite_breach_detected" not in event_names:
+                        event_names.append("appetite_breach_detected")
+
+                # ── Vendor risk ────────────────────────────────────────
+                if "/vendor-risk" in path_lower:
+                    if "/vendors" in path_lower and "/assessments" not in path_lower:
+                        if "/incidents" in path_lower and action == "create" and "vendor_incident_created" not in event_names:
+                            event_names.append("vendor_incident_created")
+                        elif "/remediation" in path_lower and action == "create" and "vendor_remediation_created" not in event_names:
+                            event_names.append("vendor_remediation_created")
+                        elif "/offboarding" in path_lower and action == "update" and "vendor_offboarding_updated" not in event_names:
+                            event_names.append("vendor_offboarding_updated")
+                        elif "/vendors/" in path_lower and action == "update" and "vendor_updated" not in event_names:
+                            event_names.append("vendor_updated")
+                        elif path_lower.rstrip("/").endswith("/vendors") and action == "create" and "vendor_created" not in event_names:
+                            event_names.append("vendor_created")
+                    if "/vendor-risk/assessments" in path_lower and action == "create" and "vendor_assessment_created" not in event_names:
+                        event_names.append("vendor_assessment_created")
+                    if "/vendor-risk/questionnaires" in path_lower and action == "send" and "vendor_questionnaire_sent" not in event_names:
+                        event_names.append("vendor_questionnaire_sent")
+                    if "/vendor-risk/questionnaires/external" in path_lower and action == "create" and "vendor_questionnaire_completed" not in event_names:
+                        event_names.append("vendor_questionnaire_completed")
+
+                # ── Evidence lifecycle + linking ───────────────────────
+                if "/evidence-mgmt/lifecycle" in path_lower:
+                    if "/review" in path_lower and action == "create":
+                        if str(req_body.get("action") or "").lower() == "reject" and "evidence_rejected" not in event_names:
+                            event_names.append("evidence_rejected")
+                    if path_lower.endswith("/renew") and action == "create" and "evidence_renewed" not in event_names:
+                        event_names.append("evidence_renewed")
+                    if path_lower.endswith("/expire") and action == "create" and "evidence_stale" not in event_names:
+                        event_names.append("evidence_stale")
+                    if action == "check_staleness" and "evidence_stale" not in event_names:
+                        event_names.append("evidence_stale")
+
+                if "/audit-packages" in path_lower and path_lower.endswith("/finalize") and action == "create" and "audit_package_finalized" not in event_names:
+                    event_names.append("audit_package_finalized")
+                if "/links/" in path_lower and "/controls" in path_lower and action == "create" and "evidence_linked_to_control" not in event_names:
+                    event_names.append("evidence_linked_to_control")
+
+                # ── Access reviews ─────────────────────────────────────
+                if "/access-reviews" in path_lower:
+                    if path_lower.rstrip("/").endswith("/access-reviews") and action == "create" and "access_review_campaign_created" not in event_names:
+                        event_names.append("access_review_campaign_created")
+                    if "/items/" in path_lower and "/decision" in path_lower and action == "decision" and "access_review_item_decided" not in event_names:
+                        event_names.append("access_review_item_decided")
+                    if "/close" in path_lower and "access_review_campaign_closed" not in event_names:
+                        event_names.append("access_review_campaign_closed")
+                    if "escalate-overdue" in path_lower and "access_review_escalated" not in event_names:
+                        event_names.append("access_review_escalated")
+
+                # ── CAPA (issue-management actions) ────────────────────
+                if "/issue-management/issues/" in path_lower and path_lower.rstrip("/").endswith("/actions") and action == "create":
+                    if "capa_action_created" not in event_names:
+                        event_names.append("capa_action_created")
+                if "/issue-management/actions/" in path_lower and action == "update":
+                    if str(req_body.get("status") or "").lower() in {"completed", "verified"} and "capa_action_completed" not in event_names:
+                        event_names.append("capa_action_completed")
+
+                # ── Asset criticality ─────────────────────────────────
+                if "/criticality-assessments/assets/" in path_lower and action in {"create", "update"}:
+                    if any(k in req_body for k in ("criticality", "criticality_level")) and "asset_criticality_changed" not in event_names:
+                        event_names.append("asset_criticality_changed")
+
+                # ── Admin (users/roles/password policy) ────────────────
+                if "/admin/users" in path_lower:
+                    if path_lower.rstrip("/").endswith("/admin/users") and action == "create" and "user_created" not in event_names:
+                        event_names.append("user_created")
+                    if "/admin/users/" in path_lower and action == "update":
+                        if req_body.get("is_active") is False and "user_deactivated" not in event_names:
+                            event_names.append("user_deactivated")
+                        if req_body.get("is_active") is not False and "user_updated" not in event_names:
+                            event_names.append("user_updated")
+                if "/admin/roles" in path_lower:
+                    if path_lower.rstrip("/").endswith("/admin/roles") and action == "create" and "role_created" not in event_names:
+                        event_names.append("role_created")
+                    if "/admin/roles/" in path_lower and action == "update" and "role_updated" not in event_names:
+                        event_names.append("role_updated")
+                if "/admin/password-policy" in path_lower and action == "update" and "password_policy_updated" not in event_names:
+                    event_names.append("password_policy_updated")
+
+                # ── Critical tasks ────────────────────────────────────
+                if action == "promote_to_task" and "/promote-to-task" in path_lower and "critical_task_created" not in event_names:
+                    event_names.append("critical_task_created")
+                if "/critical-tasks/" in path_lower and action == "update":
+                    cstatus = str(req_body.get("status") or "").lower()
+                    if cstatus in {"completed", "verified"} and "critical_task_completed" not in event_names:
+                        event_names.append("critical_task_completed")
+                    if cstatus in {"overdue", "late"} and "critical_task_overdue" not in event_names:
+                        event_names.append("critical_task_overdue")
+
+        # ── Post-processing (resource_type-driven audits without HTTP path) ──
+        # BCM uses rich internal audit() writes that include before/after state,
+        # but typically *not* a request.path. _EVENT_MAP therefore adds the
+        # "activated/completed" triggers too broadly; we filter here using the
+        # after-state when present.
+        if isinstance(changes, dict) and changes:
+            after_state = changes.get("after")
+            after_state_dict = after_state if isinstance(after_state, dict) else {}
+            after_status = str(after_state_dict.get("status") or after_state_dict.get("target") or "").lower()
+
+            if resource_type == "bcm_plan" and action == "status_change":
+                if after_status and after_status not in {"approved", "active", "activated"}:
+                    event_names = [e for e in event_names if e != "bcm_plan_activated"]
+            if resource_type == "bcm_drill" and action == "status_change":
+                if after_status and after_status not in {"completed", "closed"}:
+                    event_names = [e for e in event_names if e != "bcm_drill_completed"]
 
         return event_names
 

@@ -141,14 +141,40 @@ const EXCLUDED_CURATED_TRIGGERS = new Set(['manual_trigger', 'schedule_recurring
 // picker can present platform events hierarchically alongside CRUD functions.
 function curatedTriggerGroup(key: string): { group: string; domain: WorkflowDomain } {
   const k = (key || '').toLowerCase();
+  if (k.startsWith('vendor_')) return { group: 'Third-Party Risk', domain: 'risk' };
+  if (k.startsWith('bcm_') || k.startsWith('bia_')) return { group: 'BCM', domain: 'workflow' };
+  if (k.startsWith('user_') || k.startsWith('role_') || k.startsWith('password_') || k.startsWith('critical_task_')) {
+    return { group: 'Administration', domain: 'workflow' };
+  }
+
+  // Assessments (can map to risk *or* compliance escalation configs)
+  if (k.startsWith('risk_review_') || k.startsWith('risk_assessment_') || k.startsWith('rcsa_')) {
+    return { group: 'Assessments', domain: 'risk' };
+  }
+  if (k.startsWith('internal_control_') || k.startsWith('compliance_assessment_') || k.startsWith('access_review_')) {
+    return { group: 'Assessments', domain: 'compliance' };
+  }
+
+  if (k.startsWith('mitigation_') || k.startsWith('appetite_') || k.startsWith('kpi_')) return { group: 'Risk Management', domain: 'risk' };
   if (k.startsWith('risk') || k.startsWith('kri') || k.startsWith('incident')) return { group: 'Risk Management', domain: 'risk' };
   if (k.startsWith('vulnerab') || k.startsWith('new_vulnerab')) return { group: 'Vulnerability Management', domain: 'vulnerability' };
   if (k.startsWith('evidence')) return { group: 'Compliance · Evidence', domain: 'evidence' };
   if (k.startsWith('framework') || k.startsWith('assessment') || k.startsWith('compliance') || k.startsWith('certification')) return { group: 'Compliance', domain: 'compliance' };
-  if (k.startsWith('governance') || k.startsWith('policy') || k.startsWith('attestation') || k.startsWith('control')) return { group: 'Governance', domain: 'governance' };
+  if (
+    k.startsWith('governance') ||
+    k.startsWith('document_') ||
+    k.startsWith('committee_') ||
+    k.startsWith('policy_exception_') ||
+    k.startsWith('regulatory_') ||
+    k.startsWith('policy') ||
+    k.startsWith('attestation') ||
+    k.startsWith('control')
+  ) {
+    return { group: 'Governance', domain: 'governance' };
+  }
   if (k.startsWith('audit')) return { group: 'Audit', domain: 'audit' };
   if (k.startsWith('asset')) return { group: 'Assets', domain: 'assets' };
-  if (k.startsWith('issue')) return { group: 'Issue Management', domain: 'workflow' };
+  if (k.startsWith('issue_') || k.startsWith('capa_')) return { group: 'Issue Management', domain: 'workflow' };
   if (k.startsWith('cis') || k.startsWith('agent') || k.startsWith('connection')) return { group: 'CIS / Agents', domain: 'compliance' };
   return { group: 'Other events', domain: 'workflow' };
 }

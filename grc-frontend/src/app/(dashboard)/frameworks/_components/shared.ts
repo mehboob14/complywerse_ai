@@ -4,7 +4,7 @@ export interface UploadedFramework {
   id: number;
   name: string;
   version: string;
-  framework_type: string;
+  framework_type?: string | null;
   upload_status: string;
   controls_count: number;
   is_shared: boolean;

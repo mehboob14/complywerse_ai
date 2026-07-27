@@ -289,7 +289,7 @@ function FrameworkStartModal({
   const isComp = cls === 'compliance';
 
   const meta: Array<{ icon: React.ElementType; label: string; value: string }> = [];
-  if (framework.framework_type) meta.push({ icon: Tag, label: 'Type', value: framework.framework_type.toUpperCase() });
+  if (framework.framework_type) meta.push({ icon: Tag, label: 'Type', value: String(framework.framework_type).toUpperCase() });
   if (framework.version) meta.push({ icon: Tag, label: 'Version', value: framework.version });
   if (framework.controls_count != null) meta.push({ icon: Shield, label: 'Controls', value: String(framework.controls_count) });
   if (framework.certification_body) meta.push({ icon: BookOpen, label: 'Certifying Body', value: framework.certification_body });

@@ -60,10 +60,19 @@ VECTOR_SEMANTIC_TERMS = (
     "section", "requirement", "obligation", "policy says", "document says",
     "compare", "comparison", "align", "alignment", "gap", "difference",
 )
-# IMPORTANT: Only terms that have NO database tables (truly removed UI features).
-# Audit findings, plans, engagements, reports ARE in the DB — route those to database instead.
-# This list is intentionally narrow to avoid blocking valid DB queries.
-AUDIT_QUERY_TERMS: tuple = ()  # Audit Management tables NOW exist — all route to database
+# IMPORTANT: Terms for the retired Audit Management product module.
+# These route to the deprecated_audit response instead of SQL generation.
+AUDIT_QUERY_TERMS: tuple = (
+    "audit finding", "audit findings", "audit plan", "audit plans",
+    "audit engagement", "audit engagements", "audit workpaper", "workpaper",
+    "workpapers", "audit workpapers", "pbc list", "prepared by client",
+    "qaip", "audit quality", "audit maturity", "audit recommendation",
+    "audit recommendations", "audit universe", "auditable entity",
+    "audit board pack", "board pack", "audit follow up", "audit follow-up",
+    "audit management", "audit action plan", "audit template",
+    "audit finding theme", "audit report opinion",
+    "audit report", "audit reports",
+)
 GRC_RELEVANT_TERMS = (
     # Platform modules
     "grc", "erm", "enterprise risk", "risk management", "risk register",
@@ -103,13 +112,6 @@ GRC_RELEVANT_TERMS = (
     "department", "business unit", "user", "role", "permission",
     # GRC status words
     "open", "overdue", "critical", "high risk", "pending", "active", "closed",
-    # Audit Management (all tables in DB)
-    "audit finding", "audit findings", "audit plan", "audit plans",
-    "audit engagement", "audit engagements", "audit report", "audit reports",
-    "audit workpaper", "workpaper", "pbc list", "prepared by client",
-    "qaip", "audit quality", "audit maturity", "audit recommendation",
-    "audit universe", "auditable entity", "audit team",
-    "audit board pack", "board pack", "audit follow up",
     # CCM
     "ccm", "continuous control monitoring", "ccm rule", "ccm anomaly",
     "ccm exception", "control anomaly", "automated control",
@@ -273,16 +275,6 @@ PLATFORM_DATA_NOUNS = (
     "evidence register", "evidence items", "control evidence",
     "missing evidence", "weak evidence", "evidence gaps",
     "evidence", "evidence assessment",
-    # ── Audit Management (tables in DB — route to database) ──
-    "audit finding", "audit findings", "audit plan", "audit plans",
-    "audit engagement", "audit engagements", "audit report", "audit reports",
-    "audit workpaper", "workpaper", "workpapers", "audit workpapers",
-    "audit recommendation", "audit recommendations", "audit action plan",
-    "pbc list", "prepared by client", "audit document request",
-    "qaip", "audit quality", "audit maturity",
-    "audit team", "audit universe", "auditable entity", "audit template",
-    "audit board pack", "board pack", "audit follow up", "audit follow-up",
-    "audit finding theme", "audit report opinion",
     # ── CCM (Continuous Control Monitoring) ──
     "ccm", "continuous control monitoring", "ccm rule", "ccm rules",
     "ccm anomaly", "ccm anomalies", "ccm exception", "ccm exceptions",

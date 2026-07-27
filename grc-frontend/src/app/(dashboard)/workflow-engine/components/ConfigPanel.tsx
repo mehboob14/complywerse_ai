@@ -663,8 +663,6 @@ function TriggerSubConfig({
     compliance_statuses,
     vulnerability_severities,
     policy_categories,
-    audit_types,
-    finding_severities,
     kri_categories,
     evidence_categories,
     asset_types,
@@ -963,40 +961,6 @@ function TriggerSubConfig({
       </>
     );
   }
-  if (tt === 'audit_finding_created') {
-    return (
-      <>
-        <Field label="Finding severity (optional filter)">
-          <select
-            className={selectCls}
-            value={(config?.min_severity as string) || ''}
-            onChange={(e) => onUpdate('min_severity', e.target.value)}
-          >
-            <option value="">-- Any severity --</option>
-            {finding_severities.map((s) => (
-              <option key={s} value={s}>
-                {toLabel(s)}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Audit type (optional filter)">
-          <select
-            className={selectCls}
-            value={(config?.audit_type as string) || ''}
-            onChange={(e) => onUpdate('audit_type', e.target.value)}
-          >
-            <option value="">-- Any type --</option>
-            {audit_types.map((a) => (
-              <option key={a} value={a}>
-                {toLabel(a)}
-              </option>
-            ))}
-          </select>
-        </Field>
-      </>
-    );
-  }
   if (tt === 'kri_breach') {
     return (
       <>
@@ -1160,8 +1124,6 @@ function ActionSubConfig({
     vulnerability_severities,
     vulnerability_statuses,
     policy_categories,
-    audit_types,
-    finding_severities,
     control_effectiveness_levels,
     evidence_categories,
     report_types,
@@ -2006,134 +1968,6 @@ function ActionSubConfig({
         </Field>
         <UserMulti field="assignee_user_ids" label="Attesting users" />
         <RoleMulti field="assignee_role_ids" label="Attesting roles" />
-      </>
-    );
-  }
-
-  if (actionName === 'create_audit_finding') {
-    return (
-      <>
-        <Field label="Audit type">
-          <select
-            className={selectCls}
-            value={(config?.audit_type as string) || ''}
-            onChange={(e) => onUpdate('audit_type', e.target.value)}
-          >
-            <option value="">-- Select type --</option>
-            {audit_types.map((a) => (
-              <option key={a} value={a}>
-                {toLabel(a)}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Finding severity">
-          <select
-            className={selectCls}
-            value={(config?.severity as string) || 'medium'}
-            onChange={(e) => onUpdate('severity', e.target.value)}
-          >
-            {finding_severities.map((s) => (
-              <option key={s} value={s}>
-                {toLabel(s)}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Finding description template">
-          <textarea
-            className={`${inputCls} h-14 resize-none`}
-            value={(config?.description_template as string) || ''}
-            onChange={(e) => onUpdate('description_template', e.target.value)}
-            placeholder="Finding: {{trigger.title}}"
-          />
-        </Field>
-        <UserMulti field="assignee_user_ids" label="Assign to" />
-      </>
-    );
-  }
-
-  if (actionName === 'create_audit_plan') {
-    return (
-      <>
-        <Field label="Audit type">
-          <select
-            className={selectCls}
-            value={(config?.audit_type as string) || ''}
-            onChange={(e) => onUpdate('audit_type', e.target.value)}
-          >
-            <option value="">-- Select type --</option>
-            {audit_types.map((auditType) => (
-              <option key={auditType} value={auditType}>
-                {toLabel(auditType)}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <FwSelect label="Framework (optional scope)" anyLabel="-- Any framework --" />
-        <Field label="Start in (days)">
-          <input
-            type="number"
-            className={inputCls}
-            min={0}
-            value={(config?.start_date_offset_days as number) || ''}
-            onChange={(e) => onUpdate('start_date_offset_days', e.target.value ? Number(e.target.value) : null)}
-            placeholder="7"
-          />
-        </Field>
-        <UserMulti field="assignee_user_ids" label="Assign auditors" />
-      </>
-    );
-  }
-
-  if (actionName === 'close_audit_finding') {
-    return (
-      <>
-        <Field label="Finding severity (optional filter)">
-          <select
-            className={selectCls}
-            value={(config?.severity as string) || ''}
-            onChange={(e) => onUpdate('severity', e.target.value)}
-          >
-            <option value="">-- Any severity --</option>
-            {finding_severities.map((severity) => (
-              <option key={severity} value={severity}>
-                {toLabel(severity)}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Closure notes">
-          <textarea
-            className={`${inputCls} h-14 resize-none`}
-            value={(config?.notes as string) || ''}
-            onChange={(e) => onUpdate('notes', e.target.value)}
-            placeholder="Finding closed by automated workflow..."
-          />
-        </Field>
-      </>
-    );
-  }
-
-  if (actionName === 'assign_auditor') {
-    return (
-      <>
-        <Field label="Audit type (optional filter)">
-          <select
-            className={selectCls}
-            value={(config?.audit_type as string) || ''}
-            onChange={(e) => onUpdate('audit_type', e.target.value)}
-          >
-            <option value="">-- Any audit type --</option>
-            {audit_types.map((auditType) => (
-              <option key={auditType} value={auditType}>
-                {toLabel(auditType)}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <UserMulti field="assignee_user_ids" label="Assign auditor users" />
-        <RoleMulti field="assignee_role_ids" label="Assign auditor roles" />
       </>
     );
   }
@@ -3915,8 +3749,8 @@ function NodeConfigBody({
                   .filter(k => relevantTriggerKeys.includes(k))
                   .map(k => <option key={k} value={k}>{NODE_TYPE_LABELS[k] || k.replace(/_/g, ' ')}</option>)}
               </optgroup>
-              <optgroup label="Audit">
-                {['audit_finding_created','audit_finding_updated','audit_finding_closed']
+              <optgroup label="Auditor Portal">
+                {['audit_review_submitted','audit_control_approved']
                   .filter(k => relevantTriggerKeys.includes(k))
                   .map(k => <option key={k} value={k}>{NODE_TYPE_LABELS[k] || k.replace(/_/g, ' ')}</option>)}
               </optgroup>

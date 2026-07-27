@@ -663,8 +663,8 @@ class WorkflowActionHandlers:
             "submit_policy_exception": WorkflowActionHandlers._submit_policy_exception,
             "approve_policy_exception": WorkflowActionHandlers._approve_policy_exception,
             "request_attestation": WorkflowActionHandlers._request_attestation,
-            # Audit (v2 integration — create_audit_finding/close_audit_finding
-            # stubbed; AuditFinding model not present in main repo)
+            # Audit Management retired — keep stubs so old workflow instances
+            # that still reference these action names no-op safely instead of crashing.
             "create_audit_finding": WorkflowActionHandlers._create_audit_finding,
             "create_audit_plan": WorkflowActionHandlers._create_audit_plan,
             "close_audit_finding": WorkflowActionHandlers._close_audit_finding,
@@ -1565,8 +1565,8 @@ class WorkflowActionHandlers:
     # ------------------------------------------------------------------
     # v2 integration handlers (compliance/risk/governance executors +
     # leaf actions). Appended verbatim from the integration handoff
-    # package. AuditFinding-dependent handlers are stubbed because the
-    # AuditFinding model is not yet present in grc.models.
+    # package. Audit Management is retired — AM action stubs remain below
+    # so legacy workflow instances skip safely instead of crashing.
     # ------------------------------------------------------------------
 
     @staticmethod
@@ -2315,7 +2315,7 @@ class WorkflowActionHandlers:
         """
         from ....models import (
             Risk, RiskKRI, RiskMitigationAction, RiskIncident, RiskReview,
-            RiskAssessment, RiskAssessmentRisk, RiskAuditFindingLink,
+            RiskAssessment, RiskAssessmentRisk,
             RiskAssetLink, RiskControlLink,
             InternalControl, InternalControlRiskLink,
             RCSACampaign, RCSAFinding, RCSAAssessment,
@@ -2487,22 +2487,13 @@ class WorkflowActionHandlers:
                 return {"action": "link_risk_to_control", "result": "linked", "link_id": link.id, "control_id": control.id}
 
             if functionality in ("link_audit_finding_to_risk", "create.link_audit_finding_to_risk"):
-                if not risk_id:
-                    return {"action": "link_audit_finding_to_risk", "result": "skipped", "reason": "no risk_id"}
-                # Use any existing audit finding
-                try:
-                    from ....models import AuditFinding
-                    af = db.query(AuditFinding).filter(AuditFinding.tenant_id == tenant_id).first() if hasattr(AuditFinding, "tenant_id") else db.query(AuditFinding).first()
-                except Exception:
-                    af = None
-                if not af:
-                    return {"action": "link_audit_finding_to_risk", "result": "noop", "reason": "no audit findings exist"}
-                exists = db.query(RiskAuditFindingLink).filter(RiskAuditFindingLink.risk_id == risk_id, RiskAuditFindingLink.audit_finding_id == af.id).first()
-                if exists:
-                    return {"action": "link_audit_finding_to_risk", "result": "noop", "link_id": exists.id}
-                link = RiskAuditFindingLink(risk_id=risk_id, audit_finding_id=af.id)
-                db.add(link); db.commit()
-                return {"action": "link_audit_finding_to_risk", "result": "linked", "link_id": link.id, "audit_finding_id": af.id}
+                # Audit Management retired — AuditFinding / RiskAuditFindingLink
+                # models are gone; no-op so platform workflows do not crash.
+                return {
+                    "action": "link_audit_finding_to_risk",
+                    "result": "skipped",
+                    "reason": "audit_management_retired",
+                }
 
             if functionality in ("risk_ai_suggestions", "trigger.risk_ai_suggestions"):
                 if not risk_id:
@@ -2922,17 +2913,16 @@ class WorkflowActionHandlers:
 
     @staticmethod
     def _create_audit_finding(db, instance, definition, payload: Dict[str, Any]) -> Dict[str, Any]:
-        # STUB: AuditFinding model not present in this build of grc.models.
-        # Log the request so the workflow doesn't 500; downstream nodes still run.
+        # Audit Management retired — stub so legacy workflow instances skip safely.
         db.add(WorkflowAuditLog(
             tenant_id=instance.tenant_id,
             workflow_definition_id=definition.id,
             workflow_instance_id=instance.id,
             event_type="action.create_audit_finding",
-            message="create_audit_finding skipped (AuditFinding model unavailable)",
+            message="create_audit_finding skipped (Audit Management retired)",
             payload=payload,
         ))
-        return {"action": "create_audit_finding", "result": "skipped_no_model"}
+        return {"action": "create_audit_finding", "result": "skipped_retired"}
 
     @staticmethod
     def _request_evidence_review(db, instance, definition, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -3229,6 +3219,7 @@ class WorkflowActionHandlers:
 
     @staticmethod
     def _create_audit_plan(db, instance, definition, payload: Dict[str, Any]) -> Dict[str, Any]:
+        # Audit Management retired — stub so legacy workflow instances skip safely.
         audit_type = payload.get("audit_type") or "internal"
         framework_id = payload.get("framework_id")
         start_offset = int(payload.get("start_date_offset_days") or 7)
@@ -3237,26 +3228,27 @@ class WorkflowActionHandlers:
             workflow_definition_id=definition.id,
             workflow_instance_id=instance.id,
             event_type="action.create_audit_plan",
-            message=f"Audit plan created (type={audit_type}, framework={framework_id}, start in {start_offset}d)",
+            message=f"create_audit_plan skipped (Audit Management retired; type={audit_type})",
             payload={"audit_type": audit_type, "framework_id": framework_id, "start_offset_days": start_offset},
         ))
-        return {"action": "create_audit_plan", "audit_type": audit_type, "framework_id": framework_id}
+        return {"action": "create_audit_plan", "result": "skipped_retired", "audit_type": audit_type, "framework_id": framework_id}
 
     @staticmethod
     def _close_audit_finding(db, instance, definition, payload: Dict[str, Any]) -> Dict[str, Any]:
-        # STUB: AuditFinding model not present in this build of grc.models.
+        # Audit Management retired — stub so legacy workflow instances skip safely.
         db.add(WorkflowAuditLog(
             tenant_id=instance.tenant_id,
             workflow_definition_id=definition.id,
             workflow_instance_id=instance.id,
             event_type="action.close_audit_finding",
-            message="close_audit_finding skipped (AuditFinding model unavailable)",
+            message="close_audit_finding skipped (Audit Management retired)",
             payload=payload,
         ))
-        return {"action": "close_audit_finding", "result": "skipped_no_model"}
+        return {"action": "close_audit_finding", "result": "skipped_retired"}
 
     @staticmethod
     def _assign_auditor(db, instance, definition, payload: Dict[str, Any]) -> Dict[str, Any]:
+        # Audit Management retired — stub so legacy workflow instances skip safely.
         audit_type = payload.get("audit_type")
         assignee_ids = _normalize_ids(payload.get("assignee_user_ids") or [])
         db.add(WorkflowAuditLog(
@@ -3264,10 +3256,10 @@ class WorkflowActionHandlers:
             workflow_definition_id=definition.id,
             workflow_instance_id=instance.id,
             event_type="action.assign_auditor",
-            message=f"Auditor(s) assigned (type={audit_type}, users={assignee_ids})",
+            message=f"assign_auditor skipped (Audit Management retired; type={audit_type})",
             payload={"audit_type": audit_type, "assignee_user_ids": assignee_ids},
         ))
-        return {"action": "assign_auditor", "audit_type": audit_type, "assigned_to": assignee_ids}
+        return {"action": "assign_auditor", "result": "skipped_retired", "audit_type": audit_type, "assigned_to": assignee_ids}
 
     @staticmethod
     def _update_control_effectiveness(db, instance, definition, payload: Dict[str, Any]) -> Dict[str, Any]:

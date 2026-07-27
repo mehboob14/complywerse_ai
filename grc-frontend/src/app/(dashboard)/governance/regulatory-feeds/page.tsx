@@ -1,8 +1,8 @@
 'use client';
 
-import { Fragment, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
-import apiClient from '@/lib/api';
+import apiClient, { adminApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
   Rss,
@@ -22,9 +22,18 @@ import {
   ArrowRightCircle,
   Database,
   Plus,
+  UserPlus,
+  Users,
 } from 'lucide-react';
 import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
 import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
+
+interface FeedAssignee {
+  type: 'user' | 'role';
+  id: number;
+  name?: string | null;
+  email?: string | null;
+}
 
 interface FeedSource {
   id: number;
@@ -41,6 +50,8 @@ interface FeedSource {
   items_processed: number;
   created_at: string;
   updated_at: string;
+  assignees?: FeedAssignee[];
+  assignee_count?: number;
 }
 
 interface ImpactedFramework {
@@ -129,6 +140,8 @@ export default function RegulatoryFeedsPage() {
   const [pollingSourceId, setPollingSourceId] = useState<number | null>(null);
   const [analyzingItemId, setAnalyzingItemId] = useState<number | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [assignSource, setAssignSource] = useState<FeedSource | null>(null);
+  const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
   const [newFeed, setNewFeed] = useState({
     name: '',
     source_url: '',
@@ -139,9 +152,62 @@ export default function RegulatoryFeedsPage() {
     poll_interval_hours: 24,
   });
   const queryClient = useQueryClient();
-  const { hasPermission } = usePermissions();
-  const canCreate = hasPermission('governance:regulatory_changes:create');
-  const canDelete = hasPermission('governance:regulatory_changes:delete');
+  const { hasPermission, hasAnyPermission, isAdmin } = usePermissions();
+  const canCreate = hasPermission('governance:regulatory_changes:create') || isAdmin;
+  const canAssign =
+    isAdmin ||
+    hasAnyPermission([
+      'governance:regulatory_changes:update',
+      'governance:regulatory_changes:create',
+      'governance:regulatory_changes:*',
+      'governance:*:*',
+    ]);
+  const canDelete = hasPermission('governance:regulatory_changes:delete') || isAdmin;
+
+  const { data: users = [] } = useQuery({
+    queryKey: ['admin-users-for-feed-assign'],
+    queryFn: async () => {
+      try {
+        const r = await adminApi.getUsers();
+        return Array.isArray(r.data) ? r.data : [];
+      } catch {
+        return [];
+      }
+    },
+    enabled: canAssign,
+  });
+
+  const { data: roles = [] } = useQuery({
+    queryKey: ['admin-roles-for-feed-assign'],
+    queryFn: async () => {
+      try {
+        const r = await adminApi.getRoles();
+        return Array.isArray(r.data) ? r.data : [];
+      } catch {
+        return [];
+      }
+    },
+    enabled: canAssign,
+  });
+
+  const assigneeOptions = useMemo(() => {
+    const opts: { value: string; label: string; subLabel?: string }[] = [];
+    for (const u of users) {
+      opts.push({
+        value: `user:${u.id}`,
+        label: u.display_name || u.username || u.email || `User ${u.id}`,
+        subLabel: u.email || undefined,
+      });
+    }
+    for (const r of roles) {
+      opts.push({
+        value: `role:${r.id}`,
+        label: `Role · ${r.name}`,
+        subLabel: typeof r.user_count === 'number' ? `${r.user_count} users` : undefined,
+      });
+    }
+    return opts;
+  }, [users, roles]);
 
   const { data: sources, isLoading: sourcesLoading } = useQuery({
     queryKey: ['regulatory-feed-sources'],
@@ -231,6 +297,27 @@ export default function RegulatoryFeedsPage() {
       queryClient.invalidateQueries({ queryKey: ['regulatory-feed-items'] });
     },
   });
+
+  const assignMutation = useMutation({
+    mutationFn: async ({ sourceId, assignees }: { sourceId: number; assignees: FeedAssignee[] }) => {
+      const response = await apiClient.put(
+        `/governance/regulatory-feeds/sources/${sourceId}/assignments`,
+        { assignees },
+      );
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['regulatory-feed-sources'] });
+      setAssignSource(null);
+      setSelectedAssignees([]);
+    },
+  });
+
+  const openAssignPanel = (source: FeedSource) => {
+    const current = (source.assignees || []).map((a) => `${a.type}:${a.id}`);
+    setSelectedAssignees(current);
+    setAssignSource(source);
+  };
 
   const analyzeItemMutation = useMutation({
     mutationFn: async (itemId: number) => {
@@ -429,6 +516,7 @@ export default function RegulatoryFeedsPage() {
                     <th>Regulator</th>
                     <th>Country</th>
                     <th>Category</th>
+                    <th>Assigned</th>
                     <th>Status</th>
                     <th>Last Polled</th>
                     <th>Items</th>
@@ -438,13 +526,13 @@ export default function RegulatoryFeedsPage() {
                 <tbody>
                   {sourcesLoading ? (
                     <tr>
-                      <td colSpan={8} className="text-center py-8">
+                      <td colSpan={9} className="text-center py-8">
                         <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary-400" />
                       </td>
                     </tr>
                   ) : !sources || sources.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="text-center py-8">
+                      <td colSpan={9} className="text-center py-8">
                         <Rss className="h-12 w-12 text-gray-700 mx-auto mb-3" />
                         <p className="text-gray-600">No feed sources configured</p>
                         <p className="text-sm text-gray-700 mt-1">
@@ -455,10 +543,27 @@ export default function RegulatoryFeedsPage() {
                   ) : (
                     sources.map((source) => {
                       const statusStyle = source.is_active ? STATUS_STYLES.active : STATUS_STYLES.inactive;
+                      const assignees = source.assignees || [];
+                      const assigneeLabel = assignees.length === 0
+                        ? 'Unassigned'
+                        : assignees
+                            .slice(0, 2)
+                            .map((a) => a.name || `${a.type} #${a.id}`)
+                            .join(', ') + (assignees.length > 2 ? ` +${assignees.length - 2}` : '');
                       return (
                         <tr key={source.id}>
                           <td>
-                            <div className="font-medium text-black">{source.name}</div>
+                            <div className="space-y-1.5 min-w-[220px]">
+                              <div className="font-medium text-black">{source.name}</div>
+                              <button
+                                type="button"
+                                onClick={() => openAssignPanel(source)}
+                                className="inline-flex items-center gap-1.5 rounded-md border border-primary-200 bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-700 hover:bg-primary-100"
+                              >
+                                <UserPlus className="h-3.5 w-3.5" />
+                                {assignees.length === 0 ? 'Assign users / roles' : 'Edit assignment'}
+                              </button>
+                            </div>
                           </td>
                           <td>
                             <div className="flex items-center gap-2">
@@ -471,6 +576,19 @@ export default function RegulatoryFeedsPage() {
                           </td>
                           <td>
                             <span className="text-gray-600 capitalize">{source.category}</span>
+                          </td>
+                          <td>
+                            <button
+                              type="button"
+                              onClick={() => openAssignPanel(source)}
+                              className="flex items-center gap-1.5 text-sm text-left hover:text-primary-700 max-w-[180px]"
+                              title={assignees.map((a) => a.name || `${a.type}:${a.id}`).join(', ') || 'Assign users or roles'}
+                            >
+                              <Users className="h-3.5 w-3.5 text-gray-500 shrink-0" />
+                              <span className={assignees.length === 0 ? 'text-primary-600 font-medium' : 'text-gray-700 truncate'}>
+                                {assigneeLabel}
+                              </span>
+                            </button>
                           </td>
                           <td>
                             <span className={`badge ${statusStyle.bg} ${statusStyle.text}`}>
@@ -500,7 +618,6 @@ export default function RegulatoryFeedsPage() {
                                   <Play className="h-4 w-4" />
                                 )}
                               </button>
-                              {/* No source-edit endpoint exists; the dead Edit button was removed (audit fix). */}
                               {canDelete && <button
                                 onClick={() => {
                                   if (confirm(`Delete "${source.name}" and all its feed items?`)) {
@@ -925,6 +1042,99 @@ export default function RegulatoryFeedsPage() {
             </div>
           </div>
         </form>
+      </RightSlidePanel>
+
+      <RightSlidePanel
+        isOpen={!!assignSource}
+        onClose={() => {
+          setAssignSource(null);
+          setSelectedAssignees([]);
+        }}
+        title={assignSource ? `Assign · ${assignSource.name}` : 'Assign Feed'}
+        footer={
+          <div className="flex justify-end gap-2.5">
+            <button
+              type="button"
+              onClick={() => {
+                setAssignSource(null);
+                setSelectedAssignees([]);
+              }}
+              className="btn-secondary"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={!assignSource || assignMutation.isPending}
+              onClick={() => {
+                if (!assignSource) return;
+                const assignees: FeedAssignee[] = selectedAssignees
+                  .map((v) => {
+                    const [type, idStr] = v.split(':');
+                    const id = Number(idStr);
+                    if ((type !== 'user' && type !== 'role') || !Number.isFinite(id)) return null;
+                    return { type, id } as FeedAssignee;
+                  })
+                  .filter((a): a is FeedAssignee => !!a);
+                assignMutation.mutate({ sourceId: assignSource.id, assignees });
+              }}
+              className="btn-primary flex items-center gap-2"
+            >
+              {assignMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <UserPlus className="h-4 w-4" />
+              )}
+              Save Assignments
+            </button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">
+            Assign this regulatory feed to users and/or roles. Assignees are responsible for monitoring new items from this source.
+          </p>
+          <div>
+            <label className="block text-sm font-medium text-gray-800 mb-1">
+              Users &amp; roles
+            </label>
+            <MultiSelectDropdown
+              title="Assignees"
+              items={assigneeOptions}
+              selectedValues={selectedAssignees}
+              onApply={setSelectedAssignees}
+              multiSelect
+              triggerVariant="input"
+              placeholder="Select users or roles…"
+              size="md"
+              forceSearch
+            />
+          </div>
+          {selectedAssignees.length > 0 && (
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+              <p className="text-xs font-medium uppercase tracking-wide text-gray-500 mb-2">
+                Selected ({selectedAssignees.length})
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {selectedAssignees.map((v) => {
+                  const opt = assigneeOptions.find((o) => o.value === v);
+                  const isRole = v.startsWith('role:');
+                  return (
+                    <span
+                      key={v}
+                      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${
+                        isRole ? 'bg-primary-50 text-primary-700' : 'bg-slate-100 text-slate-700'
+                      }`}
+                    >
+                      {isRole ? <Users className="h-3 w-3" /> : <UserPlus className="h-3 w-3" />}
+                      {opt?.label || v}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
       </RightSlidePanel>
     </div>
   );

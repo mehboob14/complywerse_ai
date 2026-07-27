@@ -77,7 +77,6 @@ _MODULE_SUB_ENTITY_PREFIXES = {
     "erm",
     "evidence-mgmt",
     "vuln-management",
-    "audit-management",
     "control-library",
     # CIS / Issues / Criticality additions — every one of these nests
     # resources under a clear second-segment entity name (runs,
@@ -90,6 +89,7 @@ _MODULE_SUB_ENTITY_PREFIXES = {
     "agents",
     "issue-management",
     "criticality-assessments",
+    "auditor-portal",
 }
 
 # Map module path slugs → canonical resource type names
@@ -100,7 +100,6 @@ _MODULE_RESOURCE_ALIASES: dict[str, str] = {
     "framework-upload": "frameworks",
     "governance": "governance",
     "compliance": "compliance",
-    "audit-management": "audits",
     "auditor-portal": "audits",
     "control-library": "controls",
     "vendor-risk": "vendor_risk",

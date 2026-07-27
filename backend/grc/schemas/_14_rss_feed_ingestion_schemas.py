@@ -26,6 +26,32 @@ class RegulatoryFeedSourceUpdate(BaseModel):
     poll_interval_hours: Optional[int] = None
 
 
+class RegulatoryFeedAssignee(BaseModel):
+    """One assigned target on a feed source (user or role)."""
+    type: str  # user | role
+    id: int
+    name: Optional[str] = None
+    email: Optional[str] = None
+
+
+class RegulatoryFeedAssignmentsUpdate(BaseModel):
+    assignees: List[RegulatoryFeedAssignee] = []
+
+
+class RegulatoryFeedAssignmentResponse(BaseModel):
+    id: int
+    feed_source_id: int
+    type: str
+    target_id: int
+    name: Optional[str] = None
+    email: Optional[str] = None
+    assigned_by: Optional[int] = None
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
 class RegulatoryFeedSourceResponse(BaseModel):
     id: int
     tenant_id: int
@@ -42,6 +68,8 @@ class RegulatoryFeedSourceResponse(BaseModel):
     items_processed: int
     created_at: datetime
     updated_at: datetime
+    assignees: List[RegulatoryFeedAssignee] = []
+    assignee_count: int = 0
 
     class Config:
         from_attributes = True

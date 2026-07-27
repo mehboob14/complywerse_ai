@@ -144,7 +144,15 @@ export default function FrameworksManagePage() {
     queryKey: ['certifications'],
     queryFn: async () => {
       const response = await certificationsApi.getAll();
-      return response.data;
+      const d = response.data;
+      if (Array.isArray(d)) return d as CertificationJourney[];
+      if (d && typeof d === 'object') {
+        const o = d as Record<string, unknown>;
+        for (const k of ['items', 'data', 'results', 'certifications'] as const) {
+          if (Array.isArray(o[k])) return o[k] as CertificationJourney[];
+        }
+      }
+      return [];
     },
   });
 
@@ -152,7 +160,7 @@ export default function FrameworksManagePage() {
     return <PageLoader className="h-64" />;
   }
 
-  const activeCertificationsRaw = ((certifications as CertificationJourney[]) || []).filter(
+  const activeCertificationsRaw = (Array.isArray(certifications) ? certifications : []).filter(
     (c: CertificationJourney) => c.status === 'in_progress' || c.status === 'not_started',
   );
 
@@ -257,7 +265,8 @@ export default function FrameworksManagePage() {
     }
   };
 
-  const getFrameworkTypeLabel = (type: string) => {
+  const getFrameworkTypeLabel = (type?: string | null) => {
+    if (!type) return 'Custom';
     const labels: Record<string, string> = {
       iso: 'ISO', nist: 'NIST', pci_dss: 'PCI DSS', soc2: 'SOC 2',
       gdpr: 'GDPR', hipaa: 'HIPAA', cobit: 'COBIT', other: 'Custom',

@@ -26,6 +26,11 @@ class RegulatoryFeedSource(Base):
     
     tenant = relationship("Tenant")
     feed_items = relationship("RegulatoryFeedItem", back_populates="feed_source", cascade="all, delete-orphan")
+    assignments = relationship(
+        "RegulatoryFeedAssignment",
+        back_populates="feed_source",
+        cascade="all, delete-orphan",
+    )
     
     __table_args__ = (
         Index("ix_regulatory_feed_source_tenant", "tenant_id"),
@@ -67,5 +72,41 @@ class RegulatoryFeedItem(Base):
         Index("ix_regulatory_feed_item_regulatory_change", "regulatory_change_id"),
         Index("ix_regulatory_feed_item_published", "published_date"),
         UniqueConstraint("feed_source_id", "guid", name="uq_feed_item_source_guid"),
+    )
+
+
+class RegulatoryFeedAssignment(Base):
+    """Users and roles assigned to monitor a regulatory feed source."""
+    __tablename__ = "grc_regulatory_feed_assignments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    feed_source_id = Column(
+        Integer,
+        ForeignKey("grc_regulatory_feed_sources.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    # "user" | "role"
+    assignee_type = Column(String(20), nullable=False)
+    user_id = Column(Integer, ForeignKey("grc_users.id", ondelete="CASCADE"), nullable=True, index=True)
+    role_id = Column(Integer, ForeignKey("grc_roles.id", ondelete="CASCADE"), nullable=True, index=True)
+    assigned_by = Column(Integer, ForeignKey("grc_users.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    tenant = relationship("Tenant")
+    feed_source = relationship("RegulatoryFeedSource", back_populates="assignments")
+    user = relationship("GRCUser", foreign_keys=[user_id])
+    role = relationship("Role", foreign_keys=[role_id])
+    assigner = relationship("GRCUser", foreign_keys=[assigned_by])
+
+    __table_args__ = (
+        Index("ix_reg_feed_assign_tenant_source", "tenant_id", "feed_source_id"),
+        Index("ix_reg_feed_assign_user", "user_id"),
+        Index("ix_reg_feed_assign_role", "role_id"),
+        UniqueConstraint(
+            "feed_source_id", "assignee_type", "user_id", "role_id",
+            name="uq_reg_feed_assign_target",
+        ),
     )
 

@@ -21,7 +21,11 @@ export function usePermissions() {
       const cached = sessionStorage.getItem(PERM_CACHE_KEY);
       if (cached) {
         const parsed = JSON.parse(cached);
-        setPermissions(parsed.permissions || []);
+        const cachedPermsRaw = Array.isArray(parsed?.permissions) ? parsed.permissions : [];
+        const cachedPerms = cachedPermsRaw
+          .filter((p: unknown) => typeof p === 'string')
+          .map((p: string) => normalizePerm(p));
+        setPermissions(cachedPerms);
         setIsAdmin(!!parsed.isAdmin);
         setIsLoading(false);
         return;
@@ -34,9 +38,12 @@ export function usePermissions() {
         if (response.ok) {
           const data = await response.json();
           if (data?.authenticated && data.user) {
-            const perms: string[] = (data.user.permissions || [])
-              .filter((p: unknown) => typeof p === 'string')
-              .map((p: string) => normalizePerm(p));
+            const rawPerms: unknown = data.user.permissions;
+            const perms: string[] = Array.isArray(rawPerms)
+              ? rawPerms
+                  .filter((p: unknown) => typeof p === 'string')
+                  .map((p: string) => normalizePerm(p))
+              : [];
             const admin = !!data.user.is_admin;
             setPermissions(perms);
             setIsAdmin(admin);
@@ -56,6 +63,7 @@ export function usePermissions() {
 
   const hasPermission = (permission: string): boolean => {
     if (isAdmin) return true;
+    if (!Array.isArray(permissions)) return false;
     if (permissions.includes('*:*:*')) return true;
     
     const req = normalizePerm(permission);

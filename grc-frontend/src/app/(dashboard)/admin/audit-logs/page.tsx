@@ -109,8 +109,8 @@ const MODULE_LABELS: Record<string, string> = {
   chatbot: 'AI Assistant',
   complychat: 'AI Assistant',
   integrations: 'Integrations',
-  'audit-management': 'Audit',
-  audits: 'Audit',
+  'auditor-portal': 'Auditor Portal',
+  audits: 'Auditor Portal',
   'is-projects': 'IS Projects',
   reports: 'Reports',
   documents: 'Documents',
@@ -258,9 +258,9 @@ const SUBMODULE_LABELS: Record<string, string> = {
 };
 
 const SUB_ENTITY_MODULES = new Set([
-  'erm', 'evidence-mgmt', 'vuln-management', 'audit-management',
+  'erm', 'evidence-mgmt', 'vuln-management',
   'control-library', 'governance', 'compliance', 'vendor-risk',
-  'workflow-engine', 'framework-upload',
+  'workflow-engine', 'framework-upload', 'auditor-portal',
   // Phase-2 additions — both surfaces nest resources under module prefix.
   'issue-management', 'criticality-assessments',
   // CIS additions — all three modules nest resources under the

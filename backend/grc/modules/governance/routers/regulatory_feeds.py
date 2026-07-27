@@ -13,17 +13,35 @@ import feedparser
 from openai import OpenAI
 
 from ....models import (
-    RegulatoryFeedSource, RegulatoryFeedItem, Tenant, GRCUser, get_db,
+    RegulatoryFeedSource, RegulatoryFeedItem, RegulatoryFeedAssignment,
+    Tenant, GRCUser, Role, get_db,
     Framework, NormalizedControl, GovernanceDocument,
     RegulatoryChange, RegulatoryImpactAssessment, RegulatoryImplementationTask
 )
 from ....schemas import (
     RegulatoryFeedSourceCreate, RegulatoryFeedSourceUpdate, RegulatoryFeedSourceResponse,
-    RegulatoryFeedItemResponse, FeedPollResult, MessageResponse, RegulatoryChangeResponse
+    RegulatoryFeedItemResponse, FeedPollResult, MessageResponse, RegulatoryChangeResponse,
+    RegulatoryFeedAssignee, RegulatoryFeedAssignmentsUpdate, RegulatoryFeedAssignmentResponse,
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 
 router = APIRouter(prefix="/regulatory-feeds", tags=["Governance - Regulatory Feed Management"])
+
+_ASSIGNMENTS_TABLE_READY = False
+
+
+def ensure_feed_assignments_table(db: Session) -> None:
+    """Create the assignments table on existing tenant DBs that pre-date this model."""
+    global _ASSIGNMENTS_TABLE_READY
+    if _ASSIGNMENTS_TABLE_READY:
+        return
+    try:
+        bind = db.get_bind()
+        RegulatoryFeedAssignment.__table__.create(bind=bind, checkfirst=True)
+        _ASSIGNMENTS_TABLE_READY = True
+    except Exception:
+        # Non-fatal: endpoints will still 500 clearly if the table is missing.
+        pass
 
 
 def validate_tenant_access(user: GRCUser, tenant_id: int, db: Session) -> None:
@@ -35,7 +53,24 @@ def validate_tenant_access(user: GRCUser, tenant_id: int, db: Session) -> None:
         )
 
 
+def serialize_assignees(source: RegulatoryFeedSource) -> List[RegulatoryFeedAssignee]:
+    out: List[RegulatoryFeedAssignee] = []
+    for a in getattr(source, "assignments", None) or []:
+        if a.assignee_type == "user" and a.user_id:
+            name = None
+            email = None
+            if a.user:
+                name = a.user.display_name or a.user.username
+                email = a.user.email
+            out.append(RegulatoryFeedAssignee(type="user", id=a.user_id, name=name, email=email))
+        elif a.assignee_type == "role" and a.role_id:
+            name = a.role.name if a.role else None
+            out.append(RegulatoryFeedAssignee(type="role", id=a.role_id, name=name))
+    return out
+
+
 def serialize_feed_source(source: RegulatoryFeedSource) -> RegulatoryFeedSourceResponse:
+    assignees = serialize_assignees(source)
     return RegulatoryFeedSourceResponse(
         id=source.id,
         tenant_id=source.tenant_id,
@@ -51,7 +86,9 @@ def serialize_feed_source(source: RegulatoryFeedSource) -> RegulatoryFeedSourceR
         last_successful_poll=source.last_successful_poll,
         items_processed=source.items_processed,
         created_at=source.created_at,
-        updated_at=source.updated_at
+        updated_at=source.updated_at,
+        assignees=assignees,
+        assignee_count=len(assignees),
     )
 
 
@@ -312,11 +349,15 @@ def list_feed_sources(
     current_user: GRCUser = Depends(require_auth)
 ):
     """List all feed sources for the user's tenants."""
+    ensure_feed_assignments_table(db)
     user_tenants = get_user_tenants(current_user, db)
     if not user_tenants:
         return []
     
-    query = db.query(RegulatoryFeedSource).filter(
+    query = db.query(RegulatoryFeedSource).options(
+        joinedload(RegulatoryFeedSource.assignments).joinedload(RegulatoryFeedAssignment.user),
+        joinedload(RegulatoryFeedSource.assignments).joinedload(RegulatoryFeedAssignment.role),
+    ).filter(
         RegulatoryFeedSource.tenant_id.in_(user_tenants)
     )
     
@@ -385,7 +426,10 @@ def get_feed_source(
     """Get a specific feed source by ID."""
     user_tenants = get_user_tenants(current_user, db)
     
-    source = db.query(RegulatoryFeedSource).filter(
+    source = db.query(RegulatoryFeedSource).options(
+        joinedload(RegulatoryFeedSource.assignments).joinedload(RegulatoryFeedAssignment.user),
+        joinedload(RegulatoryFeedSource.assignments).joinedload(RegulatoryFeedAssignment.role),
+    ).filter(
         RegulatoryFeedSource.id == source_id,
         RegulatoryFeedSource.tenant_id.in_(user_tenants)
     ).first()
@@ -437,6 +481,127 @@ def update_feed_source(
     db.refresh(db_source)
     
     return serialize_feed_source(db_source)
+
+
+@router.get("/sources/{source_id}/assignments", response_model=List[RegulatoryFeedAssignmentResponse])
+def list_feed_assignments(
+    source_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """List users and roles assigned to a feed source."""
+    ensure_feed_assignments_table(db)
+    user_tenants = get_user_tenants(current_user, db)
+    source = db.query(RegulatoryFeedSource).filter(
+        RegulatoryFeedSource.id == source_id,
+        RegulatoryFeedSource.tenant_id.in_(user_tenants),
+    ).first()
+    if not source:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Feed source not found")
+
+    rows = (
+        db.query(RegulatoryFeedAssignment)
+        .options(
+            joinedload(RegulatoryFeedAssignment.user),
+            joinedload(RegulatoryFeedAssignment.role),
+        )
+        .filter(RegulatoryFeedAssignment.feed_source_id == source_id)
+        .order_by(RegulatoryFeedAssignment.created_at.asc())
+        .all()
+    )
+    out: List[RegulatoryFeedAssignmentResponse] = []
+    for a in rows:
+        if a.assignee_type == "user" and a.user_id:
+            out.append(
+                RegulatoryFeedAssignmentResponse(
+                    id=a.id,
+                    feed_source_id=a.feed_source_id,
+                    type="user",
+                    target_id=a.user_id,
+                    name=(a.user.display_name or a.user.username) if a.user else None,
+                    email=a.user.email if a.user else None,
+                    assigned_by=a.assigned_by,
+                    created_at=a.created_at,
+                )
+            )
+        elif a.assignee_type == "role" and a.role_id:
+            out.append(
+                RegulatoryFeedAssignmentResponse(
+                    id=a.id,
+                    feed_source_id=a.feed_source_id,
+                    type="role",
+                    target_id=a.role_id,
+                    name=a.role.name if a.role else None,
+                    assigned_by=a.assigned_by,
+                    created_at=a.created_at,
+                )
+            )
+    return out
+
+
+@router.put("/sources/{source_id}/assignments", response_model=List[RegulatoryFeedAssignmentResponse])
+def replace_feed_assignments(
+    source_id: int,
+    body: RegulatoryFeedAssignmentsUpdate,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Replace the full set of user/role assignees for a feed source."""
+    ensure_feed_assignments_table(db)
+    user_tenants = get_user_tenants(current_user, db)
+    source = db.query(RegulatoryFeedSource).filter(
+        RegulatoryFeedSource.id == source_id,
+        RegulatoryFeedSource.tenant_id.in_(user_tenants),
+    ).first()
+    if not source:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Feed source not found")
+
+    seen = set()
+    normalized: List[tuple] = []
+    for raw in body.assignees or []:
+        a_type = (raw.type or "").strip().lower()
+        if a_type not in ("user", "role"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid assignee type '{raw.type}'. Must be 'user' or 'role'.",
+            )
+        if not raw.id:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Assignee id is required")
+        key = (a_type, int(raw.id))
+        if key in seen:
+            continue
+        seen.add(key)
+        if a_type == "user":
+            user = db.query(GRCUser).filter(GRCUser.id == raw.id).first()
+            if not user:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"User {raw.id} not found")
+            normalized.append(("user", int(raw.id), None))
+        else:
+            role = db.query(Role).filter(
+                Role.id == raw.id,
+                or_(Role.tenant_id == source.tenant_id, Role.tenant_id.is_(None)),
+            ).first()
+            if not role:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Role {raw.id} not found")
+            normalized.append(("role", None, int(raw.id)))
+
+    db.query(RegulatoryFeedAssignment).filter(
+        RegulatoryFeedAssignment.feed_source_id == source_id
+    ).delete(synchronize_session=False)
+
+    for a_type, user_id, role_id in normalized:
+        db.add(
+            RegulatoryFeedAssignment(
+                tenant_id=source.tenant_id,
+                feed_source_id=source.id,
+                assignee_type=a_type,
+                user_id=user_id,
+                role_id=role_id,
+                assigned_by=current_user.id,
+            )
+        )
+    db.commit()
+    return list_feed_assignments(source_id, db, current_user)
 
 
 @router.delete("/sources/{source_id}", response_model=MessageResponse)

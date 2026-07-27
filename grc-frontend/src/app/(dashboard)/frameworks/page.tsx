@@ -31,7 +31,15 @@ export default function FrameworksDashboardPage() {
     queryKey: ['certifications'],
     queryFn: async () => {
       const response = await certificationsApi.getAll();
-      return response.data;
+      const d = response.data;
+      if (Array.isArray(d)) return d as CertificationJourney[];
+      if (d && typeof d === 'object') {
+        const o = d as Record<string, unknown>;
+        for (const k of ['items', 'data', 'results', 'certifications'] as const) {
+          if (Array.isArray(o[k])) return o[k] as CertificationJourney[];
+        }
+      }
+      return [];
     },
   });
 
@@ -44,7 +52,11 @@ export default function FrameworksDashboardPage() {
     );
   }
 
-  const activeCertifications = ((certifications as CertificationJourney[]) || []).filter(
+  const certificationsArray = Array.isArray(certifications)
+    ? (certifications as CertificationJourney[])
+    : [];
+
+  const activeCertifications = certificationsArray.filter(
     (c: CertificationJourney) => c.status === 'in_progress' || c.status === 'not_started',
   );
   const activeCertificationFrameworkIds = new Set(
@@ -79,7 +91,7 @@ export default function FrameworksDashboardPage() {
 
       {/* Single-framework deep-dive — operator picks one journey and sees
           KPIs, status mix, per-domain progress and live gap analysis. */}
-      <FrameworkDeepDive journeys={(certifications as CertificationJourney[]) || []} />
+      <FrameworkDeepDive journeys={certificationsArray} />
     </div>
   );
 }

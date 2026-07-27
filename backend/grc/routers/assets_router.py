@@ -1578,7 +1578,7 @@ def get_asset_detail(
     for assessment in asset.risk_assessments:
         risk_assessments.append({
             "id": assessment.id,
-            "assessment_date": assessment.assessment_date.isoformat(),
+            "assessment_date": assessment.assessment_date.isoformat() if assessment.assessment_date else None,
             "risk_score": assessment.risk_score,
             "coverage_percentage": assessment.coverage_percentage,
             "gaps": assessment.gaps
@@ -1617,6 +1617,11 @@ def get_asset_detail(
         except Exception:
             pass
 
+    # Defensive getattr: production DBs that haven't picked up ITAM /
+    # business-impact columns yet must still serve detail (nulls), not 500.
+    def _g(name, default=None):
+        return getattr(asset, name, default)
+
     return AssetDetailResponse(
         id=asset.id,
         tenant_id=asset.tenant_id,
@@ -1628,14 +1633,14 @@ def get_asset_detail(
         custodian=asset.custodian,
         host_name=asset.host_name,
         ip_address=asset.ip_address,
-        criticality=asset.criticality,
+        criticality=asset.criticality or "medium",
         confidentiality_rating=asset.confidentiality_rating,
         integrity_rating=asset.integrity_rating,
         availability_rating=asset.availability_rating,
         valuation=asset.valuation,
         vendor=asset.vendor,
         location=asset.location,
-        status=asset.status,
+        status=asset.status or "active",
         created_at=asset.created_at,
         linked_controls=linked_controls,
         linked_internal_controls=linked_internal_controls,
@@ -1645,31 +1650,55 @@ def get_asset_detail(
         linked_vulnerabilities=linked_vulnerabilities,
         risk_assessments=risk_assessments,
         coverage_percentage=float(coverage),
+        # Business-impact inputs (risk-posture panel). Wire name
+        # `operational_dependency` maps from column `op_dep_business_impact`.
+        is_customer_facing=_g("is_customer_facing"),
+        regulated_data_type=_g("regulated_data_type"),
+        operational_dependency=_g("op_dep_business_impact"),
+        business_impact_notes=_g("business_impact_notes"),
         # Phase 5 fields.
-        internet_facing=bool(asset.internet_facing) if asset.internet_facing is not None else False,
-        network_segment=asset.network_segment,
-        data_classification=asset.data_classification,
-        business_function=asset.business_function,
-        compliance_scope=asset.compliance_scope or [],
-        primary_owner_id=asset.primary_owner_id,
-        primary_owner_name=owner_names.get(asset.primary_owner_id) if asset.primary_owner_id else None,
-        secondary_owner_id=asset.secondary_owner_id,
-        secondary_owner_name=owner_names.get(asset.secondary_owner_id) if asset.secondary_owner_id else None,
-        owning_team=asset.owning_team,
-        owning_team_id=asset.owning_team_id,
+        internet_facing=bool(_g("internet_facing")) if _g("internet_facing") is not None else False,
+        network_segment=_g("network_segment"),
+        data_classification=_g("data_classification"),
+        business_function=_g("business_function"),
+        compliance_scope=_g("compliance_scope") or [],
+        primary_owner_id=_g("primary_owner_id"),
+        primary_owner_name=owner_names.get(asset.primary_owner_id) if _g("primary_owner_id") else None,
+        secondary_owner_id=_g("secondary_owner_id"),
+        secondary_owner_name=owner_names.get(asset.secondary_owner_id) if _g("secondary_owner_id") else None,
+        owning_team=_g("owning_team"),
+        owning_team_id=_g("owning_team_id"),
         owning_team_name=owning_team_name,
-        escalation_contact_id=asset.escalation_contact_id,
-        escalation_contact_name=owner_names.get(asset.escalation_contact_id) if asset.escalation_contact_id else None,
-        business_owner_id=asset.business_owner_id,
-        business_owner_name=owner_names.get(asset.business_owner_id) if asset.business_owner_id else None,
-        lifecycle_state=asset.lifecycle_state,
-        decommissioned_at=asset.decommissioned_at,
-        retirement_reason=asset.retirement_reason,
-        replacement_asset_id=asset.replacement_asset_id,
+        escalation_contact_id=_g("escalation_contact_id"),
+        escalation_contact_name=owner_names.get(asset.escalation_contact_id) if _g("escalation_contact_id") else None,
+        business_owner_id=_g("business_owner_id"),
+        business_owner_name=owner_names.get(asset.business_owner_id) if _g("business_owner_id") else None,
+        lifecycle_state=_g("lifecycle_state"),
+        decommissioned_at=_g("decommissioned_at"),
+        retirement_reason=_g("retirement_reason"),
+        replacement_asset_id=_g("replacement_asset_id"),
         replacement_asset_name=replacement_name,
-        criticality_score=asset.criticality_score,
-        last_seen_at=asset.last_seen_at,
-        last_seen_source=asset.last_seen_source,
+        criticality_score=_g("criticality_score"),
+        last_seen_at=_g("last_seen_at"),
+        last_seen_source=_g("last_seen_source"),
+        # ITAM parity — only present after column migration; never 500 if missing.
+        os_family=_g("os_family"),
+        os_version=_g("os_version"),
+        os_normalized=_g("os_normalized"),
+        cpu_cores=_g("cpu_cores"),
+        memory_gb=_g("memory_gb"),
+        storage_gb=_g("storage_gb"),
+        agent_version=_g("agent_version"),
+        manufacturer=_g("manufacturer"),
+        model=_g("model"),
+        serial_number=_g("serial_number"),
+        department=_g("department"),
+        assigned_user=_g("assigned_user"),
+        purchase_cost=_g("purchase_cost"),
+        purchase_date=_g("purchase_date"),
+        warranty_expiry=_g("warranty_expiry"),
+        eol_date=_g("eol_date"),
+        environment=_g("environment"),
     )
 
 

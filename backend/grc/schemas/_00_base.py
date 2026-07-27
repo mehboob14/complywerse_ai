@@ -1128,6 +1128,8 @@ class AssetDetailResponse(BaseModel):
     secondary_owner_id: Optional[int] = None
     secondary_owner_name: Optional[str] = None
     owning_team: Optional[str] = None
+    owning_team_id: Optional[int] = None
+    owning_team_name: Optional[str] = None
     escalation_contact_id: Optional[int] = None
     escalation_contact_name: Optional[str] = None
     business_owner_id: Optional[int] = None

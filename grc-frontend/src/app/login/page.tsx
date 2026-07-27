@@ -83,8 +83,15 @@ export default function LoginPage() {
   const ssoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [tenantSlug, setTenantSlug] = useState<string | null>(null);
   const [tenantName, setTenantName] = useState<string | null>(null);
+  // True only when ?tenant= was used — host-derived tenants should not change
+  // the heading (keeps subdomain login visually identical to localhost).
+  const [tenantFromQuery, setTenantFromQuery] = useState(false);
 
   useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const fromQuery = Boolean(urlParams.get('tenant'));
+    setTenantFromQuery(fromQuery);
+
     const slug = getTenantSlug();
     setTenantSlug(slug);
     const name = localStorage.getItem('tenant_name');
@@ -299,6 +306,7 @@ export default function LoginPage() {
     localStorage.clear();
     setTenantSlug(null);
     setTenantName(null);
+    setTenantFromQuery(false);
   };
 
   // ── SSO handoff state — shown while we bounce to Microsoft ──────────────
@@ -340,11 +348,13 @@ export default function LoginPage() {
 
   return (
     <AuthShell>
-      {/* Heading */}
+      {/* Heading — same copy on bare localhost and tenant subdomains so the
+          form card matches. Tenant is still resolved from the host for API
+          headers; Switch only appears when the tenant came from ?tenant=. */}
       <div className="mb-5 text-center">
         <h2 className="text-2xl font-bold leading-tight tracking-tight text-slate-900">Welcome back</h2>
         <p className="mt-1 text-sm leading-relaxed text-slate-500">
-          {tenantSlug ? (
+          {tenantFromQuery ? (
             <>
               Sign in to <span className="font-semibold text-slate-800">{tenantName || tenantSlug}</span>
               <span className="mx-1.5 text-slate-300">·</span>

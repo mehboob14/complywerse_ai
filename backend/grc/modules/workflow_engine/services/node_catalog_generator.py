@@ -49,7 +49,7 @@ MODULE_COLORS = {
     "Risk Management": "#EF4444",
     "Evidence": "#10B981",
     "Assets": "#06B6D4",
-    "Audit Management": "#F59E0B",
+    "Auditor Portal": "#F59E0B",
     "Vulnerability Management": "#EC4899",
     "Workflow Engine": "#6366F1"
 }

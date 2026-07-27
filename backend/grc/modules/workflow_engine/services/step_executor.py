@@ -67,7 +67,7 @@ _SAFE_ACTIONS = {
     "submit_policy_exception",
     "approve_policy_exception",
     "request_attestation",
-    # Audit
+    # Audit Management retired — kept so legacy workflow instances still resolve
     "create_audit_finding",
     "create_audit_plan",
     "close_audit_finding",
