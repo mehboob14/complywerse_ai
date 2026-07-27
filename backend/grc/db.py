@@ -171,7 +171,11 @@ def dispose_tenant_engine(slug: str) -> None:
 
 def open_tenant_session(slug: str) -> Session:
     """Open a Session for a tenant DB. Caller is responsible for closing it."""
-    return get_tenant_session_factory(slug)()
+    validate_slug(slug)
+    db = get_tenant_session_factory(slug)()
+    db.info["tenant_schema"] = slug
+    db.info["tenant_slug"] = slug
+    return db
 
 
 def get_tenant_db(request: Request):
@@ -188,6 +192,11 @@ def get_tenant_db(request: Request):
             detail="Tenant context required. Provide X-Tenant-Slug header or access via tenant subdomain.",
         )
     db = open_tenant_session(slug)
+    try:
+        from .services.ai_usage import bind_tenant
+        bind_tenant(slug)  # ensure AI-usage capture can attribute this request's tenant
+    except Exception:
+        pass
     try:
         yield db
     finally:

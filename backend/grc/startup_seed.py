@@ -778,7 +778,9 @@ def _run_backend_seed_script(script_name: str, db: Session, slug: str) -> bool:
             return False
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
-        if script_name == "seed_demo_it_assets.py":
+        if script_name in ("seed_demo_it_assets.py", "seed_demo_discovery.py"):
+            # These seeders take tenant ids (and the discovery one links its
+            # findings to the [DEMO] assets, so it must run AFTER the asset seed).
             user = db.query(GRCUser).order_by(GRCUser.id.asc()).first()
             if not user:
                 return False
@@ -939,6 +941,14 @@ def ensure_operational_dashboard_seed(db: Session, tenant_id: int, slug: str) ->
         out["compliance"] = _run_backend_seed_script("seed_demo_compliance.py", db, slug)
     if not db.query(ITAsset.id).filter(ITAsset.name.like("[DEMO]%")).first():
         out["assets"] = _run_backend_seed_script("seed_demo_it_assets.py", db, slug)
+    # Asset Discovery demo — runs AFTER the asset seed above so its findings can
+    # link to the same [DEMO] assets, keeping Discovery and Inventory consistent.
+    try:
+        from .models import DiscoveryCampaign as _DC
+        if not db.query(_DC.id).filter(_DC.name.like("[DEMO]%")).first():
+            out["discovery"] = _run_backend_seed_script("seed_demo_discovery.py", db, slug)
+    except Exception:
+        logger.exception("Discovery demo seed check failed for tenant %s", tenant_id)
     issues = ensure_issues_incidents_seed(db, tenant_id)
     out["issues"] = issues.get("seeded", False)
     out["issues_detail"] = issues

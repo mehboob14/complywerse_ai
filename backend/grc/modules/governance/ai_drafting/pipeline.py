@@ -26,6 +26,7 @@ import json
 import logging
 import os
 import re
+from contextvars import copy_context
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -868,7 +869,9 @@ def _stage_expand_clause_engine(
     indexed = list(enumerate(areas, start=1))
     bodies: Dict[int, str] = {}
     with ThreadPoolExecutor(max_workers=min(len(indexed), _STAGE_B_PARALLELISM)) as pool:
-        for i, body in pool.map(_expand_area, indexed):
+        futures = [pool.submit(copy_context().run, _expand_area, item) for item in indexed]
+        for future in as_completed(futures):
+            i, body = future.result()
             bodies[i] = body
     blocks: List[str] = [f"## {section.full_heading}\n"]
     for i in sorted(bodies):
@@ -1195,7 +1198,7 @@ def run_drafting_pipeline(
     })
 
     with ThreadPoolExecutor(max_workers=_STAGE_B_PARALLELISM) as pool:
-        future_map = {pool.submit(_expand_one, s): s for s in expandable}
+        future_map = {pool.submit(copy_context().run, _expand_one, s): s for s in expandable}
         for future in as_completed(future_map):
             s = future_map[future]
             sections_payload[s.number] = {"heading": s.full_heading, "content": future.result()}
@@ -1248,7 +1251,9 @@ def run_drafting_pipeline(
 
         # Regenerate failing sections concurrently instead of one-at-a-time.
         with ThreadPoolExecutor(max_workers=min(len(failed_sections), _STAGE_B_PARALLELISM)) as pool:
-            for num, new_content in pool.map(_regen_one, failed_sections):
+            regen_futures = [pool.submit(copy_context().run, _regen_one, s) for s in failed_sections]
+            for future in as_completed(regen_futures):
+                num, new_content = future.result()
                 spec = next((s for s in failed_sections if s.number == num), None)
                 sections_payload[num] = {
                     "heading": spec.full_heading if spec else f"{num}.",

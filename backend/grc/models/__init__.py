@@ -14,3 +14,6 @@ from ._43_framework_templates_models import *  # noqa: F401,F403 — framework t
 from ._44_control_workbench import *  # noqa: F401,F403 — unified control library work layer
 from ._44_business_continuity_management_models import *  # noqa: F401,F403 — BCM plans/BIA/drills/findings
 from ._40_access_review_models import *  # noqa: F401,F403
+from ._45_ai_usage import *  # noqa: F401,F403 - tenant-local AI usage ledger
+from ._46_ai_budget import *  # noqa: F401,F403 - tenant-local AI token budget/quota config
+from ._47_asset_discovery_models import *  # noqa: F401,F403 - discovery campaigns/scopes/runs/jobs/observations

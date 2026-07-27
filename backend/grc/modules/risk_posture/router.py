@@ -92,7 +92,12 @@ def get_asset_posture(
     )
     if not asset:
         raise HTTPException(404, "Asset not found in this tenant")
-    return compute_asset_risk(db, tenant_id, asset)
+    # A GET must not mutate. With persist=True this endpoint rewrote
+    # effective_risk_score on every linked vulnerability and committed — and
+    # now the asset-detail Risk & Controls card calls it on every open, so a
+    # plain page view was rewriting vuln rows. The tenant dashboard sweep still
+    # persists (warming the cache); a single read stays read-only.
+    return compute_asset_risk(db, tenant_id, asset, persist=False)
 
 
 # ─── Risk Posture v2: live preview ─────────────────────────────────────
@@ -166,20 +171,21 @@ def preview_asset_posture(
         asset.op_dep_business_impact = proposal.operational_dependency
 
     try:
-        after = compute_asset_risk(db, tenant_id, asset)
+        # persist=False, matching the `before` call above and this endpoint's own
+        # docstring. It was omitted here, so it defaulted to True and the preview
+        # committed — writing every linked vuln's effective_risk_* columns AND
+        # the user's *unsaved* form values onto the asset row, on every toggle,
+        # because the panel refetches with staleTime: 0.
+        #
+        # The old workaround restored the snapshot and committed again to undo
+        # it. That is no longer needed: with nothing written, there is nothing to
+        # roll back. The in-memory mutations above are discarded when the session
+        # closes, but the snapshot restore stays as cheap insurance against this
+        # request object being reused later in the handler.
+        after = compute_asset_risk(db, tenant_id, asset, persist=False)
     finally:
-        # compute_asset_risk → _vuln_score commits in the middle (it
-        # writes each vuln's effective_risk_score back). That means our
-        # proposed mutations on `asset` get committed as a side-effect.
-        # A pure rollback() can't undo what's already committed.
-        # Belt-and-braces fix: restore the snapshot values AND commit
-        # the restore so the DB row ends up in the same state it started.
         for k, v in snapshot.items():
             setattr(asset, k, v)
-        try:
-            db.commit()
-        except Exception:  # noqa: BLE001
-            db.rollback()
 
     before_eff = (before.get("components") or {}).get("vuln", {}).get("effective_risk") or {}
     after_eff  = (after.get("components")  or {}).get("vuln", {}).get("effective_risk") or {}

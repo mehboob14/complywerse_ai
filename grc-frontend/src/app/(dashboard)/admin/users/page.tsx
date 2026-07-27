@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import Link from 'next/link';
 import { DataTable, IfPermission, SearchInput, PageLoader } from '@/components/ui';
-import { Edit2, Plus, Trash2 } from 'lucide-react';
+import { BarChart3, Edit2, Plus, Trash2 } from 'lucide-react';
 import { adminApi, AdminUser, AdminRole } from '@/lib/api';
 import { authedFetch } from '@/lib/auth-fetch';
 
@@ -231,6 +232,16 @@ export default function UsersManagementPage() {
       header: 'Actions',
       accessor: (user: AdminUser) => (
         <div className="flex items-center gap-1">
+          <IfPermission required="admin:users:view">
+            <Link
+              href={`/admin/users/${user.id}/usage`}
+              className="rounded p-1.5 text-slate-500 hover:bg-slate-100 hover:text-primary-600 transition-colors"
+              title="View AI usage"
+              aria-label="View AI usage"
+            >
+              <BarChart3 className="h-4 w-4" />
+            </Link>
+          </IfPermission>
           <IfPermission required="admin:users:edit">
             <button
               onClick={() => handleEdit(user)}

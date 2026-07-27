@@ -32,6 +32,7 @@ from grc.modules.compliance_plugins.services.credentials import (
 )
 from grc.modules.compliance_plugins.services.software_normaliser import (
     enrich_inventory,
+    preserve_promotions,
 )
 
 logger = logging.getLogger(__name__)
@@ -81,7 +82,23 @@ if (Get-Command Get-NetTCPConnection -ErrorAction SilentlyContinue) {
     }
 }
 $software = @(); $software += $apps; $software += $roles; $software += $listen
-@{ installed_software = @($software) } | ConvertTo-Json -Depth 4 -Compress
+# Hardware inventory — read-only CIM queries (CPU / RAM / disk / OEM / serial).
+$hw = @{}
+try {
+  $cs   = Get-CimInstance Win32_ComputerSystem -ErrorAction SilentlyContinue
+  $cpu  = (Get-CimInstance Win32_Processor  -ErrorAction SilentlyContinue | Measure-Object -Property NumberOfLogicalProcessors -Sum).Sum
+  $bios = Get-CimInstance Win32_BIOS        -ErrorAction SilentlyContinue
+  $disk = (Get-CimInstance Win32_DiskDrive  -ErrorAction SilentlyContinue | Measure-Object -Property Size -Sum).Sum
+  $hw = @{
+    cpu_cores     = [int]$cpu
+    memory_gb     = if ($cs)   { [int][math]::Round($cs.TotalPhysicalMemory / 1GB) } else { 0 }
+    storage_gb    = if ($disk) { [int][math]::Round($disk / 1GB) } else { 0 }
+    manufacturer  = "$($cs.Manufacturer)"
+    model         = "$($cs.Model)"
+    serial_number = "$($bios.SerialNumber)"
+  }
+} catch {}
+@{ installed_software = @($software); hardware = $hw } | ConvertTo-Json -Depth 4 -Compress
 """
 
 # One round-trip Linux probe: os-release + packages (dpkg|rpm) + listening
@@ -89,7 +106,15 @@ $software = @(); $software += $apps; $software += $roles; $software += $listen
 _LINUX_PROBE_SH = (
     "echo '===DPKG==='; dpkg-query -W -f='${Package}\\t${Version}\\n' 2>/dev/null; "
     "echo '===RPM==='; rpm -qa --qf '%{NAME}\\t%{VERSION}\\n' 2>/dev/null; "
-    "echo '===LISTEN==='; { ss -tlnpH 2>/dev/null || ss -tlnp 2>/dev/null; }"
+    "echo '===LISTEN==='; { ss -tlnpH 2>/dev/null || ss -tlnp 2>/dev/null; }; "
+    # Hardware inventory — no root needed (nproc / /proc / lsblk / DMI sysfs).
+    "echo '===HARDWARE==='; "
+    "echo \"cpu_cores=$(nproc 2>/dev/null)\"; "
+    "echo \"memory_kb=$(awk '/MemTotal/{print $2}' /proc/meminfo 2>/dev/null)\"; "
+    "echo \"storage_bytes=$(lsblk -bdno SIZE 2>/dev/null | awk '{s+=$1} END{print s}')\"; "
+    "echo \"manufacturer=$(cat /sys/class/dmi/id/sys_vendor 2>/dev/null)\"; "
+    "echo \"model=$(cat /sys/class/dmi/id/product_name 2>/dev/null)\"; "
+    "echo \"serial=$(cat /sys/class/dmi/id/product_serial 2>/dev/null)\""
 )
 
 _SS_PROC_RE = re.compile(r'\(\("([^"]+)"')
@@ -150,9 +175,75 @@ def _parse_linux(stdout: str) -> list[dict[str, Any]]:
     return items
 
 
-def collect_windows(credentials: dict, timeout: int = 60) -> list[dict[str, Any]]:
-    """Run the Windows inventory probe over WinRM. Returns raw items, or
-    raises RuntimeError with a human cause on connection/transport failure."""
+# Junk OEM strings CIM / DMI return when a field is unset — treated as empty.
+_HW_JUNK = {"", "to be filled by o.e.m.", "system manufacturer", "system product name",
+            "default string", "none", "not specified", "not available", "0", "o.e.m.",
+            "not applicable", "chassis manufacture", "unknown"}
+
+
+def _clean_hw(raw: dict) -> dict[str, Any]:
+    """Normalise a raw hardware dict → {cpu_cores, memory_gb, storage_gb (ints>0),
+    manufacturer, model, serial_number (clean strings)}, dropping junk/empties."""
+    out: dict[str, Any] = {}
+    for k in ("cpu_cores", "memory_gb", "storage_gb"):
+        try:
+            v = int(float(raw.get(k)))
+            if v > 0:
+                out[k] = v
+        except (TypeError, ValueError):
+            pass
+    for k in ("manufacturer", "model", "serial_number"):
+        v = str(raw.get(k) or "").strip()
+        if v and v.lower() not in _HW_JUNK:
+            out[k] = v[:255]
+    return out
+
+
+def _parse_hardware_windows(stdout: str) -> dict[str, Any]:
+    """Pull the `hardware` object out of the WinRM probe JSON."""
+    try:
+        data = json.loads((stdout or "").strip())
+    except json.JSONDecodeError:
+        return {}
+    hw = data.get("hardware") if isinstance(data, dict) else None
+    return _clean_hw(hw) if isinstance(hw, dict) else {}
+
+
+def _parse_hardware_linux(stdout: str) -> dict[str, Any]:
+    """Parse the `===HARDWARE===` key=value block from the Linux probe."""
+    text = stdout or ""
+    start = text.find("===HARDWARE===")
+    if start < 0:
+        return {}
+    kv: dict[str, str] = {}
+    for line in text[start + len("===HARDWARE==="):].splitlines():
+        key, sep, val = line.partition("=")
+        if sep and key.strip():
+            kv[key.strip()] = val.strip()
+    raw: dict[str, Any] = {
+        "cpu_cores": kv.get("cpu_cores"),
+        "manufacturer": kv.get("manufacturer"),
+        "model": kv.get("model"),
+        "serial_number": kv.get("serial"),
+    }
+    try:
+        mk = int(kv.get("memory_kb") or 0)
+        if mk > 0:
+            raw["memory_gb"] = round(mk / 1024 / 1024)
+    except ValueError:
+        pass
+    try:
+        sb = int(kv.get("storage_bytes") or 0)
+        if sb > 0:
+            raw["storage_gb"] = round(sb / 1_000_000_000)
+    except ValueError:
+        pass
+    return _clean_hw(raw)
+
+
+def collect_windows(credentials: dict, timeout: int = 60) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Run the Windows inventory probe over WinRM. Returns (software, hardware),
+    or raises RuntimeError with a human cause on connection/transport failure."""
     if not WINRM_AVAILABLE:
         raise RuntimeError("pywinrm is not installed on this server")
     endpoint = credentials.get("winrm_endpoint")
@@ -173,12 +264,13 @@ def collect_windows(credentials: dict, timeout: int = 60) -> list[dict[str, Any]
     if int(r.status_code) != 0:
         err = (r.std_err or b"").decode("utf-8", errors="replace")[:300]
         raise RuntimeError(f"WinRM inventory probe failed (rc={r.status_code}): {err}")
-    return _parse_windows((r.std_out or b"").decode("utf-8", errors="replace"))
+    out = (r.std_out or b"").decode("utf-8", errors="replace")
+    return _parse_windows(out), _parse_hardware_windows(out)
 
 
-def collect_linux(credentials: dict, timeout: int = 30) -> list[dict[str, Any]]:
-    """Run the Linux inventory probe over SSH. Returns raw items, or raises
-    RuntimeError on connection/auth failure."""
+def collect_linux(credentials: dict, timeout: int = 30) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Run the Linux inventory probe over SSH. Returns (software, hardware),
+    or raises RuntimeError on connection/auth failure."""
     if not PARAMIKO_AVAILABLE:
         raise RuntimeError("paramiko is not installed on this server")
     host = credentials.get("ssh_host")
@@ -223,7 +315,7 @@ def collect_linux(credentials: dict, timeout: int = 30) -> list[dict[str, Any]]:
             client.close()
         except Exception:  # noqa: BLE001
             pass
-    return _parse_linux(stdout)
+    return _parse_linux(stdout), _parse_hardware_linux(stdout)
 
 
 def _transport_for(connection: IntegrationConnection, asset: ITAsset) -> Optional[str]:
@@ -286,19 +378,27 @@ def probe_and_store(
             f"{connection.integration_type!r} / OS {asset.os_family!r}"
         )
     credentials = resolve_credentials_for_connection(connection)
-    raw = collect_windows(credentials) if transport == "windows" else collect_linux(credentials)
+    raw, hardware = collect_windows(credentials) if transport == "windows" else collect_linux(credentials)
+
+    # Persist auto-discovered hardware specs (vCPU/RAM/disk/OEM/serial) — only
+    # non-junk values survive _clean_hw, and we never overwrite with a blank.
+    for _col, _val in (hardware or {}).items():
+        setattr(asset, _col, _val)
 
     enriched = enrich_inventory(db, raw)
     # Preserve promoted_asset_id links so a re-probe doesn't forget which
-    # detected apps were already turned into child assets (same rule the
-    # heartbeat hook uses).
-    prev = {e.get("software_key"): e.get("promoted_asset_id")
-            for e in (asset.detected_software_json or [])
-            if e.get("promoted_asset_id")}
-    for e in enriched:
-        if e["software_key"] in prev:
-            e["promoted_asset_id"] = prev[e["software_key"]]
-    asset.detected_software_json = enriched
+    # detected apps were already turned into child assets. Shared with the
+    # agent heartbeat so the two collectors can't drift apart.
+    asset.detected_software_json = preserve_promotions(
+        asset.detected_software_json, enriched
+    )
+    # Derive antivirus/EDR presence + software categories from the fresh
+    # inventory so the asset's Security Posture reflects what we just collected.
+    try:
+        from grc.modules.compliance_plugins.services.security_classifier import apply_posture
+        apply_posture(asset)
+    except Exception:
+        logger.exception("agentless: security posture computation failed")
     db.add(asset)
     db.flush()
 
@@ -307,6 +407,7 @@ def probe_and_store(
         "ok": True,
         "transport": transport,
         "raw_count": len(raw),
+        "hardware": hardware,
         "detected": enriched,
         "counts": {
             "total": len(enriched),

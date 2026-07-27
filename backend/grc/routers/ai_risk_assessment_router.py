@@ -597,15 +597,30 @@ def _ai_llm_suggestion(entry: AIRiskAssessmentEntry, focus: Optional[str]) -> Op
         # Anthropic path.
         if os.environ.get("ANTHROPIC_API_KEY"):
             try:
+                import time
                 import anthropic  # type: ignore
+                from ..services.ai_usage import record_provider_attempt, usage_scope
                 client = anthropic.Anthropic()
                 model = os.environ.get("COMPLYVERSE_AI_MODEL", "claude-haiku-4-5-20251001")
-                msg = client.messages.create(
-                    model=model,
-                    max_tokens=800,
-                    system="Respond with valid JSON only.",
-                    messages=[{"role": "user", "content": prompt}],
-                )
+                started_at = time.perf_counter()
+                try:
+                    with usage_scope(module_key="erm", feature_key="ai_risk_suggest"):
+                        msg = client.messages.create(
+                            model=model,
+                            max_tokens=800,
+                            system="Respond with valid JSON only.",
+                            messages=[{"role": "user", "content": prompt}],
+                        )
+                        record_provider_attempt(
+                            response=msg, requested_model=model, provider="anthropic",
+                            api_family="messages", started_at=started_at,
+                        )
+                except Exception as exc:
+                    record_provider_attempt(
+                        error=exc, requested_model=model, provider="anthropic",
+                        api_family="messages", started_at=started_at,
+                    )
+                    raise
                 raw = "".join(part.text for part in msg.content if getattr(part, "type", "") == "text")
                 # Strip markdown fences if any.
                 raw = raw.strip()

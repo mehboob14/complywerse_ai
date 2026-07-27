@@ -78,6 +78,8 @@ celery_app = Celery(
         # Async AI document drafting — moves the multi-stage pipeline off the
         # request thread so it can't time out at the HTTP layer.
         "grc.tasks.ai_drafting",
+        # Scheduled asset discovery — beat-driven campaign fan-out.
+        "grc.tasks.discovery",
     ],
 )
 
@@ -158,6 +160,8 @@ celery_app.conf.update(
         # is justified by traffic.
         "grc.tasks.connectors.*": {"queue": "parsing"},
         "connectors.*": {"queue": "parsing"},
+        # Scheduled asset discovery fan-out + per-campaign runs.
+        "grc.tasks.discovery.*": {"queue": "parsing"},
         # Async AI drafting routes onto the same parsing queue (long-running
         # AI work, same character as policy parse / gap analysis).
         "grc.tasks.ai_drafting.*": {"queue": "parsing"},
@@ -223,6 +227,14 @@ celery_app.conf.update(
         "connectors-hourly-sync": {
             "task": "connectors.sync_all_active",
             "schedule": 60 * 60,
+            "options": {"queue": "parsing"},
+        },
+        # Scheduled asset discovery. Ticks every 5 minutes; the per-campaign
+        # `schedule_seconds` + `next_run_at` decide what actually runs, so a
+        # tight tick just keeps the resolution fine without over-scanning.
+        "discovery-scheduled-fan-out": {
+            "task": "grc.tasks.discovery.discovery_scheduled_fan_out",
+            "schedule": 5 * 60,
             "options": {"queue": "parsing"},
         },
     },

@@ -3280,9 +3280,20 @@ def get_detected_software(
     asset = _tenant_asset_or_404(db, current_user, asset_id)
     inventory = asset.detected_software_json or []
     promotable = [e for e in inventory if e.get("benchmark_available") and not e.get("promoted_asset_id")]
+    # Security posture: prefer the stored value (computed at collection time),
+    # but recompute on the fly for assets last inventoried before the posture
+    # layer existed so the card is never blank when software IS present.
+    posture = getattr(asset, "security_posture", None)
+    if posture is None and inventory:
+        try:
+            from ..modules.compliance_plugins.services.security_classifier import summarize_posture
+            posture = summarize_posture(inventory)
+        except Exception:
+            posture = None
     return {
         "asset_id": asset.id,
         "inventory": inventory,
+        "security_posture": posture,
         "counts": {
             "total": len(inventory),
             "promotable": len(promotable),

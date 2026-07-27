@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { vulnManagementApi, assetsApi, ermApi, apiClient } from '@/lib/api';
+import { vulnManagementApi, assetsApi, ermApi, apiClient, entityExtrasApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import { InlineLinkPicker, PageLoader, ComboBoxInput, SeverityBadge, StatusBadge, type ComboBoxOption, type SeverityLevel } from '@/components/ui';
 import AiRecommendationSaver from '@/components/ai/AiRecommendationSaver';
@@ -33,10 +33,21 @@ import {
   Bell,
   ChevronRight,
   MessageSquare,
+  FlaskConical,
+  ShieldOff,
+  Crosshair,
 } from 'lucide-react';
+import {
+  RiskAnalysisPanel, VulnContextRail, ExploitTestPanel,
+} from './_components/RiskAnalysisPanel';
+import { NotesPanel, HistoryPanel } from '@/components/shared/EntityExtras';
+import RemediationPlanCard from './_components/RemediationPlanCard';
+import ExploitAssessment from './_components/ExploitAssessment';
+import TraceFlow from './_components/TraceFlow';
 import Link from 'next/link';
 import { CreateIssueButton } from '@/components/issue-management/CreateIssueButton';
 import { RelatedIssuesPanel } from '@/components/issue-management/RelatedIssuesPanel';
+import { GuideMarker } from '@/components/guide';
 
 interface VulnerabilityDetail {
   id: number;
@@ -131,6 +142,11 @@ interface AssetLink {
   asset_name: string;
   asset_type?: string;
   relationship_type?: string;
+  // Criticality of the linked asset, carried on the link itself. The page read
+  // `criticality` here for a long time while the API never sent it, so every
+  // affected asset rendered "Criticality not set".
+  asset_criticality?: string | null;
+  asset_criticality_score?: number | null;
   // Provenance — Track B / Phase 4. Drives the Auto badge + source chip.
   link_source?: string | null;
   auto_linked?: boolean | null;
@@ -220,6 +236,39 @@ interface Escalation {
   reason?: string;
   status: string;
 }
+
+/* ── Finding-detail tabs ──────────────────────────────────────────────
+   Structured to match the reference VM product. The existing anchored
+   sections are unchanged — each is simply assigned to a tab, so nothing
+   that already worked was rewritten. */
+type VulnTab = 'analysis' | 'remediation' | 'exploit-test' | 'history' | 'notes';
+
+const VTAB_OF: Record<string, VulnTab> = {
+  'sec-narrative': 'analysis',
+  'sec-description': 'analysis',
+  'sec-assets': 'analysis',
+  // Which controls mitigate this CVE, and what compliance breaks if it isn't
+  // fixed — that is analysis context, not a fix step. Moved out of Remediation
+  // (the user's exact complaint: "linked control which is not there").
+  'sec-controls': 'analysis',
+  'sec-remediation': 'remediation',
+  // The dependency chain IS the attack path — it belongs beside the MITRE
+  // kill-chain on Exploit Test, not under Remediation.
+  'sec-chain': 'exploit-test',
+  // Remediation stays coherent as "how we resolve this": fix it (plan +
+  // mitigations + who's assigned) OR accept it (exception). Those two remain.
+  'sec-departments': 'remediation',
+  'sec-exception': 'remediation',
+  'sec-activity': 'history',
+};
+
+const VULN_TABS: { id: VulnTab; label: string; icon: React.ElementType }[] = [
+  { id: 'analysis', label: 'Analysis', icon: Sparkles },
+  { id: 'remediation', label: 'Remediation', icon: CheckCircle },
+  { id: 'exploit-test', label: 'Exploit Test', icon: FlaskConical },
+  { id: 'history', label: 'History', icon: Clock },
+  { id: 'notes', label: 'Notes', icon: MessageSquare },
+];
 
 const SEVERITY_STYLES: Record<string, { bg: string; text: string; label: string }> = {
   critical: { bg: 'bg-red-50', text: 'text-red-600', label: 'Critical' },
@@ -331,6 +380,20 @@ export default function VulnerabilityDetailPage() {
   // confirming. The same modal handles both manual and AI-seeded creates,
   // so the operator gets a consistent UX and the AI path never bypasses
   // the assignment/due-date controls.
+  // Finding-detail tabs, mirroring the reference VM product's structure.
+  const [activeTab, setActiveTab] = useState<VulnTab>('analysis');
+
+  // The reference product's Analysis tab is ONE card: the risk score and its
+  // breakdown. Ours had six more sections stacked under it, so the tab read as
+  // a wall rather than an answer. Those sections are evidence, not the answer,
+  // so Analysis now opens exactly like theirs and the evidence is one click
+  // away. Nothing was deleted — it stopped competing with the score.
+  const [showEvidence, setShowEvidence] = useState(false);
+  const [showTrace, setShowTrace] = useState(false);
+  const EVIDENCE_SECTIONS = new Set(['sec-narrative', 'sec-description', 'sec-assets', 'sec-controls']);
+  const secHidden = (id: string) =>
+    VTAB_OF[id] !== activeTab
+    || (activeTab === 'analysis' && EVIDENCE_SECTIONS.has(id) && !showEvidence);
   const [mitigationPrefill, setMitigationPrefill] = useState<{
     title: string;
     description?: string;
@@ -349,6 +412,11 @@ export default function VulnerabilityDetailPage() {
   // to the create form.
   const [selectedMitigation, setSelectedMitigation] = useState<Mitigation | null>(null);
   const [showStatusModal, setShowStatusModal] = useState(false);
+  // Accepting risk is a decision with consequences, so it asks for a review
+  // date and a justification rather than being a silent status flip.
+  const [showAcceptRisk, setShowAcceptRisk] = useState(false);
+  const [acceptUntil, setAcceptUntil] = useState('');
+  const [acceptWhy, setAcceptWhy] = useState('');
   const [showDeptAssignModal, setShowDeptAssignModal] = useState(false);
   const [showTransitionModal, setShowTransitionModal] = useState(false);
   const [selectedTransition, setSelectedTransition] = useState<WorkflowTransition | null>(null);
@@ -403,6 +471,17 @@ export default function VulnerabilityDetailPage() {
       return response.data as AssetLink[];
     },
   });
+
+  // The score needs the linked asset's exposure and criticality — two of the
+  // seven signals. Without it the panel would silently assume "internal,
+  // medium" and quietly under-score internet-facing findings.
+  const primaryAssetId = (assetLinks || [])[0]?.asset_id;
+  const { data: riskAsset } = useQuery({
+    queryKey: ['vuln-risk-asset', primaryAssetId],
+    queryFn: async () => (await assetsApi.getDetail(primaryAssetId as number)).data as any,
+    enabled: !!primaryAssetId,
+  });
+
 
   const { data: controlLinks } = useQuery({
     queryKey: ['vuln-controls', vulnId],
@@ -476,6 +555,37 @@ export default function VulnerabilityDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['vulnerability', vulnId] });
       queryClient.invalidateQueries({ queryKey: ['vulnerabilities'] });
       setShowStatusModal(false);
+    },
+  });
+
+  // Accept risk: post the justification as a durable note, then record the
+  // acceptance itself. Two steps on purpose — the reasoning must outlive the
+  // status.
+  //
+  // The second step goes to /accept-risk rather than the generic status change
+  // because the review date has to land in `exception_expires_at`. That column
+  // is what the expiry sweep keys off; writing the date only into the note text
+  // (as this did before) produced an acceptance that read as time-boxed but in
+  // fact never lapsed.
+  const acceptRiskMutation = useMutation({
+    mutationFn: async () => {
+      const until = acceptUntil ? ` Review by ${acceptUntil}.` : '';
+      await entityExtrasApi.addNote(
+        'vulnerability', vulnId,
+        `🛡️ Risk accepted.${until} Justification: ${acceptWhy.trim()}`,
+      );
+      return vulnManagementApi.vulnerabilities.acceptRisk(vulnId, {
+        justification: acceptWhy.trim(),
+        // Date input gives YYYY-MM-DD; pin it to end of day so an acceptance
+        // "until the 30th" covers the whole of the 30th.
+        review_by: acceptUntil ? `${acceptUntil}T23:59:59` : null,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['vulnerability', vulnId] });
+      queryClient.invalidateQueries({ queryKey: ['entity-notes', 'vulnerability', vulnId] });
+      queryClient.invalidateQueries({ queryKey: ['entity-history', 'vulnerability', vulnId] });
+      setShowAcceptRisk(false); setAcceptWhy(''); setAcceptUntil('');
     },
   });
 
@@ -721,6 +831,9 @@ export default function VulnerabilityDetailPage() {
     { id: 'sec-exception', label: 'Exception', icon: AlertCircle },
     { id: 'sec-activity', label: 'Activity', icon: GitBranch },
   ];
+  // Only the sections belonging to the active tab stay visible; the rest keep
+  // their anchors so the in-page nav still works within a tab.
+  const VISIBLE_SECTIONS = SECTIONS.filter((s) => VTAB_OF[s.id] === activeTab);
 
   return (
     <div className="risk-workspace -m-4 space-y-4 lg:-m-5">
@@ -753,6 +866,50 @@ export default function VulnerabilityDetailPage() {
 
           <div className="flex flex-wrap items-center gap-2 xl:justify-end">
             <StatusBadge status={vulnerability.status} customLabel={statusStyle.label} size="md" />
+            {/* Workflow buttons, matching Command Center's header. The two most
+                common resolutions get one click each; Change Status stays for
+                the rest. */}
+            {/* One primary action, chosen by where the finding actually is in
+                its lifecycle — open → start, in progress → remediate,
+                remediated → verify, verified/accepted → reopen. Previously we
+                offered "Mark Remediated" regardless of state, which let you
+                skip straight past triage and verification. */}
+            {(() => {
+              const st = (vulnerability.status || 'open').toLowerCase();
+              const step =
+                st === 'open' || st === 'reopened'
+                  ? { label: 'Start Remediation', next: 'in_progress', cls: 'bg-blue-600 hover:bg-blue-700' }
+                  : st === 'in_progress'
+                  ? { label: 'Mark Remediated', next: 'remediated', cls: 'bg-emerald-600 hover:bg-emerald-700' }
+                  : st === 'remediated'
+                  ? { label: 'Verify Fix', next: 'verified', cls: 'bg-emerald-700 hover:bg-emerald-800' }
+                  : ['verified', 'closed', 'resolved', 'accepted', 'false_positive'].includes(st)
+                  // bg-[#475569]/hover:bg-[#334155] not bg-slate-600/700: globals.css
+                  // flattens every bg-slate-* utility to --color-surface with
+                  // !important under .platform-ui, which turned this button into
+                  // white-on-white. These hex values are slate-600/700 themselves.
+                  ? { label: 'Reopen', next: 'open', cls: 'bg-[#475569] hover:bg-[#334155]' }
+                  : null;
+              if (!step) return null;
+              return (
+                <button
+                  onClick={() => changeStatusMutation.mutate({ status: step.next })}
+                  disabled={changeStatusMutation.isPending}
+                  className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50 ${step.cls}`}
+                >
+                  <CheckCircle className="h-3.5 w-3.5" strokeWidth={2} />
+                  {changeStatusMutation.isPending ? 'Working…' : step.label}
+                </button>
+              );
+            })()}
+            <button
+              onClick={() => setShowAcceptRisk(true)}
+              className="flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-800 hover:bg-slate-50"
+              title="Accept the risk instead of fixing it — records an expiry date and justification"
+            >
+              <ShieldOff className="h-3.5 w-3.5" strokeWidth={1.75} />
+              Accept Risk
+            </button>
             <button
               onClick={() => setShowStatusModal(true)}
               className="flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-800 hover:bg-slate-50"
@@ -776,23 +933,29 @@ export default function VulnerabilityDetailPage() {
 
       {/* ── D1 split: pinned left context + scrolling right work column ── */}
       <div className="mx-4 grid grid-cols-1 gap-4 pb-4 sm:mx-6 lg:grid-cols-12">
-        {/* ── LEFT: identity + triage facts stay on screen ──────────────── */}
-        <div className="lg:col-span-5">
+        {/* ── CONTEXT RAIL — narrow, and second on screen ─────────────────
+             Measured against the reference product: its work column is ~600px
+             and its rail ~300px, i.e. 2:1. Ours was inverted — a 42% rail on
+             the LEFT pushed the actual work into the smaller half. The rail is
+             now 1/3 and ordered after the content. ── */}
+        <div className="order-2 lg:col-span-4">
           <div className="space-y-3 lg:sticky lg:top-4">
             {/* Threat flags */}
             {(vulnerability.kev_flag || hasPublicExploit) && (
-              <div className="flex flex-wrap gap-1.5">
+              <div className="flex flex-wrap items-center gap-1.5">
                 {vulnerability.kev_flag && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-red-50 border border-red-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-red-700">
                     <AlertCircle size={10} strokeWidth={1.75} />
                     <Abbr code="CISA" showIcon={false}>CISA</Abbr>{' '}<Abbr code="KEV" showIcon={false}>KEV</Abbr>
                   </span>
                 )}
+                {vulnerability.kev_flag && <GuideMarker id="vuln.kevFloor" n={1} />}
                 {hasPublicExploit && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 border border-rose-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-rose-700">
                     Public Exploit
                   </span>
                 )}
+                {hasPublicExploit && <GuideMarker id="vuln.redFlags" n={2} />}
               </div>
             )}
 
@@ -804,21 +967,26 @@ export default function VulnerabilityDetailPage() {
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-50 border border-slate-200 px-2 py-0.5 text-xs text-slate-700">
                     <span className="text-[9px] uppercase tracking-wider text-slate-500"><Abbr code="CVSS" showIcon={false} /></span>
                     <span className="font-semibold text-slate-900">{cvssValue.toFixed(1)} / 10</span>
+                    <GuideMarker id="vuln.triage" n={3} />
                   </span>
                 )}
                 {epssValue !== null && (
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-50 border border-slate-200 px-2 py-0.5 text-xs text-slate-700">
                     <span className="text-[9px] uppercase tracking-wider text-slate-500"><Abbr code="EPSS" showIcon={false} /></span>
                     <span className="font-semibold text-slate-900">{(epssValue * 100).toFixed(1)}%</span>
+                    <GuideMarker id="vuln.triage" n={4} />
                   </span>
                 )}
                 {priorityValue !== null && (
                   <span
                     className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs ${priorityTone}`}
-                    title="Composite priority — blends CVSS, EPSS, KEV, and asset criticality"
+                    title="Risk score — the backend's stored composite (CVSS, EPSS, exploit maturity, KEV, attack vector, exposure, asset criticality). The Analysis tab shows the same number's breakdown."
                   >
-                    <span className="text-[9px] uppercase tracking-wider opacity-75">Priority</span>
-                    <span className="font-bold">{priorityValue.toFixed(2)} / 10</span>
+                    {/* Shown on the /100 scale so it reads identically to the
+                        Analysis panel — one number, one source, two places. */}
+                    <span className="text-[9px] uppercase tracking-wider opacity-75">Risk score</span>
+                    <span className="font-bold">{Math.round(priorityValue * 10)} / 100</span>
+                    <GuideMarker id="vuln.priority" n={5} />
                   </span>
                 )}
               </div>
@@ -830,18 +998,16 @@ export default function VulnerabilityDetailPage() {
               )}
             </div>
 
-            {/* Identity */}
+            {/* Identity — only CWE and component live here now that the CVE is
+                in the header, so the card hides entirely when it has neither
+                rather than rendering an empty box. */}
+            {(vulnerability.cwe_id || vulnerability.affected_component) && (
             <div className="rounded-lg border border-slate-200 bg-white p-3">
               <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500 mb-2">
                 <FileText className="h-3.5 w-3.5" strokeWidth={1.75} /> Identity
               </div>
               <dl className="space-y-2">
-                {vulnerability.cve_id && (
-                  <div className="flex items-baseline justify-between gap-2">
-                    <dt className="text-xs text-slate-500 flex-shrink-0"><Abbr code="CVE" /> ID</dt>
-                    <dd className="text-xs font-mono text-slate-900 text-right truncate">{vulnerability.cve_id}</dd>
-                  </div>
-                )}
+                {/* CVE id lives in the page header — not repeated here. */}
                 {vulnerability.cwe_id && /^cwe-/i.test(vulnerability.cwe_id) && (
                   <div className="flex items-baseline justify-between gap-2">
                     <dt className="text-xs text-slate-500 flex-shrink-0"><Abbr code="CWE" /> ID</dt>
@@ -856,21 +1022,16 @@ export default function VulnerabilityDetailPage() {
                 )}
               </dl>
             </div>
+            )}
 
-            {/* Ownership & progress */}
+            {/* Progress */}
             <div className="rounded-lg border border-slate-200 bg-white p-3">
               <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500 mb-2">
-                <User className="h-3.5 w-3.5" strokeWidth={1.75} /> Ownership &amp; Progress
+                <User className="h-3.5 w-3.5" strokeWidth={1.75} /> Progress
               </div>
               <dl className="space-y-2">
-                <div className="flex items-baseline justify-between gap-2">
-                  <dt className="text-xs text-slate-500 flex-shrink-0">Owner</dt>
-                  <dd className="text-xs text-slate-800 text-right truncate">{vulnerability.assigned_user_name || '— Unassigned —'}</dd>
-                </div>
-                <div className="flex items-baseline justify-between gap-2">
-                  <dt className="text-xs text-slate-500 flex-shrink-0">Linked assets</dt>
-                  <dd className="text-xs text-slate-800 text-right">{linkedAssetCount}</dd>
-                </div>
+                {/* Owner lives in the Assignment card, which can reassign it. */}
+                {/* Linked assets are named in the Affected-asset card below. */}
                 <div className="flex items-baseline justify-between gap-2">
                   <dt className="text-xs text-slate-500 flex-shrink-0">Mitigations</dt>
                   <dd className="text-xs text-slate-800 text-right">
@@ -910,13 +1071,21 @@ export default function VulnerabilityDetailPage() {
                     <dd className="text-xs text-slate-700 text-right">{new Date(vulnerability.updated_at).toLocaleDateString()}</dd>
                   </div>
                 )}
+                {/* Where the finding came from — the one fact the old rail
+                    never showed. Folded in here rather than given its own card. */}
+                <div className="flex items-baseline justify-between gap-2">
+                  <dt className="text-xs text-slate-500 flex-shrink-0">Source</dt>
+                  <dd className="text-xs font-mono text-slate-700 text-right truncate">
+                    {vulnerability.report_id ? `report #${vulnerability.report_id}` : 'manual entry'}
+                  </dd>
+                </div>
               </dl>
             </div>
 
             {/* In-page section nav */}
             <nav className="rounded-lg border border-slate-200 bg-white p-2">
               <div className="flex flex-wrap gap-1">
-                {SECTIONS.map((s) => (
+                {VISIBLE_SECTIONS.map((s) => (
                   <a
                     key={s.id}
                     href={`#${s.id}`}
@@ -928,31 +1097,140 @@ export default function VulnerabilityDetailPage() {
                 ))}
               </div>
             </nav>
+
+            {/* Context rail — SLA, assignment, affected asset, discovery.
+                Mirrors the reference product's right-hand rail; placed in the
+                left column here so it stays pinned like the triage facts. */}
+            <VulnContextRail
+              vulnerability={vulnerability}
+              users={tenantUsers}
+              linkedAssets={assetLinks}
+            />
           </div>
         </div>
 
-        {/* ── RIGHT: scrolling work column ──────────────────────────────── */}
-        <div className="space-y-4 lg:col-span-7">
-          {/* Linked Issues — surfaces any Issues opened against this vuln. */}
-          <RelatedIssuesPanel
-            sourceType="vulnerability"
-            sourceId={vulnerability.id}
-            title="Linked Issues"
-            createFields={{
-              title: `VULN-${vulnerability.id} — ${vulnerability.title}`,
-              description: vulnerability.description || undefined,
-              category: 'security',
-              issue_type: vulnerability.kev_flag ? 'incident' : 'audit_finding',
-            }}
-          />
+        {/* ── WORK COLUMN — wide, and first on screen ───────────────────── */}
+        {/* flex column (not space-y) so the Remediation tab can group its
+            sections with `order-*` instead of physically reordering hundreds of
+            lines. gap-4 reproduces space-y-4 exactly. */}
+        <div className="order-1 flex flex-col gap-4 lg:col-span-8">
+          {/* Tab bar — Analysis / Remediation / Exploit Test / History / Notes */}
+          <div className="border-b border-slate-200">
+            <nav className="flex flex-wrap" style={{ gap: 4 }}>
+              {VULN_TABS.map((t) => {
+                const Icon = t.icon;
+                const on = activeTab === t.id;
+                return (
+                  <button
+                    key={t.id}
+                    onClick={() => setActiveTab(t.id)}
+                    className={`flex items-center gap-1.5 whitespace-nowrap px-3 py-2 text-[12.5px] font-semibold ${on ? 'text-teal-700' : 'text-slate-500 hover:text-slate-800'}`}
+                    style={{ borderBottom: on ? '2px solid #14b8a6' : '2px solid transparent', marginBottom: -1 }}
+                  >
+                    <Icon className="h-3.5 w-3.5" strokeWidth={1.75} />
+                    {t.label}
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
+
+          {/* Analysis — the contextual score, its breakdown and the recommendation. */}
+          {activeTab === 'analysis' && (
+            <RiskAnalysisPanel
+              vulnerability={vulnerability}
+              assetCriticality={riskAsset?.criticality ?? (assetLinks || [])[0]?.asset_criticality ?? undefined}
+              assetCriticalityScore={riskAsset?.criticality_score ?? (assetLinks || [])[0]?.asset_criticality_score ?? null}
+              internetFacing={riskAsset ? !!riskAsset.internet_facing : null}
+            />
+          )}
+          {activeTab === 'remediation' && (
+            <div className="order-1 flex flex-col gap-4">
+              <GroupHeading n={1} title="The fix" sub="What removes the vulnerability, and whether a vendor patch exists." />
+              <RemediationPlanCard
+                vulnId={vulnerability.id}
+                hasOwner={!!vulnerability.assigned_to || (departmentAssignments?.length ?? 0) > 0}
+              />
+              {/* Vendor patch guidance lives here, not on Analysis — it is the
+                  fix, not the diagnosis. */}
+              <div className="mt-4">
+                <ThreatIntelPanel
+                  vulnerability={vulnerability}
+                  mode="patch"
+                  onAddRemediation={(prefill) => {
+                    setMitigationPrefill({
+                      title: prefill.title,
+                      description: prefill.description,
+                      priority: prefill.priority,
+                      source: 'patch',
+                    });
+                    setShowMitigationModal(true);
+                  }}
+                />
+              </div>
+            </div>
+          )}
+          {activeTab === 'exploit-test' && (
+            <div className="order-1 flex flex-col gap-4">
+              <GroupHeading n={1} title="Can it be reached?" sub="The attack path, and the evidence behind every step of it." />
+              <ExploitAssessment vulnerability={vulnerability} assetId={(assetLinks || [])[0]?.asset_id} />
+              {/* The reasoning behind the assessment, always visible: the engine's
+                  stage-by-stage work (classify -> map with the CAPEC hit/miss -> select
+                  -> reach -> verdict), driven by the read-only trace endpoint. */}
+              <TraceFlow
+                vulnId={vulnerability.id}
+                assetId={(assetLinks || [])[0]?.asset_id}
+                cveId={vulnerability.cve_id}
+                assetName={(assetLinks || [])[0]?.asset_name}
+              />
+              {/* Group 2 (how far it spreads) is the Vulnerability Chain section,
+                  ordered in below this block. Group 3 is the human evidence: the
+                  assessment above is only a derivation from stored data, so
+                  something has to record that a person actually retested it. */}
+              <GroupHeading n={3} title="Prove it" sub="Nothing above was executed. This is where a human records what they actually tested." />
+              <GuideMarker id="vuln.exploitRetest" n={7} />
+              <ExploitTestPanel vulnId={vulnerability.id} />
+            </div>
+          )}
+          {activeTab === 'notes' && <NotesPanel entityType="vulnerability" entityId={vulnerability.id} />}
+          {/* History = the general audit trail FIRST (what changed on this
+              finding at all), then the workflow-transition timeline below it.
+              Previously only workflow transitions showed, so a status change,
+              an assignment or an asset link left no visible trace. */}
+          {activeTab === 'history' && (
+            <HistoryPanel entityType="vulnerability" entityId={vulnerability.id} />
+          )}
+
+          {/* One line, collapsed by default — so Analysis opens as the score
+              card and nothing else, the way the reference product does. */}
+          {activeTab === 'analysis' && (
+            <button
+              onClick={() => setShowEvidence(!showEvidence)}
+              className="flex w-full items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-left hover:bg-slate-100"
+            >
+              <ChevronRight
+                className={`h-4 w-4 flex-none text-slate-400 transition-transform ${showEvidence ? 'rotate-90' : ''}`}
+              />
+              <span className="text-[13px] font-semibold text-slate-700">
+                {showEvidence ? 'Hide evidence' : 'Show evidence behind this score'}
+              </span>
+              <span className="ml-auto text-[12px] text-slate-400">
+                threat intel · description · affected assets · controls it breaks
+              </span>
+            </button>
+          )}
 
           {/* (1) Threat Narrative + Threat Intelligence + Patch Information.
               ThreatIntelPanel is reused UNCHANGED — it hosts the plain-English
               narrative banner, the enrich/sync actions, and the patch-info
               Add-as-Mitigation handoff. */}
-          <section id="sec-narrative" className="scroll-mt-4">
+          <section hidden={secHidden("sec-narrative")} id="sec-narrative" className="scroll-mt-4">
             <ThreatIntelPanel
               vulnerability={vulnerability}
+              // Analysis gets the narrative + threat intel (the score's
+              // provenance). Patch guidance moved to Remediation, where fixing
+              // actually happens.
+              mode="analysis"
               onAddRemediation={(prefill) => {
                 setMitigationPrefill({
                   title: prefill.title,
@@ -967,7 +1245,7 @@ export default function VulnerabilityDetailPage() {
           </section>
 
           {/* (2) Description + affected component */}
-          <section id="sec-description" className="cw-card rounded-xl p-4 sm:p-5 scroll-mt-4">
+          <section hidden={secHidden("sec-description")} id="sec-description" className="cw-card rounded-xl p-4 sm:p-5 scroll-mt-4">
             <h2 className="text-sm font-semibold text-slate-900 flex items-center gap-1.5 mb-2">
               <FileText className="h-3.5 w-3.5 text-slate-500" strokeWidth={1.75} />
               Description
@@ -1004,20 +1282,16 @@ export default function VulnerabilityDetailPage() {
               </div>
             )}
 
-            {/* Legacy AI Recommendation prose — charter: no gradient */}
-            {vulnerability.ai_recommendation && (
-              <div className="mt-4 rounded-lg border border-primary-200 bg-primary-50/60 p-4">
-                <h3 className="text-sm font-semibold text-slate-900 mb-2 flex items-center gap-1.5">
-                  <Sparkles className="h-4 w-4 text-primary-600" strokeWidth={1.75} />
-                  AI Recommendation
-                </h3>
-                {formatAIText(vulnerability.ai_recommendation)}
-              </div>
-            )}
+            {/* An "AI Recommendation" card used to render `ai_recommendation`
+                here as well. That field now holds compensating-control
+                suggestions, which belong to Remediation — putting them on
+                Analysis both duplicated the Remediation tab and mislabelled
+                controls as diagnosis. Analysis answers "what is this and how
+                bad"; it does not propose fixes. */}
           </section>
 
           {/* (3) Affected Assets — linked asset records */}
-          <section id="sec-assets" className="cw-card rounded-xl p-4 sm:p-5 scroll-mt-4">
+          <section hidden={secHidden("sec-assets")} id="sec-assets" className="cw-card rounded-xl p-4 sm:p-5 scroll-mt-4">
             <div className="flex justify-between items-center mb-3">
               <h2 className="text-sm font-semibold text-slate-900 flex items-center gap-1.5">
                 <Server className="h-3.5 w-3.5 text-slate-500" strokeWidth={1.75} />
@@ -1059,7 +1333,23 @@ export default function VulnerabilityDetailPage() {
                   <tbody className="divide-y divide-slate-200">
                     {assetLinks.map((link) => (
                       <tr key={link.id} className="hover:bg-slate-50">
-                        <td className="px-4 py-3 cw-text">{link.asset_name}</td>
+                        {/* The asset name was plain text — this table named the
+                            asset and showed how it was matched, then refused to
+                            take you there. It is the one place in the finding
+                            screen that dead-ends. */}
+                        <td className="px-4 py-3 cw-text">
+                          {link.asset_id ? (
+                            <Link
+                              href={`/assets/${link.asset_id}`}
+                              className="font-medium text-primary-700 hover:underline"
+                              title="Open this asset"
+                            >
+                              {link.asset_name}
+                            </Link>
+                          ) : (
+                            link.asset_name
+                          )}
+                        </td>
                         <td className="px-4 py-3 text-slate-600">{link.asset_type || '-'}</td>
                         <td className="px-4 py-3 text-slate-600">{link.relationship_type || 'affected'}</td>
                         <td className="px-4 py-3">
@@ -1100,26 +1390,22 @@ export default function VulnerabilityDetailPage() {
             </div>
           </section>
 
-          {/* (4) Remediation — Patch/AI plan + Mitigations list, co-located.
-              AIAnalysisTab is reused UNCHANGED. */}
-          <section id="sec-remediation" className="space-y-4 scroll-mt-4">
-            <AIAnalysisTab
-              vulnerability={vulnerability}
-              suggestFixMutation={suggestFixMutation}
-              onAcceptSuggestion={(payload) => {
-                const title = String(payload.action_title ?? '').replace(/^\[AI\]\s*/, '');
-                setMitigationPrefill({
-                  title,
-                  description: typeof payload.action_description === 'string' ? payload.action_description : undefined,
-                  priority: typeof payload.priority === 'string' ? payload.priority : undefined,
-                  action_type: 'remediate',
-                  source: 'ai',
-                });
-                setShowMitigationModal(true);
-              }}
-              acceptingSuggestion={createMitigationMutation.isPending}
-            />
+          {/* (4) Remediation — one plan, then the compensating controls you run
+              until that plan lands.
 
+              There used to be two plan generators stacked here: RemediationPlanCard
+              (the approve → apply → verify lifecycle) and AIAnalysisTab, whose card
+              was titled "AI-Powered Remediation Plan". Two buttons, same job, and no
+              way for a reader to know which one was authoritative. RemediationPlanCard
+              wins — it is the one with backend state and an audit trail.
+
+              AIAnalysisTab is kept but demoted below the mitigations list and
+              re-scoped to what it is actually good for: proposing compensating
+              controls. That is a genuinely different question from "what is the fix" —
+              it is what you do while the patch is still pending, and it is what an
+              exception has to be justified against. */}
+          <section hidden={secHidden("sec-remediation")} id="sec-remediation" className="order-3 space-y-4 scroll-mt-4">
+            <GroupHeading n={3} title="If we’re not fixing it yet" sub="Controls that hold the risk down while the flaw is still there — and the exception if you decide to carry it." />
             {/* Mitigations list */}
             <div className="cw-card rounded-xl p-4 sm:p-5">
               <div className="flex justify-between items-center mb-3">
@@ -1189,10 +1475,27 @@ export default function VulnerabilityDetailPage() {
                 )}
               </div>
             </div>
+
+            <AIAnalysisTab
+              vulnerability={vulnerability}
+              suggestFixMutation={suggestFixMutation}
+              onAcceptSuggestion={(payload) => {
+                const title = String(payload.action_title ?? '').replace(/^\[AI\]\s*/, '');
+                setMitigationPrefill({
+                  title,
+                  description: typeof payload.action_description === 'string' ? payload.action_description : undefined,
+                  priority: typeof payload.priority === 'string' ? payload.priority : undefined,
+                  action_type: 'remediate',
+                  source: 'ai',
+                });
+                setShowMitigationModal(true);
+              }}
+              acceptingSuggestion={createMitigationMutation.isPending}
+            />
           </section>
 
           {/* (5) Controls — compliance impact */}
-          <section id="sec-controls" className="cw-card rounded-xl p-4 sm:p-5 scroll-mt-4 space-y-3">
+          <section hidden={secHidden("sec-controls")} id="sec-controls" className="cw-card rounded-xl p-4 sm:p-5 scroll-mt-4 space-y-3">
           <div className="flex justify-between items-center flex-wrap gap-2">
             <div>
               <h2 className="text-sm font-semibold text-slate-900 flex items-center gap-1.5">
@@ -1419,12 +1722,17 @@ export default function VulnerabilityDetailPage() {
           </section>
 
           {/* (6) Chain — prerequisites + dependents + kill-chain (reused unchanged) */}
-          <section id="sec-chain" className="cw-card rounded-xl p-4 sm:p-5 scroll-mt-4">
+          <section hidden={secHidden("sec-chain")} id="sec-chain" className="order-2 scroll-mt-4 space-y-3">
+            <GroupHeading n={2} title="How far would it spread?" sub="Other findings that must exist for this to work, and the ones that depend on it." />
+            <div className="cw-card rounded-xl p-4 sm:p-5">
             <DependenciesTab vulnId={vulnId} />
+            </div>
           </section>
 
           {/* Departments — assignments */}
-          <section id="sec-departments" className="cw-card rounded-xl p-4 sm:p-5 scroll-mt-4 space-y-3">
+          <section hidden={secHidden("sec-departments")} id="sec-departments" className="order-2 scroll-mt-4 space-y-3">
+          <GroupHeading n={2} title="Who owns it" sub="Approval is blocked until this finding has a person or a department on it." />
+          <div className="cw-card rounded-xl p-4 sm:p-5 space-y-3">
           <div className="flex justify-between items-center">
             <h2 className="text-sm font-semibold text-slate-900 flex items-center gap-1.5">
               <Users className="h-3.5 w-3.5 text-slate-500" strokeWidth={1.75} />
@@ -1500,17 +1808,35 @@ export default function VulnerabilityDetailPage() {
               </table>
             )}
           </div>
+          </div>
           </section>
 
           {/* (7) Exception — full FSM workflow panel (reused unchanged; replaces
               the old thin exception table). request → approve|deny → revoke. */}
-          <section id="sec-exception" className="scroll-mt-4">
+          <section hidden={secHidden("sec-exception")} id="sec-exception" className="order-4 scroll-mt-4">
             <ExceptionWorkflowPanel vulnerability={vulnerability} currentUserId={currentUserId} />
           </section>
 
           {/* (8) Activity / History — workflow transitions + history timeline +
               escalations, merged into one stream. */}
-          <section id="sec-activity" className="cw-card rounded-xl p-4 sm:p-5 scroll-mt-4 space-y-5">
+          {/* The workflow engine's own panels. Hidden entirely when all three are
+              empty — which is the normal case, because the engine is not
+              configured for vulnerabilities. They previously rendered
+              unconditionally, so the History tab opened with "No transitions
+              available", "No workflow history available" and "No escalations
+              triggered" stacked under the real change history: three blocks
+              whose only content was the word no. The inner heading also said
+              "History", colliding with the "Change history" above it, so the tab
+              appeared to show the same thing twice and neither had anything in
+              it. */}
+          <section
+            hidden={
+              secHidden("sec-activity")
+              || ((workflowTransitions?.length ?? 0) === 0
+                  && (workflowHistory?.length ?? 0) === 0
+                  && (escalationsData?.length ?? 0) === 0)
+            }
+            id="sec-activity" className="cw-card rounded-xl p-4 sm:p-5 scroll-mt-4 space-y-5">
             <div>
               <h2 className="text-sm font-semibold text-slate-900 mb-2 flex items-center gap-1.5">
                 <GitBranch className="h-4 w-4 text-primary-600" strokeWidth={1.75} />
@@ -1548,7 +1874,7 @@ export default function VulnerabilityDetailPage() {
             <div className="border-t border-slate-100 pt-4">
               <h3 className="text-sm font-semibold text-slate-900 mb-3 flex items-center gap-1.5">
                 <Clock className="h-4 w-4 text-slate-500" strokeWidth={1.75} />
-                History
+                Workflow transitions
               </h3>
               {(!workflowHistory || workflowHistory.length === 0) ? (
                 <p className="text-slate-500 text-sm">No workflow history available</p>
@@ -1632,6 +1958,65 @@ export default function VulnerabilityDetailPage() {
       </div>
 
       {/* ── Modals (page-level, reused unchanged) ─────────────────────── */}
+      {/* ── Accept Risk ─────────────────────────────────────────────────
+          Records WHY the risk was accepted and WHEN it must be revisited,
+          then flips the status. The justification is posted as a note so it
+          survives independently of the status field. */}
+      {showAcceptRisk && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
+          <div className="w-full max-w-lg rounded-xl bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+              <div className="flex items-center gap-2">
+                <ShieldOff className="h-4 w-4 text-slate-500" strokeWidth={1.75} />
+                <h3 className="text-[15px] font-semibold text-slate-900">Accept this risk</h3>
+              </div>
+              <button onClick={() => setShowAcceptRisk(false)} className="text-slate-500 hover:text-slate-800">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="space-y-4 px-5 py-4">
+              <p className="text-[13px] leading-relaxed text-slate-600">
+                Accepting means this finding will <b>not</b> be fixed for now. It stays on the register and
+                should be revisited on the date you set.
+              </p>
+              <div>
+                <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Review by</label>
+                <input
+                  type="date"
+                  value={acceptUntil}
+                  onChange={(e) => setAcceptUntil(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-[13px]"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                  Justification <span className="text-rose-600">*</span>
+                </label>
+                <textarea
+                  rows={4}
+                  value={acceptWhy}
+                  onChange={(e) => setAcceptWhy(e.target.value)}
+                  placeholder="Why is this acceptable? What compensating controls are in place?"
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-[13px]"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 border-t border-slate-100 px-5 py-3">
+              <button onClick={() => setShowAcceptRisk(false)} className="rounded-lg border border-slate-200 px-4 py-1.5 text-[13px] font-semibold text-slate-600">
+                Cancel
+              </button>
+              <button
+                disabled={!acceptWhy.trim() || acceptRiskMutation.isPending}
+                onClick={() => acceptRiskMutation.mutate()}
+                className="rounded-lg bg-amber-600 px-4 py-1.5 text-[13px] font-semibold text-white hover:bg-amber-700 disabled:opacity-40"
+              >
+                {acceptRiskMutation.isPending ? 'Recording…' : 'Accept risk'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showStatusModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="cw-card w-full max-w-md p-6 shadow-xl">
@@ -2606,6 +2991,32 @@ function DependenciesTab({ vulnId }: { vulnId: number }) {
 }
 
 
+/** Section heading for the Remediation tab's three groups.
+ *
+ * The tab had six sibling cards answering three questions, which is why it read
+ * as a pile rather than a process. The numbering is real sequence — fix it, or
+ * failing that decide who owns it, or failing that decide to carry it — not
+ * decoration.
+ */
+function GroupHeading({ n, title, sub }: { n: number; title: string; sub: string }) {
+  return (
+    <div className="flex items-start gap-2.5 pt-1">
+      {/* bg-[#1e293b] not bg-slate-800: globals.css flattens every bg-slate-*
+          utility to --color-surface with !important under .platform-ui,
+          which turned this into white-on-white. The hex value is slate-800
+          itself, so the appearance is unchanged, it just no longer matches
+          that override's selector. */}
+      <span className="mt-0.5 flex h-5 w-5 flex-none items-center justify-center rounded-full bg-[#1e293b] text-[11px] font-bold text-white">
+        {n}
+      </span>
+      <div>
+        <h2 className="text-[13px] font-bold uppercase tracking-wider text-slate-800">{title}</h2>
+        <p className="mt-0.5 text-[12.5px] leading-snug text-slate-500">{sub}</p>
+      </div>
+    </div>
+  );
+}
+
 function AIAnalysisTab({
   vulnerability,
   suggestFixMutation,
@@ -2633,23 +3044,21 @@ function AIAnalysisTab({
   const suggestions = (output?.suggestions ?? []).filter((s) => !!s?.title);
   const summary = (output?.summary ?? '').trim();
   const jobFailed = job?.status === 'failed';
-  const fallbackText = (
-    output?.recommendation ?? vulnerability.ai_recommendation ?? ''
-  ).trim();
-
-  // Has the operator at least once asked for AI analysis? We use this to
-  // switch from "intro card with CTA" to "results section".
-  const hasResult = suggestions.length > 0 || !!summary || !!fallbackText;
+  // Results come from THIS run only. `vulnerability.ai_recommendation` is a
+  // markdown snapshot of a previous run; counting it here made the panel open
+  // in "results" mode on every page load with nothing structured to show and
+  // the CTA suppressed — a dead panel.
+  const hasResult = suggestions.length > 0 || !!summary;
 
   // Quick context chips so the user can see WHICH signals the AI used.
-  const contextChips: { label: string; tone: string }[] = [];
-  if (vulnerability.kev_flag) contextChips.push({ label: 'CISA KEV', tone: 'bg-red-50 text-red-700 border-red-200' });
-  if (typeof vulnerability.epss_score === 'number')
-    contextChips.push({ label: `EPSS ${vulnerability.epss_score.toFixed(2)}`, tone: 'bg-amber-50 text-amber-700 border-amber-200' });
-  if (typeof vulnerability.composite_priority === 'number')
-    contextChips.push({ label: `Priority ${vulnerability.composite_priority.toFixed(1)}`, tone: 'bg-slate-50 text-slate-700 border-slate-200' });
-  if (vulnerability.patch_references && vulnerability.patch_references.length > 0)
-    contextChips.push({ label: `${vulnerability.patch_references.length} KB articles`, tone: 'bg-blue-50 text-blue-700 border-blue-200' });
+  // The context chips that used to sit here (CISA KEV / EPSS / Priority / KB
+  // articles) are gone. Every one of them restated a number already shown in
+  // the header or the left rail, and two of them restated it *wrongly*:
+  // `EPSS ${epss_score.toFixed(2)}` printed "EPSS 0.00" for a 0.5% score
+  // because epss_score is a probability, not a percentage; and
+  // `Priority ${composite_priority.toFixed(1)}` printed "4.1" against the
+  // header's "41 / 100" because the two render the same value on different
+  // scales. One number, one place, one scale.
 
   const acceptSuggestion = (s: AISuggestion) => {
     const priority = ['critical', 'high', 'medium', 'low'].includes((s.priority || '').toLowerCase())
@@ -2677,24 +3086,15 @@ function AIAnalysisTab({
           <div>
             <h2 className="text-sm font-semibold cw-text flex items-center gap-1.5">
               <Sparkles className="h-4 w-4 text-primary-600" />
-              AI-Powered Remediation Plan
+              Suggest compensating controls
             </h2>
             <p className="text-xs text-slate-600 mt-1 max-w-2xl">
-              The AI reads this vulnerability&apos;s CVE description, CVSS score,
-              <strong> CISA KEV flag</strong>, <strong>EPSS probability</strong>,
-              vendor <strong>KB articles &amp; advisories</strong>, and linked
-              asset context — then produces ranked, accept-with-one-click
-              remediation steps.
+              The fix itself lives in the remediation plan above. This suggests what
+              to put in place <em>until</em> that fix lands — the controls that reduce
+              exposure without changing the vulnerable component, and the ones an
+              exception has to be justified against. Accept any suggestion to add it
+              to the mitigations list.
             </p>
-            {contextChips.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mt-2.5">
-                {contextChips.map((c) => (
-                  <span key={c.label} className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${c.tone}`}>
-                    {c.label}
-                  </span>
-                ))}
-              </div>
-            )}
           </div>
           <button
             onClick={() => suggestFixMutation.mutate()}
@@ -2709,7 +3109,7 @@ function AIAnalysisTab({
             ) : (
               <>
                 <Sparkles size={14} />
-                {hasResult ? 'Regenerate' : 'Generate Plan'}
+                {hasResult ? 'Suggest again' : 'Suggest controls'}
               </>
             )}
           </button>
@@ -2737,7 +3137,7 @@ function AIAnalysisTab({
       {summary && (
         <div className="rounded-xl border border-primary-200 bg-primary-50/60 p-4">
           <h3 className="text-xs font-semibold uppercase tracking-wider text-primary-700 mb-1.5">
-            Overall recommendation
+            Control posture
           </h3>
           <p className="text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">
             {summary}
@@ -2749,10 +3149,10 @@ function AIAnalysisTab({
         <div className="space-y-3">
           <div className="flex items-baseline justify-between">
             <h3 className="text-sm font-semibold text-slate-900">
-              Suggested mitigation actions
+              Suggested compensating controls
             </h3>
             <span className="text-xs text-slate-500">
-              {suggestions.length} suggestion{suggestions.length === 1 ? '' : 's'} · ordered by urgency
+              {suggestions.length} suggestion{suggestions.length === 1 ? '' : 's'} · ordered by how much exposure each removes
             </span>
           </div>
           <div className="grid gap-3 lg:grid-cols-2">
@@ -2857,21 +3257,26 @@ function AIAnalysisTab({
         </div>
       )}
 
-      {/* Legacy markdown recommendation — show only when we have NO structured
-          suggestions, so older runs (or fallback prose) still surface. */}
-      {suggestions.length === 0 && fallbackText && (
-        <div className="rounded-xl border border-primary-200 bg-primary-50 p-4">
-          <h3 className="text-sm font-medium text-primary-600 mb-2">Recommendation</h3>
-          {formatAIText(fallbackText)}
-        </div>
-      )}
+      {/* A legacy markdown blob used to render here whenever there were no
+          structured suggestions in memory — which is every page load, because
+          the structured list lives only in the mutation result. So after any
+          refresh you stopped seeing five tidy cards and started seeing the same
+          five items again as raw markdown, syntax and all
+          (`*(_priority: critical, effort: medium_)*`), under a heading called
+          "Recommendation" that answered no question the tab was asking.
+
+          Removed rather than restyled. A suggestion earns persistence by being
+          accepted into Mitigations — that is what the Add-as-Mitigation button
+          is for. Keeping a stale, degraded copy of an old run beside the live
+          one is the same duplication this tab has been shedding all along. */}
 
       {!hasResult && !suggestFixMutation.isPending && !jobFailed && (
         <div className="cw-card p-6 text-center">
           <Sparkles className="mx-auto h-8 w-8 text-slate-300 mb-2" />
           <p className="text-sm text-slate-600">
-            Click <strong>Generate Plan</strong> to produce a ranked remediation plan tuned to this
-            vulnerability&apos;s real-world exploit signals and available vendor patches.
+            Click <strong>Suggest controls</strong> for ranked compensating controls tuned to this
+            vulnerability&apos;s real-world exploit signals — the measures that reduce exposure
+            while the remediation plan above is still being applied.
           </p>
         </div>
       )}
@@ -2947,8 +3352,16 @@ function buildThreatNarrative(v: VulnerabilityDetail): {
     } else {
       likelihood = 'has not shown signs of real-world exploitation';
     }
+    // This said "it sits in the top {100 - percentile}%", which inverted the
+    // meaning of a percentile. A CVE at the 36.6th percentile scores LOWER than
+    // most, yet the sentence rendered "top 63.4%" — which sounds like a
+    // distinction and directly contradicted the "has not shown signs of
+    // exploitation" clause it was attached to. Now the phrasing follows the
+    // direction of the number, so both halves of the sentence agree.
     const rankPart = pctRank !== null
-      ? ` — it sits in the top ${(100 - pctRank).toFixed(1)}% of all known CVEs by predicted exploit probability`
+      ? pctRank >= 50
+        ? ` — it scores higher than ${pctRank.toFixed(0)}% of all scored CVEs`
+        : ` — it scores lower than ${(100 - pctRank).toFixed(0)}% of all scored CVEs`
       : '';
     bits.push(
       `Based on real-world exploit signals, it ${likelihood}${rankPart}.`
@@ -3031,9 +3444,13 @@ const NARRATIVE_TONE_STYLES: Record<string, { card: string; chip: string; label:
 // nothing the enrichment service can look up.
 
 function ThreatIntelPanel({
-  vulnerability, onAddRemediation,
+  vulnerability, onAddRemediation, mode = 'full',
 }: {
   vulnerability: VulnerabilityDetail;
+  /** Which half to render. Patch guidance is HOW TO FIX, so it belongs on the
+   *  Remediation tab; the narrative + threat intel explain the score, so they
+   *  belong on Analysis. 'full' keeps the original both-halves behaviour. */
+  mode?: 'full' | 'analysis' | 'patch';
   /** Open the parent's Add Mitigation modal pre-filled with the patch
    *  title + description. Operator picks Action Type / Priority / Due
    *  Date / Assigned To before the row is created. */
@@ -3140,11 +3557,17 @@ function ThreatIntelPanel({
     !!vulnerability.nvd_last_synced_at ||
     (vulnerability.exploit_references && vulnerability.exploit_references.length > 0);
 
+  // "Do we hold patch intelligence" and "have we ever looked" are different
+  // questions. Folding `psirt_synced_at` into the first one meant a sync that
+  // legitimately found nothing counted as intel: the prompt to sync was
+  // suppressed, no content rendered, and the card sat there empty with only a
+  // timestamp — the reader could not tell whether the lookup had failed, was
+  // still running, or had genuinely found no published patch.
   const hasPatchIntel =
     (vulnerability.patch_references && vulnerability.patch_references.length > 0) ||
     (vulnerability.vendor_advisory_ids && vulnerability.vendor_advisory_ids.length > 0) ||
-    !!vulnerability.remediation_guidance ||
-    !!vulnerability.psirt_synced_at;
+    !!vulnerability.remediation_guidance;
+  const hasSyncedPatchIntel = !!vulnerability.psirt_synced_at;
 
   const fmt = (iso?: string) =>
     iso ? new Date(iso).toLocaleDateString() : '—';
@@ -3192,8 +3615,13 @@ function ThreatIntelPanel({
   const narrative = buildThreatNarrative(vulnerability);
   const narrativeStyle = NARRATIVE_TONE_STYLES[narrative.tone] ?? NARRATIVE_TONE_STYLES.unknown;
 
+  const showThreat = mode === 'full' || mode === 'analysis';
+  const showPatch = mode === 'full' || mode === 'patch';
+
   return (
     <div className="space-y-4">
+    {showThreat && (
+    <>
     {/* What this means — plain-English explanation of EPSS / KEV / NVD /
         priority signals. Generated client-side from the row's columns, so
         the user never has to know what these acronyms mean. Always visible
@@ -3220,8 +3648,12 @@ function ThreatIntelPanel({
       </div>
     </div>
 
-    <div className="grid gap-4 lg:grid-cols-2">
+    </>
+    )}
+
+    <div className={mode === 'full' ? 'grid gap-4 lg:grid-cols-2' : ''}>
       {/* ── Threat Intelligence (left card) ───────────────────────────── */}
+      {showThreat && (
       <div className="cw-card p-5">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-semibold cw-text flex items-center gap-1.5">
@@ -3307,8 +3739,11 @@ function ThreatIntelPanel({
               </div>
             )}
 
-            {/* Stat row — EPSS, Priority, NVD Published, Last Synced. */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {/* Stat row — EPSS, Priority, NVD Published, Last Synced.
+                Was 4 columns, which clipped "2/29/2024" to "2/29/202" and
+                wrapped the formula label onto four lines inside this
+                half-width card. Two columns fit the content. */}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {typeof vulnerability.epss_score === 'number' && (
                 <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
                   <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">EPSS</div>
@@ -3328,15 +3763,15 @@ function ThreatIntelPanel({
                   <div className="text-sm font-semibold text-slate-900 mt-0.5">
                     {vulnerability.composite_priority.toFixed(2)} / 10
                   </div>
-                  <div className="text-[10px] text-slate-500 mt-0.5">
-                    CVSS + EPSS + KEV + asset
+                  <div className="text-[10px] leading-snug text-slate-500 mt-0.5">
+                    CVSS · EPSS · maturity · KEV · vector · exposure · asset
                   </div>
                 </div>
               )}
               {vulnerability.nvd_published_at && (
                 <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
                   <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">NVD Published</div>
-                  <div className="text-sm font-semibold text-slate-900 mt-0.5">
+                  <div className="text-sm font-semibold text-slate-900 mt-0.5 whitespace-nowrap">
                     {fmt(vulnerability.nvd_published_at)}
                   </div>
                 </div>
@@ -3344,11 +3779,11 @@ function ThreatIntelPanel({
               {vulnerability.nvd_last_synced_at && (
                 <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
                   <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Last Synced</div>
-                  <div className="text-xs font-medium text-slate-700 mt-0.5">
+                  <div className="text-sm font-semibold text-slate-900 mt-0.5 whitespace-nowrap">
                     {new Date(vulnerability.nvd_last_synced_at).toLocaleDateString()}
-                  </div>
-                  <div className="text-[10px] text-slate-500 mt-0.5">
-                    {new Date(vulnerability.nvd_last_synced_at).toLocaleTimeString()}
+                    <span className="ml-1.5 text-[10px] font-normal text-slate-500">
+                      {new Date(vulnerability.nvd_last_synced_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
                   </div>
                 </div>
               )}
@@ -3398,7 +3833,10 @@ function ThreatIntelPanel({
         )}
       </div>
 
-      {/* ── Patch Information (right card) ────────────────────────────── */}
+      )}
+
+      {/* ── Patch Information — rendered on the Remediation tab ────────── */}
+      {showPatch && (
       <div className="cw-card p-5">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-semibold cw-text flex items-center gap-1.5">
@@ -3421,7 +3859,7 @@ function ThreatIntelPanel({
             ) : (
               <RefreshCw size={12} />
             )}
-            {hasPatchIntel ? 'Re-sync' : 'Sync patch info'}
+            {hasSyncedPatchIntel ? 'Re-sync' : 'Sync patch info'}
           </button>
         </div>
 
@@ -3439,7 +3877,20 @@ function ThreatIntelPanel({
           </div>
         )}
 
-        {!hasPatchIntel && !syncPatchMutation.isSuccess && (
+        {/* Searched and found nothing. This is a real finding, not an empty
+            state — "no vendor patch is published" is exactly the fact that
+            decides whether compensating controls are the only option, so it
+            gets stated plainly and dated rather than left blank. */}
+        {!hasPatchIntel && hasSyncedPatchIntel && (
+          <p className="text-xs text-slate-600">
+            No vendor patch, advisory, or KB article was published for{' '}
+            <strong>{vulnerability.cve_id || 'this finding'}</strong> as of the last
+            lookup. Until one appears, the compensating controls on this tab are the
+            only thing reducing exposure.
+          </p>
+        )}
+
+        {!hasPatchIntel && !hasSyncedPatchIntel && !syncPatchMutation.isSuccess && (
           <p className="text-xs text-slate-500 italic">
             Click <strong>Sync patch info</strong> to look up KB articles,
             vendor advisories, and CISA-published remediation guidance for {vulnerability.cve_id}.
@@ -3583,6 +4034,7 @@ function ThreatIntelPanel({
           </div>
         )}
       </div>
+      )}
     </div>
     </div>
   );
@@ -4042,10 +4494,14 @@ function ExceptionWorkflowPanel({
             >
               Cancel
             </button>
+            {/* bg-[#334155]/hover:bg-[#1e293b] not bg-slate-700/800: globals.css
+                flattens every bg-slate-* utility to --color-surface with
+                !important under .platform-ui, which made this white-on-white.
+                These hex values are slate-700/800 themselves. */}
             <button
               type="submit"
               disabled={revokeMutation.isPending}
-              className="inline-flex items-center gap-1.5 text-xs rounded-md bg-slate-700 px-2.5 py-1 text-white hover:bg-slate-800 disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 text-xs rounded-md bg-[#334155] px-2.5 py-1 text-white hover:bg-[#1e293b] disabled:opacity-50"
             >
               {revokeMutation.isPending && <Loader2 size={12} className="animate-spin" />}
               Revoke

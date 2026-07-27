@@ -135,6 +135,18 @@ class HeartbeatPayload(BaseModel):
     # and stores the enriched list on the asset's detected_software_json so
     # the host applications panel can offer "promote to child asset".
     installed_software: Optional[List[Dict[str, Any]]] = None
+    # ─── Hardware inventory ────────────────────────────────────────────
+    # A cheap hardware probe on the host — Get-CimInstance (Win32_Processor
+    # / ComputerSystem / LogicalDisk / BIOS) on Windows, /proc + lsblk +
+    # dmidecode on Linux — fills these so vCPU / RAM / disk / manufacturer
+    # / model / serial stop being manual-only. All optional; the ingest
+    # handler only writes non-null values (never clobbers with a blank).
+    cpu_cores: Optional[int] = None
+    memory_gb: Optional[int] = None
+    storage_gb: Optional[int] = None
+    manufacturer: Optional[str] = None
+    model: Optional[str] = None
+    serial_number: Optional[str] = None
 
 
 class ResultsPayload(BaseModel):
@@ -950,6 +962,55 @@ def agent_heartbeat(
         if body.os_normalized:asset.os_normalized = body.os_normalized
         if body.os_build:     asset.os_build = body.os_build
         if body.os_edition:   asset.os_edition = body.os_edition
+        # Hardware specs — only overwrite when the agent actually reports them
+        # (0 is a valid clobber for ints, so guard on `is not None`).
+        if body.cpu_cores is not None:  asset.cpu_cores = body.cpu_cores
+        if body.memory_gb is not None:  asset.memory_gb = body.memory_gb
+        if body.storage_gb is not None: asset.storage_gb = body.storage_gb
+        if body.manufacturer:           asset.manufacturer = body.manufacturer
+        if body.model:                  asset.model = body.model
+        if body.serial_number:          asset.serial_number = body.serial_number
+        if body.agent_version:          asset.agent_version = body.agent_version
+        # Presence bookkeeping. A live heartbeat IS a sighting — without this
+        # an actively-managed host still trips the 30-day stale filter and
+        # drags down the "scanned recently" metric on the inventory
+        # scorecard. Mirrors what services/normalized_assets.py stamps on
+        # every cloud/scanner upsert.
+        asset.last_seen_at = datetime.utcnow()
+        asset.last_seen_source = "agent"
+
+        # Software inventory. The agent collects the 3-layer inventory on
+        # every beat; until now the payload was parsed and dropped on the
+        # floor. Normalising it here is the same write the agentless probe
+        # performs, so an agent host and a WinRM/SSH host produce the same
+        # detected_software_json shape and the host-applications panel does
+        # not care which collector produced it.
+        #
+        # `is not None` rather than truthiness: an empty list is a real
+        # observation ("nothing installed we recognise") from a host that
+        # probed successfully, while a missing key means an older agent that
+        # does not collect software at all — that must not wipe what we have.
+        if body.installed_software is not None:
+            try:
+                from ..compliance_plugins.services.software_normaliser import (
+                    enrich_inventory, preserve_promotions,
+                )
+                enriched = enrich_inventory(db, body.installed_software)
+                asset.detected_software_json = preserve_promotions(
+                    asset.detected_software_json, enriched
+                )
+                # Derive antivirus/EDR presence + software categories from the
+                # same inventory the agent just reported.
+                from ..compliance_plugins.services.security_classifier import apply_posture
+                apply_posture(asset)
+            except Exception:
+                # A malformed inventory must never cost us the heartbeat —
+                # last_seen, OS and hardware above are more important than
+                # the software list, and the next beat gets another go.
+                logger.exception(
+                    "heartbeat: software inventory enrichment failed agent=%s asset=%s",
+                    agent.id, asset.id,
+                )
 
     db.commit()
     return {

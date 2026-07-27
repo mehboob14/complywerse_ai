@@ -37,6 +37,8 @@ from .routers import criticality_assessments_router
 from .routers import search_router
 # Teams — admin CRUD for org teams used by the asset ownership-chain dropdown.
 from .routers import teams_router
+# Notes / History / derived Alerts for assets + vulnerabilities.
+from .routers import entity_extras_router
 
 
 from .routers.admin_router import router as admin_router
@@ -73,6 +75,7 @@ from .modules.bcm import bcm_router
 from .modules.agents import agents_router, agent_downloads_router
 from .modules.risk_posture import risk_posture_router
 from .modules.onboarding import onboarding_router
+from .modules.asset_discovery import asset_discovery_router
 from .modules.compliance_plugins import compliance_plugins_router
 from .routers.connect_wizard_router import router as connect_wizard_router
 from .routers.access_review_router import router as access_review_router
@@ -113,6 +116,17 @@ app.add_middleware(
 )
 
 app.add_middleware(GZipMiddleware, minimum_size=500, compresslevel=6)
+
+# AI-usage context must be established *inside* tenant resolution so it can read
+# the resolved slug off ``scope['state']``. It is a pure-ASGI middleware (unlike
+# TenantMiddleware) so the ContextVars it sets survive into the threadpool that
+# runs sync endpoints — a BaseHTTPMiddleware here would lose them and every
+# provider attempt would be dropped for missing tenant context.
+# Added before TenantMiddleware so it ends up inner to it (add_middleware mounts
+# outermost).
+from .services.ai_usage import AIUsageASGIMiddleware
+
+app.add_middleware(AIUsageASGIMiddleware)
 
 app.add_middleware(TenantMiddleware)
 
@@ -236,12 +250,15 @@ app.include_router(connectors_router)
 app.include_router(search_router)
 # Teams — admin CRUD for org teams + asset owning-team dropdown.
 app.include_router(teams_router)
+# Notes, History, derived Alerts for assets + vulnerabilities.
+app.include_router(entity_extras_router.router)
 
 # CIS integration routers — additive only; existing routes unchanged.
 app.include_router(agents_router)
 app.include_router(agent_downloads_router)
 app.include_router(risk_posture_router)
 app.include_router(onboarding_router)
+app.include_router(asset_discovery_router)
 app.include_router(compliance_plugins_router)
 app.include_router(connect_wizard_router)
 app.include_router(access_review_router)

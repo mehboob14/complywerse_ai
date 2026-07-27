@@ -3160,6 +3160,8 @@ def generate_policy_ai_draft(
 
     request_payload = {
         "tenant_id": tenant_id,
+        "user_id": current_user.id,
+        "user_name": current_user.display_name or current_user.username,
         "doc_type": request.doc_type,
         "title": request.title,
         "description": request.description,

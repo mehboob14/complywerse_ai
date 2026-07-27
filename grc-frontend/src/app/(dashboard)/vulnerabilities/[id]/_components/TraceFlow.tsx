@@ -234,18 +234,18 @@ export default function TraceFlow({
         <div className={styles.lgroup}>
           <span className={styles.h}>verdict</span>
           <div className={styles.lrow}>
-            <span className={styles.lchip}><span className={styles.sw} style={{ background: '#FB5069' }} />likely</span>
-            <span className={styles.lchip}><span className={styles.sw} style={{ background: '#F0A430' }} />possible</span>
-            <span className={styles.lchip}><span className={styles.sw} style={{ background: '#34C88E' }} />unlikely</span>
-            <span className={styles.lchip}><span className={styles.sw} style={{ background: '#93A3B5' }} />insufficient</span>
+            <span className={styles.lchip}><span className={styles.sw} style={{ background: '#f43f5e' }} />likely</span>
+            <span className={styles.lchip}><span className={styles.sw} style={{ background: '#f59e0b' }} />possible</span>
+            <span className={styles.lchip}><span className={styles.sw} style={{ background: '#10b981' }} />unlikely</span>
+            <span className={styles.lchip}><span className={styles.sw} style={{ background: '#64748b' }} />insufficient</span>
           </div>
         </div>
         <div className={styles.lgroup}>
           <span className={styles.h}>provenance</span>
           <div className={styles.lrow}>
-            <span className={styles.lchip}><span className={styles.sw} style={{ background: '#2DD4BF' }} />standards (CAPEC)</span>
-            <span className={styles.lchip}><span className={styles.sw} style={{ background: '#F0A430' }} />CVSS</span>
-            <span className={styles.lchip}><span className={styles.sw} style={{ background: '#8C93F8' }} />analyst</span>
+            <span className={styles.lchip}><span className={styles.sw} style={{ background: '#14b8a6' }} />standards (CAPEC)</span>
+            <span className={styles.lchip}><span className={styles.sw} style={{ background: '#f59e0b' }} />CVSS</span>
+            <span className={styles.lchip}><span className={styles.sw} style={{ background: '#6366f1' }} />analyst</span>
             <span className={styles.lchip}><span className={`${styles.sw} ${styles.swDashed}`} />assumed</span>
           </div>
         </div>

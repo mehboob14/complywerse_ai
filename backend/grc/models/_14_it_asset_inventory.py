@@ -161,6 +161,45 @@ class ITAsset(Base):
     # values: low | medium | high | critical
     business_impact_notes = Column(Text, nullable=True)
 
+    # ── ITAM parity: hardware, procurement & identity extras ───────────────
+    # Brings the asset record up to full ITAM parity (matches the dedicated
+    # ITAM reference product). Powers the detail-page cards:
+    #   Hardware & Telemetry · Network & Platform · Procurement & Cost.
+    # All nullable / additive — existing rows are unaffected until set.
+    cpu_cores = Column(Integer, nullable=True)        # vCPU count
+    memory_gb = Column(Integer, nullable=True)        # RAM in GB
+    storage_gb = Column(Integer, nullable=True)       # disk in GB
+    agent_version = Column(String(50), nullable=True)
+    manufacturer = Column(String(255), nullable=True)
+    model = Column(String(255), nullable=True)
+    serial_number = Column(String(255), nullable=True)
+    department = Column(String(150), nullable=True)
+    assigned_user = Column(String(255), nullable=True)
+    purchase_cost = Column(Float, nullable=True)
+    purchase_date = Column(DateTime, nullable=True)
+    warranty_expiry = Column(DateTime, nullable=True)
+    eol_date = Column(DateTime, nullable=True)
+    # Deployment environment — production | staging | development | test | dr.
+    environment = Column(String(50), nullable=True)
+
+    # ── Identity-resolution keys (discovery) ──────────────────────────────
+    # What the discovery identity resolver matches an observation against so
+    # the same host seen by two sources collapses to ONE asset. All nullable.
+    fqdn = Column(String(255), nullable=True, index=True)
+    primary_mac = Column(String(64), nullable=True, index=True)
+    cloud_resource_id = Column(String(255), nullable=True, index=True)
+    source_system = Column(String(50), nullable=True)      # which system last asserted this asset
+    first_seen_at = Column(DateTime, nullable=True)          # paired with last_seen_at
+    # 'discovered' (auto-created by a scan, unconfirmed) | 'managed'
+    # (operator-confirmed) | NULL (pre-existing / manually created).
+    discovery_state = Column(String(30), nullable=True, index=True)
+
+    # Endpoint security posture derived from detected_software_json by the
+    # security_classifier: { has_antivirus, antivirus_products, has_edr,
+    # edr_products, endpoint_protected, categories, ... }. Recomputed every time
+    # the software inventory is refreshed (agent heartbeat / agentless probe).
+    security_posture = Column(JSON, nullable=True)
+
     __table_args__ = (
         Index("ix_it_asset_tenant_type", "tenant_id", "asset_type"),
         Index("ix_it_asset_tenant_criticality", "tenant_id", "criticality"),
@@ -275,3 +314,101 @@ class AssetSecurityComplianceSelection(Base):
         Index("ix_asset_security_compliance_asset_benchmark", "asset_id", "benchmark"),
     )
 
+
+class AssetSavedView(Base):
+    """A named, reusable filter+sort combination for the IT Asset Inventory
+    list. Owned by a user within a tenant; `filters` is the JSON blob the list
+    toolbar produces (criticality/status/type/lifecycle/environment/...)."""
+    __tablename__ = "grc_asset_saved_views"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
+    name = Column(String(120), nullable=False)
+    filters = Column(JSON, default=dict)
+    sort = Column(String(80), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+
+# =============================================================================
+# 11b. Asset-to-asset relationships (the CMDB edge table)
+# =============================================================================
+#
+# Until now the only asset↔asset links were two scalar columns
+# (`parent_asset_id`, `replacement_asset_id`) plus an *inference* from assets
+# sharing an IP address. That inference is not a dependency graph: it cannot
+# express "this app depends on that database", it cannot be created or removed
+# by a human, and it makes blast radius a guess.
+#
+# This is a real typed edge. Direction matters — A depends_on B is not the same
+# as B depends_on A — so queries must look at BOTH columns to show an asset all
+# of its relationships.
+
+ASSET_RELATIONSHIP_TYPES = (
+    "depends_on",     # A stops working if B is down
+    "hosts",          # A is the physical/virtual host of B
+    "runs_on",        # inverse of hosts, stored explicitly for clarity
+    "connects_to",    # network reachability
+    "backs_up",       # A holds backups of B
+    "replicates_to",  # A replicates data to B
+    "member_of",      # A belongs to cluster/group B
+)
+
+
+class AssetRelationship(Base):
+    """A directed, typed edge between two assets."""
+    __tablename__ = "grc_asset_relationships"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    source_asset_id = Column(Integer, ForeignKey("grc_it_assets.id", ondelete="CASCADE"),
+                             nullable=False, index=True)
+    target_asset_id = Column(Integer, ForeignKey("grc_it_assets.id", ondelete="CASCADE"),
+                             nullable=False, index=True)
+    relationship_type = Column(String(40), nullable=False, default="depends_on")
+    notes = Column(Text, nullable=True)
+    created_by_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    created_by_name = Column(String(255), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        # The same edge of the same kind should exist once.
+        UniqueConstraint("source_asset_id", "target_asset_id", "relationship_type",
+                         name="uq_asset_relationship"),
+        Index("ix_asset_rel_tenant", "tenant_id"),
+    )
+
+
+# =============================================================================
+# 11c. Alert acknowledgement state
+# =============================================================================
+#
+# Asset alerts are DERIVED (open KEV, past-SLA, stale scan, exposure) — there is
+# no alert producer, so storing the alerts themselves would mean inventing a
+# feed. What we DO need to store is the human response to one: acknowledged or
+# resolved, by whom, when.
+#
+# Keyed by (asset, kind) because that is the identity of a derived alert. If the
+# underlying condition later clears and returns, the row is reused — the history
+# of who last acknowledged it is more useful than a new empty record.
+
+class AssetAlertState(Base):
+    """Acknowledgement / resolution state for one derived alert on one asset."""
+    __tablename__ = "grc_asset_alert_states"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    asset_id = Column(Integer, ForeignKey("grc_it_assets.id", ondelete="CASCADE"),
+                      nullable=False, index=True)
+    alert_kind = Column(String(40), nullable=False)      # kev | sla | stale | exposure
+    status = Column(String(20), nullable=False, default="open")  # open|acknowledged|resolved
+    acknowledged_by_name = Column(String(255), nullable=True)
+    acknowledged_at = Column(DateTime, nullable=True)
+    resolved_by_name = Column(String(255), nullable=True)
+    resolved_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("asset_id", "alert_kind", name="uq_asset_alert_state"),
+    )

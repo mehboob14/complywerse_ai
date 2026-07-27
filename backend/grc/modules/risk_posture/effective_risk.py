@@ -13,7 +13,7 @@ The formula and weights live in docs/RISK_POSTURE_PLAN.md §2:
       + w4 × asset_CIA_value  (0..1 normalised from /5)
       + w5 × (business_impact_factor − 1.0)   (factor is 1..1.5)
 
-    Default weights: w1=0.35, w2=0.25, w3=0.15, w4=0.10, w5=0.15
+    Default weights: w1=0.30, w2=0.25, w3=0.20, w4=0.10, w5=0.15
     (sum to 1.0; configurable per tenant later)
 
     Escalation rule:

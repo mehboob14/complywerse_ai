@@ -1,6 +1,7 @@
 'use client';
 
 import { X } from 'lucide-react';
+import { GuideMarker } from '@/components/guide';
 
 export function TrajectoryLegend({ onClose }: { onClose: () => void }) {
   return (
@@ -16,9 +17,9 @@ export function TrajectoryLegend({ onClose }: { onClose: () => void }) {
         <section>
           <div className="text-[9px] font-semibold uppercase text-slate-500 mb-1">Columns</div>
           <ul className="space-y-1 text-slate-700">
-            <li className="flex items-center gap-2"><span className="h-3 w-3 rounded border-l-4 border-l-rose-500 bg-white border border-slate-200" />Asset (criticality-tinted)</li>
-            <li className="flex items-center gap-2"><span className="h-3 w-3 rounded border-t-4 border-t-rose-500 bg-white border border-slate-200" />Vulnerability (severity-tinted)</li>
-            <li className="flex items-center gap-2"><span className="h-3 w-3 rounded border-l-4 border-l-orange-500 bg-white border border-slate-200" />Risk (tier-tinted)</li>
+            <li className="flex items-center gap-2"><span className="h-3 w-3 rounded border-l-4 border-l-rose-500 bg-white border border-slate-200" />Asset (criticality-tinted) <GuideMarker id="asset.trajAssetNode" n={3} /></li>
+            <li className="flex items-center gap-2"><span className="h-3 w-3 rounded border-t-4 border-t-rose-500 bg-white border border-slate-200" />Vulnerability (severity-tinted) <GuideMarker id="asset.trajVulnNode" n={4} /></li>
+            <li className="flex items-center gap-2"><span className="h-3 w-3 rounded border-l-4 border-l-orange-500 bg-white border border-slate-200" />Risk (tier-tinted) <GuideMarker id="asset.trajRiskNode" n={5} /></li>
           </ul>
         </section>
 
@@ -50,7 +51,9 @@ export function TrajectoryLegend({ onClose }: { onClose: () => void }) {
         </section>
 
         <section>
-          <div className="text-[9px] font-semibold uppercase text-slate-500 mb-1">Interactions</div>
+          <div className="text-[9px] font-semibold uppercase text-slate-500 mb-1">
+            Interactions <GuideMarker id="asset.trajLimits" n={6} />
+          </div>
           <ul className="space-y-1 text-slate-600">
             <li>Click any node → highlight its sub-chain</li>
             <li>Hover an edge for bridge-control detail</li>

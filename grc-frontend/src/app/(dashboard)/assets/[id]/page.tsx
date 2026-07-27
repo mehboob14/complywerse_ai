@@ -6,10 +6,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { usePermissions } from '@/hooks/usePermissions';
-import { apiClient, assetsApi, compliancePluginsApi, criticalityApi, ermApi, evidenceApi, vulnManagementApi } from '@/lib/api';
+import { apiClient, assetsApi, compliancePluginsApi, criticalityApi, entityExtrasApi, ermApi, evidenceApi, riskPostureApi, vulnManagementApi } from '@/lib/api';
 import type { IacaItem, IscaItem } from '@/lib/api';
 import type { ITAsset } from '@/types';
 import { SearchInput, InlineLinkPicker, PageLoader, MultiSelectDropdown } from '@/components/ui';
+// Design-handoff theme (warm cream + IBM Plex), scoped under .asset-suite.
+import '../_suite/asset-suite.css';
 
 // Common compliance standards for the asset "Compliance Scope" picker (users can
 // still search + the asset's existing tags are always merged in).
@@ -23,9 +25,13 @@ import {
   ClipboardList, Plus, X, Trash2, Edit, RefreshCw,
   AppWindow, HardDrive, Database, Cloud, Building2,
   Lock, ShieldCheck, MapPin, User, Bug, Network,
-  Gauge, PackageSearch, Sparkles, Layers, Filter,
+  Gauge, PackageSearch, Sparkles, Layers, Filter, Boxes,
   // CIS Module Updated drop — ComplianceTab + NoMappingCallout + ScanSessions
   Cpu, Play, ChevronDown, ChevronRight, Zap,
+  // ITAM tab-bar parity — Software / Relationships / Discovery / Lifecycle /
+  // Assignments / Activity.
+  Package, Radar, GitBranch, Users, Activity as ActivityIcon,
+  MessageSquare, Clock,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -35,7 +41,14 @@ import { RelatedIssuesPanel } from '@/components/issue-management/RelatedIssuesP
 // Updated_CIS_Assests migration: host applications "room-and-chair" panel
 // rendered above the existing ComplianceTab content.
 import HostApplicationsPanel from './_host-applications-panel';
+import {
+  SoftwarePanel, RelationshipsPanel, DiscoveryPanel,
+  LifecyclePanel, ActivityPanel,
+} from './_components/AssetWorkTabs';
+import RiskControlsTab from './_components/RiskControlsTab';
+import { NotesPanel, AlertsPanel, HistoryPanel } from '@/components/shared/EntityExtras';
 import { RoomScanProvider, useRoomScan } from './_room-scan-context';
+import { GuideMarker, useGuide } from '@/components/guide';
 
 const TrajectoryMap = nextDynamic(
   () => import('./_components/TrajectoryMap').then((m) => m.TrajectoryMap),
@@ -65,7 +78,13 @@ const ASSET_TYPE_LABELS: Record<string, string> = {
   third_party: 'Third-Party System',
 };
 
-type TabType = 'details' | 'compliance' | 'controls' | 'evidence' | 'risks' | 'vulnerabilities' | 'criticality' | 'trajectory' | 'mapping-recommendations';
+type TabType = 'overview' | 'details' | 'compliance' | 'controls' | 'evidence' | 'risks' | 'vulnerabilities' | 'criticality' | 'trajectory' | 'mapping-recommendations'
+  // Parity with the reference ITAM asset tab bar. Each of these reads an
+  // endpoint that already exists; see _components/AssetWorkTabs.tsx.
+  | 'software' | 'relationships' | 'discovery' | 'lifecycle' | 'assignments' | 'activity'
+  // Notes / Alerts / History — the last reference tabs, now backed by real
+  // endpoints (Notes + History) and a derived feed (Alerts).
+  | 'alerts' | 'notes' | 'history';
 
 interface LinkedControl {
   id: number;
@@ -98,6 +117,13 @@ interface LinkedEvidence {
   name: string;
   relationship_type: string;
 }
+
+/** Statuses that mean the finding is no longer an open item on this asset.
+ *  Matches the closed-set used by the vulnerability register and by
+ *  /asset-alerts, so an asset, its alerts and the register agree. */
+const CLOSED_VULN_STATUSES = new Set(['remediated', 'verified', 'closed', 'resolved', 'accepted']);
+const isOpenVuln = (v: { status?: string | null }) =>
+  !CLOSED_VULN_STATUSES.has((v.status || '').toLowerCase());
 
 interface LinkedVulnerability {
   link_id?: number;
@@ -182,6 +208,21 @@ interface AssetDetailData {
   os_family?: string | null;
   os_version?: string | null;
   os_normalized?: string | null;
+  // ── ITAM parity: hardware, procurement & identity extras ──────────────
+  cpu_cores?: number | null;
+  memory_gb?: number | null;
+  storage_gb?: number | null;
+  agent_version?: string | null;
+  manufacturer?: string | null;
+  model?: string | null;
+  serial_number?: string | null;
+  department?: string | null;
+  assigned_user?: string | null;
+  purchase_cost?: number | null;
+  purchase_date?: string | null;
+  warranty_expiry?: string | null;
+  eol_date?: string | null;
+  environment?: string | null;
 }
 
 type AssetUpdatePayload = Partial<
@@ -189,6 +230,8 @@ type AssetUpdatePayload = Partial<
     ITAsset,
     | 'name'
     | 'description'
+    | 'asset_type'
+    | 'owner_name'
     | 'host_name'
     | 'ip_address'
     | 'criticality'
@@ -214,6 +257,21 @@ type AssetUpdatePayload = Partial<
     | 'owning_team_id'
     | 'escalation_contact_id'
     | 'business_owner_id'
+    // ITAM parity: hardware, procurement & identity extras
+    | 'cpu_cores'
+    | 'memory_gb'
+    | 'storage_gb'
+    | 'agent_version'
+    | 'manufacturer'
+    | 'model'
+    | 'serial_number'
+    | 'department'
+    | 'assigned_user'
+    | 'purchase_cost'
+    | 'purchase_date'
+    | 'warranty_expiry'
+    | 'eol_date'
+    | 'environment'
   >
 >;
 
@@ -228,7 +286,7 @@ export default function AssetDetailPage() {
   // D1 layout: the right column starts on the promoted Trajectory graph — the
   // asset's core risk narrative — rather than the old Details tab (which is now
   // dissolved into the pinned left context rail).
-  const [activeTab, setActiveTab] = useState<TabType>('trajectory');
+  const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showLifecycleModal, setShowLifecycleModal] = useState(false);
@@ -260,7 +318,10 @@ export default function AssetDetailPage() {
     };
     group?: Array<{ id: number; is_self: boolean; score?: number | null }>;
   }>({
-    queryKey: ['asset-ip-peers', assetId],
+    // Same key as HostApplicationsPanel's ['assets', id, 'ip-peers'] so the two
+    // share one cache entry. They were 'asset-ip-peers' and ['assets', id,
+    // 'ip-peers'] — one endpoint, two keys, so every page load hit it twice.
+    queryKey: ['assets', assetId, 'ip-peers'],
     queryFn: async () => {
       try {
         const response = await assetsApi.getIPPeers(assetId);
@@ -280,7 +341,8 @@ export default function AssetDetailPage() {
       const response = await ermApi.internalControls.getAll();
       return response.data as Array<{ id: number; control_id?: string; name: string; category?: string }>;
     },
-    enabled: activeTab === 'controls',
+    // Controls now render inside the merged "Risk & Controls" tab.
+    enabled: activeTab === 'risks',
   });
 
   const { data: allEvidence, isLoading: evidenceLoading } = useQuery({
@@ -454,6 +516,41 @@ export default function AssetDetailPage() {
     );
   };
 
+  // ── Tab count badges ────────────────────────────────────────────────
+  // Alerts and Software are the only two counts not already on the page, so
+  // they get their own small queries. Everything else reuses data we hold.
+  const { data: alertsForCount } = useQuery({
+    queryKey: ['asset-alerts', assetId],
+    queryFn: async () => (await entityExtrasApi.assetAlerts(assetId)).data,
+  });
+  const { data: softwareForCount } = useQuery({
+    queryKey: ['asset-detected-software', assetId],
+    queryFn: async () => (await assetsApi.getDetectedSoftware(assetId)).data as any,
+  });
+  // The SAME source the Risk & Controls card uses. The header stat used to
+  // read AssetRiskAssessment (a different, older heuristic), so the page
+  // showed two different "risk scores" for one asset.
+  const { data: assetPosture } = useQuery({
+    queryKey: ['asset-risk-posture', assetId],
+    queryFn: async () => (await riskPostureApi.asset(assetId)).data as any,
+  });
+  // Blast radius — how many other assets this one can reach: declared
+  // relationships plus co-located peers, de-duplicated.
+  const { data: blastRels } = useQuery({
+    queryKey: ['asset-relationships', assetId],
+    queryFn: async () => (await entityExtrasApi.listRelationships(assetId)).data,
+  });
+
+  // Re-detect the asset's OS from the Discovery tab. The panel has always had
+  // the button, but the page never passed the handler — so it never rendered.
+  const reDetectOsMutation = useMutation({
+    mutationFn: () => compliancePluginsApi.reDetectAssetOs(assetId).then((r: any) => r.data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['asset-detail', assetId] });
+      queryClient.invalidateQueries({ queryKey: ['asset-risk-posture', assetId] });
+    },
+  });
+
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center rounded-lg border border-slate-200 bg-white">
@@ -474,9 +571,20 @@ export default function AssetDetailPage() {
     );
   }
 
-  const latestAssessment = asset.risk_assessments?.length > 0 
+  const latestAssessment = asset.risk_assessments?.length > 0
     ? asset.risk_assessments.sort((a, b) => new Date(b.assessment_date).getTime() - new Date(a.assessment_date).getTime())[0]
     : null;
+
+  // Profile completeness — % of the key identity/ownership fields that are filled.
+  const idFields = [
+    asset.primary_owner_name || asset.owner_name, asset.custodian, asset.department,
+    asset.environment, asset.assigned_user, asset.location, asset.data_classification,
+    asset.business_function, asset.owning_team_name || asset.owning_team,
+    asset.secondary_owner_name, asset.business_owner_name, asset.escalation_contact_name,
+    asset.confidentiality_rating, asset.integrity_rating, asset.availability_rating,
+  ];
+  const idPct = Math.round((idFields.filter((v) => v !== null && v !== undefined && v !== '' && v !== 0).length / idFields.length) * 100);
+  const idPctColor = idPct >= 70 ? '#0E5A46' : idPct >= 40 ? '#B08420' : '#C2542E';
 
   const displayName = (() => {
     const isAutoName = asset.name === asset.ip_address || asset.name?.startsWith('Nessus-Host-');
@@ -492,110 +600,301 @@ export default function AssetDetailPage() {
   // Right-column work sections. The old top tab-strip is replaced by an
   // in-column secondary nav so the LEFT context rail never scrolls away.
   // Trajectory is PROMOTED to first — it's the asset's core risk narrative.
+  const softwareCount = Array.isArray(softwareForCount)
+    ? softwareForCount.length
+    : ((softwareForCount?.inventory ?? softwareForCount?.software ?? softwareForCount?.items ?? []) as any[]).length;
+
+  const tabCounts: Partial<Record<TabType, number>> = {
+    risks: (asset?.linked_risks?.length ?? 0)
+      + (asset?.linked_internal_controls?.length ?? 0)
+      + (asset?.linked_framework_controls?.length ?? 0),
+    vulnerabilities: (asset?.linked_vulnerabilities ?? []).filter(isOpenVuln).length,
+    alerts: alertsForCount?.length ?? 0,
+    software: softwareCount,
+    relationships: (ipPeers?.group ?? []).filter((g: any) => !g.is_self).length,
+    evidence: asset?.linked_evidence?.length ?? 0,
+  };
+
   const sections: { id: TabType; label: string; icon: React.ElementType }[] = [
-    { id: 'trajectory', label: 'Trajectory', icon: Network },
+    // Order + naming follow the reference ITAM asset tab bar, so the two
+    // products read the same. 'risks' now carries Risks AND Controls.
+    { id: 'overview', label: 'Overview', icon: Boxes },
+    { id: 'risks', label: 'Risk & Controls', icon: Shield },
     { id: 'vulnerabilities', label: 'Vulnerabilities', icon: Bug },
-    { id: 'risks', label: 'Risks', icon: AlertTriangle },
-    { id: 'controls', label: 'Controls', icon: Shield },
-    { id: 'evidence', label: 'Evidence', icon: FileCheck },
+    { id: 'software', label: 'Software', icon: Package },
+    { id: 'relationships', label: 'Relationships', icon: Network },
+    { id: 'lifecycle', label: 'Lifecycle', icon: GitBranch },
+    { id: 'evidence', label: 'Attachments', icon: FileCheck },
+    { id: 'notes', label: 'Notes', icon: MessageSquare },
+    { id: 'history', label: 'History', icon: Clock },
+    // ── Beyond the reference: our GRC-specific views ──
     // CIS Module Updated drop — Compliance / room scan (HostApplicationsPanel + ComplianceTab).
     { id: 'compliance', label: 'Compliance', icon: Cpu },
+    { id: 'trajectory', label: 'Trajectory', icon: Network },
     { id: 'criticality', label: 'Criticality Assessments', icon: ShieldCheck },
-    { id: 'mapping-recommendations', label: 'Mapping Recommendations', icon: Sparkles },
   ];
 
   return (
-    <div className="assets-light risk-workspace -m-4 space-y-4 lg:-m-5">
-      {/* Header bar — identity + status pills. Actions live in the left rail. */}
-      <div className="border-b border-slate-200 px-4 py-3 sm:px-6">
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-          <div className="flex items-start gap-3">
-            <Link
-              href="/assets"
-              className="mt-0.5 rounded-md p-1.5 text-slate-600 hover:bg-slate-50 hover:text-slate-800"
-              title="Back to Assets"
-            >
-              <ArrowLeft className="h-4 w-4" strokeWidth={1.75} />
-            </Link>
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-50 text-primary-600">
-              {getAssetIcon(asset.asset_type)}
-            </div>
-            <div>
-              <h1 className="text-lg font-semibold text-slate-800">{displayName}</h1>
-              <p className="text-xs text-slate-600">{asset.description || 'No description'}</p>
-            </div>
+    <div className="asset-suite assets-light risk-workspace -m-4 space-y-4 lg:-m-5">
+      {/* Header card — identity + action row (design handoff, warm theme) */}
+      <div className="as-card" style={{ padding: '20px 24px' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
+          <Link href="/assets" title="Back to inventory" style={{ width: 34, height: 34, borderRadius: 8, background: 'var(--as-subtle)', border: '1px solid var(--as-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none', marginTop: 3, color: 'var(--as-primary)' }}>
+            <ArrowLeft className="h-4 w-4" strokeWidth={1.75} />
+          </Link>
+          <div style={{ width: 44, height: 44, borderRadius: 10, background: '#F6E8D4', color: '#8A4A0F', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}>
+            {getAssetIcon(asset.asset_type)}
           </div>
-          <div className="flex flex-wrap items-center gap-2 xl:justify-end">
-            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600">
-              {ASSET_TYPE_LABELS[asset.asset_type] || asset.asset_type}
-            </span>
-            {getStatusBadge(asset.status)}
-            {getCriticalityBadge(asset.criticality)}
+          <div style={{ flex: 1, minWidth: 240 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <h1 style={{ margin: 0, fontSize: 21, fontWeight: 600, letterSpacing: -0.3, color: 'var(--as-ink)' }}>{displayName}</h1>
+              <span className="as-pill" style={{ fontWeight: 700, letterSpacing: 0.4, color: '#8A4A0F', background: '#F6E8D4' }}>{(ASSET_TYPE_LABELS[asset.asset_type] || asset.asset_type).toUpperCase()}</span>
+              <span className="as-pill" style={{ fontWeight: 700, letterSpacing: 0.4, color: 'var(--as-green)', background: 'var(--as-green-bg)' }}>{(asset.status || 'active').toUpperCase()}</span>
+              <span className="as-pill" style={{ fontWeight: 700, letterSpacing: 0.4,
+                color: (asset.criticality || '').toLowerCase() === 'critical' ? '#7A2D17' : (asset.criticality || '').toLowerCase() === 'low' ? '#0E5A46' : '#8A4A0F',
+                background: (asset.criticality || '').toLowerCase() === 'critical' ? '#F7E4DC' : (asset.criticality || '').toLowerCase() === 'low' ? '#E2EDE8' : '#F6E8D4' }}>{(asset.criticality || '').toUpperCase()}</span>
+              <GuideMarker id="asset.criticality" n={1} />
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--as-secondary)', marginTop: 5 }}>{asset.description || 'No description'}</div>
           </div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+          <button onClick={() => assessRiskMutation.mutate()} disabled={assessRiskMutation.isPending} className="as-btn as-btn-primary" style={{ padding: '8px 15px', fontSize: 12.5, opacity: assessRiskMutation.isPending ? 0.6 : 1 }}>
+            {assessRiskMutation.isPending ? 'Assessing…' : 'Assess risk'}
+          </button>
+          {canEdit && <button onClick={() => setShowEditModal(true)} className="as-btn as-btn-secondary" style={{ padding: '8px 15px', fontSize: 12.5 }}>Edit</button>}
+          {canEdit && <button onClick={() => setShowLifecycleModal(true)} className="as-btn as-btn-secondary" style={{ padding: '8px 15px', fontSize: 12.5 }} title="Change lifecycle state — decommissioning auto-closes linked vulns">Lifecycle</button>}
+          <CreateIssueButton sourceType="asset" sourceId={assetId} presetFields={{ title: `Issue on ${asset.name}`, category: 'operations', issue_type: 'incident' }} />
+          <Link href={`/compliance-plugins/asset/${assetId}`} className="as-btn as-btn-secondary" style={{ padding: '8px 15px', fontSize: 12.5 }} title="View this asset's CIS plugin runs">CIS scans</Link>
+          <Link href={`/risk-posture/asset/${assetId}`} className="as-btn as-btn-secondary" style={{ padding: '8px 15px', fontSize: 12.5 }} title="View this asset's composite risk posture">Risk posture</Link>
+          <div style={{ flex: 1 }} />
+          {canDelete && <button onClick={() => setShowDeleteConfirm(true)} className="as-btn as-btn-danger" style={{ padding: '8px 15px', fontSize: 12.5 }}>Delete</button>}
         </div>
       </div>
 
       {/* D1 split: pinned left context column + scrolling right work column.
           Every tab component is reused unchanged — only its placement changed. */}
-      <div className="mx-4 grid grid-cols-1 gap-4 pb-4 sm:mx-6 lg:grid-cols-12">
-        {/* ── LEFT: authoritative context — stays on screen ─────────────── */}
-        <div className="lg:col-span-5">
-          <div className="space-y-3 lg:sticky lg:top-4">
-            <AssetContextRail
-              asset={asset}
-              displayName={displayName}
-              assetId={assetId}
-              coverage={coverage}
-              ipPeers={ipPeers}
-              latestAssessment={latestAssessment}
-              canEdit={canEdit}
-              canDelete={canDelete}
-              onEdit={() => setShowEditModal(true)}
-              onLifecycle={() => setShowLifecycleModal(true)}
-              onDelete={() => setShowDeleteConfirm(true)}
-              onAssessRisk={() => assessRiskMutation.mutate()}
-              isAssessing={assessRiskMutation.isPending}
-              getAssetIcon={getAssetIcon}
-              formatDate={formatDate}
-            />
-          </div>
-        </div>
-
-        {/* ── RIGHT: scrolling work column ──────────────────────────────── */}
-        <div className="space-y-4 lg:col-span-7">
+      <div className="mx-4 space-y-4 pb-4 sm:mx-6">
+        {/* Full-width work column — actions + status pills moved into the header. */}
+        <div className="space-y-4">
           {/* Lightweight in-column section switcher */}
-          <div className="cw-card rounded-xl px-2 py-2">
-            <nav className="flex flex-wrap gap-1">
+          {/* Wraps onto as many rows as it needs — with 15 tabs a horizontal
+              scroller hid half of them behind a scrollbar nobody noticed. */}
+          <div style={{ borderBottom: '1px solid var(--as-border)' }}>
+            <nav className="flex" style={{ gap: 4, flexWrap: 'wrap', rowGap: 0 }}>
               {sections.map((s) => {
                 const Icon = s.icon;
                 const active = activeTab === s.id;
+                // Count badges, matching Command Center — you can see where the
+                // work is without opening every tab. Only rendered when > 0 so
+                // empty tabs stay quiet.
+                const count = tabCounts[s.id];
+                const urgent = s.id === 'alerts' || s.id === 'vulnerabilities';
                 return (
                   <button
                     key={s.id}
                     onClick={() => setActiveTab(s.id)}
-                    className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors ${
-                      active
-                        ? 'bg-primary-50 text-primary-700'
-                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-800'
-                    }`}
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 12px', fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap', background: 'transparent', border: 'none', borderBottom: active ? '2px solid var(--as-green)' : '2px solid transparent', color: active ? 'var(--as-green)' : 'var(--as-muted)', cursor: 'pointer', marginBottom: -1 }}
                   >
                     <Icon className="h-3.5 w-3.5" strokeWidth={1.75} />
                     {s.label}
+                    {count != null && count > 0 && (
+                      <span
+                        className="as-mono"
+                        style={{
+                          fontSize: 10.5, lineHeight: 1, padding: '2px 5px', borderRadius: 99,
+                          background: urgent ? 'var(--as-danger-bg)' : 'var(--as-track)',
+                          color: urgent ? '#7A2D17' : 'var(--as-muted)',
+                        }}
+                      >
+                        {count}
+                      </span>
+                    )}
                   </button>
                 );
               })}
             </nav>
           </div>
 
-          <div className="cw-card rounded-xl p-4 sm:p-5">
+          <div className={activeTab === 'overview' ? '' : 'cw-card rounded-xl p-4 sm:p-5'}>
+            {activeTab === 'overview' && (
+              <div className="space-y-4">
+                {/* Stat strip — single card, 5 cells with hairline dividers */}
+                <div className="as-card as-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', overflow: 'hidden' }}>
+                  {/* Risk Score is the SAME composite the Risk & Controls tab
+                      shows — one asset, one risk number. */}
+                  <OverviewStat
+                    label="Risk Score"
+                    value={assetPosture?.score != null ? Math.round(assetPosture.score) : '—'}
+                    accent={(assetPosture?.score ?? 0) > 70}
+                    guideId="asset.riskScore"
+                    guideN={2}
+                  />
+                  <OverviewStat
+                    label="Open Findings"
+                    // Counted every linked finding regardless of status, so a
+                    // Verified or Risk-Accepted one still reported as open and
+                    // the asset kept showing risk that had already been dealt
+                    // with — while the register's own count dropped correctly.
+                    value={(asset.linked_vulnerabilities || []).filter(isOpenVuln).length}
+                    guideId="asset.openFindings"
+                    guideN={3}
+                  />
+                  <OverviewStat
+                    label="Blast Radius"
+                    value={(() => {
+                      const ids = new Set<number>();
+                      (blastRels ?? []).forEach((r: any) => ids.add(r.other_asset_id));
+                      (ipPeers?.group ?? []).forEach((p: any) => { if (!p.is_self) ids.add(p.id); });
+                      return ids.size;
+                    })()}
+                    guideId="asset.blastRadius"
+                    guideN={4}
+                  />
+                  <OverviewStat
+                    label="Control Coverage"
+                    value={`${Math.round(coverage?.coverage_percentage ?? asset.coverage_percentage ?? 0)}%`}
+                    guideId="asset.controlCoverage"
+                    guideN={5}
+                  />
+                  <OverviewStat
+                    label="Refresh Due"
+                    value={(() => {
+                      // EOL if we have it, else the 4-year refresh cycle from purchase.
+                      const eol = asset.eol_date ? new Date(asset.eol_date) : null;
+                      const pur = asset.purchase_date ? new Date(asset.purchase_date) : null;
+                      const due = eol ?? (pur ? new Date(pur.getFullYear() + 4, pur.getMonth(), pur.getDate()) : null);
+                      return due ? due.toLocaleDateString() : '—';
+                    })()}
+                    guideId="asset.lifecycleEol"
+                    guideN={6}
+                  />
+                </div>
+
+                {/* Grouped detail cards — 2-column layout (1.6fr / 1fr) with a
+                    full-width Procurement row, matching the handoff. Equal-height
+                    columns via items-start so the last card never orphans. */}
+                <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.6fr_1fr]">
+                  {/* Left column */}
+                  <div className="flex flex-col gap-4">
+                    <OverviewCard title="Identity & Ownership" icon={User}
+                      headerRight={
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ width: 90, height: 6, borderRadius: 3, background: 'var(--as-track)', overflow: 'hidden' }}>
+                            <span style={{ display: 'block', height: '100%', width: `${idPct}%`, background: idPctColor, borderRadius: 3 }} />
+                          </span>
+                          <span className="as-mono" style={{ fontSize: 11, fontWeight: 600, color: idPctColor }}>{idPct}%</span>
+                          <span style={{ fontSize: 10.5, color: 'var(--as-faint)' }}>complete</span>
+                          <GuideMarker id="asset.profileCompleteness" n={7} />
+                        </span>
+                      }>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-4 sm:grid-cols-3">
+                        <DField label="Category" value={ASSET_TYPE_LABELS[asset.asset_type] || asset.asset_type} />
+                        <DField label="Owner" value={asset.primary_owner_name || asset.owner_name} />
+                        <DField label="Custodian" value={asset.custodian} />
+                        <DField label="Department" value={asset.department} />
+                        <DField label="Environment" value={asset.environment ? <span className="capitalize">{asset.environment}</span> : null} />
+                        <DField label="Assigned User" value={asset.assigned_user} />
+                        <DField label="Location" value={asset.location} />
+                        <DField label="Criticality" value={<span className="capitalize">{asset.criticality}</span>} />
+                        <DField label="Lifecycle" value={<span className="capitalize">{asset.lifecycle_state || asset.status}</span>} />
+                        <DField label="Data Classification" value={asset.data_classification ? <span className="capitalize">{asset.data_classification}</span> : null} />
+                        <DField label="Business Function" value={asset.business_function} />
+                        <DField label="Owning Team" value={asset.owning_team_name || asset.owning_team} />
+                        <DField label="Secondary Owner" value={asset.secondary_owner_name || (asset.secondary_owner_id ? `User #${asset.secondary_owner_id}` : null)} />
+                        <DField label="Business Owner" value={asset.business_owner_name || (asset.business_owner_id ? `User #${asset.business_owner_id}` : null)} />
+                        <DField label="Escalation Contact" value={asset.escalation_contact_name || (asset.escalation_contact_id ? `User #${asset.escalation_contact_id}` : null)} />
+                      </div>
+                    </OverviewCard>
+
+                    <OverviewCard title="Network & Platform" icon={Network} source="Auto-discovered · scan" className="flex-1">
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-4 sm:grid-cols-3">
+                        <DField label="IP Address" value={asset.ip_address} mono />
+                        <DField label="Hostname" value={asset.host_name} mono />
+                        <DField label="Operating System" value={asset.os_version || asset.os_family} />
+                        <DField label="Manufacturer" value={asset.manufacturer} />
+                        <DField label="Model" value={asset.model} />
+                        <DField label="Serial Number" value={asset.serial_number} mono />
+                        <div className="relative">
+                          <DField label="Internet Exposed" value={asset.internet_facing ? 'Yes' : 'No'} alert={!!asset.internet_facing} />
+                          <GuideMarker id="asset.internetExposed" n={8} className="absolute -top-1 right-0" />
+                        </div>
+                        <DField label="Network Segment" value={asset.network_segment} />
+                      </div>
+                    </OverviewCard>
+                  </div>
+
+                  {/* Right column — CIA ratings intentionally NOT shown here.
+                      They live (editable, with AI-suggest) only on the Risk &
+                      Controls tab, so the value appears in exactly one place.
+                      Criticality is still visible in Identity & Ownership. */}
+                  <div className="flex flex-col gap-4">
+                    <OverviewCard title="Hardware & Telemetry" icon={Cpu} source="Telemetry: agent · Specs: manual" className="flex-1" bodyFill>
+                      <div className="grid grid-cols-3 gap-2">
+                        <SpecTile label="vCPU" value={asset.cpu_cores} />
+                        <SpecTile label="GB RAM" value={asset.memory_gb} />
+                        <SpecTile label="GB Disk" value={asset.storage_gb} />
+                      </div>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-4">
+                        <DField label="Agent Version" value={asset.agent_version} mono />
+                        <DField label="Last Seen" value={asset.last_seen_at ? formatDate(asset.last_seen_at) : null} />
+                        <DField label="Scan Source" value={asset.last_seen_source} />
+                        <DField label="Discovered" value={asset.created_at ? formatDate(asset.created_at) : null} />
+                      </div>
+                    </OverviewCard>
+                  </div>
+                </div>
+
+                {/* Full-width Procurement row */}
+                <OverviewCard title="Procurement & Cost" icon={DollarSign} source="Manual · finance/CMDB">
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-4 sm:grid-cols-3 lg:grid-cols-6">
+                    <DField label="Purchase Cost" value={asset.purchase_cost != null ? formatCurrency(asset.purchase_cost) : null} />
+                    <DField label="Purchase Date" value={asset.purchase_date ? formatDate(asset.purchase_date) : null} />
+                    <DField label="Warranty Expiry" value={asset.warranty_expiry ? formatDate(asset.warranty_expiry) : null} />
+                    <DField label="End of Life" value={asset.eol_date ? formatDate(asset.eol_date) : null} />
+                    <DField label="Vendor" value={asset.vendor} />
+                    <DField label="Valuation" value={asset.valuation != null ? formatCurrency(asset.valuation) : null} />
+                  </div>
+                </OverviewCard>
+
+                {/* Provenance footer — tells the operator where these values originate. */}
+                <div style={{ marginTop: 4, fontSize: 12, color: 'var(--as-faint)', lineHeight: 1.5, display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                  <span>
+                    {asset.last_seen_at ? <>Last synced {formatDate(asset.last_seen_at)} · </> : null}
+                    KPIs are computed (risk score from assessments · findings from linked vulnerabilities · control coverage from mapped controls · CIS composite from benchmark scans · derived criticality from CIA). Identity, network &amp; procurement fields come from manual entry, CSV import, or agent discovery.
+                  </span>
+                  <GuideMarker id="asset.provenance" n={9} />
+                </div>
+
+                {/* AssignmentsPanel used to render here too, and it was pure
+                    duplication: every one of its nine role rows — technical
+                    owner, primary, secondary, business owner, custodian, owning
+                    team, escalation contact, assigned user, department — is
+                    already in the Identity & Ownership card above, which also
+                    carries its own completeness bar. Folding the old Assignments
+                    tab into Overview merged a PANEL when it should have merged
+                    the CONTENT, so the same names appeared twice on one screen
+                    under different labels.
+                    The per-role descriptions it added ("who to call when it
+                    breaks") are not lost — that is exactly what Guide mode now
+                    provides, on the fields themselves. */}
+                <DiscoveryPanel
+                  asset={asset}
+                  onRedetect={canEdit ? () => reDetectOsMutation.mutate() : undefined}
+                  redetecting={reDetectOsMutation.isPending}
+                />
+              </div>
+            )}
             {activeTab === 'trajectory' && (
               <div className="space-y-2">
                 <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
                   <Network className="h-4 w-4 text-primary-600" strokeWidth={1.75} />
                   Risk trajectory
+                  <GuideMarker id="asset.trajWhy" n={1} />
                 </h2>
                 <p className="text-xs text-slate-500">
                   Asset → Vulnerability → Risk. Click a node to trace its sub-chain.
+                  <GuideMarker id="asset.trajAudience" n={2} />
                 </p>
                 <TrajectoryMap assetId={assetId} />
               </div>
@@ -605,30 +904,40 @@ export default function AssetDetailPage() {
                 <div className="space-y-4">
                   <HostApplicationsPanel assetId={assetId} />
                   <ComplianceTab asset={asset} />
+                  {/* Absorbed from the former Activity tab — the same scan runs,
+                      previously fetched a second time under its own cache key. */}
+                  <ActivityPanel assetId={assetId} />
                 </div>
               </RoomScanProvider>
             )}
-            {activeTab === 'controls' && (
-              <ControlsTab
-                asset={asset}
-                allControls={(allControls || []).map((c) => ({
-                  id: c.id,
-                  internal_id: c.control_id,
-                  name: c.name,
-                  category: c.category,
-                }))}
-                controlsLoading={controlsLoading}
-                onLinkControl={(controlId) => linkControlMutation.mutate({
-                  internal_control_id: controlId,
-                  coverage_status: 'partial',
-                })}
-                isLinkingControl={linkControlMutation.isPending}
-                onUnlinkInternalControl={(linkId) => unlinkInternalControlMutation.mutate(linkId)}
-                onUnlinkFrameworkControl={(linkId) => unlinkFrameworkControlMutation.mutate(linkId)}
-                isUnlinkingInternal={unlinkInternalControlMutation.isPending}
-                isUnlinkingFramework={unlinkFrameworkControlMutation.isPending}
-              />
+            {/* ── ITAM tab-bar parity. Each panel reads an endpoint that
+                   already exists; where the backend has no storage the panel
+                   says so rather than faking a timeline. ── */}
+            {activeTab === 'software' && (
+              <SoftwarePanel assetId={assetId} canEdit={canEdit} peers={(ipPeers?.group ?? []).filter((g: any) => !g.is_self)} />
             )}
+            {activeTab === 'relationships' && (
+              <RelationshipsPanel asset={asset} assetId={assetId} ipPeers={ipPeers} canEdit={canEdit} />
+            )}
+            {/* Discovery, Assignments, Activity and Alerts no longer have tabs of
+                their own.
+
+                Discovery rendered nine fields that were all already on Overview,
+                issued no query, and carried a banner saying no discovery history
+                exists. Assignments rendered eight of nine rows already in
+                Overview's Identity & Ownership card, also with no query. Both
+                were field-group views of one object presented as if they were
+                separate screens — so they now sit under Overview, where the data
+                already was.
+
+                Activity called the same endpoint as the Compliance tab's run
+                list with a smaller limit, fetching identical rows into a second
+                cache key, so it moved beside the runs it duplicated. */}
+            {activeTab === 'lifecycle' && (
+              <LifecyclePanel asset={asset} onTransition={canEdit ? () => setShowLifecycleModal(true) : undefined} />
+            )}
+            {activeTab === 'notes' && <NotesPanel entityType="asset" entityId={assetId} />}
+            {activeTab === 'history' && <HistoryPanel entityType="asset" entityId={assetId} />}
             {activeTab === 'evidence' && (
               <EvidenceTab
                 asset={asset}
@@ -644,6 +953,13 @@ export default function AssetDetailPage() {
               />
             )}
             {activeTab === 'vulnerabilities' && (
+              <div className="space-y-4">
+              {/* Alerts had its own tab, but /asset-alerts/{id} builds every alert
+                  from the same VulnerabilityAssetLink join this tab lists, plus
+                  one staleness check on last_seen_at. It was a severity ranking
+                  of this list, not a second dataset — so it sits on top of the
+                  list it ranks. */}
+              <AlertsPanel assetId={assetId} canEdit={canEdit} />
               <VulnerabilitiesTab
                 asset={asset}
                 allVulnerabilities={allVulnerabilities || []}
@@ -653,31 +969,54 @@ export default function AssetDetailPage() {
                 onUnlinkVulnerability={(vulnId) => unlinkVulnerabilityMutation.mutate(vulnId)}
                 isUnlinking={unlinkVulnerabilityMutation.isPending}
               />
+              </div>
             )}
             {activeTab === 'risks' && (
-              <div className="space-y-3">
-                {/* v2: surface Issues that have been raised against this asset
-                    directly above the existing Risks list — gives the operator
-                    a single "what's broken" view alongside risk scoring. */}
-                <RelatedIssuesPanel
-                  sourceType="asset"
-                  sourceId={assetId}
-                  title="Linked Issues"
-                  createFields={{
-                    title: `Issue on ${asset.name}`,
-                    category: 'operations',
-                    issue_type: 'incident',
-                  }}
+              // Command Center's three cards (Residual Risk / CIA / CIS) on top,
+              // driven by the single /risk-posture/asset source. Our control
+              // linking + linked-risk list sit below as children — real
+              // management the reference lacks. Linked Issues moved out (it
+              // belongs in the Issues module, not here).
+              <RiskControlsTab
+                assetId={assetId}
+                asset={asset}
+                onOpenCompliance={() => setActiveTab('compliance')}
+              >
+                <ControlsTab
+                  coveragePctFromApi={coverage?.coverage_percentage ?? asset.coverage_percentage ?? null}
+                  asset={asset}
+                  allControls={(allControls || []).map((c) => ({
+                    id: c.id,
+                    internal_id: c.control_id,
+                    name: c.name,
+                    category: c.category,
+                  }))}
+                  controlsLoading={controlsLoading}
+                  onLinkControl={(controlId) => linkControlMutation.mutate({
+                    internal_control_id: controlId,
+                    coverage_status: 'partial',
+                  })}
+                  isLinkingControl={linkControlMutation.isPending}
+                  onUnlinkInternalControl={(linkId) => unlinkInternalControlMutation.mutate(linkId)}
+                  onUnlinkFrameworkControl={(linkId) => unlinkFrameworkControlMutation.mutate(linkId)}
+                  isUnlinkingInternal={unlinkInternalControlMutation.isPending}
+                  isUnlinkingFramework={unlinkFrameworkControlMutation.isPending}
                 />
                 <RisksTab asset={asset} />
-              </div>
+                {/* Absorbed from the former Mapping Recommendations tab. It
+                    writes the same AssetFrameworkControlLink rows the control
+                    list above writes, so the suggestion and the thing it acts on
+                    are now in one place instead of two tabs apart. */}
+                <MappingRecommendationsTab assetId={assetId} />
+              </RiskControlsTab>
             )}
             {activeTab === 'criticality' && (
               <CriticalityAssessmentsTab assetId={assetId} />
             )}
-            {activeTab === 'mapping-recommendations' && (
-              <MappingRecommendationsTab assetId={assetId} />
-            )}
+            {/* Mapping Recommendations wrote the same AssetFrameworkControlLink
+                rows the Controls list on Risk & Controls writes, and invalidated
+                the same cache — two tabs performing one action. It now sits with
+                the control list it feeds. */}
           </div>
         </div>
       </div>
@@ -735,17 +1074,74 @@ function RailStatRow({ label, children }: { label: string; children: React.React
   );
 }
 
-function RailCIABar({ rating, label, tone }: { rating: number; label: string; tone: string }) {
-  const value = rating || 0;
+// ── Overview tab helpers (assesst-parity grouped cards) ──────────────────────
+function DField({ label, value, mono, alert }: { label: string; value?: React.ReactNode; mono?: boolean; alert?: boolean }) {
+  const empty = value === null || value === undefined || value === '';
   return (
-    <div className="flex items-center gap-2">
-      <span className="w-24 text-xs text-slate-500">{label}</span>
-      <div className="flex gap-1">
+    <div>
+      <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: 0.6, textTransform: 'uppercase', color: 'var(--as-muted)' }}>{label}</div>
+      <div
+        className={mono ? 'as-mono' : ''}
+        style={{ marginTop: 4, fontSize: mono ? 13 : 15, fontWeight: 500, color: empty ? 'var(--as-disabled)' : alert ? '#A33B1F' : 'var(--as-primary)' }}
+      >
+        {empty ? '—' : value}
+      </div>
+    </div>
+  );
+}
+
+function SpecTile({ label, value }: { label: string; value?: number | null }) {
+  return (
+    <div style={{ borderRadius: 10, border: '1px solid var(--as-border)', background: 'var(--as-subtle)', padding: '10px 8px', textAlign: 'center' }}>
+      <div className="as-mono" style={{ fontSize: 18, fontWeight: 600, color: 'var(--as-ink)' }}>{value ?? '—'}</div>
+      <div style={{ fontSize: 10, letterSpacing: 0.5, textTransform: 'uppercase', color: 'var(--as-faint)', marginTop: 2 }}>{label}</div>
+    </div>
+  );
+}
+
+function OverviewStat({ label, value, accent, guideId, guideN }: { label: string; value: React.ReactNode; accent?: boolean; guideId?: string; guideN?: number }) {
+  return (
+    <div style={{ padding: '14px 18px', borderRight: '1px solid var(--as-divider)', minWidth: 0 }}>
+      <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: 0.6, textTransform: 'uppercase', color: 'var(--as-muted)', display: 'flex', alignItems: 'center', gap: 5 }}>
+        {label}
+        {guideId && guideN != null && <GuideMarker id={guideId} n={guideN} />}
+      </div>
+      <div className="as-mono" style={{ marginTop: 5, fontSize: 22, fontWeight: 600, color: accent ? '#A33B1F' : 'var(--as-ink)' }}>{value}</div>
+    </div>
+  );
+}
+
+function OverviewCard({ title, icon: Icon, children, className, source, headerRight, bodyFill }: { title: string; icon: React.ElementType; children: React.ReactNode; className?: string; source?: string; headerRight?: React.ReactNode; bodyFill?: boolean }) {
+  return (
+    <div className={`as-card ${className || ''}`} style={{ padding: '20px 22px', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 15, fontWeight: 600, color: 'var(--as-ink)' }}>
+          <Icon className="h-[18px] w-[18px]" style={{ color: 'var(--as-green)' }} strokeWidth={2} /> {title}
+        </div>
+        {headerRight ? headerRight : source ? (
+          <span title={`Where this data comes from: ${source}`} style={{ fontSize: 10, fontWeight: 600, letterSpacing: 0.4, textTransform: 'uppercase', color: 'var(--as-faint)', whiteSpace: 'nowrap' }}>{source}</span>
+        ) : null}
+      </div>
+      {bodyFill
+        ? <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 14 }}>{children}</div>
+        : children}
+    </div>
+  );
+}
+
+function RailCIABar({ rating, label }: { rating: number; label: string; tone?: string }) {
+  const value = rating || 0;
+  // Warm ramp — higher rating = more sensitive → rust; mid = gold; low = amber.
+  const color = value >= 4 ? '#C2542E' : value === 3 ? '#C79A2A' : value >= 1 ? '#B08420' : 'var(--as-track)';
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+      <span style={{ width: 96, flex: 'none', fontSize: 13, color: 'var(--as-secondary)' }}>{label}</span>
+      <div style={{ display: 'flex', gap: 4, flex: 1 }}>
         {[1, 2, 3, 4, 5].map((i) => (
-          <div key={i} className={`h-3.5 w-5 rounded ${i <= value ? tone : 'bg-slate-200'}`} />
+          <div key={i} style={{ height: 14, flex: 1, maxWidth: 40, borderRadius: 3, background: i <= value ? color : 'var(--as-track)' }} />
         ))}
       </div>
-      <span className="ml-auto text-xs text-slate-600">{value}/5</span>
+      <span className="as-mono" style={{ marginLeft: 8, fontSize: 12.5, fontWeight: 600, color: 'var(--as-ink)' }}>{value}/5</span>
     </div>
   );
 }
@@ -931,93 +1327,10 @@ function AssetContextRail({
         </div>
       </div>
 
-      {/* Posture stats — Coverage / CIS composite / Risk score */}
-      <div className="cw-card rounded-xl p-4">
-        <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-slate-500">
-          <Target className="h-3.5 w-3.5" strokeWidth={1.75} /> Posture
-        </div>
-        <div className="divide-y divide-slate-100">
-          <RailStatRow label="Control coverage">
-            <span className="text-slate-800">{coveragePct}%</span>
-            <span className="ml-1 text-xs font-normal text-slate-400">· {totalControls} linked</span>
-          </RailStatRow>
-          <RailStatRow label="CIS composite">
-            {cisScore == null ? (
-              <span className="text-slate-400">Not scanned</span>
-            ) : (
-              <span className={cisColor}>{cisScore.toFixed(1)}%</span>
-            )}
-          </RailStatRow>
-          <RailStatRow label="Risk score">
-            {riskScore == null ? (
-              <span className="text-slate-400">No assessment</span>
-            ) : (
-              <span className={riskColor}>{riskScore.toFixed(1)}</span>
-            )}
-          </RailStatRow>
-          <RailStatRow label="Derived criticality">
-            <ScoreBadge score={asset.criticality_score} />
-          </RailStatRow>
-        </div>
-        {latestAssessment && (
-          <p className="mt-2 text-[11px] text-slate-400">
-            Last assessed {formatDate(latestAssessment.assessment_date)}
-          </p>
-        )}
-      </div>
-
-      {/* Ownership chain */}
-      <div className="cw-card rounded-xl p-4">
-        <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-slate-500">
-          <User className="h-3.5 w-3.5" strokeWidth={1.75} /> Ownership
-        </div>
-        <div className="divide-y divide-slate-100">
-          <RailStatRow label="Primary owner">
-            {asset.primary_owner_name || (asset.primary_owner_id ? `User #${asset.primary_owner_id}` : asset.owner_name) || <span className="text-slate-400 font-normal">Not assigned</span>}
-          </RailStatRow>
-          <RailStatRow label="Secondary owner">
-            {asset.secondary_owner_name || (asset.secondary_owner_id ? `User #${asset.secondary_owner_id}` : <span className="text-slate-400 font-normal">Not assigned</span>)}
-          </RailStatRow>
-          <RailStatRow label="Business owner">
-            {asset.business_owner_name || (asset.business_owner_id ? `User #${asset.business_owner_id}` : <span className="text-slate-400 font-normal">Not assigned</span>)}
-          </RailStatRow>
-          <RailStatRow label="Owning team">
-            {asset.owning_team || <span className="text-slate-400 font-normal">Not assigned</span>}
-          </RailStatRow>
-          <RailStatRow label="Escalation">
-            {asset.escalation_contact_name || (asset.escalation_contact_id ? `User #${asset.escalation_contact_id}` : <span className="text-slate-400 font-normal">Not assigned</span>)}
-          </RailStatRow>
-        </div>
-      </div>
-
-      {/* Lifecycle & operational context */}
-      <div className="cw-card rounded-xl p-4">
-        <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-slate-500">
-          <TrendingUp className="h-3.5 w-3.5" strokeWidth={1.75} /> Lifecycle & context
-        </div>
-        <div className="divide-y divide-slate-100">
-          <RailStatRow label="Lifecycle state">
-            <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium capitalize ${lifecycleCls}`}>
-              {asset.lifecycle_state || 'active'}
-            </span>
-          </RailStatRow>
-          <RailStatRow label="Data classification">
-            {asset.data_classification && classificationCls ? (
-              <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium capitalize ${classificationCls}`}>
-                {asset.data_classification}
-              </span>
-            ) : (
-              <span className="text-slate-400 font-normal">Not set</span>
-            )}
-          </RailStatRow>
-          <RailStatRow label="Network segment">
-            {asset.network_segment || <span className="text-slate-400 font-normal">Not set</span>}
-          </RailStatRow>
-          <RailStatRow label="Last observed">
-            <StaleIndicator lastSeenAt={asset.last_seen_at} />
-          </RailStatRow>
-        </div>
-      </div>
+      {/* Posture, Ownership and Lifecycle detail moved to the Overview tab
+          (stat strip + Identity & Ownership / Network & Platform cards) to
+          remove the rail↔Overview duplication. The rail now shows only the
+          quick-glance CIA ratings + the always-visible action buttons. */}
     </>
   );
 }
@@ -1051,6 +1364,8 @@ function EditAssetModal({
   const [form, setForm] = useState({
     name: asset.name || '',
     description: asset.description || '',
+    asset_type: asset.asset_type || 'application',
+    owner_name: asset.owner_name || '',
     host_name: asset.host_name || '',
     ip_address: asset.ip_address || '',
     criticality: asset.criticality || 'medium',
@@ -1075,6 +1390,21 @@ function EditAssetModal({
     owning_team: asset.owning_team || '',
     escalation_contact_id: asset.escalation_contact_id ?? '',
     business_owner_id: asset.business_owner_id ?? '',
+    // ITAM parity: hardware, procurement & identity extras.
+    manufacturer: asset.manufacturer || '',
+    model: asset.model || '',
+    serial_number: asset.serial_number || '',
+    department: asset.department || '',
+    assigned_user: asset.assigned_user || '',
+    agent_version: asset.agent_version || '',
+    cpu_cores: asset.cpu_cores != null ? String(asset.cpu_cores) : '',
+    memory_gb: asset.memory_gb != null ? String(asset.memory_gb) : '',
+    storage_gb: asset.storage_gb != null ? String(asset.storage_gb) : '',
+    purchase_cost: asset.purchase_cost != null ? String(asset.purchase_cost) : '',
+    purchase_date: asset.purchase_date ? asset.purchase_date.slice(0, 10) : '',
+    warranty_expiry: asset.warranty_expiry ? asset.warranty_expiry.slice(0, 10) : '',
+    eol_date: asset.eol_date ? asset.eol_date.slice(0, 10) : '',
+    environment: asset.environment || '',
   });
 
   const parseId = (v: string | number): number | undefined => {
@@ -1092,6 +1422,8 @@ function EditAssetModal({
     onSave({
       name: form.name,
       description: form.description || undefined,
+      asset_type: form.asset_type as ITAsset['asset_type'],
+      owner_name: form.owner_name || undefined,
       host_name: form.host_name || undefined,
       ip_address: form.ip_address || undefined,
       criticality: form.criticality as ITAsset['criticality'],
@@ -1117,6 +1449,21 @@ function EditAssetModal({
       owning_team: form.owning_team || undefined,
       escalation_contact_id: parseId(form.escalation_contact_id),
       business_owner_id: parseId(form.business_owner_id),
+      // ITAM parity: hardware, procurement & identity extras.
+      manufacturer: form.manufacturer || undefined,
+      model: form.model || undefined,
+      serial_number: form.serial_number || undefined,
+      department: form.department || undefined,
+      assigned_user: form.assigned_user || undefined,
+      agent_version: form.agent_version || undefined,
+      cpu_cores: form.cpu_cores !== '' ? Number(form.cpu_cores) : undefined,
+      memory_gb: form.memory_gb !== '' ? Number(form.memory_gb) : undefined,
+      storage_gb: form.storage_gb !== '' ? Number(form.storage_gb) : undefined,
+      purchase_cost: form.purchase_cost !== '' ? Number(form.purchase_cost) : undefined,
+      purchase_date: form.purchase_date || undefined,
+      warranty_expiry: form.warranty_expiry || undefined,
+      eol_date: form.eol_date || undefined,
+      environment: form.environment || undefined,
     });
   };
 
@@ -1181,6 +1528,32 @@ function EditAssetModal({
               className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
               rows={3}
             />
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div>
+              <label className="block text-xs font-medium text-slate-600">Asset Type</label>
+              <select
+                value={form.asset_type}
+                onChange={(e) => setForm({ ...form, asset_type: e.target.value })}
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+              >
+                <option value="application">Application</option>
+                <option value="infrastructure">Infrastructure</option>
+                <option value="data">Data</option>
+                <option value="cloud">Cloud</option>
+                <option value="third_party">Third-party</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600">Owner</label>
+              <input
+                value={form.owner_name}
+                onChange={(e) => setForm({ ...form, owner_name: e.target.value })}
+                placeholder="e.g. Jane Doe"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+              />
+            </div>
           </div>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -1440,6 +1813,76 @@ function EditAssetModal({
                   value={form.business_owner_id as number | ''}
                   onChange={(v) => setForm({ ...form, business_owner_id: v })}
                 />
+              </div>
+            </div>
+          </div>
+
+          {/* ── ITAM parity: Hardware, Procurement & Identity ──────────── */}
+          <div className="border-t border-slate-200 pt-4">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Hardware, Procurement & Identity</p>
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-600">Environment</label>
+                <select value={form.environment} onChange={(e) => setForm({ ...form, environment: e.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900">
+                  <option value="">— None —</option>
+                  <option value="production">Production</option>
+                  <option value="staging">Staging</option>
+                  <option value="development">Development</option>
+                  <option value="test">Test</option>
+                  <option value="dr">DR</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600">Department</label>
+                <input value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600">Assigned User</label>
+                <input value={form.assigned_user} onChange={(e) => setForm({ ...form, assigned_user: e.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600">Agent Version</label>
+                <input value={form.agent_version} onChange={(e) => setForm({ ...form, agent_version: e.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600">Manufacturer</label>
+                <input value={form.manufacturer} onChange={(e) => setForm({ ...form, manufacturer: e.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600">Model</label>
+                <input value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600">Serial Number</label>
+                <input value={form.serial_number} onChange={(e) => setForm({ ...form, serial_number: e.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600">vCPU</label>
+                <input type="number" min="0" value={form.cpu_cores} onChange={(e) => setForm({ ...form, cpu_cores: e.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600">RAM (GB)</label>
+                <input type="number" min="0" value={form.memory_gb} onChange={(e) => setForm({ ...form, memory_gb: e.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600">Disk (GB)</label>
+                <input type="number" min="0" value={form.storage_gb} onChange={(e) => setForm({ ...form, storage_gb: e.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600">Purchase Cost</label>
+                <input type="number" min="0" step="0.01" value={form.purchase_cost} onChange={(e) => setForm({ ...form, purchase_cost: e.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600">Purchase Date</label>
+                <input type="date" value={form.purchase_date} onChange={(e) => setForm({ ...form, purchase_date: e.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600">Warranty Expiry</label>
+                <input type="date" value={form.warranty_expiry} onChange={(e) => setForm({ ...form, warranty_expiry: e.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600">End of Life</label>
+                <input type="date" value={form.eol_date} onChange={(e) => setForm({ ...form, eol_date: e.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900" />
               </div>
             </div>
           </div>
@@ -1788,6 +2231,7 @@ function ControlsTab({
   onUnlinkFrameworkControl,
   isUnlinkingInternal,
   isUnlinkingFramework,
+  coveragePctFromApi,
 }: {
   asset: AssetDetailData;
   allControls: Array<{ id: number | string; internal_id?: string; name: string; category?: string }>;
@@ -1798,6 +2242,8 @@ function ControlsTab({
   onUnlinkFrameworkControl: (linkId: number) => void;
   isUnlinkingInternal: boolean;
   isUnlinkingFramework: boolean;
+  /** Authoritative coverage % from /assets/{id}/coverage-analysis. */
+  coveragePctFromApi?: number | null;
 }) {
   const linkedControlIds = asset.linked_internal_controls?.map((c) => c.internal_control_id) || [];
   const controlPickerItems = allControls
@@ -1823,8 +2269,20 @@ function ControlsTab({
   // asset's risk score. We surface this here so operators understand
   // why linking 1 of 12 controls still shows the dimension as "low".
   const CTRL_TARGET = 12;
-  const coveragePct = Math.min(100, Math.round((totalControls / CTRL_TARGET) * 100));
+  // Prefer the server's number. This used to recompute coverage locally as
+  // totalControls / 12, counting a partially-covering link as a full one, while
+  // /assets/{id}/coverage-analysis weighted partials at 0.5 and divided by 10.
+  // Three formulas existed for one concept and none of them agreed, so the
+  // percentage on Overview, the bar here, and the coverage that actually drove
+  // the risk score were three different numbers for the same asset.
+  // No local fallback. It used to recompute totalControls/12 whenever the API
+  // value had not loaded yet — a third formula that produced 8% while the
+  // Overview stat showed 4% and the engine used 8.3%, all for one asset. A
+  // number that is briefly absent is honest; a number that is briefly WRONG is
+  // how three views end up disagreeing.
+  const coveragePct = coveragePctFromApi != null ? Math.round(coveragePctFromApi) : null;
   const coverageTone =
+    coveragePct == null ? { bar: 'bg-slate-300', text: 'text-slate-500', bg: 'bg-slate-50', border: 'border-slate-200', label: 'Loading…' } :
     coveragePct >= 75 ? { bar: 'bg-emerald-500', text: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200', label: 'Solid coverage' } :
     coveragePct >= 33 ? { bar: 'bg-amber-500',   text: 'text-amber-700',   bg: 'bg-amber-50',   border: 'border-amber-200',   label: 'Partial coverage' } :
                         { bar: 'bg-red-500',     text: 'text-red-700',     bg: 'bg-red-50',     border: 'border-red-200',     label: 'Low coverage' };
@@ -1862,44 +2320,19 @@ function ControlsTab({
           />
         </div>
 
-        {/* Coverage progress + breakdown */}
-        <div className="mt-4 rounded-lg border border-slate-200 bg-white p-3">
-          <div className="flex items-center justify-between text-xs">
-            <div className="flex items-center gap-2">
-              <span className="font-semibold text-slate-700">Coverage</span>
-              <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${coverageTone.text} ${coverageTone.bg} ${coverageTone.border}`}>
-                {coverageTone.label}
-              </span>
-            </div>
-            <span className="font-mono font-semibold text-slate-700">
-              {totalControls} <span className="text-slate-400">of {CTRL_TARGET} target</span> · {coveragePct}%
-            </span>
+        {/* The coverage percentage and its progress bar used to be repeated
+            here. The Residual Risk card above already states it ("Control gap
+            · X% of controls cover it"), so this only shows the breakdown of
+            WHICH controls — never the headline number again. */}
+        {totalControls > 0 && (
+          <div className="mt-3 flex gap-4 text-[11px] text-slate-600">
+            {fullCount > 0 && <span><span className="inline-block h-2 w-2 rounded-full bg-green-500 mr-1" />{fullCount} fully covered</span>}
+            {partialCount > 0 && <span><span className="inline-block h-2 w-2 rounded-full bg-yellow-500 mr-1" />{partialCount} partial</span>}
+            {totalControls > fullCount + partialCount && (
+              <span><span className="inline-block h-2 w-2 rounded-full bg-slate-400 mr-1" />{totalControls - fullCount - partialCount} not rated</span>
+            )}
           </div>
-          <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-100">
-            <div className={`h-full rounded-full transition-all ${coverageTone.bar}`} style={{ width: `${coveragePct}%` }} />
-          </div>
-          {totalControls > 0 && (
-            <div className="mt-2 flex gap-4 text-[11px] text-slate-600">
-              {fullCount > 0 && <span><span className="inline-block h-2 w-2 rounded-full bg-green-500 mr-1" />{fullCount} fully covered</span>}
-              {partialCount > 0 && <span><span className="inline-block h-2 w-2 rounded-full bg-yellow-500 mr-1" />{partialCount} partial</span>}
-              {totalControls > fullCount + partialCount && (
-                <span><span className="inline-block h-2 w-2 rounded-full bg-slate-400 mr-1" />{totalControls - fullCount - partialCount} not rated</span>
-              )}
-            </div>
-          )}
-          {totalControls === 0 && (
-            <p className="mt-2 text-[11px] italic text-slate-500">
-              No controls linked yet — risk posture treats this dimension as
-              unmeasured and excludes it from the score. Link at least one to start scoring.
-            </p>
-          )}
-          {totalControls > 0 && coveragePct < 75 && (
-            <p className="mt-2 text-[11px] text-amber-700">
-              View the asset's Risk Posture page for a per-dimension contribution
-              breakdown — adding more controls reduces the coverage gap and the score.
-            </p>
-          )}
-        </div>
+        )}
       </div>
 
       {asset.linked_internal_controls && asset.linked_internal_controls.length > 0 && (
@@ -1984,23 +2417,13 @@ function ControlsTab({
         </div>
       )}
 
+      {/* One quiet line, not a full-height hero. The "+ Link Control" button
+          in this card's header is already the way to act. */}
       {totalControls === 0 && (
-        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 py-12 text-center">
-          <Shield className="mb-4 h-12 w-12 text-slate-400" />
-          <h4 className="text-base font-medium text-slate-900">No Controls Linked</h4>
-          <p className="mt-1 text-sm text-slate-600">Link controls to this asset for compliance tracking</p>
-          <div className="mt-4">
-            <InlineLinkPicker
-              triggerLabel="Link First Control"
-              triggerClassName="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
-              items={controlPickerItems}
-              isLoading={controlsLoading || isLinkingControl}
-              emptyText="No controls available"
-              searchPlaceholder="Search controls"
-              onSelect={(value) => onLinkControl(Number(value))}
-            />
-          </div>
-        </div>
+        <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-[12.5px] text-slate-500">
+          No controls linked yet — this dimension is treated as unmeasured and left out of the score.
+          Use <span className="font-semibold">+ Link Control</span> above to start scoring it.
+        </p>
       )}
     </div>
   );
@@ -2023,6 +2446,7 @@ function EvidenceTab({
   onUnlinkEvidence: (linkId: number) => void;
   isUnlinking: boolean;
 }) {
+  const { enabled: guideEnabled } = useGuide();
   const relationshipColors: Record<string, string> = {
     supports: 'border-green-200 bg-green-50 text-green-700',
     validates: 'border-blue-200 bg-blue-50 text-blue-700',
@@ -2044,6 +2468,8 @@ function EvidenceTab({
         <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
           <FileCheck className="h-4 w-4 text-blue-600" />
           Linked Evidence ({asset.linked_evidence?.length || 0})
+          <GuideMarker id="asset.evidenceWhy" n={1} />
+          <GuideMarker id="asset.evidenceModuleLink" n={2} />
         </h3>
         <InlineLinkPicker
           triggerLabel="Link Evidence"
@@ -2057,6 +2483,14 @@ function EvidenceTab({
 
       {asset.linked_evidence && asset.linked_evidence.length > 0 ? (
         <div className="space-y-2">
+          {guideEnabled && (
+            <div className="flex items-center gap-2 text-xs text-slate-400">
+              <span>What kinds of documents belong here</span>
+              <GuideMarker id="asset.evidenceTypes" n={3} />
+              <span>· the CIS scan attachment specifically</span>
+              <GuideMarker id="asset.evidenceCisScan" n={4} />
+            </div>
+          )}
           {asset.linked_evidence.map((evidence) => (
             <div key={evidence.id} className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 p-3">
               <div className="flex items-center gap-3">
@@ -2082,8 +2516,14 @@ function EvidenceTab({
       ) : (
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 py-12 text-center">
           <FileCheck className="mb-4 h-12 w-12 text-slate-400" />
-          <h4 className="text-base font-medium text-slate-900">No Evidence Linked</h4>
-          <p className="mt-1 text-sm text-slate-600">Link evidence items to document this asset</p>
+          <h4 className="text-base font-medium text-slate-900">
+            No Evidence Linked
+            <GuideMarker id="asset.evidenceMissing" n={5} />
+          </h4>
+          <p className="mt-1 text-sm text-slate-600">
+            Link evidence items to document this asset
+            <GuideMarker id="asset.evidenceAuditorUsage" n={6} />
+          </p>
           <div className="mt-4">
             <InlineLinkPicker
               triggerLabel="Link First Evidence"
@@ -2152,7 +2592,10 @@ function VulnerabilitiesTab({
       <div className="flex items-center justify-between">
         <h3 className="flex items-center gap-2 text-base font-semibold text-slate-900">
           <Bug className="h-5 w-5 text-blue-600" />
-          Linked Vulnerabilities ({asset.linked_vulnerabilities?.length || 0})
+          Linked Vulnerabilities ({(asset.linked_vulnerabilities ?? []).filter(isOpenVuln).length} open
+          {(asset.linked_vulnerabilities ?? []).length !== (asset.linked_vulnerabilities ?? []).filter(isOpenVuln).length
+            ? ` · ${(asset.linked_vulnerabilities ?? []).length} total`
+            : ''})
         </h3>
         <InlineLinkPicker
           triggerLabel="Link Vulnerability"
@@ -2275,11 +2718,9 @@ function RisksTab({ asset }: { asset: AssetDetailData }) {
           ))}
         </div>
       ) : (
-        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 py-12 text-center">
-          <AlertTriangle className="mb-4 h-12 w-12 text-slate-400" />
-          <h4 className="text-base font-medium text-slate-900">No Associated Risks</h4>
-          <p className="mt-1 text-sm text-slate-600">No risks have been linked to this asset</p>
-        </div>
+        <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-[12.5px] text-slate-500">
+          No risks linked to this asset. Risks are linked from the risk register.
+        </p>
       )}
     </div>
   );
@@ -2935,7 +3376,10 @@ function CriticalityAssessmentsTab({ assetId }: { assetId: number }) {
     <div className="space-y-4">
       {empty ? (
         <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">
-          <p className="text-sm text-slate-600">No criticality assessments linked to this asset yet.</p>
+          <p className="text-sm text-slate-600">
+            No criticality assessments linked to this asset yet.
+            <GuideMarker id="asset.critWhy" n={1} />
+          </p>
           <p className="mt-1 text-xs text-slate-500">
             Use the buttons below to create one — the new assessment will be pre-linked to this asset.
           </p>
@@ -2960,6 +3404,7 @@ function CriticalityAssessmentsTab({ assetId }: { assetId: number }) {
             <section className="rounded-xl border border-slate-200 bg-white overflow-hidden">
               <header className="bg-slate-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-600">
                 Information System Criticality Assessments ({iscas.length})
+                <GuideMarker id="asset.critIsca" n={1} />
               </header>
               <table className="min-w-full text-sm">
                 <thead className="bg-white border-b border-slate-100 text-left text-[10px] uppercase tracking-wide text-slate-500">
@@ -2967,7 +3412,7 @@ function CriticalityAssessmentsTab({ assetId }: { assetId: number }) {
                     <th className="px-3 py-2">Information System</th>
                     <th className="px-3 py-2 text-right">Total</th>
                     <th className="px-3 py-2">Criticality</th>
-                    <th className="px-3 py-2">Approval</th>
+                    <th className="px-3 py-2">Approval <GuideMarker id="asset.critApprover" n={3} /></th>
                     <th className="px-3 py-2 text-right">Actions</th>
                   </tr>
                 </thead>
@@ -2982,6 +3427,7 @@ function CriticalityAssessmentsTab({ assetId }: { assetId: number }) {
             <section className="rounded-xl border border-slate-200 bg-white overflow-hidden">
               <header className="bg-slate-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-600">
                 Infrastructure Asset Criticality Assessments ({iacas.length})
+                <GuideMarker id="asset.critIaca" n={2} />
               </header>
               <table className="min-w-full text-sm">
                 <thead className="bg-white border-b border-slate-100 text-left text-[10px] uppercase tracking-wide text-slate-500">
@@ -3013,6 +3459,8 @@ function CriticalityAssessmentsTab({ assetId }: { assetId: number }) {
             >
               + New IACA
             </Link>
+            <GuideMarker id="asset.critVsDerived" n={4} />
+            <GuideMarker id="asset.critWhy" n={5} />
           </div>
         </>
       )}
@@ -3411,6 +3859,7 @@ function ComplianceTab({ asset }: { asset: AssetDetailData }) {
               <div className="min-w-0 flex-1">
                 <h3 className="text-sm font-semibold text-slate-900">
                   Browser asset — scans run through the host (no separate wizard form)
+                  <GuideMarker id="asset.compColocated" n={3} />
                 </h3>
                 <p className="mt-1 text-xs text-slate-600 leading-relaxed">
                   A browser has no credentials to enter, so it doesn&apos;t get its own Connect Wizard form.
@@ -3560,6 +4009,7 @@ function ComplianceTab({ asset }: { asset: AssetDetailData }) {
         <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
           <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
             <ClipboardList className="h-4 w-4 text-indigo-600" /> Matched benchmark
+            <GuideMarker id="asset.compBenchmark" n={1} />
           </h3>
           <p className="mt-1 text-xs text-slate-500">Of {total.toLocaleString()} CIS rules in the library</p>
           <div className="mt-3 flex items-baseline gap-2">
@@ -3748,7 +4198,10 @@ function ComplianceTab({ asset }: { asset: AssetDetailData }) {
       <div className="rounded-lg border border-slate-200 bg-white">
         <div className="flex items-center justify-between border-b border-slate-200 px-4 py-2">
           <div>
-            <h3 className="text-sm font-semibold text-slate-900">Applicable rules</h3>
+            <h3 className="text-sm font-semibold text-slate-900">
+              Applicable rules
+              <GuideMarker id="asset.compFormula" n={2} />
+            </h3>
             <p className="text-xs text-slate-500">Sample of what will appear when scan results arrive via the asset API</p>
           </div>
           <span className="text-xs font-medium text-slate-700">{applicable.count ?? 0} total</span>
@@ -4102,7 +4555,11 @@ function ScanSessions({
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white p-3">
         <div>
-          <h3 className="text-sm font-semibold text-slate-900">Scan sessions</h3>
+          <h3 className="text-sm font-semibold text-slate-900">
+            Scan sessions
+            <GuideMarker id="asset.compScanFrequency" n={4} />
+            <GuideMarker id="asset.compFeedsHardeningGap" n={5} />
+          </h3>
           <p className="text-[11px] text-slate-500">Each session = one Scan-all invocation. Click to expand and see individual rule outcomes.</p>
         </div>
         <div className="flex items-center gap-1 text-[10px]">

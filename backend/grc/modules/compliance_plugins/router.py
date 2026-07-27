@@ -1506,10 +1506,17 @@ def library_tree(
     # exists, so the type never got upgraded for those tenants. Casting
     # in the query makes this endpoint work on both type variants
     # without forcing a per-tenant ALTER COLUMN sweep.
+    # Guard: some rows persist os_keys as a JSON scalar (e.g. "" or null)
+    # rather than an array. jsonb_array_elements_text() raises "cannot extract
+    # elements from a scalar" on those, 500-ing the whole endpoint. Only expand
+    # rows whose os_keys is actually a JSON array; others contribute no keys.
     key_counts_rows = db.execute(_sql_text(
         "SELECT key, COUNT(*) AS n "
         "FROM grc_compliance_plugins, "
-        "     jsonb_array_elements_text(CAST(os_keys AS jsonb)) AS key "
+        "     jsonb_array_elements_text("
+        "       CASE WHEN jsonb_typeof(CAST(os_keys AS jsonb)) = 'array' "
+        "            THEN CAST(os_keys AS jsonb) ELSE '[]'::jsonb END"
+        "     ) AS key "
         "WHERE enabled = TRUE AND review_status IN ('approved','auto_approved') "
         "  AND (tenant_id IS NULL OR tenant_id = :tid) "
         "GROUP BY key"
@@ -1575,6 +1582,23 @@ def library_tree(
         if parent_key and parent_key in by_key:
             by_key[parent_key]["children"].extend(kids)
 
+    # Roll counts UP the tree: every parent folder shows the SUM of all its
+    # descendants' rules. A rule belongs to exactly one benchmark, so summing
+    # benchmark counts up the hierarchy is accurate with no double-counting
+    # (unlike per-os-key counts, where a rule tagged ["windows","windows-11"]
+    # lands in two buckets). This is why family/product folders were showing 0:
+    # plugins are tagged with specific build keys (windows-10) but not the bare
+    # family key (windows), so `rules_per_key["windows"]` was empty.
+    def _rollup(node: dict) -> int:
+        total = sum(b.get("rule_count", 0) for b in node.get("benchmarks", []))
+        for child in node.get("children", []):
+            total += _rollup(child)
+        node["rule_count"] = total
+        return total
+
+    for _root in by_parent.get(None, []):
+        _rollup(_root)
+
     # Build family roots
     family_labels = {"windows": "Windows", "linux": "Linux", "cisco": "Cisco",
                      "cloud": "Cloud Accounts", "db": "Databases", "other": "Other"}
@@ -1582,13 +1606,24 @@ def library_tree(
     for fam in sorted(families):
         # roots inside this family = parent_key IS NULL nodes whose family matches
         roots = [n for n in by_parent.get(None, []) if n.get("family") == fam]
-        total_rules = sum(rules_per_key.get(r["key"], 0) for r in roots)
+        # Unwrap the bare family node (key == family, e.g. "windows" labelled
+        # "Windows") so we don't render a redundant "Windows > Windows" nest —
+        # its children/benchmarks fold directly under the family folder.
+        children, family_benchmarks = [], []
+        for r in roots:
+            if r["key"] == fam:
+                children.extend(r.get("children", []))
+                family_benchmarks.extend(r.get("benchmarks", []))
+            else:
+                children.append(r)
+        total_rules = sum(c["rule_count"] for c in children) + sum(b.get("rule_count", 0) for b in family_benchmarks)
         tree.append({
             "key": f"family::{fam}",
             "label": family_labels.get(fam, fam.title()),
             "kind": "family",
             "rule_count": total_rules,
-            "children": roots,
+            "children": children,
+            "benchmarks": family_benchmarks,
         })
     if "__orphan__" in by_key:
         orph = by_key["__orphan__"]
@@ -1600,6 +1635,20 @@ def library_tree(
             "children": [],
             "benchmarks": orph["benchmarks"],
         })
+
+    # Prune empty branches: OS folders that carry no rules anywhere beneath
+    # them (e.g. a "Windows 10 — 21H2" build with no benchmark mapped to that
+    # exact build) are noise — the operator sees "0 rules" under a parent that
+    # says 2,199 and thinks it's broken. Drop any child whose rolled-up count
+    # is 0; the benchmarks that actually hold the rules (attached to the
+    # product level) stay visible, and every folder shown now has real rules.
+    def _prune(node: dict) -> None:
+        node["children"] = [c for c in node.get("children", []) if c.get("rule_count", 0) > 0]
+        for c in node["children"]:
+            _prune(c)
+    for _fam_node in tree:
+        _prune(_fam_node)
+    tree = [f for f in tree if f.get("rule_count", 0) > 0 or f.get("benchmarks")]
 
     # Total-rules KPI must be the actual count of approved+enabled plugins,
     # NOT the sum-over-os-keys (which double-counts: a plugin tagged

@@ -1,10 +1,12 @@
 import os
+import csv
+import io
 from datetime import datetime, timedelta
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Cookie
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import text, or_
+from sqlalchemy import text, or_, func, desc, case
 from pydantic import BaseModel, EmailStr
 import bcrypt
 
@@ -17,6 +19,7 @@ from ..models import (
     RolePermission,
     Tenant,
     UserRole,
+    AIUsageEvent,
     get_db,
 )
 from ..db import open_tenant_session
@@ -275,6 +278,9 @@ def get_current_tenant_user(
     if not user:
         raise HTTPException(status_code=401, detail="User not found in this tenant")
 
+    from ..services.ai_usage import bind_request_context
+    bind_request_context(request, user)
+
     return user
 
 
@@ -367,6 +373,276 @@ def require_permission(permission: str):
             )
         return user
     return permission_checker
+
+
+# ---------------------------------------------------------------------------
+# AI usage analytics (tenant-local; never returns prompt or response content)
+# ---------------------------------------------------------------------------
+
+def _usage_filters(query, *, date_from=None, date_to=None, username=None,
+                   module_key=None, feature_key=None, model=None, usage_status=None):
+    if date_from:
+        query = query.filter(AIUsageEvent.occurred_at >= date_from)
+    if date_to:
+        query = query.filter(AIUsageEvent.occurred_at <= date_to)
+    if username:
+        query = query.filter(AIUsageEvent.actor_username == username)
+    if module_key:
+        query = query.filter(AIUsageEvent.module_key == module_key)
+    if feature_key:
+        query = query.filter(AIUsageEvent.feature_key == feature_key)
+    if model:
+        query = query.filter(func.coalesce(AIUsageEvent.response_model, AIUsageEvent.requested_model) == model)
+    if usage_status:
+        query = query.filter(AIUsageEvent.status == usage_status)
+    return query
+
+
+def _usage_totals(query):
+    row = query.with_entities(
+        func.count(AIUsageEvent.id),
+        func.coalesce(func.sum(AIUsageEvent.prompt_tokens), 0),
+        func.coalesce(func.sum(AIUsageEvent.completion_tokens), 0),
+        func.coalesce(func.sum(AIUsageEvent.total_tokens), 0),
+        func.coalesce(func.sum(AIUsageEvent.cached_tokens), 0),
+        func.coalesce(func.sum(AIUsageEvent.reasoning_tokens), 0),
+        func.coalesce(func.sum(AIUsageEvent.estimated_cost), 0),
+        func.count(func.distinct(AIUsageEvent.actor_username)),
+        func.coalesce(func.sum(case((AIUsageEvent.status == "failed", 1), else_=0)), 0),
+        func.coalesce(func.sum(case((AIUsageEvent.pricing_version.isnot(None), 1), else_=0)), 0),
+    ).one()
+    calls = int(row[0] or 0)
+    failed = int(row[8] or 0)
+    return {
+        "calls": calls,
+        "prompt_tokens": int(row[1] or 0),
+        "completion_tokens": int(row[2] or 0),
+        "total_tokens": int(row[3] or 0),
+        "cached_tokens": int(row[4] or 0),
+        "reasoning_tokens": int(row[5] or 0),
+        "estimated_cost": float(row[6] or 0),
+        "currency": "USD",
+        "active_users": int(row[7] or 0),
+        "failed_calls": failed,
+        "failure_rate": round((failed / calls * 100), 2) if calls else 0.0,
+        "cost_configured": bool(row[9]),
+    }
+
+
+@router.get("/ai-usage/summary")
+def ai_usage_summary(
+    date_from: Optional[datetime] = None,
+    date_to: Optional[datetime] = None,
+    username: Optional[str] = None,
+    module_key: Optional[str] = None,
+    feature_key: Optional[str] = None,
+    model: Optional[str] = None,
+    usage_status: Optional[str] = None,
+    user: TenantUser = Depends(require_permission("admin:users:view")),
+    tenant_db: Session = Depends(get_tenant_db),
+):
+    query = _usage_filters(
+        tenant_db.query(AIUsageEvent), date_from=date_from, date_to=date_to,
+        username=username, module_key=module_key, feature_key=feature_key,
+        model=model, usage_status=usage_status,
+    )
+    return _usage_totals(query)
+
+
+@router.get("/ai-usage/by-module")
+def ai_usage_by_module(
+    date_from: Optional[datetime] = None,
+    date_to: Optional[datetime] = None,
+    username: Optional[str] = None,
+    user: TenantUser = Depends(require_permission("admin:users:view")),
+    tenant_db: Session = Depends(get_tenant_db),
+):
+    query = _usage_filters(tenant_db.query(AIUsageEvent), date_from=date_from, date_to=date_to, username=username)
+    rows = query.with_entities(
+        AIUsageEvent.module_key,
+        AIUsageEvent.feature_key,
+        func.count(AIUsageEvent.id),
+        func.coalesce(func.sum(AIUsageEvent.prompt_tokens), 0),
+        func.coalesce(func.sum(AIUsageEvent.completion_tokens), 0),
+        func.coalesce(func.sum(AIUsageEvent.total_tokens), 0),
+        func.coalesce(func.sum(AIUsageEvent.estimated_cost), 0),
+    ).group_by(AIUsageEvent.module_key, AIUsageEvent.feature_key).order_by(desc(func.sum(AIUsageEvent.total_tokens))).all()
+    return [{
+        "module_key": r[0], "feature_key": r[1], "calls": int(r[2] or 0),
+        "prompt_tokens": int(r[3] or 0), "completion_tokens": int(r[4] or 0),
+        "total_tokens": int(r[5] or 0), "estimated_cost": float(r[6] or 0),
+    } for r in rows]
+
+
+@router.get("/ai-usage/by-user")
+def ai_usage_by_user(
+    date_from: Optional[datetime] = None,
+    date_to: Optional[datetime] = None,
+    user: TenantUser = Depends(require_permission("admin:users:view")),
+    tenant_db: Session = Depends(get_tenant_db),
+):
+    query = _usage_filters(tenant_db.query(AIUsageEvent), date_from=date_from, date_to=date_to)
+    rows = query.with_entities(
+        AIUsageEvent.actor_user_id, AIUsageEvent.actor_username,
+        func.count(AIUsageEvent.id), func.coalesce(func.sum(AIUsageEvent.total_tokens), 0),
+        func.coalesce(func.sum(AIUsageEvent.estimated_cost), 0),
+    ).group_by(AIUsageEvent.actor_user_id, AIUsageEvent.actor_username).order_by(desc(func.sum(AIUsageEvent.total_tokens))).all()
+    return [{"user_id": r[0], "username": r[1] or "System", "calls": int(r[2] or 0),
+             "total_tokens": int(r[3] or 0), "estimated_cost": float(r[4] or 0)} for r in rows]
+
+
+@router.get("/ai-usage/users/{user_id}")
+def ai_usage_for_user(
+    user_id: int,
+    date_from: Optional[datetime] = None,
+    date_to: Optional[datetime] = None,
+    user: TenantUser = Depends(require_permission("admin:users:view")),
+    tenant_db: Session = Depends(get_tenant_db),
+):
+    target = tenant_db.query(GRCUser).filter(GRCUser.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    query = _usage_filters(tenant_db.query(AIUsageEvent), date_from=date_from, date_to=date_to, username=target.username)
+    modules = ai_usage_by_module(date_from, date_to, target.username, user, tenant_db)
+    recent = query.order_by(AIUsageEvent.occurred_at.desc()).limit(100).all()
+    return {
+        "user": {"id": target.id, "username": target.username, "display_name": target.display_name, "email": target.email},
+        "summary": _usage_totals(query),
+        "modules": modules,
+        "recent": [_serialize_ai_usage_event(event) for event in recent],
+    }
+
+
+def _serialize_ai_usage_event(event):
+    return {
+        "id": event.id, "occurred_at": event.occurred_at.isoformat() if event.occurred_at else None,
+        "username": event.actor_username, "module_key": event.module_key,
+        "feature_key": event.feature_key, "endpoint": event.endpoint,
+        "provider": event.provider, "model": event.response_model or event.requested_model,
+        "prompt_tokens": event.prompt_tokens, "completion_tokens": event.completion_tokens,
+        "total_tokens": event.total_tokens, "estimated_cost": float(event.estimated_cost or 0),
+        "status": event.status, "duration_ms": event.duration_ms,
+        "operation_id": event.operation_id, "attempt_number": event.attempt_number,
+    }
+
+
+def _csv_safe(value):
+    text_value = "" if value is None else str(value)
+    return "'" + text_value if text_value.startswith(("=", "+", "-", "@", "\t", "\r")) else text_value
+
+
+@router.get("/ai-usage/events")
+def ai_usage_events(
+    date_from: Optional[datetime] = None, date_to: Optional[datetime] = None,
+    username: Optional[str] = None, module_key: Optional[str] = None,
+    feature_key: Optional[str] = None, model: Optional[str] = None,
+    usage_status: Optional[str] = None, skip: int = 0, limit: int = 100,
+    user: TenantUser = Depends(require_permission("admin:users:view")),
+    tenant_db: Session = Depends(get_tenant_db),
+):
+    limit = min(max(limit, 1), 500)
+    query = _usage_filters(tenant_db.query(AIUsageEvent), date_from=date_from, date_to=date_to,
+                           username=username, module_key=module_key, feature_key=feature_key,
+                           model=model, usage_status=usage_status)
+    total = query.count()
+    items = query.order_by(AIUsageEvent.occurred_at.desc()).offset(max(skip, 0)).limit(limit).all()
+    return {"total": total, "items": [_serialize_ai_usage_event(item) for item in items]}
+
+
+@router.get("/ai-usage/export")
+def export_ai_usage(
+    date_from: Optional[datetime] = None, date_to: Optional[datetime] = None,
+    username: Optional[str] = None, module_key: Optional[str] = None,
+    user: TenantUser = Depends(require_permission("admin:users:view")),
+    tenant_db: Session = Depends(get_tenant_db),
+):
+    rows = _usage_filters(tenant_db.query(AIUsageEvent), date_from=date_from, date_to=date_to,
+                          username=username, module_key=module_key).order_by(AIUsageEvent.occurred_at.desc()).all()
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=[
+        "occurred_at", "username", "module_key", "feature_key", "provider", "model",
+        "prompt_tokens", "completion_tokens", "total_tokens", "estimated_cost",
+        "status", "duration_ms", "operation_id", "attempt_number",
+    ])
+    writer.writeheader()
+    for event in rows:
+        data = _serialize_ai_usage_event(event)
+        writer.writerow({key: _csv_safe(data.get(key)) for key in writer.fieldnames})
+    return StreamingResponse(iter([output.getvalue()]), media_type="text/csv",
+                             headers={"Content-Disposition": "attachment; filename=ai-usage.csv"})
+
+
+# ---------------------------------------------------------------------------
+# Token-usage dashboard: consolidated overview + budget/quota config
+# ---------------------------------------------------------------------------
+
+@router.get("/ai-usage/overview")
+def ai_usage_overview(
+    range: str = "30d",
+    user: TenantUser = Depends(require_permission("admin:users:view")),
+    tenant_db: Session = Depends(get_tenant_db),
+):
+    from ..services.ai_usage_report import build_overview
+    if range not in ("24h", "7d", "30d", "90d", "cycle"):
+        range = "30d"
+    return build_overview(tenant_db, range)
+
+
+@router.get("/ai-usage/budgets")
+def ai_usage_budgets(
+    user: TenantUser = Depends(require_permission("admin:users:view")),
+    tenant_db: Session = Depends(get_tenant_db),
+):
+    from ..services.ai_usage_report import budgets_payload
+    return budgets_payload(tenant_db)
+
+
+class ModuleBudgetIn(BaseModel):
+    module_key: str
+    monthly_budget: int = 0
+
+
+class BudgetConfigUpdate(BaseModel):
+    monthly_quota: Optional[int] = None
+    blended_rate_per_million: Optional[float] = None
+    billing_cycle_day: Optional[int] = None
+    modules: Optional[List[ModuleBudgetIn]] = None
+
+
+@router.put("/ai-usage/budgets")
+def update_ai_usage_budgets(
+    payload: BudgetConfigUpdate,
+    user: TenantUser = Depends(require_permission("admin:organization:edit")),
+    tenant_db: Session = Depends(get_tenant_db),
+):
+    from ..models import AITokenBudgetConfig, AIModuleBudget
+    from ..services.ai_usage_report import get_or_create_config, budgets_payload
+
+    cfg = get_or_create_config(tenant_db)
+    if payload.monthly_quota is not None:
+        cfg.monthly_quota = max(int(payload.monthly_quota), 0)
+    if payload.blended_rate_per_million is not None:
+        cfg.blended_rate_per_million = max(float(payload.blended_rate_per_million), 0)
+    if payload.billing_cycle_day is not None:
+        cfg.billing_cycle_day = min(max(int(payload.billing_cycle_day), 1), 28)
+    cfg.updated_by = getattr(user, "username", None)
+
+    if payload.modules is not None:
+        existing = {b.module_key: b for b in tenant_db.query(AIModuleBudget).all()}
+        for m in payload.modules:
+            key = (m.module_key or "").strip()
+            if not key:
+                continue
+            budget = max(int(m.monthly_budget or 0), 0)
+            row = existing.get(key)
+            if row:
+                row.monthly_budget = budget
+                row.updated_by = getattr(user, "username", None)
+            else:
+                tenant_db.add(AIModuleBudget(module_key=key, monthly_budget=budget,
+                                             updated_by=getattr(user, "username", None)))
+    tenant_db.commit()
+    return budgets_payload(tenant_db)
 
 
 class OrganizationProfileUpdate(BaseModel):

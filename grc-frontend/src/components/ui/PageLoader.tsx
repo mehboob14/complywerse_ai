@@ -41,6 +41,7 @@ const DOT_PX: Record<PageLoaderSize, number> = {
 
 const DOT_COUNT = 12;
 const DOT_COLOR = 'var(--color-base)'; // brand colour from tokens.css
+const roundPx = (value: number) => Number(value.toFixed(3));
 
 export function PageLoader({
   size = 'md',
@@ -76,8 +77,8 @@ export function PageLoader({
       {/* Dot wave — twelve dots evenly spaced, each delayed by 100 ms */}
       {Array.from({ length: DOT_COUNT }).map((_, i) => {
         const angle = (i / DOT_COUNT) * Math.PI * 2 - Math.PI / 2;
-        const x = center + radius * Math.cos(angle) - dotPx / 2;
-        const y = center + radius * Math.sin(angle) - dotPx / 2;
+        const x = roundPx(center + radius * Math.cos(angle) - dotPx / 2);
+        const y = roundPx(center + radius * Math.sin(angle) - dotPx / 2);
         return (
           <span
             key={i}

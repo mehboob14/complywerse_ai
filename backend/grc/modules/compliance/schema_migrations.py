@@ -695,6 +695,31 @@ _COLUMN_ADDS = [
     ("grc_it_assets", "warranty_expiry", "TIMESTAMP", None),
     ("grc_it_assets", "eol_date", "TIMESTAMP", None),
     ("grc_it_assets", "environment", "VARCHAR(50)", None),
+    # ── Identity resolution keys on ITAsset ───────────────────────────────────
+    # The columns the discovery identity resolver matches an observation against
+    # so the same host from two sources becomes ONE asset. All nullable/additive.
+    #   fqdn / primary_mac / cloud_resource_id — strong-ish identity keys (indexed
+    #     because the resolver looks assets up by them on every observation).
+    #   source_system   — which system last asserted this asset ('discovery',
+    #     'agent', 'aws', 'servicenow', …); provenance, not a match key by itself.
+    #   first_seen_at   — when this asset first entered the inventory (paired with
+    #     the existing last_seen_at).
+    #   discovery_state — 'discovered' (auto-created by a scan, unconfirmed) vs
+    #     'managed' (operator-confirmed); NULL for pre-existing/manual rows. Lets
+    #     the UI separate freshly-found devices from curated inventory instead of
+    #     dumping raw scan hits into the register.
+    ("grc_it_assets", "fqdn", "VARCHAR(255)", "ix_grc_it_assets_fqdn"),
+    ("grc_it_assets", "primary_mac", "VARCHAR(64)", "ix_grc_it_assets_primary_mac"),
+    ("grc_it_assets", "cloud_resource_id", "VARCHAR(255)",
+     "ix_grc_it_assets_cloud_resource_id"),
+    ("grc_it_assets", "source_system", "VARCHAR(50)", None),
+    ("grc_it_assets", "first_seen_at", "TIMESTAMP", None),
+    ("grc_it_assets", "discovery_state", "VARCHAR(30)",
+     "ix_grc_it_assets_discovery_state"),
+    # Endpoint security posture (antivirus / EDR presence + software category
+    # breakdown), derived from detected_software_json by the security_classifier
+    # on every inventory refresh. Drives the asset's Security Posture card.
+    ("grc_it_assets", "security_posture", "JSON", None),
 ]
 
 

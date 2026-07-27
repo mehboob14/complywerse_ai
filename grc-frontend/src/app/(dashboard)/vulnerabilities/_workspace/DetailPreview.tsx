@@ -105,6 +105,9 @@ export function DetailPreview({
   const status = str(detail.status) ?? 'open';
   const cvss = num(detail.cvss_score);
   const epssPct = num(detail.epss_percentile);
+  // The probability is the number people mean by "EPSS"; the percentile is only
+  // where it ranks. Keeping both, clearly distinguished.
+  const epssProb = num(detail.epss_score);
   const priority = num(detail.composite_priority);
   const cve = str(detail.cve_id);
   const cwe = str(detail.cwe_id);
@@ -163,9 +166,14 @@ export function DetailPreview({
           <Tile label="CVSS" sub="base score">
             <span className="text-lg font-bold text-slate-900">{cvss != null ? cvss.toFixed(1) : '—'}</span>
           </Tile>
-          <Tile label="EPSS" sub={epssPct != null ? 'exploit likelihood' : undefined}>
+          {/* This tile read `epss_percentile` while labelling it "EPSS /
+              exploit likelihood", so a finding with a 0.5% chance of
+              exploitation displayed "37%". The headline is now the actual
+              probability — the same figure the detail page shows — with the
+              percentile kept underneath as ranking context. */}
+          <Tile label="EPSS" sub={epssPct != null ? `${(epssPct * 100).toFixed(0)}th percentile` : undefined}>
             <span className="text-lg font-bold text-amber-700">
-              {epssPct != null ? `${(epssPct * 100).toFixed(0)}%` : '—'}
+              {epssProb != null ? `${(epssProb * 100).toFixed(1)}%` : '—'}
             </span>
           </Tile>
           <Tile label="Priority" sub={priority != null ? priorityBucket(priority).label : undefined}>

@@ -788,6 +788,39 @@ export const assetsApi = {
   },
 };
 
+// Asset Discovery — campaigns/scopes/runs/inbox/credentials. Backs the real
+// /asset-discovery screen (replaces the former static mock).
+export const discoveryApi = {
+  listCampaigns: () => apiClient.get('/discovery/campaigns'),
+  getCampaign: (id: number) => apiClient.get(`/discovery/campaigns/${id}`),
+  createCampaign: (data: {
+    name: string; description?: string; method?: string;
+    is_active?: boolean; schedule_seconds?: number | null;
+    scopes?: { kind: string; value: string; exclude?: boolean; note?: string }[];
+  }) => apiClient.post('/discovery/campaigns', data),
+  updateCampaign: (id: number, data: Record<string, unknown>) =>
+    apiClient.patch(`/discovery/campaigns/${id}`, data),
+  deleteCampaign: (id: number) => apiClient.delete(`/discovery/campaigns/${id}`),
+  addScope: (id: number, data: { kind: string; value: string; exclude?: boolean; note?: string }) =>
+    apiClient.post(`/discovery/campaigns/${id}/scopes`, data),
+  deleteScope: (scopeId: number) => apiClient.delete(`/discovery/scopes/${scopeId}`),
+  runNow: (id: number) => apiClient.post(`/discovery/campaigns/${id}/run`),
+  listRuns: (campaignId?: number, limit = 50) =>
+    apiClient.get('/discovery/runs', { params: { campaign_id: campaignId, limit } }),
+  inbox: (statusFilter: 'open' | 'review' | 'pending' | 'all' = 'open') =>
+    apiClient.get('/discovery/inbox', { params: { status_filter: statusFilter } }),
+  resolve: (obsId: number, action: 'adopt' | 'merge' | 'ignore', targetAssetId?: number) =>
+    apiClient.post(`/discovery/observations/${obsId}/resolve`,
+      { action, target_asset_id: targetAssetId }),
+  listCredentials: () => apiClient.get('/discovery/credentials'),
+  createCredential: (data: {
+    name: string; kind: string; username: string; secret: string;
+    secret_kind?: string; domain?: string; port?: number;
+    applies_to_cidrs?: string[]; priority?: number;
+  }) => apiClient.post('/discovery/credentials', data),
+  deleteCredential: (id: number) => apiClient.delete(`/discovery/credentials/${id}`),
+};
+
 export const isProjectsApi = {
   getAll: (params?: Record<string, string>) => apiClient.get('/is-projects', { params }),
   getById: (id: number) => apiClient.get(`/is-projects/${id}`),
