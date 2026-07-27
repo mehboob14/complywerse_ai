@@ -2610,59 +2610,66 @@ function VulnerabilitiesTab({
       </div>
 
       {asset.linked_vulnerabilities && asset.linked_vulnerabilities.length > 0 ? (
-        <div className="space-y-2">
-          {asset.linked_vulnerabilities.map((vuln) => (
-            <div key={`${vuln.vulnerability_id}-${vuln.link_id || 'link'}`} className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 p-3">
-              <div className="flex items-center gap-3">
-                <Bug className="h-5 w-5 text-red-500" />
-                <div>
-                  <p className="text-sm font-medium text-slate-900">
-                    {vuln.title || `Vulnerability #${vuln.vulnerability_id}`}
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    {vuln.vuln_id ? `${vuln.vuln_id} • ` : ''}{vuln.status || 'status unknown'}
-                  </p>
-                </div>
-                <span className={`rounded-full border px-2 py-0.5 text-xs ${severityColors[(vuln.severity || '').toLowerCase()] || 'border-slate-200 bg-slate-100 text-slate-600'}`}>
-                  {vuln.severity || 'unknown'}
-                </span>
-                <span className={`rounded-full border px-2 py-0.5 text-xs ${statusColors[(vuln.status || '').toLowerCase()] || 'border-slate-200 bg-slate-100 text-slate-600'}`}>
-                  {(vuln.status || 'unknown').replace(/_/g, ' ')}
-                </span>
-                {/* Provenance chips — show how this link was created so
-                    reviewers can spot auto-linked false positives. */}
-                {vuln.link_source && vuln.link_source !== 'manual' && (
-                  <span className="rounded-full border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-slate-600">
-                    {vuln.link_source.replace(/_/g, ' ')}
-                  </span>
-                )}
-                {vuln.auto_linked && (
-                  <span
-                    className="rounded-full border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-700"
-                    title="Linked automatically by scanner / sync / matcher — review for accuracy"
-                  >
-                    Auto
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-3">
-                <Link
-                  href={`/vulnerabilities/${vuln.vulnerability_id}`}
-                  className="text-sm text-teal-600 hover:underline"
-                >
-                  View
-                </Link>
-                <button
-                  onClick={() => onUnlinkVulnerability(vuln.vulnerability_id)}
-                  disabled={isUnlinking}
-                  className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-red-600 disabled:opacity-50"
-                  title="Unlink Vulnerability"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-          ))}
+        <div className="overflow-x-auto rounded-xl border border-slate-200">
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-200 bg-slate-50 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                <th className="px-4 py-2.5">ID</th>
+                <th className="px-4 py-2.5">Title</th>
+                <th className="px-4 py-2.5">Severity</th>
+                <th className="px-4 py-2.5">Status</th>
+                <th className="px-4 py-2.5">Source</th>
+                <th className="px-4 py-2.5 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {asset.linked_vulnerabilities.map((vuln) => (
+                <tr key={`${vuln.vulnerability_id}-${vuln.link_id || 'link'}`} className="hover:bg-slate-50/60">
+                  <td className="whitespace-nowrap px-4 py-2.5 font-mono text-xs text-slate-500">
+                    {vuln.vuln_id || `VULN-${vuln.vulnerability_id}`}
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <span className="flex items-center gap-2 font-medium text-slate-900">
+                      <Bug className="h-4 w-4 flex-none text-red-500" />
+                      {vuln.title || `Vulnerability #${vuln.vulnerability_id}`}
+                    </span>
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-2.5">
+                    <span className={`rounded-full border px-2 py-0.5 text-xs ${severityColors[(vuln.severity || '').toLowerCase()] || 'border-slate-200 bg-slate-100 text-slate-600'}`}>
+                      {vuln.severity || 'unknown'}
+                    </span>
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-2.5">
+                    <span className={`rounded-full border px-2 py-0.5 text-xs ${statusColors[(vuln.status || '').toLowerCase()] || 'border-slate-200 bg-slate-100 text-slate-600'}`}>
+                      {(vuln.status || 'unknown').replace(/_/g, ' ')}
+                    </span>
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-2.5 text-xs">
+                    {vuln.auto_linked ? (
+                      <span className="rounded-full border border-teal-200 bg-teal-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-teal-700" title="Linked automatically by scanner / sync / matcher — review for accuracy">Auto</span>
+                    ) : vuln.link_source && vuln.link_source !== 'manual' ? (
+                      <span className="uppercase tracking-wide text-slate-500">{vuln.link_source.replace(/_/g, ' ')}</span>
+                    ) : (
+                      <span className="text-slate-400">manual</span>
+                    )}
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-2.5 text-right">
+                    <Link href={`/vulnerabilities/${vuln.vulnerability_id}`} className="text-sm font-medium text-teal-600 hover:underline">
+                      View
+                    </Link>
+                    <button
+                      onClick={() => onUnlinkVulnerability(vuln.vulnerability_id)}
+                      disabled={isUnlinking}
+                      className="ml-3 rounded p-1 align-middle text-slate-400 hover:bg-slate-100 hover:text-red-600 disabled:opacity-50"
+                      title="Unlink Vulnerability"
+                    >
+                      <X className="inline h-4 w-4" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       ) : (
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 py-12 text-center">
