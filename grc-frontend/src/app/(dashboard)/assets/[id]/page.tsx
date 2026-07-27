@@ -2591,7 +2591,7 @@ function VulnerabilitiesTab({
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h3 className="flex items-center gap-2 text-base font-semibold text-slate-900">
-          <Bug className="h-5 w-5 text-blue-600" />
+          <Bug className="h-5 w-5 text-teal-600" />
           Linked Vulnerabilities ({(asset.linked_vulnerabilities ?? []).filter(isOpenVuln).length} open
           {(asset.linked_vulnerabilities ?? []).length !== (asset.linked_vulnerabilities ?? []).filter(isOpenVuln).length
             ? ` · ${(asset.linked_vulnerabilities ?? []).length} total`
@@ -2599,7 +2599,7 @@ function VulnerabilitiesTab({
         </h3>
         <InlineLinkPicker
           triggerLabel="Link Vulnerability"
-          triggerClassName="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
+          triggerClassName="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm text-white hover:bg-teal-700 transition-colors disabled:opacity-50"
           items={vulnPickerItems}
           isLoading={vulnsLoading || isLinking}
           emptyText="No vulnerabilities available"
@@ -2648,7 +2648,7 @@ function VulnerabilitiesTab({
               <div className="flex items-center gap-3">
                 <Link
                   href={`/vulnerabilities/${vuln.vulnerability_id}`}
-                  className="text-sm text-blue-600 hover:underline"
+                  className="text-sm text-teal-600 hover:underline"
                 >
                   View
                 </Link>
@@ -2672,7 +2672,7 @@ function VulnerabilitiesTab({
           <div className="mt-4">
             <InlineLinkPicker
               triggerLabel="Link First Vulnerability"
-              triggerClassName="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
+              triggerClassName="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm text-white hover:bg-teal-700 transition-colors disabled:opacity-50"
               items={vulnPickerItems}
               isLoading={vulnsLoading || isLinking}
               emptyText="No vulnerabilities available"
