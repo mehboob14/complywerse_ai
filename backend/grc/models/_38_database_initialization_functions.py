@@ -50,6 +50,11 @@ def get_db(request: _Request):
     db = open_tenant_session(slug)
     try:
         try:
+            from ..services.ai_usage import bind_tenant
+            bind_tenant(slug)  # attribute this request's tenant for AI-usage capture
+        except Exception:
+            pass
+        try:
             from ..modules.compliance.schema_migrations import ensure_assigned_column
             ensure_assigned_column(db)
         except Exception:

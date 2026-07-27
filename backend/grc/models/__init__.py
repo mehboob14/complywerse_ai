@@ -16,3 +16,6 @@ from ._44_business_continuity_management_models import *  # noqa: F401,F403 — 
 from ._40_access_review_models import *  # noqa: F401,F403
 from ._45_report_definitions import *  # noqa: F401,F403 — saved reports from the /reports builder
 from ._46_metric_targets import *  # noqa: F401,F403 — per-tenant trend metric targets / RAG thresholds
+from ._45_ai_usage import *  # noqa: F401,F403 - tenant-local AI usage ledger
+from ._46_ai_budget import *  # noqa: F401,F403 - tenant-local AI token budget/quota config
+from ._47_asset_discovery_models import *  # noqa: F401,F403 - discovery campaigns/scopes/runs/jobs/observations

@@ -354,6 +354,12 @@ _COLUMN_ADDS = [
      "ix_vuln_epss_percentile"),
     ("grc_vulnerabilities", "kev_flag", "BOOLEAN DEFAULT FALSE",
      "ix_vuln_kev_flag"),
+    # Phase 1 — real-tenant enrichment inputs. cwe_ids = all NVD weaknesses (the
+    # selector reads these); cvss_version = which spec the vector is; the KEV
+    # ransomware sub-flag CISA already ships (sharper than bare KEV membership).
+    ("grc_vulnerabilities", "cwe_ids", "JSON DEFAULT '[]'::json", None),
+    ("grc_vulnerabilities", "cvss_version", "VARCHAR(10)", None),
+    ("grc_vulnerabilities", "kev_ransomware_flag", "BOOLEAN", None),
     ("grc_vulnerabilities", "kev_date_added", "TIMESTAMP", None),
     ("grc_vulnerabilities", "nvd_published_at", "TIMESTAMP", None),
     ("grc_vulnerabilities", "nvd_last_modified_at", "TIMESTAMP", None),
@@ -367,6 +373,13 @@ _COLUMN_ADDS = [
      "ix_vuln_public_exploit_count"),
     ("grc_vulnerabilities", "public_exploit_refs", "JSON DEFAULT '[]'::json", None),
     ("grc_vulnerabilities", "public_exploit_synced_at", "TIMESTAMP", None),
+    # Public-exploit corroboration (Exploit-DB). Graded companion to the GitHub
+    # PoC columns above: the verified count + exploit type let the signal be
+    # graded, not boolean. count=NULL = not checked; 0 = checked, none found.
+    ("grc_vulnerabilities", "exploitdb_count", "INTEGER", None),
+    ("grc_vulnerabilities", "exploitdb_verified_count", "INTEGER", None),
+    ("grc_vulnerabilities", "exploitdb_refs", "JSON DEFAULT '[]'::json", None),
+    ("grc_vulnerabilities", "exploit_source", "VARCHAR(120)", None),
     # Parsed-framework FK for CWE auto-mapper — the legacy FrameworkControl
     # table is empty in upload-seeded tenants; the auto-mapper now writes
     # parsed_framework_control_id instead.
@@ -656,6 +669,57 @@ _COLUMN_ADDS = [
     ("grc_clause_applicability", "owner_name", "VARCHAR(255)", None),
     ("grc_clause_applicability", "implementation_status", "VARCHAR(50)", None),
     ("grc_clause_applicability", "linked_evidence_id", "INTEGER", None),
+    # ── ITAM parity block on ITAsset ──────────────────────────────────────────
+    # These 14 shipped on the model (_14_it_asset_inventory.py) and are read and
+    # written by assets_router (create/update/detail), the agent heartbeat
+    # (modules/agents/router.py — hardware write-through) and the ITAsset
+    # schemas, but they never got an ALTER TABLE entry. `create_all` adds
+    # missing TABLES, never missing COLUMNS, so every tenant DB provisioned
+    # before the model change raised UndefinedColumn on any asset query —
+    # SQLAlchemy SELECTs all mapped columns, so the whole module 500s.
+    # Fresh tenants were unaffected, which is why it stayed hidden.
+    # All nullable / additive, matching the model exactly.
+    ("grc_it_assets", "cpu_cores", "INTEGER", None),
+    ("grc_it_assets", "memory_gb", "INTEGER", None),
+    ("grc_it_assets", "storage_gb", "INTEGER", None),
+    ("grc_it_assets", "agent_version", "VARCHAR(50)", None),
+    ("grc_it_assets", "manufacturer", "VARCHAR(255)", None),
+    ("grc_it_assets", "model", "VARCHAR(255)", None),
+    # Indexed: the identity resolver matches on serial_number as a strong key.
+    ("grc_it_assets", "serial_number", "VARCHAR(255)",
+     "ix_grc_it_assets_serial_number"),
+    ("grc_it_assets", "department", "VARCHAR(150)", None),
+    ("grc_it_assets", "assigned_user", "VARCHAR(255)", None),
+    ("grc_it_assets", "purchase_cost", "FLOAT", None),
+    ("grc_it_assets", "purchase_date", "TIMESTAMP", None),
+    ("grc_it_assets", "warranty_expiry", "TIMESTAMP", None),
+    ("grc_it_assets", "eol_date", "TIMESTAMP", None),
+    ("grc_it_assets", "environment", "VARCHAR(50)", None),
+    # ── Identity resolution keys on ITAsset ───────────────────────────────────
+    # The columns the discovery identity resolver matches an observation against
+    # so the same host from two sources becomes ONE asset. All nullable/additive.
+    #   fqdn / primary_mac / cloud_resource_id — strong-ish identity keys (indexed
+    #     because the resolver looks assets up by them on every observation).
+    #   source_system   — which system last asserted this asset ('discovery',
+    #     'agent', 'aws', 'servicenow', …); provenance, not a match key by itself.
+    #   first_seen_at   — when this asset first entered the inventory (paired with
+    #     the existing last_seen_at).
+    #   discovery_state — 'discovered' (auto-created by a scan, unconfirmed) vs
+    #     'managed' (operator-confirmed); NULL for pre-existing/manual rows. Lets
+    #     the UI separate freshly-found devices from curated inventory instead of
+    #     dumping raw scan hits into the register.
+    ("grc_it_assets", "fqdn", "VARCHAR(255)", "ix_grc_it_assets_fqdn"),
+    ("grc_it_assets", "primary_mac", "VARCHAR(64)", "ix_grc_it_assets_primary_mac"),
+    ("grc_it_assets", "cloud_resource_id", "VARCHAR(255)",
+     "ix_grc_it_assets_cloud_resource_id"),
+    ("grc_it_assets", "source_system", "VARCHAR(50)", None),
+    ("grc_it_assets", "first_seen_at", "TIMESTAMP", None),
+    ("grc_it_assets", "discovery_state", "VARCHAR(30)",
+     "ix_grc_it_assets_discovery_state"),
+    # Endpoint security posture (antivirus / EDR presence + software category
+    # breakdown), derived from detected_software_json by the security_classifier
+    # on every inventory refresh. Drives the asset's Security Posture card.
+    ("grc_it_assets", "security_posture", "JSON", None),
 ]
 
 

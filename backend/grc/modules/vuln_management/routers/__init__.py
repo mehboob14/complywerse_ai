@@ -11,6 +11,8 @@ from .exceptions import router as exceptions_router
 from .departments import router as departments_router
 from .workflows import router as workflows_router
 from .escalations import router as escalations_router
+from .remediation_plans import router as remediation_plans_router
+from .exploitability import router as exploitability_router
 
 __all__ = [
     "reports_router",
@@ -25,5 +27,7 @@ __all__ = [
     "exceptions_router",
     "departments_router",
     "workflows_router",
-    "escalations_router"
+    "escalations_router",
+    "remediation_plans_router",
+    "exploitability_router"
 ]

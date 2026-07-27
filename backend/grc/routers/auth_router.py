@@ -184,6 +184,9 @@ def require_auth(
     if not user.is_active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User account is deactivated")
 
+    from ..services.ai_usage import bind_request_context
+    bind_request_context(request, user)
+
     # ---- Inactive-session enforcement ----------------------------------------
     # Read the policy lazily so any failure (table missing, transient error)
     # falls back to "no idle check" — auth must never break because of policy
@@ -252,6 +255,9 @@ def require_tenant_permission(permission_name: str):
         user = db.query(GRCUser).filter(GRCUser.username == username).first()
         if not user:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found in tenant")
+
+        from ..services.ai_usage import bind_request_context
+        bind_request_context(request, user)
 
         # Primary contact bypass
         tenant_row = db.query(Tenant).first()

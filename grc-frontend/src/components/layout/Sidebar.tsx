@@ -14,6 +14,7 @@ import {
   Users,
   ClipboardList,
   Server,
+  Radar,
   Settings,
   ChevronDown,
   ChevronRight,
@@ -204,7 +205,11 @@ const navigation: NavEntry[] = [
     name: 'Cybersecurity Assurance',
     icon: ShieldCheck,
     items: [
+      // CIS Benchmark merged into IT Asset Inventory as a tab (/assets?tab=cis).
       { name: 'IT Asset Inventory',        href: '/assets',                        icon: Server,        requiredPermissions: ['assets:asset_inventory:*'] },
+      // IT Asset Discovery — from feat/pdpl-ndmo-assessment.
+      // Preview UI wired into nav; confirm discovery endpoints before customer demos.
+      { name: 'IT Asset Discovery',        href: '/asset-discovery',               icon: Radar,         requiredPermissions: ['assets:asset_inventory:*'] },
       { name: 'Assets Risk Posture',       href: '/risk-posture',                  icon: Activity,      requiredPermissions: ['erm:risks:*'] },
       { name: 'Criticality Assessments',   href: '/assets/criticality-assessments', icon: ClipboardCheck, requiredPermissions: ['assets:criticality_assessments:view'] },
       { name: 'Vulnerabilities',           href: '/vulnerabilities',               icon: Bug,           requiredPermissions: ['vulnerabilities:vulnerability_register:*'], requiredModules: ['vulnerabilities'] },
@@ -483,6 +488,7 @@ function NavGroupSection({ group, collapsed }: { group: NavGroup; collapsed: boo
 const ADMIN_POPOVER_ITEMS: Array<{ id: string; label: string; icon: LucideIcon; href?: string }> = [
   { id: 'company',          label: 'Company',            icon: Settings },
   { id: 'users',            label: 'User Management',    icon: Users },
+  { id: 'ai-usage',         label: 'Token usage',        icon: BarChart3, href: '/admin/ai-usage' },
   { id: 'roles',            label: 'Role Management',    icon: ShieldCheck },
   { id: 'teams',            label: 'Teams',              icon: Users },
   { id: 'password-policy',  label: 'Password Policy',    icon: Shield },

@@ -33,6 +33,7 @@ from celery import shared_task
 from sqlalchemy.orm import Session
 
 from .base import TenantTask, get_redis
+from ..services.ai_usage import usage_scope
 
 logger = logging.getLogger(__name__)
 
@@ -140,7 +141,15 @@ def _run_drafting_with_own_session(
         return
 
     try:
-        _execute_drafting(job_id, request_payload, db)
+        with usage_scope(
+            tenant_slug=tenant_slug,
+            actor_user_id=request_payload.get("user_id") or request_payload.get("created_by"),
+            actor_username=request_payload.get("username") or request_payload.get("user_name"),
+            background_job_id=job_id,
+            module_key="governance",
+            feature_key="ai_document_drafting",
+        ):
+            _execute_drafting(job_id, request_payload, db)
         try:
             db.commit()
         except Exception:
@@ -445,4 +454,12 @@ def generate_draft(
     behaviour as `dispatch_in_thread()` — writes progress to Redis under
     the same key shape so the polling endpoint sees both paths."""
     assert db is not None
-    return _execute_drafting(job_id, request_payload, db)
+    with usage_scope(
+        tenant_slug=tenant_slug,
+        actor_user_id=request_payload.get("user_id") or request_payload.get("created_by"),
+        actor_username=request_payload.get("username") or request_payload.get("user_name"),
+        background_job_id=job_id,
+        module_key="governance",
+        feature_key="ai_document_drafting",
+    ):
+        return _execute_drafting(job_id, request_payload, db)

@@ -297,7 +297,10 @@ def ai_compare_frameworks(self, tenant_slug: str, run_id: int, db: Session = Non
             if run and run.task_id != self.request.id:
                 run.task_id = self.request.id
                 db.commit()
-            result = _ai_compare_body(db, run_id, tenant_slug)
+            from ..services.ai_usage import usage_scope
+            with usage_scope(tenant_slug=tenant_slug, module_key="control_library",
+                             feature_key="framework_comparison", background_job_id=self.request.id):
+                result = _ai_compare_body(db, run_id, tenant_slug)
             logger.info("ai_compare_frameworks DONE tenant=%s run=%s", tenant_slug, run_id)
             return result
     except LockNotAcquired:
@@ -407,11 +410,15 @@ def ai_auto_group(
                                 "progress_percent": int(done * 100 / max(1, total))})
                     set_status(tenant_slug, namespace, job_id, cur)
                 try:
-                    res = build_scoped_session(
-                        db, tenant.id, framework_ids or [], user_id=user_id,
-                        progress_cb=_scoped_progress,
-                        should_cancel=lambda: bool((get_status(tenant_slug, namespace, job_id) or {}).get("cancel_requested")),
-                    )
+                    from ..services.ai_usage import usage_scope
+                    with usage_scope(tenant_slug=tenant_slug, actor_user_id=user_id,
+                                     module_key="control_library", feature_key="auto_group",
+                                     background_job_id=self.request.id):
+                        res = build_scoped_session(
+                            db, tenant.id, framework_ids or [], user_id=user_id,
+                            progress_cb=_scoped_progress,
+                            should_cancel=lambda: bool((get_status(tenant_slug, namespace, job_id) or {}).get("cancel_requested")),
+                        )
                 except AutoGroupCancelled:
                     set_status(tenant_slug, namespace, job_id, {
                         "status": "cancelled", "phase": "cancelled",

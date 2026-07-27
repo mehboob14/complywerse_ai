@@ -14,6 +14,7 @@ Notes:
 """
 
 import os
+import time
 
 
 # ----- Redis / Celery -------------------------------------------------------
@@ -77,28 +78,55 @@ def install_openai_compat_shim() -> bool:
     except Exception:
         return False
 
-    def _wrap(orig):
+    def _prepare(kwargs):
+        model = kwargs.get("model")
+        if isinstance(model, str) and model.lower().startswith(("gpt-5", "o1", "o3", "o4")):
+            if "max_tokens" in kwargs and "max_completion_tokens" not in kwargs:
+                kwargs["max_completion_tokens"] = kwargs.pop("max_tokens")
+            else:
+                kwargs.pop("max_tokens", None)
+            if kwargs.get("temperature") not in (None, 1):
+                kwargs.pop("temperature", None)
+            if model.lower().startswith("gpt-5") and "reasoning_effort" not in kwargs:
+                kwargs["reasoning_effort"] = "low"
+        return model
+
+    def _record(response=None, error=None, model=None, started_at=None):
+        try:
+            from .services.ai_usage import record_provider_attempt
+            record_provider_attempt(
+                response=response, error=error, requested_model=model,
+                provider="openai", api_family="chat_completions",
+                started_at=started_at,
+            )
+        except Exception:
+            pass
+
+    def _wrap(orig, is_async=False):
+        if is_async:
+            async def _patched_async(self, *args, **kwargs):
+                model = _prepare(kwargs)
+                started_at = time.perf_counter()
+                try:
+                    response = await orig(self, *args, **kwargs)
+                except Exception as exc:
+                    _record(error=exc, model=model, started_at=started_at)
+                    raise
+                _record(response=response, model=model, started_at=started_at)
+                return response
+            _patched_async._grc_compat = True  # type: ignore[attr-defined]
+            return _patched_async
+
         def _patched(self, *args, **kwargs):
-            model = kwargs.get("model")
-            if isinstance(model, str) and model.lower().startswith(("gpt-5", "o1", "o3", "o4")):
-                # gpt-4o used ``max_tokens``; reasoning models need ``max_completion_tokens``.
-                if "max_tokens" in kwargs and "max_completion_tokens" not in kwargs:
-                    kwargs["max_completion_tokens"] = kwargs.pop("max_tokens")
-                else:
-                    kwargs.pop("max_tokens", None)
-                # Reasoning models only accept the default temperature (1); drop others.
-                temp = kwargs.get("temperature", None)
-                if temp is not None and temp != 1:
-                    kwargs.pop("temperature", None)
-                # Reasoning tokens count against the completion budget, so a small
-                # ``max_tokens`` (fine on gpt-4o) can be fully consumed by reasoning and
-                # return an EMPTY message. The platform uses these models for extraction
-                # / drafting, not deep reasoning, so default to the lowest effort
-                # (≈0 reasoning tokens → budget goes to output, like gpt-4o). gpt-5.x
-                # supports "low"; o-series accept it too. Caller-set values win.
-                if model.lower().startswith("gpt-5") and "reasoning_effort" not in kwargs:
-                    kwargs["reasoning_effort"] = "low"
-            return orig(self, *args, **kwargs)
+            model = _prepare(kwargs)
+            started_at = time.perf_counter()
+            try:
+                response = orig(self, *args, **kwargs)
+            except Exception as exc:
+                _record(error=exc, model=model, started_at=started_at)
+                raise
+            _record(response=response, model=model, started_at=started_at)
+            return response
         _patched._grc_compat = True  # type: ignore[attr-defined]
         return _patched
 
@@ -106,10 +134,9 @@ def install_openai_compat_shim() -> bool:
     if not getattr(_cc.Completions.create, "_grc_compat", False):
         _cc.Completions.create = _wrap(_cc.Completions.create)
         patched_any = True
-    # Also cover the async client, if present, for symmetry.
     Async = getattr(_cc, "AsyncCompletions", None)
     if Async is not None and not getattr(Async.create, "_grc_compat", False):
-        Async.create = _wrap(Async.create)
+        Async.create = _wrap(Async.create, is_async=True)
         patched_any = True
     return patched_any
 

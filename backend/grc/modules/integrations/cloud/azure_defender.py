@@ -46,7 +46,16 @@ def _try_import_azure():
     try:
         from azure.identity import ClientSecretCredential  # type: ignore
         from azure.mgmt.security import SecurityCenter  # type: ignore
-        from azure.mgmt.resource import ResourceManagementClient  # type: ignore
+        # azure-mgmt-resource >= 23 stopped re-exporting this from the package
+        # root; it now lives in the .resources subpackage. Try the current
+        # location first and fall back so either SDK generation works. Getting
+        # this wrong is silent: one bad import in this block returns None and
+        # the whole Azure sync reports `sdk_not_installed` even though the SDK
+        # is installed correctly.
+        try:
+            from azure.mgmt.resource.resources import ResourceManagementClient  # type: ignore
+        except ImportError:
+            from azure.mgmt.resource import ResourceManagementClient  # type: ignore
         from azure.core.exceptions import AzureError, HttpResponseError  # type: ignore
         return {
             "ClientSecretCredential": ClientSecretCredential,

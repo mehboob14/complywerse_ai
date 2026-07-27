@@ -22,6 +22,8 @@ from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.orm import Session
 from sqlalchemy import text, func, or_
 
+from ...services.ai_usage import usage_scope
+
 # Add complychat to path
 complychat_path = Path(__file__).parent / "complychat" / "complychat"
 sys.path.insert(0, str(complychat_path))
@@ -811,12 +813,13 @@ def answer_grc_knowledge_question(
             messages.append({"role": "user", "content": f"Uploaded file context:\n{uploaded_context}"})
         messages.append({"role": "user", "content": question})
 
-        completion = _client.chat.completions.create(
-            model=get_openai_model(),
-            messages=messages,
-            temperature=0.2,
-            max_tokens=1500,
-        )
+        with usage_scope(module_key="complychat", feature_key="knowledge_guidance"):
+            completion = _client.chat.completions.create(
+                model=get_openai_model(),
+                messages=messages,
+                temperature=0.2,
+                max_tokens=1500,
+            )
         return (completion.choices[0].message.content or "").strip() or "I couldn't generate an answer. Please try rephrasing."
 
     except Exception as llm_err:
@@ -1137,12 +1140,13 @@ def analyze_uploaded_files_with_llm(
             )
         })
 
-        completion = _client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=messages,
-            temperature=0.2,
-            max_tokens=2000,
-        )
+        with usage_scope(module_key="complychat", feature_key="file_analysis"):
+            completion = _client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=messages,
+                temperature=0.2,
+                max_tokens=2000,
+            )
         return (completion.choices[0].message.content or "").strip() or "I couldn't generate an analysis. Please try rephrasing."
 
     except Exception as llm_err:
@@ -2234,7 +2238,7 @@ def _collect_documents_for_matches(
             )
             risk_summary = "\n".join(
                 _merge_text(
-                    f"Risk: {risk_record.name}",
+                    f"Risk: {getattr(risk_record, 'title', None) or getattr(risk_record, 'name', None) or f'Risk {risk_record.id}'}",
                     f"Treatment: {assessment_risk.treatment_decision or 'n/a'}",
                     f"Rating: {assessment_risk.risk_rating or 'n/a'}",
                     assessment_risk.rationale,
@@ -2921,15 +2925,21 @@ async def ask_compliance_question(
                 current_offset=0
             )
 
-        vector_rag_result = try_qdrant_rag_answer(
-            question=request.message,
-            request_mode=request_mode,
-            db=db,
-            tenant_ids=tenant_ids,
-            context_summary=context_summary,
-            uploaded_context=uploaded_context,
-            uploaded_files=uploaded_files,
-        )
+        with usage_scope(
+            module_key="complychat",
+            feature_key="vector_rag",
+            actor_user_id=current_user.id,
+            actor_username=current_user.username,
+        ):
+            vector_rag_result = try_qdrant_rag_answer(
+                question=request.message,
+                request_mode=request_mode,
+                db=db,
+                tenant_ids=tenant_ids,
+                context_summary=context_summary,
+                uploaded_context=uploaded_context,
+                uploaded_files=uploaded_files,
+            )
         if vector_rag_result is not None:
             answer, vector_sources = vector_rag_result
             store_chat_exchange(
@@ -2952,7 +2962,13 @@ async def ask_compliance_question(
 
         if request_mode == "file_analysis":
             logger.info(f"[FILE-ANALYSIS] Sending {len(uploaded_files)} file(s) + question to LLM: {request.message}")
-            answer = analyze_uploaded_files_with_llm(request.message, uploaded_files, context_summary)
+            with usage_scope(
+                module_key="complychat",
+                feature_key="file_analysis",
+                actor_user_id=current_user.id,
+                actor_username=current_user.username,
+            ):
+                answer = analyze_uploaded_files_with_llm(request.message, uploaded_files, context_summary)
             store_chat_exchange(current_user.id, session_id, request.message, answer, offset=request.offset)
             return ChatResponse(
                 answer=answer,
@@ -2968,7 +2984,13 @@ async def ask_compliance_question(
             # LLM-driven answer — use DB-augmented context for framework/knowledge questions
             logger.info(f"[LLM-GUIDANCE] Routing to DB-augmented LLM guidance for: {request.message}")
             tenant_ids = get_user_tenants(current_user, db)
-            answer = answer_with_db_context(request.message, db, tenant_ids, context_summary, uploaded_context)
+            with usage_scope(
+                module_key="complychat",
+                feature_key="knowledge_guidance",
+                actor_user_id=current_user.id,
+                actor_username=current_user.username,
+            ):
+                answer = answer_with_db_context(request.message, db, tenant_ids, context_summary, uploaded_context)
             store_chat_exchange(current_user.id, session_id, request.message, answer, offset=request.offset)
             return ChatResponse(
                 answer=answer,
@@ -2993,7 +3015,13 @@ async def ask_compliance_question(
 
         # 🤖 STEP 1: Generate SQL query from natural language
         logger.info("[STATS] Generating SQL query from question...")
-        sql_result = generate_sql_query(enhanced_question, language="en", limit=request.limit, offset=request.offset)
+        with usage_scope(
+            module_key="complychat",
+            feature_key="sql_generation",
+            actor_user_id=current_user.id,
+            actor_username=current_user.username,
+        ):
+            sql_result = generate_sql_query(enhanced_question, language="en", limit=request.limit, offset=request.offset)
         
         if not sql_result.get('sql') or not validate_sql(sql_result['sql']):
             # No valid SQL — return a deterministic, non-fabricated response.
@@ -3057,12 +3085,18 @@ ORIGINAL QUESTION: {request.message}
 Generate new SQL using ONLY the column names listed above.
 """
                 
-                retry_result = generate_sql_query(
-                    retry_prompt,
-                    language="en",
-                    offset=request.offset,
-                    limit=request.limit
-                )
+                with usage_scope(
+                    module_key="complychat",
+                    feature_key="sql_generation_retry",
+                    actor_user_id=current_user.id,
+                    actor_username=current_user.username,
+                ):
+                    retry_result = generate_sql_query(
+                        retry_prompt,
+                        language="en",
+                        offset=request.offset,
+                        limit=request.limit
+                    )
                 
                 if retry_result and retry_result.get('sql'):
                     logger.info(f"[YES] RETRY SUCCESSFUL: New SQL generated")
@@ -3144,7 +3178,13 @@ Generate new SQL using ONLY the column names listed above.
                 logger.info("[SAFE-EMPTY] SQL returned 0 rows")
                 answer = _no_platform_data_answer(request.message)
             else:
-                answer = format_query_results(data_list, request.message, sql_query, language="en") + pagination_note
+                with usage_scope(
+                    module_key="complychat",
+                    feature_key="sql_result_formatting",
+                    actor_user_id=current_user.id,
+                    actor_username=current_user.username,
+                ):
+                    answer = format_query_results(data_list, request.message, sql_query, language="en") + pagination_note
             
             # 💾 STEP 4: Save to conversation history
             store_chat_exchange(
@@ -3233,12 +3273,18 @@ ORIGINAL QUESTION: {request.message}
 Generate new SQL using ONLY the column names listed above. Use PostgreSQL syntax (NOW(), CURRENT_DATE, INTERVAL, ILIKE, DATE_TRUNC, TO_CHAR).
 """
                     
-                    retry_result = generate_sql_query(
-                        retry_prompt,
-                        language="en",
-                        offset=request.offset,
-                        limit=request.limit
-                    )
+                    with usage_scope(
+                        module_key="complychat",
+                        feature_key="sql_generation_retry",
+                        actor_user_id=current_user.id,
+                        actor_username=current_user.username,
+                    ):
+                        retry_result = generate_sql_query(
+                            retry_prompt,
+                            language="en",
+                            offset=request.offset,
+                            limit=request.limit
+                        )
                     
                     if retry_result and retry_result.get('sql'):
                         retry_sql = retry_result['sql']
@@ -3258,7 +3304,13 @@ Generate new SQL using ONLY the column names listed above. Use PostgreSQL syntax
                                 answer = _no_platform_data_answer(request.message)
                             else:
                                 # Format successful retry results
-                                answer = format_query_results(retry_data, request.message, retry_sql, language="en")
+                                with usage_scope(
+                                    module_key="complychat",
+                                    feature_key="sql_result_formatting",
+                                    actor_user_id=current_user.id,
+                                    actor_username=current_user.username,
+                                ):
+                                    answer = format_query_results(retry_data, request.message, retry_sql, language="en")
                             
                             return ChatResponse(
                                 answer=answer,

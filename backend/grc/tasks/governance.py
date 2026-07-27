@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 from ..celery_app import celery_app
 from ..job_status import set_status as _raw_set_status
 from .base import TenantTask, tenant_lock, LockNotAcquired
+from ..services.ai_usage import usage_scope
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +56,14 @@ def parse_policy_document(self, tenant_slug: str, document_id: int, user_id: int
             from ..modules.governance.routers.policy_parser import _parse_policy_body
             set_status(tenant_slug, "policy_parse", document_id,
                        {"status": "parsing", "message": "Worker picked up the job", "task_id": self.request.id})
-            result = _parse_policy_body(db, document_id, user_id, tenant_slug)
+            with usage_scope(
+                tenant_slug=tenant_slug,
+                actor_user_id=user_id,
+                background_job_id=self.request.id,
+                module_key="governance",
+                feature_key="policy_statement_parsing",
+            ):
+                result = _parse_policy_body(db, document_id, user_id, tenant_slug)
             logger.info("parse_policy_document DONE tenant=%s doc=%s", tenant_slug, document_id)
             return result or {"status": "completed"}
     except LockNotAcquired:
@@ -124,7 +132,14 @@ def _run_parse_with_own_session(
                        {"status": "parsing",
                         "message": "Thread worker picked up the job",
                         "task_id": task_id})
-            _parse_policy_body(db, document_id, user_id, tenant_slug)
+            with usage_scope(
+                tenant_slug=tenant_slug,
+                actor_user_id=user_id,
+                background_job_id=task_id,
+                module_key="governance",
+                feature_key="policy_statement_parsing",
+            ):
+                _parse_policy_body(db, document_id, user_id, tenant_slug)
             try:
                 db.commit()
             except Exception:
@@ -211,7 +226,14 @@ def _run_gap_analysis_with_own_session(
                         "message": "Thread worker picked up the job",
                         "run_ids": run_ids,
                         "task_id": task_id})
-            _gap_analysis_body(db, run_ids, document_id, user_id, tenant_slug)
+            with usage_scope(
+                tenant_slug=tenant_slug,
+                actor_user_id=user_id,
+                background_job_id=task_id,
+                module_key="governance",
+                feature_key="gap_analysis",
+            ):
+                _gap_analysis_body(db, run_ids, document_id, user_id, tenant_slug)
             try:
                 db.commit()
             except Exception:
@@ -253,7 +275,14 @@ def run_gap_analysis(self, tenant_slug: str, run_ids: list, document_id: int, us
             from ..modules.governance.routers.gap_analysis import _gap_analysis_body
             set_status(tenant_slug, "gap_analysis", document_id,
                        {"status": "running", "message": "Worker picked up the job", "run_ids": run_ids, "task_id": self.request.id})
-            result = _gap_analysis_body(db, run_ids, document_id, user_id, tenant_slug)
+            with usage_scope(
+                tenant_slug=tenant_slug,
+                actor_user_id=user_id,
+                background_job_id=self.request.id,
+                module_key="governance",
+                feature_key="gap_analysis",
+            ):
+                result = _gap_analysis_body(db, run_ids, document_id, user_id, tenant_slug)
             logger.info("run_gap_analysis DONE tenant=%s doc=%s", tenant_slug, document_id)
             return result or {"status": "completed", "run_ids": run_ids}
     except LockNotAcquired:
@@ -290,7 +319,13 @@ def auto_map_document_controls(self, tenant_slug: str, document_id: int, db: Ses
             from ..modules.governance.statement_auto_map import auto_map_document
             set_status(tenant_slug, "statement_auto_map", document_id,
                        {"status": "running", "message": "Recommending controls for statements", "task_id": self.request.id})
-            result = auto_map_document(db, document_id)
+            with usage_scope(
+                tenant_slug=tenant_slug,
+                background_job_id=self.request.id,
+                module_key="governance",
+                feature_key="statement_auto_mapping",
+            ):
+                result = auto_map_document(db, document_id)
             set_status(tenant_slug, "statement_auto_map", document_id, {"status": "completed", **(result or {})})
             logger.info("auto_map_document_controls DONE tenant=%s doc=%s result=%s", tenant_slug, document_id, result)
             return result or {"status": "completed"}
@@ -320,7 +355,13 @@ def _run_auto_map_with_own_session(tenant_slug: str, document_id: int, task_id: 
             from ..modules.governance.statement_auto_map import auto_map_document
             set_status(tenant_slug, "statement_auto_map", document_id,
                        {"status": "running", "message": "Thread worker picked up the job", "task_id": task_id})
-            result = auto_map_document(db, document_id)
+            with usage_scope(
+                tenant_slug=tenant_slug,
+                background_job_id=task_id,
+                module_key="governance",
+                feature_key="statement_auto_mapping",
+            ):
+                result = auto_map_document(db, document_id)
             set_status(tenant_slug, "statement_auto_map", document_id, {"status": "completed", **(result or {})})
             logger.info("auto_map(thread) DONE tenant=%s doc=%s task=%s result=%s", tenant_slug, document_id, task_id, result)
     except LockNotAcquired:

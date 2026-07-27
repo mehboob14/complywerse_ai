@@ -95,7 +95,11 @@ export default function WeightsPanel({ open, onClose }: Props) {
     onSuccess: () => {
       toast.toast({ title: 'Weights saved', message: 'Risk Posture will recompute with the new formula on next refresh.', type: 'success' });
       qc.invalidateQueries({ queryKey: ['risk-weights'] });
-      qc.invalidateQueries({ queryKey: ['risk-posture-dashboard'] });
+      // Key must match page.tsx's ['risk-posture.dashboard'] exactly. It was
+      // 'risk-posture-dashboard' (hyphen vs dot), so saving weights invalidated
+      // nothing and the dashboard only updated on its next 30s poll — while the
+      // toast claimed it would recompute.
+      qc.invalidateQueries({ queryKey: ['risk-posture.dashboard'] });
       onClose();
     },
     onError: (err: { response?: { data?: { detail?: string } } }) => {

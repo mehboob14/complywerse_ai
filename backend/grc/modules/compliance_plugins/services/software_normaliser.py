@@ -234,3 +234,30 @@ def enrich_inventory(db: Session, raw_items: list) -> list:
             "promoted_asset_id": None,  # filled by assets_router when promoted
         })
     return enriched
+
+
+def preserve_promotions(previous: Optional[list], enriched: list) -> list:
+    """Carry `promoted_asset_id` links across a re-inventory.
+
+    Every collection path rewrites `asset.detected_software_json` wholesale, so
+    without this a re-probe forgets which detected apps were already promoted to
+    child assets and the operator is asked to promote them all over again.
+
+    Shared by the two collectors that produce an inventory — the agent heartbeat
+    (modules/agents/router.py) and the agentless probe
+    (services/agentless_inventory.py) — so the rule cannot drift between them.
+    Matched on `software_key`, which is stable across probes; `enriched` is
+    mutated in place and returned for convenience.
+    """
+    prev = {
+        e.get("software_key"): e.get("promoted_asset_id")
+        for e in (previous or [])
+        if isinstance(e, dict) and e.get("promoted_asset_id")
+    }
+    if not prev:
+        return enriched
+    for e in enriched:
+        linked = prev.get(e.get("software_key"))
+        if linked:
+            e["promoted_asset_id"] = linked
+    return enriched

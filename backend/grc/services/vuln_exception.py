@@ -228,22 +228,41 @@ def revoke_exception(
     return _summary(vuln)
 
 
-def expire_due_exceptions(db: Session, *, now: Optional[datetime] = None) -> int:
-    """Sweep helper used by the daily Celery task. Returns the count expired.
+def expire_due_exceptions(
+    db: Session,
+    *,
+    now: Optional[datetime] = None,
+    tenant_ids: Optional[Iterable[int]] = None,
+) -> int:
+    """Sweep due exceptions and put the findings back in the queue.
 
     Only `approved` exceptions are eligible — `requested` rows aren't in
     effect yet, and `revoked`/`denied` are already terminal-ish.
+
+    Expiring the *exception* is only half the job. If the finding was parked at
+    `status = 'accepted'` on the strength of that exception, leaving the status
+    alone means the acceptance lapses on paper while the finding stays invisible
+    in every queue and dashboard — the worst of both worlds. So an expiring
+    exception also reopens the finding and clears the resolution stamp.
+
+    `tenant_ids` scopes the sweep, which lets a request-time caller sweep only
+    what the current user can see instead of the whole estate.
     """
     from ..models import Vulnerability
 
     cutoff = now or datetime.utcnow()
-    rows = (
+    q = (
         db.query(Vulnerability)
         .filter(Vulnerability.exception_status == "approved")
         .filter(Vulnerability.exception_expires_at.isnot(None))
         .filter(Vulnerability.exception_expires_at < cutoff)
-        .all()
     )
+    if tenant_ids is not None:
+        tenant_ids = list(tenant_ids)
+        if not tenant_ids:
+            return 0
+        q = q.filter(Vulnerability.tenant_id.in_(tenant_ids))
+    rows = q.all()
     count = 0
     for vuln in rows:
         # FSM sanity check — should always pass given the filter above,
@@ -253,6 +272,16 @@ def expire_due_exceptions(db: Session, *, now: Optional[datetime] = None) -> int
         vuln.exception_status = "expired"
         # Legacy sync.
         vuln.is_exception = False
+        # Put it back in front of someone. Only `accepted` is unparked —
+        # a finding already remediated or closed on its own merits stays put.
+        if (vuln.status or "").lower() == "accepted":
+            vuln.status = "open"
+            vuln.resolved_at = None
+            vuln.resolution_notes = (
+                "Risk acceptance expired on "
+                f"{vuln.exception_expires_at:%d %b %Y} — reopened automatically."
+            )
+        vuln.updated_at = cutoff
         count += 1
     try:
         db.commit()

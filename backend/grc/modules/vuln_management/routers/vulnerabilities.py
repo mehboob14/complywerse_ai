@@ -3,7 +3,7 @@ import io
 import csv
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 
@@ -120,6 +120,13 @@ def _build_vulnerability_response(v: Vulnerability) -> VulnerabilityResponse:
         nvd_last_synced_at=getattr(v, "nvd_last_synced_at", None),
         exploit_references=list(getattr(v, "exploit_references", None) or []) or None,
         composite_priority=getattr(v, "composite_priority", None),
+        # These three are declared on the schema but were never populated
+        # here, so they came back null on every response no matter what was
+        # stored. That made the UI blind to exploit maturity and attack
+        # vector — two of the seven scoring signals — and its score
+        # permanently disagreed with the backend's.
+        public_exploit_count=getattr(v, "public_exploit_count", None),
+        public_exploit_refs=list(getattr(v, "public_exploit_refs", None) or []) or None,
         # Phase 6 — vendor patch intelligence.
         patch_references=list(getattr(v, "patch_references", None) or []) or None,
         vendor_advisory_ids=list(getattr(v, "vendor_advisory_ids", None) or []) or None,
@@ -191,6 +198,23 @@ def list_vulnerabilities(
     user_tenants = get_user_tenants(current_user, db)
     if not user_tenants:
         return []
+
+    # Lapse any risk acceptances that are past their review date before we read.
+    #
+    # The proper home for this is the nightly Celery task in grc/tasks/exceptions.py,
+    # but no worker runs in this deployment, which meant acceptances never actually
+    # expired — a finding parked as "accepted" stayed hidden forever. Doing it here
+    # is a bounded, indexed query (exception_status + exception_expires_at are both
+    # indexed) scoped to the caller's tenants, and it runs once per register load
+    # rather than once per record. When a worker does exist this stays correct;
+    # it just finds nothing to do.
+    try:
+        from ....services.vuln_exception import expire_due_exceptions
+        expire_due_exceptions(db, tenant_ids=user_tenants)
+    except Exception:  # noqa: BLE001 — never let the sweep break the register
+        import logging
+        logging.getLogger(__name__).exception("exception expiry sweep failed")
+        db.rollback()
 
     query = db.query(Vulnerability).options(
         joinedload(Vulnerability.assignee),
@@ -575,6 +599,87 @@ def assign_vulnerability(
 
     return _build_vulnerability_response(vuln)
 
+class AcceptRiskIn(BaseModel):
+    """Accepting a risk is a dated decision, not a status flip."""
+    justification: str = Field(min_length=1, max_length=4000)
+    review_by: Optional[datetime] = Field(
+        default=None,
+        description="When the acceptance lapses and the finding returns to the queue.",
+    )
+
+
+@router.post("/vulnerabilities/{vuln_id}/accept-risk", response_model=VulnerabilityResponse)
+def accept_risk(
+    vuln_id: int,
+    body: AcceptRiskIn,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Accept the risk instead of fixing it — WITH an expiry.
+
+    This exists because setting `status = 'accepted'` on its own is a trap: the
+    finding leaves the queue and never comes back. Here the review date is
+    written to `exception_expires_at`, which is what the expiry sweep keys off,
+    so the acceptance genuinely lapses.
+
+    An acceptance with no review date is allowed but flagged as permanent —
+    the UI warns, because "accepted forever" is almost never what anyone means.
+    """
+    user_tenants = get_user_tenants(current_user, db)
+    vuln = db.query(Vulnerability).filter(
+        Vulnerability.id == vuln_id,
+        Vulnerability.tenant_id.in_(user_tenants),
+    ).first()
+    if not vuln:
+        raise HTTPException(status_code=404, detail="Vulnerability not found")
+
+    now = datetime.utcnow()
+    previous = vuln.status
+    who = getattr(current_user, "display_name", None) or current_user.username
+
+    vuln.status = "accepted"
+    vuln.resolved_at = now
+    vuln.resolution_notes = body.justification.strip()
+    # The bit that actually makes expiry work.
+    vuln.exception_status = "approved"
+    vuln.exception_justification = body.justification.strip()
+    vuln.exception_expires_at = body.review_by
+    vuln.exception_expiry = body.review_by  # legacy column kept in sync
+    vuln.exception_approved_by = current_user.id
+    vuln.exception_approved_at = now
+    vuln.updated_at = now
+
+    try:
+        from ....models import AuditLog
+        until = body.review_by.strftime("%d %b %Y") if body.review_by else "no review date (permanent)"
+        db.add(AuditLog(
+            tenant_id=vuln.tenant_id,
+            user_id=current_user.id,
+            action="vulnerability.risk_accepted",
+            resource_type="vulnerability",
+            resource_id=vuln.id,
+            changes={
+                "detail": f"Risk accepted by {who} until {until}",
+                "from": previous,
+                "to": "accepted",
+                "review_by": body.review_by.isoformat() if body.review_by else None,
+            },
+        ))
+    except Exception:  # noqa: BLE001
+        import logging
+        logging.getLogger(__name__).exception("accept_risk audit write failed vuln_id=%s", vuln_id)
+
+    db.commit()
+    db.refresh(vuln)
+
+    vuln = db.query(Vulnerability).options(
+        joinedload(Vulnerability.assignee),
+        joinedload(Vulnerability.verifier),
+        joinedload(Vulnerability.asset_links).joinedload(VulnerabilityAssetLink.asset),
+    ).filter(Vulnerability.id == vuln.id).first()
+    return _build_vulnerability_response(vuln)
+
+
 @router.post("/vulnerabilities/{vuln_id}/status", response_model=VulnerabilityResponse)
 def change_vulnerability_status(
     vuln_id: int,
@@ -590,9 +695,33 @@ def change_vulnerability_status(
     if request.status not in valid_statuses:
         raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {valid_statuses}")
     
+    previous_status = vuln.status
     vuln.status = request.status
     vuln.updated_at = datetime.utcnow()
-    
+
+    # Journal the transition so the finding's History tab shows it. Without
+    # this, only configurable-workflow transitions were recorded and a plain
+    # status change left no trace at all.
+    try:
+        from ....models import AuditLog
+        db.add(AuditLog(
+            tenant_id=vuln.tenant_id,
+            user_id=current_user.id,
+            action="vulnerability.status_changed",
+            resource_type="vulnerability",
+            resource_id=vuln.id,
+            changes={
+                "detail": f"Status changed from {previous_status or 'unset'} to {request.status}",
+                "from": previous_status,
+                "to": request.status,
+            },
+        ))
+    except Exception:  # noqa: BLE001 — auditing must never block the change
+        import logging
+        logging.getLogger(__name__).exception(
+            "Failed to write status-change audit row for vuln_id=%s", vuln_id
+        )
+
     if request.resolution_notes:
         vuln.resolution_notes = request.resolution_notes
     

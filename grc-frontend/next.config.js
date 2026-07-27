@@ -38,11 +38,18 @@ const nextConfig = {
           destination: '/api/governance/documents/:documentId/parse-policy',
         },
       ],
-      afterFiles: [],
+      afterFiles: [
+        // Static documentation shipped in public/guide/. Next does not serve
+        // directory index files from public/, so /guide would 404 while
+        // /guide/index.html worked. This gives it a clean, presentable URL
+        // without adding an app route (nothing here can break a page).
+        { source: '/guide', destination: '/guide/index.html' },
+        { source: '/guide/', destination: '/guide/index.html' },
+      ],
       fallback: [
         {
           source: '/api/:path*',
-          destination: `${BACKEND_URL}/grc/:path*`,
+          destination: `${BACKEND_URL}/:path*`,
         },
       ],
     }

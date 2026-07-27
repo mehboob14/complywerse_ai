@@ -211,9 +211,11 @@ export function PriorityCell({ priority }: { priority?: number }) {
   return (
     <span
       className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${b.tone}`}
-      title="Composite priority: CVSS + EPSS + KEV + asset criticality"
+      title="Risk score — CVSS, EPSS, exploit maturity, KEV, attack vector, exposure, asset criticality. Same number shown on the finding's Analysis tab."
     >
-      {priority.toFixed(1)} · {b.label}
+      {/* /100 scale, matching the finding detail page — one score, one scale
+          everywhere it appears. */}
+      {Math.round(priority * 10)} · {b.label}
     </span>
   );
 }
@@ -288,7 +290,12 @@ export function EpssChip({ percentile, score }: { percentile?: number; score?: n
       className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700"
       title={`EPSS percentile — ${(percentile * 100).toFixed(0)}% of CVEs score lower. Probability ${(score ?? 0).toFixed(3)}.`}
     >
-      EPSS {(percentile * 100).toFixed(0)}%
+      {/* Labelled "EPSS pct" — this is the PERCENTILE, not the probability.
+          Shown as bare "EPSS 37%" it read as a 37% chance of exploitation when
+          the actual EPSS probability was 0.5%: a ~70x overstatement on the one
+          number a triager scans a list by. The tooltip said "percentile"; the
+          visible text did not, and nobody hovers every row. */}
+      EPSS pct {(percentile * 100).toFixed(0)}%
     </span>
   );
 }

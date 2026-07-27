@@ -38,7 +38,8 @@ type Dashboard = {
   summary: {
     asset_count: number;
     scored_count: number;
-    avg_score: number;
+    avg_score: number | null;
+    // null = nothing scored yet. Deliberately not 0 — see compute_tenant_posture.
     by_band: Record<string, number>;
     highest_score: number;
     highest_name?: string | null;
@@ -46,26 +47,31 @@ type Dashboard = {
   weights: { cis: number; vuln: number; cia: number; ctrl: number; risk: number };
 };
 
+// Keys MUST match RISK_BANDS in backend/grc/modules/risk_posture/service.py:
+// contained / watch / elevated / severe. They were low/moderate/high/critical —
+// the band names before the rename — so every lookup missed and every pill on
+// this page fell through to the grey "unknown" default. A whole risk colour
+// scale silently switched itself off.
 const BAND_COLOR: Record<string, string> = {
-  low: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  moderate: 'bg-amber-50 text-amber-700 border-amber-200',
-  high: 'bg-orange-50 text-orange-700 border-orange-200',
-  critical: 'bg-rose-50 text-rose-700 border-rose-200',
+  contained: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  watch: 'bg-amber-50 text-amber-700 border-amber-200',
+  elevated: 'bg-orange-50 text-orange-700 border-orange-200',
+  severe: 'bg-rose-50 text-rose-700 border-rose-200',
   unknown: 'bg-slate-100 text-slate-700 border-slate-200',
 };
 
 const BAND_BAR: Record<string, string> = {
-  low: 'bg-emerald-500',
-  moderate: 'bg-amber-500',
-  high: 'bg-orange-500',
-  critical: 'bg-rose-500',
+  contained: 'bg-emerald-500',
+  watch: 'bg-amber-500',
+  elevated: 'bg-orange-500',
+  severe: 'bg-rose-500',
 };
 
 // Higher score = MORE risk, so the colour scale is inverted vs. compliance.
 // This is a sanctioned severity ramp (low=emerald, moderate=amber, high=orange,
 // critical=rose) — a genuine multi-value data scale, not brand chrome.
 const BAND_HEX: Record<string, string> = {
-  low: '#10b981', moderate: '#f59e0b', high: '#f97316', critical: '#f43f5e', unknown: '#cbd5e1',
+  contained: '#10b981', watch: '#f59e0b', elevated: '#f97316', severe: '#f43f5e', unknown: '#cbd5e1',
 };
 function riskHex(score: number): string {
   if (score >= 75) return '#f43f5e';
@@ -73,11 +79,14 @@ function riskHex(score: number): string {
   if (score >= 25) return '#f59e0b';
   return '#10b981';
 }
-const BAND_META: Array<{ key: 'low' | 'moderate' | 'high' | 'critical'; label: string; range: string }> = [
-  { key: 'critical', label: 'Critical', range: '75–100' },
-  { key: 'high',     label: 'High',     range: '50–74' },
-  { key: 'moderate', label: 'Moderate', range: '25–49' },
-  { key: 'low',      label: 'Low',      range: '0–24' },
+// Risk-band words are deliberately NOT the criticality words. "Critical 0"
+// sitting above a table full of assets tagged CRITICAL read as a bug; these
+// two scales measure different things and now say so.
+const BAND_META: Array<{ key: 'contained' | 'watch' | 'elevated' | 'severe'; label: string; range: string }> = [
+  { key: 'severe',    label: 'Severe',    range: '75–100' },
+  { key: 'elevated',  label: 'Elevated',  range: '50–74' },
+  { key: 'watch',     label: 'Watch',     range: '25–49' },
+  { key: 'contained', label: 'Contained', range: '0–24' },
 ];
 
 type SortKey = 'score' | 'name' | 'data_quality' | 'cis' | 'open_vulns';
@@ -183,13 +192,13 @@ export default function RiskPosturePage() {
         <div className="flex flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="relative h-[160px] w-[160px]">
             <ResponsiveContainer width="100%" height="100%">
-              <RadialBarChart innerRadius="76%" outerRadius="100%" data={[{ value: summary.avg_score }]} startAngle={90} endAngle={-270}>
+              <RadialBarChart innerRadius="76%" outerRadius="100%" data={[{ value: summary.avg_score ?? 0 }]} startAngle={90} endAngle={-270}>
                 <PolarAngleAxis type="number" domain={[0, 100]} angleAxisId={0} tick={false} />
-                <RadialBar dataKey="value" cornerRadius={10} fill={riskHex(summary.avg_score)} background={{ fill: '#f1f5f9' }} />
+                <RadialBar dataKey="value" cornerRadius={10} fill={summary.avg_score == null ? '#cbd5e1' : riskHex(summary.avg_score)} background={{ fill: '#f1f5f9' }} />
               </RadialBarChart>
             </ResponsiveContainer>
             <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-4xl font-bold tabular-nums" style={{ color: riskHex(summary.avg_score) }}>{summary.avg_score}</span>
+              <span className="text-4xl font-bold tabular-nums" style={{ color: summary.avg_score == null ? '#94a3b8' : riskHex(summary.avg_score) }}>{summary.avg_score ?? '—'}</span>
               <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">avg risk / 100</span>
             </div>
           </div>
@@ -202,7 +211,14 @@ export default function RiskPosturePage() {
         {/* Band distribution — clickable to filter the table below */}
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-600">Assets by risk band</h3>
+            <div>
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-600">Assets by risk band</h3>
+              {/* Spell out that this is the 0–100 SCORE, not the asset's
+                  business criticality shown in the table's Asset column. */}
+              <p className="mt-0.5 text-[11px] text-slate-400">
+                Banded by risk score, not business criticality · click a band to filter
+              </p>
+            </div>
             {filterBand && (
               <button onClick={() => setFilterBand('')} className="text-[11px] font-medium text-primary-700 hover:underline">Clear filter</button>
             )}
@@ -223,8 +239,15 @@ export default function RiskPosturePage() {
               return (
                 <button
                   key={b.key}
-                  onClick={() => setFilterBand(active ? '' : b.key)}
-                  className={`rounded-xl border p-3 text-left transition-all ${active ? 'shadow-md ring-2 ring-offset-1' : 'border-slate-200 hover:-translate-y-0.5 hover:shadow-sm'}`}
+                  onClick={() => n > 0 && setFilterBand(active ? '' : b.key)}
+                  disabled={n === 0}
+                  title={n === 0 ? `No assets in the ${b.label.toLowerCase()} band` : `Show only ${b.label.toLowerCase()} assets`}
+                  // An empty band is dimmed rather than shown at full weight —
+                  // a bold "0" alongside populated bands read as an error.
+                  className={`rounded-xl border p-3 text-left transition-all ${
+                    n === 0 ? 'border-slate-100 opacity-45' :
+                    active ? 'shadow-md ring-2 ring-offset-1' : 'border-slate-200 hover:-translate-y-0.5 hover:shadow-sm cursor-pointer'
+                  }`}
                   style={active ? { borderColor: BAND_HEX[b.key], boxShadow: `0 0 0 2px ${BAND_HEX[b.key]}` } : undefined}
                 >
                   <div className="flex items-center gap-1.5">

@@ -12,7 +12,9 @@ from .routers import (
     exceptions_router,
     departments_router,
     workflows_router,
-    escalations_router
+    escalations_router,
+    remediation_plans_router,
+    exploitability_router,
 )
 
 router = APIRouter(prefix="/vuln-management", tags=["Vulnerability Management"])
@@ -30,6 +32,8 @@ router.include_router(exceptions_router)
 router.include_router(departments_router)
 router.include_router(workflows_router)
 router.include_router(escalations_router)
+router.include_router(remediation_plans_router)
+router.include_router(exploitability_router)
 
 
 @router.get("")
@@ -40,6 +44,7 @@ def vuln_management_module_info():
         "endpoints": [
             "/reports",
             "/vulnerabilities",
+            "/vulnerabilities/{id}/exploitability",
             "/mitigations",
             "/asset-links",
             "/control-links",

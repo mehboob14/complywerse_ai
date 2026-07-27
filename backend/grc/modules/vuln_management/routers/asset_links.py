@@ -2,7 +2,7 @@ from typing import List, Optional
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Cookie
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import text
+from sqlalchemy import text, case, func
 
 from ....models import (
     VulnerabilityAssetLink, Vulnerability, ITAsset, GRCUser, Tenant, get_db
@@ -50,9 +50,32 @@ def list_asset_links(
     
     vuln = get_vuln_or_404(vuln_id, user_tenants, db)
     
-    links = db.query(VulnerabilityAssetLink).options(
-        joinedload(VulnerabilityAssetLink.asset)
-    ).filter(VulnerabilityAssetLink.vulnerability_id == vuln_id).all()
+    # Worst asset first, and stable. This list had no ORDER BY, so the frontend's
+    # `assetLinks[0]` — which it treats as the primary affected asset for the
+    # header, the score inputs and the exploit assessment — was whichever row
+    # Postgres happened to return. Updating a linked asset moves its row in the
+    # heap and could silently change which asset the whole page was talking
+    # about. The ordering here deliberately matches `_primary_asset` in
+    # remediation_plans.py so the UI and the scoring agree on the same asset.
+    crit_rank = case(
+        (func.lower(ITAsset.criticality) == "critical", 4),
+        (func.lower(ITAsset.criticality) == "high", 3),
+        (func.lower(ITAsset.criticality) == "medium", 2),
+        (func.lower(ITAsset.criticality) == "low", 1),
+        else_=0,
+    )
+    links = (
+        db.query(VulnerabilityAssetLink)
+        .options(joinedload(VulnerabilityAssetLink.asset))
+        .outerjoin(ITAsset, ITAsset.id == VulnerabilityAssetLink.asset_id)
+        .filter(VulnerabilityAssetLink.vulnerability_id == vuln_id)
+        .order_by(
+            crit_rank.desc(),
+            ITAsset.internet_facing.desc().nullslast(),
+            VulnerabilityAssetLink.asset_id.asc(),
+        )
+        .all()
+    )
     
     return [
         VulnerabilityAssetLinkResponse(
@@ -65,6 +88,8 @@ def list_asset_links(
             created_by=link.created_by,
             asset_name=link.asset.name if link.asset else None,
             asset_type=link.asset.asset_type if link.asset else None,
+            asset_criticality=getattr(link.asset, "criticality", None) if link.asset else None,
+            asset_criticality_score=getattr(link.asset, "criticality_score", None) if link.asset else None,
             link_source=getattr(link, "link_source", "manual") or "manual",
             auto_linked=bool(getattr(link, "auto_linked", False)),
         )
@@ -172,7 +197,9 @@ def create_asset_link(
         created_at=link.created_at,
         created_by=link.created_by,
         asset_name=asset.name,
-        asset_type=asset.asset_type
+        asset_type=asset.asset_type,
+        asset_criticality=getattr(asset, "criticality", None),
+        asset_criticality_score=getattr(asset, "criticality_score", None),
     )
 
 

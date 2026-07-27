@@ -58,6 +58,19 @@ export interface DataTableProps<T extends { id: string | number }> {
   stickyHeader?: boolean;
   /** 'dark' renders a navy contextual bulk-action bar (teal actions + "Deselect all"). Default 'light'. */
   bulkBarVariant?: 'light' | 'dark';
+  /** Render each row as a raised, separated card (gap + border + shadow) instead of flat divided rows. */
+  cardRows?: boolean;
+}
+
+// Shared per-cell classes for card-row mode: white card body, border, shadow
+// that lifts on row hover, rounded/bordered ends. Selected rows tint primary.
+function cardCellClasses(selected: boolean): string {
+  return clsx(
+    'bg-white border-y border-slate-200 shadow-sm transition-shadow',
+    'group-hover:shadow-md group-hover:border-primary-200',
+    'first:rounded-l-xl first:border-l last:rounded-r-xl last:border-r',
+    selected && '!bg-primary-50 !border-primary-300'
+  );
 }
 
 function getCellValue<T>(row: T, accessor: keyof T | ((row: T) => React.ReactNode)): React.ReactNode {
@@ -99,6 +112,7 @@ export function DataTable<T extends { id: string | number }>({
   className,
   stickyHeader = false,
   bulkBarVariant = 'light',
+  cardRows = false,
 }: DataTableProps<T>) {
   const [internalSearchValue, setInternalSearchValue] = useState('');
   const [sortColumn, setSortColumn] = useState<string | null>(null);
@@ -247,7 +261,7 @@ export function DataTable<T extends { id: string | number }>({
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-slate-200 bg-slate-50">
+              <tr className="border-b-2 border-slate-300 bg-slate-200/70">
                 {initialColumns.slice(0, 5).map((_, i) => (
                   <th key={i} className="px-3 py-2.5">
                     <div className="h-4 w-24 rounded bg-slate-200 animate-pulse" />
@@ -401,10 +415,10 @@ export function DataTable<T extends { id: string | number }>({
         </div>
       )}
 
-      <div className="overflow-x-auto">
-        <table className="w-full">
-          <thead className={clsx(stickyHeader && 'sticky top-0 z-10')}>
-            <tr className="border-b border-slate-200 bg-slate-50">
+      <div className={clsx('overflow-x-auto', cardRows && 'px-3 pb-1')}>
+        <table className={clsx('w-full', cardRows && 'border-separate border-spacing-y-2.5')}>
+          <thead className={clsx('bg-slate-200/70', stickyHeader && 'sticky top-0 z-10 shadow-sm')}>
+            <tr className="border-b-2 border-slate-300 bg-slate-200/70">
               {selectable && (
                 <th className="w-10 px-3 py-2.5">
                   <input
@@ -420,7 +434,7 @@ export function DataTable<T extends { id: string | number }>({
                 <th
                   key={column.id}
                   className={clsx(
-                    'px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500',
+                    'px-3 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-slate-600',
                     column.sortable && 'cursor-pointer select-none transition-colors hover:text-slate-900'
                   )}
                   style={{ width: column.width, minWidth: column.minWidth }}
@@ -467,13 +481,19 @@ export function DataTable<T extends { id: string | number }>({
                   key={row.id}
                   onClick={onRowClick ? () => onRowClick(row) : undefined}
                   className={clsx(
-                    'border-b border-slate-200 transition-colors',
-                    onRowClick && 'cursor-pointer hover:bg-slate-50',
-                    selectedRows.has(row.id) && 'bg-primary-500/5'
+                    'transition-colors',
+                    cardRows
+                      ? 'group'
+                      : clsx('border-b border-slate-100', selectedRows.has(row.id) && 'bg-primary-500/5'),
+                    onRowClick && 'cursor-pointer',
+                    !cardRows && onRowClick && 'hover:bg-slate-50'
                   )}
                 >
                   {selectable && (
-                    <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+                    <td
+                      className={clsx('px-3', cardRows ? clsx('py-4', cardCellClasses(selectedRows.has(row.id))) : 'py-2.5')}
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <input
                         type="checkbox"
                         checked={selectedRows.has(row.id)}
@@ -486,7 +506,7 @@ export function DataTable<T extends { id: string | number }>({
                   {visibleColumns.map((column) => (
                     <td
                       key={column.id}
-                      className="px-3 py-2.5 text-sm text-slate-600"
+                      className={clsx('px-3 text-sm text-slate-600', cardRows ? clsx('py-4', cardCellClasses(selectedRows.has(row.id))) : 'py-2.5')}
                       style={{ width: column.width, minWidth: column.minWidth }}
                     >
                       {column.render

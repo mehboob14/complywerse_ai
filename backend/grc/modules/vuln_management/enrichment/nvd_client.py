@@ -34,6 +34,11 @@ logger = logging.getLogger(__name__)
 NVD_API_URL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
 NVD_TIMEOUT_SECONDS = 10
 NVD_CACHE_TTL_SECONDS = 7 * 24 * 3600  # 7 days
+# Namespaced by payload shape: bump when the cached fields change so pre-change
+# entries are ignored rather than served missing a new field. v2 added cwe_ids
+# (Phase 1) — without the bump, a CVE cached before the change would keep reading
+# back with no CWE for up to the 7-day TTL.
+NVD_CACHE_KEY = "nvd:v2:"
 
 
 @dataclass
@@ -49,6 +54,16 @@ class NvdResult:
     # range bounds. Consumed by `services/cpe_matcher.py` to find assets
     # with matching SoftwareIdentifier rows.
     configurations: List[Dict[str, Any]] = field(default_factory=list)
+    # CVSS base vector, e.g. "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H".
+    # Only scanner imports used to supply this, so any manually-entered finding
+    # had none — and its absence is not harmless: priority scoring falls back to
+    # a 0.5 attack-vector guess worth 10% of the weight, and the exploitability
+    # page cannot say whether the flaw is network-reachable.
+    cvss_vector: Optional[str] = None
+    cvss_score: Optional[float] = None
+    # All NVD-listed CWEs, Primary first, with the placeholders NVD-CWE-noinfo /
+    # NVD-CWE-Other dropped. cwe_ids[0] is the Primary the single cwe_id keeps.
+    cwe_ids: List[str] = field(default_factory=list)
 
 
 def _redis_client():
@@ -89,7 +104,7 @@ def _from_cache(redis_client, cve_id: str) -> Optional[NvdResult]:
     if redis_client is None:
         return None
     try:
-        raw = redis_client.get(f"nvd:{cve_id}")
+        raw = redis_client.get(f"{NVD_CACHE_KEY}{cve_id}")
     except Exception:
         return None
     if not raw:
@@ -105,6 +120,9 @@ def _from_cache(redis_client, cve_id: str) -> Optional[NvdResult]:
         description=payload.get("description"),
         references=list(payload.get("references") or []),
         configurations=list(payload.get("configurations") or []),
+        cvss_vector=payload.get("cvss_vector"),
+        cvss_score=payload.get("cvss_score"),
+        cwe_ids=list(payload.get("cwe_ids") or []),
     )
 
 
@@ -119,9 +137,12 @@ def _to_cache(redis_client, result: NvdResult) -> None:
             "description": result.description,
             "references": result.references,
             "configurations": result.configurations,
+            "cvss_vector": result.cvss_vector,
+            "cvss_score": result.cvss_score,
+            "cwe_ids": result.cwe_ids,
         }
         redis_client.set(
-            f"nvd:{result.cve_id}",
+            f"{NVD_CACHE_KEY}{result.cve_id}",
             json.dumps(payload),
             ex=NVD_CACHE_TTL_SECONDS,
         )
@@ -158,8 +179,46 @@ def _extract_payload(raw: Dict[str, Any], cve_id: str) -> Optional[NvdResult]:
     else:
         configurations = []
 
+    # NVD nests scores under metrics.cvssMetricV31 / V30 / V2, newest first.
+    # Take the first entry that carries a vector string.
+    cvss_vector: Optional[str] = None
+    cvss_score: Optional[float] = None
+    metrics = cve.get("metrics") or {}
+    for key in ("cvssMetricV31", "cvssMetricV30", "cvssMetricV2"):
+        for entry in metrics.get(key) or []:
+            data = (entry or {}).get("cvssData") or {}
+            vector = data.get("vectorString")
+            if isinstance(vector, str) and vector.strip():
+                cvss_vector = vector.strip()
+                base = data.get("baseScore")
+                if isinstance(base, (int, float)):
+                    cvss_score = float(base)
+                break
+        if cvss_vector:
+            break
+
+    # Weaknesses (CWE) — NVD lists a Primary and often one or more Secondary CWEs
+    # under cve.weaknesses[].description[].value. The placeholders NVD-CWE-noinfo /
+    # NVD-CWE-Other carry no CWE id, so skip them. Primary first (so cwe_ids[0] is
+    # the Primary the single cwe_id column keeps); a Secondary is frequently the
+    # more specific weakness, and specificity is what drives a good technique
+    # selection, so we keep the whole list.
+    cwe_ids: List[str] = []
+    weaknesses = cve.get("weaknesses") or []
+    for want_primary in (True, False):
+        for w in weaknesses:
+            if ((w or {}).get("type") == "Primary") != want_primary:
+                continue
+            for desc in (w or {}).get("description") or []:
+                val = ((desc or {}).get("value") or "").strip()
+                if val.upper().startswith("CWE-") and val not in cwe_ids:
+                    cwe_ids.append(val)
+
     return NvdResult(
         cve_id=cve.get("id") or cve_id,
+        cvss_vector=cvss_vector,
+        cvss_score=cvss_score,
+        cwe_ids=cwe_ids,
         published_at=_parse_nvd_datetime(cve.get("published")),
         last_modified_at=_parse_nvd_datetime(cve.get("lastModified")),
         description=description,

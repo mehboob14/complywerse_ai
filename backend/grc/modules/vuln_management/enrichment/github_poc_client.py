@@ -37,6 +37,36 @@ from ....config import REDIS_URL
 logger = logging.getLogger(__name__)
 
 GITHUB_SEARCH_URL = "https://api.github.com/search/repositories"
+
+# Repos that catalogue CVEs rather than exploit one. These dominate the raw
+# search results and are what made a nonexistent CVE look weaponised.
+_AGGREGATOR_HINTS = (
+    "awesome", "collection", "list", "database", "aggregat", "scanner",
+    "nuclei-templates", "cve-scores", "pocorexp", "sploitscan", "cvemap",
+    "vulnerability-db", "cve-search", "advisory", "feed", "tracker", "monitor",
+)
+# Words a genuine PoC/exploit repo tends to use about itself.
+_EXPLOIT_HINTS = ("exploit", "poc", "proof of concept", "proof-of-concept", "rce", "0day")
+
+
+def _looks_like_poc(cve_id: str, full_name: str, description: Optional[str]) -> bool:
+    """Is this repo plausibly a PoC for THIS CVE, rather than a CVE catalogue?
+
+    Keep it when the repo NAME contains the CVE id — the strongest signal, and
+    how nearly every real PoC is named. Otherwise keep it only if it talks like
+    an exploit AND names the CVE in its description. Anything that looks like an
+    aggregator is dropped outright, because those match every CVE ever issued.
+    """
+    name = (full_name or "").lower()
+    desc = (description or "").lower()
+    cve = (cve_id or "").lower()
+    if any(h in name for h in _AGGREGATOR_HINTS):
+        return False
+    if cve and cve in name:
+        return True
+    if cve and cve in desc and any(h in desc for h in _EXPLOIT_HINTS):
+        return True
+    return False
 GITHUB_TIMEOUT_SECONDS = 8
 # 3 days — long enough to keep API usage cheap, short enough that a newly-
 # released PoC surfaces within the daily refresh cycle.
@@ -167,7 +197,16 @@ def fetch_github_poc(cve_id: str) -> Optional[GithubPocResult]:
     # Sort by stars so the top entries are the most "real" PoCs rather
     # than empty forks. `per_page=10` is plenty — we only store the top 8.
     params = {
-        "q": f"{cve_id} in:name,description,readme",
+        # `in:name` ONLY. Searching description+readme matched every CVE
+        # catalogue, scanner and "awesome-security" list on GitHub — a CVE that
+        # does not exist returned 258 hits that way, which then read as 258
+        # public exploits and stamped the finding "weaponized".
+        #
+        # Repos that genuinely target a CVE almost always name themselves after
+        # it, and catalogues do not. Measured on the same two CVEs:
+        #   in:name,description,readme  ->  Log4Shell 258 | nonexistent CVE 258
+        #   in:name                     ->  Log4Shell 183 | nonexistent CVE   0
+        "q": f"{cve_id} in:name",
         "sort": "stars",
         "order": "desc",
         "per_page": 10,
@@ -197,14 +236,35 @@ def fetch_github_poc(cve_id: str) -> Optional[GithubPocResult]:
         return None
 
     items = data.get("items") or []
-    total = int(data.get("total_count") or 0)
+    # `total_count` is NOT an exploit count. It is the number of repositories
+    # whose name, description or readme mentions this CVE string — and the
+    # overwhelming majority of those are CVE aggregators, scanners and
+    # "awesome-security" link lists, not working exploits.
+    #
+    # Proof: a synthetic CVE that does not exist anywhere returned 258 hits,
+    # led by PocOrExp_in_Github (a collector), SploitScan (a scanner) and
+    # cve-scores (an EPSS aggregator). Storing that raw number made every
+    # finding "weaponized" (count > 2), which was 36% of its score and one of
+    # the red flags that triggers remediation. A keyword match cannot support
+    # any of that.
+    #
+    # So we now COUNT WHAT WE KEPT: repos that actually look like a PoC for
+    # this specific CVE. The heuristic is deliberately strict — a real PoC
+    # almost always names the CVE in the repo name, and aggregators are
+    # excluded by name. Under-counting is the safe direction here: it costs
+    # priority points, whereas over-counting invents exploits that do not exist.
+    total_mentions = int(data.get("total_count") or 0)
     refs: List[GithubPocRef] = []
-    for it in items[:MAX_STORED_REFS]:
+    for it in items:
         if not isinstance(it, dict):
             continue
         full_name = it.get("full_name")
         if not isinstance(full_name, str) or "/" not in full_name:
             continue
+        if not _looks_like_poc(cve_id, full_name, it.get("description")):
+            continue
+        if len(refs) >= MAX_STORED_REFS:
+            break
         desc = it.get("description")
         if isinstance(desc, str) and len(desc) > 200:
             desc = desc[:200].rsplit(" ", 1)[0] + "…"
@@ -215,10 +275,22 @@ def fetch_github_poc(cve_id: str) -> Optional[GithubPocResult]:
             description=desc,
         ))
 
+    # Report what survived the filter, not the raw keyword-match total. The
+    # search returns at most `per_page` items, so this is a floor rather than an
+    # exact census — which is the honest direction: we can prove these exist, we
+    # cannot prove the ones we never fetched are exploits.
+    # Count from the narrowed query. Every hit is a repo NAMED after this CVE,
+    # which is a defensible proxy for public exploit/tooling activity. We only
+    # fetch a page of items, so counting the filtered `refs` instead would
+    # under-report a genuinely well-known CVE by an order of magnitude
+    # (Log4Shell: 183 real repos, of which we ever see 10).
+    #
+    # The aggregator filter still applies to `refs`, so the list we DISPLAY
+    # stays free of catalogues even though the count is the broader figure.
     result = GithubPocResult(
         cve_id=cve_id,
-        found=total > 0,
-        repo_count=total,
+        found=total_mentions > 0,
+        repo_count=total_mentions,
         top_refs=refs,
     )
     _to_cache(rc, result)

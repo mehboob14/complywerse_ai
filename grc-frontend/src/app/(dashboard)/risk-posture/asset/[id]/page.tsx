@@ -2,10 +2,11 @@
 export const dynamic = 'force-dynamic';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { assetsApi, riskPostureApi } from '@/lib/api';
 import { ShieldAlert, ChevronRight, X, SlidersHorizontal, ArrowLeft } from 'lucide-react';
+import { GuideMarker } from '@/components/guide';
 
 type Posture = {
   asset: {
@@ -85,27 +86,38 @@ type PreviewResp = {
 
 // Sanctioned severity ramp: low=emerald, medium/moderate=amber, high=orange,
 // critical=rose — a genuine multi-value scale, preserved semantically.
+// Keys MUST match RISK_BANDS in backend/grc/modules/risk_posture/service.py:
+// contained / watch / elevated / severe. They were low/moderate/high/critical —
+// the band names before the rename — so every lookup missed and every pill on
+// this page fell through to the grey "unknown" default. A whole risk colour
+// scale silently switched itself off.
 const BAND_COLOR: Record<string, string> = {
-  low: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  medium: 'bg-amber-50 text-amber-700 border-amber-200',
-  moderate: 'bg-amber-50 text-amber-700 border-amber-200',
-  high: 'bg-orange-50 text-orange-700 border-orange-200',
-  critical: 'bg-rose-50 text-rose-700 border-rose-200',
+  contained: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  watch: 'bg-amber-50 text-amber-700 border-amber-200',
+  elevated: 'bg-orange-50 text-orange-700 border-orange-200',
+  severe: 'bg-rose-50 text-rose-700 border-rose-200',
   unknown: 'bg-slate-100 text-slate-700 border-slate-200',
 };
 
 const RING: Record<string, string> = {
-  low: 'text-emerald-600',
-  medium: 'text-amber-600',
-  moderate: 'text-amber-600',
-  high: 'text-orange-600',
-  critical: 'text-rose-600',
+  contained: 'text-emerald-600',
+  watch: 'text-amber-600',
+  elevated: 'text-orange-600',
+  severe: 'text-rose-600',
   unknown: 'text-slate-400',
 };
 
+// These multipliers MUST match _REGULATED_DATA_MULTIPLIER and
+// _OPERATIONAL_DEPENDENCY_MULTIPLIER in
+// backend/grc/modules/risk_posture/effective_risk.py. They are duplicated here
+// only to label the radio buttons — nothing keeps them in sync, and they had
+// already drifted: the backend corrected PII from 1.3 to 1.4 (calling 1.3 "a
+// transcription error that under-weighted PII relative to PCI/PHI/Financial")
+// while this table kept showing 1.3×. The UI was telling operators a number the
+// scorer had stopped using.
 const REGULATED_DATA: Array<{ value: string; label: string; mult: string }> = [
   { value: 'none', label: 'None', mult: '1.0×' },
-  { value: 'pii', label: 'PII', mult: '1.3×' },
+  { value: 'pii', label: 'PII', mult: '1.4×' },
   { value: 'pci', label: 'PCI (cardholder)', mult: '1.4×' },
   { value: 'phi', label: 'PHI (health)', mult: '1.4×' },
   { value: 'financial', label: 'Financial records', mult: '1.4×' },
@@ -167,19 +179,43 @@ export default function RiskPostureAssetPage() {
     business_impact_notes: '',
   });
 
-  useEffect(() => {
-    if (!assetQ.data) return;
+  // Rebuild the form from whatever the server currently holds.
+  const hydrateForm = useCallback(() => {
+    const a = assetQ.data;
+    if (!a) return;
     setForm({
-      is_customer_facing: assetQ.data.is_customer_facing ?? false,
-      is_internet_facing: assetQ.data.is_internet_facing ?? false,
-      regulated_data_type: assetQ.data.regulated_data_type || 'none',
-      operational_dependency: assetQ.data.operational_dependency || 'medium',
-      confidentiality_rating: assetQ.data.confidentiality_rating ?? defaultCIA,
-      integrity_rating: assetQ.data.integrity_rating ?? defaultCIA,
-      availability_rating: assetQ.data.availability_rating ?? defaultCIA,
-      business_impact_notes: assetQ.data.business_impact_notes ?? '',
+      is_customer_facing: a.is_customer_facing ?? false,
+      is_internet_facing: a.is_internet_facing ?? false,
+      regulated_data_type: a.regulated_data_type || 'none',
+      operational_dependency: a.operational_dependency || 'medium',
+      confidentiality_rating: a.confidentiality_rating ?? defaultCIA,
+      integrity_rating: a.integrity_rating ?? defaultCIA,
+      availability_rating: a.availability_rating ?? defaultCIA,
+      business_impact_notes: a.business_impact_notes ?? '',
     });
-  }, [assetQ.data?.id, defaultCIA]);
+  }, [assetQ.data, defaultCIA]);
+
+  // The dependency list was [assetQ.data?.id, defaultCIA]. After a save the id
+  // is unchanged, so this never re-ran and the form kept whatever it held —
+  // including the hardcoded initial defaults for any field the user had not
+  // touched. Save posts the WHOLE form, so editing one field wrote defaults
+  // over every other field: changing operational dependency could silently
+  // reset customer-facing and internet-facing. Depend on the values themselves.
+  useEffect(() => {
+    hydrateForm();
+  }, [
+    assetQ.data?.id,
+    assetQ.data?.is_customer_facing,
+    assetQ.data?.is_internet_facing,
+    assetQ.data?.regulated_data_type,
+    assetQ.data?.operational_dependency,
+    assetQ.data?.confidentiality_rating,
+    assetQ.data?.integrity_rating,
+    assetQ.data?.availability_rating,
+    assetQ.data?.business_impact_notes,
+    defaultCIA,
+    hydrateForm,
+  ]);
 
   const isDirty = useMemo(() => {
     const a = assetQ.data;
@@ -223,7 +259,11 @@ export default function RiskPostureAssetPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['asset-detail', assetId] });
       queryClient.invalidateQueries({ queryKey: ['risk-posture.asset', assetId] });
-      queryClient.invalidateQueries({ queryKey: ['risk-posture-dashboard'] });
+      // Key must match page.tsx's ['risk-posture.dashboard'] exactly. It was
+      // 'risk-posture-dashboard' (hyphen vs dot), so saving weights invalidated
+      // nothing and the dashboard only updated on its next 30s poll — while the
+      // toast claimed it would recompute.
+      queryClient.invalidateQueries({ queryKey: ['risk-posture.dashboard'] });
     },
   });
 
@@ -242,6 +282,11 @@ export default function RiskPostureAssetPage() {
   }
 
   const { asset, score, band, weights, components, contributions, data_quality, known_dimensions } = postureQ.data;
+  // Sum of the weights that actually count. Dimensions with no evidence are
+  // excluded from the score and the rest renormalised over what remains, so the
+  // share the legend shows must be the EFFECTIVE one.
+  const effWeight = (['cis', 'vuln', 'cia', 'ctrl', 'risk'] as const)
+    .reduce((sum, k) => sum + ((components as any)[k]?.known ? (weights as any)[k] : 0), 0) || 1;
   const bandLabel = band.label;
   // When the operator has unsaved changes AND the preview has come back,
   // use the preview's per-vuln list so the breakdown cards reflect the
@@ -286,18 +331,23 @@ export default function RiskPostureAssetPage() {
             <div className="flex items-baseline justify-end gap-1.5">
               <span className={`text-3xl font-bold ${RING[bandLabel] ?? 'text-slate-900'}`}>{score == null ? '—' : score}</span>
               <span className="text-xs text-slate-500">/ 100</span>
+              <GuideMarker id="posture.score" n={1} />
             </div>
-            <span className={`mt-1 inline-block px-2.5 py-0.5 rounded-full text-[10px] font-medium uppercase ${bandPill(bandLabel)}`}>
+            <span className={`mt-1 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-medium uppercase ${bandPill(bandLabel)}`}>
               {bandLabel}
+              <GuideMarker id="posture.bands" n={2} />
             </span>
-            <div className="text-[10px] text-slate-500 mt-1">
-              Data quality{' '}
-              <strong className={
-                data_quality >= 75 ? 'text-emerald-700'
-                : data_quality >= 50 ? 'text-amber-700'
-                : data_quality >= 25 ? 'text-orange-700' : 'text-rose-700'
-              }>{data_quality}%</strong>
-              {' '}· {known_dimensions.length}/5
+            <div className="flex items-center justify-end gap-1 text-[10px] text-slate-500 mt-1">
+              <span>
+                Data quality{' '}
+                <strong className={
+                  data_quality >= 75 ? 'text-emerald-700'
+                  : data_quality >= 50 ? 'text-amber-700'
+                  : data_quality >= 25 ? 'text-orange-700' : 'text-rose-700'
+                }>{data_quality}%</strong>
+                {' '}· {known_dimensions.length}/5
+              </span>
+              <GuideMarker id="posture.dataQuality" n={3} />
             </div>
           </div>
         </div>
@@ -334,9 +384,20 @@ export default function RiskPostureAssetPage() {
               {/* Formula explanation */}
               {composite && (
                 <div className="mb-3 text-xs text-primary-800 bg-primary-100 rounded-md px-3 py-2">
-                  <strong>Formula:</strong> 60% × host OS score + 40% × criticality-weighted app average
-                  {composite.penalty && (
-                    <span className="ml-2 text-amber-800">· −10 pts penalty (one app &lt; 50%)</span>
+                  {/* The formula string was unconditional, so it claimed the
+                      60/40 host-vs-apps split even when the backend used its
+                      host-only or equal-weight fallback. Follow the shape of the
+                      data instead of asserting one formula for every case. */}
+                  <strong>Formula:</strong>{' '}
+                  {(composite.formula?.description as string) || '60% × host OS score + 40% × criticality-weighted app average'}
+                  {/* Read `penalties` (an array), not `penalty`. The singular
+                      field does not exist on the response, so this note could
+                      never render — the −10 penalty was applied to the score
+                      silently, with nothing on screen explaining the drop. */}
+                  {Array.isArray(composite.penalties) && composite.penalties.length > 0 && (
+                    <span className="ml-2 text-amber-800">
+                      {composite.penalties.map((p: any) => `· −${p.points} pts (${p.reason})`).join(' ')}
+                    </span>
                   )}
                   {weakest && weakest.id !== assetId && (
                     <span className="ml-2 text-amber-800">· weakest: <strong>{weakest.name.split(' @')[0]}</strong> {weakest.score}%</span>
@@ -398,26 +459,35 @@ export default function RiskPostureAssetPage() {
 
       {/* Business impact — the scoring-inputs form + live preview open in a
           popup so the page stays compact. */}
-      <button
-        onClick={() => setOpenTile('business')}
-        className="group flex w-full items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-4 text-left shadow-sm transition-colors hover:border-primary-300 hover:bg-slate-50"
-      >
-        <span className="flex items-center gap-3">
-          <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-primary-50 text-primary-600"><SlidersHorizontal className="h-4 w-4" /></span>
-          <span>
-            <span className="block text-sm font-semibold text-slate-800">Business impact &amp; scoring inputs</span>
-            <span className="block text-xs text-slate-400">Customer/internet-facing · regulated data · operational dependency · CIA{isDirty && <span className="text-amber-700"> · ● unsaved</span>}</span>
+      <div className="relative">
+        <button
+          onClick={() => setOpenTile('business')}
+          className="group flex w-full items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-4 text-left shadow-sm transition-colors hover:border-primary-300 hover:bg-slate-50"
+        >
+          <span className="flex items-center gap-3">
+            <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-primary-50 text-primary-600"><SlidersHorizontal className="h-4 w-4" /></span>
+            <span>
+              <span className="block text-sm font-semibold text-slate-800">Business impact &amp; scoring inputs</span>
+              <span className="block text-xs text-slate-400">Customer/internet-facing · regulated data · operational dependency · CIA{isDirty && <span className="text-amber-700"> · ● unsaved</span>}</span>
+            </span>
           </span>
-        </span>
-        <span className="inline-flex items-center gap-1 text-xs font-medium text-primary-700">Edit <ChevronRight className="h-4 w-4" /></span>
-      </button>
+          <span className="inline-flex items-center gap-1 text-xs font-medium text-primary-700">Edit <ChevronRight className="h-4 w-4" /></span>
+        </button>
+        {/* Sibling, not nested inside the button — a <button> cannot contain
+            another interactive control without breaking the DOM. */}
+        <GuideMarker id="posture.businessImpact" n={4} className="absolute right-16 top-1/2 -translate-y-1/2" />
+      </div>
 
       {openTile === 'business' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" onClick={() => setOpenTile(null)}>
+        // Closing discards edits. It used to only hide the modal, leaving the
+        // changes live in `form` — so a value the user explicitly cancelled was
+        // still sitting there and got written to the database by the next,
+        // unrelated save. "Cancel" has to mean cancel.
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" onClick={() => { hydrateForm(); setOpenTile(null); }}>
           <div className="flex max-h-[90vh] w-full max-w-4xl flex-col rounded-xl border border-slate-200 bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-slate-200 px-4 py-2.5">
               <h4 className="text-sm font-semibold text-slate-900">Business impact &amp; scoring inputs</h4>
-              <button onClick={() => setOpenTile(null)}><X className="h-4 w-4 text-slate-400" /></button>
+              <button onClick={() => { hydrateForm(); setOpenTile(null); }}><X className="h-4 w-4 text-slate-400" /></button>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto p-4">
       <div className="grid gap-4 lg:grid-cols-2">
@@ -628,7 +698,10 @@ export default function RiskPostureAssetPage() {
       {/* Stacked contributions — 5-series categorical data-viz (CIS / Vuln /
           CIA / Ctrl / Risk); dimension palette preserved to match the legend. */}
       <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-5">
-        <h2 className="text-sm font-semibold text-slate-700 mb-3">Score breakdown</h2>
+        <h2 className="flex items-center gap-1.5 text-sm font-semibold text-slate-700 mb-3">
+          Score breakdown
+          <GuideMarker id="posture.dimensions" n={5} />
+        </h2>
         <div className="flex h-6 w-full rounded-md overflow-hidden bg-slate-100">
           <div className="bg-red-400 flex items-center justify-center text-[10px] text-white font-medium" style={{ width: `${contributions.cis}%` }} title={`CIS contributes ${contributions.cis} of ${score} points`}>
             {contributions.cis > 4 && contributions.cis}
@@ -646,21 +719,29 @@ export default function RiskPostureAssetPage() {
             {contributions.risk > 4 && contributions.risk}
           </div>
         </div>
+        {/* The percentage shown per dimension is its EFFECTIVE share, not its raw
+            weight. When dimensions are excluded for having no evidence, the rest
+            are renormalised over the weight that remains — so on an asset with
+            only vulnerabilities and CIA known, those two carry 100% of the score
+            between them, not 45%. Printing the raw weight made the legend look
+            broken: "CIA value (15%) → 16.7 pts" beside "Vulnerabilities (30%) →
+            18.3 pts" reads as arithmetic that does not add up, when in fact both
+            numbers are correct. */}
         <div className="flex flex-wrap gap-4 mt-3 text-xs text-slate-700">
           <span className={`flex items-center gap-1.5 ${!components.cis.known ? 'opacity-40' : ''}`}>
-            <span className="inline-block w-2 h-2 bg-red-400 rounded-sm" /> CIS gap ({Math.round(weights.cis * 100)}%) → {contributions.cis} pts {!components.cis.known && '(no data)'}
+            <span className="inline-block w-2 h-2 bg-red-400 rounded-sm" /> CIS gap ({components.cis.known ? `${Math.round((weights.cis / effWeight) * 100)}%` : `${Math.round(weights.cis * 100)}% muted`}) → {contributions.cis} pts {!components.cis.known && '· no data, excluded'}
           </span>
           <span className={`flex items-center gap-1.5 ${!components.vuln.known ? 'opacity-40' : ''}`}>
-            <span className="inline-block w-2 h-2 bg-orange-400 rounded-sm" /> Vulnerabilities ({Math.round(weights.vuln * 100)}%) → {contributions.vuln} pts
+            <span className="inline-block w-2 h-2 bg-orange-400 rounded-sm" /> Vulnerabilities ({components.vuln.known ? `${Math.round((weights.vuln / effWeight) * 100)}%` : `${Math.round(weights.vuln * 100)}% muted`}) → {contributions.vuln} pts {!components.vuln.known && '· no data, excluded'}
           </span>
           <span className={`flex items-center gap-1.5 ${!components.cia.known ? 'opacity-40' : ''}`}>
-            <span className="inline-block w-2 h-2 bg-purple-400 rounded-sm" /> CIA value ({Math.round(weights.cia * 100)}%) → {contributions.cia} pts {!components.cia.known && '(no data)'}
+            <span className="inline-block w-2 h-2 bg-purple-400 rounded-sm" /> CIA value ({components.cia.known ? `${Math.round((weights.cia / effWeight) * 100)}%` : `${Math.round(weights.cia * 100)}% muted`}) → {contributions.cia} pts {!components.cia.known && '· no data, excluded'}
           </span>
           <span className={`flex items-center gap-1.5 ${!components.ctrl.known ? 'opacity-40' : ''}`}>
-            <span className="inline-block w-2 h-2 bg-blue-400 rounded-sm" /> Control gap ({Math.round(weights.ctrl * 100)}%) → {contributions.ctrl} pts
+            <span className="inline-block w-2 h-2 bg-blue-400 rounded-sm" /> Control gap ({components.ctrl.known ? `${Math.round((weights.ctrl / effWeight) * 100)}%` : `${Math.round(weights.ctrl * 100)}% muted`}) → {contributions.ctrl} pts {!components.ctrl.known && '· no data, excluded'}
           </span>
           <span className={`flex items-center gap-1.5 ${!components.risk.known ? 'opacity-40' : ''}`}>
-            <span className="inline-block w-2 h-2 bg-pink-400 rounded-sm" /> Linked risks ({Math.round(weights.risk * 100)}%) → {contributions.risk} pts {!components.risk.known && '(no data)'}
+            <span className="inline-block w-2 h-2 bg-pink-400 rounded-sm" /> Linked risks ({components.risk.known ? `${Math.round((weights.risk / effWeight) * 100)}%` : `${Math.round(weights.risk * 100)}% muted`}) → {contributions.risk} pts {!components.risk.known && '· no data, excluded'}
           </span>
         </div>
       </div>
@@ -687,9 +768,10 @@ export default function RiskPostureAssetPage() {
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-5">
           <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-semibold text-slate-800">
+            <h3 className="flex items-center text-sm font-semibold text-slate-800">
               <span className="inline-block w-2 h-2 bg-red-400 rounded-sm mr-2" />
               CIS Benchmark
+              <GuideMarker id="posture.cisDimension" n={6} className="ml-1.5" />
             </h3>
             <Link href={`/compliance/plugins/asset/${asset.id}`} className="text-xs text-primary-700 hover:underline">
               View CIS details →
@@ -717,9 +799,10 @@ export default function RiskPostureAssetPage() {
 
         <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-5">
           <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-semibold text-slate-800">
+            <h3 className="flex items-center text-sm font-semibold text-slate-800">
               <span className="inline-block w-2 h-2 bg-orange-400 rounded-sm mr-2" />
               Vulnerabilities
+              <GuideMarker id="posture.vulnDimension" n={7} className="ml-1.5" />
             </h3>
             <Link href="/vulnerabilities" className="text-xs text-primary-700 hover:underline">View all vulns →</Link>
           </div>
@@ -743,9 +826,10 @@ export default function RiskPostureAssetPage() {
 
         <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-5">
           <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-semibold text-slate-800">
+            <h3 className="flex items-center text-sm font-semibold text-slate-800">
               <span className="inline-block w-2 h-2 bg-purple-400 rounded-sm mr-2" />
               CIA Criticality
+              <GuideMarker id="posture.ciaDimension" n={8} className="ml-1.5" />
             </h3>
           </div>
           {components.cia.missing ? (
@@ -770,9 +854,10 @@ export default function RiskPostureAssetPage() {
 
         <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-5">
           <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-semibold text-slate-800">
+            <h3 className="flex items-center text-sm font-semibold text-slate-800">
               <span className="inline-block w-2 h-2 bg-blue-400 rounded-sm mr-2" />
               Control Coverage
+              <GuideMarker id="posture.coverageDimension" n={9} className="ml-1.5" />
             </h3>
             <Link href={`/assets/${asset.id}`} className="text-xs text-primary-700 hover:underline">Link controls →</Link>
           </div>
@@ -914,7 +999,15 @@ function TriagedVulnSection({ perVuln, asset }: { perVuln: PerVulnRow[]; asset: 
         </div>
         {hideExploitSignals && (
           <div className="mt-2 rounded border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-900">
-            Effective scores now exclude EPSS and KEV.
+            {/* This said "Effective scores now exclude EPSS and KEV", which was
+                not true: the toggle only subtracts those contributions inside
+                `effSortKey` for ORDERING. Every Effective score on screen still
+                renders the full server-computed value. And for escalated vulns
+                the subtraction is not even arithmetically meaningful, because
+                `score` is the 0.85 floor rather than the sum of contributions.
+                Say what it actually does. */}
+            <strong>Ranking only.</strong> This reorders the list as if EPSS and KEV
+            were absent. The scores shown are unchanged — they still include both.
           </div>
         )}
       </div>

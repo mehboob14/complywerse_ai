@@ -404,34 +404,15 @@ function SeverityBadge({ severity }: { severity: string }) {
 
 // ─── Rule row + AI verdict drawer ────────────────────────────────────
 function RuleListItem({ rule, depth, onClick }: { rule: RuleRow; depth: number; onClick: (id: number) => void }) {
-  const qc = useQueryClient();
-  const [runState, setRunState] = useState<'idle' | 'running' | 'done' | 'fail'>('idle');
-
-  const runAll = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setRunState('running');
-    try {
-      // Quick scan on every matching asset for this rule. Fan out via the
-      // execute endpoint; backend rejects gracefully if no asset matches.
-      const targets = await compliancePluginsApi.ruleTargets(rule.id).then((r: any) => r.data);
-      const assets = targets?.assets || [];
-      if (assets.length === 0) { setRunState('done'); return; }
-      const results = await Promise.allSettled(
-        assets.map((a: any) => compliancePluginsApi.execute(rule.id, { asset_id: a.id }))
-      );
-      const ok = results.filter(r => r.status === 'fulfilled').length;
-      setRunState(ok > 0 ? 'done' : 'fail');
-      qc.invalidateQueries({ queryKey: ['compliance-plugins', 'runs'] });
-    } catch {
-      setRunState('fail');
-    }
-  };
-
+  // Read-only catalogue row. Scanning/attestation is an ASSET-side action
+  // (an asset's "CIS scans" / the Scanners tab), not something you trigger
+  // from the rule browser — so no Run-check / Attest buttons live here.
   return (
     <li
       className="flex cursor-pointer items-center gap-2 border-l-2 border-blue-200 bg-blue-50/20 px-3 py-1 text-xs hover:bg-blue-100/60"
       style={{ paddingLeft: 8 + depth * 18 }}
       onClick={() => onClick(rule.id)}
+      title="View this rule's detail"
     >
       <FileText className="h-3 w-3 flex-shrink-0 text-blue-500" />
       <code className="flex-shrink-0 font-mono text-[10px] font-semibold text-blue-700">{rule.rule_id}</code>
@@ -444,33 +425,10 @@ function RuleListItem({ rule, depth, onClick }: { rule: RuleRow; depth: number; 
       )}
       {rule.os_keys && rule.os_keys.length > 0 && rule.runner_type !== 'manual' && (
         <span className="hidden flex-shrink-0 items-center gap-0.5 rounded-full bg-violet-50 px-1.5 py-0 text-[9px] text-violet-700 lg:inline-flex">
-          <Cpu className="h-2.5 w-2.5" /> AI tagged
+          <Cpu className="h-2.5 w-2.5" /> Auto-scanned
         </span>
       )}
-      {rule.runner_type === 'manual' ? (
-        <button
-          onClick={(e) => { e.stopPropagation(); onClick(rule.id); }}
-          className="flex-shrink-0 inline-flex items-center gap-0.5 rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 hover:bg-amber-100"
-          title="Record a Pass / Fail / N-A attestation per asset"
-        >
-          <Target className="h-2.5 w-2.5" /> Attest
-        </button>
-      ) : (
-        <button
-          onClick={runAll}
-          disabled={runState === 'running'}
-          className={`flex-shrink-0 inline-flex items-center gap-0.5 rounded border px-1.5 py-0.5 text-[10px] font-medium ${
-            runState === 'running' ? 'border-amber-300 bg-amber-50 text-amber-700' :
-            runState === 'done' ? 'border-emerald-300 bg-emerald-50 text-emerald-700' :
-            runState === 'fail' ? 'border-red-300 bg-red-50 text-red-700' :
-            'border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-          }`}
-          title="Run this check on all matching assets"
-        >
-          {runState === 'running' ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <Target className="h-2.5 w-2.5" />}
-          {runState === 'running' ? 'Running' : runState === 'done' ? 'Queued' : runState === 'fail' ? 'Failed' : 'Run check'}
-        </button>
-      )}
+      <ChevronRight className="h-3 w-3 flex-shrink-0 text-gray-300" />
     </li>
   );
 }
@@ -583,18 +541,9 @@ function RuleTargetsDrawer({ ruleId, onClose }: { ruleId: number; onClose: () =>
             <div>
               <div className="mb-2 flex items-center justify-between">
                 <span className="text-xs font-semibold text-gray-700">
-                  {isManual ? 'Attest this rule per asset:' : 'Will run on these assets:'}
+                  Applies to these assets:
                 </span>
-                {assets.length > 0 && !isManual && (
-                  <button
-                    onClick={() => runAllMut.mutate()}
-                    disabled={runAllMut.isPending}
-                    className="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-emerald-700 disabled:opacity-60"
-                  >
-                    {runAllMut.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Target className="h-3 w-3" />}
-                    Run check on all {assets.length}
-                  </button>
-                )}
+                <span className="text-[10px] text-gray-400">Scan from the asset&apos;s CIS scans →</span>
               </div>
               {isManual && (
                 <div className="mb-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-[10px] text-amber-800">

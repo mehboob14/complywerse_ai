@@ -26,6 +26,99 @@ from .priority import compute_composite_priority
 logger = logging.getLogger(__name__)
 
 
+def _maturity_from_exploits(vuln) -> str:
+    """Exploit maturity, inferred from what we actually collected.
+
+    We have no vendor-supplied maturity rating, so this is derived from the two
+    corroborating public-exploit sources: GitHub PoC repos and the Exploit-DB
+    archive. Several public exploits from either source means the flaw is
+    effectively weaponised; a maintainer-*verified* Exploit-DB entry counts the
+    same, because someone reproduced it. One or two means a proof of concept
+    exists; KEV means it is being used in the wild. Adding the Exploit-DB source
+    can only RAISE maturity, never lower it — corroboration strengthens evidence.
+    """
+    count = int(getattr(vuln, "public_exploit_count", 0) or 0)
+    edb_count = int(getattr(vuln, "exploitdb_count", 0) or 0)
+    edb_verified = int(getattr(vuln, "exploitdb_verified_count", 0) or 0)
+    if getattr(vuln, "kev_flag", False):
+        return "weaponized"
+    if edb_verified > 0 or count > 2 or edb_count > 2:
+        return "weaponized"
+    if count > 0 or edb_count > 0:
+        return "proof_of_concept"
+    return "unproven"
+
+
+def apply_exploitdb_signal(vuln) -> dict:
+    """Populate the Exploit-DB corroboration fields on `vuln` from the offline
+    cache, and compute the combined public-exploit provenance string.
+
+    Extracted from `enrich_vulnerability` so the cache -> column write path is
+    exercisable on its own (and against a real row), not only through the full
+    enrichment flow — that write path was previously covered by unit tests only,
+    and unit tests are what missed the status-vocabulary bug. Sets attributes
+    only; the caller owns the commit. Absence is recorded as 0 ("checked, none
+    found"), distinct from NULL ("never checked"). Pure in-memory lookup, no
+    network.
+    """
+    from .exploitdb_cache import exploit_summary
+    edb = exploit_summary(getattr(vuln, "cve_id", None))
+    if edb is not None:
+        vuln.exploitdb_count = edb["count"]
+        vuln.exploitdb_verified_count = edb["verified"]
+        vuln.exploitdb_refs = edb["refs"]
+    else:
+        vuln.exploitdb_count = 0
+        vuln.exploitdb_verified_count = 0
+        vuln.exploitdb_refs = []
+
+    sources = []
+    if int(getattr(vuln, "public_exploit_count", 0) or 0) > 0:
+        sources.append("github")
+    if int(getattr(vuln, "exploitdb_verified_count", 0) or 0) > 0:
+        sources.append("exploit-db (verified)")
+    elif int(getattr(vuln, "exploitdb_count", 0) or 0) > 0:
+        sources.append("exploit-db")
+    vuln.exploit_source = "; ".join(sources) or None
+    return {
+        "exploitdb_count": vuln.exploitdb_count,
+        "exploitdb_verified_count": vuln.exploitdb_verified_count,
+        "exploit_source": vuln.exploit_source,
+    }
+
+
+def _vector_from_cvss(vuln):
+    """Pull the attack vector out of the packed CVSS vector string.
+
+    A v3 vector looks like "CVSS:3.1/AV:N/AC:L/..." — AV is the attack vector.
+    Returns None when there is no vector, which the scorer treats as
+    "moderate", not "safe".
+    """
+    vec = getattr(vuln, "cvss_vector", None)
+    if not vec:
+        return None
+    import re
+    m = re.search(r"AV:([NALP])", str(vec))
+    if not m:
+        return None
+    return {"N": "network", "A": "adjacent", "L": "local", "P": "physical"}[m.group(1)]
+
+
+def _internet_exposed(db, vuln) -> bool:
+    """True when any asset this finding affects faces the internet."""
+    try:
+        from ....models import ITAsset, VulnerabilityAssetLink
+        rows = (
+            db.query(ITAsset.internet_facing)
+            .join(VulnerabilityAssetLink, VulnerabilityAssetLink.asset_id == ITAsset.id)
+            .filter(VulnerabilityAssetLink.vulnerability_id == vuln.id)
+            .all()
+        )
+        return any(bool(r[0]) for r in rows)
+    except Exception:  # noqa: BLE001 — never let scoring fail on a lookup
+        return False
+
+
 def _resolve_asset_criticality(db: Session, vuln: Vulnerability) -> Optional[str]:
     """Return the highest-criticality asset linked to this vuln, if any.
 
@@ -124,6 +217,9 @@ def enrich_vulnerability(vuln: Vulnerability, db: Session) -> dict:
             kev_flag=False,
             asset_criticality=_resolve_asset_criticality(db, vuln),
             asset_criticality_score=_resolve_asset_criticality_score(db, vuln),
+            exploit_maturity=_maturity_from_exploits(vuln),
+            attack_vector=_vector_from_cvss(vuln),
+            internet_exposed=_internet_exposed(db, vuln),
         )
         vuln.composite_priority = priority
         summary["composite_priority"] = priority
@@ -142,6 +238,29 @@ def enrich_vulnerability(vuln: Vulnerability, db: Session) -> dict:
     if nvd is not None:
         vuln.nvd_published_at = nvd.published_at or vuln.nvd_published_at
         vuln.nvd_last_modified_at = nvd.last_modified_at or vuln.nvd_last_modified_at
+
+        # Backfill the CVSS vector when we don't already hold one. Scanner
+        # imports supply it; manual entries never did, which left the attack
+        # vector unknown — and "unknown" is not neutral here. Scoring falls back
+        # to a 0.5 guess worth 10% of the total, and the exploitability page
+        # cannot say whether the flaw is reachable over the network.
+        #
+        # Never overwrite an existing vector: a scanner observed this finding on
+        # a real host, NVD only describes the CVE in general.
+        if not (vuln.cvss_vector or "").strip() and nvd.cvss_vector:
+            vuln.cvss_vector = nvd.cvss_vector
+            if vuln.cvss_score is None and nvd.cvss_score is not None:
+                vuln.cvss_score = nvd.cvss_score
+        # CWE backfill — the engine's core input, and the gap that made every real
+        # tenant map generically. Never overwrite a CWE a scanner already recorded;
+        # fill the single Primary (cwe_id, back-compat) and the full list (cwe_ids,
+        # which the technique selector reads).
+        if nvd.cwe_ids:
+            if not (vuln.cwe_id or "").strip():
+                vuln.cwe_id = nvd.cwe_ids[0]
+            if not (getattr(vuln, "cwe_ids", None) or []):
+                vuln.cwe_ids = list(nvd.cwe_ids)
+            summary["cwe_ids"] = list(nvd.cwe_ids)
         if nvd.references:
             vuln.exploit_references = nvd.references
         summary["nvd_synced"] = True
@@ -171,6 +290,15 @@ def enrich_vulnerability(vuln: Vulnerability, db: Session) -> dict:
     else:
         summary["errors"].append("nvd_unavailable")
 
+    # ---- CVSS spec version (record/display only) ---------------------------
+    # Which spec the vector is written in (3.1 / 4.0). Derived from the vector's
+    # own prefix, so it covers a scanner-supplied vector as well as an NVD one.
+    # Record-only: the reachability rules are unchanged (v4 Attack-Requirements /
+    # Automatable are deliberately out of scope here).
+    vec = (getattr(vuln, "cvss_vector", None) or "").strip()
+    if vec and not (getattr(vuln, "cvss_version", None) or "").strip() and vec.upper().startswith("CVSS:"):
+        vuln.cvss_version = vec.split("/", 1)[0].split(":", 1)[1]
+
     # ---- EPSS exploit probability ------------------------------------------
     try:
         epss = fetch_epss(cve_id)
@@ -197,10 +325,15 @@ def enrich_vulnerability(vuln: Vulnerability, db: Session) -> dict:
         meta = kev_metadata(cve_id)
         if meta and meta.get("date_added"):
             vuln.kev_date_added = meta["date_added"]
+        # CISA KEV ships a "known ransomware campaign use" sub-flag — sharper than
+        # bare KEV membership. The cache already parses it; just record it.
+        vuln.kev_ransomware_flag = bool(meta and meta.get("known_ransomware_campaign_use") == "Known")
+        summary["kev_ransomware"] = vuln.kev_ransomware_flag
     else:
         # Explicitly clear stale KEV metadata when the CVE has been removed
         # from the catalogue (rare but happens during CISA cleanups).
         vuln.kev_date_added = None
+        vuln.kev_ransomware_flag = False
 
     vuln.nvd_last_synced_at = datetime.utcnow()
 
@@ -223,6 +356,18 @@ def enrich_vulnerability(vuln: Vulnerability, db: Session) -> dict:
     else:
         summary["errors"].append("github_poc_unavailable")
 
+    # ---- Public-exploit corroboration (Exploit-DB) -------------------------
+    # A second, independent source alongside the GitHub PoC search above; the two
+    # corroborate. Delegated to apply_exploitdb_signal() so the cache -> column
+    # write path is testable on its own. Best-effort: never fail enrichment on it.
+    try:
+        edb_result = apply_exploitdb_signal(vuln)
+        summary["exploitdb_count"] = edb_result["exploitdb_count"]
+        summary["exploitdb_verified_count"] = edb_result["exploitdb_verified_count"]
+        summary["exploit_source"] = edb_result["exploit_source"]
+    except Exception:
+        summary["errors"].append("exploitdb_exception")
+
     # ---- Composite priority ------------------------------------------------
     asset_criticality = _resolve_asset_criticality(db, vuln)
     asset_criticality_score = _resolve_asset_criticality_score(db, vuln)
@@ -232,14 +377,17 @@ def enrich_vulnerability(vuln: Vulnerability, db: Session) -> dict:
         kev_flag=vuln.kev_flag,
         asset_criticality=asset_criticality,
         asset_criticality_score=asset_criticality_score,
+        # Three signals added when the scorer moved from four factors to
+        # seven. Without them the stored score silently assumed "unknown
+        # maturity, moderate vector, internal only" and under-scored every
+        # internet-facing finding.
+        exploit_maturity=_maturity_from_exploits(vuln),
+        attack_vector=_vector_from_cvss(vuln),
+        internet_exposed=_internet_exposed(db, vuln),
     )
-    # Public-exploit boost: when there's a working PoC on GitHub and KEV
-    # hasn't already maxed out the formula, bump the score by up to +0.5.
-    # We deliberately keep this small — a PoC is a meaningful signal but
-    # not as strong as confirmed in-the-wild exploitation (KEV). Cap at 10.
-    if priority is not None and bool(getattr(vuln, "public_exploit_count", 0) or 0) > 0:
-        if not vuln.kev_flag:
-            priority = min(10.0, priority + 0.5)
+    # The old +0.5 public-exploit nudge is gone: exploit maturity is now a
+    # first-class signal worth up to 15 points, so adding a bonus on top
+    # would count the same evidence twice.
     vuln.composite_priority = priority
     summary["composite_priority"] = priority
 

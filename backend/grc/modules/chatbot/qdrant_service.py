@@ -439,10 +439,31 @@ class QdrantComplyChatService:
         if not texts:
             return []
 
-        response = self.openai_client.embeddings.create(
-            model=self.embedding_model,
-            input=list(texts),
-        )
+        import time
+        from ...services.ai_usage import record_provider_attempt, usage_scope
+        started_at = time.perf_counter()
+        try:
+            with usage_scope(module_key="complychat", feature_key="embedding"):
+                response = self.openai_client.embeddings.create(
+                    model=self.embedding_model,
+                    input=list(texts),
+                )
+                record_provider_attempt(
+                    response=response,
+                    requested_model=self.embedding_model,
+                    provider="openai",
+                    api_family="embeddings",
+                    started_at=started_at,
+                )
+        except Exception as exc:
+            record_provider_attempt(
+                error=exc,
+                requested_model=self.embedding_model,
+                provider="openai",
+                api_family="embeddings",
+                started_at=started_at,
+            )
+            raise
         return [list(item.embedding) for item in response.data]
 
     def _point_id(self, tenant_id: int, source_type: str, source_id: str, chunk_index: int) -> str:

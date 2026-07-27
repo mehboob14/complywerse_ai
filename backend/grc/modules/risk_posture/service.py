@@ -114,11 +114,17 @@ def _is_active_risk(status: Optional[str]) -> bool:
 def _is_active_vuln(status: Optional[str]) -> bool:
     return (status or "open").lower() not in TERMINAL_VULN_STATUSES
 
+# Risk bands deliberately do NOT reuse the criticality vocabulary
+# (low / medium / high / critical). They used to, and the result was a screen
+# where a box read "CRITICAL 0" directly above a table listing assets tagged
+# CRITICAL — two different concepts wearing the same word. An asset's
+# criticality is how much it MATTERS; its risk band is how much danger it is
+# IN. Distinct scales, distinct words.
 RISK_BANDS = [
-    (0,   25, "low",      "Healthy posture"),
-    (25,  50, "moderate", "Watch list"),
-    (50,  75, "high",     "Remediate soon"),
-    (75, 101, "critical", "Immediate action"),
+    (0,   25, "contained", "Healthy posture"),
+    (25,  50, "watch",     "Watch list"),
+    (50,  75, "elevated",  "Remediate soon"),
+    (75, 101, "severe",    "Immediate action"),
 ]
 
 
@@ -126,7 +132,7 @@ def _band_for(score: float) -> Dict[str, str]:
     for lo, hi, label, blurb in RISK_BANDS:
         if lo <= score < hi:
             return {"label": label, "description": blurb}
-    return {"label": "critical", "description": "Immediate action"}
+    return {"label": "severe", "description": "Immediate action"}
 
 
 # ─── Sub-score computations ─────────────────────────────────────────────────
@@ -252,7 +258,13 @@ def _cis_gap_self(db: Session, tenant_id: int, asset_id: int) -> Dict[str, Any]:
     scanned = passed + failed
     pass_rate = round(passed / total * 100, 1)
     if scanned == 0:
-        score = 0.0
+        # Rules exist and runs exist, but every one errored — nothing passed and
+        # nothing failed. `score = 0.0` is the BEST possible gap, so an entirely
+        # broken scan scored as a flawless asset, at full dimension weight, while
+        # the card above it showed a 0% pass rate. Nothing was measured here, so
+        # the coverage penalty is total: this is maximum uncertainty, not
+        # maximum health.
+        score = 1.0
     else:
         scanned_gap = failed / scanned
         coverage_penalty = never_scanned / total
@@ -286,6 +298,35 @@ def _resolve_crit_weights(db: Session, tenant_id: int) -> Dict[str, float]:
     return settings.get("composite_weights", _RP_CRIT_WEIGHT)
 
 
+# Addresses that are NOT a host identity. Loopback in particular is what every
+# locally-discovered asset ends up with, so grouping on it silently merges
+# unrelated assets into one "host" — and then shares their CIS compliance.
+#
+# Observed: three unrelated assets (a Windows host, a Postgres instance and an
+# MSRPC service) all recorded 127.0.0.1 and were treated as co-located. The
+# MSRPC asset, which has zero scan runs of its own, inherited a CIS score from
+# a peer's 470 runs and reported it as `known`, while the UI beside it said
+# "not scanned".
+def _is_groupable_ip(ip: Optional[str]) -> bool:
+    """Can this address be used to say two assets share a host?"""
+    if not ip:
+        return False
+    ip = ip.strip()
+    if not ip:
+        return False
+    try:
+        import ipaddress
+        addr = ipaddress.ip_address(ip)
+    except ValueError:
+        return False  # hostname or malformed — not a reliable identity
+    return not (
+        addr.is_loopback        # 127.0.0.0/8, ::1
+        or addr.is_unspecified  # 0.0.0.0, ::
+        or addr.is_link_local   # 169.254.0.0/16, fe80::/10
+        or addr.is_multicast
+    )
+
+
 def _cis_gap(db: Session, tenant_id: int, asset_id: int) -> Dict[str, Any]:
     """Room-aware CIS gap (0-1, 1 = worst) for one asset.
 
@@ -313,8 +354,10 @@ def _cis_gap(db: Session, tenant_id: int, asset_id: int) -> Dict[str, Any]:
     self_gap = _cis_gap_self(db, tenant_id, asset_id)
 
     asset = db.query(ITAsset).filter(ITAsset.id == asset_id).first()
-    if asset is None or not asset.ip_address:
-        return self_gap  # standalone (no IP) — legacy behaviour
+    if asset is None or not _is_groupable_ip(asset.ip_address):
+        # No usable address, or a loopback/link-local one. Either way this asset
+        # is scored on its own evidence — never on a stranger's.
+        return self_gap
 
     peers = (
         db.query(ITAsset)
@@ -375,6 +418,14 @@ def _cis_gap(db: Session, tenant_id: int, asset_id: int) -> Dict[str, Any]:
         **self_gap,
         "score": round(augmented, 4),
         "known": True,  # peers' data is enough to make this dimension known
+        # `**self_gap` carries this asset's own pass_rate — which is None when it
+        # was never scanned. The asset page derives its "CIS gap" row as
+        # `1 - (pass_rate ?? 0)/100`, so a None became 1.000: the WORST possible
+        # gap displayed for an asset whose actual scored gap is the peer average.
+        # Expose the blended figure explicitly so the UI has a real number to
+        # show and can label it as borrowed.
+        "pass_rate": round((1.0 - augmented) * 100, 1),
+        "pass_rate_is_borrowed": own_gap is None,
         "ip_group_augmented": True,
         "self_gap": own_gap,
         "weighted_peer_gap": round(weighted_peer_gap, 4),
@@ -584,8 +635,19 @@ def _cia_value(asset: ITAsset) -> Dict[str, Any]:
     avg = (c + i + a) / 3.0
     # Normalize 1..5 → 0..1. Higher CIA value → higher risk weight.
     norm = max(0.0, (avg - 1) / 4)
+
+    # `known` was hardcoded True, so CIA's 15% was ALWAYS in the denominator
+    # even when all three ratings were guessed from criticality. Two
+    # consequences: data-quality could never fall below 15% and honestly
+    # reported an assumption as evidence, and because `known_keys` was never
+    # empty the "no data at all" branch (composite=None, band="unknown") became
+    # unreachable — along with every piece of frontend handling written for it.
+    #
+    # Known when a human set at least one rating, or when criticality gives us a
+    # real basis to derive from. An asset with neither is genuinely unmeasured.
+    _cia_known = has_any_explicit or crit in DEFAULTS
     return {
-        "score": round(norm, 4), "known": True,
+        "score": round(norm, 4), "known": _cia_known,
         "confidentiality": c,
         "integrity": i,
         "availability": a,
@@ -816,7 +878,16 @@ def compute_tenant_posture(
     assets = asset_q.all()
     rows: List[Dict[str, Any]] = []
     for a in assets:
-        r = compute_asset_risk(db, tenant_id, a)
+        # persist=False. This loop runs once per asset on every dashboard load,
+        # and the page polls every 30 seconds — so it was issuing a write and a
+        # commit per asset, every half minute, per viewer.
+        #
+        # The justification was "warming the cache". There is no cache: nothing
+        # in this repo ever READS effective_risk_score / effective_risk_reason /
+        # effective_risk_computed_at. It was pure write amplification, and it
+        # made a GET mutate the database, which is also why the preview endpoint
+        # needed its snapshot-and-restore workaround.
+        r = compute_asset_risk(db, tenant_id, a, persist=False)
         rows.append({
             "id": a.id,
             "name": a.name,
@@ -848,11 +919,17 @@ def compute_tenant_posture(
         highest_score = scored_rows[0]["score"]
         highest_name = scored_rows[0]["name"]
     else:
-        avg_score = 0.0
-        highest_score = 0
+        # None, not 0.0. An estate where nothing has been scored yet was
+        # reporting an average of 0 — which the gauge renders green, captioned
+        # "avg risk / 100". "We have measured nothing" is indistinguishable from
+        # "everything is perfect", and the reassuring one is what people read.
+        # The compliance-overview page already handles this case by showing a
+        # dash; this now lets the risk dashboard do the same.
+        avg_score = None
+        highest_score = None
         highest_name = None
 
-    band_counts: Dict[str, int] = {"low": 0, "moderate": 0, "high": 0, "critical": 0, "unknown": 0}
+    band_counts: Dict[str, int] = {"contained": 0, "watch": 0, "elevated": 0, "severe": 0, "unknown": 0}
     for r in rows:
         band_counts[r["band"]["label"]] = band_counts.get(r["band"]["label"], 0) + 1
 

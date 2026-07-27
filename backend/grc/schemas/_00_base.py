@@ -886,6 +886,13 @@ class ITAssetBase(BaseModel):
     # "what the system computed" and "what the user chose to publish".
     criticality_manual_override: Optional[bool] = None
     criticality_override_reason: Optional[str] = None
+    # Hardware (also auto-filled by agent heartbeat / agentless scan).
+    cpu_cores: Optional[int] = None
+    memory_gb: Optional[int] = None
+    storage_gb: Optional[int] = None
+    manufacturer: Optional[str] = None
+    model: Optional[str] = None
+    serial_number: Optional[str] = None
 
 
 class ITAssetCreate(ITAssetBase):
@@ -961,6 +968,22 @@ class ITAssetUpdate(BaseModel):
     # Manual override of the derived criticality bucket (see ITAssetBase).
     criticality_manual_override: Optional[bool] = None
     criticality_override_reason: Optional[str] = None
+    # ── ITAM parity: hardware, procurement & identity extras ──────────────
+    # Writable via the standard PUT — the update loop setattr()s each field.
+    cpu_cores: Optional[int] = None
+    memory_gb: Optional[int] = None
+    storage_gb: Optional[int] = None
+    agent_version: Optional[str] = None
+    manufacturer: Optional[str] = None
+    model: Optional[str] = None
+    serial_number: Optional[str] = None
+    department: Optional[str] = None
+    assigned_user: Optional[str] = None
+    purchase_cost: Optional[float] = None
+    purchase_date: Optional[datetime] = None
+    warranty_expiry: Optional[datetime] = None
+    eol_date: Optional[datetime] = None
+    environment: Optional[str] = None
 
 
 class ITAssetResponse(BaseModel):
@@ -1008,6 +1031,11 @@ class ITAssetResponse(BaseModel):
     criticality_override_reason: Optional[str] = None
     last_seen_at: Optional[datetime] = None
     last_seen_source: Optional[str] = None
+    # ITAM parity: department, deployment environment + computed open-findings
+    # count (open_findings is attached transiently by the list endpoint).
+    department: Optional[str] = None
+    environment: Optional[str] = None
+    open_findings: Optional[int] = None
 
     class Config:
         from_attributes = True
@@ -1047,6 +1075,21 @@ class AssetEvidenceLinkCreate(BaseModel):
 
 
 class AssetDetailResponse(BaseModel):
+    # Business-impact inputs. These were absent from this response entirely,
+    # while the risk-posture "Business impact & scoring inputs" panel hydrates
+    # its form from exactly this payload. Every one of them therefore read as
+    # undefined and fell back to the form's hardcoded defaults — and because
+    # Save posts the whole form, editing any single field wrote those defaults
+    # over the real values of every other field. That is the reset-on-save data
+    # loss: not a form bug, a serialisation gap.
+    #
+    # `operational_dependency` is the wire name for the `op_dep_business_impact`
+    # column; the router maps it (see get_asset_detail).
+    is_customer_facing: Optional[bool] = None
+    regulated_data_type: Optional[str] = None
+    operational_dependency: Optional[str] = None
+    business_impact_notes: Optional[str] = None
+
     id: int
     tenant_id: int
     name: str
@@ -1097,6 +1140,24 @@ class AssetDetailResponse(BaseModel):
     criticality_score: Optional[float] = None
     last_seen_at: Optional[datetime] = None
     last_seen_source: Optional[str] = None
+    # ── ITAM parity: OS, hardware, procurement & identity extras ──────────
+    os_family: Optional[str] = None
+    os_version: Optional[str] = None
+    os_normalized: Optional[str] = None
+    cpu_cores: Optional[int] = None
+    memory_gb: Optional[int] = None
+    storage_gb: Optional[int] = None
+    agent_version: Optional[str] = None
+    manufacturer: Optional[str] = None
+    model: Optional[str] = None
+    serial_number: Optional[str] = None
+    department: Optional[str] = None
+    assigned_user: Optional[str] = None
+    purchase_cost: Optional[float] = None
+    purchase_date: Optional[datetime] = None
+    warranty_expiry: Optional[datetime] = None
+    eol_date: Optional[datetime] = None
+    environment: Optional[str] = None
 
     class Config:
         from_attributes = True

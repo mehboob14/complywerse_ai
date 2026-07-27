@@ -350,12 +350,31 @@ def suggest_fix(
     db.commit()
 
     try:
-        prompt = f"""You are a senior security engineer building a concrete
-remediation plan for a single vulnerability. Use ALL the context below —
-do NOT give generic advice. If CISA KEV is YES, lead with urgency. If
-patch articles exist, name the specific KB/advisory IDs. If the asset is
-internet-facing or highly critical, recommend compensating controls
-until the patch lands.
+        prompt = f"""You are a senior security engineer proposing COMPENSATING
+CONTROLS for a single vulnerability — the measures that hold the risk down
+while the fix is still pending. Use ALL the context below; do NOT give
+generic advice.
+
+Scope rules, and they are strict:
+  * Do NOT propose applying the vendor patch, upgrading, or otherwise
+    remediating the vulnerable component. A separate deterministic
+    remediation plan already owns the fix and is displayed directly above
+    your output. Two sets of fix instructions on one screen is worse than
+    none.
+  * Do NOT state whether a patch exists, is unavailable, or is pending.
+    You cannot verify that. The patch panel and the remediation plan can,
+    and they are on the same screen — contradicting them destroys trust in
+    both.
+  * Do NOT set deadlines, SLAs or overall urgency ("immediate action is
+    required", "remediate within N days"). The due date is computed from
+    the finding's risk score and is already shown to this reader.
+  * Propose ONLY controls that reduce exposure WITHOUT changing the
+    vulnerable component: segmentation, access restriction, virtual
+    patching / WAF rules, hardening, logging, monitoring, detection.
+
+If CISA KEV is YES or the asset is internet-facing, weight your controls
+toward containment and detection accordingly — but express that through
+which controls you choose, not through urgency language.
 
 VULNERABILITY
 Title: {vuln.title}
@@ -383,22 +402,22 @@ CURRENT MANUAL RECOMMENDATION (if any)
 Respond with a single JSON object of EXACTLY this shape — no prose
 before or after, no markdown fences:
 {{
-  "summary": "<2-3 sentence overall recommendation, mentioning KEV / EPSS / patch status explicitly when applicable>",
+  "summary": "<2-3 sentences describing the compensating control posture you recommend and what residual exposure remains after it. No deadlines, no urgency verdicts, no claims about patch availability.>",
   "suggestions": [
     {{
       "title": "<short imperative action, ≤ 80 chars>",
       "description": "<2-5 sentences. Be specific: name KB IDs, paths, commands, configuration keys. Include verification step.>",
       "priority": "critical | high | medium | low",
       "effort": "low | medium | high",
-      "category": "patch | config | compensating_control | monitoring | isolation | detection"
+      "category": "compensating_control | config | monitoring | isolation | detection"
     }}
   ]
 }}
 
-Provide 3 to 5 suggestions, ordered from most to least urgent. The first
-must be the single highest-leverage action; if a patch exists, it is
-almost always that. Subsequent suggestions should cover compensating
-controls, monitoring, and verification."""
+Provide 3 to 5 suggestions, ordered from most to least protective. The
+first must be the control that removes the most exposure on its own.
+Every suggestion must include how to verify the control is actually in
+effect — a control nobody checked is not a control."""
 
         client = get_openai_client()
         try:
@@ -406,8 +425,10 @@ controls, monitoring, and verification."""
                 model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": (
-                        "You are a cybersecurity remediation expert. You always "
-                        "respond with valid JSON matching the requested schema."
+                        "You are a cybersecurity expert proposing compensating "
+                        "controls. You never propose patching and never assert "
+                        "patch availability or deadlines. You always respond "
+                        "with valid JSON matching the requested schema."
                     )},
                     {"role": "user", "content": prompt},
                 ],
@@ -421,8 +442,10 @@ controls, monitoring, and verification."""
                 model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": (
-                        "You are a cybersecurity remediation expert. You always "
-                        "respond with valid JSON matching the requested schema."
+                        "You are a cybersecurity expert proposing compensating "
+                        "controls. You never propose patching and never assert "
+                        "patch availability or deadlines. You always respond "
+                        "with valid JSON matching the requested schema."
                     )},
                     {"role": "user", "content": prompt},
                 ],

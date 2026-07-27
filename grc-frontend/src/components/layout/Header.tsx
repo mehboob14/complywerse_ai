@@ -6,6 +6,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronDown, ChevronRight, LogOut, UserCircle, Users, Search, Loader2, Sparkles, ClipboardCheck } from 'lucide-react';
 import Link from 'next/link';
 import { apiClient, searchApi } from '@/lib/api';
+import { GuideToggle } from '@/components/guide';
 
 const navIconProps = {
   size: 18,
@@ -20,6 +21,8 @@ const PAGE_TITLES: Record<string, { title: string; subtitle?: string }> = {
   '/vulnerabilities/departments': { title: 'Department Management' },
   '/vulnerabilities/exceptions': { title: 'Exception Queue', subtitle: 'Cross-tenant exception review and approval workflow' },
   '/dashboard': { title: 'Performance Overview' },
+  '/cyber-security': { title: 'Cyber Security', subtitle: 'Application security and security-operations maturity assessments' },
+  '/nca': { title: 'NCA', subtitle: 'National Cybersecurity Authority — DCC, registers and audit plan' },
   '/governance': { title: 'Governance Overview', subtitle: 'Real-time policy, framework, and review posture' },
   '/governance/documents': { title: 'Document Management', subtitle: 'Policy and document lifecycle management' },
   '/governance/mappings': { title: 'Governance', subtitle: 'Policy and document lifecycle management' },
@@ -47,6 +50,7 @@ const PAGE_TITLES: Record<string, { title: string; subtitle?: string }> = {
   '/control-library': { title: 'Control Library' },
   '/auditor-portal': { title: 'Auditor Portal', subtitle: 'Review certification journeys, evidence, and compliance progress' },
   '/assets': { title: 'IT Asset Inventory & Valuation', subtitle: 'Manage and track IT assets with CIA ratings and valuations.' },
+  '/asset-discovery': { title: 'IT Asset Discovery', subtitle: 'Find devices on the network, decide what to adopt, and see what changed.' },
   '/integrations': { title: 'Integrations', subtitle: 'Configure and manage third-party integrations.' },
   '/integrations/connections': { title: 'Scanner Connections', subtitle: 'Manage vulnerability scanner connections and sync schedules.' },
   '/integrations/exceptions': { title: 'Integration Exceptions', subtitle: 'Review and manage integration exceptions.' },
@@ -210,6 +214,9 @@ export default function Header() {
         </form>
 
         {/* Issues moved into the sidebar "Issue & Incident Management" module. */}
+
+        {/* Guide mode — toggles small numbered markers on key UI elements. */}
+        <GuideToggle />
 
         {/* Pending compliance approvals — opens a dropdown (not a page). */}
         <div className="relative" ref={approvalsRef}>
