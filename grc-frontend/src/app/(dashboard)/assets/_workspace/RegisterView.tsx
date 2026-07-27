@@ -158,9 +158,23 @@ export function RegisterView({
       sortable: true,
       minWidth: '66px',
       render: (a) => {
-        const v = a.valuation || a.purchase_cost;
-        const m = v ? (v >= 1e6 ? `$${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `$${Math.round(v / 1e3)}K` : `$${Math.round(v)}`) : null;
-        return m ? <span className="as-mono" style={{ fontSize: 12.5, color: 'var(--as-primary)' }}>{m}</span> : <span style={{ color: 'var(--as-disabled)' }}>—</span>;
+        // Never blank: fall back to a criticality-based estimate when no explicit
+        // valuation or purchase cost is stored. A real value always wins and shows
+        // in the primary colour; estimates are muted and prefixed "~".
+        const CRIT_EST: Record<string, number> = { critical: 500000, high: 200000, medium: 75000, low: 20000 };
+        const explicit = a.valuation || a.purchase_cost;
+        const v = explicit || CRIT_EST[(a.criticality || '').toLowerCase()] || 50000;
+        const est = !explicit;
+        const m = v >= 1e6 ? `$${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `$${Math.round(v / 1e3)}K` : `$${Math.round(v)}`;
+        return (
+          <span
+            className="as-mono"
+            style={{ fontSize: 12.5, color: est ? 'var(--as-secondary)' : 'var(--as-primary)' }}
+            title={est ? 'Estimated from criticality — set a valuation on the asset to override' : undefined}
+          >
+            {est ? `~${m}` : m}
+          </span>
+        );
       },
     },
     {
