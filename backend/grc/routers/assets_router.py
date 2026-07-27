@@ -11,7 +11,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Request, Cookie, Body
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import text
+from sqlalchemy import text, func
 from pydantic import BaseModel
 
 from ..models import (
@@ -342,6 +342,120 @@ def list_assets(
 
     assets = query.order_by(ITAsset.created_at.desc()).offset(skip).limit(limit).all()
     return assets
+
+
+# ── Inventory toolbar: facets + bulk operations (Register view) ──────────────
+# These static paths MUST stay ABOVE the `/{asset_id}` route below so "facets",
+# "bulk" and "bulk-delete" are never captured as an asset id.
+
+class _BulkUpdatePayload(BaseModel):
+    asset_ids: List[int]
+    patch: Dict[str, Any]
+
+
+class _BulkDeletePayload(BaseModel):
+    asset_ids: List[int]
+
+
+# Fields the bulk editor may set — whitelisted so a client can't patch arbitrary
+# columns. Aliases map the UI's short names onto the real ITAsset columns.
+_BULK_FIELD_ALIASES = {"type": "asset_type", "lifecycle": "lifecycle_state"}
+_BULK_ALLOWED_FIELDS = {
+    "criticality", "status", "lifecycle_state", "asset_type", "environment",
+    "department", "data_classification", "owner_id", "primary_owner_id",
+    "internet_facing",
+}
+
+
+@router.get("/facets")
+def asset_facets(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Per-value counts for the inventory filter facets (Type / Criticality /
+    Status / Lifecycle / Environment …). Returns {facet_key: {value: count}}.
+    A column that doesn't exist is simply omitted, so the UI degrades gracefully."""
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        return {}
+
+    def _counts(col_name: str) -> Dict[str, int]:
+        col = getattr(ITAsset, col_name, None)
+        if col is None:
+            return {}
+        rows = (
+            db.query(col, func.count(ITAsset.id))
+            .filter(ITAsset.tenant_id.in_(user_tenants))
+            .group_by(col)
+            .all()
+        )
+        return {str(v): int(c) for v, c in rows if v is not None and v != ""}
+
+    return {
+        "type": _counts("asset_type"),
+        "criticality": _counts("criticality"),
+        "status": _counts("status"),
+        "lifecycle": _counts("lifecycle_state"),
+        "environment": _counts("environment"),
+        "data_classification": _counts("data_classification"),
+    }
+
+
+@router.patch("/bulk")
+def bulk_update_assets(
+    payload: _BulkUpdatePayload,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Apply one `patch` to many assets (the register's "Set …" actions). Only
+    whitelisted fields are applied, and only to assets in the caller's tenant(s).
+    Returns {updated, fields}."""
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants or not payload.asset_ids:
+        return {"updated": 0, "fields": []}
+
+    clean: Dict[str, Any] = {}
+    for key, value in (payload.patch or {}).items():
+        col = _BULK_FIELD_ALIASES.get(key, key)
+        if col in _BULK_ALLOWED_FIELDS and hasattr(ITAsset, col):
+            clean[col] = value
+    if not clean:
+        return {"updated": 0, "fields": []}
+
+    assets = (
+        db.query(ITAsset)
+        .filter(ITAsset.id.in_(payload.asset_ids), ITAsset.tenant_id.in_(user_tenants))
+        .all()
+    )
+    for asset in assets:
+        for col, value in clean.items():
+            setattr(asset, col, value)
+    db.commit()
+    return {"updated": len(assets), "fields": sorted(clean.keys())}
+
+
+@router.post("/bulk-delete")
+def bulk_delete_assets(
+    payload: _BulkDeletePayload,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Delete many assets at once (the register's "Delete selected" action).
+    Scoped to the caller's tenant(s); relies on the same cascade as the single
+    delete. Returns {deleted}."""
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants or not payload.asset_ids:
+        return {"deleted": 0}
+
+    assets = (
+        db.query(ITAsset)
+        .filter(ITAsset.id.in_(payload.asset_ids), ITAsset.tenant_id.in_(user_tenants))
+        .all()
+    )
+    for asset in assets:
+        db.delete(asset)
+    db.commit()
+    return {"deleted": len(assets)}
 
 
 @router.post("", response_model=ITAssetResponse, status_code=status.HTTP_201_CREATED)

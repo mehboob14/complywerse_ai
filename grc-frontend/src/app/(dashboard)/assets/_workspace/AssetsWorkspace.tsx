@@ -14,10 +14,10 @@
 import { useMemo } from 'react';
 import {
   Boxes, AlertTriangle, Clock, Lock, History,
-  Download, Upload, Plus, Search,
+  Download, Upload, Plus, Search, X,
 } from 'lucide-react';
 import { MultiSelectDropdown } from '@/components/ui';
-import { SegmentedMixCard, StackedOverTimeCard, type MixSlice, type StackedRow } from '@/components/charts/MixCharts';
+import { type MixSlice, type StackedRow } from '@/components/charts/MixCharts';
 import type { ITAsset } from '@/types';
 import { RegisterView } from './RegisterView';
 
@@ -50,6 +50,10 @@ export interface AssetsWorkspaceProps {
   setLifecycleFilter: (v: string) => void;
   typeFilter: string;
   setTypeFilter: (v: string) => void;
+  environmentFilter?: string;
+  setEnvironmentFilter?: (v: string) => void;
+  /** Per-value counts for filter facets (from GET /assets/facets). */
+  facets?: Record<string, Record<string, number> | number>;
 
   // Permissions
   canCreate: boolean;
@@ -62,6 +66,8 @@ export interface AssetsWorkspaceProps {
   onDelete: (asset: ITAsset) => void;
   onConnect: (asset: ITAsset) => void;
   onBulkConnect?: (ids: number[]) => void;
+  onBulkDelete?: (ids: number[]) => void;
+  onBulkUpdate?: (ids: number[], patch: Record<string, unknown>) => void;
   onOpenFull: (id: number) => void;
   onTemplate: () => void;
   onImport: () => void;
@@ -109,6 +115,9 @@ export function AssetsWorkspace({
   setLifecycleFilter,
   typeFilter,
   setTypeFilter,
+  environmentFilter = 'all',
+  setEnvironmentFilter,
+  facets,
   canCreate,
   canEdit,
   canDelete,
@@ -117,6 +126,8 @@ export function AssetsWorkspace({
   onDelete,
   onConnect,
   onBulkConnect,
+  onBulkDelete,
+  onBulkUpdate,
   onOpenFull,
   onTemplate,
   onImport,
@@ -124,6 +135,44 @@ export function AssetsWorkspace({
 }: AssetsWorkspaceProps) {
 
   const rows = filteredAssets ?? [];
+
+  // ─── Faceted counts: decorate filter items with live counts ────────────────
+  const fc = (facets || {}) as Record<string, Record<string, number>>;
+  const withCounts = (items: { label: string; value: string }[], key: string) => {
+    const counts = (fc[key] || {}) as Record<string, number>;
+    return items.map((it) => ({ ...it, label: counts[it.value] != null ? `${it.label} (${counts[it.value]})` : it.label }));
+  };
+  const ENV_VALUES = ['production', 'staging', 'development', 'test', 'dr'];
+  const ENV_ITEMS = ENV_VALUES
+    .filter((v) => (fc.environment?.[v] ?? 0) > 0 || environmentFilter === v)
+    .map((v) => ({ label: `${v[0].toUpperCase()}${v.slice(1)}`, value: v }));
+
+  // ─── Active filter chips ───────────────────────────────────────────────────
+  const activeChips: { label: string; onClear: () => void }[] = [];
+  if (typeFilter !== 'all') activeChips.push({ label: `Type: ${typeFilter}`, onClear: () => setTypeFilter('all') });
+  if (criticalityFilter !== 'all') activeChips.push({ label: `Criticality: ${criticalityFilter}`, onClear: () => setCriticalityFilter('all') });
+  if (statusFilter !== 'all') activeChips.push({ label: `Status: ${statusFilter}`, onClear: () => setStatusFilter('all') });
+  if (lifecycleFilter !== 'all') activeChips.push({ label: `Lifecycle: ${lifecycleFilter}`, onClear: () => setLifecycleFilter('all') });
+  if (environmentFilter !== 'all') activeChips.push({ label: `Environment: ${environmentFilter}`, onClear: () => setEnvironmentFilter?.('all') });
+  const clearAll = () => { setTypeFilter('all'); setCriticalityFilter('all'); setStatusFilter('all'); setLifecycleFilter('all'); setEnvironmentFilter?.('all'); };
+
+  // ─── Export every row matching the current filters (not just the page) ─────
+  const exportCsv = () => {
+    const cols: [string, (a: ITAsset) => unknown][] = [
+      ['Name', (a) => a.name], ['Type', (a) => a.asset_type], ['Owner', (a) => a.owner_name || ''],
+      ['Criticality', (a) => a.criticality], ['Status', (a) => a.status], ['Lifecycle', (a) => a.lifecycle_state || ''],
+      ['Environment', (a) => a.environment || ''], ['Department', (a) => a.department || ''],
+      ['IP', (a) => a.ip_address || ''], ['Hostname', (a) => a.host_name || ''], ['Risk', (a) => a.criticality_score ?? ''],
+      ['Findings', (a) => a.open_findings ?? 0],
+    ];
+    const esc = (v: unknown) => { const s = String(v ?? ''); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+    const lines = [cols.map((c) => c[0]).join(',')].concat(rows.map((a) => cols.map((c) => esc(c[1](a))).join(',')));
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url; link.download = `asset-inventory-${rows.length}.csv`; link.click();
+    URL.revokeObjectURL(url);
+  };
 
   // ─── KPIs — derived from dashboard first, else the full asset list ─────────
   const kpis = useMemo(() => {
@@ -199,6 +248,19 @@ export function AssetsWorkspace({
         })}
       </div>
 
+      {/* ─── Charts: criticality mix ────────────────────────────────────────
+          "Assets added over time" used to render here as well. The same chart
+          is already drawn by <InventoryStats>, which the assets page renders
+          immediately above this component — so the identical stacked-by-month
+          bars appeared twice on one screen. The InventoryStats copy is kept
+          because it uses the warm asset-suite card styling the rest of these
+          pages share, and labels its own window ("last 6 months · stacked by
+          criticality"). */}
+      {/* The criticality card moved up into the charts row rendered by
+          <InventoryStats>, which sits directly above this component on the
+          assets page and had an empty grid column waiting for it. Rendering it
+          again here would put the same four counts on screen twice. */}
+
       {/* ─── Toolbar (single compact row; scrolls on very narrow screens) ─────── */}
       <div className="flex items-center gap-2 overflow-x-auto pb-0.5 scrollbar-thin">
         <div className="relative w-40 shrink-0 sm:w-52">
@@ -211,32 +273,48 @@ export function AssetsWorkspace({
           />
         </div>
         <MultiSelectDropdown
-          title="Type" items={TYPE_ITEMS}
+          title="Type" items={withCounts(TYPE_ITEMS, 'asset_type')}
           selectedValues={typeFilter !== 'all' ? [typeFilter] : []}
           onApply={(v) => setTypeFilter(v[0] || 'all')}
           multiSelect={false} autoApply placeholder="All" size="sm" className="shrink-0"
         />
         <MultiSelectDropdown
-          title="Criticality" items={CRITICALITY_ITEMS}
+          title="Criticality" items={withCounts(CRITICALITY_ITEMS, 'criticality')}
           selectedValues={criticalityFilter !== 'all' ? [criticalityFilter] : []}
           onApply={(v) => setCriticalityFilter(v[0] || 'all')}
           multiSelect={false} autoApply placeholder="All" size="sm" className="shrink-0"
         />
         <MultiSelectDropdown
-          title="Status" items={STATUS_ITEMS}
+          title="Status" items={withCounts(STATUS_ITEMS, 'status')}
           selectedValues={statusFilter !== 'all' ? [statusFilter] : []}
           onApply={(v) => setStatusFilter(v[0] || 'all')}
           multiSelect={false} autoApply placeholder="All" size="sm" className="shrink-0"
         />
         <MultiSelectDropdown
-          title="Lifecycle" items={LIFECYCLE_ITEMS}
+          title="Lifecycle" items={withCounts(LIFECYCLE_ITEMS, 'lifecycle_state')}
           selectedValues={lifecycleFilter !== 'all' ? [lifecycleFilter] : []}
           onApply={(v) => setLifecycleFilter(v[0] || 'all')}
           multiSelect={false} autoApply placeholder="All" size="sm" className="shrink-0"
         />
+        {setEnvironmentFilter && ENV_ITEMS.length > 0 && (
+          <MultiSelectDropdown
+            title="Environment" items={ENV_ITEMS}
+            selectedValues={environmentFilter !== 'all' ? [environmentFilter] : []}
+            onApply={(v) => setEnvironmentFilter(v[0] || 'all')}
+            multiSelect={false} autoApply placeholder="All" size="sm" className="shrink-0"
+          />
+        )}
 
         <div className="ml-auto flex shrink-0 items-center gap-2">
           {/* Actions */}
+          <button
+            onClick={exportCsv}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            title="Export every row matching the current filters to CSV"
+          >
+            <Download strokeWidth={1.75} className="h-4 w-4" />
+            <span className="hidden md:inline">Export</span>
+          </button>
           <button
             onClick={onTemplate}
             className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
@@ -266,6 +344,22 @@ export function AssetsWorkspace({
         </div>
       </div>
 
+      {/* ─── Active filter chips ───────────────────────────────────────────── */}
+      {activeChips.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Filters</span>
+          {activeChips.map((c) => (
+            <span key={c.label} className="inline-flex items-center gap-1.5 rounded-full border border-primary-200 bg-primary-50 py-1 pl-2.5 pr-1 text-xs font-medium capitalize text-primary-700">
+              {c.label}
+              <button onClick={c.onClear} className="grid h-4 w-4 place-items-center rounded-full text-primary-600 hover:bg-primary-100" aria-label={`Remove ${c.label}`}>
+                <X strokeWidth={2} className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+          <button onClick={clearAll} className="text-xs text-slate-400 underline hover:text-slate-600">Clear all</button>
+        </div>
+      )}
+
       {/* ─── Section label ─────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-lg font-semibold text-slate-900">Asset Register</h2>
@@ -287,6 +381,8 @@ export function AssetsWorkspace({
           onDelete={onDelete}
           onConnect={onConnect}
           onBulkConnect={onBulkConnect}
+          onBulkDelete={onBulkDelete}
+          onBulkUpdate={onBulkUpdate}
         />
       )}
     </div>
