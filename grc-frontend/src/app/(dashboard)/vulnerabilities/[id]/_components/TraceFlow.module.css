@@ -1,0 +1,142 @@
+/* Trace flow — the engine's reasoning, in-product. Light surface matching the rest of
+   the Exploit Test tab: white cards, slate hairlines, and the SAME verdict (rose/amber/
+   emerald) and provenance (teal Standards / amber CVSS / indigo Curated / slate Assumed)
+   colours the assessment already uses. why strings render RAW: they wrap, never truncate. */
+.wrap {
+  --panel:#ffffff; --elev:#f8fafc; --border:#e2e8f0; --border-soft:#eef2f6;
+  --text:#0f172a; --text-2:#475569; --text-3:#94a3b8;
+  --likely:#e11d48; --possible:#d97706; --unlikely:#059669; --insufficient:#64748b;
+  --capec:#0d9488; --analyst:#4f46e5; --cvss:#d97706; --assumed:#64748b;
+  --rail:#e2e8f0; --live:#14b8a6;
+  --mono:ui-monospace,"SF Mono","Cascadia Code",Consolas,monospace;
+  background:#ffffff; color:var(--text); border:1px solid var(--border);
+  border-radius:16px; padding:20px 22px 24px; line-height:1.55;
+  box-shadow:0 1px 2px rgba(15,23,42,.04);
+}
+.head { display:flex; flex-wrap:wrap; align-items:center; gap:6px 12px; margin-bottom:20px; }
+.head h3 { margin:0; font-size:15px; font-weight:600; color:var(--text); }
+.head .subtle { font-size:12.5px; color:var(--text-2); }
+.mono { font-family:var(--mono); }
+
+.flow { display:flex; flex-direction:column; }
+.stage { display:grid; grid-template-columns:118px 1fr; gap:16px; position:relative; }
+.rail { position:relative; display:flex; justify-content:flex-end; padding-top:4px; }
+.rail .lbl { font-family:var(--mono); font-size:10.5px; letter-spacing:.06em; text-transform:uppercase;
+  color:var(--text-3); text-align:right; }
+.dot { position:absolute; right:-9px; top:5px; width:10px; height:10px; border-radius:50%;
+  background:var(--live); box-shadow:0 0 0 3px rgba(20,184,166,.14); }
+.dotEnd { background:var(--likely); box-shadow:0 0 0 3px rgba(225,29,72,.14); }
+.dotSafe { background:var(--unlikely); box-shadow:0 0 0 3px rgba(5,150,105,.14); }
+.dotGrey { background:var(--insufficient); box-shadow:0 0 0 3px rgba(100,116,139,.14); }
+.rail::after { content:""; position:absolute; right:-4px; top:13px; bottom:-13px; width:2px; background:var(--rail); }
+.stage:last-child .rail::after { display:none; }
+.card { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:12px 14px; margin-bottom:13px; }
+.cardHi { border-color:#cbd5e1; }
+
+.cve { font-family:var(--mono); font-size:14.5px; font-weight:600; color:var(--text); }
+.meta { color:var(--text-2); font-size:12.5px; }
+.pill { font-family:var(--mono); font-size:11px; padding:3px 9px; border-radius:20px; border:1px solid var(--border);
+  display:inline-block; color:var(--text-2); }
+.pillExposed { color:var(--likely); border-color:#fecdd3; background:#fff1f2; }
+.pillInternal { color:var(--unlikely); border-color:#a7f3d0; background:#ecfdf5; }
+.row { display:flex; flex-wrap:wrap; align-items:center; gap:8px 10px; }
+.idBadge { font-family:var(--mono); font-size:13px; background:var(--elev); border:1px solid var(--border);
+  border-radius:7px; padding:4px 9px; color:var(--text); }
+
+.lane { display:flex; align-items:flex-start; gap:10px; font-size:13px; margin-bottom:8px; }
+.lane:last-child { margin-bottom:0; }
+.tag { font-family:var(--mono); font-size:10.5px; letter-spacing:.05em; text-transform:uppercase; width:58px; flex:none;
+  color:var(--text-3); text-align:right; padding-top:8px; }
+.miss { flex:1; border:1.5px dashed #cbd5e1; border-radius:8px; padding:8px 12px; color:var(--text-2); background:#f8fafc; }
+.miss b { color:var(--assumed); font-family:var(--mono); font-weight:600; }
+.hit { flex:1; border:1px solid #c7d2fe; border-radius:8px; padding:8px 12px; background:#eef2ff; color:var(--text); }
+.hit b { color:var(--analyst); font-family:var(--mono); font-weight:600; }
+.hit .tid { font-family:var(--mono); color:var(--analyst); font-weight:600; }
+
+.chips { display:flex; flex-wrap:wrap; gap:8px; }
+.rulechip { font-family:var(--mono); font-size:12px; border:1px solid #fde68a; background:#fffbeb;
+  color:var(--cvss); border-radius:7px; padding:4px 9px; }
+.note { font-size:12px; color:var(--text-3); margin-top:8px; }
+
+.techs { display:flex; flex-direction:column; gap:8px; }
+.tech { display:flex; flex-wrap:wrap; align-items:center; gap:8px 11px; background:var(--elev); border:1px solid var(--border);
+  border-radius:9px; padding:9px 12px; }
+.tech.assumed { border-style:dashed; border-color:#cbd5e1; }
+.tech .tid { font-family:var(--mono); font-size:13px; font-weight:600; width:62px; flex:none; color:var(--text); }
+.tech.assumed .tid { color:var(--assumed); }
+.tech .nm { font-size:13px; color:var(--text); flex:1; min-width:120px; }
+.tech.assumed .nm { color:var(--text-2); }
+.tech .tac { font-family:var(--mono); font-size:11px; color:var(--text-3); }
+.src { font-family:var(--mono); font-size:10.5px; letter-spacing:.03em; text-transform:uppercase; padding:2px 8px;
+  border-radius:5px; flex:none; box-shadow:inset 0 0 0 1px rgba(0,0,0,.03); }
+.srcAnalyst { color:#4338ca; background:#eef2ff; }
+.srcCvss { color:#b45309; background:#fffbeb; }
+.srcCapec { color:#0f766e; background:#f0fdfa; }
+.srcAssumed { color:var(--assumed); background:#f1f5f9; border:1px dashed #cbd5e1; }
+
+.signals { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:11px; }
+.sig { font-family:var(--mono); font-size:11.5px; color:var(--text-2); border:1px solid var(--border);
+  border-radius:6px; padding:4px 9px; background:var(--elev); }
+.sig b { color:var(--unlikely); font-weight:600; }
+.sigNo b { color:var(--likely); }
+.sigMuted b { color:var(--text-3); }
+.badges { display:flex; flex-direction:column; gap:9px; }
+.badge { display:flex; flex-wrap:wrap; align-items:center; gap:8px 10px; font-size:13px; }
+.badge .tid { font-family:var(--mono); width:62px; flex:none; color:var(--text-2); }
+.badge.entry .tid { color:var(--text); font-weight:600; }
+.entryTag { color:var(--live); font-size:10px; font-family:var(--mono); }
+.st { font-family:var(--mono); font-size:11px; letter-spacing:.04em; text-transform:uppercase; padding:3px 9px;
+  border-radius:6px; flex:none; width:78px; text-align:center; }
+.stLikely { color:#be123c; background:#ffe4e6; }
+.stPossible { color:#b45309; background:#fef3c7; }
+.stBlocked { color:#475569; background:#e2e8f0; }
+/* why renders RAW — wraps onto its own line, never truncated */
+.why { color:var(--text-2); font-size:12px; line-height:1.45; flex:1 1 100%; padding-left:72px; }
+
+.verdict { border-radius:12px; padding:13px 16px; display:flex; flex-wrap:wrap; align-items:center; gap:8px 14px; border:1px solid; }
+.vLikely { background:#fff1f2; border-color:#fecdd3; }
+.vPossible { background:#fffbeb; border-color:#fde68a; }
+.vUnlikely { background:#ecfdf5; border-color:#a7f3d0; }
+.vInsufficient { background:#f8fafc; border-color:#e2e8f0; }
+.verdict .v { font-family:var(--mono); font-size:18px; font-weight:700; letter-spacing:.02em; flex:none; }
+.vLikely .v { color:var(--likely); } .vPossible .v { color:var(--possible); }
+.vUnlikely .v { color:var(--unlikely); } .vInsufficient .v { color:var(--insufficient); }
+.verdict .vr { font-size:12.5px; color:var(--text-2); }
+
+.legend { display:flex; flex-wrap:wrap; gap:16px; margin-top:20px; padding-top:16px; border-top:1px solid var(--border-soft); }
+.lgroup { display:flex; flex-direction:column; gap:6px; }
+.lgroup .h { font-family:var(--mono); font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--text-3); }
+.lrow { display:flex; flex-wrap:wrap; gap:9px; }
+.lchip { display:flex; align-items:center; gap:6px; font-size:11.5px; color:var(--text-2); }
+.sw { width:11px; height:11px; border-radius:3px; flex:none; }
+.swDashed { border:1.5px dashed #cbd5e1; }
+
+.state { color:var(--text-2); font-size:13px; padding:8px 2px; display:flex; align-items:center; gap:9px; }
+.spin { width:14px; height:14px; border:2px solid var(--border); border-top-color:var(--live); border-radius:50%;
+  animation:tf-spin .7s linear infinite; }
+@keyframes tf-spin { to { transform:rotate(360deg); } }
+.retry { font-family:var(--mono); font-size:11.5px; color:var(--live); background:transparent; border:1px solid var(--border);
+  border-radius:6px; padding:3px 10px; cursor:pointer; }
+@media (max-width:620px){ .stage{ grid-template-columns:84px 1fr; gap:11px; } }
+
+/* reveal - a stagger over DOM order, which IS the trace's real order, so the motion can
+   only walk stages the engine actually emitted. Plays on mount and on Replay (the flow
+   remounts via its key). fill:backwards keeps each stage hidden until its turn; after it
+   plays it rests at its normal (visible) state - the static frame. */
+.flow .stage { animation: tf-reveal .5s ease backwards; }
+.flow .stage:nth-child(1){ animation-delay:.05s; }
+.flow .stage:nth-child(2){ animation-delay:.48s; }
+.flow .stage:nth-child(3){ animation-delay:.91s; }
+.flow .stage:nth-child(4){ animation-delay:1.34s; }
+.flow .stage:nth-child(5){ animation-delay:1.77s; }
+.flow .stage:nth-child(6){ animation-delay:2.20s; }
+.flow .stage:nth-child(7){ animation-delay:2.63s; }
+.flow .stage:nth-child(8){ animation-delay:3.06s; }
+.flow .stage:nth-child(9){ animation-delay:3.49s; }
+@keyframes tf-reveal { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:none; } }
+/* the whole point of "static stays reachable": no motion, full frame immediately */
+@media (prefers-reduced-motion: reduce){ .flow .stage { animation:none; } }
+
+.replay { margin-left:auto; font-family:var(--mono); font-size:11px; letter-spacing:.02em; color:var(--live);
+  background:transparent; border:1px solid var(--border); border-radius:7px; padding:4px 11px; cursor:pointer; }
+.replay:hover { background:var(--elev); border-color:#cbd5e1; }

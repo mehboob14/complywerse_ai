@@ -1,0 +1,129 @@
+/*
+ * IT Asset Management Suite — design-handoff theme.
+ * Warm cream + IBM Plex, scoped entirely under `.asset-suite` so the rest of
+ * the GRC app (slate/teal) is untouched. Token values map 1:1 from
+ * design_handoff_asset_management/design-tokens.json.
+ */
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+.asset-suite {
+  /* background */
+  --as-bg: #F4F3EE;
+  --as-card: #FFFFFF;
+  --as-subtle: #FAF9F4;
+  --as-subtle2: #FCFBF7;
+  --as-track: #EDECE4;
+  /* border */
+  --as-border: #E3E2D9;
+  --as-divider: #EFEEE6;
+  --as-row: #F2F1E9;
+  --as-input: #DDDDD4;
+  /* text (near-black hierarchy) */
+  --as-ink: #1C221F;
+  --as-primary: #232823;
+  --as-secondary: #3B423D;
+  --as-muted: #4E554F;
+  --as-faint: #6E756F;
+  --as-disabled: #B3BCB5;
+  --as-placeholder: #8B928C;
+  /* brand green */
+  --as-green: #0E5A46;
+  --as-green-hover: #0A483A;
+  /* App brand teal — used for buttons/primary actions (per product brand). */
+  --as-accent: #1ed4b0;
+  --as-accent-hover: #17b898;
+  --as-accent-ink: #06342c;
+  --as-green-bg: #E2EDE8;
+  --as-green-selected: #EAF1EE;
+  --as-green-outline: #BFD4CC;
+  /* status */
+  --as-danger: #A33B1F;
+  --as-danger-text: #7A2D17;
+  --as-danger-bg: #F7E4DC;
+  --as-danger-border: #E4BCA9;
+  --as-warn: #B08420;
+  --as-warn-text: #6E5410;
+  --as-warn-bg: #F4ECD2;
+  --as-good: #0E5A46;
+  --as-good-bg: #E2EDE8;
+  /* accents */
+  --as-rust: #C2542E;
+  --as-rust-text: #8A4A0F;
+  --as-rust-bg: #F6E8D4;
+  --as-gold: #C79A2A;
+  --as-blue: #2E5EAA;
+  --as-blue-bg: #E7ECF4;
+  --as-violet: #7A5CA8;
+  --as-violet-bg: #EDE7F4;
+  --as-slate: #55606B;
+  --as-slate-bg: #EDECEA;
+  /* radii */
+  --as-r-card: 12px;
+  --as-r-inner: 10px;
+  --as-r-control: 8px;
+  --as-r-control-sm: 7px;
+
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  color: var(--as-ink);
+  background: var(--as-bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* type helpers */
+.asset-suite .as-mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; }
+.asset-suite h1.as-h1 { margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -0.4px; color: var(--as-ink); }
+.asset-suite .as-sub { margin: 6px 0 0; font-size: 13.5px; color: var(--as-secondary); }
+.asset-suite .as-label { font-size: 10.5px; font-weight: 600; letter-spacing: 0.6px; text-transform: uppercase; color: var(--as-muted); }
+
+/* surfaces */
+.asset-suite .as-card { background: var(--as-card); border: 1px solid var(--as-border); border-radius: var(--as-r-card); }
+.asset-suite .as-divider { border-color: var(--as-divider); }
+
+/* controls */
+.asset-suite .as-btn { font-family: 'IBM Plex Sans', sans-serif; border-radius: var(--as-r-control); font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: background .15s ease, border-color .15s ease, color .15s ease; }
+.asset-suite .as-btn-primary { background: var(--as-accent); color: var(--as-accent-ink); border: none; padding: 6px 14px; }
+.asset-suite .as-btn-primary:hover { background: var(--as-accent-hover); }
+.asset-suite .as-btn-secondary { background: var(--as-card); color: var(--as-primary); border: 1px solid var(--as-input); padding: 8px 13px; }
+.asset-suite .as-btn-secondary:hover { background: var(--as-subtle); }
+.asset-suite .as-btn-danger { background: var(--as-card); color: var(--as-danger); border: 1px solid var(--as-danger-border); padding: 8px 13px; }
+.asset-suite .as-btn-danger:hover { background: var(--as-danger-bg); }
+
+/* segmented toggle (Inventory | CIS Benchmark) */
+.asset-suite .as-seg { display: inline-flex; background: var(--as-card); border: 1px solid var(--as-input); border-radius: var(--as-r-control); padding: 2px; gap: 2px; }
+.asset-suite .as-seg button { border: none; background: transparent; border-radius: 6px; padding: 5px 13px; font-size: 12.5px; font-weight: 600; color: var(--as-muted); cursor: pointer; white-space: nowrap; font-family: 'IBM Plex Sans', sans-serif; transition: background .15s ease, color .15s ease; }
+.asset-suite .as-seg button:hover { color: var(--as-ink); }
+.asset-suite .as-seg button.is-active { background: var(--as-ink); color: #fff; }
+
+/* inputs / selects — strip browser chrome to match the handoff */
+.asset-suite input, .asset-suite select { font-family: 'IBM Plex Sans', sans-serif; color: var(--as-ink); }
+.asset-suite input::placeholder { color: var(--as-placeholder); }
+.asset-suite select.as-select { appearance: none; -webkit-appearance: none; background-color: var(--as-card); border: 1px solid var(--as-input); border-radius: var(--as-r-control-sm); padding: 7px 28px 7px 11px; font-size: 12.5px; color: var(--as-primary); background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%234E554F' stroke-width='1.6' stroke-linecap='round'/></svg>"); background-repeat: no-repeat; background-position: right 10px center; }
+.asset-suite .as-input { background: var(--as-card); border: 1px solid var(--as-input); border-radius: var(--as-r-control-sm); padding: 8px 11px; font-size: 12.5px; color: var(--as-ink); outline: none; }
+.asset-suite .as-input:focus-visible, .asset-suite .as-select:focus-visible { outline: 2px solid var(--as-green); outline-offset: 1px; }
+
+/* pills */
+.asset-suite .as-pill { display: inline-flex; align-items: center; gap: 5px; border-radius: 99px; font-size: 11px; font-weight: 600; padding: 3px 10px; }
+
+/* hero + charts collapse to one column on narrow viewports */
+@media (max-width: 960px) { .asset-suite .as-hero { grid-template-columns: 1fr !important; } }
+/* KPI strip wraps below narrow widths */
+@media (max-width: 820px) {
+  .asset-suite .as-kpi { grid-template-columns: repeat(2, 1fr) !important; }
+  .asset-suite .as-kpi > div:nth-child(2n) { border-right: none !important; }
+  .asset-suite .as-kpi > div { border-bottom: 1px solid var(--as-divider); }
+}
+
+/* Register (shared DataTable) warmed to the handoff palette, scoped to the suite */
+.asset-suite table thead tr { background: var(--as-subtle) !important; border-bottom: 1px solid var(--as-border) !important; }
+.asset-suite table thead th { color: var(--as-muted) !important; font-family: 'IBM Plex Sans', sans-serif; font-weight: 600; }
+.asset-suite table tbody tr { border-bottom: 1px solid var(--as-row) !important; }
+.asset-suite table tbody tr:hover { background: var(--as-subtle) !important; }
+.asset-suite table tbody td { color: var(--as-secondary); }
+.asset-suite input[type="checkbox"] { accent-color: var(--as-green); }
+/* toolbar inputs/buttons inside the suite pick up warm borders */
+.asset-suite .cw-card { background: var(--as-card); border-color: var(--as-border); }
+
+/* entrance */
+@keyframes asFadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes asRingIn { from { stroke-dashoffset: 327; } }
+.asset-suite .as-fadeup { animation: asFadeUp 0.45s ease both; }

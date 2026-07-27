@@ -1,0 +1,2009 @@
+{
+  "id": "sox",
+  "name": "SOX — Internal Controls over Financial Reporting (ICFR)",
+  "version": "SOX §302 / §404",
+  "official_sources": [
+    {
+      "title": "Sarbanes-Oxley Act of 2002",
+      "url": "https://www.govinfo.gov/content/pkg/PLAW-107publ204/pdf/PLAW-107publ204.pdf"
+    },
+    {
+      "title": "PCAOB Auditing Standard 2201 — An Audit of ICFR Integrated with the Audit of Financial Statements",
+      "url": "https://pcaobus.org/oversight/standards/auditing-standards/details/AS2201"
+    },
+    {
+      "title": "COSO Internal Control–Integrated Framework (2013)",
+      "url": "https://www.coso.org/internal-control"
+    }
+  ],
+  "assessment_shapes": [
+    "sox_icfr"
+  ],
+  "methodology": "PCAOB AS 2201 top-down/risk-based approach: identify ELCs → identify significant accounts → identify relevant assertions → identify WCGW → identify and test key controls (process + ITGC).",
+  "scoping_inputs": [
+    {
+      "id": "filer_status",
+      "type": "select",
+      "options": [
+        "Large Accelerated",
+        "Accelerated",
+        "Non-Accelerated",
+        "EGC"
+      ],
+      "label": "SEC filer status"
+    },
+    {
+      "id": "materiality_threshold",
+      "type": "number",
+      "label": "Materiality threshold (currency)"
+    },
+    {
+      "id": "in_scope_locations",
+      "type": "list",
+      "label": "In-scope locations / business units"
+    },
+    {
+      "id": "in_scope_systems",
+      "type": "list",
+      "label": "In-scope financial systems"
+    }
+  ],
+  "risk_model": {
+    "factors": [
+      "asset",
+      "threat",
+      "vulnerability",
+      "likelihood",
+      "impact_c",
+      "impact_i",
+      "impact_a"
+    ],
+    "scales": {
+      "likelihood": [
+        {
+          "value": 1,
+          "label": "Rare",
+          "definition": "May occur only in exceptional circumstances (<5% per year)."
+        },
+        {
+          "value": 2,
+          "label": "Unlikely",
+          "definition": "Could occur but not expected (5-25% per year)."
+        },
+        {
+          "value": 3,
+          "label": "Possible",
+          "definition": "Might occur at some time (25-50% per year)."
+        },
+        {
+          "value": 4,
+          "label": "Likely",
+          "definition": "Will probably occur in most circumstances (50-75% per year)."
+        },
+        {
+          "value": 5,
+          "label": "Almost Certain",
+          "definition": "Expected to occur in most circumstances (>75% per year)."
+        }
+      ],
+      "impact": [
+        {
+          "value": 1,
+          "label": "Insignificant",
+          "definition": "Negligible operational, financial, regulatory or reputational impact."
+        },
+        {
+          "value": 2,
+          "label": "Minor",
+          "definition": "Limited impact contained within a single team or system; recoverable in <1 day."
+        },
+        {
+          "value": 3,
+          "label": "Moderate",
+          "definition": "Notable impact on a business unit; recoverable in 1-7 days; minor regulatory attention."
+        },
+        {
+          "value": 4,
+          "label": "Major",
+          "definition": "Significant impact across multiple business units; >1 week to recover; regulatory action probable."
+        },
+        {
+          "value": 5,
+          "label": "Severe",
+          "definition": "Existential or systemic impact; loss of license, major fines, sustained customer loss."
+        }
+      ],
+      "maturity": [
+        {
+          "value": 0,
+          "label": "Non-Existent",
+          "definition": "No process or control in place."
+        },
+        {
+          "value": 1,
+          "label": "Initial / Ad Hoc",
+          "definition": "Process exists but is informal and inconsistent."
+        },
+        {
+          "value": 2,
+          "label": "Repeatable",
+          "definition": "Process is documented and repeated, but not standardized across the organization."
+        },
+        {
+          "value": 3,
+          "label": "Defined",
+          "definition": "Process is documented, standardized, and integrated across the organization."
+        },
+        {
+          "value": 4,
+          "label": "Managed",
+          "definition": "Process is measured, monitored with KPIs, and controlled."
+        },
+        {
+          "value": 5,
+          "label": "Optimized",
+          "definition": "Process is continuously improved through monitoring, metrics, and lessons learned."
+        }
+      ],
+      "implementation_status": [
+        {
+          "value": "NI",
+          "label": "Not Implemented"
+        },
+        {
+          "value": "PI",
+          "label": "Partially Implemented"
+        },
+        {
+          "value": "LI",
+          "label": "Largely Implemented"
+        },
+        {
+          "value": "FI",
+          "label": "Fully Implemented"
+        }
+      ]
+    },
+    "matrix": "5x5",
+    "calculation": "max(impact_c, impact_i, impact_a) * likelihood",
+    "acceptance_threshold": 6,
+    "thresholds": {
+      "low": [
+        1,
+        4
+      ],
+      "medium": [
+        5,
+        9
+      ],
+      "high": [
+        10,
+        16
+      ],
+      "critical": [
+        17,
+        25
+      ]
+    }
+  },
+  "domains": [
+    {
+      "id": "ELC",
+      "name": "Entity-Level Controls",
+      "controls": [
+        {
+          "id": "ELC.1",
+          "title": "Tone at the top / Code of conduct",
+          "question_block": {
+            "type": "sox_icfr",
+            "questions": [
+              {
+                "field": "significant_account_or_process",
+                "type": "text",
+                "prompt": "Significant account or process?"
+              },
+              {
+                "field": "assertions",
+                "type": "multi_select",
+                "options": [
+                  "Existence/Occurrence",
+                  "Completeness",
+                  "Valuation/Allocation",
+                  "Rights/Obligations",
+                  "Presentation/Disclosure"
+                ],
+                "prompt": "Relevant assertions?"
+              },
+              {
+                "field": "wcgw",
+                "type": "text",
+                "prompt": "What could go wrong (WCGW)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Inherent risk rating (1-5)?"
+              },
+              {
+                "field": "key_control",
+                "type": "text",
+                "prompt": "Key control description?"
+              },
+              {
+                "field": "control_type",
+                "type": "select",
+                "options": [
+                  "Preventive",
+                  "Detective"
+                ],
+                "prompt": "Preventive or detective?"
+              },
+              {
+                "field": "control_method",
+                "type": "select",
+                "options": [
+                  "Manual",
+                  "Automated",
+                  "IT-Dependent Manual"
+                ],
+                "prompt": "Manual or automated?"
+              },
+              {
+                "field": "frequency",
+                "type": "select",
+                "options": [
+                  "Per Transaction",
+                  "Daily",
+                  "Weekly",
+                  "Monthly",
+                  "Quarterly",
+                  "Annually"
+                ],
+                "prompt": "Frequency?"
+              },
+              {
+                "field": "test_of_design",
+                "type": "text",
+                "prompt": "Test of design results?"
+              },
+              {
+                "field": "test_of_operating_effectiveness",
+                "type": "text",
+                "prompt": "Test of operating effectiveness results?"
+              },
+              {
+                "field": "deficiency_severity",
+                "type": "select",
+                "options": [
+                  "None",
+                  "Control Deficiency",
+                  "Significant Deficiency",
+                  "Material Weakness"
+                ],
+                "prompt": "Deficiency severity if any?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Control owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ELC.2",
+          "title": "Audit committee oversight",
+          "question_block": {
+            "type": "sox_icfr",
+            "questions": [
+              {
+                "field": "significant_account_or_process",
+                "type": "text",
+                "prompt": "Significant account or process?"
+              },
+              {
+                "field": "assertions",
+                "type": "multi_select",
+                "options": [
+                  "Existence/Occurrence",
+                  "Completeness",
+                  "Valuation/Allocation",
+                  "Rights/Obligations",
+                  "Presentation/Disclosure"
+                ],
+                "prompt": "Relevant assertions?"
+              },
+              {
+                "field": "wcgw",
+                "type": "text",
+                "prompt": "What could go wrong (WCGW)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Inherent risk rating (1-5)?"
+              },
+              {
+                "field": "key_control",
+                "type": "text",
+                "prompt": "Key control description?"
+              },
+              {
+                "field": "control_type",
+                "type": "select",
+                "options": [
+                  "Preventive",
+                  "Detective"
+                ],
+                "prompt": "Preventive or detective?"
+              },
+              {
+                "field": "control_method",
+                "type": "select",
+                "options": [
+                  "Manual",
+                  "Automated",
+                  "IT-Dependent Manual"
+                ],
+                "prompt": "Manual or automated?"
+              },
+              {
+                "field": "frequency",
+                "type": "select",
+                "options": [
+                  "Per Transaction",
+                  "Daily",
+                  "Weekly",
+                  "Monthly",
+                  "Quarterly",
+                  "Annually"
+                ],
+                "prompt": "Frequency?"
+              },
+              {
+                "field": "test_of_design",
+                "type": "text",
+                "prompt": "Test of design results?"
+              },
+              {
+                "field": "test_of_operating_effectiveness",
+                "type": "text",
+                "prompt": "Test of operating effectiveness results?"
+              },
+              {
+                "field": "deficiency_severity",
+                "type": "select",
+                "options": [
+                  "None",
+                  "Control Deficiency",
+                  "Significant Deficiency",
+                  "Material Weakness"
+                ],
+                "prompt": "Deficiency severity if any?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Control owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ELC.3",
+          "title": "Risk assessment process",
+          "question_block": {
+            "type": "sox_icfr",
+            "questions": [
+              {
+                "field": "significant_account_or_process",
+                "type": "text",
+                "prompt": "Significant account or process?"
+              },
+              {
+                "field": "assertions",
+                "type": "multi_select",
+                "options": [
+                  "Existence/Occurrence",
+                  "Completeness",
+                  "Valuation/Allocation",
+                  "Rights/Obligations",
+                  "Presentation/Disclosure"
+                ],
+                "prompt": "Relevant assertions?"
+              },
+              {
+                "field": "wcgw",
+                "type": "text",
+                "prompt": "What could go wrong (WCGW)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Inherent risk rating (1-5)?"
+              },
+              {
+                "field": "key_control",
+                "type": "text",
+                "prompt": "Key control description?"
+              },
+              {
+                "field": "control_type",
+                "type": "select",
+                "options": [
+                  "Preventive",
+                  "Detective"
+                ],
+                "prompt": "Preventive or detective?"
+              },
+              {
+                "field": "control_method",
+                "type": "select",
+                "options": [
+                  "Manual",
+                  "Automated",
+                  "IT-Dependent Manual"
+                ],
+                "prompt": "Manual or automated?"
+              },
+              {
+                "field": "frequency",
+                "type": "select",
+                "options": [
+                  "Per Transaction",
+                  "Daily",
+                  "Weekly",
+                  "Monthly",
+                  "Quarterly",
+                  "Annually"
+                ],
+                "prompt": "Frequency?"
+              },
+              {
+                "field": "test_of_design",
+                "type": "text",
+                "prompt": "Test of design results?"
+              },
+              {
+                "field": "test_of_operating_effectiveness",
+                "type": "text",
+                "prompt": "Test of operating effectiveness results?"
+              },
+              {
+                "field": "deficiency_severity",
+                "type": "select",
+                "options": [
+                  "None",
+                  "Control Deficiency",
+                  "Significant Deficiency",
+                  "Material Weakness"
+                ],
+                "prompt": "Deficiency severity if any?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Control owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ELC.4",
+          "title": "Anti-fraud programs and controls",
+          "question_block": {
+            "type": "sox_icfr",
+            "questions": [
+              {
+                "field": "significant_account_or_process",
+                "type": "text",
+                "prompt": "Significant account or process?"
+              },
+              {
+                "field": "assertions",
+                "type": "multi_select",
+                "options": [
+                  "Existence/Occurrence",
+                  "Completeness",
+                  "Valuation/Allocation",
+                  "Rights/Obligations",
+                  "Presentation/Disclosure"
+                ],
+                "prompt": "Relevant assertions?"
+              },
+              {
+                "field": "wcgw",
+                "type": "text",
+                "prompt": "What could go wrong (WCGW)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Inherent risk rating (1-5)?"
+              },
+              {
+                "field": "key_control",
+                "type": "text",
+                "prompt": "Key control description?"
+              },
+              {
+                "field": "control_type",
+                "type": "select",
+                "options": [
+                  "Preventive",
+                  "Detective"
+                ],
+                "prompt": "Preventive or detective?"
+              },
+              {
+                "field": "control_method",
+                "type": "select",
+                "options": [
+                  "Manual",
+                  "Automated",
+                  "IT-Dependent Manual"
+                ],
+                "prompt": "Manual or automated?"
+              },
+              {
+                "field": "frequency",
+                "type": "select",
+                "options": [
+                  "Per Transaction",
+                  "Daily",
+                  "Weekly",
+                  "Monthly",
+                  "Quarterly",
+                  "Annually"
+                ],
+                "prompt": "Frequency?"
+              },
+              {
+                "field": "test_of_design",
+                "type": "text",
+                "prompt": "Test of design results?"
+              },
+              {
+                "field": "test_of_operating_effectiveness",
+                "type": "text",
+                "prompt": "Test of operating effectiveness results?"
+              },
+              {
+                "field": "deficiency_severity",
+                "type": "select",
+                "options": [
+                  "None",
+                  "Control Deficiency",
+                  "Significant Deficiency",
+                  "Material Weakness"
+                ],
+                "prompt": "Deficiency severity if any?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Control owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ELC.5",
+          "title": "Whistleblower programs",
+          "question_block": {
+            "type": "sox_icfr",
+            "questions": [
+              {
+                "field": "significant_account_or_process",
+                "type": "text",
+                "prompt": "Significant account or process?"
+              },
+              {
+                "field": "assertions",
+                "type": "multi_select",
+                "options": [
+                  "Existence/Occurrence",
+                  "Completeness",
+                  "Valuation/Allocation",
+                  "Rights/Obligations",
+                  "Presentation/Disclosure"
+                ],
+                "prompt": "Relevant assertions?"
+              },
+              {
+                "field": "wcgw",
+                "type": "text",
+                "prompt": "What could go wrong (WCGW)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Inherent risk rating (1-5)?"
+              },
+              {
+                "field": "key_control",
+                "type": "text",
+                "prompt": "Key control description?"
+              },
+              {
+                "field": "control_type",
+                "type": "select",
+                "options": [
+                  "Preventive",
+                  "Detective"
+                ],
+                "prompt": "Preventive or detective?"
+              },
+              {
+                "field": "control_method",
+                "type": "select",
+                "options": [
+                  "Manual",
+                  "Automated",
+                  "IT-Dependent Manual"
+                ],
+                "prompt": "Manual or automated?"
+              },
+              {
+                "field": "frequency",
+                "type": "select",
+                "options": [
+                  "Per Transaction",
+                  "Daily",
+                  "Weekly",
+                  "Monthly",
+                  "Quarterly",
+                  "Annually"
+                ],
+                "prompt": "Frequency?"
+              },
+              {
+                "field": "test_of_design",
+                "type": "text",
+                "prompt": "Test of design results?"
+              },
+              {
+                "field": "test_of_operating_effectiveness",
+                "type": "text",
+                "prompt": "Test of operating effectiveness results?"
+              },
+              {
+                "field": "deficiency_severity",
+                "type": "select",
+                "options": [
+                  "None",
+                  "Control Deficiency",
+                  "Significant Deficiency",
+                  "Material Weakness"
+                ],
+                "prompt": "Deficiency severity if any?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Control owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ELC.6",
+          "title": "Period-end financial reporting controls",
+          "question_block": {
+            "type": "sox_icfr",
+            "questions": [
+              {
+                "field": "significant_account_or_process",
+                "type": "text",
+                "prompt": "Significant account or process?"
+              },
+              {
+                "field": "assertions",
+                "type": "multi_select",
+                "options": [
+                  "Existence/Occurrence",
+                  "Completeness",
+                  "Valuation/Allocation",
+                  "Rights/Obligations",
+                  "Presentation/Disclosure"
+                ],
+                "prompt": "Relevant assertions?"
+              },
+              {
+                "field": "wcgw",
+                "type": "text",
+                "prompt": "What could go wrong (WCGW)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Inherent risk rating (1-5)?"
+              },
+              {
+                "field": "key_control",
+                "type": "text",
+                "prompt": "Key control description?"
+              },
+              {
+                "field": "control_type",
+                "type": "select",
+                "options": [
+                  "Preventive",
+                  "Detective"
+                ],
+                "prompt": "Preventive or detective?"
+              },
+              {
+                "field": "control_method",
+                "type": "select",
+                "options": [
+                  "Manual",
+                  "Automated",
+                  "IT-Dependent Manual"
+                ],
+                "prompt": "Manual or automated?"
+              },
+              {
+                "field": "frequency",
+                "type": "select",
+                "options": [
+                  "Per Transaction",
+                  "Daily",
+                  "Weekly",
+                  "Monthly",
+                  "Quarterly",
+                  "Annually"
+                ],
+                "prompt": "Frequency?"
+              },
+              {
+                "field": "test_of_design",
+                "type": "text",
+                "prompt": "Test of design results?"
+              },
+              {
+                "field": "test_of_operating_effectiveness",
+                "type": "text",
+                "prompt": "Test of operating effectiveness results?"
+              },
+              {
+                "field": "deficiency_severity",
+                "type": "select",
+                "options": [
+                  "None",
+                  "Control Deficiency",
+                  "Significant Deficiency",
+                  "Material Weakness"
+                ],
+                "prompt": "Deficiency severity if any?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Control owner?"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "PROCESS",
+      "name": "Process-Level Controls (Significant Accounts)",
+      "controls": [
+        {
+          "id": "PROC.REV",
+          "title": "Revenue and Receivables",
+          "question_block": {
+            "type": "sox_icfr",
+            "questions": [
+              {
+                "field": "significant_account_or_process",
+                "type": "text",
+                "prompt": "Significant account or process?"
+              },
+              {
+                "field": "assertions",
+                "type": "multi_select",
+                "options": [
+                  "Existence/Occurrence",
+                  "Completeness",
+                  "Valuation/Allocation",
+                  "Rights/Obligations",
+                  "Presentation/Disclosure"
+                ],
+                "prompt": "Relevant assertions?"
+              },
+              {
+                "field": "wcgw",
+                "type": "text",
+                "prompt": "What could go wrong (WCGW)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Inherent risk rating (1-5)?"
+              },
+              {
+                "field": "key_control",
+                "type": "text",
+                "prompt": "Key control description?"
+              },
+              {
+                "field": "control_type",
+                "type": "select",
+                "options": [
+                  "Preventive",
+                  "Detective"
+                ],
+                "prompt": "Preventive or detective?"
+              },
+              {
+                "field": "control_method",
+                "type": "select",
+                "options": [
+                  "Manual",
+                  "Automated",
+                  "IT-Dependent Manual"
+                ],
+                "prompt": "Manual or automated?"
+              },
+              {
+                "field": "frequency",
+                "type": "select",
+                "options": [
+                  "Per Transaction",
+                  "Daily",
+                  "Weekly",
+                  "Monthly",
+                  "Quarterly",
+                  "Annually"
+                ],
+                "prompt": "Frequency?"
+              },
+              {
+                "field": "test_of_design",
+                "type": "text",
+                "prompt": "Test of design results?"
+              },
+              {
+                "field": "test_of_operating_effectiveness",
+                "type": "text",
+                "prompt": "Test of operating effectiveness results?"
+              },
+              {
+                "field": "deficiency_severity",
+                "type": "select",
+                "options": [
+                  "None",
+                  "Control Deficiency",
+                  "Significant Deficiency",
+                  "Material Weakness"
+                ],
+                "prompt": "Deficiency severity if any?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Control owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "PROC.PUR",
+          "title": "Purchases and Payables",
+          "question_block": {
+            "type": "sox_icfr",
+            "questions": [
+              {
+                "field": "significant_account_or_process",
+                "type": "text",
+                "prompt": "Significant account or process?"
+              },
+              {
+                "field": "assertions",
+                "type": "multi_select",
+                "options": [
+                  "Existence/Occurrence",
+                  "Completeness",
+                  "Valuation/Allocation",
+                  "Rights/Obligations",
+                  "Presentation/Disclosure"
+                ],
+                "prompt": "Relevant assertions?"
+              },
+              {
+                "field": "wcgw",
+                "type": "text",
+                "prompt": "What could go wrong (WCGW)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Inherent risk rating (1-5)?"
+              },
+              {
+                "field": "key_control",
+                "type": "text",
+                "prompt": "Key control description?"
+              },
+              {
+                "field": "control_type",
+                "type": "select",
+                "options": [
+                  "Preventive",
+                  "Detective"
+                ],
+                "prompt": "Preventive or detective?"
+              },
+              {
+                "field": "control_method",
+                "type": "select",
+                "options": [
+                  "Manual",
+                  "Automated",
+                  "IT-Dependent Manual"
+                ],
+                "prompt": "Manual or automated?"
+              },
+              {
+                "field": "frequency",
+                "type": "select",
+                "options": [
+                  "Per Transaction",
+                  "Daily",
+                  "Weekly",
+                  "Monthly",
+                  "Quarterly",
+                  "Annually"
+                ],
+                "prompt": "Frequency?"
+              },
+              {
+                "field": "test_of_design",
+                "type": "text",
+                "prompt": "Test of design results?"
+              },
+              {
+                "field": "test_of_operating_effectiveness",
+                "type": "text",
+                "prompt": "Test of operating effectiveness results?"
+              },
+              {
+                "field": "deficiency_severity",
+                "type": "select",
+                "options": [
+                  "None",
+                  "Control Deficiency",
+                  "Significant Deficiency",
+                  "Material Weakness"
+                ],
+                "prompt": "Deficiency severity if any?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Control owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "PROC.PAY",
+          "title": "Payroll",
+          "question_block": {
+            "type": "sox_icfr",
+            "questions": [
+              {
+                "field": "significant_account_or_process",
+                "type": "text",
+                "prompt": "Significant account or process?"
+              },
+              {
+                "field": "assertions",
+                "type": "multi_select",
+                "options": [
+                  "Existence/Occurrence",
+                  "Completeness",
+                  "Valuation/Allocation",
+                  "Rights/Obligations",
+                  "Presentation/Disclosure"
+                ],
+                "prompt": "Relevant assertions?"
+              },
+              {
+                "field": "wcgw",
+                "type": "text",
+                "prompt": "What could go wrong (WCGW)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Inherent risk rating (1-5)?"
+              },
+              {
+                "field": "key_control",
+                "type": "text",
+                "prompt": "Key control description?"
+              },
+              {
+                "field": "control_type",
+                "type": "select",
+                "options": [
+                  "Preventive",
+                  "Detective"
+                ],
+                "prompt": "Preventive or detective?"
+              },
+              {
+                "field": "control_method",
+                "type": "select",
+                "options": [
+                  "Manual",
+                  "Automated",
+                  "IT-Dependent Manual"
+                ],
+                "prompt": "Manual or automated?"
+              },
+              {
+                "field": "frequency",
+                "type": "select",
+                "options": [
+                  "Per Transaction",
+                  "Daily",
+                  "Weekly",
+                  "Monthly",
+                  "Quarterly",
+                  "Annually"
+                ],
+                "prompt": "Frequency?"
+              },
+              {
+                "field": "test_of_design",
+                "type": "text",
+                "prompt": "Test of design results?"
+              },
+              {
+                "field": "test_of_operating_effectiveness",
+                "type": "text",
+                "prompt": "Test of operating effectiveness results?"
+              },
+              {
+                "field": "deficiency_severity",
+                "type": "select",
+                "options": [
+                  "None",
+                  "Control Deficiency",
+                  "Significant Deficiency",
+                  "Material Weakness"
+                ],
+                "prompt": "Deficiency severity if any?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Control owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "PROC.INV",
+          "title": "Inventory",
+          "question_block": {
+            "type": "sox_icfr",
+            "questions": [
+              {
+                "field": "significant_account_or_process",
+                "type": "text",
+                "prompt": "Significant account or process?"
+              },
+              {
+                "field": "assertions",
+                "type": "multi_select",
+                "options": [
+                  "Existence/Occurrence",
+                  "Completeness",
+                  "Valuation/Allocation",
+                  "Rights/Obligations",
+                  "Presentation/Disclosure"
+                ],
+                "prompt": "Relevant assertions?"
+              },
+              {
+                "field": "wcgw",
+                "type": "text",
+                "prompt": "What could go wrong (WCGW)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Inherent risk rating (1-5)?"
+              },
+              {
+                "field": "key_control",
+                "type": "text",
+                "prompt": "Key control description?"
+              },
+              {
+                "field": "control_type",
+                "type": "select",
+                "options": [
+                  "Preventive",
+                  "Detective"
+                ],
+                "prompt": "Preventive or detective?"
+              },
+              {
+                "field": "control_method",
+                "type": "select",
+                "options": [
+                  "Manual",
+                  "Automated",
+                  "IT-Dependent Manual"
+                ],
+                "prompt": "Manual or automated?"
+              },
+              {
+                "field": "frequency",
+                "type": "select",
+                "options": [
+                  "Per Transaction",
+                  "Daily",
+                  "Weekly",
+                  "Monthly",
+                  "Quarterly",
+                  "Annually"
+                ],
+                "prompt": "Frequency?"
+              },
+              {
+                "field": "test_of_design",
+                "type": "text",
+                "prompt": "Test of design results?"
+              },
+              {
+                "field": "test_of_operating_effectiveness",
+                "type": "text",
+                "prompt": "Test of operating effectiveness results?"
+              },
+              {
+                "field": "deficiency_severity",
+                "type": "select",
+                "options": [
+                  "None",
+                  "Control Deficiency",
+                  "Significant Deficiency",
+                  "Material Weakness"
+                ],
+                "prompt": "Deficiency severity if any?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Control owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "PROC.FA",
+          "title": "Fixed Assets",
+          "question_block": {
+            "type": "sox_icfr",
+            "questions": [
+              {
+                "field": "significant_account_or_process",
+                "type": "text",
+                "prompt": "Significant account or process?"
+              },
+              {
+                "field": "assertions",
+                "type": "multi_select",
+                "options": [
+                  "Existence/Occurrence",
+                  "Completeness",
+                  "Valuation/Allocation",
+                  "Rights/Obligations",
+                  "Presentation/Disclosure"
+                ],
+                "prompt": "Relevant assertions?"
+              },
+              {
+                "field": "wcgw",
+                "type": "text",
+                "prompt": "What could go wrong (WCGW)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Inherent risk rating (1-5)?"
+              },
+              {
+                "field": "key_control",
+                "type": "text",
+                "prompt": "Key control description?"
+              },
+              {
+                "field": "control_type",
+                "type": "select",
+                "options": [
+                  "Preventive",
+                  "Detective"
+                ],
+                "prompt": "Preventive or detective?"
+              },
+              {
+                "field": "control_method",
+                "type": "select",
+                "options": [
+                  "Manual",
+                  "Automated",
+                  "IT-Dependent Manual"
+                ],
+                "prompt": "Manual or automated?"
+              },
+              {
+                "field": "frequency",
+                "type": "select",
+                "options": [
+                  "Per Transaction",
+                  "Daily",
+                  "Weekly",
+                  "Monthly",
+                  "Quarterly",
+                  "Annually"
+                ],
+                "prompt": "Frequency?"
+              },
+              {
+                "field": "test_of_design",
+                "type": "text",
+                "prompt": "Test of design results?"
+              },
+              {
+                "field": "test_of_operating_effectiveness",
+                "type": "text",
+                "prompt": "Test of operating effectiveness results?"
+              },
+              {
+                "field": "deficiency_severity",
+                "type": "select",
+                "options": [
+                  "None",
+                  "Control Deficiency",
+                  "Significant Deficiency",
+                  "Material Weakness"
+                ],
+                "prompt": "Deficiency severity if any?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Control owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "PROC.TR",
+          "title": "Treasury / Cash",
+          "question_block": {
+            "type": "sox_icfr",
+            "questions": [
+              {
+                "field": "significant_account_or_process",
+                "type": "text",
+                "prompt": "Significant account or process?"
+              },
+              {
+                "field": "assertions",
+                "type": "multi_select",
+                "options": [
+                  "Existence/Occurrence",
+                  "Completeness",
+                  "Valuation/Allocation",
+                  "Rights/Obligations",
+                  "Presentation/Disclosure"
+                ],
+                "prompt": "Relevant assertions?"
+              },
+              {
+                "field": "wcgw",
+                "type": "text",
+                "prompt": "What could go wrong (WCGW)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Inherent risk rating (1-5)?"
+              },
+              {
+                "field": "key_control",
+                "type": "text",
+                "prompt": "Key control description?"
+              },
+              {
+                "field": "control_type",
+                "type": "select",
+                "options": [
+                  "Preventive",
+                  "Detective"
+                ],
+                "prompt": "Preventive or detective?"
+              },
+              {
+                "field": "control_method",
+                "type": "select",
+                "options": [
+                  "Manual",
+                  "Automated",
+                  "IT-Dependent Manual"
+                ],
+                "prompt": "Manual or automated?"
+              },
+              {
+                "field": "frequency",
+                "type": "select",
+                "options": [
+                  "Per Transaction",
+                  "Daily",
+                  "Weekly",
+                  "Monthly",
+                  "Quarterly",
+                  "Annually"
+                ],
+                "prompt": "Frequency?"
+              },
+              {
+                "field": "test_of_design",
+                "type": "text",
+                "prompt": "Test of design results?"
+              },
+              {
+                "field": "test_of_operating_effectiveness",
+                "type": "text",
+                "prompt": "Test of operating effectiveness results?"
+              },
+              {
+                "field": "deficiency_severity",
+                "type": "select",
+                "options": [
+                  "None",
+                  "Control Deficiency",
+                  "Significant Deficiency",
+                  "Material Weakness"
+                ],
+                "prompt": "Deficiency severity if any?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Control owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "PROC.TAX",
+          "title": "Tax",
+          "question_block": {
+            "type": "sox_icfr",
+            "questions": [
+              {
+                "field": "significant_account_or_process",
+                "type": "text",
+                "prompt": "Significant account or process?"
+              },
+              {
+                "field": "assertions",
+                "type": "multi_select",
+                "options": [
+                  "Existence/Occurrence",
+                  "Completeness",
+                  "Valuation/Allocation",
+                  "Rights/Obligations",
+                  "Presentation/Disclosure"
+                ],
+                "prompt": "Relevant assertions?"
+              },
+              {
+                "field": "wcgw",
+                "type": "text",
+                "prompt": "What could go wrong (WCGW)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Inherent risk rating (1-5)?"
+              },
+              {
+                "field": "key_control",
+                "type": "text",
+                "prompt": "Key control description?"
+              },
+              {
+                "field": "control_type",
+                "type": "select",
+                "options": [
+                  "Preventive",
+                  "Detective"
+                ],
+                "prompt": "Preventive or detective?"
+              },
+              {
+                "field": "control_method",
+                "type": "select",
+                "options": [
+                  "Manual",
+                  "Automated",
+                  "IT-Dependent Manual"
+                ],
+                "prompt": "Manual or automated?"
+              },
+              {
+                "field": "frequency",
+                "type": "select",
+                "options": [
+                  "Per Transaction",
+                  "Daily",
+                  "Weekly",
+                  "Monthly",
+                  "Quarterly",
+                  "Annually"
+                ],
+                "prompt": "Frequency?"
+              },
+              {
+                "field": "test_of_design",
+                "type": "text",
+                "prompt": "Test of design results?"
+              },
+              {
+                "field": "test_of_operating_effectiveness",
+                "type": "text",
+                "prompt": "Test of operating effectiveness results?"
+              },
+              {
+                "field": "deficiency_severity",
+                "type": "select",
+                "options": [
+                  "None",
+                  "Control Deficiency",
+                  "Significant Deficiency",
+                  "Material Weakness"
+                ],
+                "prompt": "Deficiency severity if any?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Control owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "PROC.FCR",
+          "title": "Financial Close and Reporting",
+          "question_block": {
+            "type": "sox_icfr",
+            "questions": [
+              {
+                "field": "significant_account_or_process",
+                "type": "text",
+                "prompt": "Significant account or process?"
+              },
+              {
+                "field": "assertions",
+                "type": "multi_select",
+                "options": [
+                  "Existence/Occurrence",
+                  "Completeness",
+                  "Valuation/Allocation",
+                  "Rights/Obligations",
+                  "Presentation/Disclosure"
+                ],
+                "prompt": "Relevant assertions?"
+              },
+              {
+                "field": "wcgw",
+                "type": "text",
+                "prompt": "What could go wrong (WCGW)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Inherent risk rating (1-5)?"
+              },
+              {
+                "field": "key_control",
+                "type": "text",
+                "prompt": "Key control description?"
+              },
+              {
+                "field": "control_type",
+                "type": "select",
+                "options": [
+                  "Preventive",
+                  "Detective"
+                ],
+                "prompt": "Preventive or detective?"
+              },
+              {
+                "field": "control_method",
+                "type": "select",
+                "options": [
+                  "Manual",
+                  "Automated",
+                  "IT-Dependent Manual"
+                ],
+                "prompt": "Manual or automated?"
+              },
+              {
+                "field": "frequency",
+                "type": "select",
+                "options": [
+                  "Per Transaction",
+                  "Daily",
+                  "Weekly",
+                  "Monthly",
+                  "Quarterly",
+                  "Annually"
+                ],
+                "prompt": "Frequency?"
+              },
+              {
+                "field": "test_of_design",
+                "type": "text",
+                "prompt": "Test of design results?"
+              },
+              {
+                "field": "test_of_operating_effectiveness",
+                "type": "text",
+                "prompt": "Test of operating effectiveness results?"
+              },
+              {
+                "field": "deficiency_severity",
+                "type": "select",
+                "options": [
+                  "None",
+                  "Control Deficiency",
+                  "Significant Deficiency",
+                  "Material Weakness"
+                ],
+                "prompt": "Deficiency severity if any?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Control owner?"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "ITGC",
+      "name": "IT General Controls",
+      "controls": [
+        {
+          "id": "ITGC.AC",
+          "title": "Access to programs and data",
+          "question_block": {
+            "type": "sox_icfr",
+            "questions": [
+              {
+                "field": "significant_account_or_process",
+                "type": "text",
+                "prompt": "Significant account or process?"
+              },
+              {
+                "field": "assertions",
+                "type": "multi_select",
+                "options": [
+                  "Existence/Occurrence",
+                  "Completeness",
+                  "Valuation/Allocation",
+                  "Rights/Obligations",
+                  "Presentation/Disclosure"
+                ],
+                "prompt": "Relevant assertions?"
+              },
+              {
+                "field": "wcgw",
+                "type": "text",
+                "prompt": "What could go wrong (WCGW)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Inherent risk rating (1-5)?"
+              },
+              {
+                "field": "key_control",
+                "type": "text",
+                "prompt": "Key control description?"
+              },
+              {
+                "field": "control_type",
+                "type": "select",
+                "options": [
+                  "Preventive",
+                  "Detective"
+                ],
+                "prompt": "Preventive or detective?"
+              },
+              {
+                "field": "control_method",
+                "type": "select",
+                "options": [
+                  "Manual",
+                  "Automated",
+                  "IT-Dependent Manual"
+                ],
+                "prompt": "Manual or automated?"
+              },
+              {
+                "field": "frequency",
+                "type": "select",
+                "options": [
+                  "Per Transaction",
+                  "Daily",
+                  "Weekly",
+                  "Monthly",
+                  "Quarterly",
+                  "Annually"
+                ],
+                "prompt": "Frequency?"
+              },
+              {
+                "field": "test_of_design",
+                "type": "text",
+                "prompt": "Test of design results?"
+              },
+              {
+                "field": "test_of_operating_effectiveness",
+                "type": "text",
+                "prompt": "Test of operating effectiveness results?"
+              },
+              {
+                "field": "deficiency_severity",
+                "type": "select",
+                "options": [
+                  "None",
+                  "Control Deficiency",
+                  "Significant Deficiency",
+                  "Material Weakness"
+                ],
+                "prompt": "Deficiency severity if any?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Control owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ITGC.CM",
+          "title": "Change management",
+          "question_block": {
+            "type": "sox_icfr",
+            "questions": [
+              {
+                "field": "significant_account_or_process",
+                "type": "text",
+                "prompt": "Significant account or process?"
+              },
+              {
+                "field": "assertions",
+                "type": "multi_select",
+                "options": [
+                  "Existence/Occurrence",
+                  "Completeness",
+                  "Valuation/Allocation",
+                  "Rights/Obligations",
+                  "Presentation/Disclosure"
+                ],
+                "prompt": "Relevant assertions?"
+              },
+              {
+                "field": "wcgw",
+                "type": "text",
+                "prompt": "What could go wrong (WCGW)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Inherent risk rating (1-5)?"
+              },
+              {
+                "field": "key_control",
+                "type": "text",
+                "prompt": "Key control description?"
+              },
+              {
+                "field": "control_type",
+                "type": "select",
+                "options": [
+                  "Preventive",
+                  "Detective"
+                ],
+                "prompt": "Preventive or detective?"
+              },
+              {
+                "field": "control_method",
+                "type": "select",
+                "options": [
+                  "Manual",
+                  "Automated",
+                  "IT-Dependent Manual"
+                ],
+                "prompt": "Manual or automated?"
+              },
+              {
+                "field": "frequency",
+                "type": "select",
+                "options": [
+                  "Per Transaction",
+                  "Daily",
+                  "Weekly",
+                  "Monthly",
+                  "Quarterly",
+                  "Annually"
+                ],
+                "prompt": "Frequency?"
+              },
+              {
+                "field": "test_of_design",
+                "type": "text",
+                "prompt": "Test of design results?"
+              },
+              {
+                "field": "test_of_operating_effectiveness",
+                "type": "text",
+                "prompt": "Test of operating effectiveness results?"
+              },
+              {
+                "field": "deficiency_severity",
+                "type": "select",
+                "options": [
+                  "None",
+                  "Control Deficiency",
+                  "Significant Deficiency",
+                  "Material Weakness"
+                ],
+                "prompt": "Deficiency severity if any?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Control owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ITGC.OPS",
+          "title": "Computer operations",
+          "question_block": {
+            "type": "sox_icfr",
+            "questions": [
+              {
+                "field": "significant_account_or_process",
+                "type": "text",
+                "prompt": "Significant account or process?"
+              },
+              {
+                "field": "assertions",
+                "type": "multi_select",
+                "options": [
+                  "Existence/Occurrence",
+                  "Completeness",
+                  "Valuation/Allocation",
+                  "Rights/Obligations",
+                  "Presentation/Disclosure"
+                ],
+                "prompt": "Relevant assertions?"
+              },
+              {
+                "field": "wcgw",
+                "type": "text",
+                "prompt": "What could go wrong (WCGW)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Inherent risk rating (1-5)?"
+              },
+              {
+                "field": "key_control",
+                "type": "text",
+                "prompt": "Key control description?"
+              },
+              {
+                "field": "control_type",
+                "type": "select",
+                "options": [
+                  "Preventive",
+                  "Detective"
+                ],
+                "prompt": "Preventive or detective?"
+              },
+              {
+                "field": "control_method",
+                "type": "select",
+                "options": [
+                  "Manual",
+                  "Automated",
+                  "IT-Dependent Manual"
+                ],
+                "prompt": "Manual or automated?"
+              },
+              {
+                "field": "frequency",
+                "type": "select",
+                "options": [
+                  "Per Transaction",
+                  "Daily",
+                  "Weekly",
+                  "Monthly",
+                  "Quarterly",
+                  "Annually"
+                ],
+                "prompt": "Frequency?"
+              },
+              {
+                "field": "test_of_design",
+                "type": "text",
+                "prompt": "Test of design results?"
+              },
+              {
+                "field": "test_of_operating_effectiveness",
+                "type": "text",
+                "prompt": "Test of operating effectiveness results?"
+              },
+              {
+                "field": "deficiency_severity",
+                "type": "select",
+                "options": [
+                  "None",
+                  "Control Deficiency",
+                  "Significant Deficiency",
+                  "Material Weakness"
+                ],
+                "prompt": "Deficiency severity if any?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Control owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ITGC.SDLC",
+          "title": "Program development / SDLC",
+          "question_block": {
+            "type": "sox_icfr",
+            "questions": [
+              {
+                "field": "significant_account_or_process",
+                "type": "text",
+                "prompt": "Significant account or process?"
+              },
+              {
+                "field": "assertions",
+                "type": "multi_select",
+                "options": [
+                  "Existence/Occurrence",
+                  "Completeness",
+                  "Valuation/Allocation",
+                  "Rights/Obligations",
+                  "Presentation/Disclosure"
+                ],
+                "prompt": "Relevant assertions?"
+              },
+              {
+                "field": "wcgw",
+                "type": "text",
+                "prompt": "What could go wrong (WCGW)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Inherent risk rating (1-5)?"
+              },
+              {
+                "field": "key_control",
+                "type": "text",
+                "prompt": "Key control description?"
+              },
+              {
+                "field": "control_type",
+                "type": "select",
+                "options": [
+                  "Preventive",
+                  "Detective"
+                ],
+                "prompt": "Preventive or detective?"
+              },
+              {
+                "field": "control_method",
+                "type": "select",
+                "options": [
+                  "Manual",
+                  "Automated",
+                  "IT-Dependent Manual"
+                ],
+                "prompt": "Manual or automated?"
+              },
+              {
+                "field": "frequency",
+                "type": "select",
+                "options": [
+                  "Per Transaction",
+                  "Daily",
+                  "Weekly",
+                  "Monthly",
+                  "Quarterly",
+                  "Annually"
+                ],
+                "prompt": "Frequency?"
+              },
+              {
+                "field": "test_of_design",
+                "type": "text",
+                "prompt": "Test of design results?"
+              },
+              {
+                "field": "test_of_operating_effectiveness",
+                "type": "text",
+                "prompt": "Test of operating effectiveness results?"
+              },
+              {
+                "field": "deficiency_severity",
+                "type": "select",
+                "options": [
+                  "None",
+                  "Control Deficiency",
+                  "Significant Deficiency",
+                  "Material Weakness"
+                ],
+                "prompt": "Deficiency severity if any?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Control owner?"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
