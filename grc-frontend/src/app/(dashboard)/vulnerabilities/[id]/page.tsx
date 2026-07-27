@@ -1188,7 +1188,7 @@ export default function VulnerabilityDetailPage() {
                   assessment above is only a derivation from stored data, so
                   something has to record that a person actually retested it. */}
               <GroupHeading n={3} title="Prove it" sub="Nothing above was executed. This is where a human records what they actually tested." />
-              <GuideMarker id="vuln.exploitRetest" n={7} />
+              <GuideMarker id="vuln.exploitRetest" n={9} />
               <ExploitTestPanel vulnId={vulnerability.id} />
             </div>
           )}

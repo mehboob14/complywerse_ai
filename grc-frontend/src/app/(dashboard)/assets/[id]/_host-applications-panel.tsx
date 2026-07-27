@@ -757,7 +757,21 @@ export default function HostApplicationsPanel({ assetId }: { assetId: number }) 
     );
   }
 
-  if (ipPeersQ.isError || !data) return null;
+  // Never render nothing — a bare `return null` here left a blank gap on the
+  // Compliance tab when /ip-peers errored or came back empty. Show a quiet
+  // placeholder instead so the section is always accounted for.
+  if (ipPeersQ.isError || !data) {
+    return (
+      <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+        <div className="flex items-center gap-2 p-5 text-sm text-gray-400">
+          <Network className="h-4 w-4" />
+          {ipPeersQ.isError
+            ? 'Benchmark and IP-group data is unavailable for this asset right now.'
+            : 'No IP-group or benchmark data for this host yet.'}
+        </div>
+      </section>
+    );
+  }
 
   const hostEntry = group.find(g => g.is_host_os);
   const appEntries = group.filter(g => !g.is_host_os);

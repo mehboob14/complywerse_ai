@@ -154,7 +154,7 @@ export default function RemediationPlanCard({ vulnId, hasOwner = true }: { vulnI
           <div>
             <div className="flex items-center gap-1.5 text-[15px] font-semibold text-slate-900">
               Remediation plan
-              <GuideMarker id="vuln.remediationPlan" n={1} />
+              <GuideMarker id="vuln.remediationPlan" n={6} />
             </div>
             <p className="mt-0.5 text-[12.5px] text-slate-500">
               {p.status === 'preview'
@@ -203,7 +203,7 @@ export default function RemediationPlanCard({ vulnId, hasOwner = true }: { vulnI
 
         <div className="relative">
           <Stepper status={p.status} />
-          <GuideMarker id="vuln.lifecycle" n={2} className="absolute -top-2 right-0" />
+          <GuideMarker id="vuln.lifecycle" n={7} className="absolute -top-2 right-0" />
         </div>
 
         <div>

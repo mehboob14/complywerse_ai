@@ -121,7 +121,7 @@ interface LinkedEvidence {
 /** Statuses that mean the finding is no longer an open item on this asset.
  *  Matches the closed-set used by the vulnerability register and by
  *  /asset-alerts, so an asset, its alerts and the register agree. */
-const CLOSED_VULN_STATUSES = new Set(['remediated', 'verified', 'closed', 'resolved', 'accepted']);
+const CLOSED_VULN_STATUSES = new Set(['remediated', 'verified', 'closed', 'resolved', 'accepted', 'false_positive', 'auto_closed_decommissioned']);
 const isOpenVuln = (v: { status?: string | null }) =>
   !CLOSED_VULN_STATUSES.has((v.status || '').toLowerCase());
 
