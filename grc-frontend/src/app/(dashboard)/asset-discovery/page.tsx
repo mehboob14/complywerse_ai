@@ -15,6 +15,7 @@ import {
   ShieldCheck, RefreshCw, Check, Cpu,
 } from 'lucide-react';
 import { discoveryApi } from '@/lib/api';
+import { useTabParam } from '@/lib/useTabParam';
 import AgentsAdminPage from '../admin/agents/page';
 import '../assets/_suite/asset-suite.css';
 
@@ -450,7 +451,7 @@ function NewCredentialForm({ onDone }: { onDone: () => void }) {
 /* ─── Shell ────────────────────────────────────────────────────────── */
 
 export default function AssetDiscoveryPage() {
-  const [tab, setTab] = useState<Tab>('overview');
+  const [tab, setTab] = useTabParam<Tab>('overview', TABS.map((t) => t.id));
   return (
     <div className="asset-suite as-fadeup" style={{ padding: '4px 2px' }}>
       <div style={{ marginBottom: 18 }}>

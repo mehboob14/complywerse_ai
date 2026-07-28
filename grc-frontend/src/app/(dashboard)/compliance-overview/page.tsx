@@ -21,6 +21,7 @@ import {
   PieChart, Pie, Cell, Tooltip,
 } from 'recharts';
 import { apiClient } from '@/lib/api';
+import { useTabParam } from '@/lib/useTabParam';
 import {
   Cloud, Database, Server, RouterIcon as RouterI, Users as UsersIcon,
   Container, CloudCog, Search, ChevronDown, ChevronRight, ExternalLink,
@@ -224,7 +225,7 @@ const COMPLIANCE_TABS: { id: ComplianceScansTab; label: string; icon: LucideIcon
 ];
 
 export default function ComplianceOverviewPage() {
-  const [activeTab, setActiveTab] = useState<ComplianceScansTab>('overview');
+  const [activeTab, setActiveTab] = useTabParam<ComplianceScansTab>('overview', ['overview', 'rules']);
 
   return (
     <div className="-m-4 lg:-m-5">

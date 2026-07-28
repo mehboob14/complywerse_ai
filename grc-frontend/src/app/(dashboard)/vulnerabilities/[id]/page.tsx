@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { vulnManagementApi, assetsApi, ermApi, apiClient, entityExtrasApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useTabParam } from '@/lib/useTabParam';
 import { InlineLinkPicker, PageLoader, ComboBoxInput, SeverityBadge, StatusBadge, type ComboBoxOption, type SeverityLevel } from '@/components/ui';
 import AiRecommendationSaver from '@/components/ai/AiRecommendationSaver';
 import { Abbr } from '@/components/common/Abbr';
@@ -381,7 +382,7 @@ export default function VulnerabilityDetailPage() {
   // so the operator gets a consistent UX and the AI path never bypasses
   // the assignment/due-date controls.
   // Finding-detail tabs, mirroring the reference VM product's structure.
-  const [activeTab, setActiveTab] = useState<VulnTab>('analysis');
+  const [activeTab, setActiveTab] = useTabParam<VulnTab>('analysis', ['analysis', 'remediation', 'exploit-test', 'history', 'notes']);
 
   // The reference product's Analysis tab is ONE card: the risk score and its
   // breakdown. Ours had six more sections stacked under it, so the tab read as
@@ -841,13 +842,20 @@ export default function VulnerabilityDetailPage() {
       <div className="border-b border-slate-200 px-4 py-3 sm:px-6">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
           <div className="flex items-start gap-3">
-            <Link
-              href="/vulnerabilities"
+            <button
+              type="button"
+              onClick={() => {
+                // Return to wherever the user came from (e.g. an asset's vuln
+                // tab), not a hardcoded list. Fall back to the list only on a
+                // direct load with no history to go back to.
+                if (typeof window !== 'undefined' && window.history.length > 1) router.back();
+                else router.push('/vulnerabilities');
+              }}
               className="mt-0.5 rounded-md p-1.5 text-slate-600 hover:bg-slate-50 hover:text-slate-800"
-              title="Back to vulnerabilities"
+              title="Back"
             >
               <ArrowLeft className="h-4 w-4" strokeWidth={1.75} />
-            </Link>
+            </button>
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-50 text-primary-600">
               <Bug className="h-5 w-5" strokeWidth={1.75} />
             </div>

@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useTabParam } from '@/lib/useTabParam';
 import { apiClient, assetsApi, compliancePluginsApi, criticalityApi, entityExtrasApi, ermApi, evidenceApi, riskPostureApi, vulnManagementApi } from '@/lib/api';
 import type { IacaItem, IscaItem } from '@/lib/api';
 import type { ITAsset } from '@/types';
@@ -286,7 +287,12 @@ export default function AssetDetailPage() {
   // D1 layout: the right column starts on the promoted Trajectory graph — the
   // asset's core risk narrative — rather than the old Details tab (which is now
   // dissolved into the pinned left context rail).
-  const [activeTab, setActiveTab] = useState<TabType>('overview');
+  const [activeTab, setActiveTab] = useTabParam<TabType>('overview', [
+    'overview', 'details', 'compliance', 'controls', 'evidence', 'risks',
+    'vulnerabilities', 'criticality', 'trajectory', 'mapping-recommendations',
+    'software', 'relationships', 'discovery', 'lifecycle', 'assignments',
+    'activity', 'alerts', 'notes', 'history',
+  ]);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showLifecycleModal, setShowLifecycleModal] = useState(false);

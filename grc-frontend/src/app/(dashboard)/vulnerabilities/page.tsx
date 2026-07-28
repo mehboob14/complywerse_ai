@@ -7,6 +7,7 @@ import * as XLSX from 'xlsx';
 import { vulnManagementApi } from '@/lib/api';
 import apiClient from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useTabParam } from '@/lib/useTabParam';
 import { SearchInput, MultiSelectDropdown, PageLoader } from '@/components/ui';
 import NcaVulnRegisterTab from '@/components/vulnerabilities/NcaVulnRegisterTab';
 import NcaVulnQuickAddModal from '@/components/vulnerabilities/NcaVulnQuickAddModal';
@@ -162,7 +163,7 @@ function getStatusStyle(status: string) {
 
 export default function VulnerabilitiesPage() {
   const { hasPermission } = usePermissions();
-  const [activeTab, setActiveTab] = useState('vulnerabilities' as 'overview' | 'vulnerabilities' | 'departments' | 'sla');
+  const [activeTab, setActiveTab] = useTabParam<'overview' | 'vulnerabilities' | 'departments' | 'sla'>('vulnerabilities', ['overview', 'vulnerabilities', 'departments', 'sla']);
   const [registerType, setRegisterType] = useState<'standard' | 'nca'>('standard');
 
   // (queryClient is declared further down; the backfill effect references it
