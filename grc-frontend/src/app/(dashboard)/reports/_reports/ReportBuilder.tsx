@@ -16,7 +16,7 @@ import {
 import ReportDataTable from './ReportDataTable';
 import FilterBuilder from './FilterBuilder';
 import ColumnPicker from './ColumnPicker';
-import { allLinkageColumns, enrichReportRows, fetchLinkageCatalog, linkageKeysForFields } from './linkages';
+import { allLinkageColumns, enrichReportRows, fetchLinkageCatalog, linkageKeysForFields, linkagePresenceColumns, presenceTarget } from './linkages';
 import { parseXmodKey, xmodKey } from './openCatalog';
 import { exportCSV, exportExcelMulti, exportWord } from './exporters';
 import { newSpecId, persistSpec, type SpecSource } from './savedReports';
@@ -29,6 +29,7 @@ function opLabel(op: string): string {
     contains: 'contains', notcontains: 'does not contain', eq: 'is', neq: 'is not',
     starts: 'starts with', empty: 'is empty', notempty: 'is not empty',
     gt: '>', gte: '≥', lt: '<', lte: '≤', between: 'between',
+    linked: 'is linked to any', notlinked: 'is not linked to any',
   };
   return map[op] || op;
 }
@@ -128,14 +129,20 @@ export default function ReportBuilder({
   const groupByKey = spec.rows[0] ?? null;
 
   const linkageColDefs = useMemo(() => allLinkageColumns(linkageCatalog), [linkageCatalog]);
+  const linkagePresenceCols = useMemo(() => linkagePresenceColumns(linkageCatalog), [linkageCatalog]);
   const allCols = useMemo(
     () => (dataset ? [...dataset.columns, ...linkageColDefs] : []),
     [dataset, linkageColDefs],
   );
-  // Filters only over columns the user has actually selected.
+  // Filters over the columns the user selected, plus first-class linkage-presence
+  // predicates ("(not) linked to any <module>") for every module with a real edge —
+  // so orphan filters are reachable without first adding a count column.
   const filterCols = useMemo(
-    () => visibleKeys.map((k) => allCols.find((c) => c.key === k)).filter((c): c is NonNullable<typeof c> => !!c),
-    [visibleKeys, allCols],
+    () => [
+      ...visibleKeys.map((k) => allCols.find((c) => c.key === k)).filter((c): c is NonNullable<typeof c> => !!c),
+      ...linkagePresenceCols,
+    ],
+    [visibleKeys, allCols, linkagePresenceCols],
   );
   const labelFor = (key: string) => {
     const col = allCols.find((c) => c.key === key);
@@ -155,20 +162,21 @@ export default function ReportBuilder({
     return Array.from(keys);
   }, [visibleKeys, spec.rules.conditions, draftRules.conditions, spec.measures, groupByKey]);
 
-  const includes = useMemo(
-    () => linkageKeysForFields(appliedFieldKeys, linkageCatalog),
-    [appliedFieldKeys, linkageCatalog],
-  );
+  const includes = useMemo(() => {
+    const base = linkageKeysForFields(appliedFieldKeys, linkageCatalog);
+    // A "(not) linked to any X" filter must enrich X so its link count is present.
+    const presence = appliedFieldKeys
+      .map(presenceTarget)
+      .filter((t): t is string => !!t);
+    return Array.from(new Set([...base, ...presence]));
+  }, [appliedFieldKeys, linkageCatalog]);
 
-  const projectFields = useMemo(() => {
-    const keys: string[] = [];
-    const inc = new Set(includes);
-    for (const link of linkageCatalog) {
-      if (!inc.has(link.key)) continue;
-      for (const f of link.fields) keys.push(f.key);
-    }
-    return keys;
-  }, [linkageCatalog, includes]);
+  // Project only the cross-module fields actually referenced (link counts are set
+  // for every included target regardless), so a presence-only filter stays cheap.
+  const projectFields = useMemo(
+    () => appliedFieldKeys.filter((k) => k.startsWith('xmod_')),
+    [appliedFieldKeys],
+  );
 
   const includesKey = includes.join(',');
 
@@ -193,8 +201,11 @@ export default function ReportBuilder({
     return [
       ...dataset.columns,
       ...linkageColDefs.filter((c) => c.linkageKey && inc.has(c.linkageKey)),
+      // Presence pseudo-columns for enriched targets so active "(not) linked"
+      // conditions resolve during row evaluation (and read cleanly in exports).
+      ...linkagePresenceCols.filter((c) => c.linkageKey && inc.has(c.linkageKey)),
     ];
-  }, [dataset, linkageColDefs, includes]);
+  }, [dataset, linkageColDefs, linkagePresenceCols, includes]);
 
   const filtersDirty = useMemo(
     () => JSON.stringify(draftRules) !== JSON.stringify(spec.rules) || draftSearch !== spec.search,
@@ -702,11 +713,12 @@ export default function ReportBuilder({
 
       <div className="flex shrink-0 flex-wrap items-center gap-1.5 px-3 py-2">
         {activeConditions.map((c) => {
-          const col = allCols.find((x) => x.key === c.col);
+          const col = cols.find((x) => x.key === c.col) || allCols.find((x) => x.key === c.col);
+          const noValueOp = ['empty', 'notempty', 'linked', 'notlinked'].includes(c.op);
           return (
             <Chip key={c.id} onRemove={() => removeCondition(c.id)}>
               {col?.label || c.col} {opLabel(c.op)}
-              {c.value ? ` ${c.value}` : ''}
+              {!noValueOp && c.value ? ` ${c.value}` : ''}
             </Chip>
           );
         })}

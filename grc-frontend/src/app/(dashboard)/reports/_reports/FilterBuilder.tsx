@@ -81,7 +81,7 @@ export default function FilterBuilder({
         {rules.conditions.map((c, i) => {
           const col = cols.find((x) => x.key === c.col);
           const ops = OPERATORS[col?.type || 'text'] || OPERATORS.text;
-          const noVal = c.op === 'empty' || c.op === 'notempty';
+          const noVal = ['empty', 'notempty', 'linked', 'notlinked'].includes(c.op);
           return (
             <div key={c.id} className={`flex flex-wrap items-center gap-1.5 ${compact ? 'text-[11px]' : ''}`}>
               <span className="w-10 shrink-0 text-right text-[11px] font-medium text-slate-400">{i === 0 ? 'Where' : rules.logic === 'AND' ? 'and' : 'or'}</span>

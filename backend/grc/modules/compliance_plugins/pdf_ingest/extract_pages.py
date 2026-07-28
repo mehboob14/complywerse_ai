@@ -26,12 +26,41 @@ from __future__ import annotations
 
 import io
 import logging
-from typing import Iterable, Iterator
+import os
+import shutil
+from typing import Iterable, Iterator, Optional
 
 logger = logging.getLogger(__name__)
 
 # Below this many characters we assume the page is image-based and need OCR.
 MIN_CHARS_PER_PAGE = 80
+
+_TESSERACT_CMD_RESOLVED: Optional[str] = None
+_TESSERACT_CMD_LOOKED_UP = False
+
+
+def _resolve_tesseract_cmd() -> Optional[str]:
+    """Locate tesseract.exe even when it is installed but not on PATH (common on Windows)."""
+    global _TESSERACT_CMD_RESOLVED, _TESSERACT_CMD_LOOKED_UP
+    if _TESSERACT_CMD_LOOKED_UP:
+        return _TESSERACT_CMD_RESOLVED
+
+    _TESSERACT_CMD_LOOKED_UP = True
+    candidates = [
+        os.environ.get("TESSERACT_CMD"),
+        shutil.which("tesseract"),
+        r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+        r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
+        "/usr/bin/tesseract",
+        "/usr/local/bin/tesseract",
+        "/opt/homebrew/bin/tesseract",
+    ]
+    for candidate in candidates:
+        if candidate and os.path.exists(candidate):
+            _TESSERACT_CMD_RESOLVED = candidate
+            return candidate
+    _TESSERACT_CMD_RESOLVED = None
+    return None
 
 
 def _pdfplumber_pages(pdf_bytes: bytes) -> list[str]:
@@ -133,6 +162,16 @@ def _ocr_page(pdf_bytes: bytes, page_index: int) -> tuple[str, float | None]:
     import fitz
     import pytesseract
     from PIL import Image
+
+    tesseract_cmd = _resolve_tesseract_cmd()
+    if tesseract_cmd:
+        pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
+    else:
+        logger.warning(
+            "Tesseract OCR binary not found (set TESSERACT_CMD or install Tesseract-OCR). "
+            "Scanned PDF pages will return empty text."
+        )
+        return "", None
 
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
     try:

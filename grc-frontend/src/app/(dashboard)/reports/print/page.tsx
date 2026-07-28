@@ -13,7 +13,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Loader2, Printer } from 'lucide-react';
 import { DATASETS, datasetByKey } from '../_reports/datasets';
-import { enrichReportRows, fetchLinkageCatalog, linkageColumns } from '../_reports/linkages';
+import { enrichReportRows, fetchLinkageCatalog, linkageColumns, linkagePresenceColumns } from '../_reports/linkages';
 import { readPrintSpec } from '../_reports/printPayload';
 import { asRows, describeRules, rowMatchesRules, rowMatchesSearch } from '../_reports/grid-utils';
 import ReportDataTable from '../_reports/ReportDataTable';
@@ -46,10 +46,16 @@ export default function ReportPrintPage() {
   });
   const rows = asRows(rawRows);
 
-  const cols = useMemo(
-    () => (dataset ? [...dataset.columns, ...linkageColumns(linkageCatalog, includes)] : []),
-    [dataset, linkageCatalog, includes],
-  );
+  const cols = useMemo(() => {
+    if (!dataset) return [];
+    const inc = new Set(includes);
+    return [
+      ...dataset.columns,
+      ...linkageColumns(linkageCatalog, includes),
+      // Presence pseudo-columns so saved "(not) linked to any X" filters resolve here too.
+      ...linkagePresenceColumns(linkageCatalog).filter((c) => c.linkageKey && inc.has(c.linkageKey)),
+    ];
+  }, [dataset, linkageCatalog, includes]);
   const labelFor = (key: string) => {
     const col = cols.find((c) => c.key === key);
     if (!col) return key;

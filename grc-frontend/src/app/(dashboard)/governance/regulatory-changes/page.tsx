@@ -560,7 +560,7 @@ export default function RegulatoryChangesPage() {
               <label className="mb-1 block text-sm font-medium text-slate-700">SBP circular file *</label>
               <input
                 type="file"
-                accept=".pdf,.doc,.docx"
+                accept=".pdf,.doc,.docx,.txt,.md"
                 onChange={(e) => {
                   setUploadFile(e.target.files?.[0] ?? null);
                   setUploadError('');

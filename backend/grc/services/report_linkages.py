@@ -248,7 +248,9 @@ def get_linkage_catalog(dataset: str) -> List[Dict[str, Any]]:
         if key == dataset:
             continue
         if key in curated:
-            out.append(curated[key])
+            entry = dict(curated[key])
+            entry["has_edge"] = (dataset, key) in EDGE_RESOLVERS
+            out.append(entry)
             continue
         label = key.replace("_", " ").title()
         fields = _field_defs(key, label, with_open=True)
@@ -263,6 +265,8 @@ def get_linkage_catalog(dataset: str) -> List[Dict[str, Any]]:
     # Include curated-only keys not in DATASET_MODELS (e.g. framework_controls)
     for key, entry in curated.items():
         if not any(e["key"] == key for e in out):
+            entry = dict(entry)
+            entry["has_edge"] = (dataset, key) in EDGE_RESOLVERS
             out.append(entry)
     return out
 

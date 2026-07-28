@@ -99,46 +99,193 @@ def validate_document_access(user: GRCUser, document: GovernanceDocument, db: Se
         )
 
 
+def _extract_pdf_bytes(pdf_bytes: bytes) -> str:
+    """Multi-layer PDF text extraction for both digital and scanned circulars.
+
+    Order: compliance ingest pipeline (pdfplumber → PyMuPDF → OCR) →
+    standalone pdfplumber / fitz / PyPDF2 fallbacks.
+    """
+    import logging
+    log = logging.getLogger(__name__)
+
+    # 1) Prefer the shared Cywift-style pipeline (handles scanned pages via OCR).
+    try:
+        from ...compliance_plugins.pdf_ingest.extract_pages import extract_all_pages
+        parts: list[str] = []
+        for page in extract_all_pages(pdf_bytes):
+            t = (page.get("text") or "").strip()
+            if t:
+                parts.append(t)
+        if parts:
+            return "\n\n".join(parts)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("extract_all_pages failed: %s", exc)
+
+    # 2) pdfplumber alone
+    try:
+        import io
+        import pdfplumber
+        parts = []
+        with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+            for page in pdf.pages:
+                t = (page.extract_text() or "").strip()
+                if t:
+                    parts.append(t)
+        if parts:
+            return "\n\n".join(parts)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("pdfplumber extract failed: %s", exc)
+
+    # 3) PyMuPDF
+    try:
+        import fitz
+        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        try:
+            parts = []
+            for page in doc:
+                t = (page.get_text("text") or "").strip()
+                if t:
+                    parts.append(t)
+            if parts:
+                return "\n\n".join(parts)
+        finally:
+            doc.close()
+    except Exception as exc:  # noqa: BLE001
+        log.warning("PyMuPDF extract failed: %s", exc)
+
+    # 4) PyPDF2 last
+    try:
+        import io
+        from PyPDF2 import PdfReader
+        reader = PdfReader(io.BytesIO(pdf_bytes))
+        parts = []
+        for page in reader.pages:
+            t = (page.extract_text() or "").strip()
+            if t:
+                parts.append(t)
+        if parts:
+            return "\n\n".join(parts)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("PyPDF2 extract failed: %s", exc)
+
+    return ""
+
+
+def _extract_docx_path(file_path: str) -> str:
+    from docx import Document
+    doc = Document(file_path)
+    text_parts: list[str] = []
+    for paragraph in doc.paragraphs:
+        if paragraph.text.strip():
+            text_parts.append(paragraph.text)
+    for table in doc.tables:
+        for row in table.rows:
+            row_text = " | ".join(cell.text.strip() for cell in row.cells if cell.text.strip())
+            if row_text:
+                text_parts.append(row_text)
+    # Also pull text from headers/footers (common in circular letterheads).
+    for section in doc.sections:
+        for header in (section.header, section.first_page_header, section.even_page_header):
+            try:
+                for p in header.paragraphs:
+                    if p.text.strip():
+                        text_parts.append(p.text)
+            except Exception:
+                pass
+        for footer in (section.footer, section.first_page_footer, section.even_page_footer):
+            try:
+                for p in footer.paragraphs:
+                    if p.text.strip():
+                        text_parts.append(p.text)
+            except Exception:
+                pass
+    return "\n".join(text_parts)
+
+
+def extract_text_from_bytes(contents: bytes, file_type: str, filename: str = "") -> str:
+    """Extract plain text from in-memory document bytes."""
+    if not contents:
+        return ""
+
+    ft = (file_type or "").lower().strip(".")
+    name = (filename or "").lower()
+
+    if ft == "pdf" or name.endswith(".pdf"):
+        return _sanitize_policy_text(_extract_pdf_bytes(contents))
+
+    if ft in ("docx", "doc") or name.endswith((".docx", ".doc")):
+        # python-docx only supports true OOXML .docx; .doc often fails.
+        import tempfile
+        import os as _os
+        suffix = ".docx" if (ft == "docx" or name.endswith(".docx")) else f".{ft or 'doc'}"
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            tmp.write(contents)
+            tmp_path = tmp.name
+        try:
+            try:
+                return _sanitize_policy_text(_extract_docx_path(tmp_path))
+            except Exception:
+                # Legacy .doc or corrupt docx: try treating as PDF-like binary fail,
+                # then plain-text decode as last resort.
+                try:
+                    return _sanitize_policy_text(contents.decode("utf-8", errors="ignore"))
+                except Exception:
+                    return ""
+        finally:
+            try:
+                _os.remove(tmp_path)
+            except Exception:
+                pass
+
+    if ft in ("txt", "text", "md", "csv", "json", "log") or name.endswith(
+        (".txt", ".md", ".csv", ".json", ".log")
+    ):
+        for enc in ("utf-8", "utf-16", "latin-1", "cp1252"):
+            try:
+                return _sanitize_policy_text(contents.decode(enc))
+            except Exception:
+                continue
+        return _sanitize_policy_text(contents.decode("utf-8", errors="ignore"))
+
+    # Unknown type: try PDF magic, then text decode.
+    if contents[:4] == b"%PDF":
+        return _sanitize_policy_text(_extract_pdf_bytes(contents))
+    try:
+        return _sanitize_policy_text(contents.decode("utf-8", errors="ignore"))
+    except Exception:
+        return ""
+
+
 def extract_text_from_file(file_path: str, file_type: str) -> str:
     if not file_path or not os.path.exists(file_path):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Document file not found on disk"
         )
-    
-    extracted_text = ""
-    
-    if file_type == "pdf":
-        from PyPDF2 import PdfReader
-        reader = PdfReader(file_path)
-        text_parts = []
-        for page in reader.pages:
-            page_text = page.extract_text()
-            if page_text:
-                text_parts.append(page_text)
-        extracted_text = "\n\n".join(text_parts)
-    
-    elif file_type in ("docx", "doc"):
-        from docx import Document
-        doc = Document(file_path)
-        text_parts = []
-        for paragraph in doc.paragraphs:
-            if paragraph.text.strip():
-                text_parts.append(paragraph.text)
-        for table in doc.tables:
-            for row in table.rows:
-                row_text = " | ".join(cell.text.strip() for cell in row.cells if cell.text.strip())
-                if row_text:
-                    text_parts.append(row_text)
-        extracted_text = "\n".join(text_parts)
-    
+
+    ft = (file_type or "").lower().strip(".")
+    with open(file_path, "rb") as f:
+        contents = f.read()
+
+    if ft == "pdf":
+        extracted_text = _extract_pdf_bytes(contents)
+    elif ft in ("docx", "doc"):
+        try:
+            extracted_text = _extract_docx_path(file_path)
+        except Exception:
+            extracted_text = extract_text_from_bytes(contents, ft, file_path)
+    elif ft in ("txt", "text", "md", "csv", "json", "log"):
+        extracted_text = extract_text_from_bytes(contents, ft, file_path)
     else:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Unsupported file type: {file_type}. Only PDF and Word documents are supported."
-        )
-    
-    return extracted_text
+        # Auto-detect rather than hard-fail — upload UX expects broad support.
+        extracted_text = extract_text_from_bytes(contents, ft, file_path)
+        if not extracted_text.strip() and ft not in ("",):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unsupported file type: {file_type}. Use PDF, Word, or plain text.",
+            )
+
+    return _sanitize_policy_text(extracted_text)
 
 
 def _split_text_into_chunks(text: str, chunk_size: int = 20000, overlap: int = 500) -> List[str]:

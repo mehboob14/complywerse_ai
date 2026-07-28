@@ -15,7 +15,7 @@ except Exception:
 
 from ....models import (
     RegulatoryChange, RegulatoryImpactAssessment, RegulatoryImplementationTask,
-    GovernanceDocument, NormalizedControl, Framework, GRCUser, Tenant, AuditLog, UserRole, Role, get_db
+    GovernanceDocument, NormalizedControl, InternalControl, InternalControlFrameworkLink, Framework, GRCUser, Tenant, AuditLog, UserRole, Role, get_db
 )
 from ....schemas import (
     RegulatoryChangeCreate, RegulatoryChangeUpdate, RegulatoryChangeResponse,
@@ -176,8 +176,14 @@ def serialize_impact_assessment(assessment: RegulatoryImpactAssessment, db: Sess
         doc = db.query(GovernanceDocument).filter(GovernanceDocument.id == assessment.impacted_item_id).first()
         impacted_item_name = doc.title if doc else None
     elif assessment.impacted_item_type == "control" and assessment.impacted_item_id:
-        ctrl = db.query(NormalizedControl).filter(NormalizedControl.id == assessment.impacted_item_id).first()
-        impacted_item_name = ctrl.name if ctrl else None
+        # SBP circular uploads map controls to ERM InternalControl records.
+        # Legacy rows may still be stored against NormalizedControl.
+        ic = db.query(InternalControl).filter(InternalControl.id == assessment.impacted_item_id).first()
+        if ic:
+            impacted_item_name = ic.name
+        else:
+            ctrl = db.query(NormalizedControl).filter(NormalizedControl.id == assessment.impacted_item_id).first()
+            impacted_item_name = ctrl.name if ctrl else None
 
     affected_areas, recommendations = split_legacy_recommendations(assessment.impact_description)
     
@@ -394,7 +400,7 @@ def upload_regulatory_change_document(
     if not tenant_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User not assigned to any tenant")
 
-    # Only allow types we can extract text from synchronously.
+    # Accept common document types; extraction falls back across engines.
     filename = file.filename or "regulatory_document"
     ext = (filename.rsplit(".", 1)[-1] if "." in filename else "").lower()
     if ext in {"pdf"}:
@@ -403,12 +409,16 @@ def upload_regulatory_change_document(
         file_type = "docx"
     elif ext in {"doc"}:
         file_type = "doc"
+    elif ext in {"txt", "md", "csv", "json", "log", "rtf"}:
+        file_type = "txt"
     else:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported file type. Use PDF or Word (.doc/.docx).")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unsupported file type. Use PDF, Word (.doc/.docx), or plain text.",
+        )
 
     try:
-        from tempfile import NamedTemporaryFile
-        from .policy_parser import extract_text_from_file
+        from .policy_parser import extract_text_from_bytes
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Text extraction deps unavailable: {str(e)}")
 
@@ -416,22 +426,24 @@ def upload_regulatory_change_document(
     if not contents:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded file is empty.")
 
-    with NamedTemporaryFile(delete=False, suffix=f".{ext}") as tmp:
-        tmp.write(contents)
-        tmp_path = tmp.name
-
     try:
-        extracted_text = extract_text_from_file(tmp_path, file_type)
-    finally:
-        try:
-            import os
-            os.remove(tmp_path)
-        except Exception:
-            pass
+        extracted_text = extract_text_from_bytes(contents, file_type, filename)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Could not read the uploaded document: {str(e)}",
+        )
 
     content_text = extracted_text or ""
     if not content_text.strip():
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Could not extract text from the uploaded document.")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                "Could not extract text from the uploaded document. "
+                "If this is a scanned PDF, ensure Tesseract OCR is installed on the server, "
+                "or upload a text-based PDF / Word file."
+            ),
+        )
 
     # Truncate aggressively to fit prompt budgets.
     if len(content_text) > 12000:
@@ -451,7 +463,17 @@ def upload_regulatory_change_document(
         source_value = "custom"
 
     frameworks = db.query(Framework).filter(Framework.is_active == True).all()
+    # For most regulators we map controls to NormalizedControl.
+    # For SBP circulars we restrict control mapping to ERM InternalControl so
+    # impact/gap analysis only considers what exists internally.
     controls = db.query(NormalizedControl).all()
+    internal_controls = None
+    if source_value == "SBP":
+        internal_controls = (
+            db.query(InternalControl)
+            .filter(InternalControl.tenant_id == tenant_id, InternalControl.status != "deprecated")
+            .all()
+        )
     policies = db.query(GovernanceDocument).filter(
         GovernanceDocument.tenant_id == tenant_id,
         GovernanceDocument.doc_type == "policy",
@@ -459,7 +481,12 @@ def upload_regulatory_change_document(
     ).all()
 
     frameworks_text = "\n".join([f"- {fw.name} ({fw.short_code}): {fw.description or 'No description'}" for fw in frameworks]) if frameworks else "No frameworks registered"
-    controls_text = "\n".join([f"- {ctrl.code}: {ctrl.name}" for ctrl in controls[:120]]) if controls else "No controls registered"
+    if source_value == "SBP" and internal_controls is not None:
+        controls_text = "\n".join([f"- {ic.control_id}: {ic.name}" for ic in internal_controls[:120]]) if internal_controls else "No internal controls registered"
+        controls_id_field = "InternalControl.control_id"
+    else:
+        controls_text = "\n".join([f"- {ctrl.code}: {ctrl.name}" for ctrl in controls[:120]]) if controls else "No controls registered"
+        controls_id_field = "NormalizedControl.code"
     policies_text = "\n".join([f"- {pol.title}" for pol in policies[:120]]) if policies else "No policies registered"
 
     sbp_context = ""
@@ -479,7 +506,7 @@ Extract (from the text):
 1) Key requirements summary
 2) Priority and estimated effective date
 3) Impacted policies (by exact policy title when possible)
-4) Impacted controls using our NormalizedControl.code values
+4) Impacted controls using our {controls_id_field} values
 5) Compliance gaps (what is missing or needs to change)
 6) Implementation tasks / recommendations to remediate
 7) Overall organizational impact
@@ -492,7 +519,7 @@ Return ONLY valid JSON in this exact schema:
   "effective_date_estimate": "YYYY-MM-DD or null",
   "impact_overview": "string (2-4 sentences on business / compliance impact)",
   "impacted_policies": [{{"title": "policy title", "action_needed": "review|update|create_new"}}],
-  "impacted_controls": [{{"id": "NormalizedControl.code", "name": "control name", "gap_type": "new_requirement|modification|obsolete", "action_needed": "description"}}],
+  "impacted_controls": [{{"id": "{controls_id_field}", "name": "control name", "gap_type": "new_requirement|modification|obsolete", "action_needed": "description"}}],
   "implementation_tasks": [
     {{
       "title": "task title",
@@ -506,7 +533,7 @@ Return ONLY valid JSON in this exact schema:
   "recommendations": ["recommendation strings"]
 }}
 
-The returned impacted_controls.id MUST be values from NormalizedControl.code whenever possible.
+The returned impacted_controls.id MUST be values from {controls_id_field} whenever possible.
 If you are unsure, still provide the best-matching codes from the platform text you see above.
 
 TEXT:
@@ -559,19 +586,33 @@ EXISTING POLICIES (sample):
             effective_date = None
 
     # Resolve control + policy ids for impacted items.
-    controls_by_code = {str(c.code).strip().lower(): c for c in controls}
+    if source_value == "SBP":
+        controls_by_code = {str(c.control_id).strip().lower(): c for c in (internal_controls or [])}
 
-    def resolve_control(code: Optional[str], name: Optional[str]) -> Optional[NormalizedControl]:
-        key = (code or "").strip().lower()
-        if key and key in controls_by_code:
-            return controls_by_code[key]
-        nkey = (name or "").strip().lower()
-        if nkey:
-            # fallback: substring match on code or name
-            for c in controls:
-                if (str(c.code).lower() == nkey) or (nkey in str(c.name).lower()) or (nkey in str(c.code).lower()):
-                    return c
-        return None
+        def resolve_control(code: Optional[str], name: Optional[str]) -> Optional[InternalControl]:
+            key = (code or "").strip().lower()
+            if key and key in controls_by_code:
+                return controls_by_code[key]
+            nkey = (name or "").strip().lower()
+            if nkey and internal_controls:
+                for c in internal_controls:
+                    if (str(c.control_id).lower() == nkey) or (nkey in str(c.name).lower()):
+                        return c
+            return None
+    else:
+        controls_by_code = {str(c.code).strip().lower(): c for c in controls}
+
+        def resolve_control(code: Optional[str], name: Optional[str]) -> Optional[NormalizedControl]:
+            key = (code or "").strip().lower()
+            if key and key in controls_by_code:
+                return controls_by_code[key]
+            nkey = (name or "").strip().lower()
+            if nkey:
+                # fallback: substring match on code or name
+                for c in controls:
+                    if (str(c.code).lower() == nkey) or (nkey in str(c.name).lower()) or (nkey in str(c.code).lower()):
+                        return c
+            return None
 
     policies_by_title = {str(p.title).strip().lower(): p for p in policies}
 
@@ -638,8 +679,16 @@ EXISTING POLICIES (sample):
         impacted_control = resolve_control(ctrl_code, ctrl_name)
         impacted_item_id = impacted_control.id if impacted_control else None
 
-        gap_identified = gap_type in ["new_requirement", "modification"]
-        impact_level = "high" if gap_type == "new_requirement" else "medium"
+        if source_value == "SBP":
+            # Only treat as a gap when the referenced ERM internal control
+            # does not exist. If it exists, we already have the internal
+            # control to cover this requirement (SBP circular impact is
+            # therefore "no gap" at controls layer).
+            gap_identified = impacted_item_id is None
+            impact_level = "high" if gap_identified else "medium"
+        else:
+            gap_identified = gap_type in ["new_requirement", "modification"]
+            impact_level = "high" if gap_type == "new_requirement" else "medium"
         impact_assessment = RegulatoryImpactAssessment(
             tenant_id=tenant_id,
             regulatory_change_id=db_change.id,
@@ -872,7 +921,45 @@ def list_impact_assessments(
         query = query.filter(RegulatoryImpactAssessment.gap_identified == gap_identified)
     
     assessments = query.order_by(RegulatoryImpactAssessment.assessed_at.desc()).all()
-    return [serialize_impact_assessment(a, db) for a in assessments]
+    responses = [serialize_impact_assessment(a, db) for a in assessments]
+
+    # SBP circulars: ensure "gap_identified" only reflects missing ERM
+    # InternalControls (not just AI guesses). This makes the UI's
+    # impact/gap view consistent.
+    if change.source == "SBP":
+        control_ids = {r.impacted_item_id for r in responses if r.impacted_item_type == "control" and r.impacted_item_id}
+        if control_ids:
+            internal_control_rows = db.query(InternalControl.id).filter(InternalControl.id.in_(control_ids)).all()
+            internal_control_ids = {row[0] for row in internal_control_rows}
+            normalized_ids = control_ids - internal_control_ids
+
+            mapped_normalized_control_ids: set[int] = set()
+            if normalized_ids:
+                mapped_rows = (
+                    db.query(InternalControlFrameworkLink.normalized_control_id)
+                    .join(InternalControl, InternalControl.id == InternalControlFrameworkLink.internal_control_id)
+                    .filter(
+                        InternalControl.tenant_id == change.tenant_id,
+                        InternalControlFrameworkLink.normalized_control_id.in_(normalized_ids),
+                    )
+                    .all()
+                )
+                mapped_normalized_control_ids = {row[0] for row in mapped_rows}
+
+            # Override gaps when an internal control is already covered.
+            for resp in responses:
+                if resp.impacted_item_type != "control" or not resp.impacted_item_id:
+                    continue
+                internal_exists = (
+                    resp.impacted_item_id in internal_control_ids
+                    or resp.impacted_item_id in mapped_normalized_control_ids
+                )
+                if internal_exists:
+                    resp.gap_identified = False
+                    resp.gap_description = None
+                    resp.compliance_gaps = None
+
+    return responses
 
 
 @router.post("/changes/{change_id}/assessments", response_model=RegulatoryImpactAssessmentResponse, status_code=status.HTTP_201_CREATED)
@@ -1302,115 +1389,139 @@ def get_gap_analysis(
     if not change:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Regulatory change not found")
     
-    policies = db.query(GovernanceDocument).filter(
-        GovernanceDocument.tenant_id == change.tenant_id,
-        GovernanceDocument.status.in_(["approved", "published"])
-    ).limit(50).all()
-    
-    controls = db.query(NormalizedControl).limit(50).all()
-    
-    policy_list = [{"id": p.id, "title": p.title, "type": p.doc_type} for p in policies]
-    control_list = [{"id": c.id, "name": c.name, "code": c.code} for c in controls]
-    
-    existing_assessments = [
-        {
-            "type": a.assessment_type,
-            "item_type": a.impacted_item_type,
-            "item_id": a.impacted_item_id,
-            "impact_level": a.impact_level,
-            "gap_identified": a.gap_identified,
-            "gap_description": a.gap_description
+    # Fast path: derive gap analysis directly from the already-computed impact
+    # assessments stored on the regulatory change. This keeps the UI
+    # responsive and avoids a second OpenAI round-trip on every tab load.
+    impact_assessments = change.impact_assessments or []
+    if change.source == "SBP":
+        # SBP circulars: control gaps should only be raised when there is no
+        # matching ERM internal control (direct match for new SBP mapping,
+        # and mapped match for legacy normalized-control mapping).
+        all_control_ids = {
+            a.impacted_item_id for a in impact_assessments if a.impacted_item_type == "control" and a.impacted_item_id
         }
-        for a in change.impact_assessments
-    ]
-    
-    if not client:
-        return RegulatoryGapAnalysisResponse(
-            regulatory_change_id=change.id,
-            regulatory_change_title=change.title,
-            analysis_summary="AI analysis unavailable. OpenAI client not configured.",
-            impacted_policies=[],
-            impacted_controls=[],
-            identified_gaps=[],
-            recommended_actions=["Configure OpenAI API to enable AI-powered gap analysis"],
-            risk_level="unknown",
-            confidence_score=0.0
-        )
-    
-    prompt = f"""Analyze the following regulatory change and identify potential impacts on existing policies and controls.
 
-Regulatory Change:
-- Title: {change.title}
-- Description: {change.description or 'Not provided'}
-- Source: {change.source}
-- Reference: {change.regulation_reference or 'Not provided'}
-- Effective Date: {change.effective_date.isoformat() if change.effective_date else 'Not specified'}
+        internal_control_ids: set[int] = set()
+        mapped_normalized_control_ids: set[int] = set()
+        if all_control_ids:
+            internal_control_rows = db.query(InternalControl.id).filter(InternalControl.id.in_(all_control_ids)).all()
+            internal_control_ids = {row[0] for row in internal_control_rows}
 
-Existing Policies (sample):
-{json.dumps(policy_list[:20], indent=2)}
+            normalized_ids = all_control_ids - internal_control_ids
+            if normalized_ids:
+                # Any internal control linked to the normalized control means
+                # the requirement is already covered internally.
+                mapped_rows = (
+                    db.query(InternalControlFrameworkLink.normalized_control_id)
+                    .join(InternalControl, InternalControl.id == InternalControlFrameworkLink.internal_control_id)
+                    .filter(
+                        InternalControl.tenant_id == change.tenant_id,
+                        InternalControlFrameworkLink.normalized_control_id.in_(normalized_ids),
+                    )
+                    .all()
+                )
+                mapped_normalized_control_ids = {row[0] for row in mapped_rows}
 
-Existing Controls (sample):
-{json.dumps(control_list[:20], indent=2)}
+        gap_assessments = []
+        for a in impact_assessments:
+            if a.impacted_item_type == "control" and a.impacted_item_id:
+                internal_exists = (
+                    a.impacted_item_id in internal_control_ids
+                    or a.impacted_item_id in mapped_normalized_control_ids
+                )
+                if not internal_exists:
+                    gap_assessments.append(a)
+            else:
+                if a.gap_identified:
+                    gap_assessments.append(a)
+    else:
+        gap_assessments = [a for a in impact_assessments if a.gap_identified]
 
-Existing Assessments:
-{json.dumps(existing_assessments, indent=2)}
+    policy_ids = {
+        a.impacted_item_id
+        for a in gap_assessments
+        if a.impacted_item_type == "policy" and a.impacted_item_id
+    }
+    control_ids = {
+        a.impacted_item_id
+        for a in gap_assessments
+        if a.impacted_item_type == "control" and a.impacted_item_id
+    }
 
-Provide a JSON response with the following structure:
-{{
-    "analysis_summary": "Brief summary of the regulatory change impact",
-    "impacted_policies": [
-        {{"id": <policy_id>, "title": "<title>", "impact_level": "high|medium|low", "reason": "<why impacted>"}}
-    ],
-    "impacted_controls": [
-        {{"id": <control_id>, "name": "<name>", "impact_level": "high|medium|low", "reason": "<why impacted>"}}
-    ],
-    "identified_gaps": [
-        {{"area": "<policy|control|process>", "description": "<gap description>", "severity": "critical|high|medium|low"}}
-    ],
-    "recommended_actions": ["<action 1>", "<action 2>"],
-    "risk_level": "critical|high|medium|low",
-    "confidence_score": 0.0-1.0
-}}
+    policies_by_id: dict[int, str] = {}
+    if policy_ids:
+        for p in (
+            db.query(GovernanceDocument)
+            .filter(GovernanceDocument.id.in_(policy_ids))
+            .all()
+        ):
+            policies_by_id[p.id] = p.title
 
-Focus on regulatory compliance gaps and potential areas of non-compliance."""
+    controls_by_id: dict[int, str] = {}
+    if control_ids:
+        # Prefer InternalControl names (SBP mapping), then fall back to
+        # NormalizedControl names (legacy mapping).
+        for c in db.query(InternalControl).filter(InternalControl.id.in_(control_ids)).all():
+            controls_by_id[c.id] = c.name
+        missing = control_ids - set(controls_by_id.keys())
+        if missing:
+            for c in db.query(NormalizedControl).filter(NormalizedControl.id.in_(missing)).all():
+                controls_by_id[c.id] = c.name
 
-    try:
-        response = client.chat.completions.create(
-            model=get_openai_model(),
-            messages=[
-                {"role": "system", "content": "You are a regulatory compliance expert specializing in gap analysis. Provide structured JSON responses."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.3,
-            response_format={"type": "json_object"}
-        )
-        
-        result = json.loads(response.choices[0].message.content)
-        
-        return RegulatoryGapAnalysisResponse(
-            regulatory_change_id=change.id,
-            regulatory_change_title=change.title,
-            analysis_summary=result.get("analysis_summary", "Analysis completed"),
-            impacted_policies=result.get("impacted_policies", []),
-            impacted_controls=result.get("impacted_controls", []),
-            identified_gaps=result.get("identified_gaps", []),
-            recommended_actions=result.get("recommended_actions", []),
-            risk_level=result.get("risk_level", "medium"),
-            confidence_score=result.get("confidence_score", 0.7)
-        )
-        
-    except Exception as e:
-        return RegulatoryGapAnalysisResponse(
-            regulatory_change_id=change.id,
-            regulatory_change_title=change.title,
-            analysis_summary=f"AI analysis encountered an error: {str(e)}",
-            impacted_policies=[],
-            impacted_controls=[],
-            identified_gaps=[],
-            recommended_actions=["Review the regulatory change manually", "Consult with compliance team"],
-            risk_level="unknown",
-            confidence_score=0.0
-        )
+    impacted_policies: list[dict[str, Any]] = []
+    impacted_controls: list[dict[str, Any]] = []
+    identified_gaps: list[dict[str, Any]] = []
+    recommended_actions: list[str] = []
+
+    for a in gap_assessments:
+        if a.impacted_item_type == "policy" and a.impacted_item_id in policies_by_id:
+            impacted_policies.append({
+                "id": a.impacted_item_id,
+                "title": policies_by_id[a.impacted_item_id],
+                "impact_level": a.impact_level,
+                "reason": "Impacted by uploaded regulatory circular requirements",
+            })
+        if a.impacted_item_type == "control" and a.impacted_item_id in controls_by_id:
+            impacted_controls.append({
+                "id": a.impacted_item_id,
+                "name": controls_by_id[a.impacted_item_id],
+                "impact_level": a.impact_level,
+                "reason": "Impacted by uploaded regulatory circular control requirements",
+            })
+
+        area = (a.impacted_item_type or a.assessment_type or "process").lower()
+        remediation = a.gap_description or a.impact_description or "Review and remediate the gap"
+        identified_gaps.append({
+            "area": area,
+            "description": remediation,
+            "severity": (a.impact_level or "medium").lower(),
+            "current_state": "identified",
+            "required_state": "addressed",
+            "remediation_plan": remediation,
+            "status": "identified",
+        })
+        if remediation not in recommended_actions:
+            recommended_actions.append(remediation)
+
+    risk_level = (change.priority or "medium").lower()
+    confidence_score = 0.9 if gap_assessments else 0.6
+    analysis_summary = (
+        "Gap analysis derived from saved impact assessments (fast path)."
+        if gap_assessments
+        else "No gaps identified from saved impact assessments."
+    )
+
+    return RegulatoryGapAnalysisResponse(
+        regulatory_change_id=change.id,
+        regulatory_change_title=change.title,
+        analysis_summary=analysis_summary,
+        impacted_policies=impacted_policies,
+        impacted_controls=impacted_controls,
+        identified_gaps=identified_gaps,
+        recommended_actions=recommended_actions[:8] if recommended_actions else [],
+        risk_level=risk_level,
+        confidence_score=confidence_score,
+    )
 
 
 # =============================================================================

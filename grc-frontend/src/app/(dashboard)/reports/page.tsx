@@ -37,7 +37,7 @@ function pushRecent(key: string) {
 export default function ReportsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { loaded: permsLoaded, can } = usePermissions();
+  const { loaded: permsLoaded, authenticated, can } = usePermissions();
   const [activeKey, setActiveKey] = useState<string | undefined>(undefined);
   /** True after "New report" — no module pre-selected until user adds data. */
   const [blankEmpty, setBlankEmpty] = useState(false);
@@ -130,13 +130,30 @@ export default function ReportsPage() {
   };
 
   if (permsLoaded && datasets.length === 0) {
+    // Distinguish a dropped/expired session (fix: sign in again) from a genuine
+    // access gap (fix: ask an admin) — otherwise a logged-out state misreads as
+    // "no permissions", which is what makes this look broken after a restart.
+    const sessionLost = !authenticated;
     return (
       <div className="-m-4 flex h-[calc(100dvh-3rem)] min-h-0 min-w-0 flex-col items-center justify-center overflow-hidden p-4 text-center lg:-m-5 lg:p-5">
         <Lock className="h-8 w-8 text-slate-300" />
-        <h1 className="mt-3 text-lg font-semibold text-slate-800">No reportable data</h1>
+        <h1 className="mt-3 text-lg font-semibold text-slate-800">
+          {sessionLost ? 'Session not active' : 'No reportable data'}
+        </h1>
         <p className="mt-1 max-w-sm text-sm text-slate-500">
-          Reports mirror your module access. Ask an administrator if you need access to a module.
+          {sessionLost
+            ? 'Your session isn’t active right now — please sign in again to load your reports.'
+            : 'Reports mirror your module access. Ask an administrator if you need access to a module.'}
         </p>
+        {sessionLost && (
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-primary-500 px-3 py-1.5 text-xs font-semibold text-[#0a0a0a] shadow-sm hover:bg-primary-600"
+          >
+            Reload
+          </button>
+        )}
       </div>
     );
   }

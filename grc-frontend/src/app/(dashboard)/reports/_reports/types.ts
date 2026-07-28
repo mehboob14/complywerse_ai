@@ -1,6 +1,6 @@
 // Reporting engine — shared types.
 
-export type ColType = 'text' | 'number' | 'date' | 'badge';
+export type ColType = 'text' | 'number' | 'date' | 'badge' | 'linkage';
 
 export interface ColumnDef {
   key: string;
@@ -109,6 +109,11 @@ export const OPERATORS: Record<string, { key: string; label: string }[]> = {
   ],
   badge: [
     { key: 'eq', label: 'is' }, { key: 'neq', label: 'is not' }, { key: 'contains', label: 'contains' },
+  ],
+  // Cross-module linkage presence. Orphan-finding ("not linked to any X") is the
+  // primary use, so it leads. No value — the operator IS the predicate.
+  linkage: [
+    { key: 'notlinked', label: 'is not linked to any' }, { key: 'linked', label: 'is linked to any' },
   ],
 };
 export interface ColumnFilter {

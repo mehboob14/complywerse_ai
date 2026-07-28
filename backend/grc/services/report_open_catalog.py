@@ -26,6 +26,13 @@ from ..models import (
     RiskControlLink, RiskEvidenceLink, RiskFrameworkControlLink, RiskIncident,
     RiskKRI, Vendor, Vulnerability, VulnerabilityAssetLink, VulnerabilityControlLink,
 )
+# Expanded reporting datasets (Wave 2) — entities + their junctions/FKs to the hubs.
+from ..models import (
+    AIRiskAssessmentEntry, AuditPackage, AuditPackageEvidence, InternalControl,
+    InternalControlEvidence, InternalControlFrameworkLink, InternalControlRiskLink,
+    OversightAction, PolicyStatement, RCSAFinding, RiskAssessment, RiskAssessmentRisk,
+    RiskReview, VendorAssessment,
+)
 
 EdgeFn = Callable[[Session, List[int]], Dict[int, List[int]]]
 
@@ -42,6 +49,28 @@ def _pair_map(rows: List[Tuple[Any, Any]]) -> Dict[int, List[int]]:
         if rid not in out[lid]:
             out[lid].append(rid)
     return dict(out)
+
+
+# ── Generic edge factories (DRY resolvers for direct-FK / junction links) ──────
+def _fwd(model, fk):
+    """base row → its direct FK target: base.id in ids, follow base.fk → target id."""
+    def fn(db: Session, ids: List[int]) -> Dict[int, List[int]]:
+        return _pair_map(db.query(model.id, fk).filter(model.id.in_(ids), fk.isnot(None)).all())
+    return fn
+
+
+def _rev(model, fk):
+    """reverse of _fwd: target ids in ids → base rows whose fk points at them."""
+    def fn(db: Session, ids: List[int]) -> Dict[int, List[int]]:
+        return _pair_map(db.query(fk, model.id).filter(fk.in_(ids)).all())
+    return fn
+
+
+def _jn(base_col, target_col):
+    """junction table: rows where base_col in ids → target_col."""
+    def fn(db: Session, ids: List[int]) -> Dict[int, List[int]]:
+        return _pair_map(db.query(base_col, target_col).filter(base_col.in_(ids)).all())
+    return fn
 
 
 # ── Edge resolvers: base dataset → target dataset → {base_id: [target_ids]} ──
@@ -442,6 +471,35 @@ EDGE_RESOLVERS: Dict[Tuple[str, str], EdgeFn] = {
     ("is_projects", "controls"): _is_projects_controls,
     ("criticality_info", "assets"): _criticality_info_assets,
     ("criticality_infra", "assets"): _criticality_infra_assets,
+    # ── Expanded datasets (Wave 2) — new registers linked to the hubs ──────────
+    ("internal_controls", "risks"): _jn(InternalControlRiskLink.control_id, InternalControlRiskLink.risk_id),
+    ("internal_controls", "evidence"): _jn(InternalControlEvidence.internal_control_id, InternalControlEvidence.evidence_id),
+    ("internal_controls", "framework_controls"): _jn(InternalControlFrameworkLink.internal_control_id, InternalControlFrameworkLink.framework_control_id),
+    ("risks", "internal_controls"): _jn(InternalControlRiskLink.risk_id, InternalControlRiskLink.control_id),
+    ("evidence", "internal_controls"): _jn(InternalControlEvidence.evidence_id, InternalControlEvidence.internal_control_id),
+    ("risk_assessments", "risks"): _jn(RiskAssessmentRisk.assessment_id, RiskAssessmentRisk.risk_id),
+    ("risks", "risk_assessments"): _jn(RiskAssessmentRisk.risk_id, RiskAssessmentRisk.assessment_id),
+    ("risk_assessments", "frameworks"): _fwd(RiskAssessment, RiskAssessment.framework_id),
+    ("risk_reviews", "risks"): _fwd(RiskReview, RiskReview.risk_id),
+    ("risks", "risk_reviews"): _rev(RiskReview, RiskReview.risk_id),
+    ("rcsa_findings", "risks"): _fwd(RCSAFinding, RCSAFinding.linked_risk_id),
+    ("rcsa_findings", "internal_controls"): _fwd(RCSAFinding, RCSAFinding.linked_internal_control_id),
+    ("risks", "rcsa_findings"): _rev(RCSAFinding, RCSAFinding.linked_risk_id),
+    ("internal_controls", "rcsa_findings"): _rev(RCSAFinding, RCSAFinding.linked_internal_control_id),
+    ("policy_statements", "gov_documents"): _fwd(PolicyStatement, PolicyStatement.document_id),
+    ("gov_documents", "policy_statements"): _rev(PolicyStatement, PolicyStatement.document_id),
+    ("audit_packages", "evidence"): _jn(AuditPackageEvidence.package_id, AuditPackageEvidence.evidence_id),
+    ("evidence", "audit_packages"): _jn(AuditPackageEvidence.evidence_id, AuditPackageEvidence.package_id),
+    ("audit_packages", "frameworks"): _fwd(AuditPackage, AuditPackage.framework_id),
+    ("vendor_assessments", "vendors"): _fwd(VendorAssessment, VendorAssessment.vendor_id),
+    ("vendor_assessments", "risks"): _fwd(VendorAssessment, VendorAssessment.linked_risk_id),
+    ("vendors", "vendor_assessments"): _rev(VendorAssessment, VendorAssessment.vendor_id),
+    ("oversight_actions", "risks"): _fwd(OversightAction, OversightAction.linked_risk_id),
+    ("oversight_actions", "committees"): _fwd(OversightAction, OversightAction.committee_id),
+    ("committees", "oversight_actions"): _rev(OversightAction, OversightAction.committee_id),
+    ("risks", "oversight_actions"): _rev(OversightAction, OversightAction.linked_risk_id),
+    ("ai_risk_assessments", "risks"): _fwd(AIRiskAssessmentEntry, AIRiskAssessmentEntry.bridged_risk_id),
+    ("risks", "ai_risk_assessments"): _rev(AIRiskAssessmentEntry, AIRiskAssessmentEntry.bridged_risk_id),
 }
 
 # Reverse edges for free browsing when only one direction was registered are
@@ -472,6 +530,16 @@ DATASET_MODELS: Dict[str, Any] = {
     "committees": GovernanceCommittee,
     "frameworks": Framework,
     "framework_controls": FrameworkControl,
+    # Expanded datasets (Wave 2)
+    "internal_controls": InternalControl,
+    "risk_assessments": RiskAssessment,
+    "risk_reviews": RiskReview,
+    "rcsa_findings": RCSAFinding,
+    "policy_statements": PolicyStatement,
+    "audit_packages": AuditPackage,
+    "vendor_assessments": VendorAssessment,
+    "oversight_actions": OversightAction,
+    "ai_risk_assessments": AIRiskAssessmentEntry,
 }
 
 
