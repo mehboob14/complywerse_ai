@@ -2853,8 +2853,11 @@ export const regulatoryApi = {
     if (opts?.source) fd.append('source', opts.source);
     if (opts?.title_hint) fd.append('title_hint', opts.title_hint);
     return apiClient.post('/governance/regulatory-changes/changes/upload', fd, {
+      // Let axios set multipart boundary; default JSON Content-Type must be cleared.
       headers: { 'Content-Type': undefined },
-      timeout: 2 * 60 * 1000,
+      // Scanned PDFs need OCR (~1m) + OpenAI analysis; Next rewrite used to
+      // socket-hang-up at ~30s — long proxy route handles the wait.
+      timeout: 15 * 60 * 1000,
     });
   },
   updateChange: (id: number, data: Record<string, unknown>) => apiClient.put(`/governance/regulatory-changes/changes/${id}`, data),

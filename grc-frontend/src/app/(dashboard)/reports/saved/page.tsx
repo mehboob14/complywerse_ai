@@ -140,10 +140,10 @@ export default function SavedReportsPage() {
           </p>
         </div>
         <Link
-          href="/reports?mode=build"
+          href="/reports?mode=new"
           className="inline-flex items-center gap-1.5 rounded-lg bg-primary-500 px-3 py-2 text-xs font-semibold text-[#0a0a0a] hover:bg-primary-600"
         >
-          <Plus className="h-3.5 w-3.5" /> New report
+          <Plus className="h-3.5 w-3.5" /> New empty report
         </Link>
       </div>
 
@@ -194,8 +194,8 @@ export default function SavedReportsPage() {
             <p className="mt-1 max-w-sm text-xs text-slate-500">
               Build a report in the workspace, save it, and it will show up here.
             </p>
-            <Link href="/reports?mode=build" className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">
-              <Plus className="h-3.5 w-3.5" /> Create a report
+            <Link href="/reports?mode=new" className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+              <Plus className="h-3.5 w-3.5" /> Create an empty report
             </Link>
           </div>
         ) : (

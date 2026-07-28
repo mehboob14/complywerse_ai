@@ -1,16 +1,9 @@
 import type { ChartKind, ColumnDef, ReportSpec, Row } from './types';
 import { fieldDomain } from './pivot';
 
-/** Sensible default columns when the user hasn't picked any yet. */
-export function defaultVisibleColumns(cols: ColumnDef[]): string[] {
-  const skip = new Set(['id']);
-  const picked: string[] = [];
-  for (const c of cols) {
-    if (picked.length >= 7) break;
-    if (skip.has(c.key)) continue;
-    picked.push(c.key);
-  }
-  return picked.length ? picked : cols.slice(0, 5).map((c) => c.key);
+/** Empty-first: never auto-pick columns. Users add exactly what they want. */
+export function defaultVisibleColumns(_cols: ColumnDef[]): string[] {
+  return [];
 }
 
 export function groupByKey(spec: ReportSpec): string | null {

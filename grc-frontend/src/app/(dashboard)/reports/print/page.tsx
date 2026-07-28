@@ -3,33 +3,20 @@
 export const dynamic = 'force-dynamic';
 
 /**
- * Executive PDF view for a built report.
+ * Print / PDF view for a built report.
  *
- * Follows the app's existing print idiom (see assets/criticality-assessments/…/print):
- * a chrome-free layout the browser's native Print → Save as PDF lifts cleanly.
- * This beats a JS PDF library here — output is real vector text (selectable,
- * searchable, crisp) at zero dependency cost, and it reuses the very components
- * the screen renders, so the PDF can't drift from the app.
- *
- * Layout: summary page (title, provenance, KPI totals, chart) → page break →
- * the full data table, fully expanded, with the header row repeated per page.
- *
- * The spec arrives via localStorage (printPayload) because this opens in a new tab.
+ * Chrome-free layout for browser Print → Save as PDF. Spec arrives via
+ * localStorage (printPayload) because this opens in a new tab.
  */
 
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Loader2, Printer } from 'lucide-react';
-import { datasetByKey } from '../_reports/datasets';
-import { enrichReportRows, fetchLinkageCatalog, linkageColumns } from '../_reports/linkages';
-import { defaultVisibleColumns } from '../_reports/builderUtils';
+import { DATASETS, datasetByKey } from '../_reports/datasets';
+import { enrichReportRows, fetchLinkageCatalog, linkageColumns, linkagePresenceColumns } from '../_reports/linkages';
 import { readPrintSpec } from '../_reports/printPayload';
-import { AGG_LABEL, allNodeKeys, buildPivot, fieldDomain, fmtAgg } from '../_reports/pivot';
 import { asRows, describeRules, rowMatchesRules, rowMatchesSearch } from '../_reports/grid-utils';
-import PivotTable from '../_reports/PivotTable';
-import PivotChart from '../_reports/PivotChart';
 import ReportDataTable from '../_reports/ReportDataTable';
-import type { ChartKind } from '../_reports/PivotChart';
 import type { ReportSpec, Row } from '../_reports/types';
 
 export default function ReportPrintPage() {
@@ -40,50 +27,48 @@ export default function ReportPrintPage() {
 
   const dataset = spec ? datasetByKey(spec.dataset) : undefined;
   const includes = useMemo(() => spec?.includes ?? [], [spec?.includes]);
+  const project = useMemo(() => spec?.visibleColumns ?? [], [spec?.visibleColumns]);
   const { data: linkageCatalog = [] } = useQuery({
-    queryKey: ['report-linkages', dataset?.key],
-    queryFn: () => fetchLinkageCatalog(dataset!.key),
+    queryKey: ['report-linkages', dataset?.key, 'print'],
+    queryFn: () => fetchLinkageCatalog(dataset!.key, DATASETS),
     enabled: !!dataset,
     staleTime: 60_000,
   });
   const { data: rawRows = [], isLoading, error } = useQuery<Row[]>({
-    queryKey: ['report', dataset?.key, includes.join(',')],
+    queryKey: ['report', dataset?.key, includes.join(','), project.join(',')],
     queryFn: async () => {
       const base = asRows(await dataset!.fetch());
       if (!includes.length) return base;
-      return enrichReportRows(dataset!.key, base, includes);
+      return enrichReportRows(dataset!.key, base, includes, project);
     },
     enabled: !!dataset,
     staleTime: 30_000,
   });
   const rows = asRows(rawRows);
 
-  const cols = useMemo(
-    () => (dataset ? [...dataset.columns, ...linkageColumns(linkageCatalog, includes)] : []),
-    [dataset, linkageCatalog, includes],
-  );
-  const labelFor = (key: string) => cols.find((c) => c.key === key)?.label ?? key;
-  const visibleKeys = useMemo(
-    () => (spec?.visibleColumns?.length ? spec.visibleColumns : defaultVisibleColumns(cols)),
-    [spec?.visibleColumns, cols],
-  );
+  const cols = useMemo(() => {
+    if (!dataset) return [];
+    const inc = new Set(includes);
+    return [
+      ...dataset.columns,
+      ...linkageColumns(linkageCatalog, includes),
+      // Presence pseudo-columns so saved "(not) linked to any X" filters resolve here too.
+      ...linkagePresenceColumns(linkageCatalog).filter((c) => c.linkageKey && inc.has(c.linkageKey)),
+    ];
+  }, [dataset, linkageCatalog, includes]);
+  const labelFor = (key: string) => {
+    const col = cols.find((c) => c.key === key);
+    if (!col) return key;
+    if (col.linkageModule) return `${col.linkageModule} · ${col.label}`;
+    return col.label;
+  };
+  const visibleKeys = useMemo(() => spec?.visibleColumns ?? [], [spec?.visibleColumns]);
 
   const filteredRows = useMemo(
     () => (spec ? rows.filter((r) => rowMatchesSearch(cols, r, spec.search) && rowMatchesRules(cols, r, spec.rules)) : []),
     [rows, cols, spec],
   );
-  const result = useMemo(
-    () => buildPivot(cols, filteredRows, spec?.rows ?? [], spec?.col ?? null, spec?.measures ?? []),
-    [cols, filteredRows, spec],
-  );
-  const colDomain = useMemo(() => fieldDomain(cols.find((c) => c.key === spec?.col), rows), [cols, spec, rows]);
-  const rowDomain = useMemo(() => fieldDomain(cols.find((c) => c.key === spec?.rows[0]), rows), [cols, spec, rows]);
-  const expanded = useMemo(() => new Set(allNodeKeys(result.nodes)), [result]);
 
-  const hasChart = !!spec && spec.view !== 'table' && result.nodes.length > 0 && result.measures.length > 0;
-
-  // Print once the data — and the chart's SVG — have actually rendered. Never
-  // auto-print an errored (empty) report.
   useEffect(() => {
     if (!spec || !dataset || isLoading || error) return;
     const t = window.setTimeout(() => window.print(), 900);
@@ -96,7 +81,7 @@ export default function ReportPrintPage() {
   if (!spec || !dataset) {
     return (
       <div className="p-8">
-        <p className="text-sm text-slate-600">No report to print. Open a report in <span className="font-medium">Reports → Build</span> and choose <span className="font-medium">Export → PDF</span>.</p>
+        <p className="text-sm text-slate-600">No report to print. Open a report in <span className="font-medium">Reports</span> and choose <span className="font-medium">Export → PDF</span>.</p>
       </div>
     );
   }
@@ -114,9 +99,11 @@ export default function ReportPrintPage() {
   const facts: { label: string; value: string }[] = [
     { label: 'Dataset', value: `${dataset.module} · ${dataset.label}` },
     { label: 'Rows', value: `${filteredRows.length.toLocaleString()}${filteredRows.length !== rows.length ? ` of ${rows.length.toLocaleString()}` : ''}` },
-    { label: 'Grouped by', value: spec.rows.length ? spec.rows.map(labelFor).join(' › ') : '—' },
-    { label: 'Pivoted by', value: spec.col ? labelFor(spec.col) : '—' },
+    { label: 'Columns', value: visibleKeys.length ? visibleKeys.map(labelFor).join(', ') : '(none — empty report)' },
     { label: 'Filters', value: describeRules(cols, spec.rules) },
+    ...(includes.length
+      ? [{ label: 'Links', value: includes.map((k) => linkageCatalog.find((l) => l.key === k)?.label ?? k).join(', ') }]
+      : []),
     ...(spec.search.trim() ? [{ label: 'Search', value: `“${spec.search.trim()}”` }] : []),
   ];
 
@@ -126,28 +113,20 @@ export default function ReportPrintPage() {
         @media print {
           @page { margin: 16mm 12mm 14mm; }
           body { background: #fff !important; }
-          /* Dashboard chrome lives outside this page — hide it. The report's own
-             summary is a <div> (not <header>), so this never hides the title. */
           aside, header, nav { display: none !important; }
           .rpt-noprint { display: none !important; }
-          /* The dashboard shell is height:100vh + overflow:hidden; if it isn't
-             reset, Chrome clips paged content to a single page. Let it flow. */
           html, body { height: auto !important; overflow: visible !important; }
           .cw-dashboard, .cw-dashboard > div, .cw-dashboard main { height: auto !important; overflow: visible !important; }
-          /* The interactive table is a scrolling, sticky viewport widget; on paper
-             it must simply flow, or later rows would be clipped away. */
           .rpt-doc .overflow-auto { overflow: visible !important; }
           .rpt-doc thead, .rpt-doc tfoot, .rpt-doc td, .rpt-doc th { position: static !important; }
           .rpt-doc table { width: 100% !important; }
-          .rpt-doc thead { display: table-header-group; }  /* repeat header each page */
-          .rpt-doc tfoot { display: table-row-group; }     /* totals sit after the last row, not on every page */
+          .rpt-doc thead { display: table-header-group; }
+          .rpt-doc tfoot { display: table-row-group; }
           .rpt-doc tr { break-inside: avoid; }
-          .rpt-break { break-before: page; }
           .rpt-runfoot { position: fixed; bottom: 0; left: 0; right: 0; }
         }
       `}</style>
 
-      {/* On-screen only — lets an operator re-trigger a dismissed dialog. */}
       <div className="rpt-noprint mb-6 flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
         <p className="text-xs text-slate-500">Print dialog didn’t open? Use the button. Enable “Headers and footers” in the dialog for page numbers.</p>
         <button onClick={() => window.print()} className="inline-flex items-center gap-1.5 rounded-lg bg-primary-500 px-3 py-1.5 text-xs font-semibold text-[#0a0a0a] hover:bg-primary-600">
@@ -155,9 +134,6 @@ export default function ReportPrintPage() {
         </button>
       </div>
 
-      {/* ── Summary ─────────────────────────────────────────────────── */}
-      {/* A <div>, not <header>: the global print rule hides all <header> elements
-          (dashboard chrome), which would otherwise erase this title block. */}
       <div className="rpt-titleblock border-b-2 border-primary-500 pb-4">
         <div className="flex items-baseline justify-between gap-4">
           <div>
@@ -177,38 +153,12 @@ export default function ReportPrintPage() {
         ))}
       </section>
 
-      {/* KPI totals — the headline numbers, before any detail. */}
-      {result.measures.length > 0 && (
-        <section className="mt-5 flex flex-wrap gap-3">
-          {result.measures.map((m, i) => (
-            <div key={m.id} className="min-w-[150px] flex-1 rounded-xl border border-slate-200 bg-slate-50/60 px-4 py-3">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                {m.agg === 'count' ? 'Count' : `${AGG_LABEL[m.agg]} ${labelFor(m.key)}`}
-              </p>
-              <p className="mt-0.5 text-2xl font-bold text-slate-900">{fmtAgg(result.grand.totals[i] ?? null, m.agg) || '—'}</p>
-            </div>
-          ))}
-        </section>
-      )}
-
-      {hasChart && (
-        <section className="mt-5">
-          <div className="h-[300px] w-full rounded-xl border border-slate-200 p-3">
-            <PivotChart result={result} kind={spec.view as ChartKind} animate={false}
-              measureIdx={Math.min(spec.measureIdx, Math.max(0, result.measures.length - 1))}
-              colDomain={colDomain} rowDomain={rowDomain}
-              options={{ legend: spec.showLegend !== false, labels: !!spec.showLabels }} />
-          </div>
-        </section>
-      )}
-
-      {/* ── Detail table ────────────────────────────────────────────── */}
-      <section className={`mt-6 ${hasChart ? 'rpt-break' : ''}`}>
+      <section className="mt-6">
         <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Detail</h2>
-        {spec.view === 'table' ? (
-          <ReportDataTable rows={filteredRows} cols={cols} visibleKeys={visibleKeys} labelFor={labelFor} />
+        {visibleKeys.length === 0 ? (
+          <p className="text-sm text-slate-500">This report has no columns selected.</p>
         ) : (
-          <PivotTable result={result} expanded={expanded} onToggle={() => {}} labelFor={labelFor} />
+          <ReportDataTable rows={filteredRows} cols={cols} visibleKeys={visibleKeys} labelFor={labelFor} />
         )}
       </section>
 

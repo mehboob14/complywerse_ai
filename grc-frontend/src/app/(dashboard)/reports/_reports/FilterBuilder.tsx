@@ -29,12 +29,15 @@ export default function FilterBuilder({
 
   // Open with one empty condition so the panel is never a dead end.
   useEffect(() => {
-    if (seeded.current || rules.conditions.length) return;
+    if (seeded.current || rules.conditions.length || !cols.length) return;
     seeded.current = true;
     onChange({ ...rules, conditions: [{ id: `r${ruleId.current++}`, col: cols[0]?.key || '', op: 'contains', value: '' }] });
   }, [rules, cols, onChange]);
 
-  const add = () => onChange({ ...rules, conditions: [...rules.conditions, { id: `r${ruleId.current++}`, col: cols[0]?.key || '', op: 'contains', value: '' }] });
+  const add = () => {
+    if (!cols.length) return;
+    onChange({ ...rules, conditions: [...rules.conditions, { id: `r${ruleId.current++}`, col: cols[0]?.key || '', op: 'contains', value: '' }] });
+  };
   const update = (id: string, p: Partial<{ col: string; op: string; value: string }>) =>
     onChange({ ...rules, conditions: rules.conditions.map((c) => (c.id === id ? { ...c, ...p } : c)) });
   const remove = (id: string) => onChange({ ...rules, conditions: rules.conditions.filter((c) => c.id !== id) });
@@ -78,7 +81,7 @@ export default function FilterBuilder({
         {rules.conditions.map((c, i) => {
           const col = cols.find((x) => x.key === c.col);
           const ops = OPERATORS[col?.type || 'text'] || OPERATORS.text;
-          const noVal = c.op === 'empty' || c.op === 'notempty';
+          const noVal = ['empty', 'notempty', 'linked', 'notlinked'].includes(c.op);
           return (
             <div key={c.id} className={`flex flex-wrap items-center gap-1.5 ${compact ? 'text-[11px]' : ''}`}>
               <span className="w-10 shrink-0 text-right text-[11px] font-medium text-slate-400">{i === 0 ? 'Where' : rules.logic === 'AND' ? 'and' : 'or'}</span>

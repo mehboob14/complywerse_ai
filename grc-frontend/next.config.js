@@ -37,6 +37,11 @@ const nextConfig = {
           source: '/api/governance/documents/:documentId/parse-policy',
           destination: '/api/governance/documents/:documentId/parse-policy',
         },
+        // SBP/regulatory circular upload: OCR + AI exceeds Next rewrite proxy limit
+        {
+          source: '/api/governance/regulatory-changes/changes/upload',
+          destination: '/api/governance/regulatory-changes/changes/upload',
+        },
       ],
       afterFiles: [
         // Static documentation shipped in public/guide/. Next does not serve

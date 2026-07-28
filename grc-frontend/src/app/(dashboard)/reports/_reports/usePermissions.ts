@@ -21,6 +21,9 @@ const normalizePerm = (perm: string): string => {
 export interface Perms {
   loaded: boolean;
   isAdmin: boolean;
+  /** True only when /auth/me came back with an authenticated session. Lets the UI
+   *  tell "signed out / session dropped" apart from "signed in, no module access". */
+  authenticated: boolean;
   /** True when the user holds any of `required` (or when nothing is required). */
   can: (required?: string[]) => boolean;
 }
@@ -28,6 +31,7 @@ export interface Perms {
 export function usePermissions(): Perms {
   const [granted, setGranted] = useState<string[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [authenticated, setAuthenticated] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
@@ -37,6 +41,7 @@ export function usePermissions(): Perms {
         const { data } = await apiClient.get('/auth/me');
         if (!alive) return;
         if (data?.authenticated && data.user) {
+          setAuthenticated(true);
           const perms: string[] = (data.user.permissions || [])
             .filter((p: unknown) => typeof p === 'string')
             .map((p: string) => normalizePerm(p));
@@ -80,5 +85,5 @@ export function usePermissions(): Perms {
     return required.some(matches);
   };
 
-  return { loaded, isAdmin, can };
+  return { loaded, isAdmin, authenticated, can };
 }

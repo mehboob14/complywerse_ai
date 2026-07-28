@@ -8,7 +8,8 @@ import { OPERATORS } from './types';
  *  instead of reading as an active "contains ''" that matches everything. */
 export function isActiveCondition(c: FilterRule): boolean {
   if (!c.col || !c.op) return false;
-  if (c.op === 'empty' || c.op === 'notempty') return true;
+  // Predicate-only operators need no value to be active.
+  if (c.op === 'empty' || c.op === 'notempty' || c.op === 'linked' || c.op === 'notlinked') return true;
   return c.value != null && String(c.value).trim() !== '';
 }
 
@@ -105,6 +106,14 @@ export function rowMatchesFilters(cols: ColumnDef[], row: Row, filters: Record<s
 
 /** Evaluate one advanced-filter condition against a row. */
 function evalCond(col: ColumnDef, row: Row, op: string, value: string): boolean {
+  // Linkage presence: the column's accessor yields the count of linked records
+  // (enrichment sets it to 0 when a real join edge exists but nothing is linked).
+  if (op === 'linked' || op === 'notlinked') {
+    const raw = rawValue(col, row);
+    const n = raw == null ? 0 : Number(raw);
+    const has = Number.isFinite(n) && n > 0;
+    return op === 'linked' ? has : !has;
+  }
   const text = displayText(col, row).toLowerCase();
   const v = (value || '').toLowerCase();
   // Numeric comparisons use numericValue so a blank/whitespace cell is *empty*,
@@ -166,7 +175,8 @@ export function describeRules(cols: ColumnDef[], rules: FilterRules): string {
     const col = cols.find((x) => x.key === c.col);
     const ops = OPERATORS[col?.type || 'text'] || OPERATORS.text;
     const opLabel = ops.find((o) => o.key === c.op)?.label ?? c.op;
-    const needsValue = c.op !== 'empty' && c.op !== 'notempty';
+    const noValueOps = ['empty', 'notempty', 'linked', 'notlinked'];
+    const needsValue = !noValueOps.includes(c.op);
     return `${col?.label ?? c.col} ${opLabel}${needsValue && c.value ? ` “${c.value}”` : ''}`;
   }).join(rules.logic === 'AND' ? ' and ' : ' or ');
 }
