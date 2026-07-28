@@ -9,6 +9,7 @@ import { compliancePluginsApi, assetsApi, integrationsApi, apiClient } from '@/l
 import ScanProgressModal from './_scan-progress-modal';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useTabParam } from '@/lib/useTabParam';
 
 const CisIngestPage = lazy(() => import('./ingest/page'));
 const AssetsPanel = lazy(() => import('./_assets-panel'));
@@ -115,7 +116,7 @@ export default function CompliancePluginsPage() {
   // Confirmation modal state — gate Scan All behind explicit consent so
   // an accidental click doesn't kick off 2475 plugin runs across the tenant.
   const [scanAllConfirm, setScanAllConfirm] = useState(false);
-  const [tab, setTab] = useState<'library' | 'assets' | 'runs' | 'import' | 'import-json'>('library');
+  const [tab, setTab] = useTabParam<'library' | 'assets' | 'runs' | 'import' | 'import-json'>('library', ['library', 'assets', 'runs', 'import', 'import-json']);
   // Advanced features hidden by default — power users toggle with ?advanced=1
   const [showAdvanced] = useState<boolean>(() => {
     try {
