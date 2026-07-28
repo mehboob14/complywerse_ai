@@ -835,7 +835,7 @@ export default function AssetDetailPage() {
                       Controls tab, so the value appears in exactly one place.
                       Criticality is still visible in Identity & Ownership. */}
                   <div className="flex flex-col gap-4">
-                    <OverviewCard title="Hardware & Telemetry" icon={Cpu} source="Telemetry: agent · Specs: manual" className="flex-1" bodyFill>
+                    <OverviewCard title="Hardware & Telemetry" icon={Cpu} source="Telemetry: agent · Specs: manual">
                       <div className="grid grid-cols-3 gap-2">
                         <SpecTile label="vCPU" value={asset.cpu_cores} />
                         <SpecTile label="GB RAM" value={asset.memory_gb} />
@@ -846,22 +846,27 @@ export default function AssetDetailPage() {
                         <DField label="Last Seen" value={asset.last_seen_at ? formatDate(asset.last_seen_at) : null} />
                         <DField label="Scan Source" value={asset.last_seen_source} />
                         <DField label="Discovered" value={asset.created_at ? formatDate(asset.created_at) : null} />
+                        <DField label="OS Family" value={asset.os_family ? <span className="capitalize">{asset.os_family}</span> : null} />
+                        <DField label="Normalised OS Key" value={asset.os_normalized} mono />
+                      </div>
+                    </OverviewCard>
+
+                    {/* Procurement lives in the right column (not a full-width row
+                        below) so it balances the taller Identity + Network stack on
+                        the left instead of leaving this card half-empty. flex-1 lets
+                        it absorb any remaining height so the columns end level. */}
+                    <OverviewCard title="Procurement & Cost" icon={DollarSign} source="Manual · finance/CMDB" className="flex-1" bodyFill>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-4">
+                        <DField label="Purchase Cost" value={asset.purchase_cost != null ? formatCurrency(asset.purchase_cost) : null} />
+                        <DField label="Purchase Date" value={asset.purchase_date ? formatDate(asset.purchase_date) : null} />
+                        <DField label="Warranty Expiry" value={asset.warranty_expiry ? formatDate(asset.warranty_expiry) : null} />
+                        <DField label="End of Life" value={asset.eol_date ? formatDate(asset.eol_date) : null} />
+                        <DField label="Vendor" value={asset.vendor} />
+                        <DField label="Valuation" value={asset.valuation != null ? formatCurrency(asset.valuation) : null} />
                       </div>
                     </OverviewCard>
                   </div>
                 </div>
-
-                {/* Full-width Procurement row */}
-                <OverviewCard title="Procurement & Cost" icon={DollarSign} source="Manual · finance/CMDB">
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-4 sm:grid-cols-3 lg:grid-cols-6">
-                    <DField label="Purchase Cost" value={asset.purchase_cost != null ? formatCurrency(asset.purchase_cost) : null} />
-                    <DField label="Purchase Date" value={asset.purchase_date ? formatDate(asset.purchase_date) : null} />
-                    <DField label="Warranty Expiry" value={asset.warranty_expiry ? formatDate(asset.warranty_expiry) : null} />
-                    <DField label="End of Life" value={asset.eol_date ? formatDate(asset.eol_date) : null} />
-                    <DField label="Vendor" value={asset.vendor} />
-                    <DField label="Valuation" value={asset.valuation != null ? formatCurrency(asset.valuation) : null} />
-                  </div>
-                </OverviewCard>
 
                 {/* Provenance footer — tells the operator where these values originate. */}
                 <div style={{ marginTop: 4, fontSize: 12, color: 'var(--as-faint)', lineHeight: 1.5, display: 'flex', alignItems: 'baseline', gap: 6 }}>
