@@ -501,14 +501,18 @@ class EnrichBody(BaseModel):
     dataset: str
     rows: List[Dict[str, Any]] = Field(default_factory=list)
     includes: List[str] = Field(default_factory=list)
+    # Open column keys to project (xmod_<dataset>__<field>, link_*, …)
+    project: List[str] = Field(default_factory=list)
 
 
 @router.get("/linkages")
 def list_linkages(dataset: str, db: Session = Depends(get_db), user=Depends(require_auth)) -> Dict[str, Any]:
-    """Return linkable modules + generated column definitions for a dataset."""
+    """Return linkable modules + column definitions for a dataset.
+
+    Prefer the open catalog (every other module's fields). Legacy aggregate
+    fields are merged in when present.
+    """
     catalog = report_linkages.get_linkage_catalog(dataset)
-    if not catalog:
-        return {"dataset": dataset, "linkages": []}
     spec = SERVER_DATASETS.get(dataset)
     if spec and not _user_can(user, db, spec.permissions):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You cannot access this dataset.")
@@ -522,7 +526,11 @@ def enrich_dataset_rows(body: EnrichBody, db: Session = Depends(get_db), user=De
     if spec and not _user_can(user, db, spec.permissions):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You cannot access this dataset.")
     enriched = report_linkages.enrich_rows(
-        db, dataset=body.dataset, rows=body.rows, includes=body.includes,
+        db,
+        dataset=body.dataset,
+        rows=body.rows,
+        includes=body.includes,
+        project=body.project or None,
     )
     return {"rows": enriched, "includes": body.includes}
 

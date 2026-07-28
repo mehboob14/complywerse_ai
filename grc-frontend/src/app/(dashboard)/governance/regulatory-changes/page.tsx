@@ -18,6 +18,7 @@ import {
   Building2,
   Loader2,
   Upload,
+  Sparkles,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -51,6 +52,7 @@ interface Dashboard {
 
 const SOURCE_OPTIONS = [
   { value: '', label: 'All Sources' },
+  { value: 'SBP', label: 'SBP (State Bank of Pakistan)' },
   { value: 'OCC', label: 'OCC' },
   { value: 'Fed', label: 'Fed' },
   { value: 'EBA', label: 'EBA' },
@@ -109,15 +111,16 @@ export default function RegulatoryChangesPage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [priorityFilter, setPriorityFilter] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isUploadOpen, setIsUploadOpen] = useState(false);
+  const [createMode, setCreateMode] = useState<'manual' | 'sbp_circular'>('sbp_circular');
   const [uploadFile, setUploadFile] = useState<File | null>(null);
-  const [uploadSource, setUploadSource] = useState('custom');
+  const [uploadSource, setUploadSource] = useState('SBP');
   const [uploadTitleHint, setUploadTitleHint] = useState('');
+  const [uploadError, setUploadError] = useState('');
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    source: 'OCC',
-    regulatory_body: '',
+    source: 'SBP',
+    regulatory_body: 'State Bank of Pakistan',
     reference_number: '',
     effective_date: '',
     publication_date: '',
@@ -176,27 +179,34 @@ export default function RegulatoryChangesPage() {
   });
 
   const uploadMutation = useMutation({
-    mutationFn: async () => {
-      if (!uploadFile) {
+    mutationFn: async (opts?: { source?: string; title_hint?: string; file?: File | null }) => {
+      const file = opts?.file ?? uploadFile;
+      if (!file) {
         throw new Error('No file selected.');
       }
-      const response = await regulatoryApi.uploadChangeDocument(uploadFile, {
-        source: uploadSource,
-        title_hint: uploadTitleHint || undefined,
+      const response = await regulatoryApi.uploadChangeDocument(file, {
+        source: opts?.source ?? uploadSource,
+        title_hint: (opts?.title_hint ?? uploadTitleHint) || undefined,
       });
       return response.data as RegulatoryChange;
     },
     onSuccess: (created) => {
       queryClient.invalidateQueries({ queryKey: ['regulatory-changes'] });
       queryClient.invalidateQueries({ queryKey: ['regulatory-dashboard'] });
-      setIsUploadOpen(false);
+      setIsModalOpen(false);
       setUploadFile(null);
       setUploadTitleHint('');
-      setUploadSource('custom');
+      setUploadSource('SBP');
+      setUploadError('');
+      resetForm();
       router.push(`/governance/regulatory-changes/${created.id}`);
     },
-    onError: () => {
-      // keep UX simple — errors will surface via UI toast component used elsewhere
+    onError: (err: unknown) => {
+      const msg =
+        (err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail
+        || (err as { message?: string })?.message
+        || 'AI analysis failed. Please try again.';
+      setUploadError(typeof msg === 'string' ? msg : 'AI analysis failed. Please try again.');
     },
   });
 
@@ -221,14 +231,18 @@ export default function RegulatoryChangesPage() {
     setFormData({
       title: '',
       description: '',
-      source: 'OCC',
-      regulatory_body: '',
+      source: 'SBP',
+      regulatory_body: 'State Bank of Pakistan',
       reference_number: '',
       effective_date: '',
       publication_date: '',
       priority: 'medium',
       impact_summary: '',
     });
+    setUploadFile(null);
+    setUploadTitleHint('');
+    setUploadError('');
+    setCreateMode('sbp_circular');
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -353,16 +367,24 @@ export default function RegulatoryChangesPage() {
         {canCreate && (
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setIsUploadOpen(true)}
+              onClick={() => {
+                setCreateMode('sbp_circular');
+                setUploadSource('SBP');
+                setUploadError('');
+                setIsModalOpen(true);
+              }}
               className="btn-primary flex items-center gap-2"
               disabled={uploadMutation.isPending}
             >
               <Upload className="h-4 w-4" />
-              Upload Document
+              Upload SBP Circular
             </button>
             <button
-              onClick={() => setIsModalOpen(true)}
-              className="btn-primary flex items-center gap-2"
+              onClick={() => {
+                setCreateMode('manual');
+                setIsModalOpen(true);
+              }}
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
               <Plus className="h-4 w-4" />
               New Change
@@ -491,7 +513,117 @@ export default function RegulatoryChangesPage() {
         title="New Regulatory Change"
         width="w-full max-w-2xl"
       >
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="mb-4 flex rounded-lg border border-slate-200 bg-slate-50 p-1">
+          <button
+            type="button"
+            onClick={() => { setCreateMode('sbp_circular'); setUploadSource('SBP'); setUploadError(''); }}
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-2 text-xs font-semibold transition-colors ${
+              createMode === 'sbp_circular' ? 'bg-white text-primary-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Upload className="h-3.5 w-3.5" /> SBP circular + AI impact
+          </button>
+          <button
+            type="button"
+            onClick={() => setCreateMode('manual')}
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-2 text-xs font-semibold transition-colors ${
+              createMode === 'manual' ? 'bg-white text-primary-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Plus className="h-3.5 w-3.5" /> Manual entry
+          </button>
+        </div>
+
+        {createMode === 'sbp_circular' ? (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              setUploadError('');
+              uploadMutation.mutate({
+                source: 'SBP',
+                title_hint: uploadTitleHint || formData.reference_number || undefined,
+                file: uploadFile,
+              });
+            }}
+            className="space-y-4"
+          >
+            <div className="rounded-lg border border-primary-200 bg-primary-50/60 p-3">
+              <div className="flex items-start gap-2">
+                <Sparkles className="mt-0.5 h-4 w-4 text-primary-700" />
+                <div>
+                  <p className="text-sm font-medium text-primary-900">AI impact analysis</p>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">SBP circular file *</label>
+              <input
+                type="file"
+                accept=".pdf,.doc,.docx"
+                onChange={(e) => {
+                  setUploadFile(e.target.files?.[0] ?? null);
+                  setUploadError('');
+                }}
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700"
+              />
+              {uploadFile && (
+                <p className="mt-2 text-xs text-slate-500">Selected: {uploadFile.name}</p>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Source</label>
+                <input
+                  type="text"
+                  value="SBP — State Bank of Pakistan"
+                  disabled
+                  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Circular / title hint</label>
+                <input
+                  type="text"
+                  value={uploadTitleHint}
+                  onChange={(e) => setUploadTitleHint(e.target.value)}
+                  placeholder="e.g. BPRD Circular No. XX of 2026"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+                />
+              </div>
+            </div>
+
+            {uploadError && (
+              <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                {uploadError}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-3 border-t border-slate-200 pt-4">
+              <button
+                type="button"
+                onClick={() => { setIsModalOpen(false); resetForm(); }}
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={uploadMutation.isPending || !uploadFile}
+                className="btn-primary flex items-center gap-2 disabled:opacity-50"
+              >
+                {uploadMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Sparkles className="h-4 w-4" />
+                )}
+                {uploadMutation.isPending ? 'Analyzing impact…' : 'Analyze impact & create'}
+              </button>
+            </div>
+          </form>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Title *</label>
                 <input
@@ -509,7 +641,11 @@ export default function RegulatoryChangesPage() {
                   <label className="block text-sm font-medium text-slate-700 mb-1">Source *</label>
                   <select
                     value={formData.source}
-                    onChange={(e) => setFormData({ ...formData, source: e.target.value })}
+                    onChange={(e) => setFormData({
+                      ...formData,
+                      source: e.target.value,
+                      regulatory_body: e.target.value === 'SBP' ? 'State Bank of Pakistan' : formData.regulatory_body,
+                    })}
                     className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
                   >
                     {SOURCE_OPTIONS.filter(o => o.value).map(opt => (
@@ -539,7 +675,7 @@ export default function RegulatoryChangesPage() {
                     value={formData.regulatory_body}
                     onChange={(e) => setFormData({ ...formData, regulatory_body: e.target.value })}
                     className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
-                    placeholder="e.g., Federal Reserve"
+                    placeholder="e.g., State Bank of Pakistan"
                   />
                 </div>
                 <div>
@@ -549,7 +685,7 @@ export default function RegulatoryChangesPage() {
                     value={formData.reference_number}
                     onChange={(e) => setFormData({ ...formData, reference_number: e.target.value })}
                     className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
-                    placeholder="e.g., REG-2025-001"
+                    placeholder="e.g., BPRD Circular No. XX"
                   />
                 </div>
               </div>
@@ -619,108 +755,7 @@ export default function RegulatoryChangesPage() {
                 </button>
               </div>
             </form>
-      </RightSlidePanel>
-
-      <RightSlidePanel
-        isOpen={isUploadOpen}
-        onClose={() => {
-          setIsUploadOpen(false);
-          setUploadFile(null);
-          setUploadTitleHint('');
-          setUploadSource('custom');
-        }}
-        title="Upload Regulatory Document"
-        width="w-full max-w-2xl"
-      >
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            uploadMutation.mutate();
-          }}
-          className="space-y-4"
-        >
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Document *</label>
-            <input
-              type="file"
-              accept=".pdf,.doc,.docx"
-              onChange={(e) => {
-                const f = e.target.files?.[0] ?? null;
-                setUploadFile(f);
-              }}
-              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700"
-            />
-            {uploadFile && (
-              <p className="mt-2 text-xs text-slate-500">Selected: {uploadFile.name}</p>
-            )}
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Source</label>
-              <select
-                value={uploadSource}
-                onChange={(e) => setUploadSource(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
-              >
-                {SOURCE_OPTIONS.filter((o) => o.value).map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Title hint</label>
-              <input
-                type="text"
-                value={uploadTitleHint}
-                onChange={(e) => setUploadTitleHint(e.target.value)}
-                placeholder="Optional short name"
-                className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
-              />
-            </div>
-          </div>
-
-          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
-            <div className="flex items-start gap-2">
-              <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5" />
-              <div>
-                <p className="text-sm font-medium text-amber-900">AI will do the heavy lifting</p>
-                <p className="text-xs text-amber-800 mt-0.5">
-                  We will extract requirements, map impacted controls to your platform, and generate implementation tasks and compliance gaps.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
-            <button
-              type="button"
-              onClick={() => {
-                setIsUploadOpen(false);
-                setUploadFile(null);
-                setUploadTitleHint('');
-                setUploadSource('custom');
-              }}
-              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={uploadMutation.isPending || !uploadFile}
-              className="btn-primary flex items-center gap-2 disabled:opacity-50"
-            >
-              {uploadMutation.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Upload className="h-4 w-4" />
-              )}
-              Upload & Extract
-            </button>
-          </div>
-        </form>
+        )}
       </RightSlidePanel>
     </div>
   );

@@ -332,7 +332,7 @@ def create_regulatory_change(
     published_date = normalize_optional_datetime(published_date_raw, "published_date")
     regulation_reference = change.regulation_reference or change.reference_number
 
-    valid_sources = ["OCC", "Fed", "EBA", "PRA", "SEC", "FINRA", "custom"]
+    valid_sources = ["OCC", "Fed", "EBA", "PRA", "SEC", "FINRA", "SBP", "custom"]
     if source not in valid_sources:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -377,7 +377,7 @@ def create_regulatory_change(
 @router.post("/changes/upload", response_model=RegulatoryChangeResponse, status_code=status.HTTP_201_CREATED)
 def upload_regulatory_change_document(
     file: UploadFile = File(...),
-    source: Optional[str] = Form("custom"),  # OCC, Fed, EBA, PRA, SEC, FINRA, custom
+    source: Optional[str] = Form("custom"),  # OCC, Fed, EBA, PRA, SEC, FINRA, SBP, custom
     title_hint: Optional[str] = Form(None),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
@@ -387,6 +387,7 @@ def upload_regulatory_change_document(
     - extract requirements (summary + priority + effective date)
     - map impacted policies + impacted controls to our platform records
     - generate implementation recommendations (implementation tasks)
+    - for SBP (State Bank of Pakistan) circulars, produce banking-sector impact analysis
     """
     user_tenants = get_user_tenants(current_user, db)
     tenant_id = get_user_primary_tenant(current_user, db)
@@ -438,7 +439,14 @@ def upload_regulatory_change_document(
 
     # Resolve source + priority defaults.
     source_value = (source or "custom").strip() if isinstance(source, str) else "custom"
-    valid_sources = ["OCC", "Fed", "EBA", "PRA", "SEC", "FINRA", "custom"]
+    source_aliases = {
+        "sbp": "SBP",
+        "state bank": "SBP",
+        "state bank of pakistan": "SBP",
+        "state_bank": "SBP",
+    }
+    source_value = source_aliases.get(source_value.lower(), source_value)
+    valid_sources = ["OCC", "Fed", "EBA", "PRA", "SEC", "FINRA", "SBP", "custom"]
     if source_value not in valid_sources:
         source_value = "custom"
 
@@ -454,9 +462,19 @@ def upload_regulatory_change_document(
     controls_text = "\n".join([f"- {ctrl.code}: {ctrl.name}" for ctrl in controls[:120]]) if controls else "No controls registered"
     policies_text = "\n".join([f"- {pol.title}" for pol in policies[:120]]) if policies else "No policies registered"
 
+    sbp_context = ""
+    if source_value == "SBP":
+        sbp_context = """
+This document is a State Bank of Pakistan (SBP) circular / prudential regulation.
+Focus impact on Pakistani banks / DFIs / MFBs / payment institutions as applicable:
+capital, liquidity, credit risk, AML/CFT, cybersecurity, digital banking, outsourcing,
+consumer protection, and regulatory reporting. Call out deadlines, reporting duties,
+and board/management accountability when present. Write a clear operational impact narrative.
+"""
+
     prompt = f"""You are a Senior GRC Compliance Expert.
 Analyze the uploaded regulatory document and produce a platform-aware compliance impact result.
-
+{sbp_context}
 Extract (from the text):
 1) Key requirements summary
 2) Priority and estimated effective date
@@ -464,6 +482,7 @@ Extract (from the text):
 4) Impacted controls using our NormalizedControl.code values
 5) Compliance gaps (what is missing or needs to change)
 6) Implementation tasks / recommendations to remediate
+7) Overall organizational impact
 
 Return ONLY valid JSON in this exact schema:
 {{
@@ -471,6 +490,7 @@ Return ONLY valid JSON in this exact schema:
   "summary": "string",
   "priority": "critical|high|medium|low",
   "effective_date_estimate": "YYYY-MM-DD or null",
+  "impact_overview": "string (2-4 sentences on business / compliance impact)",
   "impacted_policies": [{{"title": "policy title", "action_needed": "review|update|create_new"}}],
   "impacted_controls": [{{"id": "NormalizedControl.code", "name": "control name", "gap_type": "new_requirement|modification|obsolete", "action_needed": "description"}}],
   "implementation_tasks": [
@@ -524,6 +544,9 @@ EXISTING POLICIES (sample):
 
     ai_title = (analysis.get("title") or title_hint or filename).strip()
     ai_summary = analysis.get("summary") or ""
+    impact_overview = (analysis.get("impact_overview") or "").strip()
+    if impact_overview:
+        ai_summary = f"{ai_summary}\n\nImpact assessment:\n{impact_overview}".strip() if ai_summary else f"Impact assessment:\n{impact_overview}"
     ai_priority = (analysis.get("priority") or "medium").strip()
     if ai_priority not in ["critical", "high", "medium", "low"]:
         ai_priority = "medium"
@@ -738,7 +761,7 @@ def update_regulatory_change(
         if isinstance(source_value, str):
             source_value = source_value.strip() or "custom"
             update_data["source"] = source_value
-        valid_sources = ["OCC", "Fed", "EBA", "PRA", "SEC", "FINRA", "custom"]
+        valid_sources = ["OCC", "Fed", "EBA", "PRA", "SEC", "FINRA", "SBP", "custom"]
         if source_value not in valid_sources:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,

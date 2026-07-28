@@ -14,13 +14,14 @@ from sqlalchemy.orm import Session
 
 from ..models import (
     AssetControlLink, AssetEvidenceLink, AssetFrameworkControlLink,
-    AssetInternalControlLink, Evidence, EvidenceControlMapping, EvidenceIncidentLink,
+    AssetInternalControlLink, CriticalTask, DocumentAssetLink, DocumentControlLink,
+    DocumentRiskLink, Evidence, EvidenceControlMapping, EvidenceIncidentLink,
     FrameworkControl, IncidentAssetLink, IncidentRiskLink, IncidentVulnerabilityLink,
     InternalControl, Issue, IssueAssetLink, IssueControlLink, IssueEvidenceLink,
-    IssueRiskLink, IssueVendorLink, IssueVulnerabilityLink, ITAsset, NormalizedControl,
-    Risk, RiskAssetLink, RiskControlLink, RiskEvidenceLink, RiskFrameworkControlLink,
-    RiskIncident, RiskGovernanceLink, Vendor, Vulnerability, VulnerabilityAssetLink,
-    VulnerabilityControlLink,
+    IssueRiskLink, IssueVendorLink, IssueVulnerabilityLink, ISProject, ITAsset,
+    NormalizedControl, Risk, RiskAssetLink, RiskControlLink, RiskEvidenceLink,
+    RiskFrameworkControlLink, RiskIncident, RiskGovernanceLink, RiskKRI, Vendor,
+    Vulnerability, VulnerabilityAssetLink, VulnerabilityControlLink,
 )
 
 _SEV_RANK = {"critical": 4, "high": 3, "medium": 2, "low": 1, "informational": 0, "info": 0}
@@ -135,17 +136,135 @@ LINKAGE_CATALOG: Dict[str, List[Dict[str, Any]]] = {
         {"key": "risks", "label": "Risks", "module": "Risk Management",
          "fields": _field_defs("risks", "Risks", with_open=True)},
     ],
-    "journeys": [],
+    "journeys": [
+        {"key": "controls", "label": "Controls", "module": "Controls",
+         "fields": _field_defs("controls", "Controls")},
+        {"key": "evidence", "label": "Evidence", "module": "Evidence",
+         "fields": _field_defs("evidence", "Evidence")},
+        {"key": "risks", "label": "Risks", "module": "Risk Management",
+         "fields": _field_defs("risks", "Risks", with_open=True)},
+    ],
     "gov_documents": [
         {"key": "risks", "label": "Risks", "module": "Risk Management",
          "fields": _field_defs("risks", "Risks", with_open=True)},
         {"key": "controls", "label": "Controls", "module": "Controls", "fields": _field_defs("controls", "Controls")},
+        {"key": "assets", "label": "Assets", "module": "IT Assets", "fields": _field_defs("assets", "Assets")},
+        {"key": "evidence", "label": "Evidence", "module": "Evidence",
+         "fields": _field_defs("evidence", "Evidence")},
+        {"key": "issues", "label": "Issues", "module": "Issue Management",
+         "fields": _field_defs("issues", "Issues", with_severity=True, with_open=True)},
+    ],
+    # Newer datasets — catalog entries enable the column picker; enrichers
+    # fill values when a backend join exists. Missing enrichers still show
+    # zero-filled link columns rather than hiding the option.
+    "tasks": [
+        {"key": "assets", "label": "Assets", "module": "IT Assets", "fields": _field_defs("assets", "Assets")},
+        {"key": "risks", "label": "Risks", "module": "Risk Management",
+         "fields": _field_defs("risks", "Risks", with_open=True)},
+        {"key": "issues", "label": "Issues", "module": "Issue Management",
+         "fields": _field_defs("issues", "Issues", with_severity=True, with_open=True)},
+        {"key": "vulnerabilities", "label": "Vulnerabilities", "module": "Vulnerabilities",
+         "fields": _field_defs("vulnerabilities", "Vulnerabilities", with_severity=True, with_open=True)},
+    ],
+    "kris": [
+        {"key": "risks", "label": "Risks", "module": "Risk Management",
+         "fields": _field_defs("risks", "Risks", with_open=True)},
+    ],
+    "bcm_plans": [
+        {"key": "risks", "label": "Risks", "module": "Risk Management",
+         "fields": _field_defs("risks", "Risks", with_open=True)},
+        {"key": "assets", "label": "Assets", "module": "IT Assets", "fields": _field_defs("assets", "Assets")},
+        {"key": "incidents", "label": "Incidents", "module": "ERM Incidents",
+         "fields": _field_defs("incidents", "Incidents", with_severity=True, with_open=True)},
+    ],
+    "bcm_drills": [
+        {"key": "risks", "label": "Risks", "module": "Risk Management",
+         "fields": _field_defs("risks", "Risks", with_open=True)},
+        {"key": "issues", "label": "Issues", "module": "Issue Management",
+         "fields": _field_defs("issues", "Issues", with_severity=True, with_open=True)},
+    ],
+    "is_projects": [
+        {"key": "risks", "label": "Risks", "module": "Risk Management",
+         "fields": _field_defs("risks", "Risks", with_open=True)},
+        {"key": "issues", "label": "Issues", "module": "Issue Management",
+         "fields": _field_defs("issues", "Issues", with_severity=True, with_open=True)},
+        {"key": "controls", "label": "Controls", "module": "Controls",
+         "fields": _field_defs("controls", "Controls")},
+    ],
+    "criticality_info": [
+        {"key": "assets", "label": "Assets", "module": "IT Assets", "fields": _field_defs("assets", "Assets")},
+        {"key": "risks", "label": "Risks", "module": "Risk Management",
+         "fields": _field_defs("risks", "Risks", with_open=True)},
+    ],
+    "criticality_infra": [
+        {"key": "assets", "label": "Assets", "module": "IT Assets", "fields": _field_defs("assets", "Assets")},
+        {"key": "vulnerabilities", "label": "Vulnerabilities", "module": "Vulnerabilities",
+         "fields": _field_defs("vulnerabilities", "Vulnerabilities", with_severity=True, with_open=True)},
+    ],
+    "discovery_campaigns": [
+        {"key": "assets", "label": "Assets", "module": "IT Assets", "fields": _field_defs("assets", "Assets")},
+    ],
+    "regulatory_changes": [
+        {"key": "risks", "label": "Risks", "module": "Risk Management",
+         "fields": _field_defs("risks", "Risks", with_open=True)},
+        {"key": "controls", "label": "Controls", "module": "Controls",
+         "fields": _field_defs("controls", "Controls")},
+        {"key": "issues", "label": "Issues", "module": "Issue Management",
+         "fields": _field_defs("issues", "Issues", with_severity=True, with_open=True)},
+    ],
+    "exceptions": [
+        {"key": "risks", "label": "Risks", "module": "Risk Management",
+         "fields": _field_defs("risks", "Risks", with_open=True)},
+        {"key": "controls", "label": "Controls", "module": "Controls",
+         "fields": _field_defs("controls", "Controls")},
+    ],
+    "committees": [
+        {"key": "risks", "label": "Risks", "module": "Risk Management",
+         "fields": _field_defs("risks", "Risks", with_open=True)},
+        {"key": "issues", "label": "Issues", "module": "Issue Management",
+         "fields": _field_defs("issues", "Issues", with_severity=True, with_open=True)},
+    ],
+    "frameworks": [
+        {"key": "controls", "label": "Controls", "module": "Controls",
+         "fields": _field_defs("controls", "Controls")},
+        {"key": "evidence", "label": "Evidence", "module": "Evidence",
+         "fields": _field_defs("evidence", "Evidence")},
     ],
 }
 
 
 def get_linkage_catalog(dataset: str) -> List[Dict[str, Any]]:
-    return LINKAGE_CATALOG.get(dataset, [])
+    """Open catalog: every other known module, with aggregate + field stubs.
+
+    The frontend builds a richer catalog from its DATASETS registry (full column
+    labels). This backend catalog remains as a fallback / merge source.
+    """
+    from .report_open_catalog import DATASET_MODELS, EDGE_RESOLVERS
+
+    # Prefer curated entries when present (richer aggregate field defs)
+    curated = {e["key"]: e for e in LINKAGE_CATALOG.get(dataset, [])}
+    out: List[Dict[str, Any]] = []
+    for key in DATASET_MODELS:
+        if key == dataset:
+            continue
+        if key in curated:
+            out.append(curated[key])
+            continue
+        label = key.replace("_", " ").title()
+        fields = _field_defs(key, label, with_open=True)
+        # Marker that open xmod fields are expected from the client catalog
+        out.append({
+            "key": key,
+            "label": label,
+            "module": label,
+            "fields": fields,
+            "has_edge": (dataset, key) in EDGE_RESOLVERS,
+        })
+    # Include curated-only keys not in DATASET_MODELS (e.g. framework_controls)
+    for key, entry in curated.items():
+        if not any(e["key"] == key for e in out):
+            out.append(entry)
+    return out
 
 
 def _bucket() -> Dict[str, Any]:
@@ -665,6 +784,197 @@ def _enrich_incidents(db: Session, ids: List[int], includes: Set[str]) -> Dict[i
     return out
 
 
+def _enrich_vendors(db: Session, ids: List[int], includes: Set[str]) -> Dict[int, Dict[str, Dict[str, Any]]]:
+    out: Dict[int, Dict[str, Dict[str, Any]]] = {}
+    if not ids:
+        return out
+
+    if "issues" in includes:
+        rows = (
+            db.query(IssueVendorLink.vendor_id, Issue.title, Issue.severity, Issue.workflow_state)
+            .join(Issue, Issue.id == IssueVendorLink.issue_id)
+            .filter(IssueVendorLink.vendor_id.in_(ids))
+            .all()
+        )
+        for vid, title, sev, st in rows:
+            b = out.setdefault(vid, {}).setdefault("issues", _bucket())
+            _apply(b, title, severity=sev, is_open=_is_open_status(st))
+
+    # Vendors ↔ risks is often via issues; expose risk counts through that path.
+    if "risks" in includes:
+        rows = (
+            db.query(IssueVendorLink.vendor_id, Risk.title, Risk.closure_status)
+            .join(IssueRiskLink, IssueRiskLink.issue_id == IssueVendorLink.issue_id)
+            .join(Risk, Risk.id == IssueRiskLink.risk_id)
+            .filter(IssueVendorLink.vendor_id.in_(ids))
+            .all()
+        )
+        for vid, title, st in rows:
+            b = out.setdefault(vid, {}).setdefault("risks", _bucket())
+            _apply(b, title, is_open=_is_open_status(st))
+
+    return out
+
+
+def _enrich_gov_documents(db: Session, ids: List[int], includes: Set[str]) -> Dict[int, Dict[str, Dict[str, Any]]]:
+    out: Dict[int, Dict[str, Dict[str, Any]]] = {}
+    if not ids:
+        return out
+
+    if "risks" in includes:
+        rows = (
+            db.query(DocumentRiskLink.document_id, Risk.title, Risk.closure_status)
+            .join(Risk, Risk.id == DocumentRiskLink.risk_id)
+            .filter(DocumentRiskLink.document_id.in_(ids))
+            .all()
+        )
+        for did, title, st in rows:
+            b = out.setdefault(did, {}).setdefault("risks", _bucket())
+            _apply(b, title, is_open=_is_open_status(st))
+
+    if "controls" in includes:
+        rows = (
+            db.query(DocumentControlLink.document_id, NormalizedControl.name)
+            .join(NormalizedControl, NormalizedControl.id == DocumentControlLink.normalized_control_id)
+            .filter(DocumentControlLink.document_id.in_(ids))
+            .all()
+        )
+        for did, name in rows:
+            b = out.setdefault(did, {}).setdefault("controls", _bucket())
+            _apply(b, name)
+
+    if "assets" in includes:
+        rows = (
+            db.query(DocumentAssetLink.document_id, ITAsset.name)
+            .join(ITAsset, ITAsset.id == DocumentAssetLink.asset_id)
+            .filter(DocumentAssetLink.document_id.in_(ids))
+            .all()
+        )
+        for did, name in rows:
+            b = out.setdefault(did, {}).setdefault("assets", _bucket())
+            _apply(b, name)
+
+    return out
+
+
+def _enrich_tasks(db: Session, ids: List[int], includes: Set[str]) -> Dict[int, Dict[str, Dict[str, Any]]]:
+    out: Dict[int, Dict[str, Dict[str, Any]]] = {}
+    if not ids:
+        return out
+
+    tasks = db.query(CriticalTask).filter(CriticalTask.id.in_(ids)).all()
+    risk_ids = {t.linked_risk_id for t in tasks if t.linked_risk_id}
+    vuln_ids = {t.linked_vulnerability_id for t in tasks if t.linked_vulnerability_id}
+    issue_ids = {t.linked_issue_id for t in tasks if t.linked_issue_id}
+    asset_ids = {
+        t.source_entity_id for t in tasks
+        if t.source_entity_id and str(t.source_entity_type or "").lower() in {"asset", "it_asset", "itasset"}
+    }
+
+    risks_by_id = {
+        r.id: r for r in db.query(Risk).filter(Risk.id.in_(risk_ids)).all()
+    } if risk_ids and "risks" in includes else {}
+    vulns_by_id = {
+        v.id: v for v in db.query(Vulnerability).filter(Vulnerability.id.in_(vuln_ids)).all()
+    } if vuln_ids and "vulnerabilities" in includes else {}
+    issues_by_id = {
+        i.id: i for i in db.query(Issue).filter(Issue.id.in_(issue_ids)).all()
+    } if issue_ids and "issues" in includes else {}
+    assets_by_id = {
+        a.id: a for a in db.query(ITAsset).filter(ITAsset.id.in_(asset_ids)).all()
+    } if asset_ids and "assets" in includes else {}
+
+    for t in tasks:
+        if "risks" in includes and t.linked_risk_id and t.linked_risk_id in risks_by_id:
+            r = risks_by_id[t.linked_risk_id]
+            b = out.setdefault(t.id, {}).setdefault("risks", _bucket())
+            _apply(b, r.title, is_open=_is_open_status(r.closure_status))
+        if "vulnerabilities" in includes and t.linked_vulnerability_id and t.linked_vulnerability_id in vulns_by_id:
+            v = vulns_by_id[t.linked_vulnerability_id]
+            b = out.setdefault(t.id, {}).setdefault("vulnerabilities", _bucket())
+            _apply(b, v.title, severity=v.severity, is_open=_is_open_status(v.status))
+        if "issues" in includes and t.linked_issue_id and t.linked_issue_id in issues_by_id:
+            i = issues_by_id[t.linked_issue_id]
+            b = out.setdefault(t.id, {}).setdefault("issues", _bucket())
+            _apply(b, i.title, severity=getattr(i, "severity", None), is_open=_is_open_status(getattr(i, "workflow_state", None)))
+        if "assets" in includes and t.source_entity_id and t.source_entity_id in assets_by_id:
+            a = assets_by_id[t.source_entity_id]
+            b = out.setdefault(t.id, {}).setdefault("assets", _bucket())
+            _apply(b, a.name)
+
+    return out
+
+
+def _enrich_kris(db: Session, ids: List[int], includes: Set[str]) -> Dict[int, Dict[str, Dict[str, Any]]]:
+    out: Dict[int, Dict[str, Dict[str, Any]]] = {}
+    if not ids or "risks" not in includes:
+        return out
+
+    rows = (
+        db.query(RiskKRI.id, Risk.title, Risk.closure_status)
+        .join(Risk, Risk.id == RiskKRI.risk_id)
+        .filter(RiskKRI.id.in_(ids), RiskKRI.risk_id.isnot(None))
+        .all()
+    )
+    for kid, title, st in rows:
+        b = out.setdefault(kid, {}).setdefault("risks", _bucket())
+        _apply(b, title, is_open=_is_open_status(st))
+    return out
+
+
+def _enrich_is_projects(db: Session, ids: List[int], includes: Set[str]) -> Dict[int, Dict[str, Dict[str, Any]]]:
+    out: Dict[int, Dict[str, Dict[str, Any]]] = {}
+    if not ids:
+        return out
+
+    projects = db.query(ISProject).filter(ISProject.id.in_(ids)).all()
+    if "risks" in includes:
+        risk_ids: Set[int] = set()
+        for p in projects:
+            for rid in (p.linked_risks or []):
+                try:
+                    risk_ids.add(int(rid))
+                except (TypeError, ValueError):
+                    continue
+        risks_by_id = {
+            r.id: r for r in db.query(Risk).filter(Risk.id.in_(risk_ids)).all()
+        } if risk_ids else {}
+        for p in projects:
+            for rid in (p.linked_risks or []):
+                try:
+                    risk = risks_by_id.get(int(rid))
+                except (TypeError, ValueError):
+                    continue
+                if not risk:
+                    continue
+                b = out.setdefault(p.id, {}).setdefault("risks", _bucket())
+                _apply(b, risk.title, is_open=_is_open_status(risk.closure_status))
+
+    if "controls" in includes:
+        control_ids: Set[int] = set()
+        for p in projects:
+            for cid in (p.linked_controls or []):
+                try:
+                    control_ids.add(int(cid))
+                except (TypeError, ValueError):
+                    continue
+        controls_by_id = {
+            c.id: c for c in db.query(NormalizedControl).filter(NormalizedControl.id.in_(control_ids)).all()
+        } if control_ids else {}
+        for p in projects:
+            for cid in (p.linked_controls or []):
+                try:
+                    ctrl = controls_by_id.get(int(cid))
+                except (TypeError, ValueError):
+                    continue
+                if not ctrl:
+                    continue
+                b = out.setdefault(p.id, {}).setdefault("controls", _bucket())
+                _apply(b, ctrl.name)
+
+    return out
+
+
 _ENRICHERS = {
     "assets": _enrich_assets,
     "risks": _enrich_risks,
@@ -673,6 +983,11 @@ _ENRICHERS = {
     "controls": _enrich_controls,
     "issues": _enrich_issues,
     "incidents": _enrich_incidents,
+    "vendors": _enrich_vendors,
+    "gov_documents": _enrich_gov_documents,
+    "tasks": _enrich_tasks,
+    "kris": _enrich_kris,
+    "is_projects": _enrich_is_projects,
 }
 
 
@@ -682,45 +997,66 @@ def enrich_rows(
     dataset: str,
     rows: List[Dict[str, Any]],
     includes: List[str],
+    project: Optional[List[str]] = None,
 ) -> List[Dict[str, Any]]:
     """Merge linkage columns into report rows. Safe to call with empty includes."""
     if not rows or not includes:
         return rows
 
-    catalog_keys = {e["key"] for e in get_linkage_catalog(dataset)}
-    valid = [i for i in includes if i in catalog_keys]
+    # Accept any include key (open catalog) — not only the legacy LINKAGE_CATALOG.
+    from .report_open_catalog import enrich_xmod_fields
+
+    seen: Set[str] = set()
+    valid: List[str] = []
+    for i in includes:
+        if not i or i == dataset or i in seen:
+            continue
+        seen.add(i)
+        valid.append(i)
     if not valid:
         return rows
 
-    ids: List[int] = []
-    for r in rows:
-        try:
-            ids.append(int(r.get("id")))
-        except (TypeError, ValueError):
-            continue
-    if not ids:
-        return rows
-
     enricher = _ENRICHERS.get(dataset)
-    if enricher is None:
-        return rows
+    buckets: Dict[int, Dict[str, Dict[str, Any]]] = {}
+    if enricher is not None:
+        ids: List[int] = []
+        for r in rows:
+            try:
+                ids.append(int(r.get("id")))
+            except (TypeError, ValueError):
+                continue
+        catalog_keys = {e["key"] for e in get_linkage_catalog(dataset)}
+        legacy_includes = [i for i in valid if i in catalog_keys]
+        if ids and legacy_includes:
+            try:
+                buckets = enricher(db, ids, set(legacy_includes))
+            except Exception:  # noqa: BLE001
+                buckets = {}
 
-    buckets = enricher(db, ids, set(valid))
     merged: List[Dict[str, Any]] = []
     for r in rows:
         try:
             rid = int(r.get("id"))
         except (TypeError, ValueError):
-            merged.append(r)
+            row = dict(r)
+            for link_key in valid:
+                prefix = f"link_{link_key}"
+                row.setdefault(f"{prefix}_count", 0)
+                row.setdefault(f"{prefix}_names", "")
+                row.setdefault(f"{prefix}_open_count", 0)
+            merged.append(row)
             continue
         row = dict(r)
         for link_key, bucket in (buckets.get(rid) or {}).items():
             row.update(_flatten_link(rid, link_key, bucket))
-        # Zero-fill requested includes with no links
         for link_key in valid:
             prefix = f"link_{link_key}"
             row.setdefault(f"{prefix}_count", 0)
             row.setdefault(f"{prefix}_names", "")
             row.setdefault(f"{prefix}_open_count", 0)
         merged.append(row)
-    return merged
+
+    # Open-ended field projection (any column from any linked module)
+    return enrich_xmod_fields(
+        db, dataset=dataset, rows=merged, includes=valid, project=project,
+    )

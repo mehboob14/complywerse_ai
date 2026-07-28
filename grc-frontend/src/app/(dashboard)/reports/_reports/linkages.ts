@@ -1,5 +1,6 @@
 import apiClient from '@/lib/api';
-import type { ColumnDef, Row } from './types';
+import type { ColumnDef, ReportDataset, Row } from './types';
+import { buildOpenLinkageCatalog, mergeLinkageCatalogs } from './openCatalog';
 
 export interface LinkageFieldDef {
   key: string;
@@ -15,19 +16,35 @@ export interface LinkageDef {
   fields: LinkageFieldDef[];
 }
 
-const catalogCache = new Map<string, LinkageDef[]>();
-
-export async function fetchLinkageCatalog(dataset: string): Promise<LinkageDef[]> {
-  if (catalogCache.has(dataset)) return catalogCache.get(dataset)!;
-  const r = await apiClient.get<{ linkages: LinkageDef[] }>('/reporting/linkages', { params: { dataset } });
-  const list = r.data.linkages || [];
-  catalogCache.set(dataset, list);
-  return list;
+/** Build the open catalog (all modules / all columns) and merge any server extras. */
+export async function fetchLinkageCatalog(
+  dataset: string,
+  datasets?: ReportDataset[],
+): Promise<LinkageDef[]> {
+  const open = datasets?.length ? buildOpenLinkageCatalog(dataset, datasets) : [];
+  try {
+    const r = await apiClient.get<{ linkages: LinkageDef[] }>('/reporting/linkages', { params: { dataset } });
+    const server = r.data.linkages || [];
+    if (open.length) return mergeLinkageCatalogs(open, server);
+    return server;
+  } catch {
+    return open;
+  }
 }
 
-export async function enrichReportRows(dataset: string, rows: Row[], includes: string[]): Promise<Row[]> {
+export async function enrichReportRows(
+  dataset: string,
+  rows: Row[],
+  includes: string[],
+  project: string[] = [],
+): Promise<Row[]> {
   if (!includes.length || !rows.length) return rows;
-  const r = await apiClient.post<{ rows: Row[] }>('/reporting/enrich', { dataset, rows, includes });
+  const r = await apiClient.post<{ rows: Row[] }>('/reporting/enrich', {
+    dataset,
+    rows,
+    includes,
+    project,
+  });
   return r.data.rows || rows;
 }
 
