@@ -5,6 +5,7 @@ from .exceptions_section import router as exceptions_router
 from .audit_trail import router as audit_trail_router
 from .reviews import router as reviews_router
 from .risk_assessments import router as risk_assessments_router
+from .statutory_audit import router as statutory_audit_router
 
 __all__ = [
     "overview_router",
@@ -14,4 +15,5 @@ __all__ = [
     "audit_trail_router",
     "reviews_router",
     "risk_assessments_router",
+    "statutory_audit_router",
 ]

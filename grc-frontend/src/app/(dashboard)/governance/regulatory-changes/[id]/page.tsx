@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
-import { adminApi, regulatoryApi } from '@/lib/api';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { adminApi, governanceApi, regulatoryApi } from '@/lib/api';
 import { RightSlidePanel, PageLoader } from '@/components/ui';
 import {
   FileWarning,
@@ -25,6 +25,8 @@ import {
   Edit,
   Lock,
   User,
+  Search,
+  X,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useToast } from '@/components/ui/ToastProvider';
@@ -49,10 +51,17 @@ interface RegulatoryChange {
 interface Assessment {
   id: number;
   change_id: number;
+  assessment_type?: string;
+  impacted_item_id?: number | null;
+  impacted_item_type?: string | null;
+  impacted_item_name?: string | null;
   assessor_id?: number;
   assessor_name?: string;
   impact_level: string;
+  impact_description?: string;
   affected_areas?: string;
+  gap_identified?: boolean;
+  gap_description?: string;
   compliance_gaps?: string;
   recommendations?: string;
   assessment_date: string;
@@ -79,12 +88,16 @@ interface Task {
 interface GapAnalysis {
   id: number;
   gap_type: string;
+  item_name?: string;
+  item_id?: number | null;
   description: string;
   current_state?: string;
   required_state?: string;
   severity: string;
   remediation_plan?: string;
   status: string;
+  assigned_to?: number | null;
+  assignee_name?: string | null;
 }
 
 interface IncompleteTask {
@@ -191,6 +204,12 @@ export default function RegulatoryChangeDetailPage() {
   const [closureReadiness, setClosureReadiness] = useState<ClosureReadiness | null>(null);
   const [checkingReadiness, setCheckingReadiness] = useState(false);
 
+  const [showGapModal, setShowGapModal] = useState(false);
+  const [selectedDocumentIds, setSelectedDocumentIds] = useState<number[]>([]);
+  const [includeAllControls, setIncludeAllControls] = useState(true);
+  const [docSearch, setDocSearch] = useState('');
+  const [gapSummary, setGapSummary] = useState<string>('');
+
   const [assessmentForm, setAssessmentForm] = useState({
     impact_level: 'medium',
     affected_areas: '',
@@ -205,6 +224,9 @@ export default function RegulatoryChangeDetailPage() {
     priority: 'medium',
     due_date: '',
     assigned_to: null as number | null,
+    impact_assessment_id: null as number | null,
+    linked_policy_id: null as number | null,
+    linked_control_id: null as number | null,
   });
 
   const { data: change, isLoading, error } = useQuery({
@@ -242,46 +264,231 @@ export default function RegulatoryChangeDetailPage() {
     enabled: showTaskModal,
   });
 
+  const { data: documents = [], isLoading: documentsLoading } = useQuery({
+    queryKey: ['governance-docs-for-reg-gap'],
+    queryFn: async () => {
+      type DocRow = { id: number; title: string; status?: string; doc_type?: string };
+      const normalize = (payload: unknown): DocRow[] => {
+        if (Array.isArray(payload)) return payload as DocRow[];
+        if (payload && typeof payload === 'object' && Array.isArray((payload as { items?: unknown }).items)) {
+          return (payload as { items: DocRow[] }).items;
+        }
+        return [];
+      };
+
+      const response = await governanceApi.getDocuments({
+        doc_type: 'policy',
+        status: 'approved',
+        limit: 200,
+      });
+      const byId = new Map(normalize(response.data).map((d) => [d.id, d]));
+
+      try {
+        const published = await governanceApi.getDocuments({
+          doc_type: 'policy',
+          status: 'published',
+          limit: 200,
+        });
+        for (const d of normalize(published.data)) byId.set(d.id, d);
+      } catch {
+        /* approved list is enough */
+      }
+
+      // If neither status returned rows, fall back to unfiltered policies.
+      if (byId.size === 0) {
+        try {
+          const anyPolicies = await governanceApi.getDocuments({
+            doc_type: 'policy',
+            limit: 200,
+          });
+          for (const d of normalize(anyPolicies.data)) byId.set(d.id, d);
+        } catch {
+          /* leave empty */
+        }
+      }
+
+      return Array.from(byId.values()).sort((a, b) =>
+        (a.title || '').localeCompare(b.title || ''),
+      );
+    },
+    enabled: showGapModal,
+  });
+
   const selectedTaskAssignee = users.find((u) => u.id === taskForm.assigned_to);
 
-  const { data: gaps, isLoading: gapsLoading, error: gapsError, refetch: refetchGaps } = useQuery({
+  const emptyTaskForm = {
+    title: '',
+    description: '',
+    task_type: 'policy_update',
+    priority: 'medium',
+    due_date: '',
+    assigned_to: null as number | null,
+    impact_assessment_id: null as number | null,
+    linked_policy_id: null as number | null,
+    linked_control_id: null as number | null,
+  };
+
+  const openTaskFromAssessment = (assessment: Assessment) => {
+    const itemName =
+      assessment.impacted_item_name ||
+      assessment.affected_areas ||
+      `${assessment.impacted_item_type || assessment.assessment_type || 'item'} #${assessment.id}`;
+    const gapText =
+      (assessment.gap_description && !/^action needed:/i.test(assessment.gap_description)
+        ? assessment.gap_description
+        : null) ||
+      assessment.compliance_gaps ||
+      assessment.impact_description ||
+      assessment.affected_areas ||
+      '';
+    const itemType = (assessment.impacted_item_type || assessment.assessment_type || '').toLowerCase();
+    const taskType =
+      itemType === 'control' ? 'control_update' :
+      itemType === 'policy' ? 'policy_update' :
+      'process_change';
+
+    setTaskForm({
+      title: `Remediate: ${itemName}`.slice(0, 200),
+      description: gapText && !/^action needed:/i.test(gapText) ? gapText : `Review and update ${itemName}`,
+      task_type: taskType,
+      priority: (assessment.impact_level || 'medium').toLowerCase(),
+      due_date: '',
+      assigned_to: null,
+      impact_assessment_id: assessment.id,
+      linked_policy_id: itemType === 'policy' ? assessment.impacted_item_id ?? null : null,
+      linked_control_id: itemType === 'control' ? assessment.impacted_item_id ?? null : null,
+    });
+    setShowTaskModal(true);
+  };
+
+  const openTaskFromGap = (gap: GapAnalysis) => {
+    const itemType = (gap.gap_type || '').toLowerCase();
+    const taskType =
+      itemType === 'control' ? 'control_update' :
+      itemType === 'policy' ? 'policy_update' :
+      'process_change';
+    setTaskForm({
+      title: `Close gap: ${gap.item_name || gap.gap_type}`.slice(0, 200),
+      description: gap.remediation_plan || gap.description || '',
+      task_type: taskType,
+      priority: (gap.severity || 'medium').toLowerCase(),
+      due_date: '',
+      assigned_to: gap.assigned_to ?? null,
+      impact_assessment_id: typeof gap.id === 'number' ? gap.id : null,
+      linked_policy_id: itemType === 'policy' ? gap.item_id ?? null : null,
+      linked_control_id: itemType === 'control' ? gap.item_id ?? null : null,
+    });
+    setShowTaskModal(true);
+  };
+
+  const mapGapPayload = (payload: unknown): GapAnalysis[] => {
+    const data = payload as
+      | GapAnalysis[]
+      | {
+          analysis_summary?: string;
+          identified_gaps?: Array<{
+            id?: number;
+            area?: string;
+            item_name?: string;
+            item_id?: number | null;
+            description?: string;
+            severity?: string;
+            current_state?: string;
+            required_state?: string;
+            remediation_plan?: string;
+            status?: string;
+            assigned_to?: number | null;
+            assignee_name?: string | null;
+          }>;
+        };
+
+    if (Array.isArray(data)) return data;
+    if (data?.analysis_summary) setGapSummary(data.analysis_summary);
+    const identifiedGaps = Array.isArray(data?.identified_gaps) ? data.identified_gaps : [];
+    return identifiedGaps.map((gap, index) => ({
+      id: gap.id ?? index + 1,
+      gap_type: gap.area || 'process',
+      item_name: gap.item_name,
+      item_id: gap.item_id,
+      description: gap.description || 'No description provided',
+      current_state: gap.current_state,
+      required_state: gap.required_state,
+      severity: (gap.severity || 'medium').toLowerCase(),
+      remediation_plan: gap.remediation_plan,
+      status: gap.status || 'identified',
+      assigned_to: gap.assigned_to,
+      assignee_name: gap.assignee_name,
+    }));
+  };
+
+  const { data: gaps, isLoading: gapsLoading, error: gapsError } = useQuery({
     queryKey: ['regulatory-gaps', changeId],
     queryFn: async () => {
       const response = await regulatoryApi.getGapAnalysis(changeId);
-      const payload = response.data as
-        | GapAnalysis[]
-        | {
-            identified_gaps?: Array<{
-              id?: number;
-              area?: string;
-              description?: string;
-              severity?: string;
-              current_state?: string;
-              required_state?: string;
-              remediation_plan?: string;
-              status?: string;
-            }>;
-          };
-
-      if (Array.isArray(payload)) {
-        return payload;
-      }
-
-      const identifiedGaps = Array.isArray(payload?.identified_gaps) ? payload.identified_gaps : [];
-      return identifiedGaps.map((gap, index) => ({
-        id: gap.id ?? index + 1,
-        gap_type: gap.area || 'process',
-        description: gap.description || 'No description provided',
-        current_state: gap.current_state,
-        required_state: gap.required_state,
-        severity: (gap.severity || 'medium').toLowerCase(),
-        remediation_plan: gap.remediation_plan,
-        status: gap.status || 'identified',
-      })) as GapAnalysis[];
+      return mapGapPayload(response.data);
     },
     enabled: activeTab === 'gaps',
   });
 
+  const runGapMutation = useMutation({
+    mutationFn: async () => {
+      const response = await regulatoryApi.runGapAnalysis(changeId, {
+        document_ids: selectedDocumentIds,
+        include_all_controls: includeAllControls,
+        assigned_to: null,
+      });
+      return response.data;
+    },
+    onSuccess: (data) => {
+      const mapped = mapGapPayload(data);
+      queryClient.setQueryData(['regulatory-gaps', changeId], mapped);
+      queryClient.invalidateQueries({ queryKey: ['regulatory-tasks', changeId] });
+      queryClient.invalidateQueries({ queryKey: ['regulatory-assessments', changeId] });
+      queryClient.invalidateQueries({ queryKey: ['regulatory-change', changeId] });
+      setShowGapModal(false);
+      const created = (data as { tasks_created?: number })?.tasks_created || 0;
+      toast({
+        title: 'Gap analysis complete',
+        message: created
+          ? `Found ${mapped.length} gap(s). Created ${created} assigned task(s).`
+          : `Found ${mapped.length} gap(s).`,
+        type: 'success',
+      });
+    },
+    onError: () => {
+      toast({
+        title: 'Gap analysis failed',
+        message: 'Could not run gap analysis. Please try again.',
+        type: 'error',
+      });
+    },
+  });
+
+  const visibleDocuments = (() => {
+    const list = Array.isArray(documents) ? documents : [];
+    const term = docSearch.trim().toLowerCase();
+    if (!term) return list;
+    return list.filter((d) => (d.title || '').toLowerCase().includes(term));
+  })();
+
+  const allVisibleSelected =
+    visibleDocuments.length > 0 &&
+    visibleDocuments.every((d) => selectedDocumentIds.includes(d.id));
+
+  const toggleDocument = (id: number) => {
+    setSelectedDocumentIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+  };
+
+  const toggleVisibleDocuments = () => {
+    const visibleIds = visibleDocuments.map((d) => d.id);
+    if (allVisibleSelected) {
+      setSelectedDocumentIds((prev) => prev.filter((id) => !visibleIds.includes(id)));
+    } else {
+      setSelectedDocumentIds((prev) => Array.from(new Set([...prev, ...visibleIds])));
+    }
+  };
   const updateStatusMutation = useMutation({
     mutationFn: (status: string) => regulatoryApi.updateChange(changeId, { status }),
     onSuccess: () => {
@@ -306,17 +513,36 @@ export default function RegulatoryChangeDetailPage() {
   });
 
   const createTaskMutation = useMutation({
-    mutationFn: (data: Record<string, unknown>) => regulatoryApi.createTask(changeId, data),
+    mutationFn: (data: Record<string, unknown>) => {
+      const payload: Record<string, unknown> = {
+        title: data.title,
+        description: data.description || null,
+        task_type: data.task_type,
+        priority: data.priority,
+        assigned_to: data.assigned_to || null,
+        due_date: data.due_date || null,
+        impact_assessment_id: data.impact_assessment_id || null,
+        linked_policy_id: data.linked_policy_id || null,
+        linked_control_id: data.linked_control_id || null,
+      };
+      return regulatoryApi.createTask(changeId, payload);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['regulatory-tasks', changeId] });
+      queryClient.invalidateQueries({ queryKey: ['regulatory-change', changeId] });
       setShowTaskModal(false);
-      setTaskForm({
-        title: '',
-        description: '',
-        task_type: 'policy_update',
-        priority: 'medium',
-        due_date: '',
-        assigned_to: null,
+      setTaskForm(emptyTaskForm);
+      toast({
+        title: 'Task created',
+        message: 'Implementation task added successfully',
+        type: 'success',
+      });
+    },
+    onError: () => {
+      toast({
+        title: 'Failed to create task',
+        message: 'Could not create the implementation task. Please try again.',
+        type: 'error',
       });
     },
   });
@@ -566,7 +792,10 @@ export default function RegulatoryChangeDetailPage() {
                   Add Assessment
                 </button>
                 <button 
-                  onClick={() => setShowTaskModal(true)}
+                  onClick={() => {
+                    setTaskForm(emptyTaskForm);
+                    setShowTaskModal(true);
+                  }}
                   className="w-full flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm text-slate-900 hover:bg-slate-50 transition-colors"
                 >
                   <Plus size={16} />
@@ -677,7 +906,12 @@ export default function RegulatoryChangeDetailPage() {
       {activeTab === 'assessments' && (
         <div className="space-y-4">
           <div className="flex justify-between items-center">
-            <h2 className="text-lg font-semibold text-slate-900">Impact Assessments</h2>
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900">Impact Assessments</h2>
+              <p className="text-sm text-slate-500 mt-0.5">
+                Review impacted policies and controls, then create implementation tasks directly.
+              </p>
+            </div>
             <button onClick={() => setShowAssessmentModal(true)} className="btn-primary flex items-center gap-2">
               <Plus size={16} />
               Add Assessment
@@ -701,42 +935,78 @@ export default function RegulatoryChangeDetailPage() {
                 <p className="text-sm">Add an impact assessment to evaluate this change</p>
               </div>
             ) : (
-              <div className="divide-y divide-slate-100">
-                {assessments.map((assessment) => (
-                  <div key={assessment.id} className="p-6">
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex items-center gap-3">
-                        <span className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium ${getPriorityStyle(assessment.impact_level).bg} ${getPriorityStyle(assessment.impact_level).text}`}>
-                          {assessment.impact_level} impact
-                        </span>
-                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs ${getTaskStatusStyle(assessment.status).bg} ${getTaskStatusStyle(assessment.status).text}`}>
-                          {assessment.status}
-                        </span>
-                      </div>
-                      <span className="text-sm text-slate-500">
-                        {new Date(assessment.assessment_date).toLocaleDateString()}
-                      </span>
-                    </div>
-                    {assessment.affected_areas && (
-                      <div className="mb-3">
-                        <h4 className="text-sm font-medium text-slate-700 mb-1">Affected Areas</h4>
-                        <p className="text-slate-900">{assessment.affected_areas}</p>
-                      </div>
-                    )}
-                    {assessment.compliance_gaps && (
-                      <div className="mb-3">
-                        <h4 className="text-sm font-medium text-slate-700 mb-1">Compliance Gaps</h4>
-                        <p className="text-slate-900">{assessment.compliance_gaps}</p>
-                      </div>
-                    )}
-                    {assessment.recommendations && (
-                      <div>
-                        <h4 className="text-sm font-medium text-slate-700 mb-1">Recommendations</h4>
-                        <p className="text-slate-900">{assessment.recommendations}</p>
-                      </div>
-                    )}
-                  </div>
-                ))}
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-slate-200">
+                  <thead className="bg-slate-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Item</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Impact</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Gap</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Summary</th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {assessments.map((assessment) => {
+                      const itemType = (assessment.impacted_item_type || assessment.assessment_type || 'process').toLowerCase();
+                      const itemName =
+                        assessment.impacted_item_name ||
+                        (assessment.affected_areas && !assessment.affected_areas.toLowerCase().startsWith('control ')
+                          ? assessment.affected_areas
+                          : null) ||
+                        `${itemType} #${assessment.id}`;
+                      const summary =
+                        (assessment.gap_description && !/^action needed:/i.test(assessment.gap_description)
+                          ? assessment.gap_description
+                          : null) ||
+                        (assessment.compliance_gaps && !/^action needed:/i.test(assessment.compliance_gaps)
+                          ? assessment.compliance_gaps
+                          : null) ||
+                        assessment.impact_description ||
+                        assessment.affected_areas ||
+                        'No details provided';
+                      const hasGap = Boolean(assessment.gap_identified || assessment.gap_description || assessment.compliance_gaps);
+
+                      return (
+                        <tr key={assessment.id} className="align-top hover:bg-slate-50/80">
+                          <td className="px-4 py-4">
+                            <div className="text-sm font-medium text-slate-900 max-w-xs">{itemName}</div>
+                            <div className="mt-0.5 text-xs uppercase tracking-wide text-slate-500">{itemType}</div>
+                          </td>
+                          <td className="px-4 py-4">
+                            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${getPriorityStyle(assessment.impact_level).bg} ${getPriorityStyle(assessment.impact_level).text}`}>
+                              {assessment.impact_level}
+                            </span>
+                          </td>
+                          <td className="px-4 py-4">
+                            {hasGap ? (
+                              <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-rose-50 text-rose-700">
+                                Gap
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-emerald-50 text-emerald-700">
+                                Covered
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-4 max-w-md">
+                            <p className="text-sm text-slate-800 line-clamp-3">{summary}</p>
+                          </td>
+                          <td className="px-4 py-4 text-right">
+                            <button
+                              type="button"
+                              onClick={() => openTaskFromAssessment(assessment)}
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 hover:bg-slate-50"
+                            >
+                              <ClipboardList className="h-3.5 w-3.5" />
+                              Create Task
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>
@@ -747,7 +1017,13 @@ export default function RegulatoryChangeDetailPage() {
         <div className="space-y-4">
           <div className="flex justify-between items-center">
             <h2 className="text-lg font-semibold text-slate-900">Implementation Tasks</h2>
-            <button onClick={() => setShowTaskModal(true)} className="btn-primary flex items-center gap-2">
+            <button
+              onClick={() => {
+                setTaskForm(emptyTaskForm);
+                setShowTaskModal(true);
+              }}
+              className="btn-primary flex items-center gap-2"
+            >
               <Plus size={16} />
               Add Task
             </button>
@@ -859,16 +1135,25 @@ export default function RegulatoryChangeDetailPage() {
 
       {activeTab === 'gaps' && (
         <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <h2 className="text-lg font-semibold text-slate-900">Gap Analysis</h2>
-            <button 
-              onClick={() => refetchGaps()}
-              className="btn-primary flex items-center gap-2"
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900">Gap Analysis</h2>
+              {gapSummary && (
+                <p className="mt-1 text-sm text-slate-500 max-w-2xl">{gapSummary}</p>
+              )}
+            </div>
+            <button
+              onClick={() => {
+                setShowGapModal(true);
+                setDocSearch('');
+              }}
+              className="btn-primary flex items-center gap-2 self-start"
             >
               <Sparkles size={16} />
-              Run AI Analysis
+              Run Gap Analysis
             </button>
           </div>
+
           <div className="rounded-xl border border-slate-300 bg-white overflow-hidden">
             {gapsLoading ? (
               <div className="flex justify-center py-16">
@@ -881,51 +1166,202 @@ export default function RegulatoryChangeDetailPage() {
                 <p className="text-sm text-slate-500">There was an error loading the gap analysis data</p>
               </div>
             ) : (!gaps || gaps.length === 0) ? (
-              <div className="flex flex-col items-center justify-center py-16 text-slate-500">
+              <div className="flex flex-col items-center justify-center py-16 text-slate-500 px-6 text-center">
                 <BarChart3 className="h-12 w-12 mb-4" />
-                <p className="text-lg font-medium">No gaps identified</p>
-                <p className="text-sm">Run AI analysis to identify compliance gaps</p>
+                <p className="text-lg font-medium text-slate-900">No gaps identified yet</p>
+                <p className="text-sm mt-1 max-w-md">
+                  Select governance documents to analyze against this regulatory change.
+                  All controls are included by default. You can assign remediation to a user.
+                </p>
+                <button
+                  onClick={() => setShowGapModal(true)}
+                  className="btn-primary mt-5 flex items-center gap-2"
+                >
+                  <Sparkles size={16} />
+                  Run Gap Analysis
+                </button>
               </div>
             ) : (
-              <div className="divide-y divide-slate-100">
-                {gaps.map((gap) => (
-                  <div key={gap.id} className="p-6">
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex items-center gap-3">
-                        <span className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium ${getPriorityStyle(gap.severity).bg} ${getPriorityStyle(gap.severity).text}`}>
-                          {gap.severity}
-                        </span>
-                        <span className="text-sm text-slate-500">{gap.gap_type.replace(/_/g, ' ')}</span>
-                      </div>
-                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs ${getTaskStatusStyle(gap.status).bg} ${getTaskStatusStyle(gap.status).text}`}>
-                        {gap.status}
-                      </span>
-                    </div>
-                    <p className="text-slate-900 mb-4">{gap.description}</p>
-                    <div className="grid gap-4 md:grid-cols-2">
-                      {gap.current_state && (
-                        <div className="rounded-lg bg-slate-50 border border-slate-200 p-4">
-                          <h4 className="text-sm font-medium text-slate-700 mb-2">Current State</h4>
-                          <p className="text-sm text-slate-700">{gap.current_state}</p>
-                        </div>
-                      )}
-                      {gap.required_state && (
-                        <div className="rounded-lg bg-slate-50 border border-slate-200 p-4">
-                          <h4 className="text-sm font-medium text-slate-700 mb-2">Required State</h4>
-                          <p className="text-sm text-slate-700">{gap.required_state}</p>
-                        </div>
-                      )}
-                    </div>
-                    {gap.remediation_plan && (
-                      <div className="mt-4 rounded-lg bg-emerald-50 border border-emerald-300 p-4">
-                        <h4 className="text-sm font-medium text-emerald-700 mb-2">Remediation Plan</h4>
-                        <p className="text-sm text-slate-700">{gap.remediation_plan}</p>
-                      </div>
-                    )}
-                  </div>
-                ))}
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-slate-200">
+                  <thead className="bg-slate-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Item</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Gap</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Severity</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Assignee</th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {gaps.map((gap) => (
+                      <tr key={gap.id} className="align-top hover:bg-slate-50/80">
+                        <td className="px-4 py-3">
+                          <div className="text-sm font-medium text-slate-900">
+                            {gap.item_name || gap.gap_type.replace(/_/g, ' ')}
+                          </div>
+                          <div className="mt-0.5 text-xs uppercase tracking-wide text-slate-500">
+                            {gap.gap_type.replace(/_/g, ' ')}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 max-w-lg">
+                          <p className="text-sm text-slate-800 line-clamp-3">{gap.description}</p>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${getPriorityStyle(gap.severity).bg} ${getPriorityStyle(gap.severity).text}`}>
+                            {gap.severity}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-slate-700">
+                          {gap.assignee_name ? (
+                            <span className="inline-flex items-center gap-1.5">
+                              <User className="h-3.5 w-3.5 text-slate-400" />
+                              {gap.assignee_name}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400">Unassigned</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <button
+                            type="button"
+                            onClick={() => openTaskFromGap(gap)}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 hover:bg-slate-50"
+                          >
+                            <ClipboardList className="h-3.5 w-3.5" />
+                            Create Task
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {showGapModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-xl border border-slate-300 bg-white p-6 shadow-2xl mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-5">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900">Run Gap Analysis</h3>
+                <p className="text-sm text-slate-600">
+                  Select documents to analyze against this regulatory change
+                </p>
+              </div>
+              <button
+                onClick={() => setShowGapModal(false)}
+                className="p-2 text-slate-500 hover:text-slate-900 rounded-lg hover:bg-slate-100"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="relative mb-3">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+              <input
+                type="text"
+                value={docSearch}
+                onChange={(e) => setDocSearch(e.target.value)}
+                placeholder="Search documents…"
+                className="w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+              />
+            </div>
+
+            <div className="space-y-2 max-h-56 overflow-y-auto mb-4">
+              {documentsLoading ? (
+                <div className="flex justify-center py-6">
+                  <Loader2 className="h-6 w-6 animate-spin text-primary-400" />
+                </div>
+              ) : documents.length === 0 ? (
+                <p className="text-sm text-slate-500 text-center py-4">
+                  No approved/published policies found
+                </p>
+              ) : visibleDocuments.length === 0 ? (
+                <p className="text-sm text-slate-500 text-center py-4">
+                  No documents match &ldquo;{docSearch}&rdquo;.
+                </p>
+              ) : (
+                <>
+                  <label className="flex items-center gap-3 rounded-lg border border-slate-300 bg-slate-50 p-3 cursor-pointer hover:bg-slate-100">
+                    <input
+                      type="checkbox"
+                      checked={allVisibleSelected}
+                      onChange={toggleVisibleDocuments}
+                      className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                    />
+                    <span className="text-sm font-medium text-slate-900">
+                      {docSearch.trim()
+                        ? `Select all matching (${visibleDocuments.length})`
+                        : `Select all (${documents.length})`}
+                    </span>
+                  </label>
+                  {visibleDocuments.map((doc) => (
+                    <label
+                      key={doc.id}
+                      className="flex items-center gap-3 rounded-lg border border-slate-200 p-3 cursor-pointer hover:bg-slate-50"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedDocumentIds.includes(doc.id)}
+                        onChange={() => toggleDocument(doc.id)}
+                        className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-slate-900 truncate">{doc.title}</p>
+                        <p className="text-xs text-slate-500 capitalize">{doc.status || 'policy'}</p>
+                      </div>
+                    </label>
+                  ))}
+                </>
+              )}
+            </div>
+            <p className="text-xs text-slate-500 mb-4">
+              {selectedDocumentIds.length === 0
+                ? 'No documents selected — analysis uses existing gaps plus all controls (default). Select documents to force a review against specific policies.'
+                : `${selectedDocumentIds.length} document(s) selected — each will be checked even if not previously flagged.`}
+            </p>
+
+            <label className="flex items-start gap-3 rounded-lg border border-slate-300 bg-slate-50 p-3 mb-5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={includeAllControls}
+                onChange={(e) => setIncludeAllControls(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+              />
+              <div>
+                <p className="text-sm font-medium text-slate-900">Include all controls</p>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  On by default. Evaluates control coverage against this circular (internal controls for SBP).
+                </p>
+              </div>
+            </label>
+
+            <div className="flex justify-end gap-3 border-t border-slate-200 pt-4">
+              <button
+                type="button"
+                onClick={() => setShowGapModal(false)}
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => runGapMutation.mutate()}
+                disabled={runGapMutation.isPending}
+                className="btn-primary flex items-center gap-2 disabled:opacity-50"
+              >
+                {runGapMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Sparkles className="h-4 w-4" />
+                )}
+                Run analysis
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1042,8 +1478,11 @@ export default function RegulatoryChangeDetailPage() {
 
       <RightSlidePanel
         isOpen={showTaskModal}
-        onClose={() => setShowTaskModal(false)}
-        title="Add Implementation Task"
+        onClose={() => {
+          setShowTaskModal(false);
+          setTaskForm(emptyTaskForm);
+        }}
+        title={taskForm.impact_assessment_id ? 'Create Implementation Task' : 'Add Implementation Task'}
         width="w-full max-w-lg"
       >
         <form onSubmit={(e) => { e.preventDefault(); createTaskMutation.mutate(taskForm); }} className="space-y-4">

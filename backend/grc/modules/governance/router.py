@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from .routers import documents_router, versions_router, workflows_router, workflow_templates_router, reviews_router, mappings_router, dashboard_router, policy_parser_router, document_workflow_router, attestations_router, attestation_campaigns_router, regulatory_changes_router, committees_router, regulatory_feeds_router, gap_analysis_router, applicability_router, reports_router, document_signoff_router
+from .routers import documents_router, versions_router, workflows_router, workflow_templates_router, reviews_router, mappings_router, dashboard_router, policy_parser_router, document_workflow_router, attestations_router, attestation_campaigns_router, document_attestations_router, regulatory_changes_router, committees_router, regulatory_feeds_router, gap_analysis_router, applicability_router, reports_router, document_signoff_router
 from ...routers import policy_exception_router
 
 router = APIRouter(prefix="/governance", tags=["Governance Module"])
@@ -16,6 +16,7 @@ router.include_router(policy_parser_router, tags=["Governance Policy Parser"])
 router.include_router(document_workflow_router, tags=["Governance Document Workflow"])
 router.include_router(attestations_router, tags=["Policy Attestations"])
 router.include_router(attestation_campaigns_router, tags=["Attestation & Certification Management"])
+router.include_router(document_attestations_router, tags=["Document Attestations"])
 router.include_router(regulatory_changes_router, tags=["Regulatory Change Management"])
 router.include_router(committees_router, tags=["Board & Committee Management"])
 router.include_router(regulatory_feeds_router, tags=["Regulatory Feed Management"])

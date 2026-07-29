@@ -210,13 +210,15 @@ export default function ComplianceAssessmentsModule({
             loadControls ? (
               <DetailLoader
                 assessment={selected} loadControls={loadControls} api={api}
-                backLabel="Overview" onBack={backToOverview}
+                backLabel={initialTab ? undefined : 'Overview'}
+                onBack={initialTab ? undefined : backToOverview}
                 slaPolicy={slaPolicy} onSlaPolicyChange={onSlaPolicyChange}
               />
             ) : (
               <AssessmentDetail
                 assessment={selected} controls={controls} api={api}
-                backLabel="Overview" onBack={backToOverview}
+                backLabel={initialTab ? undefined : 'Overview'}
+                onBack={initialTab ? undefined : backToOverview}
                 slaPolicy={slaPolicy} onSlaPolicyChange={onSlaPolicyChange}
               />
             )
@@ -591,7 +593,7 @@ function DetailLoader({
   assessment, loadControls, backLabel, onBack, api, slaPolicy, onSlaPolicyChange,
 }: {
   assessment: Assessment; loadControls: (a: Assessment) => Promise<ControlItem[]>;
-  backLabel: string; onBack: () => void; api?: DetailApi;
+  backLabel?: string; onBack?: () => void; api?: DetailApi;
   slaPolicy?: SlaPolicy; onSlaPolicyChange?: (p: SlaPolicy) => void;
 }) {
   const { data, isLoading, error } = useQuery({
@@ -599,12 +601,15 @@ function DetailLoader({
     queryFn: () => loadControls(assessment),
     staleTime: 30_000,
   });
+  const backBtn = onBack ? (
+    <button onClick={onBack} className="mb-3.5 inline-flex items-center gap-1.5 text-[13px] font-semibold text-slate-500 hover:text-[#0f766e]">
+      <ChevronLeft className="h-[15px] w-[15px]" /> Back to {backLabel || 'Overview'}
+    </button>
+  ) : null;
   if (isLoading) {
     return (
       <div>
-        <button onClick={onBack} className="mb-3.5 inline-flex items-center gap-1.5 text-[13px] font-semibold text-slate-500 hover:text-[#0f766e]">
-          <ChevronLeft className="h-[15px] w-[15px]" /> Back to {backLabel}
-        </button>
+        {backBtn}
         <div className="flex items-center justify-center rounded-[14px] border border-slate-200 bg-white py-20">
           <Loader2 className="h-6 w-6 animate-spin" style={{ color: '#0f766e' }} />
         </div>
@@ -614,9 +619,7 @@ function DetailLoader({
   if (error || !data) {
     return (
       <div>
-        <button onClick={onBack} className="mb-3.5 inline-flex items-center gap-1.5 text-[13px] font-semibold text-slate-500 hover:text-[#0f766e]">
-          <ChevronLeft className="h-[15px] w-[15px]" /> Back to {backLabel}
-        </button>
+        {backBtn}
         <div className="rounded-[14px] border border-slate-200 bg-white px-6 py-12 text-center text-[13.5px] text-slate-500">Failed to load this assessment's controls.</div>
       </div>
     );
@@ -628,7 +631,7 @@ function DetailLoader({
 function AssessmentDetail({
   assessment, controls, backLabel, onBack, api, slaPolicy, onSlaPolicyChange,
 }: {
-  assessment: Assessment; controls: ControlItem[]; backLabel: string; onBack: () => void; api?: DetailApi;
+  assessment: Assessment; controls: ControlItem[]; backLabel?: string; onBack?: () => void; api?: DetailApi;
   slaPolicy?: SlaPolicy; onSlaPolicyChange?: (p: SlaPolicy) => void;
 }) {
   // Which domain the "Add item" drawer is open for (null = closed). The button
@@ -716,9 +719,11 @@ function AssessmentDetail({
 
   return (
     <div>
-      <button onClick={onBack} className="mb-3.5 inline-flex items-center gap-1.5 text-[13px] font-semibold text-slate-500 hover:text-[#0f766e]">
-        <ChevronLeft className="h-[15px] w-[15px]" /> Back to {backLabel}
-      </button>
+      {onBack && (
+        <button onClick={onBack} className="mb-3.5 inline-flex items-center gap-1.5 text-[13px] font-semibold text-slate-500 hover:text-[#0f766e]">
+          <ChevronLeft className="h-[15px] w-[15px]" /> Back to {backLabel || 'Overview'}
+        </button>
+      )}
 
       <div className="mb-[18px] flex flex-wrap items-start justify-between gap-5">
         <div>

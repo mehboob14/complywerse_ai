@@ -42,6 +42,11 @@ const nextConfig = {
           source: '/api/governance/regulatory-changes/changes/upload',
           destination: '/api/governance/regulatory-changes/changes/upload',
         },
+        // Statutory Audit Import with AI: PDF extract + OpenAI exceeds rewrite proxy limit
+        {
+          source: '/api/auditor-portal/statutory-audit/observations/upload-parse',
+          destination: '/api/auditor-portal/statutory-audit/observations/upload-parse',
+        },
       ],
       afterFiles: [
         // Static documentation shipped in public/guide/. Next does not serve

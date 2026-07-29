@@ -88,13 +88,11 @@ export async function fetchMyPending(): Promise<{ total: number; items: MyPendin
 }
 
 /**
- * Per-document attestation coverage %. Additive endpoint; returns {} on 404 so the
- * ATTEST column / attestation-gaps card degrade to "—" until the backend ships it.
+ * Per-document attestation coverage %. Prefers document-attestation campaigns
+ * (acks / same-domain active users); falls back to legacy coverage-map.
  */
 export async function fetchCoverageMap(): Promise<Record<number, number>> {
-  try {
-    const res = await apiClient.get('/governance/attestations/coverage-map');
-    const d = res.data as { coverage?: Record<string, number>; items?: Array<{ document_id: number; compliance_rate: number }> };
+  const parse = (d: { coverage?: Record<string, number>; items?: Array<{ document_id: number; compliance_rate: number }> }) => {
     const out: Record<number, number> = {};
     if (d.coverage) {
       for (const [k, v] of Object.entries(d.coverage)) out[Number(k)] = Number(v);
@@ -102,6 +100,17 @@ export async function fetchCoverageMap(): Promise<Record<number, number>> {
       for (const it of d.items) out[it.document_id] = it.compliance_rate;
     }
     return out;
+  };
+  try {
+    const res = await governanceApi.getDocAttestationCoverageMap();
+    const out = parse(res.data as any);
+    if (Object.keys(out).length > 0) return out;
+  } catch {
+    /* fall through */
+  }
+  try {
+    const res = await apiClient.get('/governance/attestations/coverage-map');
+    return parse(res.data as any);
   } catch {
     return {};
   }

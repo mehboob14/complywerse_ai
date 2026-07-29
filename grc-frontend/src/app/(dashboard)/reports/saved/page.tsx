@@ -34,6 +34,7 @@ export default function SavedReportsPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<ReportSpec | null>(null);
   const [renameValue, setRenameValue] = useState('');
+  const [renameDescription, setRenameDescription] = useState('');
   const [confirmDelete, setConfirmDelete] = useState<ReportSpec | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -93,9 +94,10 @@ export default function SavedReportsPage() {
     const name = renameValue.trim();
     if (!name) return;
     const id = renaming.id;
+    const description = renameDescription.trim();
     setRenaming(null);
     await run(id, async () => {
-      await persistSpec({ ...renaming, name });
+      await persistSpec({ ...renaming, name, description });
     });
   };
 
@@ -133,7 +135,7 @@ export default function SavedReportsPage() {
             Saved reports
           </h1>
           <p className="mt-0.5 text-sm text-slate-500">
-            Open, rename, share, duplicate or delete reports you’ve built.
+            Open, rename, share, duplicate or delete custom reports you’ve built.
             {source === 'local' && (
               <span className="ml-1 text-amber-600">Currently stored on this device only.</span>
             )}
@@ -228,6 +230,9 @@ export default function SavedReportsPage() {
                           >
                             {s.name || 'Untitled report'}
                           </button>
+                          {s.description && (
+                            <p className="mt-0.5 truncate text-[11px] text-slate-500">{s.description}</p>
+                          )}
                           {!accessible && (
                             <p className="mt-0.5 text-[11px] text-amber-600">You don’t have access to this dataset</p>
                           )}
@@ -269,7 +274,11 @@ export default function SavedReportsPage() {
                               type="button"
                               title="Rename"
                               disabled={busy}
-                              onClick={() => { setRenaming(s); setRenameValue(s.name || ''); }}
+                              onClick={() => {
+                                setRenaming(s);
+                                setRenameValue(s.name || '');
+                                setRenameDescription(s.description || '');
+                              }}
                               className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-40"
                             >
                               <Pencil className="h-3.5 w-3.5" />
@@ -321,13 +330,23 @@ export default function SavedReportsPage() {
       {renaming && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" onClick={() => setRenaming(null)}>
           <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-sm font-semibold text-slate-900">Rename report</h2>
+            <h2 className="text-sm font-semibold text-slate-900">Edit report</h2>
+            <label className="mt-3 block text-[11px] font-semibold uppercase tracking-wide text-slate-500">Name</label>
             <input
               autoFocus
               value={renameValue}
               onChange={(e) => setRenameValue(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') saveRename(); if (e.key === 'Escape') setRenaming(null); }}
-              className="mt-3 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none"
+              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none"
+            />
+            <label className="mt-3 block text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              Description <span className="font-normal normal-case text-slate-400">(optional)</span>
+            </label>
+            <textarea
+              value={renameDescription}
+              onChange={(e) => setRenameDescription(e.target.value)}
+              rows={2}
+              className="mt-1 w-full resize-none rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none"
             />
             <div className="mt-4 flex justify-end gap-2">
               <button type="button" onClick={() => setRenaming(null)} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50">Cancel</button>

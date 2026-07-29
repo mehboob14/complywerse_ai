@@ -50,16 +50,24 @@ interface Dashboard {
   pending_assessments: number;
 }
 
+const CIRCULAR_TYPE_OPTIONS = [
+  { value: 'SBP', label: 'SBP Circular', hint: 'State Bank of Pakistan' },
+  { value: 'SAMA', label: 'SAMA Circular', hint: 'Saudi Central Bank' },
+  { value: 'QCB', label: 'QCB Circular', hint: 'Qatar Central Bank' },
+  { value: 'MAS', label: 'MAS Notice', hint: 'Monetary Authority of Singapore' },
+  { value: 'NCA', label: 'NCA Circular', hint: 'National Cybersecurity Authority' },
+  { value: 'OCC', label: 'OCC Bulletin', hint: 'US Comptroller of the Currency' },
+  { value: 'Fed', label: 'Fed Guidance', hint: 'US Federal Reserve' },
+  { value: 'EBA', label: 'EBA Guideline', hint: 'European Banking Authority' },
+  { value: 'PRA', label: 'PRA Statement', hint: 'UK Prudential Regulation Authority' },
+  { value: 'SEC', label: 'SEC Release', hint: 'US Securities & Exchange Commission' },
+  { value: 'FINRA', label: 'FINRA Notice', hint: 'Financial Industry Regulatory Authority' },
+  { value: 'custom', label: 'Other Circular', hint: 'Custom / other regulator' },
+];
+
 const SOURCE_OPTIONS = [
   { value: '', label: 'All Sources' },
-  { value: 'SBP', label: 'SBP (State Bank of Pakistan)' },
-  { value: 'OCC', label: 'OCC' },
-  { value: 'Fed', label: 'Fed' },
-  { value: 'EBA', label: 'EBA' },
-  { value: 'PRA', label: 'PRA' },
-  { value: 'SEC', label: 'SEC' },
-  { value: 'FINRA', label: 'FINRA' },
-  { value: 'custom', label: 'Custom' },
+  ...CIRCULAR_TYPE_OPTIONS.map(({ value, label }) => ({ value, label })),
 ];
 
 const STATUS_OPTIONS = [
@@ -111,7 +119,7 @@ export default function RegulatoryChangesPage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [priorityFilter, setPriorityFilter] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [createMode, setCreateMode] = useState<'manual' | 'sbp_circular'>('sbp_circular');
+  const [createMode, setCreateMode] = useState<'manual' | 'circular'>('circular');
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadSource, setUploadSource] = useState('SBP');
   const [uploadTitleHint, setUploadTitleHint] = useState('');
@@ -242,7 +250,7 @@ export default function RegulatoryChangesPage() {
     setUploadFile(null);
     setUploadTitleHint('');
     setUploadError('');
-    setCreateMode('sbp_circular');
+    setCreateMode('circular');
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -368,7 +376,7 @@ export default function RegulatoryChangesPage() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => {
-                setCreateMode('sbp_circular');
+                setCreateMode('circular');
                 setUploadSource('SBP');
                 setUploadError('');
                 setIsModalOpen(true);
@@ -377,7 +385,7 @@ export default function RegulatoryChangesPage() {
               disabled={uploadMutation.isPending}
             >
               <Upload className="h-4 w-4" />
-              Upload SBP Circular
+              Upload Circular
             </button>
             <button
               onClick={() => {
@@ -516,12 +524,12 @@ export default function RegulatoryChangesPage() {
         <div className="mb-4 flex rounded-lg border border-slate-200 bg-slate-50 p-1">
           <button
             type="button"
-            onClick={() => { setCreateMode('sbp_circular'); setUploadSource('SBP'); setUploadError(''); }}
+            onClick={() => { setCreateMode('circular'); setUploadSource('SBP'); setUploadError(''); }}
             className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-2 text-xs font-semibold transition-colors ${
-              createMode === 'sbp_circular' ? 'bg-white text-primary-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+              createMode === 'circular' ? 'bg-white text-primary-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            <Upload className="h-3.5 w-3.5" /> SBP circular + AI impact
+            <Upload className="h-3.5 w-3.5" /> Circular + AI impact
           </button>
           <button
             type="button"
@@ -534,13 +542,13 @@ export default function RegulatoryChangesPage() {
           </button>
         </div>
 
-        {createMode === 'sbp_circular' ? (
+        {createMode === 'circular' ? (
           <form
             onSubmit={(e) => {
               e.preventDefault();
               setUploadError('');
               uploadMutation.mutate({
-                source: 'SBP',
+                source: uploadSource,
                 title_hint: uploadTitleHint || formData.reference_number || undefined,
                 file: uploadFile,
               });
@@ -557,7 +565,33 @@ export default function RegulatoryChangesPage() {
             </div>
 
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">SBP circular file *</label>
+              <label className="mb-2 block text-sm font-medium text-slate-700">Circular type *</label>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {CIRCULAR_TYPE_OPTIONS.map((opt) => {
+                  const selected = uploadSource === opt.value;
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setUploadSource(opt.value)}
+                      className={`rounded-lg border px-3 py-2.5 text-left transition-colors ${
+                        selected
+                          ? 'border-primary-500 bg-primary-50 ring-1 ring-primary-500/30'
+                          : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+                      }`}
+                    >
+                      <p className={`text-sm font-medium ${selected ? 'text-primary-800' : 'text-slate-900'}`}>
+                        {opt.label}
+                      </p>
+                      <p className="mt-0.5 text-xs text-slate-500">{opt.hint}</p>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Circular file *</label>
               <input
                 type="file"
                 accept=".pdf,.doc,.docx,.txt,.md"
@@ -572,26 +606,15 @@ export default function RegulatoryChangesPage() {
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Source</label>
-                <input
-                  type="text"
-                  value="SBP — State Bank of Pakistan"
-                  disabled
-                  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Circular / title hint</label>
-                <input
-                  type="text"
-                  value={uploadTitleHint}
-                  onChange={(e) => setUploadTitleHint(e.target.value)}
-                  placeholder="e.g. BPRD Circular No. XX of 2026"
-                  className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
-                />
-              </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Circular / title hint</label>
+              <input
+                type="text"
+                value={uploadTitleHint}
+                onChange={(e) => setUploadTitleHint(e.target.value)}
+                placeholder="e.g. Circular No. XX of 2026"
+                className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+              />
             </div>
 
             {uploadError && (

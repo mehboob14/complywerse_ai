@@ -7,7 +7,7 @@ from ._11_attestation_certification_management_schemas import *  # noqa: F401,F4
 class RegulatoryChangeCreate(BaseModel):
     title: str
     description: Optional[str] = None
-    source: Optional[str] = "custom"  # OCC, Fed, EBA, PRA, SEC, FINRA, custom
+    source: Optional[str] = "custom"  # SBP, SAMA, QCB, MAS, NCA, OCC, Fed, EBA, PRA, SEC, FINRA, custom
     regulation_reference: Optional[str] = None
     reference_number: Optional[str] = None  # legacy alias for regulation_reference
     effective_date: Optional[Union[datetime, str]] = None
@@ -181,6 +181,20 @@ class RegulatoryChangeDashboardStats(BaseModel):
     task_completion_rate: float = 0.0
 
 
+class RegulatoryGapAnalysisRunRequest(BaseModel):
+    """Scope a regulatory gap-analysis run.
+
+    - document_ids: governance documents (policies) to analyze against.
+      Empty list means "all eligible approved/published policies".
+    - include_all_controls: when true (default), also evaluate control gaps.
+    - assigned_to: optional user id; when set, an implementation task is
+      created for each identified gap and assigned to that user.
+    """
+    document_ids: List[int] = []
+    include_all_controls: bool = True
+    assigned_to: Optional[int] = None
+
+
 class RegulatoryGapAnalysisResponse(BaseModel):
     regulatory_change_id: int
     regulatory_change_title: str
@@ -191,6 +205,7 @@ class RegulatoryGapAnalysisResponse(BaseModel):
     recommended_actions: List[str] = []
     risk_level: str
     confidence_score: float
+    tasks_created: int = 0
 
 
 class IncompleteTaskDetail(BaseModel):

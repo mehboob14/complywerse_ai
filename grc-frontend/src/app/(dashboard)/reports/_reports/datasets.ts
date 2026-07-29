@@ -9,7 +9,7 @@ import apiClient, {
   rcsaApi, complianceApi, tpraApi, aiRiskAssessmentApi,
 } from '@/lib/api';
 import { asRows } from './grid-utils';
-import type { ReportDataset } from './types';
+import type { ColumnDef, ReportDataset } from './types';
 
 const TONE = {
   green: 'bg-emerald-50 text-emerald-700 border-emerald-200',
@@ -52,6 +52,28 @@ const boolTrue = (v: unknown): boolean => {
 };
 const boolFmt = (v: unknown) => (v == null || v === '' ? '' : boolTrue(v) ? 'Yes' : 'No');
 
+const fetchAssessmentsByFormats = async (formats: string[]) => {
+  const results = await Promise.all(
+    formats.map((f) => apiClient.get('/compliance/assessments', { params: { limit: 500, assessment_format: f } }))
+  );
+  return results.flatMap((r) => asRows(r.data?.assessments ?? r.data));
+};
+const ASSESSMENT_COLUMNS: ColumnDef[] = [
+  { key: 'id', label: 'ID', type: 'number', width: 70, href: (r) => `/compliance/assessments/${r.id}` },
+  { key: 'name', label: 'Assessment', type: 'text', width: 300, href: (r) => `/compliance/assessments/${r.id}` },
+  { key: 'assessment_format', label: 'Format', type: 'badge', width: 220, badgeTone: () => TONE.teal, format: titleCase },
+  { key: 'status', label: 'Status', type: 'badge', width: 130, badgeTone: statusTone, format: titleCase },
+  { key: 'overall_score', label: 'Score', type: 'number', width: 90, align: 'right', badgeTone: scoreTone, agg: 'avg' },
+  { key: 'total_items', label: 'Items', type: 'number', width: 90, align: 'right', agg: 'sum' },
+  { key: 'complied_count', label: 'Complied', type: 'number', width: 100, align: 'right', agg: 'sum' },
+  { key: 'not_complied_count', label: 'Not complied', type: 'number', width: 120, align: 'right', agg: 'sum' },
+  { key: 'in_progress_count', label: 'In progress', type: 'number', width: 110, align: 'right', agg: 'sum' },
+  { key: 'assessor', label: 'Assessor', type: 'text', width: 150 },
+  { key: 'due_date', label: 'Due', type: 'date', width: 120 },
+  { key: 'created_at', label: 'Created', type: 'date', width: 120 },
+  { key: 'updated_at', label: 'Updated', type: 'date', width: 120 },
+];
+
 export const DATASETS: ReportDataset[] = [
   {
     key: 'risks', permissions: ['erm:risks:*'], module: 'Risk Management', label: 'Risk Register', server: true,
@@ -74,38 +96,47 @@ export const DATASETS: ReportDataset[] = [
     ],
   },
   {
-    key: 'controls', permissions: ['controls:control_library:*'], module: 'Controls', label: 'Controls Library',
+    key: 'controls', permissions: ['controls:control_library:*'], module: 'Control Testing & Assurance', label: 'Controls Library',
     description: 'Control objectives, type and automation status.',
     fetch: async () => asRows((await controlsApi.getAll()).data),
     columns: [
       // Aligned to NormalizedControlResponse (the /controls list shape): code, name,
-      // control_owner, maturity_level, created_at. The prior keys (reference_code,
-      // control_type, automation_status, owner_id) are not in the response → were blank.
+      // statement, objective, control_owner, maturity_level, created_at. The prior
+      // keys (reference_code, control_type, automation_status, owner_id) are not in
+      // the response → were blank.
       { key: 'code', label: 'Ref', type: 'text', width: 120, href: (r) => `/control-library/${r.id}` },
-      { key: 'name', label: 'Control', type: 'text', width: 340, href: (r) => `/control-library/${r.id}` },
+      { key: 'name', label: 'Control', type: 'text', width: 300, href: (r) => `/control-library/${r.id}` },
       { key: 'maturity_level', label: 'Maturity', type: 'badge', width: 130, badgeTone: () => TONE.slate, format: titleCase },
       { key: 'control_owner', label: 'Owner', type: 'text', width: 150 },
+      { key: 'statement', label: 'Description', type: 'text', width: 320 },
+      { key: 'objective', label: 'Objective', type: 'text', width: 260 },
       { key: 'created_at', label: 'Created', type: 'date', width: 120 },
     ],
   },
   {
-    key: 'evidence', permissions: ['evidence:evidence_library:*', 'evidence:evidence_upload:*'], module: 'Evidence', label: 'Evidence Library', server: true,
-    description: 'Collected evidence with type, status and expiry.',
+    key: 'evidence', permissions: ['evidence:evidence_library:*', 'evidence:evidence_upload:*'], module: 'Compliance Management', label: 'Evidence Library', server: true,
+    description: 'Collected evidence with type, status, expiry and linkage counts.',
     fetch: async () => asRows((await evidenceApi.getAll()).data),
     columns: [
-      // Aligned to EvidenceResponse (the /evidence list shape): id, name, file_type,
-      // status, uploaded_at, version. The prior keys (title, evidence_type,
-      // collection_date, expiry_date, created_at) are not in the response → were blank.
+      // Aligned to serialize_evidence() (the /evidence list shape) — richer than
+      // the bare EvidenceResponse schema: evidence_type, collection/expiry dates,
+      // owner/uploader names and cross-module link counts are all populated there.
       { key: 'id', label: 'ID', type: 'number', width: 70, href: (r) => `/evidence/${r.id}` },
-      { key: 'name', label: 'Evidence', type: 'text', width: 340, href: (r) => `/evidence/${r.id}` },
-      { key: 'file_type', label: 'Type', type: 'badge', width: 120, badgeTone: () => TONE.teal, format: titleCase },
+      { key: 'name', label: 'Evidence', type: 'text', width: 300, href: (r) => `/evidence/${r.id}` },
+      { key: 'evidence_type', label: 'Type', type: 'badge', width: 140, badgeTone: () => TONE.teal, format: titleCase, accessor: (r) => r.evidence_type ?? r.file_type },
       { key: 'status', label: 'Status', type: 'badge', width: 130, badgeTone: statusTone, format: titleCase },
+      { key: 'is_stale', label: 'Stale', type: 'badge', width: 90, badgeTone: (v) => (boolTrue(v) ? TONE.red : TONE.slate), format: boolFmt },
+      { key: 'owner_name', label: 'Owner', type: 'text', width: 150, accessor: (r) => r.owner_name ?? r.uploader_name ?? r.owner_id },
       { key: 'version', label: 'Version', type: 'text', width: 90 },
+      { key: 'collection_date', label: 'Collected', type: 'date', width: 120 },
+      { key: 'expiry_date', label: 'Expires', type: 'date', width: 120 },
       { key: 'uploaded_at', label: 'Uploaded', type: 'date', width: 130 },
+      { key: 'control_mappings_count', label: 'Controls linked', type: 'number', width: 120, align: 'right', agg: 'sum' },
+      { key: 'risk_links_count', label: 'Risks linked', type: 'number', width: 110, align: 'right', agg: 'sum' },
     ],
   },
   {
-    key: 'journeys', permissions: ['compliance:frameworks:*'], module: 'Compliance', label: 'Framework Journeys',
+    key: 'journeys', permissions: ['compliance:frameworks:*'], module: 'Compliance Management', label: 'Framework Journeys',
     description: 'Certification journeys, target dates and progress.',
     fetch: async () => asRows((await certificationsApi.getAll()).data),
     columns: [
@@ -120,22 +151,27 @@ export const DATASETS: ReportDataset[] = [
     ],
   },
   {
-    key: 'gov_documents', permissions: ['governance:policies:*'], module: 'Governance', label: 'Governance Documents',
+    key: 'gov_documents', permissions: ['governance:policies:*'], module: 'Governance', label: 'Governance Documents', server: true,
     description: 'Policies, procedures and standards with review dates.',
     fetch: async () => asRows((await apiClient.get('/governance/documents')).data),
     columns: [
-      { key: 'title', label: 'Document', type: 'text', width: 320, href: (r) => `/governance/documents/${r.id}` },
-      { key: 'document_type', label: 'Type', type: 'badge', width: 130, badgeTone: () => TONE.teal, format: titleCase },
+      // Aligned to serialize_document(): `doc_type`/`classification`/`current_version`
+      // are the real field names (document_type/category/version_number were blank).
+      { key: 'title', label: 'Document', type: 'text', width: 280, href: (r) => `/governance/documents/${r.id}` },
+      { key: 'doc_type', label: 'Type', type: 'badge', width: 130, badgeTone: () => TONE.teal, format: titleCase, accessor: (r) => r.doc_type ?? r.document_type },
       { key: 'status', label: 'Status', type: 'badge', width: 140, badgeTone: statusTone, format: titleCase },
-      { key: 'category', label: 'Category', type: 'text', width: 150 },
-      { key: 'version_number', label: 'Version', type: 'text', width: 90 },
-      { key: 'owner_name', label: 'Owner', type: 'text', width: 150 },
+      { key: 'classification', label: 'Classification', type: 'text', width: 140, accessor: (r) => r.classification ?? r.category },
+      { key: 'current_version', label: 'Version', type: 'text', width: 90, accessor: (r) => r.current_version ?? r.version_number },
+      { key: 'owner_name', label: 'Owner', type: 'text', width: 150, accessor: (r) => r.owner_name ?? r.owner_id },
       { key: 'effective_date', label: 'Effective', type: 'date', width: 120 },
       { key: 'next_review_date', label: 'Next review', type: 'date', width: 130 },
+      { key: 'last_reviewed_at', label: 'Last reviewed', type: 'date', width: 130 },
+      { key: 'approved_at', label: 'Approved', type: 'date', width: 120 },
+      { key: 'published_at', label: 'Published', type: 'date', width: 120 },
     ],
   },
   {
-    key: 'assets', permissions: ['assets:asset_inventory:*'], module: 'IT Assets', label: 'Asset Inventory', server: true,
+    key: 'assets', permissions: ['assets:asset_inventory:*'], module: 'Cybersecurity Assurance', label: 'Asset Inventory', server: true,
     description: 'IT assets with type, criticality, ownership and internet exposure.',
     fetch: async () => asRows((await assetsApi.getAll()).data),
     columns: [
@@ -153,57 +189,67 @@ export const DATASETS: ReportDataset[] = [
     ],
   },
   {
-    key: 'vendors', permissions: ['erm:risks:*'], module: 'Vendor Risk', label: 'Vendor Register',
-    description: 'Third-party vendors with tier, data-access level and status.',
+    key: 'vendors', permissions: ['erm:risks:*'], module: 'Third-Party Vendor Risk', label: 'Vendor Register', server: true,
+    description: 'Third-party vendors with tier, data-access level, contact and residual risk.',
     fetch: async () => asRows((await vendorRiskApi.getVendors()).data),
     columns: [
       { key: 'id', label: 'ID', type: 'number', width: 70, href: (r) => `/vendor-risk/vendors/${r.id}` },
-      { key: 'name', label: 'Vendor', type: 'text', width: 260, href: (r) => `/vendor-risk/vendors/${r.id}`, accessor: (r) => r.name ?? r.vendor_name ?? r.company_name },
+      { key: 'name', label: 'Vendor', type: 'text', width: 240, href: (r) => `/vendor-risk/vendors/${r.id}`, accessor: (r) => r.name ?? r.vendor_name ?? r.company_name },
       { key: 'vendor_type', label: 'Type', type: 'badge', width: 150, badgeTone: () => TONE.teal, format: titleCase },
-      { key: 'criticality', label: 'Tier / risk', type: 'badge', width: 140, badgeTone: sevTone, format: titleCase, accessor: (r) => r.criticality ?? r.risk_tier ?? r.risk_rating ?? r.inherent_risk },
-      { key: 'data_access_level', label: 'Data access', type: 'badge', width: 150, badgeTone: sevTone, format: titleCase },
-      { key: 'status', label: 'Status', type: 'badge', width: 130, badgeTone: statusTone, format: titleCase },
+      { key: 'tier', label: 'Tier / risk', type: 'badge', width: 130, badgeTone: sevTone, format: titleCase, accessor: (r) => r.tier ?? r.criticality ?? r.risk_rating },
+      { key: 'data_access_level', label: 'Data access', type: 'badge', width: 140, badgeTone: sevTone, format: titleCase },
+      { key: 'status', label: 'Status', type: 'badge', width: 120, badgeTone: statusTone, format: titleCase },
+      { key: 'primary_contact_name', label: 'Contact', type: 'text', width: 150 },
+      { key: 'website', label: 'Website', type: 'text', width: 170 },
+      { key: 'residual_risk_score', label: 'Residual risk', type: 'number', width: 110, align: 'right', badgeTone: scoreTone, agg: 'avg' },
+      { key: 'next_reassessment_date', label: 'Next assessment', type: 'date', width: 130 },
       { key: 'created_at', label: 'Onboarded', type: 'date', width: 120 },
     ],
   },
   {
-    key: 'vulnerabilities', permissions: ['vulnerabilities:vulnerability_register:*'], module: 'Vulnerabilities', label: 'Vulnerability Register', server: true,
+    key: 'vulnerabilities', permissions: ['vulnerabilities:vulnerability_register:*'], module: 'Cybersecurity Assurance', label: 'Vulnerability Register', server: true,
     description: 'Open vulnerabilities with severity, CVSS, KEV and remediation status.',
     fetch: async () => asRows((await vulnManagementApi.vulnerabilities.getAll()).data),
     columns: [
+      // Aligned to VulnerabilityResponse: affected_host, assigned_to/assignee_name,
+      // discovered_at, resolved_at, vuln_id are the real field names on the list API.
       { key: 'id', label: 'ID', type: 'number', width: 70, href: (r) => `/vulnerabilities/${r.id}` },
-      { key: 'title', label: 'Vulnerability', type: 'text', width: 320, href: (r) => `/vulnerabilities/${r.id}`, accessor: (r) => r.title ?? r.name ?? r.vuln_id },
+      { key: 'title', label: 'Vulnerability', type: 'text', width: 280, href: (r) => `/vulnerabilities/${r.id}`, accessor: (r) => r.title ?? r.name ?? r.vuln_id },
+      { key: 'vuln_id', label: 'Vuln ID', type: 'text', width: 110 },
       { key: 'severity', label: 'Severity', type: 'badge', width: 110, badgeTone: sevTone, format: titleCase },
       { key: 'cvss_score', label: 'CVSS', type: 'number', width: 80, align: 'right', agg: 'avg' },
       { key: 'cve_id', label: 'CVE', type: 'text', width: 150 },
       { key: 'kev_flag', label: 'KEV', type: 'badge', width: 80, badgeTone: (v) => (boolTrue(v) ? TONE.red : TONE.slate), format: boolFmt },
       { key: 'status', label: 'Status', type: 'badge', width: 130, badgeTone: statusTone, format: titleCase },
-      { key: 'asset', label: 'Asset', type: 'text', width: 180, accessor: (r) => r.asset_name ?? r.host_name },
-      { key: 'owner', label: 'Owner', type: 'text', width: 150, accessor: (r) => r.owner_name ?? r.assigned_to },
+      { key: 'affected_host', label: 'Asset', type: 'text', width: 160, accessor: (r) => r.affected_host ?? r.asset_name ?? r.host_name },
+      { key: 'assigned_to', label: 'Owner', type: 'text', width: 150, accessor: (r) => r.assignee_name ?? r.assigned_to },
       { key: 'due_date', label: 'Due', type: 'date', width: 120, accessor: (r) => r.due_date ?? r.sla_due_date },
-      { key: 'created_at', label: 'Detected', type: 'date', width: 120, accessor: (r) => r.created_at ?? r.discovered_at },
+      { key: 'discovered_at', label: 'Detected', type: 'date', width: 120, accessor: (r) => r.discovered_at ?? r.created_at },
+      { key: 'resolved_at', label: 'Resolved', type: 'date', width: 120 },
     ],
   },
   {
-    key: 'issues', permissions: ['issue_management:issues:*'], module: 'Issue Management', label: 'Enterprise Log',
+    key: 'issues', permissions: ['issue_management:issues:*'], module: 'Issue & Incident Management', label: 'Enterprise Log', server: true,
     description: 'Issues and findings with severity, workflow state, assignment and SLA.',
-    fetch: async () => asRows((await issuesApi.list({ limit: 2000 })).data),
+    fetch: async () => asRows((await issuesApi.list({ limit: 5000 })).data),
     columns: [
       { key: 'id', label: 'ID', type: 'number', width: 70, href: (r) => `/issues/${r.id}` },
       { key: 'code', label: 'Code', type: 'text', width: 90, href: (r) => `/issues/${r.id}` },
-      { key: 'title', label: 'Issue', type: 'text', width: 300, href: (r) => `/issues/${r.id}` },
+      { key: 'title', label: 'Issue', type: 'text', width: 260, href: (r) => `/issues/${r.id}` },
+      { key: 'description', label: 'Description', type: 'text', width: 300 },
       { key: 'severity', label: 'Severity', type: 'badge', width: 110, badgeTone: sevTone, format: titleCase },
       { key: 'workflow_state', label: 'State', type: 'badge', width: 130, badgeTone: statusTone, format: titleCase },
       { key: 'issue_type', label: 'Type', type: 'badge', width: 130, badgeTone: () => TONE.slate, format: titleCase },
       { key: 'category', label: 'Category', type: 'text', width: 120, format: titleCase },
+      { key: 'source_type', label: 'Source', type: 'badge', width: 130, badgeTone: () => TONE.slate, format: titleCase },
       { key: 'sla_breached', label: 'SLA breached', type: 'badge', width: 110, badgeTone: (v) => (boolTrue(v) ? TONE.red : TONE.slate), format: boolFmt },
-      { key: 'assignee', label: 'Assignee', type: 'text', width: 150, accessor: (r) => (r.assignee as { display_name?: string })?.display_name },
+      { key: 'assignee', label: 'Assignee', type: 'text', width: 150, accessor: (r) => r.assignee_name ?? (r.assignee as { display_name?: string })?.display_name ?? r.assignee_id },
       { key: 'created_at', label: 'Created', type: 'date', width: 120 },
       { key: 'target_closure_date', label: 'Target close', type: 'date', width: 120 },
     ],
   },
   {
-    key: 'incidents', permissions: ['erm:incidents:*'], module: 'ERM', label: 'Incidents',
+    key: 'incidents', permissions: ['erm:incidents:*'], module: 'Issue & Incident Management', label: 'Incidents',
     description: 'Risk incidents with severity, status, assignment and impact.',
     fetch: async () => asRows((await ermApi.incidents.getAll()).data),
     columns: [
@@ -219,15 +265,15 @@ export const DATASETS: ReportDataset[] = [
     ],
   },
   {
-    key: 'tasks', permissions: ['critical_tasks:tasks:*', 'critical_tasks:reports:view'], module: 'Tasks', label: 'Critical Tasks',
+    key: 'tasks', permissions: ['critical_tasks:tasks:*', 'critical_tasks:reports:view'], module: 'Critical Tasks', label: 'Critical Tasks', server: true,
     description: 'Task workspace items with status, priority, SLA and ownership.',
-    fetch: async () => asRows((await criticalTasksApi.list({ limit: 2000 })).data),
+    fetch: async () => asRows((await criticalTasksApi.list({ limit: 5000 })).data),
     columns: [
       { key: 'id', label: 'ID', type: 'number', width: 70, href: (r) => `/tasks/${r.id}` },
       { key: 'title', label: 'Task', type: 'text', width: 300, href: (r) => `/tasks/${r.id}`, accessor: (r) => r.title ?? r.name },
       { key: 'status', label: 'Status', type: 'badge', width: 130, badgeTone: statusTone, format: titleCase },
       { key: 'priority', label: 'Priority', type: 'badge', width: 110, badgeTone: sevTone, format: titleCase },
-      { key: 'assignee_name', label: 'Assignee', type: 'text', width: 150, accessor: (r) => r.assignee_name ?? (r.assignee as { display_name?: string })?.display_name },
+      { key: 'assignee_name', label: 'Assignee', type: 'text', width: 150, accessor: (r) => r.assignee_name ?? (r.assignee as { display_name?: string })?.display_name ?? r.assigned_owner_id },
       { key: 'due_date', label: 'Due', type: 'date', width: 120 },
       { key: 'created_at', label: 'Created', type: 'date', width: 120 },
       { key: 'module', label: 'Source module', type: 'text', width: 140, format: titleCase, accessor: (r) => r.source_module ?? r.module },
@@ -253,30 +299,48 @@ export const DATASETS: ReportDataset[] = [
     ],
   },
   {
-    key: 'bcm_plans', permissions: ['bcm:plans:*'], module: 'BCM', label: 'Continuity Plans',
-    description: 'Business continuity plans with status and ownership.',
+    key: 'bcm_plans', permissions: ['bcm:plans:*'], module: 'Business Continuity', label: 'Continuity Plans',
+    description: 'Business continuity plans with RTO/RPO, review cadence, BIA and drill coverage.',
     fetch: async () => asRows((await bcmApi.plans.list()).data),
     columns: [
+      // Aligned to serialize_plan() (bcm/routers/_common.py) — `title` (not `name`)
+      // is the real field; `plan_type` does not exist on BcmPlan.
       { key: 'id', label: 'ID', type: 'number', width: 70, href: (r) => `/bcm/plans/${r.id}` },
-      { key: 'name', label: 'Plan', type: 'text', width: 280, href: (r) => `/bcm/plans/${r.id}`, accessor: (r) => r.name ?? r.title },
+      { key: 'title', label: 'Plan', type: 'text', width: 260, href: (r) => `/bcm/plans/${r.id}`, accessor: (r) => r.title ?? r.name },
       { key: 'status', label: 'Status', type: 'badge', width: 130, badgeTone: statusTone, format: titleCase },
-      { key: 'plan_type', label: 'Type', type: 'badge', width: 140, badgeTone: () => TONE.teal, format: titleCase },
+      { key: 'business_unit', label: 'Business unit', type: 'text', width: 150 },
       { key: 'owner_name', label: 'Owner', type: 'text', width: 150 },
-      { key: 'next_review_date', label: 'Next review', type: 'date', width: 130 },
+      { key: 'rto_hours', label: 'RTO (hrs)', type: 'number', width: 90, align: 'right', agg: 'avg' },
+      { key: 'rpo_hours', label: 'RPO (hrs)', type: 'number', width: 90, align: 'right', agg: 'avg' },
+      { key: 'testing_frequency', label: 'Test freq', type: 'badge', width: 120, badgeTone: () => TONE.slate, format: titleCase },
+      { key: 'bia_count', label: 'BIAs', type: 'number', width: 80, align: 'right', agg: 'sum' },
+      { key: 'drill_count', label: 'Drills', type: 'number', width: 80, align: 'right', agg: 'sum' },
+      { key: 'next_review_due', label: 'Next review', type: 'date', width: 130 },
+      { key: 'approved_date', label: 'Approved', type: 'date', width: 120 },
       { key: 'updated_at', label: 'Updated', type: 'date', width: 120 },
     ],
   },
   {
-    key: 'bcm_drills', permissions: ['bcm:drills:*'], module: 'BCM', label: 'Drills & Invocations',
-    description: 'BCM drills and invocations with outcome and schedule.',
+    key: 'bcm_drills', permissions: ['bcm:drills:*'], module: 'Business Continuity', label: 'Drills & Invocations',
+    description: 'BCM drills and invocations with outcome, schedule and findings.',
     fetch: async () => asRows((await bcmApi.drills.list()).data),
     columns: [
+      // Aligned to serialize_drill() — `title` + `scheduled_date` are the real
+      // fields; `outcome` does not exist on BcmDrill (effective_status/has_result
+      // are the closest real signals of drill outcome).
       { key: 'id', label: 'ID', type: 'number', width: 70, href: (r) => `/bcm/drills/${r.id}` },
-      { key: 'name', label: 'Drill', type: 'text', width: 280, href: (r) => `/bcm/drills/${r.id}`, accessor: (r) => r.name ?? r.title },
-      { key: 'status', label: 'Status', type: 'badge', width: 130, badgeTone: statusTone, format: titleCase },
-      { key: 'drill_type', label: 'Type', type: 'badge', width: 140, badgeTone: () => TONE.slate, format: titleCase },
-      { key: 'scheduled_at', label: 'Scheduled', type: 'date', width: 130 },
-      { key: 'outcome', label: 'Outcome', type: 'text', width: 160, format: titleCase },
+      { key: 'title', label: 'Drill', type: 'text', width: 240, href: (r) => `/bcm/drills/${r.id}`, accessor: (r) => r.title ?? r.name },
+      { key: 'plan_title', label: 'Plan', type: 'text', width: 200 },
+      { key: 'drill_type', label: 'Type', type: 'badge', width: 130, badgeTone: () => TONE.slate, format: titleCase },
+      { key: 'source_type', label: 'Source', type: 'badge', width: 140, badgeTone: () => TONE.teal, format: titleCase },
+      { key: 'effective_status', label: 'Status', type: 'badge', width: 120, badgeTone: statusTone, format: titleCase },
+      { key: 'is_overdue', label: 'Overdue', type: 'badge', width: 90, badgeTone: (v) => (boolTrue(v) ? TONE.red : TONE.slate), format: boolFmt },
+      { key: 'owner_name', label: 'Owner', type: 'text', width: 150 },
+      { key: 'scheduled_date', label: 'Scheduled', type: 'date', width: 130 },
+      { key: 'actual_start', label: 'Started', type: 'date', width: 120 },
+      { key: 'actual_end', label: 'Completed', type: 'date', width: 120 },
+      { key: 'has_result', label: 'Has result', type: 'badge', width: 100, badgeTone: (v) => (boolTrue(v) ? TONE.green : TONE.slate), format: boolFmt },
+      { key: 'finding_count', label: 'Findings', type: 'number', width: 90, align: 'right', agg: 'sum' },
     ],
   },
   {
@@ -297,33 +361,43 @@ export const DATASETS: ReportDataset[] = [
     ],
   },
   {
-    key: 'criticality_info', permissions: ['assets:criticality_assessments:view'], module: 'IT Assets', label: 'Info-system criticality',
-    description: 'Information-system criticality assessments.',
+    key: 'criticality_info', permissions: ['assets:criticality_assessments:view'], module: 'Cybersecurity Assurance', label: 'Info-system criticality',
+    description: 'Information-system criticality assessments with total score, approval and owners.',
     fetch: async () => asRows((await criticalityApi.infoSystem.list()).data),
     columns: [
+      // Aligned to ISCAResponse: total_score/criticality_level (not `criticality`/
+      // `overall_rating`), business_owner_user_name, assessor_user_name, approval_status.
       { key: 'id', label: 'ID', type: 'number', width: 70, href: (r) => `/assets/criticality-assessments` },
-      { key: 'name', label: 'System', type: 'text', width: 260, accessor: (r) => r.name ?? r.system_name ?? r.title },
-      { key: 'criticality', label: 'Criticality', type: 'badge', width: 130, badgeTone: sevTone, format: titleCase, accessor: (r) => r.criticality ?? r.overall_rating },
-      { key: 'status', label: 'Status', type: 'badge', width: 130, badgeTone: statusTone, format: titleCase },
-      { key: 'owner_name', label: 'Owner', type: 'text', width: 150 },
+      { key: 'name', label: 'System', type: 'text', width: 240, accessor: (r) => r.name ?? r.system_name ?? r.title },
+      { key: 'total_score', label: 'Score', type: 'number', width: 90, align: 'right', badgeTone: scoreTone, agg: 'avg' },
+      { key: 'criticality_level', label: 'Criticality', type: 'badge', width: 130, badgeTone: sevTone, format: titleCase, accessor: (r) => r.criticality_level ?? r.criticality },
+      { key: 'approval_status', label: 'Approval', type: 'badge', width: 120, badgeTone: statusTone, format: titleCase },
+      { key: 'business_owner_name', label: 'Business owner', type: 'text', width: 160, accessor: (r) => r.business_owner_user_name ?? r.business_owner_name ?? r.owner_name },
+      { key: 'assessor_name', label: 'Assessor', type: 'text', width: 150, accessor: (r) => r.assessor_user_name ?? r.assessor_name },
+      { key: 'date_of_assessment', label: 'Assessed', type: 'date', width: 120 },
       { key: 'updated_at', label: 'Updated', type: 'date', width: 120 },
     ],
   },
   {
-    key: 'criticality_infra', permissions: ['assets:criticality_assessments:view'], module: 'IT Assets', label: 'Infra criticality',
-    description: 'Infrastructure asset criticality assessments.',
+    key: 'criticality_infra', permissions: ['assets:criticality_assessments:view'], module: 'Cybersecurity Assurance', label: 'Infra criticality',
+    description: 'Infrastructure asset criticality assessments with total score, approval and custodians.',
     fetch: async () => asRows((await criticalityApi.infraAsset.list()).data),
     columns: [
+      // Aligned to IACAResponse: total_score/criticality_level, custodian_user_name,
+      // administrator_user_name, approval_status.
       { key: 'id', label: 'ID', type: 'number', width: 70, href: (r) => `/assets/criticality-assessments` },
-      { key: 'name', label: 'Asset', type: 'text', width: 260, accessor: (r) => r.name ?? r.asset_name ?? r.title },
-      { key: 'criticality', label: 'Criticality', type: 'badge', width: 130, badgeTone: sevTone, format: titleCase, accessor: (r) => r.criticality ?? r.overall_rating },
-      { key: 'status', label: 'Status', type: 'badge', width: 130, badgeTone: statusTone, format: titleCase },
-      { key: 'owner_name', label: 'Owner', type: 'text', width: 150 },
+      { key: 'name', label: 'Asset', type: 'text', width: 240, accessor: (r) => r.name ?? r.asset_name ?? r.title },
+      { key: 'total_score', label: 'Score', type: 'number', width: 90, align: 'right', badgeTone: scoreTone, agg: 'avg' },
+      { key: 'criticality_level', label: 'Criticality', type: 'badge', width: 130, badgeTone: sevTone, format: titleCase, accessor: (r) => r.criticality_level ?? r.criticality },
+      { key: 'approval_status', label: 'Approval', type: 'badge', width: 120, badgeTone: statusTone, format: titleCase },
+      { key: 'custodian_user_name', label: 'Custodian', type: 'text', width: 150, accessor: (r) => r.custodian_user_name ?? r.custodian_name },
+      { key: 'administrator_user_name', label: 'Administrator', type: 'text', width: 160 },
+      { key: 'location', label: 'Location', type: 'text', width: 140 },
       { key: 'updated_at', label: 'Updated', type: 'date', width: 120 },
     ],
   },
   {
-    key: 'discovery_campaigns', permissions: ['assets:asset_inventory:*'], module: 'IT Assets', label: 'Discovery campaigns',
+    key: 'discovery_campaigns', permissions: ['assets:asset_inventory:*'], module: 'Cybersecurity Assurance', label: 'Discovery campaigns',
     description: 'IT asset discovery campaigns and schedules.',
     fetch: async () => asRows((await discoveryApi.listCampaigns()).data),
     columns: [
@@ -337,15 +411,23 @@ export const DATASETS: ReportDataset[] = [
     ],
   },
   {
-    key: 'regulatory_changes', permissions: ['governance:regulatory_changes:*'], module: 'Compliance', label: 'Regulatory changes',
-    description: 'Tracked regulatory changes with priority and status.',
+    key: 'regulatory_changes', permissions: ['governance:regulatory_changes:*'], module: 'Compliance Management', label: 'Regulatory changes',
+    description: 'Tracked regulatory changes with regulator, owner, impact and implementation progress.',
     fetch: async () => asRows((await regulatoryApi.getChanges()).data),
     columns: [
+      // Aligned to RegulatoryChangeResponse — no jurisdiction/deadline field exists;
+      // regulatory_body + effective_date are the closest real equivalents.
       { key: 'id', label: 'ID', type: 'number', width: 70, href: (r) => `/governance/regulatory-changes/${r.id}` },
-      { key: 'title', label: 'Change', type: 'text', width: 300, href: (r) => `/governance/regulatory-changes/${r.id}` },
-      { key: 'source', label: 'Source', type: 'badge', width: 140, badgeTone: () => TONE.teal, format: titleCase },
+      { key: 'title', label: 'Change', type: 'text', width: 280, href: (r) => `/governance/regulatory-changes/${r.id}` },
+      { key: 'source', label: 'Source', type: 'badge', width: 120, badgeTone: () => TONE.teal, format: titleCase },
+      { key: 'regulatory_body', label: 'Regulator', type: 'badge', width: 140, badgeTone: () => TONE.slate, format: titleCase },
       { key: 'priority', label: 'Priority', type: 'badge', width: 110, badgeTone: sevTone, format: titleCase },
       { key: 'status', label: 'Status', type: 'badge', width: 130, badgeTone: statusTone, format: titleCase },
+      { key: 'assignee_name', label: 'Owner', type: 'text', width: 150 },
+      { key: 'impact_summary', label: 'Impact', type: 'text', width: 260 },
+      { key: 'gap_count', label: 'Gaps', type: 'number', width: 80, align: 'right', agg: 'sum' },
+      { key: 'task_count', label: 'Tasks', type: 'number', width: 80, align: 'right', agg: 'sum' },
+      { key: 'completed_task_count', label: 'Tasks done', type: 'number', width: 100, align: 'right', agg: 'sum' },
       { key: 'effective_date', label: 'Effective', type: 'date', width: 120 },
       { key: 'created_at', label: 'Logged', type: 'date', width: 120 },
     ],
@@ -366,32 +448,48 @@ export const DATASETS: ReportDataset[] = [
   },
   {
     key: 'committees', permissions: ['governance:committees:*'], module: 'Governance', label: 'Committees',
-    description: 'Governance committees and status.',
+    description: 'Governance committees with cadence, secretariat and open-action load.',
     fetch: async () => asRows((await committeeApi.getCommittees()).data),
     columns: [
+      // `status` does not exist on GovernanceCommittee (only `is_active`) — was blank.
       { key: 'id', label: 'ID', type: 'number', width: 70, href: (r) => `/governance/committees/${r.id}` },
-      { key: 'name', label: 'Committee', type: 'text', width: 260, href: (r) => `/governance/committees/${r.id}` },
-      { key: 'status', label: 'Status', type: 'badge', width: 130, badgeTone: statusTone, format: titleCase },
+      { key: 'name', label: 'Committee', type: 'text', width: 220, href: (r) => `/governance/committees/${r.id}` },
       { key: 'committee_type', label: 'Type', type: 'badge', width: 140, badgeTone: () => TONE.slate, format: titleCase },
+      { key: 'is_active', label: 'Active', type: 'badge', width: 90, badgeTone: (v) => (boolTrue(v) ? TONE.green : TONE.slate), format: boolFmt },
       { key: 'chair_name', label: 'Chair', type: 'text', width: 150 },
-      { key: 'member_count', label: 'Members', type: 'number', width: 100, align: 'right' },
+      { key: 'secretary_name', label: 'Secretariat', type: 'text', width: 150 },
+      { key: 'meeting_frequency', label: 'Cadence', type: 'badge', width: 120, badgeTone: () => TONE.teal, format: titleCase },
+      { key: 'member_count', label: 'Members', type: 'number', width: 90, align: 'right' },
+      { key: 'meeting_count', label: 'Meetings', type: 'number', width: 90, align: 'right', agg: 'sum' },
+      { key: 'pending_actions_count', label: 'Open actions', type: 'number', width: 110, align: 'right', agg: 'sum' },
+      { key: 'description', label: 'Description', type: 'text', width: 240 },
+      { key: 'updated_at', label: 'Updated', type: 'date', width: 120 },
     ],
   },
   {
-    key: 'frameworks', permissions: ['compliance:frameworks:*'], module: 'Compliance', label: 'Framework catalog',
-    description: 'Available compliance frameworks in the tenant.',
+    key: 'frameworks', permissions: ['compliance:frameworks:*'], module: 'Compliance Management', label: 'Framework catalog',
+    description: 'Available compliance frameworks in the tenant, with control coverage.',
     fetch: async () => asRows((await frameworksApi.getAll()).data),
     columns: [
+      // Aligned to FrameworkResponse — `framework_type`/`status`/`publisher` do not
+      // exist on this response (were blank); short_code/regulator/jurisdiction/
+      // is_mandatory/is_custom/control_count/domain_count are the real fields.
       { key: 'id', label: 'ID', type: 'number', width: 70, href: (r) => `/frameworks/${r.id}` },
-      { key: 'name', label: 'Framework', type: 'text', width: 280, href: (r) => `/frameworks/${r.id}` },
-      { key: 'framework_type', label: 'Type', type: 'badge', width: 140, badgeTone: () => TONE.slate, format: titleCase },
-      { key: 'version', label: 'Version', type: 'text', width: 100 },
-      { key: 'status', label: 'Status', type: 'badge', width: 130, badgeTone: statusTone, format: titleCase },
-      { key: 'publisher', label: 'Publisher', type: 'text', width: 160 },
+      { key: 'name', label: 'Framework', type: 'text', width: 240, href: (r) => `/frameworks/${r.id}` },
+      { key: 'short_code', label: 'Code', type: 'text', width: 100 },
+      { key: 'regulator', label: 'Regulator', type: 'badge', width: 140, badgeTone: () => TONE.slate, format: titleCase },
+      { key: 'jurisdiction', label: 'Jurisdiction', type: 'text', width: 130 },
+      { key: 'version', label: 'Version', type: 'text', width: 90 },
+      { key: 'is_mandatory', label: 'Mandatory', type: 'badge', width: 110, badgeTone: (v) => (boolTrue(v) ? TONE.teal : TONE.slate), format: boolFmt },
+      { key: 'is_custom', label: 'Custom', type: 'badge', width: 90, badgeTone: (v) => (boolTrue(v) ? TONE.teal : TONE.slate), format: boolFmt },
+      { key: 'is_active', label: 'Active', type: 'badge', width: 90, badgeTone: (v) => (boolTrue(v) ? TONE.green : TONE.slate), format: boolFmt },
+      { key: 'control_count', label: 'Controls', type: 'number', width: 90, align: 'right', agg: 'sum' },
+      { key: 'domain_count', label: 'Domains', type: 'number', width: 90, align: 'right', agg: 'sum' },
+      { key: 'description', label: 'Description', type: 'text', width: 260 },
     ],
   },
   {
-    key: 'internal_controls', permissions: ['erm:risks:*'], module: 'Controls', label: 'Internal Control Register',
+    key: 'internal_controls', permissions: ['erm:risks:*'], module: 'Control Testing & Assurance', label: 'Internal Control Register', server: true,
     description: 'Internal controls with design/operating effectiveness, testing and ownership.',
     fetch: async () => asRows((await ermApi.internalControls.getAll()).data),
     columns: [
@@ -404,7 +502,7 @@ export const DATASETS: ReportDataset[] = [
       { key: 'operating_effectiveness', label: 'Operating', type: 'badge', width: 130, badgeTone: statusTone, format: titleCase },
       { key: 'priority', label: 'Priority', type: 'badge', width: 110, badgeTone: sevTone, format: titleCase },
       { key: 'is_key_control', label: 'Key', type: 'badge', width: 80, badgeTone: (v) => (boolTrue(v) ? TONE.teal : TONE.slate), format: boolFmt },
-      { key: 'owner_name', label: 'Owner', type: 'text', width: 150 },
+      { key: 'owner_name', label: 'Owner', type: 'text', width: 150, accessor: (r) => r.owner_name ?? r.owner_id },
       { key: 'next_test_date', label: 'Next test', type: 'date', width: 130 },
       { key: 'created_at', label: 'Created', type: 'date', width: 120 },
     ],
@@ -445,7 +543,7 @@ export const DATASETS: ReportDataset[] = [
     ],
   },
   {
-    key: 'rcsa_findings', permissions: ['erm:rcsa:*'], module: 'Assessments', label: 'RCSA Findings',
+    key: 'rcsa_findings', permissions: ['erm:rcsa:*'], module: 'Risk Management', label: 'RCSA Findings',
     description: 'Risk & control self-assessment findings with severity and remediation.',
     fetch: async () => asRows((await rcsaApi.getFindings()).data),
     columns: [
@@ -463,7 +561,7 @@ export const DATASETS: ReportDataset[] = [
     ],
   },
   {
-    key: 'rcsa_campaigns', permissions: ['erm:rcsa:*'], module: 'Assessments', label: 'RCSA Campaigns',
+    key: 'rcsa_campaigns', permissions: ['erm:rcsa:*'], module: 'Risk Management', label: 'RCSA Campaigns',
     description: 'RCSA campaigns with period, progress and completion.',
     fetch: async () => asRows((await rcsaApi.getCampaigns()).data),
     columns: [
@@ -499,7 +597,7 @@ export const DATASETS: ReportDataset[] = [
     ],
   },
   {
-    key: 'audit_packages', permissions: ['evidence:evidence_library:*', 'evidence:evidence_upload:*'], module: 'Evidence', label: 'Audit Packages',
+    key: 'audit_packages', permissions: ['evidence:evidence_library:*', 'evidence:evidence_upload:*'], module: 'Compliance Management', label: 'Audit Packages',
     description: 'Evidence audit packages with framework, retention and legal hold.',
     fetch: async () => asRows((await apiClient.get('/evidence-mgmt/audit-packages')).data),
     columns: [
@@ -517,7 +615,7 @@ export const DATASETS: ReportDataset[] = [
     ],
   },
   {
-    key: 'vendor_assessments', permissions: ['erm:risks:*'], module: 'Vendor Risk', label: 'Vendor Assessments',
+    key: 'vendor_assessments', permissions: ['erm:risks:*'], module: 'Third-Party Vendor Risk', label: 'Vendor Assessments',
     description: 'Third-party assessments with inherent/residual scoring and rating.',
     fetch: async () => asRows((await vendorRiskApi.getAssessments()).data),
     columns: [
@@ -535,7 +633,7 @@ export const DATASETS: ReportDataset[] = [
     ],
   },
   {
-    key: 'tpra_findings', permissions: ['erm:risks:*'], module: 'Vendor Risk', label: 'TPRA Findings',
+    key: 'tpra_findings', permissions: ['erm:risks:*'], module: 'Third-Party Vendor Risk', label: 'TPRA Findings',
     description: 'Third-party risk assessment findings across the vendor portfolio.',
     fetch: async () => asRows((await tpraApi.findingsRegister()).data),
     columns: [
@@ -570,7 +668,7 @@ export const DATASETS: ReportDataset[] = [
     ],
   },
   {
-    key: 'ai_risk_assessments', permissions: ['erm:risks:*'], module: 'AI Governance', label: 'AI Risk Assessments',
+    key: 'ai_risk_assessments', permissions: ['erm:risks:*'], module: 'Risk Management', label: 'AI Risk Assessments',
     description: 'AI system risk assessment entries with scoring and residual level.',
     fetch: async () => asRows((await aiRiskAssessmentApi.list()).data),
     columns: [
@@ -587,6 +685,87 @@ export const DATASETS: ReportDataset[] = [
       { key: 'created_at', label: 'Created', type: 'date', width: 120 },
     ],
   },
+  // ── Wave 3 — newly covered product areas ──────────────────────────────────
+  {
+    key: 'access_reviews', permissions: ['compliance:frameworks:*'], module: 'Compliance Management', label: 'Access Review Campaigns',
+    description: 'User access certification campaigns with sampling, decisions and exceptions.',
+    // Backend wraps the list as { campaigns: [...] } (grc/routers/access_review_router.py).
+    fetch: async () => { const d = (await apiClient.get('/access-reviews')).data; return asRows(d?.campaigns ?? d); },
+    columns: [
+      { key: 'id', label: 'ID', type: 'number', width: 70, href: (r) => `/compliance/access-reviews/${r.id}` },
+      { key: 'name', label: 'Campaign', type: 'text', width: 260, href: (r) => `/compliance/access-reviews/${r.id}` },
+      { key: 'review_type', label: 'Scope', type: 'badge', width: 130, badgeTone: () => TONE.slate, format: titleCase },
+      { key: 'sampling_method', label: 'Sampling', type: 'badge', width: 120, badgeTone: () => TONE.teal, format: titleCase },
+      { key: 'status', label: 'Status', type: 'badge', width: 140, badgeTone: statusTone, format: titleCase },
+      { key: 'population_size', label: 'Population', type: 'number', width: 100, align: 'right', agg: 'sum' },
+      { key: 'requested_sample_size', label: 'Sample size', type: 'number', width: 110, align: 'right', agg: 'sum' },
+      { key: 'items_reviewed', label: 'Reviewed', type: 'number', width: 100, align: 'right', agg: 'sum' },
+      { key: 'exceptions_found', label: 'Exceptions', type: 'number', width: 100, align: 'right', agg: 'sum' },
+      { key: 'created_at', label: 'Created', type: 'date', width: 120 },
+    ],
+  },
+  {
+    key: 'regulatory_feeds', permissions: ['governance:regulatory_changes:*'], module: 'Compliance Management', label: 'Regulatory Feeds',
+    description: 'Ingested regulatory feed items with AI-assessed priority and processing status.',
+    fetch: async () => asRows((await apiClient.get('/governance/regulatory-feeds/items')).data),
+    columns: [
+      { key: 'id', label: 'ID', type: 'number', width: 70 },
+      { key: 'title', label: 'Item', type: 'text', width: 320, href: (r) => (typeof r.link === 'string' && r.link) || null },
+      { key: 'feed_source_name', label: 'Source', type: 'badge', width: 160, badgeTone: () => TONE.teal, format: titleCase },
+      { key: 'status', label: 'Status', type: 'badge', width: 120, badgeTone: statusTone, format: titleCase },
+      { key: 'priority', label: 'AI priority', type: 'badge', width: 110, badgeTone: sevTone, format: titleCase, accessor: (r) => (r.ai_analysis as { priority?: string } | null)?.priority },
+      { key: 'regulatory_change_id', label: 'Linked change', type: 'number', width: 120, align: 'right' },
+      { key: 'published_date', label: 'Published', type: 'date', width: 130 },
+      { key: 'processed_at', label: 'Processed', type: 'date', width: 130 },
+      { key: 'created_at', label: 'Ingested', type: 'date', width: 120 },
+    ],
+  },
+  {
+    key: 'assessments_cyber', permissions: ['compliance:assessments:*'], module: 'Compliance Management', label: 'Cyber Security Assessments',
+    description: 'ASVS, OWASP, mobile app security and cyber-maturity assessments (CSIR/CTI/Incident/ITSecOps).',
+    fetch: async () => fetchAssessmentsByFormats([
+      'asvs_checklist', 'owasp_v4_testing_checklist', 'mobile_app_security',
+      'csir_maturity', 'cti_maturity', 'incident_maturity', 'itsecops_maturity',
+    ]),
+    columns: ASSESSMENT_COLUMNS,
+  },
+  {
+    key: 'assessments_nca', permissions: ['compliance:assessments:*'], module: 'Compliance Management', label: 'NCA Assessments',
+    description: 'NCA DCC essential-controls tool plus vulnerability/audit/risk registers.',
+    fetch: async () => fetchAssessmentsByFormats([
+      'nca_dcc_tool', 'nca_vuln_register', 'nca_audit_register', 'nca_risk_register',
+    ]),
+    columns: ASSESSMENT_COLUMNS,
+  },
+  {
+    key: 'assessments_digital_ops', permissions: ['compliance:assessments:*'], module: 'Compliance Management', label: 'Digital Operations Maturity',
+    description: 'Digital operations maturity assessments.',
+    fetch: async () => fetchAssessmentsByFormats(['digital_ops_maturity']),
+    columns: ASSESSMENT_COLUMNS,
+  },
+  {
+    key: 'assessments_dpia', permissions: ['compliance:assessments:*'], module: 'Compliance Management', label: 'DPIA / PIA Assessments',
+    description: 'Data Protection Impact Assessments.',
+    fetch: async () => fetchAssessmentsByFormats(['dpia_pia']),
+    columns: ASSESSMENT_COLUMNS,
+  },
+  {
+    key: 'assessments_pdpl', permissions: ['compliance:assessments:*'], module: 'Compliance Management', label: 'Saudi PDPL Assessments',
+    description: 'Saudi PDPL assessment toolkit submissions.',
+    fetch: async () => fetchAssessmentsByFormats(['pdpl_assessment_toolkit']),
+    columns: ASSESSMENT_COLUMNS,
+  },
+  {
+    key: 'internal_audit', permissions: ['compliance:assessments:*'], module: 'Auditor Portal', label: 'Internal Audit',
+    description: 'Internal audit master-tracking assessments (UBL audit format).',
+    fetch: async () => fetchAssessmentsByFormats(['ubl_audit_master_tracking']),
+    columns: ASSESSMENT_COLUMNS,
+  },
+  // `auditor_packages` (Sidebar: Auditor Portal › Portal) has no dedicated list
+  // API of its own — the page picks a framework via the same certification-journey
+  // list already covered by the `journeys` dataset, then drills into per-framework
+  // evidence/controls/risks/vendors tabs (no flat register to report on). Reused
+  // rather than duplicated; see COVERAGE_MATRIX.md.
 ];
 
 export { sevTone };

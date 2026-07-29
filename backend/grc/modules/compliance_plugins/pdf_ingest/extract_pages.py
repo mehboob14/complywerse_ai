@@ -214,18 +214,27 @@ def _ocr_page(pdf_bytes: bytes, page_index: int) -> tuple[str, float | None]:
     return _post_correct_ocr(best_text), best_conf
 
 
-def extract_all_pages(pdf_bytes: bytes) -> Iterator[dict]:
+def extract_all_pages(
+    pdf_bytes: bytes,
+    *,
+    max_pages: Optional[int] = None,
+    allow_ocr: bool = True,
+) -> Iterator[dict]:
     """Yield per-page extraction dicts with the best available text.
 
     The strategy is: pdfplumber → fitz fill-in for sparse pages → OCR last.
     OCR is the most expensive step (~1-3s per page) so we only invoke it
     when both vector extractors gave us essentially nothing.
+
+    ``max_pages`` caps how many pages are processed (useful for interactive
+    AI import flows). ``allow_ocr=False`` skips the Tesseract path entirely.
     """
     plumber = _pdfplumber_pages(pdf_bytes)
     fitz_pages: list[str] | None = None
     page_count = len(plumber)
+    limit = page_count if max_pages is None else min(page_count, max(1, int(max_pages)))
 
-    for i, plumber_text in enumerate(plumber):
+    for i, plumber_text in enumerate(plumber[:limit]):
         if len(plumber_text.strip()) >= MIN_CHARS_PER_PAGE:
             # Even when pdfplumber gave a clean read, run post-OCR
             # normalization to fix smart-quotes that occasionally appear
@@ -251,6 +260,15 @@ def extract_all_pages(pdf_bytes: bytes) -> Iterator[dict]:
                 "page": i + 1,
                 "text": _post_correct_ocr(fitz_text),
                 "source": "fitz",
+                "ocr_used": False,
+                "ocr_confidence": None,
+            }
+            continue
+        if not allow_ocr:
+            yield {
+                "page": i + 1,
+                "text": "",
+                "source": "none",
                 "ocr_used": False,
                 "ocr_confidence": None,
             }

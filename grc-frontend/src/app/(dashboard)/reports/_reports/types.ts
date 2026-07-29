@@ -47,8 +47,23 @@ export interface ServerQuery {
 export interface ServerPage { rows: Row[]; total: number; skip: number; limit: number }
 
 /** ── Report Builder ─────────────────────────────────────────────────────── */
-export type AggFn = 'count' | 'sum' | 'avg' | 'min' | 'max';
-export interface Measure { id: string; key: string; agg: AggFn }
+export type AggFn = 'count' | 'count_distinct' | 'sum' | 'avg' | 'min' | 'max';
+
+/** One aggregation measure — field is empty for row-count (`count(*)`). */
+export interface Measure {
+  id: string;
+  key: string;
+  agg: AggFn;
+  label?: string;
+  /** When true (count / count_distinct), also emit a % of grand-total column. */
+  pctOfTotal?: boolean;
+}
+
+/** Dimensions + measures block persisted inside the report `spec` JSON. */
+export interface AggregationSpec {
+  groupBy: string[];
+  measures: Measure[];
+}
 
 /** Every chart type the builder can render from a pivot result. */
 export type ChartKind =
@@ -61,15 +76,18 @@ export type ChartKind =
 export interface ReportSpec {
   id: string;
   name: string;
+  /** Optional user-written notes about what this custom report shows. */
+  description?: string;
   dataset: string;
-  rows: string[];              // row group fields, outermost first (tree levels)
-  col: string | null;          // pivot-across field
+  /** Group-by dimensions (outermost first). Same as AggregationSpec.groupBy. */
+  rows: string[];
+  col: string | null;          // pivot-across field (charts)
   measures: Measure[];
   rules: FilterRules;
   search: string;
   view: 'table' | ChartKind;
   measureIdx: number;          // which measure the chart plots (charts show one)
-  visibleColumns?: string[];     // flat table columns (Build mode primary)
+  visibleColumns?: string[];     // flat table columns (detail mode)
   columnWidths?: Record<string, number>;
   columnAlign?: Record<string, 'left' | 'right'>;
   pinnedColumns?: string[];
@@ -83,10 +101,27 @@ export interface ReportSpec {
 }
 
 export const emptySpec = (dataset: string): ReportSpec => ({
-  id: '', name: '', dataset, rows: [], col: null, measures: [],
+  id: '', name: '', description: '', dataset, rows: [], col: null, measures: [],
   rules: { logic: 'AND', conditions: [] }, search: '', view: 'table', measureIdx: 0,
   includes: [], visibleColumns: [], columnWidths: {}, columnAlign: {}, pinnedColumns: [], sorts: [],
 });
+
+/** Server-mode aggregate contract — mirrors backend POST /reporting/aggregate. */
+export interface ServerAggregateQuery {
+  dataset: string;
+  search?: string;
+  sorts: { key: string; dir: 'asc' | 'desc' }[];
+  filters: { col: string; op: string; value: string }[];
+  logic: 'AND' | 'OR';
+  group_by: string[];
+  measures: { id: string; field?: string; fn: AggFn; pct_of_total?: boolean }[];
+}
+export interface ServerAggregatePage {
+  rows: Row[];
+  total: number;
+  columns: { key: string; label: string; type?: string }[];
+  warnings?: { skipped_filters?: { col: string; op: string; reason: string }[]; skipped_measures?: string[]; skipped_group_by?: string[] };
+}
 
 /** One condition in the advanced AND/OR filter builder. */
 export interface FilterRule { id: string; col: string; op: string; value: string }
@@ -95,26 +130,41 @@ export interface FilterRules { logic: 'AND' | 'OR'; conditions: FilterRule[] }
 /** Operators available per column type in the advanced builder. */
 export const OPERATORS: Record<string, { key: string; label: string }[]> = {
   text: [
-    { key: 'contains', label: 'contains' }, { key: 'notcontains', label: 'does not contain' },
     { key: 'eq', label: 'is' }, { key: 'neq', label: 'is not' },
-    { key: 'starts', label: 'starts with' }, { key: 'empty', label: 'is empty' }, { key: 'notempty', label: 'is not empty' },
-  ],
-  number: [
-    { key: 'eq', label: '=' }, { key: 'neq', label: '≠' }, { key: 'gt', label: '>' },
-    { key: 'lt', label: '<' }, { key: 'gte', label: '≥' }, { key: 'lte', label: '≤' },
-  ],
-  date: [
-    { key: 'after', label: 'after' }, { key: 'before', label: 'before' }, { key: 'on', label: 'on' },
+    { key: 'contains', label: 'contains' }, { key: 'notcontains', label: 'does not contain' },
+    { key: 'starts', label: 'starts with' },
     { key: 'empty', label: 'is empty' }, { key: 'notempty', label: 'is not empty' },
   ],
+  number: [
+    { key: 'eq', label: 'equals' }, { key: 'neq', label: 'does not equal' },
+    { key: 'gt', label: 'greater than' }, { key: 'gte', label: 'greater or equal' },
+    { key: 'lt', label: 'less than' }, { key: 'lte', label: 'less or equal' },
+    { key: 'empty', label: 'is empty' }, { key: 'notempty', label: 'is not empty' },
+  ],
+  date: [
+    { key: 'on', label: 'on' }, { key: 'before', label: 'before' }, { key: 'after', label: 'after' },
+    { key: 'empty', label: 'is empty' }, { key: 'notempty', label: 'is not empty' },
+  ],
+  // Enum / status / Yes-No flags — pick from known values; no numeric compares.
   badge: [
-    { key: 'eq', label: 'is' }, { key: 'neq', label: 'is not' }, { key: 'contains', label: 'contains' },
+    { key: 'eq', label: 'is' }, { key: 'neq', label: 'is not' },
+    { key: 'contains', label: 'contains' }, { key: 'notcontains', label: 'does not contain' },
+    { key: 'empty', label: 'is empty' }, { key: 'notempty', label: 'is not empty' },
   ],
   // Cross-module linkage presence. Orphan-finding ("not linked to any X") is the
   // primary use, so it leads. No value — the operator IS the predicate.
   linkage: [
     { key: 'notlinked', label: 'is not linked to any' }, { key: 'linked', label: 'is linked to any' },
   ],
+};
+
+/** Short plain-language hint for filter panel copy (by column type). */
+export const FILTER_TYPE_HINT: Record<string, string> = {
+  text: 'Text: is / contains / starts with / empty',
+  number: 'Numbers: equals, greater/less than, empty',
+  date: 'Dates: on / before / after / empty',
+  badge: 'Tags & status: is / is not / empty',
+  linkage: 'Links: linked to any / not linked to any',
 };
 export interface ColumnFilter {
   text?: string;                 // "contains" for text/number

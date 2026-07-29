@@ -13,7 +13,9 @@ const NUM = 'whitespace-nowrap px-3 py-1.5 text-right text-sm tabular-nums text-
 const TH = 'whitespace-nowrap border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500';
 
 function measureLabel(m: Measure, label: string): string {
-  return m.agg === 'count' ? 'Count' : `${AGG_LABEL[m.agg]} ${label}`;
+  if (m.agg === 'count' && !m.key) return 'How many';
+  if (m.agg === 'count_distinct') return `Unique ${label}`;
+  return `${AGG_LABEL[m.agg]} ${label}`;
 }
 
 export default function PivotTable({

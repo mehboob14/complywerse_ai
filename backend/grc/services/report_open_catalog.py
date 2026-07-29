@@ -33,6 +33,14 @@ from ..models import (
     OversightAction, PolicyStatement, RCSAFinding, RiskAssessment, RiskAssessmentRisk,
     RiskReview, VendorAssessment,
 )
+# Wave 4 — new edges for curated LINKAGE_CATALOG pairs that had no resolver, +
+# the RCSA campaign / TPRA finding FE datasets.
+from ..models import (
+    BcmBiaRecord, BcmFinding, ControlImplementation, ControlObjective,
+    DiscoveryObservation, DiscoveryRun, FrameworkDomain, ImplementationEvidence,
+    MeetingAgendaItem, RCSACampaign, RegulatoryImplementationTask, TPRAFinding,
+)
+from ..models import CommitteeMeeting, ControlMapping, IssueGovernanceLink, IssueISProjectLink, RegulatoryImpactAssessment
 
 EdgeFn = Callable[[Session, List[int]], Dict[int, List[int]]]
 
@@ -423,6 +431,284 @@ def _criticality_infra_assets(db: Session, ids: List[int]) -> Dict[int, List[int
     return _pair_map(rows)
 
 
+def _vulns_risks(db: Session, ids: List[int]) -> Dict[int, List[int]]:
+    """No direct FK — risks reach a vulnerability only through the issue that
+    links both (mirrors report_linkages._enrich_vulnerabilities's "risks")."""
+    rows = (
+        db.query(IssueVulnerabilityLink.vulnerability_id, IssueRiskLink.risk_id)
+        .join(IssueRiskLink, IssueRiskLink.issue_id == IssueVulnerabilityLink.issue_id)
+        .filter(IssueVulnerabilityLink.vulnerability_id.in_(ids))
+        .all()
+    )
+    return _pair_map(rows)
+
+
+def _journeys_controls(db: Session, ids: List[int]) -> Dict[int, List[int]]:
+    """journey -> control_implementations.framework_control_id -> ControlMapping
+    -> normalized_control_id, so the target ids line up with the "controls"
+    dataset (NormalizedControl) like every other `*_controls` edge."""
+    rows = (
+        db.query(ControlImplementation.journey_id, ControlMapping.normalized_control_id)
+        .join(ControlMapping, ControlMapping.framework_control_id == ControlImplementation.framework_control_id)
+        .filter(ControlImplementation.journey_id.in_(ids))
+        .all()
+    )
+    return _pair_map(rows)
+
+
+def _journeys_evidence(db: Session, ids: List[int]) -> Dict[int, List[int]]:
+    rows = (
+        db.query(ControlImplementation.journey_id, ImplementationEvidence.evidence_id)
+        .join(ImplementationEvidence, ImplementationEvidence.implementation_id == ControlImplementation.id)
+        .filter(ControlImplementation.journey_id.in_(ids), ImplementationEvidence.evidence_id.isnot(None))
+        .all()
+    )
+    return _pair_map(rows)
+
+
+def _journeys_risks(db: Session, ids: List[int]) -> Dict[int, List[int]]:
+    """journey -> control_implementations.framework_control_id -> risks mapped
+    onto that same framework control via RiskFrameworkControlLink."""
+    rows = (
+        db.query(ControlImplementation.journey_id, RiskFrameworkControlLink.risk_id)
+        .join(
+            RiskFrameworkControlLink,
+            RiskFrameworkControlLink.framework_control_id == ControlImplementation.framework_control_id,
+        )
+        .filter(ControlImplementation.journey_id.in_(ids))
+        .all()
+    )
+    return _pair_map(rows)
+
+
+def _gov_docs_issues(db: Session, ids: List[int]) -> Dict[int, List[int]]:
+    rows = db.query(IssueGovernanceLink.governance_document_id, IssueGovernanceLink.issue_id).filter(
+        IssueGovernanceLink.governance_document_id.in_(ids)
+    ).all()
+    return _pair_map(rows)
+
+
+
+def _bcm_plans_risks(db: Session, ids: List[int]) -> Dict[int, List[int]]:
+    rows = db.query(BcmBiaRecord.plan_id, BcmBiaRecord.linked_risk_id).filter(
+        BcmBiaRecord.plan_id.in_(ids), BcmBiaRecord.linked_risk_id.isnot(None)
+    ).all()
+    return _pair_map(rows)
+
+
+def _bcm_plans_assets(db: Session, ids: List[int]) -> Dict[int, List[int]]:
+    """BIA records carry a JSON list of dependent asset ids (no junction table)."""
+    out: Dict[int, List[int]] = {}
+    for rec in db.query(BcmBiaRecord).filter(BcmBiaRecord.plan_id.in_(ids)).all():
+        for raw_id in (rec.linked_asset_ids or []):
+            try:
+                aid = int(raw_id)
+            except (TypeError, ValueError):
+                continue
+            bucket = out.setdefault(int(rec.plan_id), [])
+            if aid not in bucket:
+                bucket.append(aid)
+    return out
+
+
+def _bcm_plans_incidents(db: Session, ids: List[int]) -> Dict[int, List[int]]:
+    rows = db.query(BcmDrill.plan_id, BcmDrill.linked_incident_id).filter(
+        BcmDrill.plan_id.in_(ids), BcmDrill.linked_incident_id.isnot(None)
+    ).all()
+    return _pair_map(rows)
+
+
+def _bcm_drills_risks(db: Session, ids: List[int]) -> Dict[int, List[int]]:
+    rows = db.query(BcmFinding.drill_id, BcmFinding.linked_risk_id).filter(
+        BcmFinding.drill_id.in_(ids), BcmFinding.linked_risk_id.isnot(None)
+    ).all()
+    return _pair_map(rows)
+
+
+def _bcm_drills_issues(db: Session, ids: List[int]) -> Dict[int, List[int]]:
+    rows = db.query(BcmFinding.drill_id, BcmFinding.linked_issue_id).filter(
+        BcmFinding.drill_id.in_(ids), BcmFinding.linked_issue_id.isnot(None)
+    ).all()
+    return _pair_map(rows)
+
+
+def _is_projects_issues(db: Session, ids: List[int]) -> Dict[int, List[int]]:
+    rows = db.query(IssueISProjectLink.is_project_id, IssueISProjectLink.issue_id).filter(
+        IssueISProjectLink.is_project_id.in_(ids)
+    ).all()
+    return _pair_map(rows)
+
+
+def _criticality_info_risks(db: Session, ids: List[int]) -> Dict[int, List[int]]:
+    """Direct FK — set when an ISCA item is promoted to the risk register."""
+    rows = db.query(InfoSystemCriticalityItem.id, InfoSystemCriticalityItem.linked_risk_id).filter(
+        InfoSystemCriticalityItem.id.in_(ids), InfoSystemCriticalityItem.linked_risk_id.isnot(None)
+    ).all()
+    return _pair_map(rows)
+
+
+def _criticality_infra_vulns(db: Session, ids: List[int]) -> Dict[int, List[int]]:
+    """No direct FK — reached via the item's linked_asset_id's vulnerabilities."""
+    rows = (
+        db.query(InfraAssetCriticalityItem.id, VulnerabilityAssetLink.vulnerability_id)
+        .join(VulnerabilityAssetLink, VulnerabilityAssetLink.asset_id == InfraAssetCriticalityItem.linked_asset_id)
+        .filter(InfraAssetCriticalityItem.id.in_(ids))
+        .all()
+    )
+    return _pair_map(rows)
+
+
+def _discovery_campaigns_assets(db: Session, ids: List[int]) -> Dict[int, List[int]]:
+    """campaign -> runs -> observations resolved to a canonical IT asset."""
+    rows = (
+        db.query(DiscoveryRun.campaign_id, DiscoveryObservation.resolved_asset_id)
+        .join(DiscoveryObservation, DiscoveryObservation.run_id == DiscoveryRun.id)
+        .filter(DiscoveryRun.campaign_id.in_(ids), DiscoveryObservation.resolved_asset_id.isnot(None))
+        .all()
+    )
+    return _pair_map(rows)
+
+
+def _regulatory_changes_controls(db: Session, ids: List[int]) -> Dict[int, List[int]]:
+    rows = (
+        db.query(RegulatoryImplementationTask.regulatory_change_id, RegulatoryImplementationTask.linked_control_id)
+        .filter(
+            RegulatoryImplementationTask.regulatory_change_id.in_(ids),
+            RegulatoryImplementationTask.linked_control_id.isnot(None),
+        )
+        .all()
+    )
+    return _pair_map(rows)
+
+
+
+def _exceptions_risks(db: Session, ids: List[int]) -> Dict[int, List[int]]:
+    """Direct FK — set once an exception's risk is promoted to the register."""
+    rows = db.query(PolicyException.id, PolicyException.promoted_risk_id).filter(
+        PolicyException.id.in_(ids), PolicyException.promoted_risk_id.isnot(None)
+    ).all()
+    return _pair_map(rows)
+
+
+
+def _committees_risks(db: Session, ids: List[int]) -> Dict[int, List[int]]:
+    """committee -> oversight_actions.linked_risk_id, plus committee ->
+    meetings -> agenda_items.linked_risk_id (two independent risk touchpoints)."""
+    out = _pair_map(
+        db.query(OversightAction.committee_id, OversightAction.linked_risk_id)
+        .filter(OversightAction.committee_id.in_(ids), OversightAction.linked_risk_id.isnot(None))
+        .all()
+    )
+    rows2 = (
+        db.query(CommitteeMeeting.committee_id, MeetingAgendaItem.linked_risk_id)
+        .join(MeetingAgendaItem, MeetingAgendaItem.meeting_id == CommitteeMeeting.id)
+        .filter(CommitteeMeeting.committee_id.in_(ids), MeetingAgendaItem.linked_risk_id.isnot(None))
+        .all()
+    )
+    for cid, rid in rows2:
+        if cid is None or rid is None:
+            continue
+        bucket = out.setdefault(int(cid), [])
+        if int(rid) not in bucket:
+            bucket.append(int(rid))
+    return out
+
+
+
+def _frameworks_controls(db: Session, ids: List[int]) -> Dict[int, List[int]]:
+    """framework -> domains -> objectives -> framework_controls -> ControlMapping
+    -> normalized_control_id, matching the "controls" dataset (NormalizedControl)."""
+    rows = (
+        db.query(FrameworkDomain.framework_id, ControlMapping.normalized_control_id)
+        .join(ControlObjective, ControlObjective.domain_id == FrameworkDomain.id)
+        .join(FrameworkControl, FrameworkControl.objective_id == ControlObjective.id)
+        .join(ControlMapping, ControlMapping.framework_control_id == FrameworkControl.id)
+        .filter(FrameworkDomain.framework_id.in_(ids))
+        .all()
+    )
+    return _pair_map(rows)
+
+
+def _frameworks_evidence(db: Session, ids: List[int]) -> Dict[int, List[int]]:
+    rows = (
+        db.query(FrameworkDomain.framework_id, EvidenceControlMapping.evidence_id)
+        .join(ControlObjective, ControlObjective.domain_id == FrameworkDomain.id)
+        .join(FrameworkControl, FrameworkControl.objective_id == ControlObjective.id)
+        .join(EvidenceControlMapping, EvidenceControlMapping.framework_control_id == FrameworkControl.id)
+        .filter(FrameworkDomain.framework_id.in_(ids), EvidenceControlMapping.evidence_id.isnot(None))
+        .all()
+    )
+    return _pair_map(rows)
+
+
+def _gov_docs_evidence(db: Session, ids: List[int]) -> Dict[int, List[int]]:
+    """gov_documents → evidence via DocumentControlLink → EvidenceControlMapping."""
+    rows = (
+        db.query(DocumentControlLink.document_id, EvidenceControlMapping.evidence_id)
+        .join(EvidenceControlMapping, EvidenceControlMapping.normalized_control_id == DocumentControlLink.normalized_control_id)
+        .filter(DocumentControlLink.document_id.in_(ids), EvidenceControlMapping.evidence_id.isnot(None))
+        .all()
+    )
+    return _pair_map(rows)
+
+
+def _regulatory_changes_risks(db: Session, ids: List[int]) -> Dict[int, List[int]]:
+    """regulatory_changes → risks via RegulatoryImpactAssessment where impacted_item_type='risk'."""
+    rows = (
+        db.query(RegulatoryImpactAssessment.regulatory_change_id, RegulatoryImpactAssessment.impacted_item_id)
+        .filter(
+            RegulatoryImpactAssessment.regulatory_change_id.in_(ids),
+            RegulatoryImpactAssessment.impacted_item_type == "risk",
+            RegulatoryImpactAssessment.impacted_item_id.isnot(None),
+        )
+        .all()
+    )
+    return _pair_map(rows)
+
+
+def _regulatory_changes_issues(db: Session, ids: List[int]) -> Dict[int, List[int]]:
+    """regulatory_changes → issues via RegulatoryImpactAssessment where impacted_item_type='issue'."""
+    rows = (
+        db.query(RegulatoryImpactAssessment.regulatory_change_id, RegulatoryImpactAssessment.impacted_item_id)
+        .filter(
+            RegulatoryImpactAssessment.regulatory_change_id.in_(ids),
+            RegulatoryImpactAssessment.impacted_item_type == "issue",
+            RegulatoryImpactAssessment.impacted_item_id.isnot(None),
+        )
+        .all()
+    )
+    return _pair_map(rows)
+
+
+def _exceptions_controls(db: Session, ids: List[int]) -> Dict[int, List[int]]:
+    """exceptions (PolicyException) → controls via document → DocumentControlLink."""
+    rows = (
+        db.query(PolicyException.id, DocumentControlLink.normalized_control_id)
+        .join(DocumentControlLink, DocumentControlLink.document_id == PolicyException.document_id)
+        .filter(
+            PolicyException.id.in_(ids),
+            PolicyException.document_id.isnot(None),
+        )
+        .all()
+    )
+    return _pair_map(rows)
+
+
+def _committees_issues(db: Session, ids: List[int]) -> Dict[int, List[int]]:
+    """committees → issues via meetings → agenda_items → document → IssueGovernanceLink."""
+    rows = (
+        db.query(CommitteeMeeting.committee_id, IssueGovernanceLink.issue_id)
+        .join(MeetingAgendaItem, MeetingAgendaItem.meeting_id == CommitteeMeeting.id)
+        .join(IssueGovernanceLink, IssueGovernanceLink.governance_document_id == MeetingAgendaItem.linked_document_id)
+        .filter(
+            CommitteeMeeting.committee_id.in_(ids),
+            MeetingAgendaItem.linked_document_id.isnot(None),
+        )
+        .all()
+    )
+    return _pair_map(rows)
+
+
 EDGE_RESOLVERS: Dict[Tuple[str, str], EdgeFn] = {
     ("assets", "vulnerabilities"): _assets_vulnerabilities,
     ("assets", "risks"): _assets_risks,
@@ -500,6 +786,32 @@ EDGE_RESOLVERS: Dict[Tuple[str, str], EdgeFn] = {
     ("risks", "oversight_actions"): _rev(OversightAction, OversightAction.linked_risk_id),
     ("ai_risk_assessments", "risks"): _fwd(AIRiskAssessmentEntry, AIRiskAssessmentEntry.bridged_risk_id),
     ("risks", "ai_risk_assessments"): _rev(AIRiskAssessmentEntry, AIRiskAssessmentEntry.bridged_risk_id),
+    # ── Wave 4 — curated LINKAGE_CATALOG pairs that previously had no resolver ──
+    ("vulnerabilities", "risks"): _vulns_risks,
+    ("journeys", "controls"): _journeys_controls,
+    ("journeys", "evidence"): _journeys_evidence,
+    ("journeys", "risks"): _journeys_risks,
+    ("gov_documents", "issues"): _gov_docs_issues,
+    ("bcm_plans", "risks"): _bcm_plans_risks,
+    ("bcm_plans", "assets"): _bcm_plans_assets,
+    ("bcm_plans", "incidents"): _bcm_plans_incidents,
+    ("bcm_drills", "risks"): _bcm_drills_risks,
+    ("bcm_drills", "issues"): _bcm_drills_issues,
+    ("is_projects", "issues"): _is_projects_issues,
+    ("criticality_info", "risks"): _criticality_info_risks,
+    ("criticality_infra", "vulnerabilities"): _criticality_infra_vulns,
+    ("discovery_campaigns", "assets"): _discovery_campaigns_assets,
+    ("regulatory_changes", "controls"): _regulatory_changes_controls,
+    ("exceptions", "risks"): _exceptions_risks,
+    ("committees", "risks"): _committees_risks,
+    ("frameworks", "controls"): _frameworks_controls,
+    ("frameworks", "evidence"): _frameworks_evidence,
+    # ── Wave 5 — previously catalog-only edges now resolved ─────────────────
+    ("gov_documents", "evidence"): _gov_docs_evidence,
+    ("regulatory_changes", "risks"): _regulatory_changes_risks,
+    ("regulatory_changes", "issues"): _regulatory_changes_issues,
+    ("exceptions", "controls"): _exceptions_controls,
+    ("committees", "issues"): _committees_issues,
 }
 
 # Reverse edges for free browsing when only one direction was registered are
@@ -540,6 +852,9 @@ DATASET_MODELS: Dict[str, Any] = {
     "vendor_assessments": VendorAssessment,
     "oversight_actions": OversightAction,
     "ai_risk_assessments": AIRiskAssessmentEntry,
+    # Wave 4 — FE report datasets with a real SQLAlchemy model backing them.
+    "rcsa_campaigns": RCSACampaign,
+    "tpra_findings": TPRAFinding,
 }
 
 

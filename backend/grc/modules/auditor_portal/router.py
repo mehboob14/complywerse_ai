@@ -14,6 +14,7 @@ from .routers import (
     audit_trail_router,
     reviews_router,
     risk_assessments_router,
+    statutory_audit_router,
 )
 
 
@@ -26,13 +27,14 @@ router.include_router(exceptions_router)
 router.include_router(audit_trail_router)
 router.include_router(reviews_router)
 router.include_router(risk_assessments_router)
+router.include_router(statutory_audit_router)
 
 
 @router.get("")
 def module_info():
     return {
         "module": "Auditor Portal",
-        "version": "1.0.0",
+        "version": "1.1.0",
         "endpoints": [
             "/{framework_id}/overview",
             "/{framework_id}/controls",
@@ -45,5 +47,8 @@ def module_info():
             "/{framework_id}/audit-trail",
             "/{framework_id}/risk-assessments",
             "/reviews",
+            "/statutory-audit/observations",
+            "/statutory-audit/observations/upload-parse",
+            "/statutory-audit/observations/confirm",
         ],
     }

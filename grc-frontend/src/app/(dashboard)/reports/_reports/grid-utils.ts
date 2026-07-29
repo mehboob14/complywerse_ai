@@ -104,6 +104,12 @@ export function rowMatchesFilters(cols: ColumnDef[], row: Row, filters: Record<s
   return true;
 }
 
+/** Normalize badge/text enums so "In Progress" matches raw "in_progress"
+ *  (mirrors backend `_norm_literal`). */
+export function normKey(s: string): string {
+  return String(s ?? '').trim().toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ');
+}
+
 /** Evaluate one advanced-filter condition against a row. */
 function evalCond(col: ColumnDef, row: Row, op: string, value: string): boolean {
   // Linkage presence: the column's accessor yields the count of linked records
@@ -114,8 +120,17 @@ function evalCond(col: ColumnDef, row: Row, op: string, value: string): boolean 
     const has = Number.isFinite(n) && n > 0;
     return op === 'linked' ? has : !has;
   }
-  const text = displayText(col, row).toLowerCase();
+  const text = displayText(col, row);
+  const textLower = text.toLowerCase();
   const v = (value || '').toLowerCase();
+  // Badge / enum: compare normalized keys so titleCase display matches raw enum.
+  const badgeEq = () => {
+    const raw = rawValue(col, row);
+    const rawN = normKey(String(raw ?? ''));
+    const dispN = normKey(text);
+    const valN = normKey(value || '');
+    return rawN === valN || dispN === valN;
+  };
   // Numeric comparisons use numericValue so a blank/whitespace cell is *empty*,
   // not 0 — otherwise `< 5`, `= 0`, `≥ 0` all wrongly match un-scored rows.
   if (col.type === 'number' && op !== 'empty' && op !== 'notempty') {
@@ -133,25 +148,35 @@ function evalCond(col: ColumnDef, row: Row, op: string, value: string): boolean 
     }
   }
   switch (op) {
-    case 'contains': return text.includes(v);
-    case 'notcontains': return !text.includes(v);
-    case 'eq': return text === v;
-    case 'neq': return text !== v;
-    case 'starts': return text.startsWith(v);
-    case 'empty': return !text;
-    case 'notempty': return !!text;
+    case 'contains':
+      return col.type === 'badge'
+        ? normKey(text).includes(normKey(value || '')) || normKey(String(rawValue(col, row) ?? '')).includes(normKey(value || ''))
+        : textLower.includes(v);
+    case 'notcontains':
+      return col.type === 'badge'
+        ? !(normKey(text).includes(normKey(value || '')) || normKey(String(rawValue(col, row) ?? '')).includes(normKey(value || '')))
+        : !textLower.includes(v);
+    case 'eq': return col.type === 'badge' ? badgeEq() : textLower === v;
+    case 'neq': return col.type === 'badge' ? !badgeEq() : textLower !== v;
+    case 'starts': return textLower.startsWith(v);
+    case 'empty': return !text && (rawValue(col, row) == null || String(rawValue(col, row)).trim() === '');
+    case 'notempty': return !!text || (rawValue(col, row) != null && String(rawValue(col, row)).trim() !== '');
     case 'before': case 'after': case 'on': {
+      // Date-only compare (local YMD) — aligns with server day-bucket `_parse_dt`.
       const raw = rawValue(col, row);
       const d = raw ? new Date(String(raw)) : null;
       if (!d || Number.isNaN(d.getTime()) || !value) return false;
       const ymd = localYMD(value);
       if (!ymd) return false;
       const [y, mo, dd] = ymd;
-      if (op === 'on') return d.getFullYear() === y && d.getMonth() === mo && d.getDate() === dd;
-      if (op === 'before') return d < new Date(y, mo, dd);           // before local midnight of the day
-      return d >= new Date(y, mo, dd + 1);                           // 'after' = strictly after the day
+      const rowY = d.getFullYear();
+      const rowM = d.getMonth();
+      const rowD = d.getDate();
+      if (op === 'on') return rowY === y && rowM === mo && rowD === dd;
+      if (op === 'before') return new Date(rowY, rowM, rowD) < new Date(y, mo, dd);
+      return new Date(rowY, rowM, rowD) >= new Date(y, mo, dd + 1); // after = strictly after the day
     }
-    default: return true;
+    default: return false; // unknown operator → non-match (never silently match-all)
   }
 }
 
@@ -161,7 +186,8 @@ export function rowMatchesRules(cols: ColumnDef[], row: Row, rules: FilterRules)
   if (!active.length) return true;
   const results = active.map((c) => {
     const col = cols.find((x) => x.key === c.col);
-    return col ? evalCond(col, row, c.op, c.value) : true;
+    // Missing column → non-match (never silently match-all).
+    return col ? evalCond(col, row, c.op, c.value) : false;
   });
   return rules.logic === 'AND' ? results.every(Boolean) : results.some(Boolean);
 }

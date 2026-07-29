@@ -2,6 +2,7 @@ from ....config import get_openai_model
 from typing import Any, List, Optional
 from datetime import datetime, timezone, timedelta
 import json
+import re
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Form
 from sqlalchemy.orm import Session, joinedload
@@ -22,13 +23,41 @@ from ....schemas import (
     RegulatoryImpactAssessmentCreate, RegulatoryImpactAssessmentResponse,
     RegulatoryImplementationTaskCreate, RegulatoryImplementationTaskUpdate,
     RegulatoryImplementationTaskResponse, RegulatoryChangeDashboardStats,
-    RegulatoryGapAnalysisResponse, MessageResponse,
+    RegulatoryGapAnalysisResponse, RegulatoryGapAnalysisRunRequest, MessageResponse,
     RegulatoryChangeClosureReadinessResponse, RegulatoryChangeCloseResponse,
     IncompleteTaskDetail
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 
 router = APIRouter(prefix="/regulatory-changes", tags=["Governance - Regulatory Change Management"])
+
+REGULATORY_CHANGE_SOURCES = [
+    "SBP", "SAMA", "QCB", "MAS", "NCA",
+    "OCC", "Fed", "EBA", "PRA", "SEC", "FINRA", "custom",
+]
+
+REGULATORY_SOURCE_ALIASES = {
+    "sbp": "SBP",
+    "state bank": "SBP",
+    "state bank of pakistan": "SBP",
+    "state_bank": "SBP",
+    "sama": "SAMA",
+    "saudi central bank": "SAMA",
+    "qcb": "QCB",
+    "qatar central bank": "QCB",
+    "mas": "MAS",
+    "monetary authority of singapore": "MAS",
+    "nca": "NCA",
+    "national cybersecurity authority": "NCA",
+}
+
+
+def normalize_regulatory_source(source: Optional[str], *, fallback: str = "custom") -> str:
+    """Normalize free-text / alias source to a canonical regulatory-change code."""
+    raw = (source or fallback).strip() if isinstance(source, str) else fallback
+    if not raw:
+        return fallback
+    return REGULATORY_SOURCE_ALIASES.get(raw.lower(), raw)
 
 
 def normalize_optional_datetime(value: Any, field_name: str) -> Optional[datetime]:
@@ -329,7 +358,7 @@ def create_regulatory_change(
     if not tenant_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User not assigned to any tenant")
     
-    source = (change.source or "custom").strip() if isinstance(change.source, str) else "custom"
+    source = normalize_regulatory_source(change.source if isinstance(change.source, str) else None)
     status_value = (change.status or "identified").strip() if isinstance(change.status, str) else "identified"
     priority_value = (change.priority or "medium").strip() if isinstance(change.priority, str) else "medium"
 
@@ -338,11 +367,10 @@ def create_regulatory_change(
     published_date = normalize_optional_datetime(published_date_raw, "published_date")
     regulation_reference = change.regulation_reference or change.reference_number
 
-    valid_sources = ["OCC", "Fed", "EBA", "PRA", "SEC", "FINRA", "SBP", "custom"]
-    if source not in valid_sources:
+    if source not in REGULATORY_CHANGE_SOURCES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid source. Must be one of: {', '.join(valid_sources)}"
+            detail=f"Invalid source. Must be one of: {', '.join(REGULATORY_CHANGE_SOURCES)}"
         )
     
     valid_statuses = ["identified", "under_assessment", "implementation", "completed", "closed", "not_applicable"]
@@ -450,16 +478,8 @@ def upload_regulatory_change_document(
         content_text = content_text[:12000] + "\n\n...[truncated]"
 
     # Resolve source + priority defaults.
-    source_value = (source or "custom").strip() if isinstance(source, str) else "custom"
-    source_aliases = {
-        "sbp": "SBP",
-        "state bank": "SBP",
-        "state bank of pakistan": "SBP",
-        "state_bank": "SBP",
-    }
-    source_value = source_aliases.get(source_value.lower(), source_value)
-    valid_sources = ["OCC", "Fed", "EBA", "PRA", "SEC", "FINRA", "SBP", "custom"]
-    if source_value not in valid_sources:
+    source_value = normalize_regulatory_source(source if isinstance(source, str) else None)
+    if source_value not in REGULATORY_CHANGE_SOURCES:
         source_value = "custom"
 
     frameworks = db.query(Framework).filter(Framework.is_active == True).all()
@@ -808,13 +828,12 @@ def update_regulatory_change(
     if "source" in update_data:
         source_value = update_data.get("source")
         if isinstance(source_value, str):
-            source_value = source_value.strip() or "custom"
+            source_value = normalize_regulatory_source(source_value)
             update_data["source"] = source_value
-        valid_sources = ["OCC", "Fed", "EBA", "PRA", "SEC", "FINRA", "SBP", "custom"]
-        if source_value not in valid_sources:
+        if source_value not in REGULATORY_CHANGE_SOURCES:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid source. Must be one of: {', '.join(valid_sources)}"
+                detail=f"Invalid source. Must be one of: {', '.join(REGULATORY_CHANGE_SOURCES)}"
             )
     
     if "status" in update_data:
@@ -1371,96 +1390,154 @@ def get_regulatory_dashboard(
 # AI Gap Analysis Endpoint
 # =============================================================================
 
-@router.get("/changes/{change_id}/gap-analysis", response_model=RegulatoryGapAnalysisResponse)
-def get_gap_analysis(
-    change_id: int,
-    db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth)
-):
-    user_tenants = get_user_tenants(current_user, db)
-    
-    change = db.query(RegulatoryChange).options(
-        joinedload(RegulatoryChange.impact_assessments)
-    ).filter(
-        RegulatoryChange.id == change_id,
-        RegulatoryChange.tenant_id.in_(user_tenants)
-    ).first()
-    
-    if not change:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Regulatory change not found")
-    
-    # Fast path: derive gap analysis directly from the already-computed impact
-    # assessments stored on the regulatory change. This keeps the UI
-    # responsive and avoids a second OpenAI round-trip on every tab load.
-    impact_assessments = change.impact_assessments or []
+def _sbp_control_gap_assessments(
+    change: RegulatoryChange,
+    impact_assessments: list,
+    db: Session,
+) -> list:
+    """For SBP circulars, only treat control impacts as gaps when no
+    matching ERM InternalControl exists (direct id or via framework link)."""
+    all_control_ids = {
+        a.impacted_item_id
+        for a in impact_assessments
+        if a.impacted_item_type == "control" and a.impacted_item_id
+    }
+
+    internal_control_ids: set[int] = set()
+    mapped_normalized_control_ids: set[int] = set()
+    if all_control_ids:
+        internal_control_rows = (
+            db.query(InternalControl.id).filter(InternalControl.id.in_(all_control_ids)).all()
+        )
+        internal_control_ids = {row[0] for row in internal_control_rows}
+
+        normalized_ids = all_control_ids - internal_control_ids
+        if normalized_ids:
+            mapped_rows = (
+                db.query(InternalControlFrameworkLink.normalized_control_id)
+                .join(InternalControl, InternalControl.id == InternalControlFrameworkLink.internal_control_id)
+                .filter(
+                    InternalControl.tenant_id == change.tenant_id,
+                    InternalControlFrameworkLink.normalized_control_id.in_(normalized_ids),
+                )
+                .all()
+            )
+            mapped_normalized_control_ids = {row[0] for row in mapped_rows}
+
+    gap_assessments = []
+    for a in impact_assessments:
+        if a.impacted_item_type == "control" and a.impacted_item_id:
+            internal_exists = (
+                a.impacted_item_id in internal_control_ids
+                or a.impacted_item_id in mapped_normalized_control_ids
+            )
+            if not internal_exists:
+                gap_assessments.append(a)
+        elif a.gap_identified:
+            gap_assessments.append(a)
+    return gap_assessments
+
+
+def _build_gap_analysis_payload(
+    change: RegulatoryChange,
+    db: Session,
+    *,
+    document_ids: Optional[List[int]] = None,
+    include_all_controls: bool = True,
+    synthesize_missing_docs: bool = False,
+    assignee_id: Optional[int] = None,
+    assignee_name: Optional[str] = None,
+) -> RegulatoryGapAnalysisResponse:
+    """Build a structured gap-analysis payload from impact assessments,
+    optionally scoped to selected documents and control inclusion.
+
+    ``document_ids=None`` means do not filter policy gaps (include all existing).
+    ``synthesize_missing_docs`` only applies when the user explicitly selected
+    documents — it creates review rows for selected docs that were not already
+    flagged, without flooding the DB when running against "all policies".
+    """
+    impact_assessments = list(change.impact_assessments or [])
+
     if change.source == "SBP":
-        # SBP circulars: control gaps should only be raised when there is no
-        # matching ERM internal control (direct match for new SBP mapping,
-        # and mapped match for legacy normalized-control mapping).
-        all_control_ids = {
-            a.impacted_item_id for a in impact_assessments if a.impacted_item_type == "control" and a.impacted_item_id
-        }
-
-        internal_control_ids: set[int] = set()
-        mapped_normalized_control_ids: set[int] = set()
-        if all_control_ids:
-            internal_control_rows = db.query(InternalControl.id).filter(InternalControl.id.in_(all_control_ids)).all()
-            internal_control_ids = {row[0] for row in internal_control_rows}
-
-            normalized_ids = all_control_ids - internal_control_ids
-            if normalized_ids:
-                # Any internal control linked to the normalized control means
-                # the requirement is already covered internally.
-                mapped_rows = (
-                    db.query(InternalControlFrameworkLink.normalized_control_id)
-                    .join(InternalControl, InternalControl.id == InternalControlFrameworkLink.internal_control_id)
-                    .filter(
-                        InternalControl.tenant_id == change.tenant_id,
-                        InternalControlFrameworkLink.normalized_control_id.in_(normalized_ids),
-                    )
-                    .all()
-                )
-                mapped_normalized_control_ids = {row[0] for row in mapped_rows}
-
-        gap_assessments = []
-        for a in impact_assessments:
-            if a.impacted_item_type == "control" and a.impacted_item_id:
-                internal_exists = (
-                    a.impacted_item_id in internal_control_ids
-                    or a.impacted_item_id in mapped_normalized_control_ids
-                )
-                if not internal_exists:
-                    gap_assessments.append(a)
-            else:
-                if a.gap_identified:
-                    gap_assessments.append(a)
+        gap_assessments = _sbp_control_gap_assessments(change, impact_assessments, db)
     else:
         gap_assessments = [a for a in impact_assessments if a.gap_identified]
 
+    # Scope policy gaps to the selected document set (None/empty = all existing).
+    selected_docs = set(document_ids) if document_ids is not None else set()
+    filter_policies = document_ids is not None
+    scoped: list = []
+    for a in gap_assessments:
+        if a.impacted_item_type == "control":
+            if include_all_controls:
+                scoped.append(a)
+            continue
+        if a.impacted_item_type == "policy":
+            if filter_policies and a.impacted_item_id and a.impacted_item_id not in selected_docs:
+                continue
+            scoped.append(a)
+            continue
+        scoped.append(a)
+
+    # Ensure every explicitly selected document appears as a policy gap row
+    # even when upload-time AI did not already flag it.
+    if synthesize_missing_docs and selected_docs:
+        already = {
+            a.impacted_item_id
+            for a in scoped
+            if a.impacted_item_type == "policy" and a.impacted_item_id
+        }
+        missing_ids = selected_docs - already
+        if missing_ids:
+            for doc in (
+                db.query(GovernanceDocument)
+                .filter(
+                    GovernanceDocument.id.in_(missing_ids),
+                    GovernanceDocument.tenant_id == change.tenant_id,
+                )
+                .all()
+            ):
+                assessment = RegulatoryImpactAssessment(
+                    tenant_id=change.tenant_id,
+                    regulatory_change_id=change.id,
+                    assessment_type="policy",
+                    impacted_item_type="policy",
+                    impacted_item_id=doc.id,
+                    impact_level=change.priority or "medium",
+                    impact_description=(
+                        f"Selected document '{doc.title}' needs review against "
+                        f"regulatory change '{change.title}'."
+                    ),
+                    gap_identified=True,
+                    gap_description=(
+                        f"Review and update '{doc.title}' to align with the "
+                        f"requirements in '{change.title}'."
+                    ),
+                    assessed_by=change.created_by,
+                    assessed_at=datetime.utcnow(),
+                )
+                db.add(assessment)
+                db.flush()
+                scoped.append(assessment)
+
     policy_ids = {
         a.impacted_item_id
-        for a in gap_assessments
+        for a in scoped
         if a.impacted_item_type == "policy" and a.impacted_item_id
     }
     control_ids = {
         a.impacted_item_id
-        for a in gap_assessments
+        for a in scoped
         if a.impacted_item_type == "control" and a.impacted_item_id
     }
 
     policies_by_id: dict[int, str] = {}
     if policy_ids:
-        for p in (
-            db.query(GovernanceDocument)
-            .filter(GovernanceDocument.id.in_(policy_ids))
-            .all()
-        ):
+        for p in db.query(GovernanceDocument).filter(GovernanceDocument.id.in_(policy_ids)).all():
             policies_by_id[p.id] = p.title
 
     controls_by_id: dict[int, str] = {}
     if control_ids:
-        # Prefer InternalControl names (SBP mapping), then fall back to
-        # NormalizedControl names (legacy mapping).
         for c in db.query(InternalControl).filter(InternalControl.id.in_(control_ids)).all():
             controls_by_id[c.id] = c.name
         missing = control_ids - set(controls_by_id.keys())
@@ -1473,42 +1550,99 @@ def get_gap_analysis(
     identified_gaps: list[dict[str, Any]] = []
     recommended_actions: list[str] = []
 
-    for a in gap_assessments:
-        if a.impacted_item_type == "policy" and a.impacted_item_id in policies_by_id:
+    def _name_from_text(*texts: Optional[str]) -> Optional[str]:
+        patterns = (
+            r"(?i)(?:policy|document|control)\s+['\"]([^'\"]+)['\"]",
+            r"(?i)['\"]([^'\"]+)['\"]\s+(?:requires|needs|must)",
+        )
+        for text in texts:
+            if not text:
+                continue
+            for pattern in patterns:
+                match = re.search(pattern, text)
+                if match:
+                    return match.group(1).strip()
+        return None
+
+    for a in scoped:
+        area = (a.impacted_item_type or a.assessment_type or "process").lower()
+        item_name = None
+        if area == "policy" and a.impacted_item_id and a.impacted_item_id in policies_by_id:
+            item_name = policies_by_id[a.impacted_item_id]
             impacted_policies.append({
                 "id": a.impacted_item_id,
-                "title": policies_by_id[a.impacted_item_id],
+                "title": item_name,
                 "impact_level": a.impact_level,
-                "reason": "Impacted by uploaded regulatory circular requirements",
+                "reason": a.gap_description or a.impact_description or "Requires review",
             })
-        if a.impacted_item_type == "control" and a.impacted_item_id in controls_by_id:
+        elif area == "control" and a.impacted_item_id and a.impacted_item_id in controls_by_id:
+            item_name = controls_by_id[a.impacted_item_id]
             impacted_controls.append({
                 "id": a.impacted_item_id,
-                "name": controls_by_id[a.impacted_item_id],
+                "name": item_name,
                 "impact_level": a.impact_level,
-                "reason": "Impacted by uploaded regulatory circular control requirements",
+                "reason": a.gap_description or a.impact_description or "Requires review",
             })
+        elif a.impacted_item_id and area == "policy":
+            item_name = f"Document #{a.impacted_item_id}"
+        elif a.impacted_item_id and area == "control":
+            item_name = f"Control #{a.impacted_item_id}"
+        else:
+            item_name = _name_from_text(a.gap_description, a.impact_description)
 
-        area = (a.impacted_item_type or a.assessment_type or "process").lower()
-        remediation = a.gap_description or a.impact_description or "Review and remediate the gap"
+        remediation = (a.gap_description or "").strip()
+        impact_desc = (a.impact_description or "").strip()
+        if not remediation or remediation.lower().startswith("action needed:"):
+            remediation = impact_desc or f"Review {item_name or area} against '{change.title}'."
+
+        if area == "policy":
+            current_state = f"'{item_name or 'Selected document'}' not yet confirmed aligned"
+            required_state = f"Aligned with requirements in '{change.title}'"
+        elif area == "control":
+            current_state = (
+                f"No matching internal control for '{item_name or 'requirement'}'"
+                if change.source == "SBP"
+                else f"Control '{item_name or 'requirement'}' needs update"
+            )
+            required_state = (
+                f"Internal control covering '{item_name or 'requirement'}'"
+                if change.source == "SBP"
+                else f"Updated control covering '{change.title}'"
+            )
+        else:
+            current_state = "Gap identified"
+            required_state = "Remediated"
+
         identified_gaps.append({
+            "id": a.id,
             "area": area,
+            "item_name": item_name,
+            "item_id": a.impacted_item_id,
             "description": remediation,
-            "severity": (a.impact_level or "medium").lower(),
-            "current_state": "identified",
-            "required_state": "addressed",
+            "severity": (a.impact_level or change.priority or "medium").lower(),
+            "current_state": current_state,
+            "required_state": required_state,
             "remediation_plan": remediation,
             "status": "identified",
+            "assigned_to": assignee_id,
+            "assignee_name": assignee_name,
         })
         if remediation not in recommended_actions:
             recommended_actions.append(remediation)
 
     risk_level = (change.priority or "medium").lower()
-    confidence_score = 0.9 if gap_assessments else 0.6
+    confidence_score = 0.9 if scoped else 0.6
+    doc_note = (
+        f"{len(selected_docs)} selected document(s)"
+        if selected_docs
+        else "all eligible documents"
+    )
+    ctrl_note = "including all controls" if include_all_controls else "controls excluded"
     analysis_summary = (
-        "Gap analysis derived from saved impact assessments (fast path)."
-        if gap_assessments
-        else "No gaps identified from saved impact assessments."
+        f"Gap analysis scoped to {doc_note}, {ctrl_note}. "
+        f"Found {len(identified_gaps)} gap(s)."
+        if scoped or selected_docs
+        else "No gaps identified for the current selection."
     )
 
     return RegulatoryGapAnalysisResponse(
@@ -1518,12 +1652,151 @@ def get_gap_analysis(
         impacted_policies=impacted_policies,
         impacted_controls=impacted_controls,
         identified_gaps=identified_gaps,
-        recommended_actions=recommended_actions[:8] if recommended_actions else [],
+        recommended_actions=recommended_actions[:12] if recommended_actions else [],
         risk_level=risk_level,
         confidence_score=confidence_score,
+        tasks_created=0,
     )
 
 
+@router.get("/changes/{change_id}/gap-analysis", response_model=RegulatoryGapAnalysisResponse)
+def get_gap_analysis(
+    change_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+
+    change = db.query(RegulatoryChange).options(
+        joinedload(RegulatoryChange.impact_assessments)
+    ).filter(
+        RegulatoryChange.id == change_id,
+        RegulatoryChange.tenant_id.in_(user_tenants)
+    ).first()
+
+    if not change:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Regulatory change not found")
+
+    return _build_gap_analysis_payload(change, db, include_all_controls=True)
+
+
+@router.post("/changes/{change_id}/gap-analysis/run", response_model=RegulatoryGapAnalysisResponse)
+def run_gap_analysis(
+    change_id: int,
+    body: RegulatoryGapAnalysisRunRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Run a scoped gap analysis: selected documents + all controls by default.
+
+    Optionally creates implementation tasks for each identified gap and
+    assigns them to ``assigned_to``.
+    """
+    user_tenants = get_user_tenants(current_user, db)
+
+    change = db.query(RegulatoryChange).options(
+        joinedload(RegulatoryChange.impact_assessments)
+    ).filter(
+        RegulatoryChange.id == change_id,
+        RegulatoryChange.tenant_id.in_(user_tenants)
+    ).first()
+
+    if not change:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Regulatory change not found")
+
+    explicit_document_ids = list(body.document_ids or [])
+    document_ids: Optional[List[int]] = None
+    synthesize_missing_docs = False
+    if explicit_document_ids:
+        valid_ids = {
+            row[0]
+            for row in db.query(GovernanceDocument.id)
+            .filter(
+                GovernanceDocument.id.in_(explicit_document_ids),
+                GovernanceDocument.tenant_id == change.tenant_id,
+            )
+            .all()
+        }
+        invalid = set(explicit_document_ids) - valid_ids
+        if invalid:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid document_ids for this tenant: {sorted(invalid)}",
+            )
+        document_ids = sorted(valid_ids)
+        synthesize_missing_docs = True
+
+    assignee_id = body.assigned_to
+    assignee_name = None
+    if assignee_id is not None:
+        user = db.query(GRCUser).filter(GRCUser.id == assignee_id).first()
+        if not user:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Assigned user not found")
+        assignee_name = user.display_name
+
+    payload = _build_gap_analysis_payload(
+        change,
+        db,
+        document_ids=document_ids,
+        include_all_controls=bool(body.include_all_controls),
+        synthesize_missing_docs=synthesize_missing_docs,
+        assignee_id=assignee_id,
+        assignee_name=assignee_name,
+    )
+
+    tasks_created = 0
+    if assignee_id is not None and payload.identified_gaps:
+        now = datetime.utcnow()
+        existing_titles = {
+            (t.title or "").strip().lower()
+            for t in db.query(RegulatoryImplementationTask)
+            .filter(RegulatoryImplementationTask.regulatory_change_id == change.id)
+            .all()
+        }
+        for gap in payload.identified_gaps:
+            area = (gap.get("area") or "process").lower()
+            item_name = gap.get("item_name") or area
+            title = f"Close gap: {item_name}"[:500]
+            if title.strip().lower() in existing_titles:
+                continue
+            task_type = "policy_update" if area == "policy" else (
+                "control_update" if area == "control" else "process_change"
+            )
+            db_task = RegulatoryImplementationTask(
+                tenant_id=change.tenant_id,
+                regulatory_change_id=change.id,
+                impact_assessment_id=gap.get("id"),
+                title=title,
+                description=gap.get("remediation_plan") or gap.get("description") or "",
+                task_type=task_type,
+                status="pending",
+                priority=(gap.get("severity") or change.priority or "medium"),
+                assigned_to=assignee_id,
+                due_date=now + timedelta(days=30),
+                linked_policy_id=gap.get("item_id") if area == "policy" else None,
+                linked_control_id=gap.get("item_id") if area == "control" else None,
+                created_by=current_user.id,
+            )
+            db.add(db_task)
+            existing_titles.add(title.strip().lower())
+            tasks_created += 1
+
+        if tasks_created and change.status in ("identified", "under_assessment"):
+            change.status = "implementation"
+
+    db.commit()
+    payload.tasks_created = tasks_created
+    if tasks_created:
+        payload.analysis_summary = (
+            f"{payload.analysis_summary} Created {tasks_created} task(s)"
+            + (f" assigned to {assignee_name}." if assignee_name else ".")
+        )
+    return payload
+
+
+# =============================================================================
+# Closure Readiness and Close Endpoints
+# =============================================================================
 # =============================================================================
 # Closure Readiness and Close Endpoints
 # =============================================================================

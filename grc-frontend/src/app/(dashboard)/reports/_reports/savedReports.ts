@@ -60,6 +60,17 @@ const toBody = (spec: ReportSpec) => ({
   spec, is_shared: !!spec.shared,
 });
 
+export async function getSpec(id: string): Promise<{ spec: ReportSpec | null; source: SpecSource }> {
+  try {
+    const { data } = await apiClient.get(`/reporting/reports/${encodeURIComponent(id)}`);
+    if (data?.slug) return { spec: toSpec(data as ServerReport), source: 'server' };
+  } catch {
+    /* fall through to local */
+  }
+  const local = loadLocal().find((s) => s.id === id) ?? null;
+  return { spec: local, source: 'local' };
+}
+
 export async function listSpecs(): Promise<{ specs: ReportSpec[]; source: SpecSource }> {
   let serverSpecs: ReportSpec[];
   try {

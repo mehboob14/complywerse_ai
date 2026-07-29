@@ -122,6 +122,15 @@ export default function ReportsPage() {
     setBuilderNonce((n) => n + 1);
   };
 
+  const loadSavedSpec = (s: ReportSpec) => {
+    setBlankEmpty(false);
+    setActiveKey(s.dataset);
+    setLoaded(s);
+    setBuilderNonce((n) => n + 1);
+    pushRecent(s.dataset);
+    setRecentKeys(loadRecent());
+  };
+
   const newEmptyReport = () => {
     setBlankEmpty(true);
     setActiveKey(undefined);
@@ -209,6 +218,7 @@ export default function ReportsPage() {
             groupedDatasets={grouped}
             recentDatasets={recentDatasets}
             onDatasetChange={pickDataset}
+            onLoadSpec={loadSavedSpec}
             initialSpec={
               showBlank
                 ? { ...emptySpec(''), name: loaded?.name || '' }

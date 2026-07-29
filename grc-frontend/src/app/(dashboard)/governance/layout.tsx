@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import {
   FileText,
   AlertTriangle,
+  ClipboardCheck,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -12,6 +13,7 @@ import { clsx } from 'clsx';
 // top nav so it isn't duplicated on the documents bar.
 const governanceNavigation = [
   { name: 'Documents', href: '/governance/documents', icon: FileText },
+  { name: 'Attestation', href: '/governance/documents/attestation', icon: ClipboardCheck },
   { name: 'Policy Exceptions', href: '/governance/exceptions', icon: AlertTriangle },
 ];
 
@@ -21,10 +23,8 @@ export default function GovernanceLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  // This strip is the sub-nav for the Documents area only (Documents · Policy
-  // Exceptions). Other governance pages (regulatory-feeds/changes, committees,
-  // approvals, workflows, gap-analysis) are reached from the sidebar and must
-  // render clean, without this tab strip.
+  // This strip is the sub-nav for the Documents area only (Documents · Attestation ·
+  // Policy Exceptions). Other governance pages are reached from the sidebar.
   const showTabs =
     pathname?.startsWith('/governance/documents') ||
     pathname?.startsWith('/governance/exceptions');
@@ -35,9 +35,14 @@ export default function GovernanceLayout({
       <div className="border-b border-slate-200 px-3 sm:px-6 pt-3 overflow-x-auto">
         <div className="flex items-center gap-0 min-w-max">
           {governanceNavigation.map((item) => {
+            // Exact match for Documents so /documents/attestation doesn't highlight Documents
             const isActive =
-              pathname === item.href ||
-              (item.href !== '/governance' && pathname.startsWith(item.href));
+              item.href === '/governance/documents'
+                ? pathname === '/governance/documents' ||
+                  (!!pathname?.startsWith('/governance/documents/') &&
+                    !pathname.startsWith('/governance/documents/attestation'))
+                : pathname === item.href ||
+                  (item.href !== '/governance' && !!pathname?.startsWith(item.href));
             return (
               <Link
                 key={item.name}

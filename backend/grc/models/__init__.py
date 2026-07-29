@@ -19,3 +19,5 @@ from ._46_metric_targets import *  # noqa: F401,F403 — per-tenant trend metric
 from ._45_ai_usage import *  # noqa: F401,F403 - tenant-local AI usage ledger
 from ._46_ai_budget import *  # noqa: F401,F403 - tenant-local AI token budget/quota config
 from ._47_asset_discovery_models import *  # noqa: F401,F403 - discovery campaigns/scopes/runs/jobs/observations
+from ._48_statutory_audit_models import *  # noqa: F401,F403 - statutory audit observations
+from ._49_document_attestation_models import *  # noqa: F401,F403 - document attestation campaigns

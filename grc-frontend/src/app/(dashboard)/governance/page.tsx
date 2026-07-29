@@ -326,7 +326,7 @@ export default function GovernanceDashboardPage() {
         <div className="flex flex-wrap items-center gap-2">
           {/* Attestations + Statements moved here from the sidebar — they live
               under the Governance documents area now. */}
-          <Link href="/governance/attestations" className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50">
+          <Link href="/governance/documents/attestation" className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50">
             <FileCheck size={14} />
             Attestations
           </Link>

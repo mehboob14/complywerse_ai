@@ -99,7 +99,12 @@ def validate_document_access(user: GRCUser, document: GovernanceDocument, db: Se
         )
 
 
-def _extract_pdf_bytes(pdf_bytes: bytes) -> str:
+def _extract_pdf_bytes(
+    pdf_bytes: bytes,
+    *,
+    max_pages: int | None = None,
+    allow_ocr: bool = True,
+) -> str:
     """Multi-layer PDF text extraction for both digital and scanned circulars.
 
     Order: compliance ingest pipeline (pdfplumber → PyMuPDF → OCR) →
@@ -112,7 +117,7 @@ def _extract_pdf_bytes(pdf_bytes: bytes) -> str:
     try:
         from ...compliance_plugins.pdf_ingest.extract_pages import extract_all_pages
         parts: list[str] = []
-        for page in extract_all_pages(pdf_bytes):
+        for page in extract_all_pages(pdf_bytes, max_pages=max_pages, allow_ocr=allow_ocr):
             t = (page.get("text") or "").strip()
             if t:
                 parts.append(t)
@@ -127,7 +132,10 @@ def _extract_pdf_bytes(pdf_bytes: bytes) -> str:
         import pdfplumber
         parts = []
         with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
-            for page in pdf.pages:
+            pages = pdf.pages
+            if max_pages is not None:
+                pages = pages[: max(1, int(max_pages))]
+            for page in pages:
                 t = (page.extract_text() or "").strip()
                 if t:
                     parts.append(t)
@@ -142,8 +150,9 @@ def _extract_pdf_bytes(pdf_bytes: bytes) -> str:
         doc = fitz.open(stream=pdf_bytes, filetype="pdf")
         try:
             parts = []
-            for page in doc:
-                t = (page.get_text("text") or "").strip()
+            limit = doc.page_count if max_pages is None else min(doc.page_count, max(1, int(max_pages)))
+            for i in range(limit):
+                t = (doc.load_page(i).get_text("text") or "").strip()
                 if t:
                     parts.append(t)
             if parts:
@@ -159,7 +168,10 @@ def _extract_pdf_bytes(pdf_bytes: bytes) -> str:
         from PyPDF2 import PdfReader
         reader = PdfReader(io.BytesIO(pdf_bytes))
         parts = []
-        for page in reader.pages:
+        pages = reader.pages
+        if max_pages is not None:
+            pages = pages[: max(1, int(max_pages))]
+        for page in pages:
             t = (page.extract_text() or "").strip()
             if t:
                 parts.append(t)
@@ -202,7 +214,14 @@ def _extract_docx_path(file_path: str) -> str:
     return "\n".join(text_parts)
 
 
-def extract_text_from_bytes(contents: bytes, file_type: str, filename: str = "") -> str:
+def extract_text_from_bytes(
+    contents: bytes,
+    file_type: str,
+    filename: str = "",
+    *,
+    max_pages: int | None = None,
+    allow_ocr: bool = True,
+) -> str:
     """Extract plain text from in-memory document bytes."""
     if not contents:
         return ""
@@ -211,7 +230,9 @@ def extract_text_from_bytes(contents: bytes, file_type: str, filename: str = "")
     name = (filename or "").lower()
 
     if ft == "pdf" or name.endswith(".pdf"):
-        return _sanitize_policy_text(_extract_pdf_bytes(contents))
+        return _sanitize_policy_text(
+            _extract_pdf_bytes(contents, max_pages=max_pages, allow_ocr=allow_ocr)
+        )
 
     if ft in ("docx", "doc") or name.endswith((".docx", ".doc")):
         # python-docx only supports true OOXML .docx; .doc often fails.
@@ -249,7 +270,9 @@ def extract_text_from_bytes(contents: bytes, file_type: str, filename: str = "")
 
     # Unknown type: try PDF magic, then text decode.
     if contents[:4] == b"%PDF":
-        return _sanitize_policy_text(_extract_pdf_bytes(contents))
+        return _sanitize_policy_text(
+            _extract_pdf_bytes(contents, max_pages=max_pages, allow_ocr=allow_ocr)
+        )
     try:
         return _sanitize_policy_text(contents.decode("utf-8", errors="ignore"))
     except Exception:

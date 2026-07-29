@@ -1,26 +1,69 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import {
-  AlertCircle, ArrowDownUp, Check, ChevronDown, Columns3, Download, FileSpreadsheet,
-  FileText, FileType2, Filter, Layers, LayoutGrid, Link2, Loader2, Lock,
-  Plus, Printer, Save, Search, Sigma, Users, X, Pencil,
+  AlertCircle, ArrowDownUp, Bookmark, Check, ChevronDown, Columns3, Copy, Download,
+  FileSpreadsheet, FileText, FileType2, Filter, FolderOpen, LayoutGrid, Loader2,
+  Lock, Plus, Printer, Save, Search, Sigma, Trash2, Users, X, Pencil,
 } from 'lucide-react';
-import type { ColType, ReportDataset, ReportSpec, SortSpec } from './types';
+import type { ColType, ColumnDef, FilterRules, ReportDataset, ReportSpec, Row, ServerQuery, SortSpec } from './types';
 import { emptySpec } from './types';
 import {
   asRows, compareRows, describeRules, isActiveCondition,
   rowMatchesRules, rowMatchesSearch,
 } from './grid-utils';
+import {
+  aggregateRows, canServerAggregate, isSummaryMode, measureColKey, measureLabel,
+} from './aggregate-utils';
 import ReportDataTable from './ReportDataTable';
 import FilterBuilder from './FilterBuilder';
 import ColumnPicker from './ColumnPicker';
+import SummarizePanel from './SummarizePanel';
 import { allLinkageColumns, enrichReportRows, fetchLinkageCatalog, linkageKeysForFields, linkagePresenceColumns, presenceTarget } from './linkages';
 import { parseXmodKey, xmodKey } from './openCatalog';
 import { exportCSV, exportExcelMulti, exportWord } from './exporters';
-import { newSpecId, persistSpec, type SpecSource } from './savedReports';
+import { duplicateSpec, listSpecs, newSpecId, persistSpec, removeSpec, type SpecSource } from './savedReports';
 import { stashPrintSpec } from './printPayload';
+import { aggregateServer, queryServer, toServerMeasures } from './serverApi';
+import { datasetByKey } from './datasets';
+
+const LINKAGE_OPS = new Set(['linked', 'notlinked']);
+const SERVER_BUILD_PAGE = 500;
+const SERVER_BUILD_CAP = 5000;
+
+/** Fetch all server pages for Build mode (filters/search applied in SQL).
+ *  Linkage ops are excluded — they need post-enrich client evaluation. */
+async function fetchServerBuildRows(
+  datasetKey: string,
+  rules: FilterRules,
+  search: string,
+  sorts: SortSpec[],
+): Promise<Row[]> {
+  const filters = rules.conditions
+    .filter(isActiveCondition)
+    .filter((c) => !LINKAGE_OPS.has(c.op))
+    .map((c) => ({ col: c.col, op: c.op, value: c.value }));
+  const out: Row[] = [];
+  let skip = 0;
+  while (skip < SERVER_BUILD_CAP) {
+    const body: ServerQuery = {
+      dataset: datasetKey,
+      skip,
+      limit: SERVER_BUILD_PAGE,
+      search: search.trim() || undefined,
+      sorts: (sorts || []).map((s) => ({ key: s.key, dir: s.dir })),
+      filters,
+      logic: rules.logic,
+    };
+    const page = await queryServer(body);
+    out.push(...asRows(page.rows));
+    if (out.length >= page.total || page.rows.length < SERVER_BUILD_PAGE) break;
+    skip += SERVER_BUILD_PAGE;
+  }
+  return out;
+}
 
 const typeHint = (t?: ColType) => (t === 'number' ? '#' : t === 'date' ? 'date' : t === 'badge' ? 'tag' : 'text');
 
@@ -28,7 +71,8 @@ function opLabel(op: string): string {
   const map: Record<string, string> = {
     contains: 'contains', notcontains: 'does not contain', eq: 'is', neq: 'is not',
     starts: 'starts with', empty: 'is empty', notempty: 'is not empty',
-    gt: '>', gte: '≥', lt: '<', lte: '≤', between: 'between',
+    gt: 'greater than', gte: 'greater or equal', lt: 'less than', lte: 'less or equal',
+    on: 'on', before: 'before', after: 'after',
     linked: 'is linked to any', notlinked: 'is not linked to any',
   };
   return map[op] || op;
@@ -37,7 +81,7 @@ function opLabel(op: string): string {
 const seedSpec = (ds: string): ReportSpec => ({
   ...emptySpec(ds),
   visibleColumns: [],
-  measures: [{ id: 'm0', key: '', agg: 'count' }],
+  measures: [],
   view: 'table',
 });
 
@@ -49,6 +93,7 @@ export default function ReportBuilder({
   onDatasetChange,
   initialSpec,
   onSavedChange,
+  onLoadSpec,
 }: {
   dataset: ReportDataset | null;
   datasets?: ReportDataset[];
@@ -57,29 +102,46 @@ export default function ReportBuilder({
   onDatasetChange?: (key: string, seedColumns?: string[]) => void;
   initialSpec?: ReportSpec | null;
   onSavedChange?: () => void;
+  /** Parent loads a saved report into the workspace (dataset + full builder state). */
+  onLoadSpec?: (spec: ReportSpec) => void;
 }) {
   const dsKey = dataset?.key ?? '';
   const initial = initialSpec ?? seedSpec(dsKey || '_blank');
   const [spec, setSpec] = useState<ReportSpec>(() => ({
     ...initial,
     view: 'table',
+    description: initial.description ?? '',
     visibleColumns: Array.isArray(initial.visibleColumns) ? initial.visibleColumns : [],
     columnWidths: initial.columnWidths ?? {},
     columnAlign: initial.columnAlign ?? {},
     pinnedColumns: initial.pinnedColumns ?? [],
     sorts: initial.sorts ?? [],
     rows: initial.rows ?? [],
+    measures: Array.isArray(initial.measures) ? initial.measures : [],
   }));
   const [draftRules, setDraftRules] = useState(initial.rules);
   const [draftSearch, setDraftSearch] = useState(initial.search);
   const [fieldQ, setFieldQ] = useState('');
   const [datasetQ, setDatasetQ] = useState('');
-  const [panel, setPanel] = useState<'filters' | 'columns' | 'dataset' | 'add-data' | null>(null);
+  const [panel, setPanel] = useState<'filters' | 'columns' | 'dataset' | 'add-data' | 'summarize' | null>(null);
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [libraryQ, setLibraryQ] = useState('');
+  const [savedSpecs, setSavedSpecs] = useState<ReportSpec[]>([]);
+  const [librarySource, setLibrarySource] = useState<SpecSource>('server');
+  const [libraryLoading, setLibraryLoading] = useState(false);
+  const [libraryBusyId, setLibraryBusyId] = useState<string | null>(null);
+  const [saveDialog, setSaveDialog] = useState<'save' | 'save-as' | null>(null);
+  const [saveName, setSaveName] = useState('');
+  const [saveDescription, setSaveDescription] = useState('');
+  const [saveShared, setSaveShared] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState(false);
   const [savedSource, setSavedSource] = useState<SpecSource>('server');
   const [exporting, setExporting] = useState(false);
   const [menu, setMenu] = useState(false);
   const [showTotals, setShowTotals] = useState(true);
+  /** If server /aggregate rejects measures (computed columns, etc.), fall back to client. */
+  const [forceClientAgg, setForceClientAgg] = useState(false);
   /** Module currently shown in the Add data modal (right pane). */
   const [addDataModule, setAddDataModule] = useState<string | null>(null);
   /** Draft multi-select: datasetKey → field keys. Modal stays open until Apply. */
@@ -90,18 +152,47 @@ export default function ReportBuilder({
     setSpec({
       ...next,
       view: 'table',
+      description: next.description ?? '',
       visibleColumns: Array.isArray(next.visibleColumns) ? next.visibleColumns : [],
       columnWidths: next.columnWidths ?? {},
       columnAlign: next.columnAlign ?? {},
       pinnedColumns: next.pinnedColumns ?? [],
       sorts: next.sorts ?? [],
       rows: next.rows ?? [],
+      measures: Array.isArray(next.measures) ? next.measures : [],
     });
     setDraftRules(next.rules);
     setDraftSearch(next.search);
   }, [dsKey, initialSpec]);
 
   const patch = (p: Partial<ReportSpec>) => setSpec((s) => ({ ...s, ...p }));
+
+  const refreshLibrary = useCallback(async () => {
+    setLibraryLoading(true);
+    try {
+      const r = await listSpecs();
+      setSavedSpecs(r.specs);
+      setLibrarySource(r.source);
+    } catch {
+      setSavedSpecs([]);
+    } finally {
+      setLibraryLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (libraryOpen) void refreshLibrary();
+  }, [libraryOpen, refreshLibrary]);
+
+  const filteredLibrary = useMemo(() => {
+    const needle = libraryQ.trim().toLowerCase();
+    if (!needle) return savedSpecs;
+    return savedSpecs.filter((s) => {
+      const ds = datasetByKey(s.dataset);
+      const hay = `${s.name} ${s.description ?? ''} ${s.dataset} ${ds?.label ?? ''} ${ds?.module ?? ''}`.toLowerCase();
+      return hay.includes(needle);
+    });
+  }, [savedSpecs, libraryQ]);
 
   const picksFromVisible = (): Record<string, string[]> => {
     const picks: Record<string, string[]> = {};
@@ -126,7 +217,10 @@ export default function ReportBuilder({
   });
 
   const visibleKeys = useMemo(() => spec.visibleColumns ?? [], [spec.visibleColumns]);
-  const groupByKey = spec.rows[0] ?? null;
+  const dimensions = spec.rows ?? [];
+  const summaryMode = isSummaryMode(spec.measures);
+  /** Visual row grouping in detail mode only (first dimension). */
+  const groupByKey = !summaryMode ? (dimensions[0] ?? null) : null;
 
   const linkageColDefs = useMemo(() => allLinkageColumns(linkageCatalog), [linkageCatalog]);
   const linkagePresenceCols = useMemo(() => linkagePresenceColumns(linkageCatalog), [linkageCatalog]);
@@ -134,15 +228,23 @@ export default function ReportBuilder({
     () => (dataset ? [...dataset.columns, ...linkageColDefs] : []),
     [dataset, linkageColDefs],
   );
-  // Filters over the columns the user selected, plus first-class linkage-presence
-  // predicates ("(not) linked to any <module>") for every module with a real edge —
-  // so orphan filters are reachable without first adding a count column.
-  const filterCols = useMemo(
-    () => [
-      ...visibleKeys.map((k) => allCols.find((c) => c.key === k)).filter((c): c is NonNullable<typeof c> => !!c),
-      ...linkagePresenceCols,
-    ],
-    [visibleKeys, allCols, linkagePresenceCols],
+  /** Full column catalog for labels / stale filter+summarize fields (not offered as new picks). */
+  const lookupCols = useMemo(() => {
+    const seen = new Set<string>();
+    const out: ColumnDef[] = [];
+    for (const c of [...allCols, ...linkagePresenceCols]) {
+      if (seen.has(c.key)) continue;
+      seen.add(c.key);
+      out.push(c);
+    }
+    return out;
+  }, [allCols, linkagePresenceCols]);
+  // Filter / Summarize pickers only offer columns the user selected (visible set).
+  const selectedCols = useMemo(
+    () => visibleKeys
+      .map((k) => lookupCols.find((c) => c.key === k))
+      .filter((c): c is ColumnDef => !!c),
+    [visibleKeys, lookupCols],
   );
   const labelFor = (key: string) => {
     const col = allCols.find((c) => c.key === key);
@@ -157,10 +259,10 @@ export default function ReportBuilder({
       ...spec.rules.conditions.map((c) => c.col),
       ...draftRules.conditions.map((c) => c.col),
       ...spec.measures.map((m) => m.key).filter(Boolean),
-      ...(groupByKey ? [groupByKey] : []),
+      ...dimensions,
     ]);
     return Array.from(keys);
-  }, [visibleKeys, spec.rules.conditions, draftRules.conditions, spec.measures, groupByKey]);
+  }, [visibleKeys, spec.rules.conditions, draftRules.conditions, spec.measures, dimensions]);
 
   const includes = useMemo(() => {
     const base = linkageKeysForFields(appliedFieldKeys, linkageCatalog);
@@ -179,21 +281,79 @@ export default function ReportBuilder({
   );
 
   const includesKey = includes.join(',');
+  const serverMode = !!dataset?.server;
+  // Server SQL already applied search + non-linkage rules; queryKey must refetch on Apply.
+  const serverRulesKey = serverMode ? JSON.stringify(spec.rules) : '';
+  const serverSearchKey = serverMode ? spec.search : '';
+
+  const hasLinkageFilters = useMemo(
+    () => spec.rules.conditions.some((c) => LINKAGE_OPS.has(c.op) && isActiveCondition(c)),
+    [spec.rules],
+  );
+
+  const measuresKey = JSON.stringify(spec.measures);
+  const dimsKey = JSON.stringify(dimensions);
+
+  const serverAggEligible = useMemo(() => {
+    if (!serverMode || !summaryMode || !dataset || hasLinkageFilters || forceClientAgg) return false;
+    const allow = new Set(
+      dataset.columns
+        .map((c) => c.key)
+        .filter((k) => !k.startsWith('xmod_') && !k.startsWith('link_')),
+    );
+    return canServerAggregate(dimensions, spec.measures, allow);
+  }, [serverMode, summaryMode, dataset, hasLinkageFilters, forceClientAgg, dimensions, spec.measures]);
+
+  useEffect(() => { setForceClientAgg(false); }, [dsKey, measuresKey, dimsKey]);
 
   const { data: rawRows = [], isLoading, isFetched, error, refetch, isFetching } = useQuery({
-    queryKey: ['report', dsKey, includesKey],
+    queryKey: ['report', dsKey, includesKey, serverMode, serverRulesKey, serverSearchKey, serverAggEligible],
     queryFn: async () => {
       if (!dataset) return [];
-      const base = asRows(await dataset.fetch());
+      // When server aggregate handles the whole result, skip shipping detail rows.
+      if (serverAggEligible) return [];
+      const base = dataset.server
+        ? await fetchServerBuildRows(dataset.key, spec.rules, spec.search, spec.sorts ?? [])
+        : asRows(await dataset.fetch());
       if (!includes.length) return base;
       return enrichReportRows(dataset.key, base, includes, projectFields);
     },
     staleTime: 30_000,
     placeholderData: keepPreviousData,
-    enabled: !!dataset,
+    enabled: !!dataset && !serverAggEligible,
   });
+
+  const { data: serverAgg, isLoading: serverAggLoading, error: serverAggError, refetch: refetchAgg } = useQuery({
+    queryKey: ['report-agg', dsKey, serverRulesKey, serverSearchKey, measuresKey, dimsKey],
+    queryFn: async () => {
+      if (!dataset) return null;
+      const filters = spec.rules.conditions
+        .filter(isActiveCondition)
+        .filter((c) => !LINKAGE_OPS.has(c.op))
+        .map((c) => ({ col: c.col, op: c.op, value: c.value }));
+      try {
+        return await aggregateServer({
+          dataset: dataset.key,
+          search: spec.search.trim() || undefined,
+          sorts: (spec.sorts || []).map((s) => ({ key: s.key, dir: s.dir })),
+          filters,
+          logic: spec.rules.logic,
+          group_by: dimensions,
+          measures: toServerMeasures(spec.measures),
+        });
+      } catch {
+        setForceClientAgg(true);
+        return null;
+      }
+    },
+    staleTime: 30_000,
+    enabled: !!dataset && serverAggEligible,
+  });
+
   const rows = asRows(rawRows);
-  const showInitialLoad = !!dataset && isLoading && !isFetched && rows.length === 0;
+  const showInitialLoad = !!dataset && (
+    (serverAggEligible ? serverAggLoading : (isLoading && !isFetched && rows.length === 0))
+  );
 
   const cols = useMemo(() => {
     if (!dataset) return [];
@@ -222,16 +382,266 @@ export default function ReportBuilder({
     patch({ rules: empty, search: '' });
   };
 
+  const openSaveDialog = (mode: 'save' | 'save-as') => {
+    if (!dataset) return;
+    const defaultName = spec.name.trim() || `${dataset.label} report`;
+    setSaveName(mode === 'save-as' && spec.name.trim() ? `${spec.name.trim()} (copy)` : defaultName);
+    setSaveDescription(spec.description ?? '');
+    setSaveShared(mode === 'save-as' ? false : !!spec.shared);
+    setSaveDialog(mode);
+  };
+
+  const commitSave = async () => {
+    if (!dataset || !saveDialog) return;
+    const name = saveName.trim();
+    if (!name) return;
+    setSaving(true);
+    try {
+      const isFork = spec.mine === false || saveDialog === 'save-as';
+      const s: ReportSpec = {
+        ...spec,
+        view: 'table',
+        visibleColumns: visibleKeys,
+        includes,
+        dataset: dataset.key,
+        id: (spec.id && !isFork) ? spec.id : newSpecId(),
+        name,
+        description: saveDescription.trim(),
+        shared: saveShared,
+        mine: true,
+        updatedAt: new Date().toISOString(),
+      };
+      setSpec(s);
+      setSavedSource(await persistSpec(s));
+      setSavedAt(true);
+      setTimeout(() => setSavedAt(false), 2200);
+      setSaveDialog(null);
+      onSavedChange?.();
+      void refreshLibrary();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  /** Quick update when the report already has an id and name (no dialog). */
+  const doQuickSave = async () => {
+    if (!dataset) return;
+    if (!spec.id || !spec.name.trim() || spec.mine === false) {
+      openSaveDialog('save');
+      return;
+    }
+    setSaving(true);
+    try {
+      const s: ReportSpec = {
+        ...spec,
+        view: 'table',
+        visibleColumns: visibleKeys,
+        includes,
+        dataset: dataset.key,
+        mine: true,
+        updatedAt: new Date().toISOString(),
+      };
+      setSpec(s);
+      setSavedSource(await persistSpec(s));
+      setSavedAt(true);
+      setTimeout(() => setSavedAt(false), 2200);
+      onSavedChange?.();
+      void refreshLibrary();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const loadFromLibrary = (s: ReportSpec) => {
+    setLibraryOpen(false);
+    setLibraryQ('');
+    if (onLoadSpec) {
+      onLoadSpec(s);
+      return;
+    }
+    // Fallback when parent doesn't wire load — apply in-place if same dataset.
+    setSpec({
+      ...s,
+      view: 'table',
+      description: s.description ?? '',
+      visibleColumns: Array.isArray(s.visibleColumns) ? s.visibleColumns : [],
+      columnWidths: s.columnWidths ?? {},
+      columnAlign: s.columnAlign ?? {},
+      pinnedColumns: s.pinnedColumns ?? [],
+      sorts: s.sorts ?? [],
+      rows: s.rows ?? [],
+      measures: Array.isArray(s.measures) ? s.measures : [],
+    });
+    setDraftRules(s.rules);
+    setDraftSearch(s.search);
+    if (s.dataset && s.dataset !== dataset?.key) {
+      onDatasetChange?.(s.dataset, s.visibleColumns);
+    }
+  };
+
+  const deleteFromLibrary = async (id: string) => {
+    setLibraryBusyId(id);
+    try {
+      await removeSpec(id);
+      await refreshLibrary();
+      onSavedChange?.();
+    } finally {
+      setLibraryBusyId(null);
+    }
+  };
+
+  const duplicateFromLibrary = async (s: ReportSpec) => {
+    setLibraryBusyId(s.id);
+    try {
+      await duplicateSpec(s);
+      await refreshLibrary();
+      onSavedChange?.();
+    } finally {
+      setLibraryBusyId(null);
+    }
+  };
+
   const filteredRows = useMemo(() => {
-    const matched = rows.filter(
-      (r) => rowMatchesSearch(cols, r, spec.search) && rowMatchesRules(cols, r, spec.rules),
-    );
+    // Server mode already applied search + non-linkage filters in SQL; only
+    // re-evaluate linkage presence ops client-side after enrich. Client mode
+    // applies the full rule set locally.
+    const linkageOnly: FilterRules = {
+      logic: spec.rules.logic,
+      conditions: spec.rules.conditions.filter((c) => LINKAGE_OPS.has(c.op)),
+    };
+    const matched = rows.filter((r) => {
+      if (serverMode) {
+        return rowMatchesRules(cols, r, linkageOnly);
+      }
+      return rowMatchesSearch(cols, r, spec.search) && rowMatchesRules(cols, r, spec.rules);
+    });
     if (!spec.sorts?.length) return matched;
     return [...matched].sort((a, b) => compareRows(cols, a, b, spec.sorts as SortSpec[]));
-  }, [rows, cols, spec.search, spec.rules, spec.sorts]);
+  }, [rows, cols, spec.search, spec.rules, spec.sorts, serverMode]);
+
+  const clientAggregate = useMemo(() => {
+    if (!summaryMode || serverAggEligible) return null;
+    return aggregateRows(cols, filteredRows, dimensions, spec.measures);
+  }, [summaryMode, serverAggEligible, cols, filteredRows, dimensions, spec.measures]);
+
+  const summaryTable = useMemo(() => {
+    if (!summaryMode) return null;
+    if (serverAggEligible && serverAgg) {
+      const aggCols: typeof cols = (serverAgg.columns || []).map((c) => ({
+        key: c.key,
+        label: c.label,
+        type: (c.type === 'number' ? 'number' : c.type === 'badge' ? 'badge' : c.type === 'date' ? 'date' : 'text') as ColType,
+        align: c.type === 'number' ? 'right' as const : undefined,
+        width: c.type === 'number' ? 120 : 160,
+        format: c.key.endsWith('_pct')
+          ? (v: unknown) => (v == null || v === '' ? '' : `${Number(v).toFixed(1)}%`)
+          : undefined,
+      }));
+      return {
+        cols: aggCols,
+        rows: asRows(serverAgg.rows),
+        visibleKeys: aggCols.map((c) => c.key),
+        sourceCount: serverAgg.total,
+      };
+    }
+    if (clientAggregate) {
+      return {
+        cols: clientAggregate.cols,
+        rows: clientAggregate.rows,
+        visibleKeys: clientAggregate.cols.map((c) => c.key),
+        sourceCount: clientAggregate.sourceCount,
+      };
+    }
+    return null;
+  }, [summaryMode, serverAggEligible, serverAgg, clientAggregate]);
+
+  const displayCols = summaryTable?.cols ?? cols;
+  const displayRows = summaryTable?.rows ?? filteredRows;
+  const displayVisibleKeys = summaryTable?.visibleKeys ?? visibleKeys;
 
   const ruleCount = spec.rules.conditions.filter(isActiveCondition).length;
   const activeConditions = spec.rules.conditions.filter(isActiveCondition);
+
+  // ── KPI stat cards — computed after filteredRows is available ────────────
+  const kpiStats = useMemo(() => {
+    if (!dataset) return null;
+    if (summaryMode && summaryTable) {
+      const stats: { label: string; value: string | number; tone?: 'red' | 'amber' | 'green' | 'slate' }[] = [
+        { label: 'Summary groups', value: summaryTable.rows.length.toLocaleString(), tone: 'slate' },
+      ];
+      if (!serverAggEligible) {
+        stats.unshift({
+          label: 'Source rows',
+          value: summaryTable.sourceCount.toLocaleString(),
+          tone: 'slate',
+        });
+      }
+      // Surface first measure grand total from client aggregate when available.
+      if (clientAggregate && spec.measures[0]) {
+        const mk = measureColKey(spec.measures[0]);
+        const g = clientAggregate.grand[mk];
+        if (g != null) {
+          stats.push({
+            label: clientAggregate.cols.find((c) => c.key === mk)?.label ?? 'Total',
+            value: typeof g === 'number' ? (Number.isInteger(g) ? g.toLocaleString() : g.toFixed(1)) : String(g),
+            tone: 'green',
+          });
+        }
+      }
+      return stats.slice(0, 4);
+    }
+    if (rows.length === 0) return null;
+    const total = rows.length;
+    const filtered = filteredRows.length;
+    const stats: { label: string; value: string | number; tone?: 'red' | 'amber' | 'green' | 'slate' }[] = [
+      { label: 'Total rows', value: total.toLocaleString(), tone: 'slate' },
+      { label: 'Matching filters', value: filtered.toLocaleString(), tone: filtered < total ? 'amber' : 'slate' },
+    ];
+
+    if (dataset.key === 'risks') {
+      const high = rows.filter((r) => Number(r.residual_score) >= 15).length;
+      const open = rows.filter((r) => String(r.closure_status ?? '').toLowerCase() === 'open').length;
+      if (high > 0) stats.push({ label: 'High residual (≥15)', value: high, tone: 'red' });
+      if (open > 0) stats.push({ label: 'Open risks', value: open, tone: 'amber' });
+    } else if (dataset.key === 'controls' || dataset.key === 'internal_controls') {
+      const noOwner = rows.filter((r) => !r.control_owner && !r.owner_name).length;
+      if (noOwner > 0) stats.push({ label: 'No owner', value: noOwner, tone: 'red' });
+    } else if (dataset.key === 'evidence') {
+      const stale = rows.filter((r) => String(r.is_stale ?? '').toLowerCase() === 'yes' || r.is_stale === true).length;
+      const unlinked = rows.filter((r) => Number(r.control_mappings_count ?? 0) === 0).length;
+      if (stale > 0) stats.push({ label: 'Stale', value: stale, tone: 'red' });
+      if (unlinked > 0) stats.push({ label: 'Unlinked', value: unlinked, tone: 'amber' });
+    } else if (dataset.key === 'issues') {
+      const sla = rows.filter((r) => String(r.sla_breached ?? '').toLowerCase() === 'yes' || r.sla_breached === true).length;
+      const unassigned = rows.filter((r) => !r.assignee && !r.assignee_name).length;
+      if (sla > 0) stats.push({ label: 'SLA breached', value: sla, tone: 'red' });
+      if (unassigned > 0) stats.push({ label: 'Unassigned', value: unassigned, tone: 'amber' });
+    } else if (dataset.key === 'tasks') {
+      const overdue = rows.filter((r) => r.due_date && new Date(String(r.due_date)) < new Date() && String(r.status ?? '').toLowerCase() !== 'done').length;
+      if (overdue > 0) stats.push({ label: 'Overdue', value: overdue, tone: 'red' });
+    } else if (dataset.key === 'vulnerabilities') {
+      const kev = rows.filter((r) => String(r.kev_flag ?? '').toLowerCase() === 'yes' || r.kev_flag === true).length;
+      const crit = rows.filter((r) => /(crit|high)/i.test(String(r.severity ?? ''))).length;
+      if (kev > 0) stats.push({ label: 'KEV flagged', value: kev, tone: 'red' });
+      if (crit > 0) stats.push({ label: 'Critical/High', value: crit, tone: 'red' });
+    } else if (dataset.key === 'vendors') {
+      const highRisk = rows.filter((r) => /(crit|high)/i.test(String(r.tier ?? r.risk_rating ?? ''))).length;
+      if (highRisk > 0) stats.push({ label: 'High-risk', value: highRisk, tone: 'red' });
+    } else if (dataset.key === 'regulatory_changes') {
+      const unaddressed = rows.filter((r) => Number(r.task_count ?? 0) === 0 && Number(r.gap_count ?? 0) === 0).length;
+      if (unaddressed > 0) stats.push({ label: 'Unaddressed', value: unaddressed, tone: 'amber' });
+    } else if (dataset.key === 'exceptions') {
+      const expiring = rows.filter((r) => {
+        if (!r.expires_at) return false;
+        const exp = new Date(String(r.expires_at));
+        const in30 = new Date(); in30.setDate(in30.getDate() + 30);
+        return exp <= in30 && exp >= new Date();
+      }).length;
+      if (expiring > 0) stats.push({ label: 'Expiring soon', value: expiring, tone: 'amber' });
+    }
+
+    return stats.slice(0, 4);
+  }, [dataset, rows, filteredRows, summaryMode, summaryTable, serverAggEligible, clientAggregate, spec.measures]);
 
   const toggleSort = (key: string, additive: boolean) => {
     patch({
@@ -259,59 +669,64 @@ export default function ReportBuilder({
     patch({ rules: next });
   };
 
-  const doSave = async () => {
-    if (!dataset) return;
-    const isFork = spec.mine === false;
-    const s: ReportSpec = {
-      ...spec,
-      view: 'table',
-      visibleColumns: visibleKeys,
-      includes,
-      dataset: dataset.key,
-      id: (spec.id && !isFork) ? spec.id : newSpecId(),
-      name: isFork ? `${spec.name} (copy)` : (spec.name.trim() || `${dataset.label} report`),
-      shared: isFork ? false : spec.shared,
-      mine: true,
-    };
-    setSpec(s);
-    setSavedSource(await persistSpec(s));
-    setSavedAt(true);
-    setTimeout(() => setSavedAt(false), 2200);
-    onSavedChange?.();
-  };
-
   const factLines = () => [
     { label: 'Dataset', value: dataset ? `${dataset.module} · ${dataset.label}` : '—' },
     { label: 'Generated', value: new Date().toLocaleString() },
     {
       label: 'Rows',
-      value: `${filteredRows.length.toLocaleString()}${filteredRows.length !== rows.length ? ` of ${rows.length.toLocaleString()}` : ''}`,
+      value: summaryMode
+        ? `${displayRows.length.toLocaleString()} summary group${displayRows.length === 1 ? '' : 's'}`
+        : `${filteredRows.length.toLocaleString()}${filteredRows.length !== rows.length ? ` of ${rows.length.toLocaleString()}` : ''}`,
     },
-    { label: 'Columns', value: visibleKeys.map(labelFor).join(', ') || '(none — empty report)' },
+    {
+      label: 'Columns',
+      value: summaryMode
+        ? displayVisibleKeys.map((k) => displayCols.find((c) => c.key === k)?.label ?? k).join(', ') || '(none)'
+        : visibleKeys.map(labelFor).join(', ') || '(none — empty report)',
+    },
+    ...(summaryMode
+      ? [{
+          label: 'Summary',
+          value: [
+            dimensions.length ? `grouped by ${dimensions.map(labelFor).join(' › ')}` : 'overall total',
+            spec.measures.map((m) => measureLabel(m, m.key ? labelFor(m.key) : '')).join(', '),
+          ].filter(Boolean).join(' · '),
+        }]
+      : []),
     { label: 'Filters', value: describeRules(cols, spec.rules) },
     ...(includes.length
       ? [{ label: 'Cross-module links', value: includes.map((k) => linkageCatalog.find((l) => l.key === k)?.label ?? k).join(', ') }]
       : []),
     ...(spec.search.trim() ? [{ label: 'Search', value: `“${spec.search.trim()}”` }] : []),
   ];
-  const exportCols = visibleKeys.map((k) => cols.find((c) => c.key === k)).filter(Boolean) as typeof cols;
+  const exportCols = (summaryMode ? displayVisibleKeys : visibleKeys)
+    .map((k) => displayCols.find((c) => c.key === k))
+    .filter(Boolean) as typeof cols;
 
   const doExport = async (kind: 'pdf' | 'excel' | 'csv' | 'word') => {
     if (!dataset) return;
     setMenu(false);
     const name = spec.name.trim() || dataset.label;
+    const exportRows = displayRows;
     if (kind === 'pdf') {
-      stashPrintSpec({ ...spec, name, visibleColumns: visibleKeys, includes, view: 'table', dataset: dataset.key });
+      stashPrintSpec({
+        ...spec,
+        name,
+        visibleColumns: summaryMode ? displayVisibleKeys : visibleKeys,
+        includes,
+        view: 'table',
+        dataset: dataset.key,
+      });
       window.open('/reports/print', '_blank', 'noopener');
       return;
     }
     if (kind === 'csv') {
-      exportCSV(name, exportCols, filteredRows);
+      exportCSV(name, exportCols, exportRows);
       return;
     }
     if (kind === 'excel') {
       exportExcelMulti(name, [
-        { name: 'Report', cols: exportCols, rows: filteredRows },
+        { name: 'Report', cols: exportCols, rows: exportRows },
         { name: 'Definition', aoa: [['Field', 'Value'], ...factLines().map((f) => [f.label, f.value])] },
       ]);
       return;
@@ -322,18 +737,12 @@ export default function ReportBuilder({
         name,
         { title: name, subtitle: `${dataset.module} · ${dataset.label}`, facts: factLines() },
         exportCols,
-        filteredRows,
+        exportRows,
       );
     } finally {
       setExporting(false);
     }
   };
-
-  const groupOptions = useMemo(() => {
-    if (!dataset) return [];
-    const keys = new Set([...dataset.columns.map((c) => c.key), ...visibleKeys]);
-    return allCols.filter((c) => keys.has(c.key) && (c.type === 'badge' || c.type === 'text'));
-  }, [allCols, dataset, visibleKeys]);
 
   useEffect(() => {
     try {
@@ -344,6 +753,9 @@ export default function ReportBuilder({
     } catch { /* ignore */ }
   }, [dataset]);
 
+  const loadError = error || serverAggError;
+  const busyFetching = serverAggEligible ? serverAggLoading : isFetching;
+  const doRefetch = () => { if (serverAggEligible) void refetchAgg(); else void refetch(); };
   const openAddData = () => {
     const picks = picksFromVisible();
     setDraftPicks(picks);
@@ -437,14 +849,14 @@ export default function ReportBuilder({
       </div>
     );
   }
-  if (error && rows.length === 0) {
+  if (loadError && (serverAggEligible ? !serverAgg : rows.length === 0)) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-2 text-rose-700">
         <AlertCircle className="h-6 w-6" />
         <p className="text-sm">Could not load {dataset?.label || 'data'}.</p>
         <button
           type="button"
-          onClick={() => refetch()}
+          onClick={doRefetch}
           className="rounded-md border border-rose-300 bg-white px-3 py-1.5 text-xs font-medium hover:bg-rose-100"
         >
           Retry
@@ -466,22 +878,26 @@ export default function ReportBuilder({
               className="w-full border-0 bg-transparent py-1 pl-5 text-lg font-semibold tracking-tight text-slate-900 placeholder:font-normal placeholder:text-slate-400 focus:outline-none"
             />
           </div>
+          {spec.description ? (
+            <p className="mt-0.5 max-w-xl truncate text-[11px] text-slate-500">{spec.description}</p>
+          ) : null}
           <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-slate-500">
             <span className="font-medium text-slate-600">
               {dataset ? `${dataset.module} · ${dataset.label}` : 'No module selected'}
             </span>
             <span>·</span>
-            <span>{visibleKeys.length} columns</span>
+            <span>{summaryMode ? `${displayRows.length.toLocaleString()} groups` : `${visibleKeys.length} columns`}</span>
             <span>·</span>
             <span>
-              {filteredRows.length.toLocaleString()}
-              {filteredRows.length !== rows.length ? ` of ${rows.length.toLocaleString()}` : ''} rows
+              {summaryMode
+                ? (serverAggEligible ? 'Server aggregate' : `${filteredRows.length.toLocaleString()} source rows`)
+                : `${filteredRows.length.toLocaleString()}${filteredRows.length !== rows.length ? ` of ${rows.length.toLocaleString()}` : ''} rows`}
             </span>
-            {isFetching && (
+            {busyFetching && (
               <>
                 <span>·</span>
                 <span className="inline-flex items-center gap-1 text-slate-400">
-                  <Loader2 className="h-3 w-3 animate-spin" /> Enriching…
+                  <Loader2 className="h-3 w-3 animate-spin" /> {serverAggEligible ? 'Aggregating…' : 'Enriching…'}
                 </span>
               </>
             )}
@@ -520,6 +936,15 @@ export default function ReportBuilder({
           </div>
           <button
             type="button"
+            onClick={() => openSaveDialog('save-as')}
+            disabled={!dataset}
+            title="Save as a new custom report"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+          >
+            <Copy className="h-3.5 w-3.5" /> Save as
+          </button>
+          <button
+            type="button"
             onClick={() => patch({ shared: !spec.shared })}
             className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium ${
               spec.shared
@@ -532,10 +957,13 @@ export default function ReportBuilder({
           </button>
           <button
             type="button"
-            onClick={doSave}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-primary-500 px-3 py-1.5 text-xs font-semibold text-[#0a0a0a] shadow-sm hover:bg-primary-600"
+            onClick={doQuickSave}
+            disabled={!dataset || saving}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-primary-500 px-3 py-1.5 text-xs font-semibold text-[#0a0a0a] shadow-sm hover:bg-primary-600 disabled:opacity-40"
           >
-            {savedAt ? (
+            {saving ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : savedAt ? (
               <>
                 <Check className="h-3.5 w-3.5" strokeWidth={3} /> Saved{savedSource === 'local' ? ' locally' : ''}
               </>
@@ -653,6 +1081,130 @@ export default function ReportBuilder({
           Filter{ruleCount ? ` (${ruleCount})` : ''}
         </ToolbarBtn>
 
+        <div className="relative">
+          <ToolbarBtn
+            active={libraryOpen}
+            onClick={() => { setPanel(null); setLibraryOpen((o) => !o); }}
+            icon={<Bookmark className="h-3.5 w-3.5" />}
+          >
+            My reports
+            <ChevronDown className={`h-3 w-3 text-slate-400 transition-transform ${libraryOpen ? 'rotate-180' : ''}`} />
+          </ToolbarBtn>
+          {libraryOpen && (
+            <>
+              <div className="fixed inset-0 z-30" onClick={() => setLibraryOpen(false)} />
+              <div className="absolute left-0 top-full z-40 mt-1 flex max-h-[min(70vh,420px)] w-96 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+                <div className="border-b border-slate-100 px-3 py-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800">Custom reports</p>
+                      <p className="mt-0.5 text-[11px] text-slate-500">
+                        Load a report you saved — filters, columns, and sort included.
+                      </p>
+                    </div>
+                    <Link
+                      href="/reports/saved"
+                      className="shrink-0 text-[11px] font-semibold text-primary-700 hover:underline"
+                      onClick={() => setLibraryOpen(false)}
+                    >
+                      Manage
+                    </Link>
+                  </div>
+                  <div className="relative mt-2">
+                    <Search className="pointer-events-none absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-400" />
+                    <input
+                      value={libraryQ}
+                      onChange={(e) => setLibraryQ(e.target.value)}
+                      placeholder="Search your reports…"
+                      className="w-full rounded-lg border border-slate-200 bg-slate-50 py-1.5 pl-8 pr-2 text-xs focus:border-primary-500 focus:bg-white focus:outline-none"
+                    />
+                  </div>
+                </div>
+                <div className="min-h-0 flex-1 overflow-y-auto p-1.5">
+                  {libraryLoading ? (
+                    <div className="flex items-center justify-center gap-2 px-3 py-8 text-xs text-slate-400">
+                      <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+                    </div>
+                  ) : filteredLibrary.length === 0 ? (
+                    <div className="px-3 py-8 text-center">
+                      <FolderOpen className="mx-auto h-7 w-7 text-slate-300" />
+                      <p className="mt-2 text-sm font-medium text-slate-700">
+                        {savedSpecs.length === 0 ? 'No custom reports yet' : 'No matches'}
+                      </p>
+                      <p className="mt-1 text-[11px] text-slate-500">
+                        Customize filters and columns, then click Save report.
+                      </p>
+                    </div>
+                  ) : (
+                    <ul>
+                      {filteredLibrary.map((s) => {
+                        const ds = datasetByKey(s.dataset);
+                        const busy = libraryBusyId === s.id;
+                        const active = s.id && s.id === spec.id;
+                        return (
+                          <li key={s.id} className="group mb-0.5">
+                            <div
+                              className={`flex items-start gap-1 rounded-xl px-2 py-2 ${
+                                active ? 'bg-primary-50' : 'hover:bg-slate-50'
+                              }`}
+                            >
+                              <button
+                                type="button"
+                                onClick={() => loadFromLibrary(s)}
+                                className="min-w-0 flex-1 text-left focus:outline-none"
+                              >
+                                <p className="truncate text-sm font-medium text-slate-800">
+                                  {s.name || 'Untitled report'}
+                                  {s.shared && <Users className="ml-1 inline h-3 w-3 text-slate-400" />}
+                                </p>
+                                <p className="mt-0.5 truncate text-[11px] text-slate-500">
+                                  {ds?.label ?? s.dataset}
+                                  {s.description ? ` · ${s.description}` : ''}
+                                </p>
+                              </button>
+                              <div className="flex shrink-0 items-center gap-0.5 opacity-0 group-hover:opacity-100">
+                                {busy ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" />
+                                ) : (
+                                  <>
+                                    <button
+                                      type="button"
+                                      title="Duplicate"
+                                      onClick={() => duplicateFromLibrary(s)}
+                                      className="rounded p-1 text-slate-400 hover:bg-white hover:text-slate-700"
+                                    >
+                                      <Copy className="h-3.5 w-3.5" />
+                                    </button>
+                                    {s.mine !== false && (
+                                      <button
+                                        type="button"
+                                        title="Delete"
+                                        onClick={() => deleteFromLibrary(s.id)}
+                                        className="rounded p-1 text-slate-400 hover:bg-white hover:text-rose-600"
+                                      >
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                      </button>
+                                    )}
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+                {librarySource === 'local' && savedSpecs.length > 0 && (
+                  <p className="border-t border-slate-100 px-3 py-1.5 text-[10px] text-amber-600">
+                    Stored on this device only — server unreachable.
+                  </p>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+
         <ToolbarBtn
           active={panel === 'columns' || panel === 'add-data' || visibleKeys.length > 0}
           onClick={() => (dataset ? setPanel((p) => (p === 'columns' ? null : 'columns')) : openAddData())}
@@ -661,19 +1213,15 @@ export default function ReportBuilder({
           {visibleKeys.length || 0} columns
         </ToolbarBtn>
 
-        <div className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600">
-          <Layers className="h-3.5 w-3.5 text-slate-400" />
-          <select
-            value={groupByKey || ''}
-            onChange={(e) => patch({ rows: e.target.value ? [e.target.value] : [] })}
-            className="max-w-[9rem] bg-transparent text-xs font-medium focus:outline-none"
-          >
-            <option value="">Group: none</option>
-            {groupOptions.map((c) => (
-              <option key={c.key} value={c.key}>{c.label}</option>
-            ))}
-          </select>
-        </div>
+        <ToolbarBtn
+          active={panel === 'summarize' || summaryMode}
+          onClick={() => dataset && setPanel((p) => (p === 'summarize' ? null : 'summarize'))}
+          icon={<Sigma className="h-3.5 w-3.5" />}
+        >
+          {summaryMode
+            ? `Summarize · ${spec.measures.length}`
+            : 'Summarize'}
+        </ToolbarBtn>
 
         <div className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600">
           <ArrowDownUp className="h-3.5 w-3.5 text-slate-400" />
@@ -688,26 +1236,29 @@ export default function ReportBuilder({
             className="max-w-[10rem] bg-transparent text-xs font-medium focus:outline-none"
           >
             <option value="">Sort: none</option>
-            {visibleKeys.map((k) => (
-              <optgroup key={k} label={labelFor(k)}>
-                <option value={`${k}:asc`}>{labelFor(k)} ↑</option>
-                <option value={`${k}:desc`}>{labelFor(k)} ↓</option>
+            {(summaryMode ? displayVisibleKeys : visibleKeys).map((k) => (
+              <optgroup key={k} label={summaryMode ? (displayCols.find((c) => c.key === k)?.label ?? k) : labelFor(k)}>
+                <option value={`${k}:asc`}>{(summaryMode ? displayCols.find((c) => c.key === k)?.label : labelFor(k)) ?? k} ↑</option>
+                <option value={`${k}:desc`}>{(summaryMode ? displayCols.find((c) => c.key === k)?.label : labelFor(k)) ?? k} ↓</option>
               </optgroup>
             ))}
           </select>
         </div>
 
-        <ToolbarBtn
-          active={showTotals}
-          onClick={() => setShowTotals((t) => !t)}
-          icon={<Sigma className="h-3.5 w-3.5" />}
-        >
-          Totals {showTotals ? 'on' : 'off'}
-        </ToolbarBtn>
+        {!summaryMode && (
+          <ToolbarBtn
+            active={showTotals}
+            onClick={() => setShowTotals((t) => !t)}
+            icon={<Sigma className="h-3.5 w-3.5" />}
+          >
+            Totals {showTotals ? 'on' : 'off'}
+          </ToolbarBtn>
+        )}
 
         <span className="ml-auto text-[11px] tabular-nums text-slate-400">
-          {filteredRows.length.toLocaleString()}
-          {filteredRows.length !== rows.length ? ` of ${rows.length.toLocaleString()}` : ''} rows
+          {summaryMode
+            ? `${displayRows.length.toLocaleString()} group${displayRows.length === 1 ? '' : 's'}`
+            : `${filteredRows.length.toLocaleString()}${filteredRows.length !== rows.length ? ` of ${rows.length.toLocaleString()}` : ''} rows`}
         </span>
       </div>
 
@@ -743,6 +1294,22 @@ export default function ReportBuilder({
             </button>
           </span>
         ))}
+        {summaryMode && (
+          <span className="inline-flex items-center gap-1 rounded-full border border-primary-200 bg-primary-50 px-2 py-0.5 text-[11px] font-medium text-primary-800">
+            Summary
+            {dimensions.length > 0 ? ` by ${dimensions.map(labelFor).join(' › ')}` : ' · overall total'}
+            {' · '}
+            {spec.measures.map((m) => measureLabel(m, m.key ? labelFor(m.key) : '')).join(', ')}
+            <button
+              type="button"
+              onClick={() => patch({ rows: [], measures: [] })}
+              className="rounded-full p-0.5 text-primary-600 hover:bg-primary-100 hover:text-rose-600"
+              aria-label="Clear summary"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </span>
+        )}
         <button
           type="button"
           onClick={openAddData}
@@ -758,27 +1325,38 @@ export default function ReportBuilder({
           <div className="fixed inset-0 z-30" onClick={() => setPanel(null)} />
           <div className="absolute left-3 top-[7.25rem] z-40 w-[min(100%-1.5rem,28rem)] rounded-2xl border border-slate-200 bg-white p-3 shadow-2xl">
             <div className="mb-2 flex items-center justify-between">
-              <p className="text-sm font-semibold text-slate-800">Filters</p>
-              <button type="button" onClick={() => setPanel(null)} className="rounded p-1 text-slate-400 hover:text-slate-600">
+              <div className="min-w-0 pr-2">
+                <p className="text-sm font-semibold text-slate-800">Filter results</p>
+                <p className="mt-0.5 text-[10px] leading-snug text-slate-500">
+                  Show only the rows that match your rules. These run before any summary totals.
+                </p>
+              </div>
+              <button type="button" onClick={() => setPanel(null)} className="shrink-0 rounded p-1 text-slate-400 hover:text-slate-600">
                 <X className="h-4 w-4" />
               </button>
             </div>
-            {filterCols.length === 0 ? (
+            {!dataset ? (
               <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-6 text-center text-xs text-slate-500">
-                Add data columns first — filters only apply to columns you’ve selected.
+                Select a dataset first to enable filters.
               </p>
             ) : (
               <>
+                {serverMode && (
+                  <p className="mb-2 rounded-md border border-sky-200 bg-sky-50 px-2 py-1 text-[10px] leading-snug text-sky-800">
+                    Click Apply filters to update results. Rules about linked records are checked after related data is loaded.
+                  </p>
+                )}
                 <input
                   value={draftSearch}
                   onChange={(e) => setDraftSearch(e.target.value)}
-                  placeholder="Search selected columns…"
+                  placeholder={serverMode ? 'Search dataset…' : 'Search columns…'}
                   className="mb-2 w-full rounded-lg border border-slate-200 px-3 py-1.5 text-xs focus:border-primary-500 focus:outline-none"
                 />
                 <FilterBuilder
                   staged
                   dirty={filtersDirty}
-                  cols={filterCols}
+                  cols={selectedCols}
+                  lookupCols={lookupCols}
                   rows={rows}
                   rules={draftRules}
                   onChange={setDraftRules}
@@ -1023,6 +1601,22 @@ export default function ReportBuilder({
         </>
       )}
 
+      {panel === 'summarize' && dataset && (
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => setPanel(null)} />
+          <SummarizePanel
+            cols={selectedCols}
+            lookupCols={lookupCols}
+            dimensions={dimensions}
+            measures={spec.measures}
+            onDimensionsChange={(keys) => patch({ rows: keys })}
+            onMeasuresChange={(measures) => patch({ measures })}
+            onClose={() => setPanel(null)}
+            onClear={() => patch({ rows: [], measures: [] })}
+          />
+        </>
+      )}
+
       {panel === 'columns' && dataset && (
         <>
           <div className="fixed inset-0 z-30" onClick={() => setPanel(null)} />
@@ -1067,15 +1661,79 @@ export default function ReportBuilder({
         </>
       )}
 
+      {kpiStats && kpiStats.length > 0 && (summaryMode || visibleKeys.length > 0) && (
+        <div className="flex shrink-0 flex-wrap gap-2 border-b border-slate-100 px-4 py-2.5">
+          {kpiStats.map((stat) => (
+            <div
+              key={stat.label}
+              className={`flex min-w-[90px] flex-col items-start rounded-xl border px-3 py-2 ${
+                stat.tone === 'red'
+                  ? 'border-rose-200 bg-rose-50'
+                  : stat.tone === 'amber'
+                    ? 'border-amber-200 bg-amber-50'
+                    : stat.tone === 'green'
+                      ? 'border-emerald-200 bg-emerald-50'
+                      : 'border-slate-200 bg-slate-50'
+              }`}
+            >
+              <span className={`text-xl font-bold tabular-nums leading-none ${
+                stat.tone === 'red' ? 'text-rose-700' :
+                stat.tone === 'amber' ? 'text-amber-700' :
+                stat.tone === 'green' ? 'text-emerald-700' : 'text-slate-700'
+              }`}>
+                {stat.value}
+              </span>
+              <span className="mt-1 text-[10px] font-medium leading-tight text-slate-500">{stat.label}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="flex min-h-0 min-w-0 flex-1 flex-col p-3 pt-2">
-        {visibleKeys.length === 0 ? (
+        {summaryMode && !summaryTable && (serverAggLoading || isLoading || isFetching) ? (
+          <div className="flex flex-1 items-center justify-center text-slate-400">
+            <Loader2 className="h-6 w-6 animate-spin" />
+          </div>
+        ) : summaryMode && summaryTable ? (
+          <ReportDataTable
+            cols={displayCols}
+            rows={displayRows}
+            visibleKeys={displayVisibleKeys}
+            widths={spec.columnWidths ?? {}}
+            align={spec.columnAlign ?? {}}
+            pinned={[]}
+            sorts={spec.sorts ?? []}
+            labelFor={(k) => displayCols.find((c) => c.key === k)?.label ?? k}
+            onWidthsChange={(w) => patch({ columnWidths: w })}
+            onSort={toggleSort}
+            groupByKey={null}
+            showTotals={false}
+            totalInDataset={summaryTable.sourceCount}
+          />
+        ) : summaryMode && !summaryTable ? (
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50/80 px-6 text-center">
+            <Sigma className="h-9 w-9 text-slate-300" />
+            <h2 className="mt-3 text-base font-semibold text-slate-800">No summary yet</h2>
+            <p className="mt-1 max-w-md text-sm text-slate-500">
+              Check each calculation: Add up and Average need a numeric column, and Count unique / Lowest / Highest need a column selected.
+            </p>
+            <button
+              type="button"
+              onClick={() => setPanel('summarize')}
+              className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+            >
+              <Sigma className="h-3.5 w-3.5" />
+              Edit summary
+            </button>
+          </div>
+        ) : visibleKeys.length === 0 ? (
           <div className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50/80 px-6 text-center">
             <Columns3 className="h-9 w-9 text-slate-300" />
             <h2 className="mt-3 text-base font-semibold text-slate-800">Empty report</h2>
             <p className="mt-1 max-w-md text-sm text-slate-500">
-              Add data from any module — nothing is selected until you choose.
+              Add columns for a detail table, or open Summarize to turn the list into counts, averages, and other totals.
             </p>
-            <div className="mt-4">
+            <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
               <button
                 type="button"
                 onClick={openAddData}
@@ -1085,6 +1743,16 @@ export default function ReportBuilder({
                 Add data
                 <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
               </button>
+              {dataset && (
+                <button
+                  type="button"
+                  onClick={() => setPanel('summarize')}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+                >
+                  <Sigma className="h-3.5 w-3.5" />
+                  Summarize
+                </button>
+              )}
             </div>
           </div>
         ) : (
@@ -1106,6 +1774,77 @@ export default function ReportBuilder({
           />
         )}
       </div>
+
+      {saveDialog && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4"
+          onClick={() => !saving && setSaveDialog(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-4 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-sm font-semibold text-slate-900">
+              {saveDialog === 'save-as' ? 'Save as new custom report' : 'Save custom report'}
+            </h2>
+            <p className="mt-1 text-xs text-slate-500">
+              Stores your dataset, columns, filters, sort, and summary settings so you can reopen it anytime.
+            </p>
+            <label className="mt-3 block text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              Name
+            </label>
+            <input
+              autoFocus
+              value={saveName}
+              onChange={(e) => setSaveName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void commitSave();
+                if (e.key === 'Escape' && !saving) setSaveDialog(null);
+              }}
+              placeholder="e.g. Evidences not linked to risks or controls"
+              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none"
+            />
+            <label className="mt-3 block text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              Description <span className="font-normal normal-case text-slate-400">(optional)</span>
+            </label>
+            <textarea
+              value={saveDescription}
+              onChange={(e) => setSaveDescription(e.target.value)}
+              rows={2}
+              placeholder="What does this report show?"
+              className="mt-1 w-full resize-none rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none"
+            />
+            <label className="mt-3 flex items-center gap-2 text-xs text-slate-600">
+              <input
+                type="checkbox"
+                checked={saveShared}
+                onChange={(e) => setSaveShared(e.target.checked)}
+                className="rounded border-slate-300"
+              />
+              Share with everyone in this tenant
+            </label>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => setSaveDialog(null)}
+                className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={saving || !saveName.trim()}
+                onClick={() => void commitSave()}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-primary-500 px-3 py-1.5 text-xs font-semibold text-[#0a0a0a] hover:bg-primary-600 disabled:opacity-40"
+              >
+                {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

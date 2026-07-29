@@ -36,8 +36,9 @@ from sqlalchemy import Boolean, String, and_, func, or_
 from sqlalchemy.orm import Session
 
 from ..models import (
-    Evidence, ITAsset, MetricSnapshot, MetricTarget, Permission, ReportDefinition,
-    Risk, Role, RolePermission, Tenant, UserRole, Vulnerability, get_db,
+    CriticalTask, Evidence, GovernanceDocument, GRCUser, InternalControl, Issue, ITAsset,
+    MetricSnapshot, MetricTarget, Permission, ReportDefinition, Risk, Role,
+    RolePermission, Tenant, UserRole, Vendor, Vulnerability, get_db,
 )
 from ..services import metric_catalog, metric_snapshots
 from ..services import report_linkages
@@ -61,6 +62,7 @@ class DatasetSpec:
         sortable: List[str],
         filterable: Dict[str, str],
         default_order: tuple,
+        user_fields: Optional[Dict[str, str]] = None,
     ) -> None:
         self.model = model
         self.permissions = permissions    # any-of module perms that grant this dataset (same as the frontend)
@@ -69,6 +71,9 @@ class DatasetSpec:
         self.sortable = sortable          # column keys allowed in ORDER BY
         self.filterable = filterable      # column key -> type ('text'|'number'|'date'|'badge')
         self.default_order = default_order  # (column_name, 'asc'|'desc')
+        # Maps a raw integer FK column (already in `fields`) to the resolved
+        # display-name key that the frontend expects (e.g. owner_id -> owner_name).
+        self.user_fields: Dict[str, str] = user_fields or {}
 
 
 # Registry — key MUST match the frontend dataset key so the grid can address it.
@@ -83,12 +88,17 @@ SERVER_DATASETS: Dict[str, DatasetSpec] = {
         ],
         search=["title", "vuln_id", "cve_id", "affected_host", "affected_component"],
         sortable=[
-            "id", "vuln_id", "title", "severity", "cvss_score", "cve_id", "status",
-            "kev_flag", "due_date", "discovered_at", "resolved_at",
+            "id", "vuln_id", "title", "severity", "cvss_score", "cve_id", "cwe_id", "status",
+            "kev_flag", "due_date", "discovered_at", "resolved_at", "affected_host",
+            "affected_component", "assigned_to",
         ],
         filterable={
             "severity": "badge", "status": "badge", "cve_id": "text", "cvss_score": "number",
             "kev_flag": "badge", "due_date": "date", "discovered_at": "date", "title": "text",
+            # FE vuln-aligned keys (Asset / Owner / Detected) + the rest of the
+            # register's identity/classification columns.
+            "affected_host": "text", "assigned_to": "number", "resolved_at": "date",
+            "vuln_id": "text", "cwe_id": "text", "affected_component": "text",
         },
         default_order=("discovered_at", "desc"),
     ),
@@ -137,17 +147,137 @@ SERVER_DATASETS: Dict[str, DatasetSpec] = {
     "evidence": DatasetSpec(
         Evidence,
         permissions=["evidence:evidence_library:*", "evidence:evidence_upload:*"],
-        # The evidence list API (EvidenceResponse) exposes name / file_type / status /
-        # uploaded_at — NOT title / evidence_type / collection_date. Serialize the real
-        # fields; the frontend accessors map title<-name, evidence_type<-file_type,
-        # created_at<-uploaded_at so client and server modes match.
-        fields=["id", "name", "file_type", "status", "uploaded_at", "version"],
-        search=["name", "file_type"],
-        sortable=["id", "name", "file_type", "status", "uploaded_at", "version"],
+        fields=[
+            "id", "name", "file_type", "evidence_type", "status", "version",
+            "uploaded_at", "collection_date", "expiry_date", "is_stale", "owner_id",
+        ],
+        search=["name", "file_type", "evidence_type"],
+        sortable=[
+            "id", "name", "file_type", "evidence_type", "status", "uploaded_at",
+            "collection_date", "expiry_date", "is_stale", "version",
+        ],
         filterable={
-            "file_type": "badge", "status": "badge", "uploaded_at": "date", "name": "text",
+            "file_type": "badge", "evidence_type": "badge", "status": "badge",
+            "is_stale": "badge", "uploaded_at": "date", "collection_date": "date",
+            "expiry_date": "date", "name": "text",
         },
         default_order=("id", "desc"),
+        user_fields={"owner_id": "owner_name"},
+    ),
+    # ── Wave 5 promotions — real columns only; FE columns with no matching
+    # model column (nested display-name objects, renamed keys) are covered by
+    # an accessor fallback to the scalar FK / real column serialized here
+    # rather than shipped blank.
+    "issues": DatasetSpec(
+        Issue,
+        permissions=["issue_management:issues:*"],
+        fields=[
+            "id", "code", "title", "description", "severity", "workflow_state",
+            "issue_type", "category", "source_type", "sla_breached", "assignee_id",
+            "created_at", "target_closure_date",
+        ],
+        search=["title", "code", "description"],
+        sortable=[
+            "id", "code", "title", "severity", "workflow_state", "issue_type", "category",
+            "source_type", "sla_breached", "created_at", "target_closure_date",
+        ],
+        filterable={
+            "severity": "badge", "workflow_state": "badge", "issue_type": "badge",
+            "category": "text", "source_type": "badge", "sla_breached": "badge",
+            "created_at": "date", "target_closure_date": "date", "title": "text", "code": "text",
+        },
+        default_order=("created_at", "desc"),
+        user_fields={"assignee_id": "assignee_name"},
+    ),
+    "tasks": DatasetSpec(
+        CriticalTask,
+        permissions=["critical_tasks:tasks:*", "critical_tasks:reports:view"],
+        fields=[
+            "id", "title", "status", "priority", "assigned_owner_id", "due_date",
+            "created_at", "source_module", "source", "category", "linked_risk_id",
+            "linked_issue_id",
+        ],
+        search=["title"],
+        sortable=[
+            "id", "title", "status", "priority", "due_date", "created_at",
+            "source_module", "source", "category", "linked_risk_id", "linked_issue_id",
+        ],
+        filterable={
+            "status": "badge", "priority": "badge", "due_date": "date", "created_at": "date",
+            "source_module": "text", "source": "text", "category": "text", "title": "text",
+            "linked_risk_id": "number", "linked_issue_id": "number",
+        },
+        default_order=("created_at", "desc"),
+        user_fields={"assigned_owner_id": "assignee_name"},
+    ),
+    "vendors": DatasetSpec(
+        Vendor,
+        permissions=["erm:risks:*"],
+        # NB: FE `tier` / `residual_risk_score` / `primary_contact_name` /
+        # `website` / `next_reassessment_date` are all real columns — no
+        # accessor fallback needed for this dataset.
+        fields=[
+            "id", "name", "vendor_type", "tier", "data_access_level", "status",
+            "primary_contact_name", "website", "residual_risk_score",
+            "next_reassessment_date", "created_at",
+        ],
+        search=["name", "primary_contact_name"],
+        sortable=[
+            "id", "name", "vendor_type", "tier", "data_access_level", "status",
+            "residual_risk_score", "next_reassessment_date", "created_at",
+        ],
+        filterable={
+            "vendor_type": "badge", "tier": "badge", "data_access_level": "badge",
+            "status": "badge", "residual_risk_score": "number",
+            "next_reassessment_date": "date", "created_at": "date", "name": "text",
+        },
+        default_order=("created_at", "desc"),
+    ),
+    "gov_documents": DatasetSpec(
+        GovernanceDocument,
+        permissions=["governance:policies:*"],
+        fields=[
+            "id", "title", "doc_type", "status", "classification", "current_version",
+            "owner_id", "effective_date", "next_review_date", "last_reviewed_at",
+            "approved_at", "published_at", "created_at",
+        ],
+        search=["title", "document_code"],
+        sortable=[
+            "id", "title", "doc_type", "status", "classification", "current_version",
+            "effective_date", "next_review_date", "last_reviewed_at", "approved_at",
+            "published_at", "created_at",
+        ],
+        filterable={
+            "doc_type": "badge", "status": "badge", "classification": "text",
+            "effective_date": "date", "next_review_date": "date",
+            "last_reviewed_at": "date", "approved_at": "date", "published_at": "date",
+            "title": "text",
+        },
+        default_order=("created_at", "desc"),
+        user_fields={"owner_id": "owner_name"},
+    ),
+    "internal_controls": DatasetSpec(
+        InternalControl,
+        permissions=["erm:risks:*"],
+        fields=[
+            "id", "control_id", "name", "category", "control_type", "status",
+            "design_effectiveness", "operating_effectiveness", "priority",
+            "is_key_control", "owner_id", "next_test_date", "created_at",
+        ],
+        search=["name", "control_id"],
+        sortable=[
+            "id", "control_id", "name", "category", "control_type", "status",
+            "design_effectiveness", "operating_effectiveness", "priority",
+            "is_key_control", "next_test_date", "created_at",
+        ],
+        filterable={
+            "category": "badge", "control_type": "badge", "status": "badge",
+            "design_effectiveness": "badge", "operating_effectiveness": "badge",
+            "priority": "badge", "is_key_control": "badge", "next_test_date": "date",
+            "created_at": "date", "name": "text", "control_id": "text",
+        },
+        default_order=("created_at", "desc"),
+        user_fields={"owner_id": "owner_name"},
     ),
 }
 
@@ -216,6 +346,72 @@ class QueryBody(BaseModel):
     logic: str = "AND"  # how `filters` combine: AND | OR
 
 
+class AggregateMeasureSpec(BaseModel):
+    id: str
+    field: Optional[str] = None  # empty / omitted for count(*)
+    fn: str = "count"  # count | count_distinct | sum | avg | min | max
+    pct_of_total: bool = False
+
+
+class AggregateBody(BaseModel):
+    dataset: str
+    search: Optional[str] = None
+    sorts: List[SortSpec] = Field(default_factory=list)
+    filters: List[FilterSpec] = Field(default_factory=list)
+    logic: str = "AND"
+    group_by: List[str] = Field(default_factory=list)
+    measures: List[AggregateMeasureSpec] = Field(default_factory=list)
+
+
+_ALLOWED_AGG_FNS = frozenset({"count", "count_distinct", "sum", "avg", "min", "max"})
+
+
+def _agg_sql(fn: str, col):
+    """Map an allowlisted aggregate name to a SQLAlchemy expression. Never accepts raw SQL."""
+    if fn == "count":
+        return func.count() if col is None else func.count(col)
+    if fn == "count_distinct":
+        return func.count(func.distinct(col))
+    if fn == "sum":
+        return func.sum(col)
+    if fn == "avg":
+        return func.avg(col)
+    if fn == "min":
+        return func.min(col)
+    if fn == "max":
+        return func.max(col)
+    return None
+
+
+def _apply_query_filters(
+    q,
+    model: Any,
+    spec: DatasetSpec,
+    body_filters: List[FilterSpec],
+    logic: str,
+    search: Optional[str],
+):
+    """Shared WHERE builder for /query and /aggregate. Returns (query, skipped_filters)."""
+    if search:
+        term = f"%{search.strip()}%"
+        search_cols = [c for c in (_col(model, name) for name in spec.search) if c is not None]
+        if search_cols:
+            q = q.filter(or_(*[c.ilike(term) for c in search_cols]))
+
+    conditions = []
+    skipped_filters: List[Dict[str, Any]] = []
+    for spec_f in body_filters:
+        kind = spec.filterable.get(spec_f.col, "text")
+        cond, skip_reason = _build_condition(model, spec_f, kind)
+        if cond is not None:
+            conditions.append(cond)
+        elif skip_reason:
+            skipped_filters.append({"col": spec_f.col, "op": spec_f.op, "reason": skip_reason})
+    if conditions:
+        q = q.filter(or_(*conditions) if logic.upper() == "OR" else and_(*conditions))
+    return q, skipped_filters
+
+
 # ── Helpers ────────────────────────────────────────────────────────────────
 def _col(model: Any, name: str):
     """Return the InstrumentedAttribute for a real column, else None (guarded)."""
@@ -247,69 +443,82 @@ def _parse_dt(value: Any) -> Optional[datetime]:
 
 
 def _build_condition(model: Any, spec: FilterSpec, kind: str):
-    """Translate one filter condition into a SQLAlchemy expression, or None to skip."""
+    """Translate one filter condition into a SQLAlchemy expression.
+
+    Returns ``(condition_or_None, skip_reason_or_None)``. `skip_reason` is only
+    set when the filter was dropped for a reason the *client* can act on
+    (unknown column, an operator this dataset doesn't support, an unparsable
+    value) so the caller can surface it as a `warnings.skipped_filters` entry.
+    The common "no value typed yet" case stays silent, exactly like before.
+    """
     col = _col(model, spec.col)
     if col is None:
-        return None
+        return None, "unknown_column"
     op = spec.op
+
+    # Cross-module linkage filters (linked/notlinked) are a client-side
+    # (report-builder) concept — server mode has no join graph here yet.
+    if op in ("linked", "notlinked"):
+        return None, "unsupported_operator"
 
     # Emptiness — only string columns have a meaningful "" case; on date/number/
     # boolean columns `col == ""` would be a Postgres type error, so use NULL only.
     if op in ("empty", "notempty"):
         is_text = isinstance(col.type, String)
         if op == "empty":
-            return or_(col.is_(None), col == "") if is_text else col.is_(None)
-        return and_(col.isnot(None), col != "") if is_text else col.isnot(None)
+            return (or_(col.is_(None), col == "") if is_text else col.is_(None)), None
+        return (and_(col.isnot(None), col != "") if is_text else col.isnot(None)), None
 
     val = spec.value
     if val is None or val == "":
-        return None
+        return None, None  # nothing to filter on yet — not an error
 
     if kind == "number":
         try:
             num = float(val)
         except (TypeError, ValueError):
-            return None
-        return {
+            return None, "invalid_value"
+        expr = {
             "eq": col == num, "neq": col != num, "gt": col > num,
             "lt": col < num, "gte": col >= num, "lte": col <= num,
         }.get(op)
+        return expr, (None if expr is not None else "unsupported_operator")
 
     if kind == "date":
         d = _parse_dt(val)
         if d is None:
-            return None
+            return None, "invalid_value"
         if op == "before":
-            return col < d
+            return col < d, None
         if op == "after":
             # "after <day>" means strictly after that calendar day (matches client).
-            return col >= d + timedelta(days=1)
+            return col >= d + timedelta(days=1), None
         if op == "on":
-            return and_(col >= d, col < d + timedelta(days=1))
-        return None
+            return and_(col >= d, col < d + timedelta(days=1)), None
+        return None, "unsupported_operator"
 
     # Boolean-backed badge columns (kev_flag, internet_facing): coerce truthy text
     # (func.lower / ilike on a boolean column is a Postgres type error).
     if isinstance(col.type, Boolean):
         if op not in ("eq", "neq"):
-            return None
+            return None, "unsupported_operator"
         truthy = str(val).strip().lower() in ("1", "true", "yes", "y", "on")
         expr = col.is_(True) if truthy else or_(col.is_(False), col.is_(None))
-        return ~expr if op == "neq" else expr
+        return (~expr if op == "neq" else expr), None
 
     # text / badge
     s = str(val)
     if op == "eq":
-        return _norm_col(col) == _norm_literal(s)
+        return _norm_col(col) == _norm_literal(s), None
     if op == "neq":
-        return _norm_col(col) != _norm_literal(s)
+        return _norm_col(col) != _norm_literal(s), None
     if op == "contains":
-        return col.ilike(f"%{s}%")
+        return col.ilike(f"%{s}%"), None
     if op == "notcontains":
-        return ~col.ilike(f"%{s}%")
+        return ~col.ilike(f"%{s}%"), None
     if op == "starts":
-        return col.ilike(f"{s}%")
-    return None
+        return col.ilike(f"{s}%"), None
+    return None, "unsupported_operator"
 
 
 def _serialize(spec: DatasetSpec, obj: Any) -> Dict[str, Any]:
@@ -362,22 +571,9 @@ def query_dataset(body: QueryBody, db: Session = Depends(get_db), user=Depends(r
     model = spec.model
     q = db.query(model)
 
-    # Global search across configured text columns.
-    if body.search:
-        term = f"%{body.search.strip()}%"
-        search_cols = [c for c in (_col(model, name) for name in spec.search) if c is not None]
-        if search_cols:
-            q = q.filter(or_(*[c.ilike(term) for c in search_cols]))
-
-    # Advanced / column filters.
-    conditions = []
-    for spec_f in body.filters:
-        kind = spec.filterable.get(spec_f.col, "text")
-        cond = _build_condition(model, spec_f, kind)
-        if cond is not None:
-            conditions.append(cond)
-    if conditions:
-        q = q.filter(or_(*conditions) if body.logic.upper() == "OR" else and_(*conditions))
+    q, skipped_filters = _apply_query_filters(
+        q, model, spec, body.filters, body.logic, body.search,
+    )
 
     total = q.count()
 
@@ -408,15 +604,283 @@ def query_dataset(body: QueryBody, db: Session = Depends(get_db), user=Depends(r
     limit = max(1, min(body.limit, MAX_LIMIT))
     rows = q.offset(skip).limit(limit).all()
 
-    return {
-        "rows": [_serialize(spec, r) for r in rows],
+    serialized = [_serialize(spec, r) for r in rows]
+
+    # Resolve user FKs to display names in one batch query per dataset.
+    if spec.user_fields and serialized:
+        user_id_set: set = set()
+        for fk_col in spec.user_fields:
+            for row in serialized:
+                uid = row.get(fk_col)
+                if uid is not None:
+                    try:
+                        user_id_set.add(int(uid))
+                    except (TypeError, ValueError):
+                        pass
+        if user_id_set:
+            users = db.query(GRCUser).filter(GRCUser.id.in_(list(user_id_set))).all()
+            user_map: Dict[int, str] = {
+                u.id: (u.display_name or u.username or str(u.id))
+                for u in users
+            }
+            for row in serialized:
+                for fk_col, name_col in spec.user_fields.items():
+                    uid = row.get(fk_col)
+                    if uid is not None:
+                        try:
+                            row[name_col] = user_map.get(int(uid))
+                        except (TypeError, ValueError):
+                            pass
+
+    result: Dict[str, Any] = {
+        "rows": serialized,
         "total": total,
         "skip": skip,
         "limit": limit,
     }
+    if skipped_filters:
+        result["warnings"] = {"skipped_filters": skipped_filters}
+    return result
+
+
+@router.post("/aggregate")
+def aggregate_dataset(body: AggregateBody, db: Session = Depends(get_db), user=Depends(require_auth)) -> Dict[str, Any]:
+    """Run allowlisted GROUP BY + aggregate measures for one server dataset.
+
+    Filters apply first (WHERE), then grouping. Only columns present on the
+    model and functions in ``_ALLOWED_AGG_FNS`` are accepted — never raw SQL.
+    """
+    spec = SERVER_DATASETS.get(body.dataset)
+    if spec is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Dataset '{body.dataset}' is not available in server mode.",
+        )
+    if not _user_can(user, db, spec.permissions):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"You do not have permission to report on '{body.dataset}'.",
+        )
+    if not body.measures:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="At least one measure is required.",
+        )
+
+    model = spec.model
+    # Allowlist: real table columns that are filterable, sortable, or projected.
+    allowed_cols = set(spec.fields) | set(spec.sortable) | set(spec.filterable.keys())
+
+    skipped_group_by: List[str] = []
+    group_cols = []
+    group_keys: List[str] = []
+    for key in body.group_by:
+        if key not in allowed_cols:
+            skipped_group_by.append(key)
+            continue
+        col = _col(model, key)
+        if col is None:
+            skipped_group_by.append(key)
+            continue
+        group_cols.append(col)
+        group_keys.append(key)
+
+    skipped_measures: List[str] = []
+    select_exprs = list(group_cols)
+    measure_meta: List[Dict[str, Any]] = []  # parallel to measure aliases after group cols
+
+    for m in body.measures:
+        fn = (m.fn or "count").lower().strip()
+        if fn not in _ALLOWED_AGG_FNS:
+            skipped_measures.append(m.id)
+            continue
+        field = (m.field or "").strip() or None
+        col = None
+        if fn == "count" and not field:
+            col = None
+        else:
+            if not field or field not in allowed_cols:
+                skipped_measures.append(m.id)
+                continue
+            col = _col(model, field)
+            if col is None:
+                skipped_measures.append(m.id)
+                continue
+            # sum/avg only on numeric-typed filterable columns (or any real column
+            # when the dataset didn't declare a type — still safer than free SQL).
+            if fn in ("sum", "avg"):
+                kind = spec.filterable.get(field)
+                if kind is not None and kind != "number":
+                    skipped_measures.append(m.id)
+                    continue
+
+        expr = _agg_sql(fn, col)
+        if expr is None:
+            skipped_measures.append(m.id)
+            continue
+        alias = f"m_{m.id}"
+        select_exprs.append(expr.label(alias))
+        measure_meta.append({
+            "id": m.id,
+            "alias": alias,
+            "fn": fn,
+            "field": field,
+            "pct_of_total": bool(m.pct_of_total) and fn in ("count", "count_distinct"),
+            "label": _measure_label(fn, field, spec),
+        })
+
+    if not measure_meta:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No valid measures after allowlist checks.",
+        )
+
+    q = db.query(*select_exprs).select_from(model)
+    q, skipped_filters = _apply_query_filters(
+        q, model, spec, body.filters, body.logic, body.search,
+    )
+    if group_cols:
+        q = q.group_by(*group_cols)
+
+    # Optional sort — only over group keys or measure aliases.
+    order_clauses = []
+    labeled = {getattr(se, "key", None) or getattr(se, "name", None): se for se in select_exprs}
+    for s in body.sorts:
+        key = s.key
+        col_expr = None
+        if key in group_keys:
+            col_expr = _col(model, key)
+        elif key in labeled:
+            col_expr = labeled[key]
+        elif key.startswith("m_") and key in labeled:
+            col_expr = labeled[key]
+        if col_expr is None:
+            continue
+        order_clauses.append(col_expr.desc() if str(s.dir).lower() == "desc" else col_expr.asc())
+    if order_clauses:
+        q = q.order_by(*order_clauses)
+    elif group_cols:
+        q = q.order_by(*[c.asc() for c in group_cols])
+
+    raw_rows = q.limit(MAX_LIMIT).all()
+
+    # Grand totals for pct_of_total (ungrouped aggregates over the same filter).
+    grand_vals: Dict[str, Any] = {}
+    need_pct = any(mm["pct_of_total"] for mm in measure_meta)
+    if need_pct:
+        g_exprs = []
+        for mm in measure_meta:
+            field = mm["field"]
+            col = _col(model, field) if field else None
+            g_exprs.append(_agg_sql(mm["fn"], col).label(mm["alias"]))
+        gq = db.query(*g_exprs).select_from(model)
+        gq, _ = _apply_query_filters(gq, model, spec, body.filters, body.logic, body.search)
+        g_row = gq.one()
+        g_map = g_row._mapping if hasattr(g_row, "_mapping") else None
+        for i, mm in enumerate(measure_meta):
+            raw_v = g_map[mm["alias"]] if g_map is not None else g_row[i]
+            grand_vals[mm["alias"]] = _num_or_none(raw_v)
+
+    out_rows: List[Dict[str, Any]] = []
+    for raw in raw_rows:
+        mapping = raw._mapping if hasattr(raw, "_mapping") else None
+        row: Dict[str, Any] = {}
+        for i, key in enumerate(group_keys):
+            v = mapping[key] if mapping is not None else raw[i]
+            if isinstance(v, (datetime, date)):
+                v = v.isoformat()
+            row[key] = v
+        for mi, mm in enumerate(measure_meta):
+            alias = mm["alias"]
+            v = mapping[alias] if mapping is not None else raw[len(group_keys) + mi]
+            v = _num_or_none(v)
+            row[alias] = v
+            if mm["pct_of_total"]:
+                g = grand_vals.get(alias)
+                row[f"{alias}_pct"] = (
+                    round((float(v) / float(g)) * 100, 1)
+                    if g and v is not None and float(g) > 0
+                    else None
+                )
+        out_rows.append(row)
+
+    columns: List[Dict[str, Any]] = []
+    for key in group_keys:
+        kind = spec.filterable.get(key, "text")
+        columns.append({"key": key, "label": key.replace("_", " ").title(), "type": kind})
+    for mm in measure_meta:
+        columns.append({"key": mm["alias"], "label": mm["label"], "type": "number"})
+        if mm["pct_of_total"]:
+            columns.append({"key": f"{mm['alias']}_pct", "label": "% of total", "type": "number"})
+
+    result: Dict[str, Any] = {
+        "rows": out_rows,
+        "total": len(out_rows),
+        "columns": columns,
+        "grand": {mm["alias"]: grand_vals.get(mm["alias"]) for mm in measure_meta} if need_pct else None,
+    }
+    warnings: Dict[str, Any] = {}
+    if skipped_filters:
+        warnings["skipped_filters"] = skipped_filters
+    if skipped_group_by:
+        warnings["skipped_group_by"] = skipped_group_by
+    if skipped_measures:
+        warnings["skipped_measures"] = skipped_measures
+    if warnings:
+        result["warnings"] = warnings
+    return result
+
+
+def _num_or_none(v: Any) -> Optional[float]:
+    if v is None:
+        return None
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def _measure_label(fn: str, field: Optional[str], _spec: DatasetSpec) -> str:
+    labels = {
+        "count": "Count",
+        "count_distinct": "Distinct",
+        "sum": "Sum",
+        "avg": "Avg",
+        "min": "Min",
+        "max": "Max",
+    }
+    prefix = labels.get(fn, fn)
+    if fn == "count" and not field:
+        return prefix
+    pretty = (field or "").replace("_", " ").title()
+    if fn == "count_distinct":
+        return f"Distinct {pretty}"
+    return f"{prefix} {pretty}"
 
 
 # ── Saved reports ──────────────────────────────────────────────────────────
+_REPORT_TABLE_ENSURED: set = set()
+
+
+def _ensure_report_table(db: Session) -> None:
+    """Self-heal grc_report_definitions for tenant DBs that predate the model.
+
+    This app has no Alembic; create_all runs at tenant provisioning, so existing
+    tenants need a checkfirst create on first use (same pattern as MetricTarget).
+    """
+    try:
+        key = str(getattr(db.get_bind(), "url", "default"))
+    except Exception:  # noqa: BLE001
+        key = "default"
+    if key in _REPORT_TABLE_ENSURED:
+        return
+    try:
+        ReportDefinition.__table__.create(bind=db.get_bind(), checkfirst=True)
+        _REPORT_TABLE_ENSURED.add(key)
+    except Exception:  # noqa: BLE001 — never block the caller
+        pass
+
+
 class ReportDefIn(BaseModel):
     slug: str
     name: str
@@ -440,6 +904,7 @@ def _report_out(r: ReportDefinition, user_id: Optional[int]) -> Dict[str, Any]:
 @router.get("/reports")
 def list_reports(db: Session = Depends(get_db), user=Depends(require_auth)) -> Dict[str, Any]:
     """Reports the caller can see: their own, plus anything shared in the tenant."""
+    _ensure_report_table(db)
     rows = (
         db.query(ReportDefinition)
         .filter(or_(ReportDefinition.created_by == user.id, ReportDefinition.is_shared.is_(True)))
@@ -447,6 +912,27 @@ def list_reports(db: Session = Depends(get_db), user=Depends(require_auth)) -> D
         .all()
     )
     return {"reports": [_report_out(r, user.id) for r in rows]}
+
+
+@router.get("/reports/{slug}")
+def get_report(slug: str, db: Session = Depends(get_db), user=Depends(require_auth)) -> Dict[str, Any]:
+    """Fetch one saved report by slug (own or shared-in-tenant)."""
+    _ensure_report_table(db)
+    own = (
+        db.query(ReportDefinition)
+        .filter(ReportDefinition.slug == slug, ReportDefinition.created_by == user.id)
+        .first()
+    )
+    if own is not None:
+        return _report_out(own, user.id)
+    shared = (
+        db.query(ReportDefinition)
+        .filter(ReportDefinition.slug == slug, ReportDefinition.is_shared.is_(True))
+        .first()
+    )
+    if shared is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found.")
+    return _report_out(shared, user.id)
 
 
 @router.post("/reports")
@@ -457,6 +943,7 @@ def upsert_report(body: ReportDefIn, db: Session = Depends(get_db), user=Depends
     creates the caller's own copy under the same slug, which the (slug, owner)
     uniqueness allows.
     """
+    _ensure_report_table(db)
     row = (
         db.query(ReportDefinition)
         .filter(ReportDefinition.slug == body.slug, ReportDefinition.created_by == user.id)
@@ -483,6 +970,7 @@ def upsert_report(body: ReportDefIn, db: Session = Depends(get_db), user=Depends
 def delete_report(slug: str, db: Session = Depends(get_db), user=Depends(require_auth)) -> Dict[str, Any]:
     """Delete one of the caller's own reports. Shared reports owned by someone
     else are not the caller's to remove."""
+    _ensure_report_table(db)
     row = (
         db.query(ReportDefinition)
         .filter(ReportDefinition.slug == slug, ReportDefinition.created_by == user.id)

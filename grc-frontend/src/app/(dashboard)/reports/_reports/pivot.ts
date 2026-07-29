@@ -14,7 +14,12 @@ import { displayText, groupRows, numericValue } from './grid-utils';
 export type { AggFn, Measure };
 
 export const AGG_LABEL: Record<AggFn, string> = {
-  count: 'Count', sum: 'Sum', avg: 'Avg', min: 'Min', max: 'Max',
+  count: 'How many',
+  count_distinct: 'Unique',
+  sum: 'Total',
+  avg: 'Average',
+  min: 'Lowest',
+  max: 'Highest',
 };
 /** Aggregations that can be summed across a folded tail without lying. */
 export const ADDITIVE: AggFn[] = ['count', 'sum'];
@@ -43,6 +48,15 @@ const BLANK = '—';
 /** Single-pass aggregate. Avoids Math.min(...arr) so it stays safe on big sets. */
 export function runAgg(fn: AggFn, col: ColumnDef | undefined, rows: Row[]): number | null {
   if (fn === 'count') return rows.length;
+  if (fn === 'count_distinct') {
+    if (!col) return 0;
+    const set = new Set<string>();
+    for (const r of rows) {
+      const t = displayText(col, r);
+      if (t) set.add(t);
+    }
+    return set.size;
+  }
   if (!col) return null;
   let n = 0, sum = 0, min = Infinity, max = -Infinity;
   for (const r of rows) {
@@ -123,7 +137,7 @@ export function buildPivot(
 /** Format an aggregated value for display. */
 export function fmtAgg(v: number | null, fn: AggFn): string {
   if (v == null) return '';
-  if (fn === 'count') return v.toLocaleString();
+  if (fn === 'count' || fn === 'count_distinct') return v.toLocaleString();
   const rounded = Math.round(v * 10) / 10;
   return Number.isInteger(rounded) ? rounded.toLocaleString() : rounded.toFixed(1);
 }
@@ -133,7 +147,11 @@ export function fmtAgg(v: number | null, fn: AggFn): string {
  *  node (branches included) with its row path, so subtotal rows survive export. */
 export function flattenPivot(result: PivotResult, labelFor: (key: string) => string): { cols: ColumnDef[]; rows: Row[] } {
   const { rowFields, colKeys, hasCol, measures, nodes } = result;
-  const mLabel = (m: Measure) => (m.agg === 'count' ? 'Count' : `${AGG_LABEL[m.agg]} ${labelFor(m.key)}`);
+  const mLabel = (m: Measure) => {
+    if (m.agg === 'count' && !m.key) return 'How many';
+    if (m.agg === 'count_distinct') return `Unique ${labelFor(m.key)}`;
+    return `${AGG_LABEL[m.agg]} ${labelFor(m.key)}`;
+  };
 
   const cols: ColumnDef[] = rowFields.map((f, i) => ({ key: `r${i}`, label: f.label, type: 'text' as const }));
   if (hasCol) {

@@ -521,6 +521,38 @@ export const governanceApi = {
       attestation_type: data.attestation_type || 'acknowledgment',
       due_date: data.due_date,
     }),
+  // Document attestation campaigns (external link + signature pad)
+  listDocAttestationCampaigns: (params?: { document_id?: number; status_filter?: string }) =>
+    apiClient.get('/governance/document-attestations/campaigns', { params }),
+  getDocAttestationCampaign: (id: number) =>
+    apiClient.get(`/governance/document-attestations/campaigns/${id}`),
+  createDocAttestationCampaign: (data: {
+    document_id: number;
+    name?: string;
+    message?: string;
+    due_date?: string;
+    activate?: boolean;
+  }) => apiClient.post('/governance/document-attestations/campaigns', data),
+  updateDocAttestationCampaign: (id: number, data: Record<string, unknown>) =>
+    apiClient.patch(`/governance/document-attestations/campaigns/${id}`, data),
+  deleteDocAttestationCampaign: (id: number) =>
+    apiClient.delete(`/governance/document-attestations/campaigns/${id}`),
+  getDocAttestationCoverageMap: () =>
+    apiClient.get('/governance/document-attestations/coverage-map'),
+  getDocAttestationSignatureUrl: (campaignId: number, ackId: number) =>
+    `/api/governance/document-attestations/campaigns/${campaignId}/acknowledgments/${ackId}/signature`,
+  getPublicDocAttestation: (token: string, tenantSlug?: string | null) =>
+    apiClient.get(`/governance/document-attestations/public/${token}`, {
+      params: tenantSlug ? { tenant_slug: tenantSlug } : undefined,
+    }),
+  submitPublicDocAttestation: (
+    token: string,
+    data: { name: string; email: string; designation: string; signature_data: string },
+    tenantSlug?: string | null,
+  ) =>
+    apiClient.post(`/governance/document-attestations/public/${token}/acknowledge`, data, {
+      params: tenantSlug ? { tenant_slug: tenantSlug } : undefined,
+    }),
   getParseStatus: (documentId: number) =>
     apiClient.get(`/governance/documents/${documentId}/parse-status`),
   getDocumentGapFindings: (documentId: number, params?: Record<string, any>) =>
@@ -2870,6 +2902,12 @@ export const regulatoryApi = {
   deleteTask: (taskId: number) => apiClient.delete(`/governance/regulatory-changes/tasks/${taskId}`),
   getDashboard: () => apiClient.get('/governance/regulatory-changes/dashboard'),
   getGapAnalysis: (changeId: number) => apiClient.get(`/governance/regulatory-changes/changes/${changeId}/gap-analysis`),
+  runGapAnalysis: (
+    changeId: number,
+    data: { document_ids?: number[]; include_all_controls?: boolean; assigned_to?: number | null },
+  ) => apiClient.post(`/governance/regulatory-changes/changes/${changeId}/gap-analysis/run`, data, {
+    timeout: 2 * 60 * 1000,
+  }),
   getClosureReadiness: (changeId: number) => apiClient.get(`/governance/regulatory-changes/changes/${changeId}/closure-readiness`),
   closeChange: (changeId: number) => apiClient.post(`/governance/regulatory-changes/changes/${changeId}/close`),
 };
@@ -4971,6 +5009,79 @@ export const bcmApi = {
     createIssue: (id: number) => apiClient.post(`/bcm/findings/${id}/create-issue`, {}),
     linkRisk: (id: number, data: { risk_id?: number }) => apiClient.post(`/bcm/findings/${id}/link-risk`, data),
   },
+};
+
+// ─── Statutory Audit / Audit Observations (Auditor Portal) ───────────────────
+export const statutoryAuditApi = {
+  meta: () => apiClient.get('/auditor-portal/statutory-audit/observations/meta'),
+  list: (params?: {
+    search?: string;
+    status_filter?: string;
+    priority?: string;
+    regulator_source?: string;
+    audit_period?: string;
+    observation_type?: string;
+    skip?: number;
+    limit?: number;
+  }) => apiClient.get('/auditor-portal/statutory-audit/observations', { params }),
+  get: (id: number) => apiClient.get(`/auditor-portal/statutory-audit/observations/${id}`),
+  create: (data: Record<string, unknown>) =>
+    apiClient.post('/auditor-portal/statutory-audit/observations', data),
+  update: (id: number, data: Record<string, unknown>) =>
+    apiClient.put(`/auditor-portal/statutory-audit/observations/${id}`, data),
+  remove: (id: number) => apiClient.delete(`/auditor-portal/statutory-audit/observations/${id}`),
+  transition: (id: number, data: { status: string; notes?: string }) =>
+    apiClient.post(`/auditor-portal/statutory-audit/observations/${id}/transition`, data),
+  uploadParse: (file: File, opts?: { regulator_hint?: string; audit_period_hint?: string }) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    if (opts?.regulator_hint) fd.append('regulator_hint', opts.regulator_hint);
+    if (opts?.audit_period_hint) fd.append('audit_period_hint', opts.audit_period_hint);
+    // Clear default application/json so axios/browser sets multipart boundary correctly.
+    // Routed via Next App Router proxy (see next.config beforeFiles) so PDF+AI
+    // is not dropped by the ~30s rewrite proxy (socket hang up → opaque 500).
+    return apiClient.post('/auditor-portal/statutory-audit/observations/upload-parse', fd, {
+      headers: { 'Content-Type': undefined },
+      timeout: 900000,
+    });
+  },
+  confirmImport: (data: {
+    observations: Array<Record<string, unknown>>;
+    source_document_name?: string;
+    import_batch_id?: string;
+  }) => apiClient.post('/auditor-portal/statutory-audit/observations/confirm', data),
+  linkEvidence: (id: number, data: { evidence_id: number; relationship_type?: string; notes?: string }) =>
+    apiClient.post(`/auditor-portal/statutory-audit/observations/${id}/evidence/link`, data),
+  uploadEvidence: (id: number, file: File, opts?: { name?: string; notes?: string; relationship_type?: string }) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    if (opts?.name) fd.append('name', opts.name);
+    if (opts?.notes) fd.append('notes', opts.notes);
+    if (opts?.relationship_type) fd.append('relationship_type', opts.relationship_type);
+    return apiClient.post(`/auditor-portal/statutory-audit/observations/${id}/evidence/upload`, fd, {
+      headers: { 'Content-Type': undefined },
+    });
+  },
+  unlinkEvidence: (id: number, linkId: number) =>
+    apiClient.delete(`/auditor-portal/statutory-audit/observations/${id}/evidence/${linkId}`),
+  linkControl: (id: number, data: { internal_control_id: number; notes?: string }) =>
+    apiClient.post(`/auditor-portal/statutory-audit/observations/${id}/links/controls`, data),
+  unlinkControl: (id: number, linkId: number) =>
+    apiClient.delete(`/auditor-portal/statutory-audit/observations/${id}/links/controls/${linkId}`),
+  linkRisk: (id: number, data: { risk_id: number; notes?: string }) =>
+    apiClient.post(`/auditor-portal/statutory-audit/observations/${id}/links/risks`, data),
+  unlinkRisk: (id: number, linkId: number) =>
+    apiClient.delete(`/auditor-portal/statutory-audit/observations/${id}/links/risks/${linkId}`),
+  linkIssue: (id: number, data: { issue_id: number; notes?: string }) =>
+    apiClient.post(`/auditor-portal/statutory-audit/observations/${id}/links/issues`, data),
+  unlinkIssue: (id: number, linkId: number) =>
+    apiClient.delete(`/auditor-portal/statutory-audit/observations/${id}/links/issues/${linkId}`),
+  linkDocument: (id: number, data: { document_id: number; notes?: string }) =>
+    apiClient.post(`/auditor-portal/statutory-audit/observations/${id}/links/documents`, data),
+  unlinkDocument: (id: number, linkId: number) =>
+    apiClient.delete(`/auditor-portal/statutory-audit/observations/${id}/links/documents/${linkId}`),
+  linkOptions: (kind: 'controls' | 'risks' | 'issues' | 'documents' | 'evidence', search?: string) =>
+    apiClient.get('/auditor-portal/statutory-audit/link-options', { params: { kind, search } }),
 };
 
 export default apiClient;

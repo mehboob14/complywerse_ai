@@ -18,6 +18,7 @@ import {
   LifecycleDots,
   OwnerChip,
   FrameworkPills,
+  AttestCell,
   useFrameworkNames,
 } from './lib';
 import { RowActionsMenu } from './RowActionsMenu';
@@ -26,6 +27,7 @@ export interface RegisterTableProps {
   docs: GovDoc[];
   totalCount: number;
   updatedLabel?: string;
+  coverageMap?: Record<number, number>;
   onOpenDoc: (id: number) => void;
   onEdit: (doc: GovDoc) => void;
   onDownload: (doc: GovDoc) => void;
@@ -44,6 +46,7 @@ export function RegisterTable({
   docs,
   totalCount,
   updatedLabel,
+  coverageMap = {},
   onOpenDoc,
   onEdit,
   onDownload,
@@ -101,6 +104,12 @@ export function RegisterTable({
           max={3}
         />
       ),
+    },
+    {
+      id: 'attest',
+      header: 'Attestation %',
+      minWidth: '110px',
+      render: (d) => <AttestCell pct={coverageMap[d.id] ?? null} />,
     },
     {
       id: 'ver',

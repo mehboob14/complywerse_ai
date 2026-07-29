@@ -3,7 +3,9 @@
 // run in SQL and the browser only holds one page.
 
 import apiClient from '@/lib/api';
-import type { ReportView, ServerPage, ServerQuery } from './types';
+import type {
+  Measure, ReportView, ServerAggregatePage, ServerAggregateQuery, ServerPage, ServerQuery,
+} from './types';
 import { isActiveCondition } from './grid-utils';
 
 /** Flatten a ReportView into the server query contract. Server mode drives
@@ -26,4 +28,19 @@ export function buildServerQuery(dataset: string, view: ReportView, search: stri
 export async function queryServer(body: ServerQuery): Promise<ServerPage> {
   const { data } = await apiClient.post('/reporting/query', body);
   return data as ServerPage;
+}
+
+/** Server-side GROUP BY + aggregates (allowlisted columns/functions only). */
+export async function aggregateServer(body: ServerAggregateQuery): Promise<ServerAggregatePage> {
+  const { data } = await apiClient.post('/reporting/aggregate', body);
+  return data as ServerAggregatePage;
+}
+
+export function toServerMeasures(measures: Measure[]): ServerAggregateQuery['measures'] {
+  return measures.map((m) => ({
+    id: m.id,
+    field: m.key || undefined,
+    fn: m.agg,
+    pct_of_total: !!m.pctOfTotal,
+  }));
 }

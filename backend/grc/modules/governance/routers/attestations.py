@@ -329,14 +329,64 @@ async def get_attestation_coverage_map(
 ):
     """Return per-document attestation compliance coverage for the tenant.
 
-    coverage_rate formula matches GET /attestations/document/{id}.summary.compliance_rate:
-        round(100 * completed / total)  where total = all attestations for the doc.
-    Documents with zero attestations are omitted (frontend treats missing as '-').
+    Prefers the new document-attestation campaign model:
+    unique acknowledgments / active users on the creator's email domain.
+    Falls back to legacy PolicyAttestation rows when no campaign coverage exists.
     """
     user_tenants = get_user_tenants(current_user, db)
     if not user_tenants:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tenant access")
 
+    coverage: dict = {}
+
+    # New campaign-based coverage (active campaign, else latest)
+    try:
+        from ....models import (
+            DocumentAttestationAcknowledgment,
+            DocumentAttestationCampaign,
+        )
+        from sqlalchemy import func as sa_func
+
+        campaigns = (
+            db.query(DocumentAttestationCampaign)
+            .filter(DocumentAttestationCampaign.tenant_id.in_(user_tenants))
+            .order_by(DocumentAttestationCampaign.created_at.desc())
+            .all()
+        )
+        chosen: dict = {}
+        for c in campaigns:
+            existing = chosen.get(c.document_id)
+            if existing is None:
+                chosen[c.document_id] = c
+            elif existing.status != "active" and c.status == "active":
+                chosen[c.document_id] = c
+
+        for doc_id, camp in chosen.items():
+            domain = (camp.allowed_email_domain or "").strip().lower()
+            if not domain:
+                continue
+            denom = (
+                db.query(sa_func.count(GRCUser.id))
+                .filter(
+                    GRCUser.is_active.is_(True),
+                    sa_func.lower(GRCUser.email).like(f"%@{domain}"),
+                )
+                .scalar()
+                or 0
+            )
+            if denom <= 0:
+                continue
+            acks = (
+                db.query(sa_func.count(DocumentAttestationAcknowledgment.id))
+                .filter(DocumentAttestationAcknowledgment.campaign_id == camp.id)
+                .scalar()
+                or 0
+            )
+            coverage[str(doc_id)] = min(100, round(acks / denom * 100))
+    except Exception:
+        pass
+
+    # Legacy PolicyAttestation fallback for docs not covered above
     attestations = db.query(PolicyAttestation).filter(
         PolicyAttestation.tenant_id.in_(user_tenants)
     ).all()
@@ -345,11 +395,12 @@ async def get_attestation_coverage_map(
     completed: dict = {}
     for att in attestations:
         doc_id = att.document_id
+        if str(doc_id) in coverage:
+            continue
         totals[doc_id] = totals.get(doc_id, 0) + 1
         if att.status == "completed":
             completed[doc_id] = completed.get(doc_id, 0) + 1
 
-    coverage: dict = {}
     for doc_id, total in totals.items():
         if total <= 0:
             continue

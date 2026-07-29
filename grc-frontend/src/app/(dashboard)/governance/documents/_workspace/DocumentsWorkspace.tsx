@@ -336,6 +336,7 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
               docs={filteredDocs}
               totalCount={summary?.total_documents ?? allDocs.length}
               updatedLabel={updatedLabel}
+              coverageMap={coverageMap}
               onOpenDoc={openDoc}
               onEdit={onEditDoc}
               onDownload={onDownloadDoc}

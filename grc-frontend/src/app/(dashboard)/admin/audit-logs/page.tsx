@@ -110,6 +110,7 @@ const MODULE_LABELS: Record<string, string> = {
   complychat: 'AI Assistant',
   integrations: 'Integrations',
   'auditor-portal': 'Auditor Portal',
+  'auditor-portal/statutory-audit': 'Statutory Audit',
   audits: 'Auditor Portal',
   'is-projects': 'IS Projects',
   reports: 'Reports',
