@@ -879,10 +879,6 @@ export default function PolicyExceptionsPage() {
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 lg:gap-6">
             {/* Feature 1 — search across policy content */}
             <section className="min-w-0 space-y-3">
-              <div>
-                <p className="text-sm font-semibold text-slate-900">Search across policy content</p>
-                <p className="mt-0.5 text-xs text-slate-500">Find matching policies, then raise an exception from a hit.</p>
-              </div>
               <div className="flex gap-2">
                 <input
                   value={policyQuery}
@@ -902,11 +898,6 @@ export default function PolicyExceptionsPage() {
                 </button>
               </div>
               <div className="max-h-72 space-y-2 overflow-y-auto pr-0.5">
-                {!searchedOnce && !searchingPolicies && (
-                  <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-center text-xs text-slate-400">
-                    Enter a term and search to see matching policy content.
-                  </p>
-                )}
                 {searchedOnce && !searchingPolicies && policyResults.length === 0 && (
                   <p className="px-1 py-2 text-xs text-slate-400">No policies matched “{policyQuery}”.</p>
                 )}
