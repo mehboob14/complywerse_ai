@@ -101,6 +101,13 @@ function ResidualRiskCard({ assetId, asset }: { assetId: number; asset: any }) {
         <div className="flex items-center gap-2 py-6 text-[13px] text-slate-400"><Loader2 size={14} className="animate-spin" /> Computing risk…</div>
       ) : !d ? (
         <div className="py-6 text-[13px] text-slate-400">Risk posture is unavailable for this asset.</div>
+      ) : score == null || !tone ? (
+        // An unassessed / unprofiled asset has no computed score, so there is no
+        // band/tone. Render a prompt instead of dereferencing tone!.fg (which
+        // crashed the whole tab with "Cannot read properties of null").
+        <div className="py-6 text-[13px] text-slate-400">
+          No risk score yet — this asset hasn’t been assessed. Add CIA ratings, link controls or risks, or run a CIS scan to compute its residual risk.
+        </div>
       ) : (
         <>
           <div className="flex flex-wrap items-center gap-3">
