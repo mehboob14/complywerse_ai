@@ -72,6 +72,9 @@
 .srcAnalyst { color:#4338ca; background:#eef2ff; }
 .srcCvss { color:#b45309; background:#fffbeb; }
 .srcCapec { color:#0f766e; background:#f0fdfa; }
+/* capec_via_parent — standards data, but inherited from an ancestor CWE. Sky,
+   next to teal (the direct-CAPEC family) but distinct so the borrow is visible. */
+.srcCapecParent { color:#0369a1; background:#f0f9ff; }
 .srcAssumed { color:var(--assumed); background:#f1f5f9; border:1px dashed #cbd5e1; }
 
 .signals { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:11px; }

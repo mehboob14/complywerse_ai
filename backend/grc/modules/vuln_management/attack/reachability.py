@@ -33,17 +33,27 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, asdict
-from typing import Callable, List, Optional, Union
+from typing import Callable, List, Optional, Tuple, Union
 
 from . import catalog
 from .selection import parse_cvss_vector, select_techniques
-from .verdict import ENTRY_TACTICS, roll_up
+from .verdict import ENTRY_TACTICS, apply_wall_to_rollup, roll_up
 
 logger = logging.getLogger(__name__)
 
 STATUS_BLOCKED = "blocked"
 STATUS_POSSIBLE = "possible"
 STATUS_LIKELY = "likely"
+# A post-foothold technique that is possible/likely ON ITS OWN signals but sits past
+# a shut entry door: the chain can't reach it. Distinct from BLOCKED (this technique's
+# own precondition fails) — SEVERED means an EARLIER gate is shut. See apply_chain_severing.
+STATUS_SEVERED = "severed"
+
+# Tactics an attacker reaches WITHOUT a foothold — reconnaissance happens before the
+# door, resource-development is off-target prep. Single source of truth: view.py
+# imports this. Everything NOT in here and NOT an entry tactic is post-foothold and
+# only reachable once an entry step is actually open.
+PRE_ENTRY_TACTICS = {"reconnaissance", "resource-development"}
 
 # Statuses that mean the flaw is gone on this asset (patched / closed / retest-
 # verified) — the finding is no longer exploitable. This is the codebase-wide
@@ -99,6 +109,22 @@ def _is_entry_technique(technique_id: str) -> bool:
     return primary in ENTRY_TACTICS
 
 
+def primary_tactic(tech: dict) -> Optional[str]:
+    """The technique's PRIMARY tactic — the one that fixes its kill-chain POSITION:
+    the earliest (lowest matrix order) of its tactics. This is the same primary
+    ``view.build_view`` renders as ``t["tactic"]`` and the spine groups by, defined
+    in ONE place so the sequential stage gate and the rendered grouping can never
+    disagree about which stage a technique sits in.
+    """
+    tactics = tech.get("tactics") or []
+    if not tactics:
+        return None
+    return min(
+        tactics,
+        key=lambda s: (catalog.tactic_order(s) is None, catalog.tactic_order(s) or 0),
+    )
+
+
 # ──────────────────────────────────────────────────────────────────────────
 # Signals — the fixed vocabulary of facts about one vuln-on-one-asset
 # ──────────────────────────────────────────────────────────────────────────
@@ -136,10 +162,23 @@ def build_signals(vuln, asset, *, control_coverage: Optional[float] = None) -> S
     unless it's decommissioned/retired. Replace with a real column later without
     touching the rules.
     """
-    # exposure
-    internet_exposed = getattr(asset, "is_internet_facing", None)
-    if internet_exposed is None:
-        internet_exposed = getattr(asset, "internet_facing", None)
+    # exposure — TWO columns populated by DIFFERENT subsystems: the asset form and
+    # CSV import write `internet_facing`; discovery (deep_collect) and the risk-posture
+    # editor write `is_internet_facing`. Neither alone is authoritative, and
+    # `is_internet_facing` is non-nullable (always a concrete False), so the old
+    # "is_internet_facing first, else internet_facing" read IGNORED a True set via the
+    # asset form — an internet-facing host read as "Not exposed" and its chain was
+    # wrongly severed, while the score panel (which reads internet_facing) said the
+    # opposite. Resolve consistently: exposed if EITHER says so; unknown only when both
+    # are truly unknown; otherwise not-exposed.
+    _isf = getattr(asset, "is_internet_facing", None)
+    _inet = getattr(asset, "internet_facing", None)
+    if _isf is True or _inet is True:
+        internet_exposed = True
+    elif _isf is None and _inet is None:
+        internet_exposed = None
+    else:
+        internet_exposed = False
 
     lifecycle = (getattr(asset, "lifecycle_state", None) or "").lower()
     asset_status = (getattr(asset, "status", None) or "").lower()
@@ -285,6 +324,35 @@ def _confirmation(s: Signals) -> Optional[str]:
     return None
 
 
+def _possible_why(technique_id: str, s: Signals) -> str:
+    """The reason a technique is POSSIBLE, built from the ACTUAL signals rather than a
+    fixed template — what keeps this step reachable on THIS asset, and why the evidence
+    doesn't (yet) escalate it to LIKELY. Mirrors how BLOCKED and LIKELY already cite
+    their concrete fact instead of boilerplate.
+    """
+    facts: List[str] = []
+    if s.internet_exposed is True:
+        facts.append("this host is internet-facing")
+    elif s.network_reachable:
+        facts.append("this host is reachable on the network")
+    if _is_entry_technique(technique_id):
+        if s.cvss_av == "N":
+            facts.append("the flaw is exploitable over the network")
+        elif s.cvss_av == "A":
+            facts.append("the flaw is exploitable from an adjacent network")
+        elif s.cvss_av == "L":
+            facts.append("the flaw is exploitable with local access")
+    reach = "; ".join(facts) if facts else "nothing on this asset disqualifies it"
+    if s.has_public_exploit is False:
+        conf = "no public exploit is known for it and it is not on CISA KEV"
+    elif s.has_public_exploit is None:
+        conf = "exploit availability has not been checked and it is not on CISA KEV"
+    else:
+        conf = "it is not on CISA KEV"
+    return (f"An attacker could attempt this — {reach}. It stays possible rather than "
+            f"confirmed because {conf}.")
+
+
 # ──────────────────────────────────────────────────────────────────────────
 # The assessment
 # ──────────────────────────────────────────────────────────────────────────
@@ -313,7 +381,7 @@ def assess_technique(technique_id: str, signals: Signals) -> dict:
 
     return {
         "status": STATUS_POSSIBLE,
-        "why": "The earlier steps hold; an attacker could attempt this, but it isn't confirmed exploited in the wild.",
+        "why": _possible_why(technique_id, signals),
         "confirmed": False,
     }
 
@@ -327,6 +395,115 @@ def assess_chain(selected: List[dict], signals: Signals) -> List[dict]:
         verdict = assess_technique(tech["technique_id"], signals)
         out.append({**tech, **verdict})
     return out
+
+
+def _severed_reason(entry_state: Optional[str]) -> str:
+    """The concrete why for a downstream stage the chain can't reach — matched to the
+    verdict's entry_state so the badge, spine and narrator all give the SAME reason."""
+    if entry_state == "assumed_insufficient":
+        return ("The chain is assumed — no CWE or CVSS vector is recorded for this finding, "
+                "so the path is a guess, not derived. No stage is confirmed reachable.")
+    if entry_state == "none":
+        return ("No network entry step applies to this finding, so an attacker can't reach this "
+                "stage without already having local access to the asset.")
+    return ("The entry step is blocked on this asset, so the chain is severed at the door and "
+            "can't reach this stage.")
+
+
+def apply_chain_severing(chain: List[dict], entry_state: Optional[str]) -> List[dict]:
+    """Push the kill-chain's SEQUENTIAL gate down onto the per-technique badges.
+
+    Layer 3 badges each technique on its OWN signals, so a post-foothold technique
+    (privilege escalation, lateral movement, …) can read POSSIBLE even when the only
+    way IN is blocked — a "capability" view. The spine already hides those, but the
+    chain the narrator, the replay and the counts read kept the raw POSSIBLE, so the
+    walkthrough narrated an "open path" the same screen said was severed.
+
+    This closes that gap in ONE place: when the entry door is not open, any
+    post-foothold technique that is POSSIBLE/LIKELY on its own is re-badged SEVERED —
+    an attacker who can't get in can't reach it. A technique BLOCKED on its own keeps
+    that (more specific) reason; entry and pre-entry (recon) stages are untouched.
+    Pure and idempotent (new records; SEVERED is not possible/likely so a second pass
+    is a no-op). entry_state=="open" (a real way in exists) → downstream stands on its
+    own signals, unchanged.
+    """
+    if entry_state == "open":
+        return chain
+    reason = _severed_reason(entry_state)
+    out: List[dict] = []
+    for t in chain:
+        tactic = (t.get("tactics") or [None])[0]
+        if (tactic not in PRE_ENTRY_TACTICS and tactic not in ENTRY_TACTICS
+                and t.get("status") in (STATUS_POSSIBLE, STATUS_LIKELY)):
+            out.append({**t, "status": STATUS_SEVERED, "why": reason, "severed": True})
+        else:
+            out.append(t)
+    return out
+
+
+def apply_stage_walls(chain: List[dict], entry_state: Optional[str]) -> Tuple[List[dict], Optional[str]]:
+    """Sequential stage gating PAST the door — the intermediate-wall rule.
+
+    ``apply_chain_severing`` handles the ENTRY gate: when no way in is open,
+    everything post-foothold is severed at the door. This closes the case that
+    gate left open: entry IS open, but some LATER stage has techniques and every
+    one of them is individually blocked. Walking the tactic spine in MITRE
+    matrix order:
+
+    * a stage with NO mapped techniques is TRANSPARENT — the flaw contributes
+      nothing at that tactic, the chain passes through unchanged (established
+      behaviour, kept);
+    * a stage with at least one passable technique (possible/likely) is PASSED;
+    * a stage whose techniques are ALL blocked is a WALL — every passable
+      technique on any LATER stage is re-badged SEVERED, with a why that names
+      the wall stage, because a chain that can't get past the wall can't reach
+      it. A later technique BLOCKED on its own keeps that (more specific) reason.
+
+    Pre-entry stages (recon / resource-development) happen before the door and
+    stand alone — they never gate. The entry stages (Initial Access / Execution)
+    are the POOLED door the verdict already reasons on — any one open way in
+    means in — so they aren't wall candidates either; the first wall can only be
+    a post-foothold stage.
+
+    Returns ``(chain, walled_at_shortname)``. Pure, deterministic and idempotent:
+    when entry is not open this is a strict no-op (the entry gate already severed
+    downstream, so entry-blocked findings render IDENTICALLY to before this rule
+    existed), and a second pass finds the same first wall and changes nothing
+    (severed is not passable, so the wall stays where it was).
+    """
+    if entry_state != "open" or not chain:
+        return chain, None
+    # Group by the PRIMARY tactic — the same grouping the view renders and the
+    # spine uses, so the wall can never sit in a different stage than the UI shows.
+    by_stage: dict = {}
+    for t in chain:
+        sn = primary_tactic(t)
+        if sn is not None:
+            by_stage.setdefault(sn, []).append(t)
+    wall_sn: Optional[str] = None
+    wall_order: Optional[int] = None
+    for sn, techs in sorted(by_stage.items(), key=lambda kv: catalog.tactic_order(kv[0]) or 0):
+        order = catalog.tactic_order(sn)
+        if order is None or sn in PRE_ENTRY_TACTICS or sn in ENTRY_TACTICS:
+            continue
+        if not any(t.get("status") in (STATUS_POSSIBLE, STATUS_LIKELY) for t in techs):
+            wall_sn, wall_order = sn, order
+            break
+    if wall_sn is None or wall_order is None:
+        return chain, None
+    wall_name = (catalog.get_tactic(wall_sn) or {}).get("name") or wall_sn
+    reason = (f"A required earlier stage ({wall_name}) is fully blocked on this asset, "
+              f"so the chain cannot reach this technique.")
+    out: List[dict] = []
+    for t in chain:
+        sn = primary_tactic(t)
+        order = catalog.tactic_order(sn) if sn else None
+        if (order is not None and order > wall_order
+                and t.get("status") in (STATUS_POSSIBLE, STATUS_LIKELY)):
+            out.append({**t, "status": STATUS_SEVERED, "why": reason, "severed": True})
+        else:
+            out.append(t)
+    return out, wall_sn
 
 
 def evaluate(vuln, asset, *, control_coverage: Optional[float] = None) -> dict:
@@ -346,6 +523,19 @@ def evaluate(vuln, asset, *, control_coverage: Optional[float] = None) -> dict:
     )
     signals = build_signals(vuln, asset, control_coverage=control_coverage)
     chain = assess_chain(selected, signals)
+    # Verdict FIRST (reasons only on the entry set, so it's unaffected by severing),
+    # then push its entry_state gate onto the downstream badges so the chain the
+    # narrator, replay and counts read agrees with the spine — no POSSIBLE step past
+    # a shut door.
+    rollup = roll_up(chain, signals)
+    chain = apply_chain_severing(chain, rollup.get("entry_state"))
+    # Sequential gate PAST the door: with entry open, a fully-blocked intermediate
+    # stage walls the chain — later techniques read SEVERED (naming the wall) and
+    # the verdict is weakened to say where the chain stops. No-op when entry is
+    # not open, so entry-blocked findings are byte-identical to before.
+    chain, walled_at = apply_stage_walls(chain, rollup.get("entry_state"))
+    if walled_at:
+        rollup = apply_wall_to_rollup(rollup, walled_at)
     return {
         "chain": chain,
         "signals": signals.as_dict(),
@@ -359,7 +549,8 @@ def evaluate(vuln, asset, *, control_coverage: Optional[float] = None) -> dict:
             STATUS_BLOCKED: sum(1 for t in chain if t["status"] == STATUS_BLOCKED),
             STATUS_POSSIBLE: sum(1 for t in chain if t["status"] == STATUS_POSSIBLE),
             STATUS_LIKELY: sum(1 for t in chain if t["status"] == STATUS_LIKELY),
+            STATUS_SEVERED: sum(1 for t in chain if t["status"] == STATUS_SEVERED),
         },
         # Layer 4 — the top-line verdict + signal % the card renders.
-        "rollup": roll_up(chain, signals),
+        "rollup": rollup,
     }

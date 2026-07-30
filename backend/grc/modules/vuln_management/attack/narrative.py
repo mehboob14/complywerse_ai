@@ -246,6 +246,12 @@ def _assessment_facts(view: dict) -> str:
         # specific, informative reasons for LIKELY (the exploit) and BLOCKED (the fact).
         if status == "possible":
             reach = "POSSIBLE — nothing blocks this step; no exploit or KEV confirms the attacker uses it here (an open, unproven avenue)"
+        elif status == "severed":
+            # The chain is cut UPSTREAM (the entry door is shut) — the attacker never
+            # reaches this stage. Framed as BLOCKED so the model narrates it as
+            # unreachable ("the door is closed, so they never get here"), NOT an open
+            # path — the exact contradiction the severing fix removes.
+            reach = f"BLOCKED (the chain is severed before this stage) — {t.get('why')}"
         else:
             reach = f"{status.upper()} — {t.get('why')}"
         lines.append(f"    reachability on this asset: {reach}")

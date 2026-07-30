@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-from . import capec_map
+from . import capec_map, cwe_hierarchy
 from .curated_cwe_map import CURATED_CWE_TECHNIQUES
 from .selection import (
     parse_cvss_vector,
@@ -22,8 +22,11 @@ from .selection import (
     select_techniques,
     _ASSUMED_ENTRY,
 )
-from .reachability import build_signals, assess_chain, _is_entry_technique
-from .verdict import roll_up
+from .reachability import (
+    build_signals, assess_chain, apply_chain_severing, apply_stage_walls,
+    _is_entry_technique,
+)
+from .verdict import apply_wall_to_rollup, roll_up
 
 
 def _cwe_list(cwe_ids) -> List[str]:
@@ -56,16 +59,37 @@ def explain(vuln, asset, *, control_coverage: Optional[float] = None) -> dict:
         "resolved": bool(cwes),
     })
 
-    # 2 — map: per CWE, each mechanism's hit/miss (existing calls, recorded verbatim)
+    # 2 — map: per CWE, each mechanism's hit/miss (existing calls, recorded verbatim).
+    # When CAPEC directly MISSES, the ancestor walk is the honest next step the engine
+    # takes — climb the ChildOf tree to the nearest mapped parent and borrow it — so the
+    # trace records it as its own lane. Without this the 'select' stage would show
+    # capec_via_parent techniques the 'map' stage never explained, contradicting itself.
+    def _capec_mapped(a: str) -> bool:
+        return bool(capec_map.techniques_for_cwe(a))
     for cwe in cwes:
         capec_links = capec_map.techniques_for_cwes([cwe])
         key = capec_map.normalise_cwe(cwe)
         curated = CURATED_CWE_TECHNIQUES.get(key or "", [])
+        parent_walk = None
+        if not capec_links:
+            anc, depth = cwe_hierarchy.walk_to_mapped(cwe, _capec_mapped)
+            if anc:
+                anc_links = capec_map.techniques_for_cwe(anc)
+                parent_walk = {
+                    "hit": True,
+                    "via_parent_cwe": f"CWE-{anc}",
+                    "parent_name": cwe_hierarchy.name(anc),
+                    "depth": depth,
+                    "techniques": [l["technique_id"] for l in anc_links],
+                }
+            else:
+                parent_walk = {"hit": False}
         stages.append({
             "stage": "map",
             "cwe": cwe,
             "capec": {"hit": bool(capec_links),
                       "techniques": [l["technique_id"] for l in capec_links]},
+            "parent_walk": parent_walk,
             "analyst": {"hit": bool(curated),
                         "techniques": [t[0] for t in curated]},
         })
@@ -102,9 +126,22 @@ def explain(vuln, asset, *, control_coverage: Optional[float] = None) -> dict:
         } for t in selected],
     })
 
-    # 5 — reachability: badge each technique against the asset's signals
+    # 5 — reachability: badge each technique against the asset's signals, then apply
+    #     the SEQUENTIAL gate. The raw badge is each technique on its own signals; the
+    #     verdict's entry_state then severs anything past a shut door, so the replay
+    #     shows the SAME chain the spine and narrator do — a downstream step reads
+    #     SEVERED, never a "possible" that contradicts "chain severed at the door".
     signals = build_signals(vuln, asset, control_coverage=control_coverage)
-    chain = assess_chain(selected, signals)
+    raw_chain = assess_chain(selected, signals)
+    rollup = roll_up(raw_chain, signals)          # verdict reasons on entry set only
+    chain = apply_chain_severing(raw_chain, rollup["entry_state"])
+    # The SAME sequential wall pass evaluate() runs — with entry open, a fully-
+    # blocked intermediate stage severs everything after it and weakens the
+    # verdict, naming the wall. Mirrored here so the trace's result keeps the
+    # equality guarantee with build_view.
+    chain, walled_at = apply_stage_walls(chain, rollup["entry_state"])
+    if walled_at:
+        rollup = apply_wall_to_rollup(rollup, walled_at)
     stages.append({
         "stage": "reach",
         "signals": {
@@ -125,8 +162,8 @@ def explain(vuln, asset, *, control_coverage: Optional[float] = None) -> dict:
         } for c in chain],
     })
 
-    # 6 — verdict
-    rollup = roll_up(chain, signals)
+    # 6 — verdict (computed on the entry set above; an intermediate wall — if the
+    #     sequential gate found one — has already weakened it, naming the stage)
     stages.append({
         "stage": "verdict",
         "entry_set": [c["technique_id"] for c in chain if _is_entry_technique(c["technique_id"])],

@@ -27,14 +27,17 @@ import logging
 import re
 from typing import Dict, List, Optional
 
-from . import capec_map, catalog
+from . import capec_map, catalog, cwe_hierarchy
 from .curated_cwe_map import CURATED_CWE_TECHNIQUES
 
 logger = logging.getLogger(__name__)
 
 # Source authority, high -> low. When a technique is selected by several tiers,
 # the record's headline source is the most authoritative one present.
-_SOURCE_RANK = {"capec_chain": 3, "analyst": 2, "cvss_derived": 1}
+# capec_via_parent = an ancestor CWE's CAPEC mapping (real standards data, but
+# borrowed from a parent, so ranked below an exact CAPEC/analyst hit and above the
+# CVSS heuristic).
+_SOURCE_RANK = {"capec_chain": 4, "analyst": 3, "capec_via_parent": 2, "cvss_derived": 1}
 _CONFIDENCE_RANK = {"high": 3, "medium": 2, "low": 1}
 
 # Recon step attached to every vuln; Layer 3 gates it on network_reachable.
@@ -219,6 +222,31 @@ def select_techniques(cwe_ids=None, cvss_vector: Optional[str] = None) -> List[d
             assumed=False,
         )
 
+    # Tier 2b — ancestor walk. For a CWE with NO direct CAPEC mapping, climb the
+    # CWE ChildOf hierarchy to the nearest ancestor that DOES map and borrow its
+    # techniques, labelled 'capec_via_parent' with the climb depth and a lower
+    # confidence. A child weakness is a specific case of its parent, so this is
+    # real MITRE standards data — approximate (the parent is broader), never
+    # fabricated. Fires ONLY on a direct miss, so it never overrides an exact hit.
+    def _mapped(a: str) -> bool:
+        return bool(capec_map.techniques_for_cwe(a))
+    for cwe in cwes:
+        if capec_map.techniques_for_cwe(cwe):
+            continue  # direct CAPEC hit — Tier 2 already covered this CWE
+        anc, depth = cwe_hierarchy.walk_to_mapped(cwe, _mapped)
+        if not anc:
+            continue
+        for link in capec_map.techniques_for_cwe(anc):
+            _merge(
+                selected, link["technique_id"], "capec_via_parent",
+                "medium" if depth == 1 else "low",
+                {"from_cwe": f"CWE-{capec_map.normalise_cwe(cwe)}",
+                 "via_parent_cwe": f"CWE-{anc}", "parent_name": cwe_hierarchy.name(anc),
+                 "depth": depth, "via_capec": link.get("via_capec"),
+                 "capec_name": link.get("capec_name")},
+                assumed=False,
+            )
+
     # Tier 3 — curated gap-filler (deliberate analyst crosswalk)
     for cwe in cwes:
         key = capec_map.normalise_cwe(cwe)
@@ -265,3 +293,28 @@ def selection_summary(cwe_ids=None, cvss_vector: Optional[str] = None) -> dict:
         "cvss_parsed": parse_cvss_vector(cvss_vector),
         "techniques": techniques,
     }
+
+
+# Threshold for the register's "High tactics" filter / dashboard tile.
+# Empirically: richest-with-exploit findings in this product sit at ≥7 distinct
+# ATT&CK tactics; below that the chain is a short entry/backbone mapping.
+HIGH_TACTICS_MIN = 7
+
+
+def tactic_count(cwe_ids=None, cvss_vector: Optional[str] = None) -> int:
+    """How many distinct ATT&CK tactics the selection maps to for one finding.
+
+    Pure and DB-free — same mapping the Exploit Test tab uses (minus reachability
+    badges). Used by the register filter and dashboard aggregates.
+    """
+    tactics = set()
+    for t in select_techniques(cwe_ids, cvss_vector):
+        for tac in (t.get("tactics") or []):
+            if tac:
+                tactics.add(tac)
+    return len(tactics)
+
+
+def is_high_tactics(cwe_ids=None, cvss_vector: Optional[str] = None,
+                    *, min_tactics: int = HIGH_TACTICS_MIN) -> bool:
+    return tactic_count(cwe_ids, cvss_vector) >= min_tactics

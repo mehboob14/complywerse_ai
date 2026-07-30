@@ -177,6 +177,9 @@ export default function VulnerabilitiesPage() {
   // on what still needs work. The checkbox toggles them back in. An explicit
   // status pick from the existing dropdown overrides this on the backend.
   const [showClosed, setShowClosed] = useState(false);
+  // Separate axes: public-exploit availability vs ATT&CK tactic richness.
+  const [exploitFilter, setExploitFilter] = useState<string>('all');
+  const [tacticsFilter, setTacticsFilter] = useState<string>('all');
   const [sortBy, setSortBy] = useState<'created_at' | 'severity' | 'due_date' | 'title'>('created_at');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -314,17 +317,23 @@ export default function VulnerabilitiesPage() {
     { id: 'sla', label: 'SLA Config', icon: Clock },
   ];
 
+  // CVE-shaped searches must see closed rows too (e.g. auto_closed_decommissioned),
+  // otherwise a known CVE like CVE-2025-55130 silently returns 0. Title search stays
+  // client-side over the loaded page to avoid a refetch on every keystroke.
+  const serverSearch = /CVE-\d{4}-\d+/i.test(searchTerm.trim()) ? searchTerm.trim() : '';
+
   const { data: vulnerabilities, isLoading, error } = useQuery({
-    queryKey: ['vulnerabilities', statusFilter, severityFilter, showClosed, registerType],
+    queryKey: ['vulnerabilities', statusFilter, severityFilter, showClosed, registerType, exploitFilter, tacticsFilter, serverSearch],
     queryFn: async () => {
       const params: Record<string, unknown> = {};
       if (statusFilter !== 'all') params.status = statusFilter;
       if (severityFilter !== 'all') params.severity = severityFilter;
       // Only forward the closed-toggle when no explicit status filter is set;
       // the backend already gives precedence to status_filter, but skipping
-      // the redundant param keeps the URL clean.
+      // the redundant param keeps the URL clean. CVE searches force closed in
+      // so a decommissioned finding still surfaces by ID.
       if (statusFilter === 'all') {
-        params.include_closed = showClosed;
+        params.include_closed = showClosed || !!serverSearch;
       }
       // Scope the list to the chosen register type. NCA Template surfaces only
       // bridged NCA vulns; standard surfaces everything that isn't tagged.
@@ -333,8 +342,21 @@ export default function VulnerabilitiesPage() {
       } else {
         params.template_type = '_general';
       }
+      if (exploitFilter === 'yes') params.has_exploit = true;
+      if (exploitFilter === 'no') params.has_exploit = false;
+      if (tacticsFilter === 'high') params.high_tactics = true;
+      if (serverSearch) {
+        params.search = serverSearch;
+        params.limit = 500;
+      } else if (exploitFilter !== 'all' || tacticsFilter !== 'all') {
+        // Exploit / tactics filters need the whole register, not the default page of 100.
+        params.limit = 500;
+      }
       const response = await vulnManagementApi.vulnerabilities.getAll(
-        params as { status?: string; severity?: string; include_closed?: boolean; template_type?: string }
+        params as {
+          status?: string; severity?: string; include_closed?: boolean; template_type?: string;
+          search?: string; limit?: number; has_exploit?: boolean; high_tactics?: boolean;
+        }
       );
       return response.data as Vulnerability[];
     },
@@ -347,6 +369,17 @@ export default function VulnerabilitiesPage() {
       const response = await vulnManagementApi.dashboard.get();
       return response.data as DashboardData;
     },
+  });
+
+  // Runtime domains (scanner plugin-family) for the dashboard's "By domain" panel.
+  // Fetched here (not in VulnsWorkspace, which is props-only) and passed down; the
+  // list's own `vulns` is page-capped, so this server aggregate is the accurate source.
+  const { data: domainsResp } = useQuery({
+    queryKey: ['vuln-domains'],
+    queryFn: async () =>
+      (await vulnManagementApi.vulnerabilities.getDomains()).data as {
+        domains: Array<{ family: string; total: number; worst_severity: string }>;
+      },
   });
 
   const { data: departments } = useQuery({
@@ -992,6 +1025,7 @@ export default function VulnerabilitiesPage() {
           vulns={vulnerabilities ?? []}
           filteredVulns={filteredVulnerabilities}
           dashboard={dashboard}
+          domains={domainsResp?.domains ?? []}
           loading={isLoading}
           registerType={registerType}
           setRegisterType={setRegisterType}
@@ -1004,6 +1038,10 @@ export default function VulnerabilitiesPage() {
           setSeverityFilter={setSeverityFilter}
           showClosed={showClosed}
           setShowClosed={setShowClosed}
+          exploitFilter={exploitFilter}
+          setExploitFilter={setExploitFilter}
+          tacticsFilter={tacticsFilter}
+          setTacticsFilter={setTacticsFilter}
           canCreate={hasPermission('vulnerabilities:vulnerability_register:create')}
           canEdit={hasPermission('vulnerabilities:vulnerability_register:edit')}
           canDelete={hasPermission('vulnerabilities:vulnerability_register:delete')}

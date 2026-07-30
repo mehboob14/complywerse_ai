@@ -44,6 +44,15 @@ ENTRY_TACTICS = {"initial-access", "execution"}
 # The fixed set the signal-% is measured over — positive exploitability signals.
 _EPSS_HOT = 0.10
 
+# Advisory clamp for the risk score's exploit-probability band, keyed by verdict.
+# Module-level so ``apply_wall_to_rollup`` can re-derive it after a wall weakens
+# the verdict — the clamp and the verdict must never disagree.
+_CLAMP_BY_VERDICT = {
+    VERDICT_LIKELY: ("raise", "Reachable and confirmed — exploit probability should be floored high, above raw EPSS."),
+    VERDICT_POSSIBLE: ("neutral", "Reachable but unconfirmed — use EPSS as-is."),
+    VERDICT_UNLIKELY: ("hold", "Not reachable here — hold exploit probability near/below EPSS regardless of severity."),
+}
+
 
 _entry_validated = False
 
@@ -156,11 +165,7 @@ def roll_up(chain: List[dict], signals) -> dict:
     data_completeness = round(100 * sum(known) / len(known))
 
     # ── advisory clamp for the risk score's exploit-probability band ──
-    clamp = {
-        VERDICT_LIKELY: ("raise", "Reachable and confirmed — exploit probability should be floored high, above raw EPSS."),
-        VERDICT_POSSIBLE: ("neutral", "Reachable but unconfirmed — use EPSS as-is."),
-        VERDICT_UNLIKELY: ("hold", "Not reachable here — hold exploit probability near/below EPSS regardless of severity."),
-    }[verdict]
+    clamp = _CLAMP_BY_VERDICT[verdict]
 
     return {
         "verdict": verdict,
@@ -175,3 +180,40 @@ def roll_up(chain: List[dict], signals) -> dict:
             "rationale": clamp[1],
         },
     }
+
+
+def apply_wall_to_rollup(rollup: dict, wall_shortname: str) -> dict:
+    """Reflect an intermediate WALL in the verdict — the sequential-gating case
+    where a way in IS open but a later stage's techniques are ALL blocked (see
+    ``reachability.apply_stage_walls``), so the chain cannot progress past it.
+
+    The door stands open — the entry techniques are genuinely passable — so the
+    verdict never drops to 'unlikely' (that would deny a way in that exists).
+    But a chain that cannot progress past the wall isn't 'likely' END-TO-END
+    either, so LIKELY weakens one notch to POSSIBLE; and in BOTH cases the
+    verdict_reason names the wall stage, so the weakening is never silent. The
+    clamp is re-derived from the weakened verdict so the two can't disagree.
+
+    Adds ``walled_at`` (shortname) + ``walled_at_name`` ONLY when applied — a
+    finding with no wall keeps today's exact rollup shape, so unchanged findings
+    produce identical payloads and no snapshot noise. Pure: returns a new dict.
+    Deterministic: the reason depends only on the wall stage's catalogue name.
+    """
+    wall_name = (catalog.get_tactic(wall_shortname) or {}).get("name") or wall_shortname
+    out = dict(rollup)
+    walled_line = (f"the chain is walled at {wall_name} — every technique on that stage "
+                   f"is blocked on this asset, so the attack cannot progress past it")
+    if out.get("verdict") == VERDICT_LIKELY:
+        out["verdict"] = VERDICT_POSSIBLE
+        out["verdict_reason"] = f"A way in is confirmed reachable, but {walled_line}."
+    elif out.get("verdict") == VERDICT_POSSIBLE:
+        out["verdict_reason"] = f"At least one way in is open, but {walled_line}."
+    else:
+        # Defensive: a wall only exists when entry is open, and open entry never
+        # rolls up 'unlikely' — nothing to weaken.
+        return rollup
+    clamp = _CLAMP_BY_VERDICT[out["verdict"]]
+    out["exploit_probability"] = {"recommendation": clamp[0], "rationale": clamp[1]}
+    out["walled_at"] = wall_shortname
+    out["walled_at_name"] = wall_name
+    return out

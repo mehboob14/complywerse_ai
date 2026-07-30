@@ -98,7 +98,7 @@ def _vector_from_cvss(vuln):
     if not vec:
         return None
     import re
-    m = re.search(r"AV:([NALP])", str(vec))
+    m = re.search(r"\bAV:([NALP])\b", str(vec))
     if not m:
         return None
     return {"N": "network", "A": "adjacent", "L": "local", "P": "physical"}[m.group(1)]
@@ -182,6 +182,29 @@ def _resolve_asset_criticality_score(db: Session, vuln: Vulnerability) -> Option
     return best
 
 
+def recompute_composite_priority(vuln: Vulnerability, db: Session) -> Optional[float]:
+    """Compute + store the 7-signal composite priority for one vulnerability from
+    its already-stored fields and linked asset — WITHOUT fetching external feeds.
+
+    Shared by full enrichment and by scanner sync, so a freshly-imported finding
+    gets the correct score immediately rather than sitting at 0 until the next
+    enrichment. (A score left at 0 is what made the Remediation plan read
+    "0/100" while the Analysis tab computed the real score live.)
+    """
+    priority = compute_composite_priority(
+        cvss_score=vuln.cvss_score,
+        epss_score=vuln.epss_score,
+        kev_flag=vuln.kev_flag,
+        asset_criticality=_resolve_asset_criticality(db, vuln),
+        asset_criticality_score=_resolve_asset_criticality_score(db, vuln),
+        exploit_maturity=_maturity_from_exploits(vuln),
+        attack_vector=_vector_from_cvss(vuln),
+        internet_exposed=_internet_exposed(db, vuln),
+    )
+    vuln.composite_priority = priority
+    return priority
+
+
 def enrich_vulnerability(vuln: Vulnerability, db: Session) -> dict:
     """Pull NVD + EPSS + KEV for `vuln.cve_id`, write back, commit.
 
@@ -251,6 +274,14 @@ def enrich_vulnerability(vuln: Vulnerability, db: Session) -> dict:
             vuln.cvss_vector = nvd.cvss_vector
             if vuln.cvss_score is None and nvd.cvss_score is not None:
                 vuln.cvss_score = nvd.cvss_score
+        # Always record NVD's own CVSS for the labelled CVE, kept SEPARATE from
+        # the scanner's cvss_score (never overwrites it). Lets the finding show
+        # "scanner X · NVD (this CVE) Y" — the two legitimately differ when the
+        # scanner plugin bundles several CVEs and reports the worst one.
+        if getattr(nvd, "cvss_score", None) is not None:
+            vuln.nvd_cvss_score = nvd.cvss_score
+        if getattr(nvd, "cvss_vector", None):
+            vuln.nvd_cvss_vector = nvd.cvss_vector
         # CWE backfill — the engine's core input, and the gap that made every real
         # tenant map generically. Never overwrite a CWE a scanner already recorded;
         # fill the single Primary (cwe_id, back-compat) and the full list (cwe_ids,
@@ -266,24 +297,28 @@ def enrich_vulnerability(vuln: Vulnerability, db: Session) -> dict:
         summary["nvd_synced"] = True
         # ---- CPE matcher (Phase 4) -----------------------------------------
         # Walk this CVE's NVD `affected_configurations` against the tenant's
-        # SoftwareIdentifier inventory; auto-link any matching assets.
-        # Best-effort: a failure here doesn't poison enrichment.
+        # SoftwareIdentifier inventory; auto-link any matching assets — but ONLY
+        # when auto-linking is enabled (default OFF: findings link to assets
+        # manually). Best-effort: a failure here doesn't poison enrichment.
         try:
-            from ....services.cpe_matcher import match_cve_to_asset_ids, write_auto_links
-            asset_ids = match_cve_to_asset_ids(
-                db,
-                tenant_id=vuln.tenant_id,
-                cve_id=cve_id,
-                configurations=nvd.configurations or [],
+            from ....services.cpe_matcher import (
+                match_cve_to_asset_ids, write_auto_links, auto_link_enabled,
             )
-            if asset_ids:
-                added = write_auto_links(
+            if auto_link_enabled():
+                asset_ids = match_cve_to_asset_ids(
                     db,
-                    vuln_id=vuln.id,
                     tenant_id=vuln.tenant_id,
-                    asset_ids=asset_ids,
+                    cve_id=cve_id,
+                    configurations=nvd.configurations or [],
                 )
-                summary["cpe_matches_added"] = added
+                if asset_ids:
+                    added = write_auto_links(
+                        db,
+                        vuln_id=vuln.id,
+                        tenant_id=vuln.tenant_id,
+                        asset_ids=asset_ids,
+                    )
+                    summary["cpe_matches_added"] = added
         except Exception:
             logger.exception("CPE matcher failed for vuln %s", vuln.id)
             summary["errors"].append("cpe_matcher_exception")
@@ -369,26 +404,9 @@ def enrich_vulnerability(vuln: Vulnerability, db: Session) -> dict:
         summary["errors"].append("exploitdb_exception")
 
     # ---- Composite priority ------------------------------------------------
-    asset_criticality = _resolve_asset_criticality(db, vuln)
-    asset_criticality_score = _resolve_asset_criticality_score(db, vuln)
-    priority = compute_composite_priority(
-        cvss_score=vuln.cvss_score,
-        epss_score=vuln.epss_score,
-        kev_flag=vuln.kev_flag,
-        asset_criticality=asset_criticality,
-        asset_criticality_score=asset_criticality_score,
-        # Three signals added when the scorer moved from four factors to
-        # seven. Without them the stored score silently assumed "unknown
-        # maturity, moderate vector, internal only" and under-scored every
-        # internet-facing finding.
-        exploit_maturity=_maturity_from_exploits(vuln),
-        attack_vector=_vector_from_cvss(vuln),
-        internet_exposed=_internet_exposed(db, vuln),
-    )
-    # The old +0.5 public-exploit nudge is gone: exploit maturity is now a
-    # first-class signal worth up to 15 points, so adding a bonus on top
-    # would count the same evidence twice.
-    vuln.composite_priority = priority
+    # Shared with scanner sync via recompute_composite_priority() so every path
+    # that touches a finding stores the identical 7-signal score.
+    priority = recompute_composite_priority(vuln, db)
     summary["composite_priority"] = priority
 
     try:

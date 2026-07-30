@@ -32,9 +32,19 @@ function verdictLabel(v: string, entryState: string) {
 }
 const SRC_CLASS: Record<string, string> = {
   analyst: styles.srcAnalyst, cvss_derived: styles.srcCvss, capec_chain: styles.srcCapec,
+  capec_via_parent: styles.srcCapecParent,
 };
+// How each source reads in the select-stage badge. capec_via_parent would otherwise
+// print raw; give it a short human label. Others keep the terse engine name.
+const SRC_LABEL: Record<string, string> = { capec_via_parent: 'capec (parent)' };
+function srcLabel(s: string) {
+  return SRC_LABEL[s] || (s || '').replace('_derived', '');
+}
 const ST_CLASS: Record<string, string> = {
   likely: styles.stLikely, possible: styles.stPossible, blocked: styles.stBlocked,
+  // 'severed' — a downstream step the chain can't reach (entry door shut). Muted like
+  // blocked; the label text ('severed') distinguishes it from a self-blocked step.
+  severed: styles.stBlocked,
 };
 
 export default function TraceFlow({
@@ -125,7 +135,7 @@ export default function TraceFlow({
           }
           if (s.stage === 'map') {
             return (
-              <StageRow key={i} label="map" dot={styles.dot}>
+              <StageRow key={i} label={`map · ${s.cwe}`} dot={styles.dot}>
                 <div className={`${styles.card} ${styles.cardHi}`}>
                   <div className={styles.lane}>
                     <span className={styles.tag}>capec</span>
@@ -133,6 +143,14 @@ export default function TraceFlow({
                       ? <span className={styles.hit}><b>hit</b> &nbsp;{s.cwe} &rarr; {(s.capec.techniques || []).map((t: string) => <span key={t} className={styles.tid}>{t} </span>)}</span>
                       : <span className={styles.miss}><b>miss</b> &nbsp;CAPEC has no mapping for {s.cwe} &mdash; it drops the common web-app weaknesses</span>}
                   </div>
+                  {s.parent_walk && (
+                    <div className={styles.lane}>
+                      <span className={styles.tag}>parent</span>
+                      {s.parent_walk.hit
+                        ? <span className={styles.hit}><b>climb</b> &nbsp;no direct CAPEC, so up to {s.parent_walk.via_parent_cwe}{s.parent_walk.parent_name ? ` (${s.parent_walk.parent_name})` : ''} &mdash; {s.parent_walk.depth === 1 ? 'its parent' : `${s.parent_walk.depth} levels up`} &rarr; {(s.parent_walk.techniques || []).map((t: string) => <span key={t} className={styles.tid}>{t} </span>)}</span>
+                        : <span className={styles.miss}><b>miss</b> &nbsp;no mapped ancestor for {s.cwe} within the CWE tree</span>}
+                    </div>
+                  )}
                   <div className={styles.lane}>
                     <span className={styles.tag}>analyst</span>
                     {s.analyst.hit
@@ -182,7 +200,7 @@ export default function TraceFlow({
                           <span className={styles.nm}>{t.name}</span>
                           {(t.tactics || []).slice(0, 1).map((tc: string) => <span key={tc} className={styles.tac}>{tc}</span>)}
                           <span className={`${styles.src} ${t.assumed ? styles.srcAssumed : (SRC_CLASS[t.winner] || styles.srcCvss)}`}>
-                            {t.assumed ? 'assumed' : `${t.winner.replace('_derived', '')}${others.length ? ' › ' + others.map((o: string) => o.replace('_derived', '')).join(' ') : ''}`}
+                            {t.assumed ? 'assumed' : `${srcLabel(t.winner)}${others.length ? ' › ' + others.map((o: string) => srcLabel(o)).join(' ') : ''}`}
                           </span>
                         </div>
                       );
@@ -198,7 +216,7 @@ export default function TraceFlow({
                 <div className={styles.card}>
                   <div className={styles.signals}>
                     {sigChip('internet_exposed', s.signals.internet_exposed)}
-                    {sigChip('verified_exploit', s.signals.exploit_verified)}
+                    {sigChip('public_exploit', s.signals.has_public_exploit)}
                     {sigChip('in_kev', s.signals.in_kev)}
                   </div>
                   <div className={styles.badges}>
@@ -244,6 +262,7 @@ export default function TraceFlow({
           <span className={styles.h}>provenance</span>
           <div className={styles.lrow}>
             <span className={styles.lchip}><span className={styles.sw} style={{ background: '#14b8a6' }} />standards (CAPEC)</span>
+            <span className={styles.lchip}><span className={styles.sw} style={{ background: '#0ea5e9' }} />standards (parent)</span>
             <span className={styles.lchip}><span className={styles.sw} style={{ background: '#f59e0b' }} />CVSS</span>
             <span className={styles.lchip}><span className={styles.sw} style={{ background: '#6366f1' }} />analyst</span>
             <span className={styles.lchip}><span className={`${styles.sw} ${styles.swDashed}`} />assumed</span>

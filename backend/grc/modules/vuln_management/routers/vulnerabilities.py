@@ -59,7 +59,7 @@ def generate_vuln_id(tenant_id: int, db: Session) -> str:
     return f"VULN-{count + 1:05d}"
 
 
-def _build_vulnerability_response(v: Vulnerability) -> VulnerabilityResponse:
+def _build_vulnerability_response(v: Vulnerability, solution_count=None) -> VulnerabilityResponse:
     linked_assets = []
     if getattr(v, "asset_links", None):
         linked_assets = [
@@ -80,10 +80,16 @@ def _build_vulnerability_response(v: Vulnerability) -> VulnerabilityResponse:
         cvss_vector=v.cvss_vector,
         cve_id=v.cve_id,
         cwe_id=v.cwe_id,
+        cwe_ids=getattr(v, "cwe_ids", None),
+        nvd_cvss_score=getattr(v, "nvd_cvss_score", None),
+        nvd_cvss_vector=getattr(v, "nvd_cvss_vector", None),
+        vpr_score=getattr(v, "vpr_score", None),
+        cpe=getattr(v, "cpe", None),
         affected_component=v.affected_component,
         affected_host=v.affected_host,
         affected_port=v.affected_port,
         affected_url=v.affected_url,
+        plugin_family=getattr(v, "plugin_family", None),
         evidence=v.evidence,
         reproduction_steps=v.reproduction_steps,
         recommendation=v.recommendation,
@@ -127,6 +133,12 @@ def _build_vulnerability_response(v: Vulnerability) -> VulnerabilityResponse:
         # permanently disagreed with the backend's.
         public_exploit_count=getattr(v, "public_exploit_count", None),
         public_exploit_refs=list(getattr(v, "public_exploit_refs", None) or []) or None,
+        # Exploit-DB corroboration (the second public-exploit source) — both columns,
+        # so cheap to expose on every row; the frontend ORs them for "exploit exists".
+        exploitdb_count=getattr(v, "exploitdb_count", None),
+        exploitdb_verified_count=getattr(v, "exploitdb_verified_count", None),
+        # Populated only by the detail endpoint (a query); None on list rows.
+        solution_count=solution_count,
         # Phase 6 — vendor patch intelligence.
         patch_references=list(getattr(v, "patch_references", None) or []) or None,
         vendor_advisory_ids=list(getattr(v, "vendor_advisory_ids", None) or []) or None,
@@ -173,6 +185,9 @@ def list_vulnerabilities(
     status_filter: Optional[str] = None,
     assigned_to: Optional[int] = None,
     cve_id: Optional[str] = None,
+    # Domain filter — the scanner family a finding belongs to. Used by the
+    # grouped register view to load one domain's findings on expand.
+    plugin_family: Optional[str] = None,
     is_exception: Optional[bool] = None,
     is_overdue: Optional[bool] = None,
     # Filter by template source. Used by the NCA register to surface only the
@@ -189,6 +204,12 @@ def list_vulnerabilities(
     include_closed: bool = False,
     closed_only: bool = False,
     search: Optional[str] = None,
+    # Public-exploit filter (GitHub PoC OR Exploit-DB). Distinct from KEV.
+    # True → only findings with a public exploit; False → only those without.
+    has_exploit: Optional[bool] = None,
+    # ATT&CK tactic richness filter — True keeps findings whose mapped chain
+    # spans ≥ HIGH_TACTICS_MIN distinct tactics (see attack.selection).
+    high_tactics: Optional[bool] = None,
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
@@ -241,6 +262,12 @@ def list_vulnerabilities(
         query = query.filter(Vulnerability.assigned_to == assigned_to)
     if cve_id:
         query = query.filter(Vulnerability.cve_id.ilike(f"%{cve_id}%"))
+    if plugin_family:
+        # "Uncategorized" is the UI label for findings with no scanner family.
+        if plugin_family == "Uncategorized":
+            query = query.filter(Vulnerability.plugin_family.is_(None))
+        else:
+            query = query.filter(Vulnerability.plugin_family == plugin_family)
     if template_type:
         if template_type == "_general":
             query = query.filter(Vulnerability.template_type.is_(None))
@@ -259,10 +286,93 @@ def list_vulnerabilities(
             (Vulnerability.vuln_id.ilike(f"%{search}%")) |
             (Vulnerability.cve_id.ilike(f"%{search}%"))
         )
-    
+    if has_exploit is not None:
+        from sqlalchemy import or_, func
+        exploit_expr = or_(
+            func.coalesce(Vulnerability.public_exploit_count, 0) > 0,
+            func.coalesce(Vulnerability.exploitdb_count, 0) > 0,
+        )
+        query = query.filter(exploit_expr if has_exploit else ~exploit_expr)
+
+    # High-tactics is mapping-derived (CWE→CAPEC→ATT&CK), not a SQL column.
+    # Evaluate after the cheap filters, before pagination — register sizes are
+    # hundreds, not tens of thousands, and select_techniques is pure/in-memory.
+    if high_tactics is not None:
+        from ..attack.selection import is_high_tactics
+        candidates = query.order_by(Vulnerability.created_at.desc()).all()
+        matched = [
+            v for v in candidates
+            if is_high_tactics(v.cwe_id, v.cvss_vector) is high_tactics
+        ]
+        page = matched[skip: skip + limit]
+        return [_build_vulnerability_response(v) for v in page]
+
     vulns = query.order_by(Vulnerability.created_at.desc()).offset(skip).limit(limit).all()
-    
+
     return [_build_vulnerability_response(v) for v in vulns]
+
+
+@router.get("/vulnerabilities/domains")
+def list_vulnerability_domains(
+    tenant_id: Optional[int] = None,
+    template_type: Optional[str] = None,
+    include_closed: bool = False,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(require_tenant_permission("vulnerabilities:vulnerability_register:view")),
+):
+    """Group the register into runtime-derived domains (the scanner's own plugin
+    family). Computed server-side over the WHOLE register so the counts match
+    the KPI cards — a client tally would only see the loaded page (the list caps
+    at `limit`). Domains are ordered worst-severity-first so buckets holding
+    criticals surface at the top even when the family is a catch-all like "Misc.".
+    """
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        return {"domains": [], "total": 0}
+
+    q = db.query(
+        Vulnerability.plugin_family,
+        Vulnerability.severity,
+        func.count(Vulnerability.id),
+    ).filter(Vulnerability.tenant_id.in_(user_tenants))
+
+    if tenant_id:
+        validate_tenant_access(current_user, tenant_id, db)
+        q = q.filter(Vulnerability.tenant_id == tenant_id)
+    if template_type:
+        if template_type == "_general":
+            q = q.filter(Vulnerability.template_type.is_(None))
+        else:
+            q = q.filter(Vulnerability.template_type == template_type)
+    if not include_closed:
+        q = q.filter(Vulnerability.status.notin_(_LIST_CLOSED_STATUSES))
+
+    q = q.group_by(Vulnerability.plugin_family, Vulnerability.severity)
+
+    SEV_KEYS = ["critical", "high", "medium", "low", "info"]
+    SEV_RANK = {"critical": 4, "high": 3, "medium": 2, "low": 1, "info": 0}
+    fam_map: dict = {}
+    for family, severity, cnt in q.all():
+        key = family or "Uncategorized"
+        d = fam_map.setdefault(key, {s: 0 for s in SEV_KEYS})
+        sev = (severity or "info").lower()
+        d[sev] = d.get(sev, 0) + int(cnt)
+
+    domains = []
+    for family, d in fam_map.items():
+        total = sum(d[s] for s in SEV_KEYS)
+        worst = next((s for s in SEV_KEYS if d[s] > 0), "info")
+        domains.append({
+            "family": family,
+            "total": total,
+            "by_severity": d,
+            "worst_severity": worst,
+        })
+    # worst severity first, then biggest bucket — so "Misc." (criticals) and
+    # "Databases" float up and the 120-row info "Windows" pile sinks.
+    domains.sort(key=lambda x: (SEV_RANK[x["worst_severity"]], x["total"]), reverse=True)
+    return {"domains": domains, "total": sum(x["total"] for x in domains)}
 
 
 @router.post("/vulnerabilities", response_model=VulnerabilityResponse, status_code=status.HTTP_201_CREATED)
@@ -519,8 +629,30 @@ def get_vulnerability(
     
     if not vuln:
         raise HTTPException(status_code=404, detail="Vulnerability not found")
-    
-    return _build_vulnerability_response(vuln)
+
+    # Keep the stored contextual score honest on every view: recompute it from the
+    # finding's current signals + linked asset (no external feeds) so the saved
+    # value can never drift stale from the evidence the page shows — the "stored
+    # score is stale (42 vs 37)" case. Best-effort: a scoring hiccup must never
+    # block viewing the finding.
+    try:
+        from grc.modules.vuln_management.enrichment.enrichment_service import recompute_composite_priority
+        _before = vuln.composite_priority
+        recompute_composite_priority(vuln, db)
+        if vuln.composite_priority != _before:
+            db.commit()
+    except Exception:
+        db.rollback()
+
+    # Solution count for the Analysis "Patch" tile — so a finding with a synced
+    # remediation (e.g. a Nessus solution) reads "Guidance available" instead of the
+    # misleading "Not found" when no vendor patch reference is stored.
+    from ....models import VulnerabilitySolution
+    solution_count = db.query(VulnerabilitySolution).filter(
+        VulnerabilitySolution.vulnerability_id == vuln.id
+    ).count()
+
+    return _build_vulnerability_response(vuln, solution_count=solution_count)
 
 
 @router.put("/vulnerabilities/{vuln_id}", response_model=VulnerabilityResponse)
@@ -598,6 +730,85 @@ def assign_vulnerability(
     ).filter(Vulnerability.id == vuln.id).first()
 
     return _build_vulnerability_response(vuln)
+
+
+class LinkAssetIn(BaseModel):
+    asset_id: int
+
+
+def _reload_vuln_full(db: Session, vuln_id: int) -> Vulnerability:
+    return db.query(Vulnerability).options(
+        joinedload(Vulnerability.assignee),
+        joinedload(Vulnerability.verifier),
+        joinedload(Vulnerability.asset_links).joinedload(VulnerabilityAssetLink.asset),
+    ).filter(Vulnerability.id == vuln_id).first()
+
+
+@router.post("/vulnerabilities/{vuln_id}/link-asset", response_model=VulnerabilityResponse)
+def link_asset_to_vulnerability(
+    vuln_id: int,
+    request: LinkAssetIn,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(require_tenant_permission("vulnerabilities:vulnerability_register:edit"))
+):
+    """Manually attach a finding to an IT asset. Without a linked asset the
+    contextual score falls back to defaults for internet-exposure and asset
+    criticality — this is the operator's control to attach the right host so
+    those signals become real. Recomputes the score immediately."""
+    from ....models import ITAsset
+    user_tenants = get_user_tenants(current_user, db)
+    vuln = get_vuln_or_404(vuln_id, user_tenants, db)
+    asset = db.query(ITAsset).filter(
+        ITAsset.id == request.asset_id,
+        ITAsset.tenant_id.in_(user_tenants),
+    ).first()
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    existing = db.query(VulnerabilityAssetLink).filter(
+        VulnerabilityAssetLink.vulnerability_id == vuln.id,
+        VulnerabilityAssetLink.asset_id == asset.id,
+    ).first()
+    if not existing:
+        db.add(VulnerabilityAssetLink(
+            vulnerability_id=vuln.id, asset_id=asset.id,
+            impact_on_asset="Manually linked", link_source="manual", auto_linked=False))
+        db.flush()
+    try:
+        from grc.modules.vuln_management.enrichment.enrichment_service import recompute_composite_priority
+        recompute_composite_priority(vuln, db)
+    except Exception:
+        pass
+    db.commit()
+    return _build_vulnerability_response(_reload_vuln_full(db, vuln.id))
+
+
+@router.delete("/vulnerabilities/{vuln_id}/link-asset/{asset_id}", response_model=VulnerabilityResponse)
+def unlink_asset_from_vulnerability(
+    vuln_id: int,
+    asset_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(require_tenant_permission("vulnerabilities:vulnerability_register:edit"))
+):
+    """Detach an asset from a finding (recomputes the score without it)."""
+    user_tenants = get_user_tenants(current_user, db)
+    vuln = get_vuln_or_404(vuln_id, user_tenants, db)
+    link = db.query(VulnerabilityAssetLink).filter(
+        VulnerabilityAssetLink.vulnerability_id == vuln.id,
+        VulnerabilityAssetLink.asset_id == asset_id,
+    ).first()
+    if link:
+        db.delete(link)
+        db.flush()
+        try:
+            from grc.modules.vuln_management.enrichment.enrichment_service import recompute_composite_priority
+            recompute_composite_priority(vuln, db)
+        except Exception:
+            pass
+        db.commit()
+    return _build_vulnerability_response(_reload_vuln_full(db, vuln.id))
+
 
 class AcceptRiskIn(BaseModel):
     """Accepting a risk is a dated decision, not a status flip."""

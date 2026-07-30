@@ -53,7 +53,17 @@ def get_dashboard(
             recent_activities=[],
             by_assignee={},
             mitigation_coverage={},
-            by_department={}
+            by_department={},
+            kev_count=0,
+            exploit_count=0,
+            no_exploit_count=0,
+            with_cve_count=0,
+            high_tactics_count=0,
+            high_tactics_with_exploit_count=0,
+            high_epss_count=0,
+            internet_exposed_count=0,
+            patch_count=0,
+            contextual_priority={"urgent": 0, "moderate": 0, "low": 0},
         )
     
     query = db.query(Vulnerability).filter(Vulnerability.tenant_id.in_(user_tenants))
@@ -72,8 +82,21 @@ def get_dashboard(
     by_status = {}
     by_assignee = {}
     overdue_count = 0
+    kev_count = 0
+    exploit_count = 0
+    no_exploit_count = 0
+    with_cve_count = 0
+    high_tactics_count = 0
+    high_tactics_with_exploit_count = 0
+    high_epss_count = 0
+    patch_count = 0
+    contextual_priority = {"urgent": 0, "moderate": 0, "low": 0}
     resolved_times = []
     now = datetime.utcnow()
+
+    # Lazy import — the ATT&CK selection path is pure/in-memory and cheap enough
+    # to run once per dashboard load over the register (hundreds of rows).
+    from ..attack.selection import is_high_tactics
     
     aging_buckets = {
         "0-7 days": 0,
@@ -109,7 +132,36 @@ def get_dashboard(
                 aging_buckets["31-90 days"] += 1
             else:
                 aging_buckets["90+ days"] += 1
-    
+
+        # ── Redesign aggregates — threat/exposure signals + the raw→contextual story.
+        if v.kev_flag:
+            kev_count += 1
+        has_public_exploit = (v.public_exploit_count or 0) > 0 or (v.exploitdb_count or 0) > 0
+        if has_public_exploit:
+            exploit_count += 1
+        else:
+            no_exploit_count += 1
+        if v.cve_id:
+            with_cve_count += 1
+        high_tac = is_high_tactics(v.cwe_id, v.cvss_vector)
+        if high_tac:
+            high_tactics_count += 1
+            if has_public_exploit:
+                high_tactics_with_exploit_count += 1
+        if (v.epss_score or 0) >= 0.1:
+            high_epss_count += 1
+        if (v.patch_references or []) or (v.remediation_guidance or "").strip():
+            patch_count += 1
+        # composite_priority is 0–10; ×10 => 0–100, matching the detail page's ring
+        # bands (urgent = high+ ≥55, moderate 25–55, low <25). Un-enriched (None) => low.
+        cp = (v.composite_priority or 0) * 10
+        if cp >= 55:
+            contextual_priority["urgent"] += 1
+        elif cp >= 25:
+            contextual_priority["moderate"] += 1
+        else:
+            contextual_priority["low"] += 1
+
     mttr_days = sum(resolved_times) / len(resolved_times) if resolved_times else None
     
     # Mitigation coverage
@@ -125,6 +177,25 @@ def get_dashboard(
         "with_mitigations": len(mit_vuln_ids),
         "without_mitigations": len(vuln_ids) - len(mit_vuln_ids)
     }
+
+    # Internet-exposed — distinct findings linked to an internet-facing asset.
+    # Honour BOTH exposure columns (canonical `internet_facing` and the legacy
+    # `is_internet_facing`) so this KPI never disagrees with the reachability
+    # engine / finding pages.
+    internet_exposed_count = 0
+    if vuln_ids:
+        internet_exposed_count = (
+            db.query(func.count(func.distinct(VulnerabilityAssetLink.vulnerability_id)))
+            .join(ITAsset, ITAsset.id == VulnerabilityAssetLink.asset_id)
+            .filter(
+                VulnerabilityAssetLink.vulnerability_id.in_(vuln_ids),
+                or_(
+                    ITAsset.internet_facing.is_(True),
+                    ITAsset.is_internet_facing.is_(True),
+                ),
+            )
+            .scalar() or 0
+        )
 
     # Department breakdown
     by_department: Dict[str, int] = {}
@@ -204,7 +275,17 @@ def get_dashboard(
         recent_activities=recent_activities,
         by_assignee=by_assignee,
         mitigation_coverage=mitigation_coverage,
-        by_department=by_department
+        by_department=by_department,
+        kev_count=kev_count,
+        exploit_count=exploit_count,
+        no_exploit_count=no_exploit_count,
+        with_cve_count=with_cve_count,
+        high_tactics_count=high_tactics_count,
+        high_tactics_with_exploit_count=high_tactics_with_exploit_count,
+        high_epss_count=high_epss_count,
+        internet_exposed_count=internet_exposed_count,
+        patch_count=patch_count,
+        contextual_priority=contextual_priority,
     )
 
 

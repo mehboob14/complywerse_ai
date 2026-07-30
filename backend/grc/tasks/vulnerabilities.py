@@ -208,3 +208,37 @@ def daily_refresh(self) -> dict:
 
     logger.info("daily_refresh DONE: kev=%s dispatched=%d/%d", kev_ok, dispatched, len(slugs))
     return {"status": "ok", "kev_refreshed": kev_ok, "tenants_dispatched": dispatched}
+
+
+@celery_app.task(
+    bind=True,
+    name="grc.tasks.vulnerabilities.refresh_exploitdb",
+    queue="parsing",
+    max_retries=0,
+)
+def refresh_exploitdb(self) -> dict:
+    """Weekly refresh of the offline Exploit-DB CVE→exploits mirror.
+
+    Re-downloads OffSec's files_exploits.csv, rewrites
+    ``seed_data/exploit_db/cve_exploits.json``, and reloads the in-memory
+    cache. Point-in-time by design — the UI surfaces ``generated_at`` so
+    operators know how fresh the public-exploit signal is.
+    """
+    from ..modules.vuln_management.enrichment.exploitdb_cache import (
+        cache_status,
+        refresh_exploitdb_mirror,
+    )
+
+    ok = refresh_exploitdb_mirror()
+    status = cache_status()
+    logger.info(
+        "refresh_exploitdb: %s generated_at=%s distinct=%s",
+        "OK" if ok else "FAILED",
+        status.get("generated_at"),
+        (status.get("counts") or {}).get("distinct_cves"),
+    )
+    return {
+        "status": "ok" if ok else "error",
+        "generated_at": status.get("generated_at"),
+        "counts": status.get("counts") or {},
+    }

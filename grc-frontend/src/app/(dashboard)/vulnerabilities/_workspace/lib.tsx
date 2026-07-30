@@ -13,6 +13,27 @@
 
 import { SeverityBadge, type SeverityLevel } from '@/components/ui';
 
+// ─── Title cleanup ───────────────────────────────────────────────────────────
+// Scanner (Nessus) plugin names bake version ranges and release-date footnotes
+// into the title — e.g. "Node.js 20.x < 20.20.0 / 22.x < 22.22.0 / … Multiple
+// Vulnerabilities (Tuesday, January 13, 2026 Security Releases).". This derives
+// a clean label for the list; the FULL name is always kept (tooltip + detail
+// page), so nothing is lost for audit. Display-only + falls back to the original
+// if the cleanup would leave too little behind.
+export function shortenVulnTitle(title?: string | null): string {
+  if (!title) return title || '';
+  let t = title.trim();
+  // 1. Drop a trailing parenthetical (dates / "Security Releases" / advisory ref).
+  t = t.replace(/\s*\([^)]*\)\s*\.?\s*$/g, '').trim();
+  // 2. Collapse "20.x < 20.20.0 / 22.x < 22.22.0 / …" version-range runs.
+  t = t.replace(/\s*\d[\w.]*\s*[<>]=?\s*\d[\w.]*(?:\s*\/\s*\d[\w.]*\s*[<>]=?\s*\d[\w.]*)*/g, ' ');
+  // 3. Strip a lone "< x.y.z" (e.g. "axios < 1.15.2 Prototype Pollution").
+  t = t.replace(/\s*[<>]=?\s*\d[\w.]+/g, ' ');
+  // 4. Tidy leftover separators + whitespace.
+  t = t.replace(/\s*\/\s*/g, ' ').replace(/\s{2,}/g, ' ').replace(/\s+([.,])/g, '$1').trim();
+  return t.length >= 3 ? t : title.trim();
+}
+
 // ─── The Vulnerability shape (mirrors page.tsx) ──────────────────────────────
 export interface Vulnerability {
   id: number;
@@ -25,6 +46,7 @@ export interface Vulnerability {
   cvss_score?: number;
   affected_component?: string;
   affected_host?: string;
+  plugin_family?: string;
   linked_assets?: string[];
   due_date?: string;
   assigned_to?: number;
@@ -36,6 +58,8 @@ export interface Vulnerability {
   epss_percentile?: number;
   kev_flag?: boolean;
   kev_date_added?: string;
+  public_exploit_count?: number | null;
+  exploitdb_count?: number | null;
   nvd_published_at?: string;
   nvd_last_modified_at?: string;
   nvd_last_synced_at?: string;
@@ -216,6 +240,79 @@ export function PriorityCell({ priority }: { priority?: number }) {
       {/* /100 scale, matching the finding detail page — one score, one scale
           everywhere it appears. */}
       {Math.round(priority * 10)} · {b.label}
+    </span>
+  );
+}
+
+// ─── Before / after enrichment priority ──────────────────────────────────────
+// "Before" = the naive priority from CVSS/severity ALONE. "After" = the 7-signal
+// composite once EPSS, KEV, exploit maturity, attack vector, internet exposure and
+// asset criticality are folded in. Showing both makes the value of enrichment
+// explicit: a CVSS 6.5 (65) that is internal, has no public exploit and sits on a
+// medium asset lands at 31 — the contextual score. Pure derivation from fields the
+// row already carries, so it can never drift from the composite the backend stored.
+const SEVERITY_BASELINE: Record<string, number> = { critical: 9, high: 7.5, medium: 5, low: 2.5, info: 1 };
+
+export function enrichmentPriority(v: { cvss_score?: number | null; severity?: string; composite_priority?: number | null }) {
+  const hasCvss = typeof v.cvss_score === 'number' && v.cvss_score > 0;
+  const base10 = hasCvss ? (v.cvss_score as number) : (SEVERITY_BASELINE[(v.severity || '').toLowerCase()] ?? 0);
+  const before = Math.round(base10 * 10);   // /100, matching the composite's scale
+  const after = typeof v.composite_priority === 'number' ? Math.round(v.composite_priority * 10) : null;
+  return { before, after, delta: after != null ? after - before : null, baseFrom: hasCvss ? 'CVSS' : 'severity' };
+}
+
+export function PriorityDelta({ delta }: { delta: number }) {
+  if (delta === 0) return <span className="text-[10px] font-medium text-slate-400" title="Enrichment did not change the priority">±0</span>;
+  const down = delta < 0;
+  return (
+    <span className={`text-[10px] font-semibold ${down ? 'text-emerald-600' : 'text-rose-600'}`}
+      title={down ? 'Context LOWERED the priority (e.g. internal / no exploit)' : 'Context RAISED the priority (e.g. exploited / internet-facing)'}>
+      {down ? '↓' : '↑'}{Math.abs(delta)}
+    </span>
+  );
+}
+
+/** Raw/"before" priority ONLY — for its own column. The naive score from CVSS
+ *  (or severity) alone, before any context is folded in. Neutral styling because
+ *  it's the starting point the contextual column then adjusts. */
+export function PriorityRawCell({ v }: { v: { cvss_score?: number | null; severity?: string; composite_priority?: number | null } }) {
+  const { before, baseFrom } = enrichmentPriority(v);
+  return (
+    <span className="inline-flex flex-col leading-tight"
+      title={`Raw priority from ${baseFrom} alone — before any context: ${before}/100`}>
+      <span className="w-fit rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold tabular-nums text-slate-600">{before}</span>
+      <span className="mt-0.5 text-[10px] text-slate-400">{baseFrom} alone</span>
+    </span>
+  );
+}
+
+/** Contextual/"after" priority ONLY — for its own column. The 7-signal composite
+ *  with the drop/rise delta versus the raw score. */
+export function PriorityContextualCell({ v }: { v: { cvss_score?: number | null; severity?: string; composite_priority?: number | null } }) {
+  const { after, delta } = enrichmentPriority(v);
+  if (after == null) return <span className="text-xs italic text-slate-400">not scored</span>;
+  const b = priorityBucket(v.composite_priority ?? 0);
+  return (
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap"
+      title="7-signal contextual composite: CVSS, EPSS, exploit maturity, KEV, attack vector, internet exposure, asset criticality">
+      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${b.tone}`}>{after} · {b.label}</span>
+      {delta != null && <PriorityDelta delta={delta} />}
+    </span>
+  );
+}
+
+/** Compact "before → after" for list rows: e.g. 65 → 31 · Medium ↓34. */
+export function PriorityBeforeAfter({ v }: { v: { cvss_score?: number | null; severity?: string; composite_priority?: number | null } }) {
+  const { before, after, delta, baseFrom } = enrichmentPriority(v);
+  if (after == null) return <PriorityCell priority={v.composite_priority ?? undefined} />;
+  const b = priorityBucket(v.composite_priority ?? 0);
+  return (
+    <span className="inline-flex items-center gap-1 whitespace-nowrap"
+      title={`Before enrichment (${baseFrom} alone): ${before}/100  →  After (7-signal composite): ${after}/100`}>
+      <span className="text-[11px] tabular-nums text-slate-400 line-through decoration-slate-300">{before}</span>
+      <span className="text-slate-300">→</span>
+      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${b.tone}`}>{after} · {b.label}</span>
+      {delta != null && <PriorityDelta delta={delta} />}
     </span>
   );
 }

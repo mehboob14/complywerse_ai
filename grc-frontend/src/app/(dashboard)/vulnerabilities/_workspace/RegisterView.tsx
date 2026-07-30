@@ -19,9 +19,12 @@ import {
   SeverityCell,
   StatusPill,
   SlaCell,
-  PriorityCell,
+  PriorityRawCell,
+  PriorityContextualCell,
+  enrichmentPriority,
   OwnerCell,
   ThreatChips,
+  shortenVulnTitle,
 } from './lib';
 import { RowActionsMenu } from './RowActionsMenu';
 
@@ -73,7 +76,7 @@ export function RegisterView({
       minWidth: '200px',
       render: (v) => (
         <div className="flex min-w-0 items-center gap-2">
-          <span className="truncate font-medium text-slate-900">{v.title}</span>
+          <span className="truncate font-medium text-slate-900" title={v.title}>{shortenVulnTitle(v.title)}</span>
           <ThreatChips vuln={v} />
         </div>
       ),
@@ -87,12 +90,20 @@ export function RegisterView({
       render: (v) => <SeverityCell severity={v.severity} cvss={v.cvss_score} />,
     },
     {
-      id: 'priority',
-      header: 'Priority',
+      id: 'priority_raw',
+      header: 'Priority · Raw',
+      accessor: (v) => enrichmentPriority(v).before,
+      sortable: true,
+      minWidth: '96px',
+      render: (v) => <PriorityRawCell v={v} />,
+    },
+    {
+      id: 'priority_ctx',
+      header: 'Priority · Contextual',
       accessor: (v) => v.composite_priority ?? -1,
       sortable: true,
-      minWidth: '100px',
-      render: (v) => <PriorityCell priority={v.composite_priority} />,
+      minWidth: '150px',
+      render: (v) => <PriorityContextualCell v={v} />,
     },
     {
       id: 'status',

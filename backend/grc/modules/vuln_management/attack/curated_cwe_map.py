@@ -73,4 +73,22 @@ CURATED_CWE_TECHNIQUES: Dict[str, List[CuratedLink]] = {
     "269": [  # Improper Privilege Management
         ("T1068", "high", "Improper privilege management is the classic local privilege-escalation vector"),
     ],
+    "287": [  # Improper Authentication
+        ("T1078", "medium", "An authentication weakness yields valid-account-equivalent access"),
+        ("T1190", "medium", "Commonly the exploitation of a public-facing app to gain access without valid credentials"),
+    ],
+    "289": [  # Authentication Bypass by Alternate Name
+        ("T1190", "medium", "Auth bypass via an alternate name reaches a protected function on a public-facing app without valid credentials"),
+    ],
+    "862": [  # Missing Authorization
+        ("T1190", "medium", "A missing authorization check is exploited against a public-facing app to reach resources the attacker should not"),
+    ],
+
+    # ── Resource exhaustion / denial of service ────────────────────────────
+    "400": [  # Uncontrolled Resource Consumption
+        ("T1499", "medium", "Uncontrolled resource consumption is driven to exhaust the endpoint (Endpoint Denial of Service)"),
+    ],
+    "770": [  # Allocation of Resources Without Limits or Throttling
+        ("T1499", "medium", "Unbounded allocation enables resource exhaustion / Endpoint Denial of Service"),
+    ],
 }

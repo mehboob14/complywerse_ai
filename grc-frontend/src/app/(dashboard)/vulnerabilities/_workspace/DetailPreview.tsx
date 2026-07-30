@@ -22,6 +22,7 @@ import {
   SlaCell,
   PriorityCell,
   priorityBucket,
+  enrichmentPriority,
   InitialsAvatar,
   KevChip,
 } from './lib';
@@ -29,6 +30,7 @@ import {
 // ─── local shapes (defensive; backend returns loose records) ────────────────
 type Detail = Record<string, unknown> & Partial<Vulnerability> & {
   public_exploit_count?: number | null;
+  exploitdb_count?: number | null;
 };
 type Mitigation = { id: number; status?: string };
 
@@ -109,6 +111,7 @@ export function DetailPreview({
   // where it ranks. Keeping both, clearly distinguished.
   const epssProb = num(detail.epss_score);
   const priority = num(detail.composite_priority);
+  const ep = enrichmentPriority(detail);   // before (CVSS/severity) → after (composite)
   const cve = str(detail.cve_id);
   const cwe = str(detail.cwe_id);
   const owner = str(detail.assignee_name);
@@ -125,7 +128,9 @@ export function DetailPreview({
 
   // Flags.
   const kev = detail.kev_flag === true;
-  const exploitCount = num(detail.public_exploit_count) ?? 0;
+  // "A public exploit exists" = GitHub PoC OR Exploit-DB — matches the detail header
+  // and Exploit Test tab, so the preview never disagrees with them.
+  const exploitCount = (num(detail.public_exploit_count) ?? 0) + (num(detail.exploitdb_count) ?? 0);
   const hasPublicExploit = exploitCount > 0;
 
   // Linked-asset count.
@@ -176,7 +181,7 @@ export function DetailPreview({
               {epssProb != null ? `${(epssProb * 100).toFixed(1)}%` : '—'}
             </span>
           </Tile>
-          <Tile label="Priority" sub={priority != null ? priorityBucket(priority).label : undefined}>
+          <Tile label="Priority" sub={priority != null ? `raw ${ep.before} → ${ep.after} contextual` : undefined}>
             {priority != null ? <PriorityCell priority={priority} /> : <span className="text-lg font-bold text-slate-400">—</span>}
           </Tile>
           <Tile label="SLA / Due">

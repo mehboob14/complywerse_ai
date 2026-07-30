@@ -6,7 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { vulnManagementApi, assetsApi, ermApi, apiClient, entityExtrasApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useTabParam } from '@/lib/useTabParam';
-import { InlineLinkPicker, PageLoader, ComboBoxInput, SeverityBadge, StatusBadge, type ComboBoxOption, type SeverityLevel } from '@/components/ui';
+import { InlineLinkPicker, PageLoader, ComboBoxInput, StatusBadge, type ComboBoxOption } from '@/components/ui';
 import AiRecommendationSaver from '@/components/ai/AiRecommendationSaver';
 import { Abbr } from '@/components/common/Abbr';
 import {
@@ -39,7 +39,7 @@ import {
   Crosshair,
 } from 'lucide-react';
 import {
-  RiskAnalysisPanel, VulnContextRail, ExploitTestPanel,
+  RiskAnalysisPanel, VulnContextRail, ExploitTestPanel, cweName,
 } from './_components/RiskAnalysisPanel';
 import { NotesPanel, HistoryPanel } from '@/components/shared/EntityExtras';
 import RemediationPlanCard from './_components/RemediationPlanCard';
@@ -87,6 +87,12 @@ interface VulnerabilityDetail {
   // Public-exploit detection (GitHub PoC search). Non-null count = we
   // checked; >0 = clone-and-run code is in the wild.
   public_exploit_count?: number | null;
+  // Exploit-DB corroboration — the SECOND public-exploit source. "Has a public
+  // exploit" is (github OR exploit-db); reading only public_exploit_count made a
+  // finding with just an Exploit-DB entry show "None known" here while the Exploit
+  // Test tab (which already ORs both) showed "Available".
+  exploitdb_count?: number | null;
+  exploitdb_verified_count?: number | null;
   public_exploit_refs?: Array<{
     full_name: string;
     url: string;
@@ -483,6 +489,18 @@ export default function VulnerabilityDetailPage() {
     enabled: !!primaryAssetId,
   });
 
+  // The per-asset reachability verdict — the SAME source and query key the Exploit
+  // Test tab uses (['exploitability', vulnId, assetId]), so it shares that cache
+  // rather than double-fetching. Surfaced here so the header can show "reachable on
+  // THIS asset" as a distinct, labelled axis from "a public exploit EXISTS in the
+  // wild" — the two must never be conflated, which is what let one page read
+  // "exploitable" while the Exploit Test tab read "unlikely".
+  const { data: reachData } = useQuery({
+    queryKey: ['exploitability', vulnId, primaryAssetId],
+    queryFn: async () => (await vulnManagementApi.vulnerabilities.exploitability(vulnId, primaryAssetId as number)).data as any,
+    enabled: !!primaryAssetId,
+  });
+
 
   const { data: controlLinks } = useQuery({
     queryKey: ['vuln-controls', vulnId],
@@ -763,52 +781,18 @@ export default function VulnerabilityDetailPage() {
 
   const statusStyle = getStatusStyle(vulnerability.status);
 
-  // ── Hero-strip derived values ───────────────────────────────────────
-  // The header KPI strip shows the operator everything they need to triage
-  // this vuln at a glance. All values come from existing columns; no new
-  // queries.
-  const dueDate = vulnerability.due_date ? new Date(vulnerability.due_date) : null;
-  const dueDays = dueDate
-    ? Math.ceil((dueDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
-    : null;
-  const dueLabel = dueDays === null
-    ? null
-    : dueDays < 0
-      ? `${Math.abs(dueDays)}d overdue`
-      : dueDays === 0
-        ? 'Due today'
-        : `${dueDays}d to SLA`;
-  const dueTone = dueDays === null
-    ? 'border-slate-200 bg-slate-50 text-slate-600'
-    : dueDays < 0
-      ? 'border-red-300 bg-red-50 text-red-700'
-      : dueDays <= 3
-        ? 'border-orange-300 bg-orange-50 text-orange-700'
-        : 'border-emerald-200 bg-emerald-50 text-emerald-700';
-
-  const priorityValue = typeof vulnerability.composite_priority === 'number'
-    ? vulnerability.composite_priority
-    : null;
-  const priorityTone = priorityValue === null
-    ? 'border-slate-200 bg-slate-50 text-slate-600'
-    : priorityValue >= 9
-      ? 'border-red-300 bg-red-50 text-red-700'
-      : priorityValue >= 7
-        ? 'border-orange-300 bg-orange-50 text-orange-700'
-        : priorityValue >= 4
-          ? 'border-yellow-300 bg-yellow-50 text-yellow-700'
-          : 'border-blue-200 bg-blue-50 text-blue-700';
-
-  const epssValue = typeof vulnerability.epss_score === 'number' ? vulnerability.epss_score : null;
-  const cvssValue = typeof vulnerability.cvss_score === 'number' ? vulnerability.cvss_score : null;
-  const linkedAssetCount = vulnerability.linked_assets?.length ?? 0;
-  const hasPublicExploit = typeof vulnerability.public_exploit_count === 'number'
-    && vulnerability.public_exploit_count > 0;
-
-  // Normalised severity level for the shared SeverityBadge (charter-fixed).
-  const severityLevel = (['critical', 'high', 'medium', 'low', 'info'].includes(
-    (vulnerability.severity || '').toLowerCase(),
-  ) ? (vulnerability.severity || '').toLowerCase() : 'info') as SeverityLevel;
+  // The rail's threat-flag + triage chip cards were removed (their values lead
+  // the Analysis tab), so their derived display values went with them.
+  // "A public exploit exists" — a fact about the CVE, true if EITHER source found
+  // one (GitHub PoC or Exploit-DB). This is the FACT axis, distinct from reachability.
+  const hasPublicExploit = ((vulnerability.public_exploit_count ?? 0) > 0)
+    || ((vulnerability.exploitdb_count ?? 0) > 0);
+  // Exploit Test tab is ALWAYS in the bar. When neither a public exploit nor KEV
+  // is present the tab is muted/disabled and the chain is labelled theoretical —
+  // the engine still builds a full attack path for every finding.
+  const exploitAvailable = hasPublicExploit || !!vulnerability.kev_flag;
+  // The REACHABILITY axis — can it reach THIS asset — from the per-asset verdict.
+  const reachVerdict: string | null = reachData?.verdict?.verdict ?? null;
 
   // Mitigation-progress line (n of m complete) — derived from the always-loaded
   // mitigations list; no new query.
@@ -818,23 +802,6 @@ export default function VulnerabilityDetailPage() {
   // Exception-state badge tone (mirrors the FSM panel's state styles).
   const exceptionState = (vulnerability.exception_status || 'none') as string;
   const exceptionStateTone = EXCEPTION_STATE_STYLES[exceptionState] || EXCEPTION_STATE_STYLES.none;
-
-  // Section registry for the right-column in-page nav. Each entry anchors to a
-  // scroll target so nothing that answers the core question hides behind a tab.
-  const SECTIONS = [
-    { id: 'sec-narrative', label: 'Threat', icon: Shield },
-    { id: 'sec-description', label: 'Description', icon: FileText },
-    { id: 'sec-assets', label: 'Assets', icon: Server },
-    { id: 'sec-remediation', label: 'Remediation', icon: CheckCircle },
-    { id: 'sec-controls', label: 'Controls', icon: Shield },
-    { id: 'sec-chain', label: 'Chain', icon: Link2 },
-    { id: 'sec-departments', label: 'Departments', icon: Users },
-    { id: 'sec-exception', label: 'Exception', icon: AlertCircle },
-    { id: 'sec-activity', label: 'Activity', icon: GitBranch },
-  ];
-  // Only the sections belonging to the active tab stay visible; the rest keep
-  // their anchors so the in-page nav still works within a tab.
-  const VISIBLE_SECTIONS = SECTIONS.filter((s) => VTAB_OF[s.id] === activeTab);
 
   return (
     <div className="risk-workspace -m-4 space-y-4 lg:-m-5">
@@ -948,63 +915,11 @@ export default function VulnerabilityDetailPage() {
              now 1/3 and ordered after the content. ── */}
         <div className="order-2 lg:col-span-4">
           <div className="space-y-3 lg:sticky lg:top-4">
-            {/* Threat flags */}
-            {(vulnerability.kev_flag || hasPublicExploit) && (
-              <div className="flex flex-wrap items-center gap-1.5">
-                {vulnerability.kev_flag && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-red-50 border border-red-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-red-700">
-                    <AlertCircle size={10} strokeWidth={1.75} />
-                    <Abbr code="CISA" showIcon={false}>CISA</Abbr>{' '}<Abbr code="KEV" showIcon={false}>KEV</Abbr>
-                  </span>
-                )}
-                {vulnerability.kev_flag && <GuideMarker id="vuln.kevFloor" n={1} />}
-                {hasPublicExploit && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 border border-rose-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-rose-700">
-                    Public Exploit
-                  </span>
-                )}
-                {hasPublicExploit && <GuideMarker id="vuln.redFlags" n={2} />}
-              </div>
-            )}
-
-            {/* Triage facts */}
-            <div className="rounded-lg border border-slate-200 bg-white p-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <SeverityBadge severity={severityLevel} size="md" />
-                {cvssValue !== null && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-50 border border-slate-200 px-2 py-0.5 text-xs text-slate-700">
-                    <span className="text-[9px] uppercase tracking-wider text-slate-500"><Abbr code="CVSS" showIcon={false} /></span>
-                    <span className="font-semibold text-slate-900">{cvssValue.toFixed(1)} / 10</span>
-                    <GuideMarker id="vuln.triage" n={3} />
-                  </span>
-                )}
-                {epssValue !== null && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-50 border border-slate-200 px-2 py-0.5 text-xs text-slate-700">
-                    <span className="text-[9px] uppercase tracking-wider text-slate-500"><Abbr code="EPSS" showIcon={false} /></span>
-                    <span className="font-semibold text-slate-900">{(epssValue * 100).toFixed(1)}%</span>
-                    <GuideMarker id="vuln.triage" n={4} />
-                  </span>
-                )}
-                {priorityValue !== null && (
-                  <span
-                    className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs ${priorityTone}`}
-                    title="Risk score — the backend's stored composite (CVSS, EPSS, exploit maturity, KEV, attack vector, exposure, asset criticality). The Analysis tab shows the same number's breakdown."
-                  >
-                    {/* Shown on the /100 scale so it reads identically to the
-                        Analysis panel — one number, one source, two places. */}
-                    <span className="text-[9px] uppercase tracking-wider opacity-75">Risk score</span>
-                    <span className="font-bold">{Math.round(priorityValue * 10)} / 100</span>
-                    <GuideMarker id="vuln.priority" n={5} />
-                  </span>
-                )}
-              </div>
-              {dueLabel && (
-                <div className={`mt-2.5 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 ${dueTone}`}>
-                  <Clock size={12} strokeWidth={1.75} />
-                  <span className="text-xs font-semibold">{dueLabel}</span>
-                </div>
-              )}
-            </div>
+            {/* The threat-flags card (exploit-in-the-wild / reachable badges) and
+                the triage-facts chip card (severity · CVSS · EPSS · risk score)
+                were removed — every one of those values already leads the
+                Analysis tab (verdict banner, Before/After panels), so the rail
+                repeated the work column at lower fidelity. */}
 
             {/* Identity — only CWE and component live here now that the CVE is
                 in the header, so the card hides entirely when it has neither
@@ -1018,8 +933,22 @@ export default function VulnerabilityDetailPage() {
                 {/* CVE id lives in the page header — not repeated here. */}
                 {vulnerability.cwe_id && /^cwe-/i.test(vulnerability.cwe_id) && (
                   <div className="flex items-baseline justify-between gap-2">
-                    <dt className="text-xs text-slate-500 flex-shrink-0"><Abbr code="CWE" /> ID</dt>
-                    <dd className="text-xs font-mono text-slate-900 text-right truncate">{vulnerability.cwe_id}</dd>
+                    <dt className="text-xs text-slate-500 flex-shrink-0"><Abbr code="CWE" /></dt>
+                    <dd className="text-right">
+                      <span className="text-xs">
+                        {(((vulnerability as any).cwe_ids?.length ? (vulnerability as any).cwe_ids : [vulnerability.cwe_id]) as string[]).map((c, i) => (
+                          <span key={c}>
+                            {i > 0 && <span className="text-slate-300">, </span>}
+                            <a href={`https://cwe.mitre.org/data/definitions/${c.replace(/\D/g, '')}.html`} target="_blank" rel="noreferrer"
+                              title={cweName(c) || undefined}
+                              className="font-mono text-indigo-600 hover:underline">{c}</a>
+                          </span>
+                        ))}
+                      </span>
+                      {cweName((vulnerability as any).cwe_ids?.[0] || vulnerability.cwe_id || '') && (
+                        <div className="mt-0.5 text-[11px] text-slate-500">{cweName((vulnerability as any).cwe_ids?.[0] || vulnerability.cwe_id || '')}</div>
+                      )}
+                    </dd>
                   </div>
                 )}
                 {vulnerability.affected_component && (
@@ -1084,27 +1013,24 @@ export default function VulnerabilityDetailPage() {
                 <div className="flex items-baseline justify-between gap-2">
                   <dt className="text-xs text-slate-500 flex-shrink-0">Source</dt>
                   <dd className="text-xs font-mono text-slate-700 text-right truncate">
-                    {vulnerability.report_id ? `report #${vulnerability.report_id}` : 'manual entry'}
+                    {(() => {
+                      // The finding's origin. Scanner imports carry a scanner-prefixed
+                      // vuln_id (Nessus = "NS-…") — show that rather than the misleading
+                      // "manual entry" fallback, which only fits a hand-entered finding.
+                      const vid = String((vulnerability as any).vuln_id || '');
+                      if (vid.startsWith('NS-')) return 'Nessus scan';
+                      if ((vulnerability as any).plugin_family) return 'Scanner import';
+                      if (vulnerability.report_id) return `report #${vulnerability.report_id}`;
+                      return 'manual entry';
+                    })()}
                   </dd>
                 </div>
               </dl>
             </div>
 
-            {/* In-page section nav */}
-            <nav className="rounded-lg border border-slate-200 bg-white p-2">
-              <div className="flex flex-wrap gap-1">
-                {VISIBLE_SECTIONS.map((s) => (
-                  <a
-                    key={s.id}
-                    href={`#${s.id}`}
-                    className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-primary-700 transition-colors"
-                  >
-                    <s.icon size={13} strokeWidth={1.75} />
-                    {s.label}
-                  </a>
-                ))}
-              </div>
-            </nav>
+            {/* The in-page section-pill nav was removed — the tabs plus the
+                evidence drawer's own jump chips cover navigation, so the rail
+                pills were a third, redundant way to the same anchors. */}
 
             {/* Context rail — SLA, assignment, affected asset, discovery.
                 Mirrors the reference product's right-hand rail; placed in the
@@ -1128,15 +1054,24 @@ export default function VulnerabilityDetailPage() {
               {VULN_TABS.map((t) => {
                 const Icon = t.icon;
                 const on = activeTab === t.id;
+                const muted = t.id === 'exploit-test' && !exploitAvailable;
                 return (
                   <button
                     key={t.id}
                     onClick={() => setActiveTab(t.id)}
-                    className={`flex items-center gap-1.5 whitespace-nowrap px-3 py-2 text-[12.5px] font-semibold ${on ? 'text-teal-700' : 'text-slate-500 hover:text-slate-800'}`}
+                    title={muted ? 'No public exploit is available for this finding, so the exploit-test step is disabled.' : undefined}
+                    className={`flex items-center gap-1.5 whitespace-nowrap px-3 py-2 text-[12.5px] font-semibold ${
+                      on ? 'text-teal-700' : muted ? 'text-slate-400' : 'text-slate-500 hover:text-slate-800'
+                    }`}
                     style={{ borderBottom: on ? '2px solid #14b8a6' : '2px solid transparent', marginBottom: -1 }}
                   >
-                    <Icon className="h-3.5 w-3.5" strokeWidth={1.75} />
+                    <Icon className={`h-3.5 w-3.5 ${muted && !on ? 'opacity-60' : ''}`} strokeWidth={1.75} />
                     {t.label}
+                    {muted && (
+                      <span className="rounded bg-slate-100 px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-slate-400">
+                        Off
+                      </span>
+                    )}
                   </button>
                 );
               })}
@@ -1149,7 +1084,14 @@ export default function VulnerabilityDetailPage() {
               vulnerability={vulnerability}
               assetCriticality={riskAsset?.criticality ?? (assetLinks || [])[0]?.asset_criticality ?? undefined}
               assetCriticalityScore={riskAsset?.criticality_score ?? (assetLinks || [])[0]?.asset_criticality_score ?? null}
-              internetFacing={riskAsset ? !!riskAsset.internet_facing : null}
+              internetFacing={riskAsset
+                ? ((riskAsset.internet_facing == null && riskAsset.is_internet_facing == null)
+                    ? null
+                    : (!!riskAsset.internet_facing || !!riskAsset.is_internet_facing))
+                : null}
+              assetName={riskAsset?.name ?? riskAsset?.host_name ?? (assetLinks || [])[0]?.asset_name ?? null}
+              reachVerdict={reachVerdict}
+              reachReason={reachData?.verdict?.verdict_reason ?? null}
             />
           )}
           {activeTab === 'remediation' && (
@@ -1181,7 +1123,11 @@ export default function VulnerabilityDetailPage() {
           {activeTab === 'exploit-test' && (
             <div className="order-1 flex flex-col gap-4">
               <GroupHeading n={1} title="Can it be reached?" sub="The attack path, and the evidence behind every step of it." />
-              <ExploitAssessment vulnerability={vulnerability} assetId={(assetLinks || [])[0]?.asset_id} />
+              <ExploitAssessment
+                vulnerability={vulnerability}
+                assetId={(assetLinks || [])[0]?.asset_id}
+                exploitAvailable={exploitAvailable}
+              />
               {/* The reasoning behind the assessment, always visible: the engine's
                   stage-by-stage work (classify -> map with the CAPEC hit/miss -> select
                   -> reach -> verdict), driven by the read-only trace endpoint. */}
@@ -1196,7 +1142,7 @@ export default function VulnerabilityDetailPage() {
                   assessment above is only a derivation from stored data, so
                   something has to record that a person actually retested it. */}
               <GroupHeading n={3} title="Prove it" sub="Nothing above was executed. This is where a human records what they actually tested." />
-              <GuideMarker id="vuln.exploitRetest" n={9} />
+              <GuideMarker id="vuln.exploitRetest" n={20} />
               <ExploitTestPanel vulnId={vulnerability.id} />
             </div>
           )}
@@ -1209,23 +1155,43 @@ export default function VulnerabilityDetailPage() {
             <HistoryPanel entityType="vulnerability" entityId={vulnerability.id} />
           )}
 
-          {/* One line, collapsed by default — so Analysis opens as the score
-              card and nothing else, the way the reference product does. */}
+          {/* Evidence drawer header — collapsed by default so Analysis opens as
+              the score card and nothing else. The chips name the four sections
+              and jump straight to one (opening the drawer first if needed). */}
           {activeTab === 'analysis' && (
-            <button
-              onClick={() => setShowEvidence(!showEvidence)}
-              className="flex w-full items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-left hover:bg-slate-100"
-            >
-              <ChevronRight
-                className={`h-4 w-4 flex-none text-slate-400 transition-transform ${showEvidence ? 'rotate-90' : ''}`}
-              />
-              <span className="text-[13px] font-semibold text-slate-700">
-                {showEvidence ? 'Hide evidence' : 'Show evidence behind this score'}
-              </span>
-              <span className="ml-auto text-[12px] text-slate-400">
-                threat intel · description · affected assets · controls it breaks
-              </span>
-            </button>
+            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+              <button
+                onClick={() => setShowEvidence(!showEvidence)}
+                className="flex w-full items-center gap-2 bg-slate-50/70 px-4 py-3 text-left hover:bg-slate-100"
+              >
+                <ChevronRight
+                  className={`h-4 w-4 flex-none text-slate-400 transition-transform ${showEvidence ? 'rotate-90' : ''}`}
+                />
+                <span className="text-[13px] font-semibold text-slate-700">Evidence behind this score</span>
+                <span className="ml-auto text-[11.5px] font-medium text-slate-400">{showEvidence ? 'Hide' : 'Show'}</span>
+              </button>
+              <div className="flex flex-wrap gap-1.5 border-t border-slate-100 px-4 py-2.5">
+                {([
+                  ['sec-narrative', 'Threat intel'],
+                  ['sec-description', 'Description'],
+                  ['sec-assets', 'Affected assets'],
+                  ['sec-controls', 'Controls it breaks'],
+                ] as const).map(([id, label]) => (
+                  <button
+                    key={id}
+                    onClick={() => {
+                      setShowEvidence(true);
+                      // The target section is hidden until the state applies —
+                      // scroll on the next frame, after React has re-rendered.
+                      setTimeout(() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
+                    }}
+                    className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11.5px] font-medium text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900"
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
           )}
 
           {/* (1) Threat Narrative + Threat Intelligence + Patch Information.
@@ -3399,12 +3365,12 @@ function buildThreatNarrative(v: VulnerabilityDetail): {
   let action = '';
   let tone: 'critical' | 'high' | 'medium' | 'low' | 'unknown' = 'unknown';
   const p = v.composite_priority;
-  const hasPublicExploit = typeof v.public_exploit_count === 'number' && v.public_exploit_count > 0;
+  const hasPublicExploit = ((v.public_exploit_count ?? 0) > 0) || ((v.exploitdb_count ?? 0) > 0);
   if (v.kev_flag) {
     action = 'Treat this as drop-everything urgent. Patch or apply compensating controls immediately, even ahead of your normal SLA.';
     tone = 'critical';
   } else if (hasPublicExploit) {
-    action = 'Public exploit code exists — treat as imminently exploitable. Patch within the next maintenance window at the latest, and consider compensating controls in the meantime.';
+    action = 'A public exploit exists in the wild — treat as imminently exploitable wherever this finding is reachable. Patch within the next maintenance window at the latest; the Exploit Test tab shows whether it can currently reach this asset.';
     tone = 'critical';
   } else if (typeof p === 'number') {
     if (p >= 9) {
