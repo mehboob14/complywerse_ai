@@ -64,7 +64,9 @@ $uninstallPaths = @(
 )
 $apps = foreach ($p in $uninstallPaths) {
   Get-ItemProperty $p | Where-Object { $_.DisplayName } | ForEach-Object {
-    [pscustomobject]@{ name = "$($_.DisplayName)"; version = "$($_.DisplayVersion)"; source = 'registry' }
+    # Publisher comes from the same registry key we are already reading — not
+    # asking for it is why the Publisher column rendered as a wall of dashes.
+    [pscustomobject]@{ name = "$($_.DisplayName)"; version = "$($_.DisplayVersion)"; publisher = "$($_.Publisher)"; source = 'registry' }
   }
 }
 $roles = @()
@@ -89,6 +91,10 @@ try {
   $cpu  = (Get-CimInstance Win32_Processor  -ErrorAction SilentlyContinue | Measure-Object -Property NumberOfLogicalProcessors -Sum).Sum
   $bios = Get-CimInstance Win32_BIOS        -ErrorAction SilentlyContinue
   $disk = (Get-CimInstance Win32_DiskDrive  -ErrorAction SilentlyContinue | Measure-Object -Property Size -Sum).Sum
+  # Identity + network facts the machine also knows: the interactively logged-on
+  # user (→ Assigned User), the primary IP-enabled NIC's MAC, and the FQDN.
+  $net  = Get-CimInstance Win32_NetworkAdapterConfiguration -ErrorAction SilentlyContinue | Where-Object { $_.IPEnabled } | Select-Object -First 1
+  $fqdn = if ($cs.Domain -and $cs.Domain -ne 'WORKGROUP') { "$($cs.DNSHostName).$($cs.Domain)" } else { "$($cs.DNSHostName)" }
   $hw = @{
     cpu_cores     = [int]$cpu
     memory_gb     = if ($cs)   { [int][math]::Round($cs.TotalPhysicalMemory / 1GB) } else { 0 }
@@ -96,6 +102,9 @@ try {
     manufacturer  = "$($cs.Manufacturer)"
     model         = "$($cs.Model)"
     serial_number = "$($bios.SerialNumber)"
+    assigned_user = "$($cs.UserName)"
+    fqdn          = "$fqdn"
+    primary_mac   = "$($net.MACAddress)"
   }
 } catch {}
 @{ installed_software = @($software); hardware = $hw } | ConvertTo-Json -Depth 4 -Compress
@@ -114,7 +123,13 @@ _LINUX_PROBE_SH = (
     "echo \"storage_bytes=$(lsblk -bdno SIZE 2>/dev/null | awk '{s+=$1} END{print s}')\"; "
     "echo \"manufacturer=$(cat /sys/class/dmi/id/sys_vendor 2>/dev/null)\"; "
     "echo \"model=$(cat /sys/class/dmi/id/product_name 2>/dev/null)\"; "
-    "echo \"serial=$(cat /sys/class/dmi/id/product_serial 2>/dev/null)\""
+    "echo \"serial=$(cat /sys/class/dmi/id/product_serial 2>/dev/null)\"; "
+    # Identity — hostname, FQDN, and the default-route interface's MAC. The DMI
+    # probe alone never captured these, so a wizard-added host kept the IP as a
+    # placeholder host_name with blank FQDN/MAC. A rescan now fills all three.
+    "echo \"host_name=$(hostname 2>/dev/null)\"; "
+    "echo \"fqdn=$(hostname -f 2>/dev/null)\"; "
+    "echo \"primary_mac=$(cat /sys/class/net/$(ip route show default 2>/dev/null | awk '{print $5; exit}')/address 2>/dev/null)\""
 )
 
 _SS_PROC_RE = re.compile(r'\(\("([^"]+)"')
@@ -192,7 +207,7 @@ def _clean_hw(raw: dict) -> dict[str, Any]:
                 out[k] = v
         except (TypeError, ValueError):
             pass
-    for k in ("manufacturer", "model", "serial_number"):
+    for k in ("manufacturer", "model", "serial_number", "assigned_user", "fqdn", "primary_mac", "host_name"):
         v = str(raw.get(k) or "").strip()
         if v and v.lower() not in _HW_JUNK:
             out[k] = v[:255]
@@ -225,6 +240,9 @@ def _parse_hardware_linux(stdout: str) -> dict[str, Any]:
         "manufacturer": kv.get("manufacturer"),
         "model": kv.get("model"),
         "serial_number": kv.get("serial"),
+        "host_name": kv.get("host_name"),
+        "fqdn": kv.get("fqdn"),
+        "primary_mac": kv.get("primary_mac"),
     }
     try:
         mk = int(kv.get("memory_kb") or 0)

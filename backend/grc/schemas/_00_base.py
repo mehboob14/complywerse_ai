@@ -997,7 +997,7 @@ class ITAssetResponse(BaseModel):
     custodian: Optional[str] = None
     host_name: Optional[str] = None
     ip_address: Optional[str] = None
-    criticality: str
+    criticality: Optional[str] = None
     confidentiality_rating: Optional[int]
     integrity_rating: Optional[int]
     availability_rating: Optional[int]
@@ -1100,7 +1100,7 @@ class AssetDetailResponse(BaseModel):
     custodian: Optional[str] = None
     host_name: Optional[str] = None
     ip_address: Optional[str] = None
-    criticality: str
+    criticality: Optional[str] = None
     confidentiality_rating: Optional[int]
     integrity_rating: Optional[int]
     availability_rating: Optional[int]
@@ -1160,6 +1160,37 @@ class AssetDetailResponse(BaseModel):
     warranty_expiry: Optional[datetime] = None
     eol_date: Optional[datetime] = None
     environment: Optional[str] = None
+    # ── Machine-derived, read-only ────────────────────────────────────────
+    # Everything below is written by the agentless collector, never by hand.
+    # It was already being stored and simply never served, so the detail page
+    # had no way to show what the scan actually found.
+    os_build: Optional[str] = None
+    os_edition: Optional[str] = None
+    fqdn: Optional[str] = None
+    primary_mac: Optional[str] = None
+    detected_software_json: Optional[Any] = None   # [{name, version, publisher…}]
+    security_posture: Optional[Any] = None         # AV / EDR / category rollup
+    # ── Typed-asset model — kind-specific component block ────────────────
+    # platform_kind (server|database|network|cloud|identity|cluster) tells the
+    # UI which dedicated detail card to render; platform_properties carries that
+    # kind's own facts (e.g. a DB's version/databases/extensions/settings).
+    platform_kind: Optional[str] = None
+    platform_properties: Optional[Any] = None
+    # ── Provenance: where this row came from and when we first saw it ─────
+    source_system: Optional[str] = None
+    discovery_state: Optional[str] = None
+    first_seen_at: Optional[datetime] = None
+    # ── Classification / cloud extras ────────────────────────────────────
+    asset_role: Optional[str] = None
+    # A promoted application's OWN properties (port, service account,
+    # data directory…). Shape varies by product on purpose.
+    app_attributes_json: Optional[Any] = None
+    # Set on a promoted application: the host it runs on. Without it the UI
+    # cannot link a child application back to its parent machine.
+    parent_asset_id: Optional[int] = None
+    cloud_resource_id: Optional[str] = None
+    cde_environment: Optional[bool] = None
+    pci_dss: Optional[Any] = None
 
     class Config:
         from_attributes = True

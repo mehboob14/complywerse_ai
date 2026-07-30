@@ -138,16 +138,29 @@ def _preflight_ssh(creds: Dict[str, Any]) -> PreflightResult:
         else:
             client.connect(host, port=port, username=username, password=password, timeout=10,
                            allow_agent=False, look_for_keys=False)
-        _stdin, stdout, _stderr = client.exec_command("whoami", timeout=5)
+        # 5s was too tight for cross-internet targets — auth would succeed
+        # then the exec channel would hit socket.timeout (which stringifies to
+        # ""), surfacing a blank "SSH error:". 20s gives a remote host room to
+        # open the session channel and return `whoami`.
+        _stdin, stdout, _stderr = client.exec_command("whoami", timeout=20)
         ident = stdout.read().decode().strip()
         return PreflightResult(True, "ok", "SSH auth succeeded.", identity=ident)
     except paramiko.AuthenticationException:
         return PreflightResult(False, "auth_failed",
             "SSH rejected the credentials. Check username/password or private key.")
     except paramiko.SSHException as e:
-        return PreflightResult(False, "unknown", f"SSH protocol error: {e}")
+        detail = str(e) or f"{type(e).__name__} (no message)"
+        return PreflightResult(False, "unknown", f"SSH protocol error: {detail}")
     except Exception as e:  # noqa: BLE001
-        return PreflightResult(False, "unknown", f"SSH error: {str(e)[:200]}")
+        # Never surface a blank error: socket.timeout / EOFError stringify to
+        # "", which told the operator nothing. Fall back to the exception type
+        # plus a hint about the usual post-auth cause.
+        detail = str(e)[:200] or (
+            f"{type(e).__name__} with no message — auth succeeded but the read-only "
+            "`whoami` did not return in time (slow/remote host or the account's "
+            "session was closed by the server)."
+        )
+        return PreflightResult(False, "unknown", f"SSH error: {detail}")
     finally:
         try:
             client.close()
@@ -197,6 +210,126 @@ def _preflight_aws(creds: Dict[str, Any]) -> PreflightResult:
             f"Cannot reach AWS STS endpoint: {e}")
 
 
+# ─── SQL databases (Postgres / MSSQL / MySQL) ───────────────────────────────
+
+def _tcp_open(host: str, port: int, timeout: float = 5.0) -> PreflightResult | None:
+    """Return a network_unreachable result if TCP fails; None if open."""
+    try:
+        with socket.create_connection((host, int(port)), timeout=timeout):
+            return None
+    except (socket.gaierror, socket.timeout, ConnectionRefusedError, OSError) as e:
+        return PreflightResult(
+            False, "network_unreachable",
+            f"Cannot reach {host}:{port}: {type(e).__name__}",
+        )
+
+
+def _preflight_postgres(creds: Dict[str, Any]) -> PreflightResult:
+    try:
+        import psycopg2  # type: ignore
+    except ImportError:
+        return PreflightResult(False, "config_error", "psycopg2 not installed on this server")
+    host = creds.get("postgres_host")
+    port = int(creds.get("postgres_port") or 5432)
+    user = creds.get("postgres_username")
+    pw = creds.get("postgres_password")
+    db = creds.get("postgres_database") or "postgres"
+    if not host or not user or not pw:
+        return PreflightResult(False, "config_error",
+            "postgres_host, postgres_username, and postgres_password are required")
+    unreachable = _tcp_open(host, port)
+    if unreachable:
+        return unreachable
+    try:
+        conn = psycopg2.connect(
+            host=host, port=port, user=user, password=pw, dbname=db, connect_timeout=8,
+        )
+        cur = conn.cursor()
+        cur.execute("SELECT current_user, current_setting('server_version')")
+        who, ver = cur.fetchone()
+        cur.close()
+        conn.close()
+        return PreflightResult(True, "ok",
+            f"PostgreSQL auth succeeded (server {ver}).", identity=str(who))
+    except Exception as e:  # noqa: BLE001
+        msg = str(e)
+        low = msg.lower()
+        if "password" in low or "authentication" in low or "auth" in low:
+            return PreflightResult(False, "auth_failed",
+                f"PostgreSQL rejected the credentials: {msg[:220]}")
+        if "timeout" in low or "could not connect" in low or "refused" in low:
+            return PreflightResult(False, "network_unreachable", msg[:220])
+        return PreflightResult(False, "unknown", f"PostgreSQL error: {msg[:220]}")
+
+
+def _preflight_mssql(creds: Dict[str, Any]) -> PreflightResult:
+    try:
+        import pymssql  # type: ignore
+    except ImportError:
+        return PreflightResult(False, "config_error", "pymssql not installed on this server")
+    host = creds.get("mssql_host")
+    port = int(creds.get("mssql_port") or 1433)
+    user = creds.get("mssql_username")
+    pw = creds.get("mssql_password")
+    db = creds.get("mssql_database") or "master"
+    if not host or not user or not pw:
+        return PreflightResult(False, "config_error",
+            "mssql_host, mssql_username, and mssql_password are required")
+    unreachable = _tcp_open(host, port)
+    if unreachable:
+        return unreachable
+    try:
+        conn = pymssql.connect(server=host, port=port, user=user, password=pw,
+                               database=db, login_timeout=8, timeout=8)
+        cur = conn.cursor()
+        cur.execute("SELECT SUSER_SNAME(), @@VERSION")
+        who, ver = cur.fetchone()
+        cur.close()
+        conn.close()
+        return PreflightResult(True, "ok",
+            f"MSSQL auth succeeded ({str(ver)[:60]}…).", identity=str(who))
+    except Exception as e:  # noqa: BLE001
+        msg = str(e)
+        low = msg.lower()
+        if "login failed" in low or "password" in low or "18456" in low:
+            return PreflightResult(False, "auth_failed", f"MSSQL rejected credentials: {msg[:220]}")
+        return PreflightResult(False, "unknown", f"MSSQL error: {msg[:220]}")
+
+
+def _preflight_mysql(creds: Dict[str, Any]) -> PreflightResult:
+    try:
+        import pymysql  # type: ignore
+    except ImportError:
+        return PreflightResult(False, "config_error", "PyMySQL not installed on this server")
+    host = creds.get("mysql_host")
+    port = int(creds.get("mysql_port") or 3306)
+    user = creds.get("mysql_username")
+    pw = creds.get("mysql_password")
+    db = creds.get("mysql_database") or "information_schema"
+    if not host or not user or not pw:
+        return PreflightResult(False, "config_error",
+            "mysql_host, mysql_username, and mysql_password are required")
+    unreachable = _tcp_open(host, port)
+    if unreachable:
+        return unreachable
+    try:
+        conn = pymysql.connect(host=host, port=port, user=user, password=pw,
+                               database=db, connect_timeout=8, read_timeout=8)
+        cur = conn.cursor()
+        cur.execute("SELECT CURRENT_USER(), VERSION()")
+        who, ver = cur.fetchone()
+        cur.close()
+        conn.close()
+        return PreflightResult(True, "ok",
+            f"MySQL auth succeeded (server {ver}).", identity=str(who))
+    except Exception as e:  # noqa: BLE001
+        msg = str(e)
+        low = msg.lower()
+        if "access denied" in low or "password" in low:
+            return PreflightResult(False, "auth_failed", f"MySQL rejected credentials: {msg[:220]}")
+        return PreflightResult(False, "unknown", f"MySQL error: {msg[:220]}")
+
+
 # ─── Dispatcher ─────────────────────────────────────────────────────────────
 
 def preflight_check(integration_type: str, creds: Dict[str, Any]) -> PreflightResult:
@@ -208,6 +341,12 @@ def preflight_check(integration_type: str, creds: Dict[str, Any]) -> PreflightRe
         return _preflight_ssh(creds)
     if itype == "aws_readonly":
         return _preflight_aws(creds)
+    if itype == "postgres_sql":
+        return _preflight_postgres(creds)
+    if itype == "mssql_sql":
+        return _preflight_mssql(creds)
+    if itype == "mysql_sql":
+        return _preflight_mysql(creds)
     # Unknown / Nessus / Nexpose — skip pre-flight (those have their own
     # vendor-specific auth flows handled elsewhere).
     return PreflightResult(True, "ok", f"No pre-flight defined for {itype!r}; skipped.")

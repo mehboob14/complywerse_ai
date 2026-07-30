@@ -42,14 +42,19 @@ import { RelatedIssuesPanel } from '@/components/issue-management/RelatedIssuesP
 // Updated_CIS_Assests migration: host applications "room-and-chair" panel
 // rendered above the existing ComplianceTab content.
 import HostApplicationsPanel from './_host-applications-panel';
+import { PlatformDetails, PLATFORM_META } from './_platform-detail-card';
 import {
-  SoftwarePanel, RelationshipsPanel, DiscoveryPanel,
+  SoftwarePanel, RelationshipsPanel,
   LifecyclePanel, ActivityPanel,
 } from './_components/AssetWorkTabs';
 import RiskControlsTab from './_components/RiskControlsTab';
 import { NotesPanel, AlertsPanel, HistoryPanel } from '@/components/shared/EntityExtras';
 import { RoomScanProvider, useRoomScan } from './_room-scan-context';
 import { GuideMarker, useGuide } from '@/components/guide';
+import {
+  SoftwareSetupDrawer,
+  type SoftwareSetupEntry,
+} from '@/components/assets/SoftwareSetupDrawer';
 
 const TrajectoryMap = nextDynamic(
   () => import('./_components/TrajectoryMap').then((m) => m.TrajectoryMap),
@@ -155,6 +160,10 @@ interface AssetDetailData {
   name: string;
   description?: string;
   asset_type: string;
+  // Typed-asset model: which kind of asset this is (server/database/network/
+  // cloud/identity/cluster) and the kind-specific component block.
+  platform_kind?: string | null;
+  platform_properties?: any;
   owner_id?: number;
   owner_name?: string;
   custodian?: string;
@@ -224,6 +233,40 @@ interface AssetDetailData {
   warranty_expiry?: string | null;
   eol_date?: string | null;
   environment?: string | null;
+  // ── Machine-derived, read-only. Written by the agentless collector; the
+  //    Edit modal must never offer these, because the next scan overwrites
+  //    whatever a human typed. ──────────────────────────────────────────
+  os_build?: string | null;
+  os_edition?: string | null;
+  fqdn?: string | null;
+  primary_mac?: string | null;
+  detected_software_json?: Array<{
+    name?: string; version?: string; publisher?: string; vendor?: string; category?: string;
+    /** Stable key the promote endpoint takes, and the CIS matcher routes on. */
+    software_key?: string;
+    /** True when a CIS benchmark exists — only these can become child assets. */
+    benchmark_available?: boolean;
+    /** Set once promoted; the child asset's id. */
+    promoted_asset_id?: number | null;
+  }> | null;
+  security_posture?: {
+    has_antivirus?: boolean; antivirus_products?: string[];
+    has_edr?: boolean; edr_products?: string[];
+    endpoint_protected?: boolean; security_tools?: string[];
+    categories?: Record<string, number>; software_total?: number; computed_at?: string;
+  } | null;
+  // Provenance
+  source_system?: string | null;
+  discovery_state?: string | null;
+  first_seen_at?: string | null;
+  // Classification / cloud
+  asset_role?: string | null;
+  /** A promoted application's own properties — shape varies by product. */
+  app_attributes_json?: Record<string, any> | null;
+  /** Set on a promoted application — the host asset it runs on. */
+  parent_asset_id?: number | null;
+  cloud_resource_id?: string | null;
+  cde_environment?: boolean | null;
 }
 
 type AssetUpdatePayload = Partial<
@@ -296,6 +339,7 @@ export default function AssetDetailPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showLifecycleModal, setShowLifecycleModal] = useState(false);
+  const [setupEntry, setSetupEntry] = useState<SoftwareSetupEntry | null>(null);
 
   const { data: asset, isLoading, error } = useQuery<AssetDetailData>({
     queryKey: ['asset-detail', assetId],
@@ -547,16 +591,6 @@ export default function AssetDetailPage() {
     queryFn: async () => (await entityExtrasApi.listRelationships(assetId)).data,
   });
 
-  // Re-detect the asset's OS from the Discovery tab. The panel has always had
-  // the button, but the page never passed the handler — so it never rendered.
-  const reDetectOsMutation = useMutation({
-    mutationFn: () => compliancePluginsApi.reDetectAssetOs(assetId).then((r: any) => r.data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['asset-detail', assetId] });
-      queryClient.invalidateQueries({ queryKey: ['asset-risk-posture', assetId] });
-    },
-  });
-
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center rounded-lg border border-slate-200 bg-white">
@@ -609,6 +643,30 @@ export default function AssetDetailPage() {
   const softwareCount = Array.isArray(softwareForCount)
     ? softwareForCount.length
     : ((softwareForCount?.inventory ?? softwareForCount?.software ?? softwareForCount?.items ?? []) as any[]).length;
+
+  // ── What KIND of thing is this asset? ───────────────────────────────────
+  // The field set a device deserves depends on what it is. A Cisco switch has
+  // no manufacturer/serial over SSH and runs no installed-software list; an S3
+  // bucket has neither, but does have a cloud resource id. Rendering every
+  // field for every type is how a page ends up as a wall of dashes, so each
+  // block below is gated on the asset actually being able to have that data.
+  const _fam = (asset?.os_family || asset?.os_normalized || '').toLowerCase();
+  const _type = (asset?.asset_type || '').toLowerCase();
+  const isNetworkDevice = _fam.startsWith('cisco') || _fam.startsWith('ios')
+    || _type.includes('network') || _type.includes('firewall') || _type.includes('router')
+    || _type.includes('switch');
+  const isCloud = _type.includes('cloud') || _type.includes('saas') || !!asset?.cloud_resource_id;
+  // A promoted application (PostgreSQL, IIS, SQL Server…) runs ON a host. It
+  // has a version, a publisher and a parent — it does NOT have a serial
+  // number, a chassis manufacturer or 32 GB of RAM. Rendering the host layout
+  // for it produced a page of dashes where the hardware should be, next to
+  // vCPU/RAM/Disk tiles that can never be filled.
+  const isApplication = asset?.asset_role === 'application' || _type === 'application';
+  // Hosts (Windows/Linux/servers/endpoints) are the things that report an
+  // installed-software inventory and an AV/EDR posture.
+  const showsSoftware = !isNetworkDevice && !isCloud;
+  const software = Array.isArray(asset?.detected_software_json) ? asset!.detected_software_json! : [];
+  const posture = asset?.security_posture || null;
 
   const tabCounts: Partial<Record<TabType, number>> = {
     risks: (asset?.linked_risks?.length ?? 0)
@@ -784,6 +842,7 @@ export default function AssetDetailPage() {
                   {/* Left column */}
                   <div className="flex flex-col gap-4">
                     <OverviewCard title="Identity & Ownership" icon={User}
+                      onEdit={canEdit ? () => setShowEditModal(true) : undefined}
                       headerRight={
                         <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                           <span style={{ width: 90, height: 6, borderRadius: 3, background: 'var(--as-track)', overflow: 'hidden' }}>
@@ -803,7 +862,14 @@ export default function AssetDetailPage() {
                         <DField label="Assigned User" value={asset.assigned_user} />
                         <DField label="Location" value={asset.location} />
                         <DField label="Criticality" value={<span className="capitalize">{asset.criticality}</span>} />
-                        <DField label="Lifecycle" value={<span className="capitalize">{asset.lifecycle_state || asset.status}</span>} />
+                        {/* Only show a lifecycle stage somebody actually set. Falling back
+                            to `status` printed "Active" for every new asset — that is the
+                            column default, not a lifecycle decision, and it gave the
+                            impression the asset had been reviewed and placed in service. */}
+                        <DField label="Lifecycle"
+                          value={asset.lifecycle_state
+                            ? <span className="capitalize">{asset.lifecycle_state}</span>
+                            : null} />
                         <DField label="Data Classification" value={asset.data_classification ? <span className="capitalize">{asset.data_classification}</span> : null} />
                         <DField label="Business Function" value={asset.business_function} />
                         <DField label="Owning Team" value={asset.owning_team_name || asset.owning_team} />
@@ -813,19 +879,52 @@ export default function AssetDetailPage() {
                       </div>
                     </OverviewCard>
 
-                    <OverviewCard title="Network & Platform" icon={Network} source="Auto-discovered · scan" className="flex-1">
+                    <OverviewCard title="Network & Platform" icon={Network} source="Auto-discovered · scan" className="flex-1" onEdit={canEdit ? () => setShowEditModal(true) : undefined}>
                       <div className="grid grid-cols-2 gap-x-4 gap-y-4 sm:grid-cols-3">
                         <DField label="IP Address" value={asset.ip_address} mono />
                         <DField label="Hostname" value={asset.host_name} mono />
-                        <DField label="Operating System" value={asset.os_version || asset.os_family} />
-                        <DField label="Manufacturer" value={asset.manufacturer} />
-                        <DField label="Model" value={asset.model} />
-                        <DField label="Serial Number" value={asset.serial_number} mono />
+                        <DField label="FQDN" value={asset.fqdn} mono />
+                        <DField label="MAC Address" value={asset.primary_mac} mono />
+                        {!isApplication && <DField label="Operating System" value={asset.os_version || asset.os_family} />}
+                        {/* Network gear reports no OEM/serial over SSH — hide the
+                            fields instead of showing three permanent dashes. */}
+                        {/* Chassis facts belong to the physical machine only. */}
+                        {!isNetworkDevice && !isApplication && <DField label="Manufacturer" value={asset.manufacturer} />}
+                        {!isNetworkDevice && !isApplication && <DField label="Model" value={asset.model} />}
+                        {!isNetworkDevice && !isApplication && <DField label="Serial Number" value={asset.serial_number} mono />}
+                        {isApplication && (
+                          <DField label="Runs On" value={
+                            asset.parent_asset_id
+                              ? <a href={`/assets/${asset.parent_asset_id}`} className="text-primary-700 underline font-medium">
+                                  {asset.host_name || `Asset #${asset.parent_asset_id}`}
+                                </a>
+                              : asset.host_name} />
+                        )}
+                        {isApplication && <DField label="Version" value={asset.os_version} />}
+                        {/* The application's OWN properties, collected by the
+                            software profiler over the host's connection. Keys
+                            differ per product (PostgreSQL has a data directory,
+                            IIS has app pools), so render whatever came back
+                            rather than a fixed field list. */}
+                        {isApplication && Object.entries(asset.app_attributes_json || {})
+                          .filter(([k]) => !k.startsWith('_'))
+                          .map(([k, v]) => (
+                            <DField
+                              key={k}
+                              label={k.replace(/_/g, ' ').replace(/\w/g, (c) => c.toUpperCase())}
+                              value={String(v)}
+                              mono={/port|path|account|directory|file/i.test(k)}
+                              // A service command line is far longer than a grid
+                              // cell; give it the full row so it wraps cleanly.
+                              wide={/path|directory|kubeconfig|command/i.test(k) || String(v).length > 60}
+                            />
+                          ))}
                         <div className="relative">
                           <DField label="Internet Exposed" value={asset.internet_facing ? 'Yes' : 'No'} alert={!!asset.internet_facing} />
                           <GuideMarker id="asset.internetExposed" n={8} className="absolute -top-1 right-0" />
                         </div>
                         <DField label="Network Segment" value={asset.network_segment} />
+                        {isCloud && <DField label="Cloud Resource ID" value={asset.cloud_resource_id} mono />}
                       </div>
                     </OverviewCard>
                   </div>
@@ -835,27 +934,57 @@ export default function AssetDetailPage() {
                       Controls tab, so the value appears in exactly one place.
                       Criticality is still visible in Identity & Ownership. */}
                   <div className="flex flex-col gap-4">
-                    <OverviewCard title="Hardware & Telemetry" icon={Cpu} source="Telemetry: agent · Specs: manual">
-                      <div className="grid grid-cols-3 gap-2">
-                        <SpecTile label="vCPU" value={asset.cpu_cores} />
-                        <SpecTile label="GB RAM" value={asset.memory_gb} />
-                        <SpecTile label="GB Disk" value={asset.storage_gb} />
-                      </div>
+                    {asset.platform_kind && asset.platform_kind !== 'server' ? (
+                    <OverviewCard title={PLATFORM_META[asset.platform_kind]?.title || 'Platform Details'} icon={PLATFORM_META[asset.platform_kind]?.icon || Cpu} source="Auto-collected · agentless scan" onEdit={canEdit ? () => setShowEditModal(true) : undefined}>
+                      <PlatformDetails kind={asset.platform_kind} props={asset.platform_properties} />
+                    </OverviewCard>
+                    ) : (
+                    <OverviewCard title="Hardware & Telemetry" icon={Cpu} source="Telemetry: agent · Specs: manual" onEdit={canEdit ? () => setShowEditModal(true) : undefined}>
+                      {/* An application has no chassis of its own — those specs
+                          belong to the host it runs on, one click away under
+                          "Runs On". Showing three permanently-empty tiles here
+                          implied the data was missing rather than inapplicable. */}
+                      {isApplication ? (
+                        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                          Hardware belongs to the host{' '}
+                          {asset.parent_asset_id ? (
+                            <a href={`/assets/${asset.parent_asset_id}`} className="text-primary-700 underline font-medium">
+                              {asset.host_name || `#${asset.parent_asset_id}`}
+                            </a>
+                          ) : (asset.host_name || 'this application runs on')}
+                          {' '}— an application has no CPU, RAM or disk of its own.
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-3 gap-2">
+                          <SpecTile label="vCPU" value={asset.cpu_cores} />
+                          <SpecTile label="GB RAM" value={asset.memory_gb} />
+                          <SpecTile label="GB Disk" value={asset.storage_gb} />
+                        </div>
+                      )}
                       <div className="grid grid-cols-2 gap-x-4 gap-y-4">
                         <DField label="Agent Version" value={asset.agent_version} mono />
                         <DField label="Last Seen" value={asset.last_seen_at ? formatDate(asset.last_seen_at) : null} />
                         <DField label="Scan Source" value={asset.last_seen_source} />
-                        <DField label="Discovered" value={asset.created_at ? formatDate(asset.created_at) : null} />
-                        <DField label="OS Family" value={asset.os_family ? <span className="capitalize">{asset.os_family}</span> : null} />
-                        <DField label="Normalised OS Key" value={asset.os_normalized} mono />
+                        <DField label="First Seen" value={asset.first_seen_at ? formatDate(asset.first_seen_at) : (asset.created_at ? formatDate(asset.created_at) : null)} />
+                        {/* OS family / edition / build describe the operating system of a
+                            MACHINE. An application inherits none of them — showing
+                            "OS Family: Windows" with "OS Edition: —" on a PostgreSQL
+                            asset mixes the host's identity into the app's. */}
+                        {!isApplication && <DField label="OS Family" value={asset.os_family ? <span className="capitalize">{asset.os_family}</span> : null} />}
+                        {!isApplication && <DField label="OS Edition" value={asset.os_edition} />}
+                        {!isApplication && <DField label="OS Build" value={asset.os_build} mono />}
+                        <DField label={isApplication ? 'Benchmark Key' : 'Normalised OS Key'} value={asset.os_normalized} mono />
+                        <DField label="Record Source" value={asset.source_system ? <span className="capitalize">{asset.source_system}</span> : 'manual'} />
                       </div>
                     </OverviewCard>
+                    )}
+
 
                     {/* Procurement lives in the right column (not a full-width row
                         below) so it balances the taller Identity + Network stack on
                         the left instead of leaving this card half-empty. flex-1 lets
                         it absorb any remaining height so the columns end level. */}
-                    <OverviewCard title="Procurement & Cost" icon={DollarSign} source="Manual · finance/CMDB" className="flex-1" bodyFill>
+                    <OverviewCard title="Procurement & Cost" icon={DollarSign} source="Manual · finance/CMDB" className="flex-1" bodyFill onEdit={canEdit ? () => setShowEditModal(true) : undefined}>
                       <div className="grid grid-cols-2 gap-x-4 gap-y-4">
                         <DField label="Purchase Cost" value={asset.purchase_cost != null ? formatCurrency(asset.purchase_cost) : null} />
                         <DField label="Purchase Date" value={asset.purchase_date ? formatDate(asset.purchase_date) : null} />
@@ -867,6 +996,111 @@ export default function AssetDetailPage() {
                     </OverviewCard>
                   </div>
                 </div>
+
+                {/* Software & posture — FULL WIDTH, below the two-column grid.
+                    A 28-row software table inside the right column stretched it
+                    far past the left one and left a large blank gap beside it.
+                    It is also the widest content on the page (name + version +
+                    publisher + actions), so it belongs on a full row. Only
+                    rendered for things that run software — a switch or an S3
+                    bucket has no installed-software list. */}
+                {showsSoftware && (software.length > 0 || posture) && (
+                  <OverviewCard title="Software & Security Posture" icon={ShieldCheck}
+                    source="Auto-collected · agentless scan">
+                    {posture && (
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-4 mb-4">
+                        <DField label="Antivirus"
+                          value={posture.has_antivirus
+                            ? (posture.antivirus_products?.join(', ') || 'Present')
+                            : 'None detected'}
+                          alert={!posture.has_antivirus} />
+                        <DField label="EDR"
+                          value={posture.has_edr
+                            ? (posture.edr_products?.join(', ') || 'Present')
+                            : 'None detected'}
+                          alert={!posture.has_edr} />
+                        <DField label="Endpoint Protected"
+                          value={posture.endpoint_protected ? 'Yes' : 'No'}
+                          alert={!posture.endpoint_protected} />
+                        <DField label="Packages Found" value={posture.software_total ?? software.length} />
+                      </div>
+                    )}
+                    {software.length > 0 && (
+                      <div>
+                        <div className="flex items-baseline justify-between gap-3 mb-2">
+                          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                            Installed software ({software.length})
+                          </div>
+                          <div className="text-xs text-slate-500">
+                            {software.filter((s: any) => s.promoted_asset_id).length} tracked as assets
+                            {' · '}
+                            {software.filter((s: any) => s.benchmark_available && !s.promoted_asset_id).length} can be set up
+                          </div>
+                        </div>
+                        <div className="max-h-80 overflow-y-auto rounded-lg border border-slate-200">
+                          <table className="w-full text-xs">
+                            <thead className="bg-slate-50 sticky top-0">
+                              <tr>
+                                <th className="text-left font-medium text-slate-600 px-3 py-1.5">Name</th>
+                                <th className="text-left font-medium text-slate-600 px-3 py-1.5">Version</th>
+                                <th className="text-left font-medium text-slate-600 px-3 py-1.5">Tracked as asset</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {software.map((s: any, i: number) => {
+                                const clickable = Boolean(s.software_key);
+                                return (
+                                  <tr
+                                    key={`${s.name}-${i}`}
+                                    className={`border-t border-slate-100 ${clickable ? 'cursor-pointer hover:bg-slate-50' : ''}`}
+                                    onClick={clickable ? () => {
+                                      // Pull the live rule_count + benchmark_name from the
+                                      // ENRICHED endpoint (softwareForCount), not the raw
+                                      // detected_software_json row — the raw JSON has no
+                                      // rule_count, so the drawer was showing "0 rules".
+                                      const enr = (softwareForCount?.inventory ?? []).find(
+                                        (x: any) => x.software_key === s.software_key,
+                                      ) || {};
+                                      setSetupEntry({
+                                        software_key: s.software_key!,
+                                        name: s.name || s.software_key!,
+                                        version: s.version,
+                                        publisher: s.publisher ?? s.vendor,
+                                        benchmark_available: !!(enr.benchmark_available ?? s.benchmark_available),
+                                        benchmark_name: enr.benchmark_name ?? s.benchmark_name,
+                                        rule_count: enr.rule_count,
+                                        promoted_asset_id: s.promoted_asset_id ?? null,
+                                      });
+                                    } : undefined}
+                                  >
+                                    <td className="px-3 py-1.5 text-slate-900">{s.name || '—'}</td>
+                                    <td className="px-3 py-1.5 font-mono text-slate-600">{s.version || '—'}</td>
+                                    <td className="px-3 py-1.5">
+                                      {s.promoted_asset_id ? (
+                                        <span className="text-primary-700 font-medium">
+                                          Asset #{s.promoted_asset_id}
+                                        </span>
+                                      ) : s.benchmark_available ? (
+                                        <span className="text-slate-500">Click to set up</span>
+                                      ) : (
+                                        <span className="text-slate-400">—</span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                        <p className="mt-2 text-[11px] text-slate-500 leading-relaxed">
+                          Click a software row to open set-up — CIS-ready packages can be scanned
+                          (credentials when needed); others can be tracked without a benchmark.
+                          A set-up application becomes a child asset linked to this host.
+                        </p>
+                      </div>
+                    )}
+                  </OverviewCard>
+                )}
 
                 {/* Provenance footer — tells the operator where these values originate. */}
                 <div style={{ marginTop: 4, fontSize: 12, color: 'var(--as-faint)', lineHeight: 1.5, display: 'flex', alignItems: 'baseline', gap: 6 }}>
@@ -889,11 +1123,12 @@ export default function AssetDetailPage() {
                     The per-role descriptions it added ("who to call when it
                     breaks") are not lost — that is exactly what Guide mode now
                     provides, on the fields themselves. */}
-                <DiscoveryPanel
-                  asset={asset}
-                  onRedetect={canEdit ? () => reDetectOsMutation.mutate() : undefined}
-                  redetecting={reDetectOsMutation.isPending}
-                />
+                {/* DiscoveryPanel ("Last observed") removed — same pure-duplication
+                    problem as AssignmentsPanel above: its four fields (Last seen,
+                    Seen by, Agent version, Normalised OS Key) are ALL already in the
+                    "Hardware & Telemetry" card above, and its "no discovery history"
+                    note was stale (the Discovery module now records per-scan history).
+                    Re-detect OS still lives on the Compliance tab. */}
               </div>
             )}
             {activeTab === 'trajectory' && (
@@ -925,7 +1160,13 @@ export default function AssetDetailPage() {
                    already exists; where the backend has no storage the panel
                    says so rather than faking a timeline. ── */}
             {activeTab === 'software' && (
-              <SoftwarePanel assetId={assetId} canEdit={canEdit} peers={(ipPeers?.group ?? []).filter((g: any) => !g.is_self)} />
+              <SoftwarePanel
+                assetId={assetId}
+                canEdit={canEdit}
+                peers={(ipPeers?.group ?? []).filter((g: any) => !g.is_self)}
+                hostName={asset.name || asset.host_name || undefined}
+                hostIp={asset.ip_address || undefined}
+              />
             )}
             {activeTab === 'relationships' && (
               <RelationshipsPanel asset={asset} assetId={assetId} ipPeers={ipPeers} canEdit={canEdit} />
@@ -1066,6 +1307,23 @@ export default function AssetDetailPage() {
           }
         />
       )}
+
+      {setupEntry && (
+        <SoftwareSetupDrawer
+          open
+          onClose={() => setSetupEntry(null)}
+          hostAssetId={assetId}
+          hostName={asset.name || asset.host_name || undefined}
+          hostIp={asset.ip_address || undefined}
+          entry={setupEntry}
+          onComplete={() => {
+            queryClient.invalidateQueries({ queryKey: ['assets', assetId, 'detected-software'] });
+            queryClient.invalidateQueries({ queryKey: ['asset-detected-software', assetId] });
+            queryClient.invalidateQueries({ queryKey: ['assets', assetId, 'ip-peers'] });
+            queryClient.invalidateQueries({ queryKey: ['asset-detail', assetId] });
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -1086,14 +1344,22 @@ function RailStatRow({ label, children }: { label: string; children: React.React
 }
 
 // ── Overview tab helpers (assesst-parity grouped cards) ──────────────────────
-function DField({ label, value, mono, alert }: { label: string; value?: React.ReactNode; mono?: boolean; alert?: boolean }) {
+function DField({ label, value, mono, alert, wide }: { label: string; value?: React.ReactNode; mono?: boolean; alert?: boolean; wide?: boolean }) {
   const empty = value === null || value === undefined || value === '';
+  // Long unbroken values — a Windows install path, a service account, a MAC —
+  // used to run straight over the neighbouring column, so "NT AUTHORITY  // NetworkService" collided with the next field's label. minWidth:0 lets the
+  // grid cell actually shrink, and overflowWrap breaks inside a long token
+  // rather than pushing the column wider than its track.
   return (
-    <div>
+    <div style={{ minWidth: 0, ...(wide ? { gridColumn: '1 / -1' } : null) }}>
       <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: 0.6, textTransform: 'uppercase', color: 'var(--as-muted)' }}>{label}</div>
       <div
         className={mono ? 'as-mono' : ''}
-        style={{ marginTop: 4, fontSize: mono ? 13 : 15, fontWeight: 500, color: empty ? 'var(--as-disabled)' : alert ? '#A33B1F' : 'var(--as-primary)' }}
+        style={{
+          marginTop: 4, fontSize: mono ? 13 : 15, fontWeight: 500,
+          color: empty ? 'var(--as-disabled)' : alert ? '#A33B1F' : 'var(--as-primary)',
+          minWidth: 0, overflowWrap: 'anywhere', wordBreak: 'break-word',
+        }}
       >
         {empty ? '—' : value}
       </div>
@@ -1122,16 +1388,23 @@ function OverviewStat({ label, value, accent, guideId, guideN }: { label: string
   );
 }
 
-function OverviewCard({ title, icon: Icon, children, className, source, headerRight, bodyFill }: { title: string; icon: React.ElementType; children: React.ReactNode; className?: string; source?: string; headerRight?: React.ReactNode; bodyFill?: boolean }) {
+function OverviewCard({ title, icon: Icon, children, className, source, headerRight, bodyFill, onEdit }: { title: string; icon: React.ElementType; children: React.ReactNode; className?: string; source?: string; headerRight?: React.ReactNode; bodyFill?: boolean; onEdit?: () => void }) {
   return (
     <div className={`as-card ${className || ''}`} style={{ padding: '20px 22px', display: 'flex', flexDirection: 'column' }}>
       <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 15, fontWeight: 600, color: 'var(--as-ink)' }}>
           <Icon className="h-[18px] w-[18px]" style={{ color: 'var(--as-green)' }} strokeWidth={2} /> {title}
         </div>
-        {headerRight ? headerRight : source ? (
-          <span title={`Where this data comes from: ${source}`} style={{ fontSize: 10, fontWeight: 600, letterSpacing: 0.4, textTransform: 'uppercase', color: 'var(--as-faint)', whiteSpace: 'nowrap' }}>{source}</span>
-        ) : null}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {headerRight ? headerRight : source ? (
+            <span title={`Where this data comes from: ${source}`} style={{ fontSize: 10, fontWeight: 600, letterSpacing: 0.4, textTransform: 'uppercase', color: 'var(--as-faint)', whiteSpace: 'nowrap' }}>{source}</span>
+          ) : null}
+          {onEdit && (
+            <button onClick={onEdit} title="Edit these fields" className="as-btn as-btn-secondary" style={{ padding: '3px 9px', fontSize: 11, whiteSpace: 'nowrap' }}>
+              <Edit className="h-3 w-3" style={{ display: 'inline', verticalAlign: -1, marginRight: 4 }} strokeWidth={2} />Edit
+            </button>
+          )}
+        </div>
       </div>
       {bodyFill
         ? <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 14 }}>{children}</div>

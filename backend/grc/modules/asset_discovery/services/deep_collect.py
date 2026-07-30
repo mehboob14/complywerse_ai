@@ -30,6 +30,7 @@ from sqlalchemy.orm import Session
 from grc.crypto import decrypt_secret
 from grc.models import (
     ITAsset, DiscoveryRun, DiscoveryObservation, CredentialProfile,
+    IntegrationConnection,
 )
 
 logger = logging.getLogger(__name__)
@@ -38,6 +39,146 @@ logger = logging.getLogger(__name__)
 # collecting all of them synchronously in one pass would be abusive. The rest
 # get collected on the next run (or an on-demand probe).
 MAX_DEEP_COLLECT_PER_RUN = 512
+
+
+def transport_for_observation(obs: DiscoveryObservation) -> Optional[str]:
+    """windows | linux | None, from the sweep evidence alone.
+
+    An unclaimed observation has no asset row to consult, so the open ports are
+    all we have: 445/3389 → Windows, 22 → Linux. This is what lets a Windows
+    login be tried ONLY against Windows devices — trying a WinRM credential
+    against a Linux box is a guaranteed failed login, and enough failed logins
+    against a domain account trips lockout.
+    """
+    raw = obs.raw if isinstance(obs.raw, dict) else {}
+    guess = str(raw.get("os_guess") or raw.get("os") or "").lower()
+    if guess.startswith("windows"):
+        return "windows"
+    if guess.startswith(("linux", "ubuntu", "debian", "rhel", "centos")):
+        return "linux"
+    ports = raw.get("open_ports") or []
+    if 445 in ports or 3389 in ports or 5985 in ports or 5986 in ports:
+        return "windows"
+    if 22 in ports:
+        return "linux"
+    return None
+
+
+def agentless_port_state(obs: DiscoveryObservation, transport: str) -> str:
+    """'open' | 'closed' | 'unknown' — is the port the collector will dial
+    actually listening?
+
+    Windows discovery finds hosts on 445 (SMB), but the agentless collector
+    talks WinRM on 5985/5986. Those are different services: a machine can answer
+    on 445 all day with WinRM switched off, which is the default on a
+    workstation. Attempting anyway costs a 65-second connect timeout per host
+    and then reports "login failed", which reads as a bad password and sends the
+    operator to fix the wrong thing.
+
+    'unknown' is returned when the sweep that produced this observation never
+    probed the relevant port, so an older observation is never mistaken for
+    evidence that the port is shut.
+    """
+    raw = obs.raw if isinstance(obs.raw, dict) else {}
+    probed = raw.get("probed_ports")
+    open_ports = raw.get("open_ports") or []
+    wanted = (5985, 5986) if transport == "windows" else (22,)
+    if not probed or not any(p in probed for p in wanted):
+        return "unknown"
+    return "open" if any(p in open_ports for p in wanted) else "closed"
+
+
+def classify_collect_error(exc: Exception) -> str:
+    """'unreachable' | 'auth' | 'error' — what kind of failure this was.
+
+    A connect timeout and a rejected password are not the same event and must
+    not carry the same label: one means the service is off or firewalled, the
+    other means the credential is wrong.
+    """
+    text = f"{type(exc).__name__}: {exc}".lower()
+    if any(k in text for k in ("connecttimeout", "timed out", "connection refused",
+                               "max retries exceeded", "no route to host",
+                               "network is unreachable", "getaddrinfo",
+                               "name or service not known", "connectionerror")):
+        return "unreachable"
+    if any(k in text for k in ("401", "unauthorized", "access is denied", "access denied",
+                               "authentication", "auth failed", "bad username",
+                               "logon failure", "permission denied")):
+        return "auth"
+    return "error"
+
+
+def infer_internet_facing(ip: Optional[str]) -> Optional[bool]:
+    """Derive network exposure from the address itself.
+
+    A globally-routable address is reachable from the internet by definition.
+    RFC1918 / loopback / link-local / CGNAT space is not — with one honest
+    caveat: a private host can still be published via NAT or a port-forward,
+    and no local scan can see that. So a False here means "not exposed by its
+    address", which is the correct default, and the operator can still tick the
+    box in Edit if the host is published.
+
+    Returns None when the address can't be parsed, so callers leave the field
+    alone rather than guessing.
+    """
+    if not ip:
+        return None
+    try:
+        addr = ipaddress.ip_address(str(ip).strip())
+    except ValueError:
+        return None
+    if addr.is_loopback or addr.is_link_local or addr.is_private or addr.is_reserved:
+        return False
+    return bool(addr.is_global)
+
+
+def promote_observation(db: Session, obs: DiscoveryObservation,
+                        profile: CredentialProfile, transport: str) -> ITAsset:
+    """Authenticate to an unclaimed device and, ONLY on success, make it an asset.
+
+    This is the discovery→inventory gate. The asset row is created first because
+    collect_host writes onto one, but if the collect raises (bad credentials,
+    unreachable, wrong transport) the row is removed again, so a failed attempt
+    leaves inventory exactly as it was. Nothing enters IT Asset Inventory without
+    a successful authenticated read behind it.
+    """
+    from grc.modules.asset_discovery.services.resolver import _create_from
+
+    asset = _create_from(db, obs.tenant_id, obs)
+    # Network segment IS machine-derived — it is the scope the sweep found this
+    # device in. Leaving it blank and calling it "manual only" was wrong: the
+    # campaign already knows which subnet answered.
+    raw = obs.raw if isinstance(obs.raw, dict) else {}
+    scope = raw.get("scope")
+    if scope and not getattr(asset, "network_segment", None):
+        asset.network_segment = str(scope)[:100]
+
+    # Exposure is derivable from the address, so don't make the operator type
+    # it. Set at creation only — a later re-collect must never overwrite a
+    # human's answer, and this value moves criticality by +2.5.
+    #
+    # Both columns are written together on purpose: `internet_facing` feeds
+    # criticality and the asset page while `is_internet_facing` feeds risk
+    # posture, and nothing keeps them in sync. Setting one and not the other is
+    # how the two scores end up disagreeing about the same fact.
+    exposed = infer_internet_facing(asset.ip_address)
+    if exposed is not None:
+        asset.internet_facing = exposed
+        if hasattr(asset, "is_internet_facing"):
+            asset.is_internet_facing = exposed
+    db.flush()
+    try:
+        collect_host(db, asset, profile, transport)
+    except Exception:
+        # Undo the speculative row — no half-born assets.
+        db.delete(asset)
+        db.flush()
+        raise
+    obs.resolution = "created"
+    obs.resolved_asset_id = asset.id
+    obs.resolution_note = f"credential '{profile.name}' succeeded — promoted to asset #{asset.id}"
+    db.flush()
+    return asset
 
 
 def _transport_for_host(asset: ITAsset, obs: Optional[DiscoveryObservation]) -> Optional[str]:
@@ -121,6 +262,60 @@ def _credentials_dict(profile: CredentialProfile, ip: str, transport: str) -> Di
     }
 
 
+def _ensure_integration_connection(db: Session, asset: ITAsset,
+                                   profile: CredentialProfile, transport: str) -> None:
+    """Register (or refresh) an IntegrationConnection for this host so the SAME
+    credential that just enriched the asset ALSO powers CIS benchmark runs.
+
+    This is the unification: discovery no longer needs a second, separate login
+    set up through the Connect Wizard — the host it just authenticated to is
+    registered as a first-class connection, keyed by host, and the CIS runner
+    picks it up by runner_type. One credential, two jobs (inventory + CIS).
+
+    Idempotent per (tenant, integration_type, host): a second scan refreshes the
+    existing row rather than piling up duplicates. Best-effort — the caller wraps
+    this so a registration failure never fails the collect.
+    """
+    host = asset.host_name or asset.ip_address
+    if not host:
+        return
+    itype = "windows_winrm" if transport == "windows" else "linux_ssh"
+    if transport == "windows":
+        user = f"{profile.domain}\\{profile.username}" if profile.domain else profile.username
+        port = profile.port or 5986
+    else:
+        user = profile.username
+        port = profile.port or 22
+    conn = db.query(IntegrationConnection).filter(
+        IntegrationConnection.tenant_id == asset.tenant_id,
+        IntegrationConnection.integration_type == itype,
+        IntegrationConnection.console_url == host,
+    ).first()
+    if conn is None:
+        db.add(IntegrationConnection(
+            tenant_id=asset.tenant_id,
+            integration_type=itype,
+            category="compliance",
+            connection_name=f"Discovery — {host}",
+            console_url=host,
+            console_port=port,
+            auth_method="basic",
+            username=user,
+            # Same grc.crypto scheme as the CredentialProfile, so
+            # resolve_credentials_for_connection() decrypts it unchanged.
+            password=profile.secret_encrypted,
+            is_active=True,
+            status="connected",
+        ))
+    else:
+        conn.username = user
+        conn.password = profile.secret_encrypted
+        conn.console_port = port
+        conn.is_active = True
+        conn.status = "connected"
+    db.flush()
+
+
 def collect_host(db: Session, asset: ITAsset, profile: CredentialProfile,
                  transport: str) -> Dict[str, Any]:
     """Authenticate to one host, inventory it, and write the result onto the
@@ -140,19 +335,117 @@ def collect_host(db: Session, asset: ITAsset, profile: CredentialProfile,
     creds = _credentials_dict(profile, ip, transport)
     raw, hardware = collect_windows(creds) if transport == "windows" else collect_linux(creds)
 
-    # Auto-discovered hardware (vCPU / RAM / disk / OEM / serial) — fill blanks,
-    # never clobber a curated value.
+    # Auto-discovered hardware (vCPU / RAM / disk / OEM / serial / fqdn / mac) —
+    # fill blanks, never clobber a curated value.
     for col, val in (hardware or {}).items():
         if val is not None and getattr(asset, col, None) in (None, "", 0):
             setattr(asset, col, val)
 
+    # A wizard-added host arrives with host_name == the IP the operator typed —
+    # a placeholder, not its real name (the fill-blanks loop above leaves it
+    # untouched because it isn't empty). Once the authenticated probe returns the
+    # real hostname, replace the placeholder. A curated name (≠ the IP) is kept.
+    real_host = (hardware or {}).get("host_name")
+    if real_host and (asset.host_name or "").strip() in ("", (asset.ip_address or "").strip()):
+        asset.host_name = real_host
+
+    # Exposure: a public (globally-routable) IP is internet-reachable by
+    # definition, but a wizard-added host defaulted to internet_facing=False and
+    # rendered "Not exposed". Derive it from the address — fill-only, so a value
+    # an operator deliberately changed is never flipped back. Both exposure
+    # columns are set together (build_signals reads either).
+    try:
+        import ipaddress as _ipa
+        _ip_obj = _ipa.ip_address((asset.ip_address or "").strip()) if asset.ip_address else None
+        if _ip_obj is not None and _ip_obj.is_global and not asset.internet_facing:
+            asset.internet_facing = True
+            if hasattr(asset, "is_internet_facing"):
+                asset.is_internet_facing = True
+    except ValueError:
+        pass
+
+    # Vendor falls back to the hardware manufacturer when finance hasn't set a
+    # procurement vendor — a real machine-derived value, not a fabricated guess.
+    if getattr(asset, "manufacturer", None) and not getattr(asset, "vendor", None):
+        asset.vendor = asset.manufacturer
+
     enriched = enrich_inventory(db, raw)
+
+    # Deep-profile each detected product IN THE SAME PASS, while we already hold
+    # an authenticated session. Previously these properties were only fetched
+    # when an operator promoted the software to an asset, which had two
+    # consequences: a promoted app arrived thin if the host was unreachable at
+    # that moment, and nothing ever refreshed the values afterwards. Collecting
+    # them with the host scan means the facts are already on file BEFORE anyone
+    # decides to promote, and every re-scan brings them up to date.
+    #
+    # Bounded by design: only products with a probe set (see software_profiler)
+    # are touched, so a laptop with 28 packages runs probes for the one or two
+    # that are real server software, not for Zoom and WinRAR.
+    try:
+        from grc.modules.compliance_plugins.services.software_profiler import (
+            profile_software, probes_for,
+        )
+
+        def _run(shell: str, command: str):
+            from grc.modules.compliance_plugins.runners.winrm_runner import windows_winrm_runner
+            from grc.modules.compliance_plugins.runners.ssh_runner import linux_ssh_runner
+            cd = {"shell": shell, "command": command, "expect": {"kind": "exit_zero"}}
+            res = (windows_winrm_runner if transport == "windows" else linux_ssh_runner)(cd, creds)
+            out = res.raw_output or {}
+            return out.get("stdout", ""), out.get("exit_status", 1)
+
+        for entry in enriched:
+            key = entry.get("software_key")
+            if not key or not probes_for(key, transport):
+                continue
+            attrs = profile_software(_run, key, transport)
+            if attrs:
+                entry["attributes"] = attrs
+    except Exception:  # noqa: BLE001 — profiling must never fail the collect
+        logger.info("deep_collect: software profiling failed for %s",
+                    asset.ip_address, exc_info=True)
+
     asset.detected_software_json = preserve_promotions(asset.detected_software_json, enriched)
     apply_posture(asset)
+
+    # OS profile — the network sweep and the hardware probe never set it, but the
+    # CIS matcher routes ENTIRELY off os_normalized (a blank key = no benchmark can
+    # match). Run the SAME detector the Connect Wizard / "Re-detect OS" button uses,
+    # over the WinRM/SSH session we already hold, so a discovered host is fully
+    # profiled AND CIS-ready in a single pass — no second connection, no manual
+    # re-detect. Best-effort: a detection miss must never fail the collect.
+    try:
+        from grc.modules.compliance_plugins.services.os_detector import detect_for_runner_full
+        runner = "windows_winrm" if transport == "windows" else "linux_ssh"
+        fam, ver, norm, build, edition = detect_for_runner_full(runner, creds)
+        if fam:
+            asset.os_family = fam
+        if ver:
+            asset.os_version = ver
+        if norm:
+            asset.os_normalized = norm
+        if build and hasattr(asset, "os_build"):
+            asset.os_build = build
+        if edition and hasattr(asset, "os_edition"):
+            asset.os_edition = edition
+    except Exception:
+        logger.info("deep_collect: OS detection failed for %s", asset.ip_address, exc_info=True)
+
     asset.last_seen_at = datetime.utcnow()
     asset.last_seen_source = "agentless"
     db.add(asset)
     db.flush()
+
+    # Unify with CIS: register this host as an IntegrationConnection so the same
+    # credential can also RUN the CIS benchmark against it — no second, separate
+    # Connect-Wizard login for the same machine. Best-effort.
+    try:
+        _ensure_integration_connection(db, asset, profile, transport)
+    except Exception:
+        logger.info("deep_collect: connection registration failed for %s",
+                    asset.ip_address, exc_info=True)
+
     return {"software": len(enriched), "posture": asset.security_posture}
 
 

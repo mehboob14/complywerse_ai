@@ -37,7 +37,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from grc.crypto import encrypt_secret
-from grc.models import IntegrationConnection, get_db, ITAsset
+from grc.models import IntegrationConnection, get_db, ITAsset, CredentialProfile
 from grc.routers.auth_router import get_user_primary_tenant, require_auth, GRCUser
 
 router = APIRouter(prefix="/connect-wizard", tags=["Connect Wizard"])
@@ -375,18 +375,9 @@ def _handshake_inner(body: "HandshakeIn", db: Session) -> dict:
     # ──────────────────────────────────────────────────────────────────
     from grc.modules.compliance_plugins.services.preflight import preflight_check
 
-    # ─── Skip preflight for the new banking platforms ─────────────────
-    # MSSQL/Postgres/MySQL/AD/Azure/K8s have rich, structured credentials
-    # that the preflight_check helper doesn't yet know how to test. Rather
-    # than block the connect flow, we trust the operator-provided creds
-    # and let the runner surface a clear error on first scan. Once we
-    # write per-platform `preflight_*` probes, we can re-enable here.
-    if platform in ("mssql", "postgres", "mysql", "ad", "azure", "k8s"):
-        # Skip preflight; just proceed to persistence.
-        pass
-    # ─── Universal TCP probe helper ───────────────────────────────
-    # Used by all platforms to test reachability before paying for a
-    # full protocol handshake. Fast — 2s timeout.
+    # Live preflight for SQL DBs (and OS platforms below). An unvalidated
+    # credential must never create a "connected" row — that manufactures
+    # scan readiness. Postgres/MSSQL/MySQL now have real TCP+auth probes.
     import socket as _sock
     def _tcp_open(host: str, port: int, timeout: float = 2.0) -> bool:
         try:
@@ -394,6 +385,43 @@ def _handshake_inner(body: "HandshakeIn", db: Session) -> dict:
                 return True
         except Exception:
             return False
+
+    if platform in ("mssql", "postgres", "mysql"):
+        prefix_map = {"mssql": "mssql", "postgres": "postgres", "mysql": "mysql"}
+        p = prefix_map[platform]
+        itype = {"mssql": "mssql_sql", "postgres": "postgres_sql", "mysql": "mysql_sql"}[platform]
+        test_creds = {
+            f"{p}_host": body.hostname,
+            f"{p}_port": console_port,
+            f"{p}_username": body.service_account,
+            f"{p}_password": body.agent_password,
+            f"{p}_database": body.database_name or (
+                "master" if platform == "mssql" else
+                "postgres" if platform == "postgres" else "information_schema"
+            ),
+        }
+        pf = preflight_check(itype, test_creds)
+        if not pf.ok:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "preflight_failed": True,
+                    "code": pf.code,
+                    "message": pf.detail,
+                    "hint": _PREFLIGHT_HINTS.get(pf.code, _PREFLIGHT_HINTS["unknown"]),
+                },
+            )
+    # ─── AD / Azure / K8s: limited preflight until full probes exist ───
+    if platform == "ad" and body.hostname and not _tcp_open(body.hostname, console_port):
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "preflight_failed": True,
+                "code": "network_unreachable",
+                "message": f"Cannot reach LDAP host {body.hostname}:{console_port}",
+                "hint": _PREFLIGHT_HINTS["network_unreachable"],
+            },
+        )
 
     if platform == "windows":
         # ─── WinRM auto-probe with diagnostic ─────────────────────────
@@ -910,10 +938,183 @@ def _handshake_inner(body: "HandshakeIn", db: Session) -> dict:
                     existing_keys.add(k)
             asset.detected_software_json = merged
 
+    # ── Saved login (CredentialProfile) — parity with the discovery paths ──
+    # The wizard used to store the credential ONLY on the IntegrationConnection,
+    # so a wizard-onboarded host never showed in "saved logins" and could not be
+    # re-run from a discovery campaign (no reusable, selectable login existed).
+    # Persist a reusable CredentialProfile for host-login platforms (SSH/WinRM)
+    # too — scoped to the host — so EVERY onboarding path (discovery sweep OR
+    # wizard) yields a selectable, re-runnable saved login that appears in the
+    # same list and can be picked when scheduling a campaign. DB / cloud-API
+    # platforms (postgres/mysql/aws/azure/…) are not host logins and keep living
+    # only on the IntegrationConnection.
+    _CRED_KIND = {"windows_winrm": "winrm", "linux_ssh": "ssh", "netdev_ssh": "ssh"}
+    cred_kind = _CRED_KIND.get(integration_type)
+    cred_profile = None
+    if cred_kind and body.service_account and body.agent_password:
+        host_ip = (asset.ip_address if asset else None) or (
+            body.hostname
+            if body.hostname and body.hostname.replace(".", "").isdigit()
+            else None
+        )
+        cidrs = [f"{host_ip}/32"] if host_ip else None
+        cred_name = f"{label} — {cred_kind} login"
+        cred_profile = (
+            db.query(CredentialProfile)
+            .filter(
+                CredentialProfile.tenant_id == tenant_id,
+                CredentialProfile.name == cred_name,
+            )
+            .first()
+        )
+        if cred_profile:
+            # Re-onboarding the same host refreshes the stored secret rather than
+            # duplicating the login (name is unique per tenant).
+            cred_profile.kind = cred_kind
+            cred_profile.username = body.service_account
+            cred_profile.secret_encrypted = encrypt_secret(body.agent_password)
+            cred_profile.port = console_port
+            cred_profile.applies_to_cidrs = cidrs
+            cred_profile.is_active = True
+        else:
+            cred_profile = CredentialProfile(
+                tenant_id=tenant_id,
+                name=cred_name,
+                kind=cred_kind,
+                username=body.service_account,
+                secret_kind="password",
+                secret_encrypted=encrypt_secret(body.agent_password),
+                port=console_port,
+                # The wizard already trusts the host on first contact (AutoAdd);
+                # keep parity so a scheduled re-run doesn't fail host-key checks.
+                ssh_accept_unknown_hosts=(cred_kind == "ssh"),
+                applies_to_cidrs=cidrs,
+                priority=100,
+                is_active=True,
+                created_by_name="connect-wizard",
+            )
+            db.add(cred_profile)
+
     db.commit()
     db.refresh(conn)
     if asset:
         db.refresh(asset)
+    if cred_profile is not None:
+        db.refresh(cred_profile)
+
+    # ── Deep collect + scan-history — full parity with the discovery path ──
+    # The wizard's probe above only GUESSED services from open ports and left
+    # hardware / real software / hostname / exposure blank, so a wizard-added
+    # host looked thin and never appeared in scan history. Run the SAME
+    # authenticated inventory collect the discovery sweep uses, then record the
+    # onboarding as a run — so every path (sweep OR wizard) yields an equally
+    # rich asset AND an audit trail. Everything here is best-effort and AFTER the
+    # base commit, so a probe hiccup never loses the onboarding itself.
+    _WIZARD_CAMPAIGN = "Connect Wizard (ad-hoc onboards)"
+    _DEEP_TRANSPORT = {"windows_winrm": "windows", "linux_ssh": "linux"}
+    deep_transport = _DEEP_TRANSPORT.get(integration_type)
+    deep_collected = False
+    if asset is not None and cred_profile is not None and deep_transport:
+        try:
+            from grc.modules.asset_discovery.services.deep_collect import collect_host
+            collect_host(db, asset, cred_profile, deep_transport)
+            asset.platform_kind = "server"
+            # collect_host updates host_name (IP placeholder → real hostname) and
+            # registers a hostname-keyed IntegrationConnection. Fold that back
+            # into the wizard's connection so there's exactly ONE per host: point
+            # the wizard conn at the resolved host_name and drop the duplicate.
+            resolved_host = asset.host_name or conn.console_url
+            if resolved_host and conn.console_url != resolved_host:
+                dup = db.query(IntegrationConnection).filter(
+                    IntegrationConnection.tenant_id == tenant_id,
+                    IntegrationConnection.integration_type == conn.integration_type,
+                    IntegrationConnection.console_url == resolved_host,
+                    IntegrationConnection.id != conn.id,
+                ).first()
+                if dup is not None:
+                    db.delete(dup)
+                conn.console_url = resolved_host
+            db.commit()
+            db.refresh(asset)
+            deep_collected = True
+        except Exception:  # noqa: BLE001 — enrichment is best-effort
+            db.rollback()
+            logger.info("connect-wizard deep collect failed for %s",
+                        body.hostname, exc_info=True)
+
+    # ── Platform inventory (typed non-OS assets) ──────────────────────────
+    # Databases / network devices / cloud accounts / clusters have their own
+    # component model (see platform_collectors). Run the matching collector so
+    # the asset carries its real, kind-specific detail (version / databases /
+    # extensions for a DB, etc.) instead of blank server fields. The credential
+    # already lives on the connection; best-effort.
+    if asset is not None and deep_transport is None:
+        try:
+            from grc.modules.asset_discovery.services.platform_collectors import (
+                collect_platform, has_collector,
+            )
+            if has_collector(integration_type):
+                from grc.modules.compliance_plugins.services.credentials import (
+                    resolve_credentials_for_connection,
+                )
+                _pcreds = resolve_credentials_for_connection(conn)
+                _result = collect_platform(integration_type, _pcreds)
+                if _result:
+                    asset.platform_kind, asset.platform_properties = _result
+                    db.commit()
+                    db.refresh(asset)
+                    deep_collected = True
+        except Exception:  # noqa: BLE001 — best-effort, cred lives on the conn
+            db.rollback()
+            logger.info("connect-wizard platform collect failed for %s",
+                        body.hostname, exc_info=True)
+
+    # Record the onboarding in scan history. Runs require a campaign (FK NOT
+    # NULL), so ad-hoc wizard onboards are grouped under one synthetic per-tenant
+    # campaign — they show up in "Scan history" alongside discovery runs.
+    if asset is not None:
+        try:
+            from grc.models import DiscoveryCampaign, DiscoveryRun
+            camp = (
+                db.query(DiscoveryCampaign)
+                .filter(
+                    DiscoveryCampaign.tenant_id == tenant_id,
+                    DiscoveryCampaign.name == _WIZARD_CAMPAIGN,
+                )
+                .first()
+            )
+            if camp is None:
+                camp = DiscoveryCampaign(
+                    tenant_id=tenant_id,
+                    name=_WIZARD_CAMPAIGN,
+                    description="Auto-created: records single-host Connect Wizard onboards in scan history.",
+                    method="network",
+                    is_active=True,
+                    created_by_name="connect-wizard",
+                )
+                db.add(camp)
+                db.flush()
+            _now = datetime.utcnow()
+            db.add(DiscoveryRun(
+                tenant_id=tenant_id,
+                campaign_id=camp.id,
+                trigger="manual",
+                status="succeeded" if deep_collected else "failed",
+                started_at=_now,
+                finished_at=_now,
+                hosts_seen=1,
+                observations=1,
+                assets_new=1 if asset_was_created else 0,
+                assets_updated=0 if asset_was_created else 1,
+                error=None if deep_collected else "onboard saved; deep inventory probe failed",
+                created_by_name="connect-wizard",
+            ))
+            camp.last_run_at = _now
+            db.commit()
+        except Exception:  # noqa: BLE001 — an audit row must never fail onboarding
+            db.rollback()
+            logger.info("connect-wizard scan-history record failed for %s",
+                        body.hostname, exc_info=True)
 
     _STATUS[nonce] = {
         "state": "ready",

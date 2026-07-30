@@ -17,7 +17,11 @@ class ITAsset(Base):
     custodian = Column(String(255), nullable=True)
     host_name = Column(String(255), nullable=True)
     ip_address = Column(String(50), nullable=True)
-    criticality = Column(String(50), default="medium")  # low, medium, high, critical
+    # NO default. A row created without an explicit rating is UNRATED, not
+    # "medium" — a default here is indistinguishable downstream from a real
+    # assessment and was being laundered into CIA ratings, risk scores and
+    # dollar valuations for assets nobody had ever looked at.
+    criticality = Column(String(50), nullable=True)  # low, medium, high, critical
     confidentiality_rating = Column(Integer, nullable=True)
     integrity_rating = Column(Integer, nullable=True)
     availability_rating = Column(Integer, nullable=True)
@@ -60,7 +64,13 @@ class ITAsset(Base):
     # agreement: additive only). Allowed transitions:
     #   planned → active → maintenance → decommissioned → retired
     # See services/asset_lifecycle.py for the machine.
-    lifecycle_state = Column(String(30), default="active")
+    # No default. A lifecycle stage is a DECISION someone records (in
+    # service / maintenance / decommissioning), and defaulting it to
+    # "active" made every freshly-discovered asset look reviewed and
+    # placed in service. `status` keeps its default because downstream
+    # queries filter on it as an operational flag (active vs retired);
+    # lifecycle_state is the field that carries the human judgement.
+    lifecycle_state = Column(String(30), nullable=True)
     decommissioned_at = Column(DateTime, nullable=True)
     retirement_reason = Column(Text, nullable=True)
     replacement_asset_id = Column(Integer, ForeignKey("grc_it_assets.id"), nullable=True)
@@ -108,6 +118,11 @@ class ITAsset(Base):
     detected_software_json = Column(JSON, default=list, nullable=True)
     asset_role = Column(String(50), nullable=True)     # 'host' | 'application' | None
     parent_asset_id = Column(Integer, ForeignKey("grc_it_assets.id"), nullable=True, index=True)
+    # Software-specific properties for an application asset, e.g. for
+    # PostgreSQL: {"port": 5432, "data_directory": "...", "service_account":
+    # "...", "listen_addresses": "*", "config_file": "..."}. Shape varies by
+    # product on purpose — the alternative is a column per product per version.
+    app_attributes_json = Column(JSON, nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -199,6 +214,18 @@ class ITAsset(Base):
     # edr_products, endpoint_protected, categories, ... }. Recomputed every time
     # the software inventory is refreshed (agent heartbeat / agentless probe).
     security_posture = Column(JSON, nullable=True)
+
+    # ── Typed-asset model (per-platform components) ───────────────────────
+    # An asset's REAL detail model differs by kind: a server has CPU/RAM/OS, a
+    # database has version/databases/extensions, a network device has firmware/
+    # interfaces, a cloud account has regions/resources. Rather than force every
+    # kind through the server columns (which left a Postgres/Cisco/AWS asset
+    # showing blank "VCPU / OS Edition"), the kind-specific facts live here.
+    #   platform_kind: server | database | network | cloud | identity | cluster
+    #   platform_properties: the collector's kind-specific JSON, rendered by the
+    #     dedicated detail card the frontend picks for that kind.
+    platform_kind = Column(String(30), nullable=True, index=True)
+    platform_properties = Column(JSON, nullable=True)
 
     __table_args__ = (
         Index("ix_it_asset_tenant_type", "tenant_id", "asset_type"),

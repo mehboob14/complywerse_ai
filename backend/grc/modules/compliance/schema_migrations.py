@@ -161,11 +161,35 @@ _COLUMN_ADDS = [
     ("grc_it_assets", "asset_role", "VARCHAR(50)", None),
     ("grc_it_assets", "parent_asset_id", "INTEGER",
      "ix_grc_it_assets_parent_asset_id"),
+    # Per-application properties. One ITAsset row cannot carry a column for
+    # every product's own attributes (PostgreSQL has a data directory and
+    # listen_addresses; IIS has sites and app pools; Cisco has an IOS image) —
+    # so a promoted application stored a name and a version and nothing else.
+    # This holds the software's OWN facts, collected by software_profiler.
+    ("grc_it_assets", "app_attributes_json", "JSON", None),
+    # Typed-asset model: per-platform component block + the kind that drives
+    # which dedicated detail card renders (server/database/network/cloud/…).
+    ("grc_it_assets", "platform_kind", "VARCHAR(30)",
+     "ix_grc_it_assets_platform_kind"),
+    ("grc_it_assets", "platform_properties", "JSON", None),
     # Collector routing for plugin runs (Updated_CIS_Assests migration).
     ("grc_integration_connections", "assigned_collector_agent_id", "INTEGER",
      "ix_grc_integration_connections_assigned_collector_agent_id"),
     ("grc_compliance_plugin_runs", "executed_by_agent_id", "INTEGER",
      "ix_grc_compliance_plugin_runs_executed_by_agent_id"),
+    # Vulnerability register grouping — scanner-provided family (Windows,
+    # Databases, Web Servers, Misc. …) used as the runtime "domain" the
+    # register groups findings under.
+    ("grc_vulnerabilities", "plugin_family", "VARCHAR(120)",
+     "ix_grc_vulnerabilities_plugin_family"),
+    # NVD's CVSS for the labelled CVE, kept beside the scanner's cvss_score so
+    # the finding can show scanner-vs-NVD (multi-CVE bundle plugins report the
+    # bundle's worst score, not the single attributed CVE's).
+    ("grc_vulnerabilities", "nvd_cvss_score", "FLOAT", None),
+    ("grc_vulnerabilities", "nvd_cvss_vector", "VARCHAR(120)", None),
+    # Scanner-native Nessus fields surfaced in the "Data by source" model.
+    ("grc_vulnerabilities", "vpr_score", "FLOAT", None),
+    ("grc_vulnerabilities", "cpe", "VARCHAR(255)", None),
     # RCSA custom rows: per-row ownership + cached AI explanation (new feature).
     ("grc_rcsa_custom_rows", "assigned_user_id", "INTEGER",
      "ix_grc_rcsa_custom_rows_assigned_user_id"),
