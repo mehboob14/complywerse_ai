@@ -231,9 +231,12 @@ def create_kri(
     tenant_id = get_user_primary_tenant(current_user, db)
     kri_feeds.ensure_kri_columns(db)
 
-    if kri.risk_id:
+    # Frontend historically sent risk_id=0 when no risk was selected.
+    risk_id = kri.risk_id if kri.risk_id and kri.risk_id > 0 else None
+
+    if risk_id:
         risk = db.query(Risk).filter(
-            Risk.id == kri.risk_id,
+            Risk.id == risk_id,
             Risk.tenant_id.in_(user_tenants)
         ).first()
         if not risk:
@@ -245,9 +248,9 @@ def create_kri(
     enriched = None
     if ai_assist:
         risk_context = None
-        if kri.risk_id:
+        if risk_id:
             linked_risk = db.query(Risk).filter(
-                Risk.id == kri.risk_id,
+                Risk.id == risk_id,
                 Risk.tenant_id.in_(user_tenants)
             ).first()
             if linked_risk:
@@ -264,7 +267,7 @@ def create_kri(
     data_source = kri.data_source or (enriched.get("data_source") if enriched else None)
     
     db_kri = RiskKRI(
-        risk_id=kri.risk_id,
+        risk_id=risk_id,
         tenant_id=tenant_id,
         metric_key=kri.metric_key,
         name=kri.name,

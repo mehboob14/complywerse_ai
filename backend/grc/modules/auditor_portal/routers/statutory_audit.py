@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, text
 from sqlalchemy.orm import Session, joinedload
 
 from ....config import get_openai_api_key, get_openai_base_url, get_openai_model
@@ -78,11 +78,30 @@ def _get_openai_client():
         return None, f"Could not initialize the AI client: {e}"
 
 
+def _ensure_category_column(db: Session) -> None:
+    """Additive column for existing deployments (create_all will not ALTER)."""
+    try:
+        db.execute(
+            text(
+                "ALTER TABLE grc_audit_observations "
+                "ADD COLUMN IF NOT EXISTS category VARCHAR(120)"
+            )
+        )
+        db.flush()
+    except Exception as e:  # pragma: no cover
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        logger.warning("statutory audit category column ensure failed: %s", e)
+
+
 def _ensure_tables(db: Session) -> None:
     """Create statutory-audit tables if missing. Tolerates orphaned PG types / races."""
     engine = db.get_bind()
     eid = id(engine)
     if eid in _ensured_engines:
+        _ensure_category_column(db)
         return
     try:
         from sqlalchemy import inspect as sa_inspect
@@ -108,6 +127,7 @@ def _ensure_tables(db: Session) -> None:
                     continue
                 logger.warning("statutory audit create %s failed: %s", table.name, te)
         _ensured_engines.add(eid)
+        _ensure_category_column(db)
     except Exception as e:  # pragma: no cover
         logger.warning("statutory audit table self-heal failed: %s", e)
         # Still mark ensured if tables already exist so we don't retry forever.
@@ -116,6 +136,7 @@ def _ensure_tables(db: Session) -> None:
 
             if sa_inspect(engine).has_table(AuditObservation.__tablename__):
                 _ensured_engines.add(eid)
+                _ensure_category_column(db)
         except Exception:
             pass
 
@@ -196,6 +217,7 @@ def serialize_observation(db: Session, obs: AuditObservation, *, with_links: boo
         "management_response": obs.management_response,
         "notes": obs.notes,
         "area_domain": obs.area_domain,
+        "category": getattr(obs, "category", None),
         "owner_id": obs.owner_id,
         "owner_name": _user_name(db, obs.owner_id),
         "created_by": obs.created_by,
@@ -303,6 +325,7 @@ class ObservationCreate(BaseModel):
     management_response: Optional[str] = None
     notes: Optional[str] = None
     area_domain: Optional[str] = None
+    category: Optional[str] = None
     owner_id: Optional[int] = None
 
 
@@ -318,6 +341,7 @@ class ObservationUpdate(BaseModel):
     management_response: Optional[str] = None
     notes: Optional[str] = None
     area_domain: Optional[str] = None
+    category: Optional[str] = None
     owner_id: Optional[int] = None
 
 
@@ -336,6 +360,7 @@ class ConfirmImportItem(BaseModel):
     audit_period: Optional[str] = None
     due_date: Optional[str] = None
     area_domain: Optional[str] = None
+    category: Optional[str] = None
     selected: bool = True
 
 
@@ -343,6 +368,7 @@ class ConfirmImportRequest(BaseModel):
     observations: List[ConfirmImportItem]
     source_document_name: Optional[str] = None
     import_batch_id: Optional[str] = None
+    default_category: Optional[str] = None
 
 
 class LinkBody(BaseModel):
@@ -364,6 +390,7 @@ def list_observations(
     regulator_source: Optional[str] = Query(None),
     audit_period: Optional[str] = Query(None),
     observation_type: Optional[str] = Query(None),
+    category: Optional[str] = Query(None),
     skip: int = 0,
     limit: int = 200,
     db: Session = Depends(get_db),
@@ -382,6 +409,8 @@ def list_observations(
         q = q.filter(AuditObservation.audit_period.ilike(f"%{audit_period}%"))
     if observation_type and observation_type != "all":
         q = q.filter(AuditObservation.observation_type == observation_type)
+    if category and category != "all":
+        q = q.filter(AuditObservation.category.ilike(category.strip()))
     if search:
         like = f"%{search.strip()}%"
         q = q.filter(
@@ -391,6 +420,7 @@ def list_observations(
                 AuditObservation.code.ilike(like),
                 AuditObservation.regulation_reference.ilike(like),
                 AuditObservation.regulator_source.ilike(like),
+                AuditObservation.category.ilike(like),
             )
         )
     total = q.count()
@@ -445,6 +475,17 @@ def observations_meta(
         .distinct()
         .all()
     ]
+    categories = [
+        r[0]
+        for r in db.query(AuditObservation.category)
+        .filter(
+            AuditObservation.tenant_id.in_(tenant_ids),
+            AuditObservation.category.isnot(None),
+            AuditObservation.category != "",
+        )
+        .distinct()
+        .all()
+    ]
     by_status = {
         row[0]: row[1]
         for row in db.query(AuditObservation.status, func.count(AuditObservation.id))
@@ -458,6 +499,7 @@ def observations_meta(
         "observation_types": sorted(OBS_TYPES),
         "regulator_sources": sorted(sources),
         "audit_periods": sorted(periods),
+        "categories": sorted(categories),
         "counts_by_status": by_status,
     }
 
@@ -497,6 +539,7 @@ def create_observation(
         management_response=payload.management_response,
         notes=payload.notes,
         area_domain=payload.area_domain,
+        category=(payload.category or "").strip() or None,
         owner_id=payload.owner_id,
         created_by=current_user.id,
     )
@@ -528,29 +571,40 @@ async def upload_parse_observations(
     file: UploadFile = File(...),
     regulator_hint: Optional[str] = Form(None),
     audit_period_hint: Optional[str] = Form(None),
+    category_hint: Optional[str] = Form(None),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
-    """Extract draft observations from a PDF/DOCX/TXT. Does NOT write to DB."""
+    """Extract draft observations from PDF/Word/Excel/CSV/text. Does NOT write to DB."""
     try:
         _ensure_tables(db)
         _tenant_ids(current_user, db)
 
         filename = file.filename or "audit_document"
         ext = (filename.rsplit(".", 1)[-1] if "." in filename else "").lower()
-        if ext in {"pdf"}:
-            file_type = "pdf"
-        elif ext in {"docx"}:
-            file_type = "docx"
-        elif ext in {"doc"}:
-            file_type = "doc"
-        elif ext in {"txt", "md", "csv", "json", "log", "rtf"}:
-            file_type = "txt"
-        else:
+        _AI_IMPORT_EXTS = {
+            "pdf", "doc", "docx",
+            "xls", "xlsx",
+            "csv", "tsv",
+            "txt", "md", "rtf", "json", "log",
+        }
+        if ext not in _AI_IMPORT_EXTS:
             raise HTTPException(
                 status_code=400,
-                detail="Unsupported file type. Use PDF, Word, or plain text.",
+                detail=(
+                    "Unsupported file type. "
+                    "Use PDF, Word (.doc/.docx), Excel (.xls/.xlsx), CSV, or plain text."
+                ),
             )
+        if ext == "pdf":
+            file_type = "pdf"
+        elif ext in {"docx", "doc"}:
+            file_type = ext
+        elif ext in {"xlsx", "xls"}:
+            file_type = ext
+        else:
+            # csv/tsv/txt/md/rtf/json/log — decode as text
+            file_type = "txt"
 
         try:
             from ...governance.routers.policy_parser import extract_text_from_bytes
@@ -590,7 +644,7 @@ async def upload_parse_observations(
                 status_code=422,
                 detail=(
                     f"Could not read document '{filename}': {e}. "
-                    "Try a text-based PDF/Word file, or paste key requirements into a .txt upload."
+                    "Try PDF, Word, Excel (.xlsx), CSV, or a plain-text file."
                 ),
             )
 
@@ -600,8 +654,8 @@ async def upload_parse_observations(
                 status_code=422,
                 detail=(
                     "Could not extract enough text from the uploaded file. "
-                    "If this is a scanned PDF, install Tesseract OCR on the server "
-                    "or upload a text-based PDF / Word / .txt file instead."
+                    "If this is a scanned PDF, install Tesseract OCR on the server, "
+                    "or upload a text-based PDF, Word, Excel, CSV, or .txt file instead."
                 ),
             )
         if len(text) > 14000:
@@ -616,6 +670,10 @@ async def upload_parse_observations(
             hint_bits.append(f"Regulator/source hint: {regulator_hint}")
         if audit_period_hint:
             hint_bits.append(f"Audit period hint: {audit_period_hint}")
+        if category_hint:
+            hint_bits.append(
+                f"Category / grouping hint (apply to all rows unless a clearer per-item category is obvious): {category_hint}"
+            )
         hints = "\n".join(hint_bits)
 
         prompt = f"""You are a Senior External / Statutory Audit specialist.
@@ -628,6 +686,7 @@ Return ONLY valid JSON:
 {{
   "regulator_source": "string or null",
   "audit_period": "string or null",
+  "category": "grouping label or null (e.g. Inspection, IFPD Circular, Licensing)",
   "observations": [
     {{
       "title": "short title",
@@ -638,6 +697,7 @@ Return ONLY valid JSON:
       "priority": "critical|high|medium|low",
       "due_date": "YYYY-MM-DD or null",
       "area_domain": "business area or null",
+      "category": "grouping label or null",
       "confidence": 0.0
     }}
   ]
@@ -738,6 +798,11 @@ DOCUMENT TEXT:
                     "audit_period": analysis.get("audit_period") or audit_period_hint,
                     "due_date": row.get("due_date"),
                     "area_domain": row.get("area_domain"),
+                    "category": (
+                        (row.get("category") or analysis.get("category") or category_hint or "")
+                        .strip()
+                        or None
+                    ),
                     "confidence": row.get("confidence"),
                     "selected": True,
                 }
@@ -757,6 +822,7 @@ DOCUMENT TEXT:
             "source_file": filename,
             "regulator_source": analysis.get("regulator_source") or regulator_hint,
             "audit_period": analysis.get("audit_period") or audit_period_hint,
+            "category": analysis.get("category") or category_hint,
             "import_batch_id": str(uuid.uuid4()),
             "count": len(drafts),
         }
@@ -820,6 +886,7 @@ def confirm_import(
             audit_period=item.audit_period,
             due_date=due,
             area_domain=item.area_domain,
+            category=(item.category or payload.default_category or "").strip() or None,
             source_document_name=payload.source_document_name,
             import_batch_id=batch_id,
             created_by=current_user.id,
@@ -899,6 +966,9 @@ def update_observation(
         raise HTTPException(status_code=400, detail="Invalid observation_type")
     if "priority" in data and data["priority"] not in PRIORITIES:
         raise HTTPException(status_code=400, detail="Invalid priority")
+    if "category" in data:
+        cat = (data["category"] or "").strip()
+        data["category"] = cat or None
     for k, v in data.items():
         setattr(obs, k, v)
     obs.updated_at = datetime.utcnow()

@@ -557,6 +557,15 @@ export const governanceApi = {
     apiClient.get(`/governance/documents/${documentId}/parse-status`),
   getDocumentGapFindings: (documentId: number, params?: Record<string, any>) =>
     apiClient.get(`/governance/gap-analysis/findings/document/${documentId}`, { params }),
+  // Controls recommended for linking against open gap findings (from frameworks
+  // the user actually ran gap analysis against).
+  getGapRecommendedControls: (documentId: number) =>
+    apiClient.get(`/governance/gap-analysis/document/${documentId}/recommended-controls`),
+  linkGapRecommendedControl: (
+    documentId: number,
+    data: { control_kind: string; control_id: number; finding_id?: number },
+  ) =>
+    apiClient.post(`/governance/gap-analysis/document/${documentId}/recommended-controls/link`, data),
   exportGapFindings: (documentId: number) =>
     apiClient.get(`/governance/gap-analysis/export/${documentId}`, { responseType: 'blob' }),
   updateGapFinding: (findingId: number, data: Record<string, any>) =>
@@ -5021,6 +5030,7 @@ export const statutoryAuditApi = {
     regulator_source?: string;
     audit_period?: string;
     observation_type?: string;
+    category?: string;
     skip?: number;
     limit?: number;
   }) => apiClient.get('/auditor-portal/statutory-audit/observations', { params }),
@@ -5032,11 +5042,15 @@ export const statutoryAuditApi = {
   remove: (id: number) => apiClient.delete(`/auditor-portal/statutory-audit/observations/${id}`),
   transition: (id: number, data: { status: string; notes?: string }) =>
     apiClient.post(`/auditor-portal/statutory-audit/observations/${id}/transition`, data),
-  uploadParse: (file: File, opts?: { regulator_hint?: string; audit_period_hint?: string }) => {
+  uploadParse: (
+    file: File,
+    opts?: { regulator_hint?: string; audit_period_hint?: string; category_hint?: string },
+  ) => {
     const fd = new FormData();
     fd.append('file', file);
     if (opts?.regulator_hint) fd.append('regulator_hint', opts.regulator_hint);
     if (opts?.audit_period_hint) fd.append('audit_period_hint', opts.audit_period_hint);
+    if (opts?.category_hint) fd.append('category_hint', opts.category_hint);
     // Clear default application/json so axios/browser sets multipart boundary correctly.
     // Routed via Next App Router proxy (see next.config beforeFiles) so PDF+AI
     // is not dropped by the ~30s rewrite proxy (socket hang up → opaque 500).
@@ -5049,6 +5063,7 @@ export const statutoryAuditApi = {
     observations: Array<Record<string, unknown>>;
     source_document_name?: string;
     import_batch_id?: string;
+    default_category?: string;
   }) => apiClient.post('/auditor-portal/statutory-audit/observations/confirm', data),
   linkEvidence: (id: number, data: { evidence_id: number; relationship_type?: string; notes?: string }) =>
     apiClient.post(`/auditor-portal/statutory-audit/observations/${id}/evidence/link`, data),

@@ -83,6 +83,14 @@ def ensure_kri_columns(db: Session) -> None:
         db.commit()
     except Exception:  # noqa: BLE001
         db.rollback()
+    # Older rows may have NULL kind after the column was added without a DEFAULT fill.
+    try:
+        db.execute(text(
+            "UPDATE grc_risk_kris SET kind = 'kri' WHERE kind IS NULL OR kind = ''"
+        ))
+        db.commit()
+    except Exception:  # noqa: BLE001
+        db.rollback()
     _ENSURED.add(key)
 
 

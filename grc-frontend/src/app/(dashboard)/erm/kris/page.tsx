@@ -441,7 +441,7 @@ function KRIModal({
   onSuccess: () => void;
 }) {
   const [formData, setFormData] = useState<Partial<RiskKRICreate>>({
-    risk_id: kri?.risk_id || (risks[0]?.id || 0),
+    risk_id: kri?.risk_id || undefined,
     name: kri?.name || '',
     description: kri?.description || '',
     metric_type: kri?.metric_type || 'percentage',
@@ -450,19 +450,29 @@ function KRIModal({
     amber_threshold: kri?.amber_threshold || 50,
     threshold_direction: kri?.threshold_direction || 'higher_is_better',
     frequency: kri?.frequency || 'monthly',
+    kind: 'kri',
   });
   const [aiSuggestionNote, setAiSuggestionNote] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
   const isFirstMount = useRef(true);
 
   const createMutation = useMutation({
     mutationFn: (data: RiskKRICreate) => ermApi.kris.create(data),
     onSuccess,
+    onError: (error: any) => {
+      const d = error?.response?.data?.detail;
+      setFormError(typeof d === 'string' ? d : error?.message || 'Could not create KRI');
+    },
   });
 
   const updateMutation = useMutation({
     mutationFn: (data: { id: number; updates: Partial<RiskKRICreate> }) =>
       ermApi.kris.update(data.id, data.updates),
     onSuccess,
+    onError: (error: any) => {
+      const d = error?.response?.data?.detail;
+      setFormError(typeof d === 'string' ? d : error?.message || 'Could not update KRI');
+    },
   });
 
   const aiSuggestMutation = useMutation({
@@ -506,10 +516,21 @@ function KRIModal({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError(null);
+    if (!formData.name?.trim()) {
+      setFormError('Name is required');
+      return;
+    }
+    const payload: RiskKRICreate = {
+      ...(formData as RiskKRICreate),
+      name: formData.name.trim(),
+      risk_id: formData.risk_id && formData.risk_id > 0 ? formData.risk_id : undefined,
+      kind: formData.kind || 'kri',
+    };
     if (kri) {
-      updateMutation.mutate({ id: kri.id, updates: formData });
+      updateMutation.mutate({ id: kri.id, updates: payload });
     } else {
-      createMutation.mutate(formData as RiskKRICreate);
+      createMutation.mutate(payload);
     }
   };
 
@@ -540,7 +561,9 @@ function KRIModal({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Risk *</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Linked risk <span className="text-xs font-normal text-slate-400">(optional)</span>
+            </label>
             <MultiSelectDropdown
               title="Risk"
               items={risks.map((risk) => ({
@@ -549,15 +572,23 @@ function KRIModal({
                 subLabel: risk.risk_category,
               }))}
               selectedValues={formData.risk_id ? [String(formData.risk_id)] : []}
-              onApply={(values) => setFormData({ ...formData, risk_id: values[0] ? Number(values[0]) : 0 })}
+              onApply={(values) =>
+                setFormData({
+                  ...formData,
+                  risk_id: values[0] ? Number(values[0]) : undefined,
+                })
+              }
               multiSelect={false}
               triggerVariant="input"
               triggerClassName="w-full"
               forceSearch
               searchPlaceholder="Search risk by title..."
-              placeholder="Select Risk"
+              placeholder="No linked risk (standalone KRI)"
               size="md"
             />
+            <p className="mt-1 text-xs text-slate-500">
+              Leave empty to create a governance-level KRI not tied to a single risk.
+            </p>
           </div>
 
           <div>
@@ -673,6 +704,12 @@ function KRIModal({
               />
             </div>
           </div>
+
+          {formError && (
+            <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+              {formError}
+            </div>
+          )}
 
           <div className="flex justify-end gap-2 pt-4">
             <button

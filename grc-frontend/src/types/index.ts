@@ -682,7 +682,7 @@ export interface RiskKRIMeasurement {
 }
 
 export interface RiskKRICreate {
-  risk_id: number;
+  risk_id?: number;
   name: string;
   description?: string;
   metric_type: KRIMetricType;
@@ -693,6 +693,7 @@ export interface RiskKRICreate {
   frequency?: KRIFrequency;
   data_source?: string;
   owner_id?: number;
+  kind?: string;
 }
 
 export interface RiskKRIUpdate {

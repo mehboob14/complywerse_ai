@@ -473,6 +473,7 @@ export default function PolicyDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['compliance-summary', id] });
       queryClient.invalidateQueries({ queryKey: ['document-gap-findings', id] });
       queryClient.invalidateQueries({ queryKey: ['gap-analysis-runs', id] });
+      queryClient.invalidateQueries({ queryKey: ['gap-recommended-controls', id] });
     }
     prevHasRunningRef.current = hasRunningAnalysis;
   }, [hasRunningAnalysis, id, queryClient]);
@@ -496,6 +497,56 @@ export default function PolicyDetailPage() {
     enabled: !!id && activeTab === 'gap-analysis',
     refetchInterval: hasRunningAnalysis ? 3000 : false, // Poll every 3 seconds when analysis is running
     placeholderData: keepPreviousData,
+  });
+
+  const { data: gapRecommendedControls, isLoading: gapRecsLoading } = useQuery({
+    queryKey: ['gap-recommended-controls', id],
+    queryFn: async () => {
+      const response = await governanceApi.getGapRecommendedControls(id);
+      return response.data as {
+        document_id: number;
+        framework_ids: number[];
+        findings: Array<{
+          finding_id: number;
+          clause_reference: string | null;
+          clause_title: string | null;
+          compliance_status: string;
+          framework_name: string | null;
+          uploaded_framework_id: number | null;
+          controls: Array<{
+            kind: string;
+            id: number;
+            code: string | null;
+            title: string | null;
+            match_reason: string;
+            already_linked: boolean;
+            framework_name?: string | null;
+          }>;
+        }>;
+        total_recommendations: number;
+        unlinked_count: number;
+      };
+    },
+    enabled: !!id && activeTab === 'gap-analysis' && !hasRunningAnalysis,
+  });
+
+  const linkGapControlMutation = useMutation({
+    mutationFn: (data: { control_kind: string; control_id: number; finding_id?: number }) =>
+      governanceApi.linkGapRecommendedControl(id, data),
+    onSuccess: () => {
+      toast({ type: 'success', title: 'Control linked', message: 'Recommended control linked to this document.' });
+      queryClient.invalidateQueries({ queryKey: ['gap-recommended-controls', id] });
+      queryClient.invalidateQueries({ queryKey: ['document-mappings', id] });
+      queryClient.invalidateQueries({ queryKey: ['doc-coverage', id] });
+      queryClient.invalidateQueries({ queryKey: ['document-gap-findings', id] });
+    },
+    onError: (err: any) => {
+      toast({
+        type: 'error',
+        title: 'Link failed',
+        message: err?.response?.data?.detail || err?.message || 'Could not link control',
+      });
+    },
   });
 
   const { data: uploadedFrameworks } = useQuery({
@@ -585,6 +636,7 @@ export default function PolicyDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['compliance-summary', id], refetchType: 'all' });
       // Refetch findings with all filter combinations
       queryClient.invalidateQueries({ queryKey: ['document-gap-findings'], refetchType: 'all' });
+      queryClient.invalidateQueries({ queryKey: ['gap-recommended-controls', id] });
       setShowGapModal(false);
       setSelectedFrameworkIds([]);
     },
@@ -618,6 +670,7 @@ export default function PolicyDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['governance-document', id] });
       queryClient.invalidateQueries({ queryKey: ['document-versions', id] });
       queryClient.invalidateQueries({ queryKey: ['compliance-summary', id] });
+      queryClient.invalidateQueries({ queryKey: ['gap-recommended-controls', id] });
       setEditingRow(null);
       setEditAction(null);
       setOverrideForm({ status: 'fully_compliant', justification: '' });
@@ -705,6 +758,7 @@ export default function PolicyDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['governance-document', id] });
       queryClient.invalidateQueries({ queryKey: ['document-versions', id] });
       queryClient.invalidateQueries({ queryKey: ['compliance-summary', id] });
+      queryClient.invalidateQueries({ queryKey: ['gap-recommended-controls', id] });
       setAddressGapFinding(null);
       setAddressGapMode('append');
       setAddressGapOriginal('');
@@ -875,6 +929,14 @@ export default function PolicyDetailPage() {
     if (data?.findings) return data.findings;
     return [];
   }, [gapFindings]);
+
+  const gapRecsByFindingId = useMemo(() => {
+    const map = new Map<number, NonNullable<typeof gapRecommendedControls>['findings'][number]['controls']>();
+    for (const row of gapRecommendedControls?.findings || []) {
+      map.set(row.finding_id, row.controls || []);
+    }
+    return map;
+  }, [gapRecommendedControls]);
 
   const totalFindings = useMemo(() => {
     if (gapFindings?.total) return gapFindings.total;
@@ -1219,6 +1281,89 @@ export default function PolicyDetailPage() {
           {/* Compliance Summary */}
           <ComplianceSummarySection summary={complianceSummary} loading={summaryLoading} />
 
+          {/* Recommended controls to link against open gaps */}
+          {(gapRecsLoading || (gapRecommendedControls?.findings?.length ?? 0) > 0) && (
+            <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+              <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-slate-200">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Link2 className="h-4 w-4 text-primary-600 flex-shrink-0" />
+                  <h3 className="text-sm font-semibold text-slate-900">Recommended controls to link</h3>
+                  {gapRecommendedControls && (
+                    <span className="text-xs text-slate-500">
+                      {gapRecommendedControls.unlinked_count} unlinked · {gapRecommendedControls.total_recommendations} total
+                      from frameworks you analyzed
+                    </span>
+                  )}
+                </div>
+              </div>
+              {gapRecsLoading ? (
+                <div className="flex items-center gap-2 px-4 py-6 text-sm text-slate-500">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Loading recommendations…
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100 max-h-80 overflow-y-auto">
+                  {(gapRecommendedControls?.findings || []).map((row) => (
+                    <div key={row.finding_id} className="px-4 py-3">
+                      <div className="flex items-baseline gap-2 mb-2 min-w-0">
+                        <span className="font-mono text-[11px] text-primary-700 flex-shrink-0">
+                          {(row.clause_reference || '—').toUpperCase()}
+                        </span>
+                        <span className="text-xs text-slate-700 truncate">{row.clause_title || ''}</span>
+                        {row.framework_name && (
+                          <span className="text-[10px] text-slate-400 flex-shrink-0">{row.framework_name}</span>
+                        )}
+                        <span className={`ml-auto flex-shrink-0 inline-block rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+                          (COMPLIANCE_STATUS_STYLES[row.compliance_status] || COMPLIANCE_STATUS_STYLES.not_addressed).bg
+                        } ${(COMPLIANCE_STATUS_STYLES[row.compliance_status] || COMPLIANCE_STATUS_STYLES.not_addressed).text}`}>
+                          {(COMPLIANCE_STATUS_STYLES[row.compliance_status] || { label: row.compliance_status }).label}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {row.controls.map((c) => {
+                          const pendingKey = `${c.kind}:${c.id}`;
+                          const isPending =
+                            linkGapControlMutation.isPending
+                            && linkGapControlMutation.variables?.control_kind === c.kind
+                            && linkGapControlMutation.variables?.control_id === c.id;
+                          return (
+                            <div
+                              key={pendingKey}
+                              className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 pl-2 pr-1 py-1"
+                              title={c.match_reason}
+                            >
+                              <span className="text-[10px] uppercase tracking-wide text-slate-400">{c.kind}</span>
+                              <span className="font-mono text-[11px] text-slate-700">{(c.code || '').toUpperCase()}</span>
+                              <span className="text-xs text-slate-600 max-w-[140px] truncate">{c.title}</span>
+                              {c.already_linked ? (
+                                <span className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 bg-emerald-50">
+                                  <Check className="h-2.5 w-2.5" /> Linked
+                                </span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  disabled={isPending}
+                                  onClick={() => linkGapControlMutation.mutate({
+                                    control_kind: c.kind,
+                                    control_id: c.id,
+                                    finding_id: row.finding_id,
+                                  })}
+                                  className="inline-flex items-center gap-1 rounded bg-primary-600 px-2 py-0.5 text-[11px] font-medium text-white hover:bg-primary-700 disabled:opacity-50"
+                                >
+                                  {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Link2 className="h-3 w-3" />}
+                                  Link
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Gap Findings Table */}
           <div className="rounded-xl border border-slate-300 bg-white overflow-hidden">
             <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between border-b border-slate-300">
@@ -1348,6 +1493,22 @@ export default function PolicyDetailPage() {
                             onUpdateFinding={(findingId: number, data: any) => updateFindingMutation.mutate({ findingId, data })}
                             onOverride={(findingId: number, data: any) => overrideMutation.mutate({ findingId, data })}
                             onAcceptRisk={(findingId: number, data: any) => acceptRiskMutation.mutate({ findingId, data })}
+                            recommendedControls={gapRecsByFindingId.get(finding.id) || []}
+                            onLinkRecommendedControl={(ctrl: { kind: string; id: number }) =>
+                              linkGapControlMutation.mutate({
+                                control_kind: ctrl.kind,
+                                control_id: ctrl.id,
+                                finding_id: finding.id,
+                              })
+                            }
+                            linkingControl={
+                              linkGapControlMutation.isPending
+                                ? {
+                                    kind: linkGapControlMutation.variables?.control_kind,
+                                    id: linkGapControlMutation.variables?.control_id,
+                                  }
+                                : null
+                            }
                             onAddressGap={(f: any) => {
                               setAddressGapFinding(f);
                               // Pre-fill with whatever the backend already has
@@ -3693,6 +3854,7 @@ function GapFindingRow({
   assignOwnerForm, setAssignOwnerForm, targetDateForm, setTargetDateForm,
   statusUpdateForm, setStatusUpdateForm,
   onUpdateFinding, onOverride, onAcceptRisk, onAddressGap, isPending,
+  recommendedControls = [], onLinkRecommendedControl, linkingControl,
 }: any) {
   return (
     <>
@@ -3796,6 +3958,41 @@ function GapFindingRow({
                   <div>
                     <label className="text-xs font-medium uppercase tracking-wider text-slate-600 block mb-1">Remediation Recommendation</label>
                     <p className="text-sm text-slate-700">{finding.remediation_recommendation}</p>
+                  </div>
+                )}
+                {Array.isArray(recommendedControls) && recommendedControls.length > 0 && (
+                  <div className="rounded-lg border border-slate-200 bg-white p-3">
+                    <label className="text-xs font-medium uppercase tracking-wider text-slate-600 block mb-2">
+                      Recommended controls to link
+                    </label>
+                    <div className="space-y-1.5">
+                      {recommendedControls.map((c: any) => {
+                        const isLinking = linkingControl?.kind === c.kind && linkingControl?.id === c.id;
+                        return (
+                          <div key={`${c.kind}-${c.id}`} className="flex items-center gap-2 rounded-md border border-slate-100 bg-slate-50 px-2 py-1.5">
+                            <span className="text-[10px] uppercase text-slate-400 w-16 flex-shrink-0">{c.kind}</span>
+                            <span className="font-mono text-[11px] text-slate-700 flex-shrink-0">{(c.code || '').toUpperCase()}</span>
+                            <span className="text-xs text-slate-600 truncate flex-1">{c.title}</span>
+                            {c.already_linked ? (
+                              <span className="text-[10px] font-medium text-emerald-700 flex-shrink-0">Linked</span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onLinkRecommendedControl?.({ kind: c.kind, id: c.id });
+                                }}
+                                disabled={isLinking || !onLinkRecommendedControl}
+                                className="inline-flex items-center gap-1 rounded bg-primary-600 px-2 py-0.5 text-[11px] font-medium text-white hover:bg-primary-700 disabled:opacity-50 flex-shrink-0"
+                              >
+                                {isLinking ? <Loader2 className="h-3 w-3 animate-spin" /> : <Link2 className="h-3 w-3" />}
+                                Link
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
                 {/* Impact Types */}

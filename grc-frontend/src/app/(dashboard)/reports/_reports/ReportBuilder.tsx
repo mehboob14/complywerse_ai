@@ -1602,19 +1602,16 @@ export default function ReportBuilder({
       )}
 
       {panel === 'summarize' && dataset && (
-        <>
-          <div className="fixed inset-0 z-30" onClick={() => setPanel(null)} />
-          <SummarizePanel
-            cols={selectedCols}
-            lookupCols={lookupCols}
-            dimensions={dimensions}
-            measures={spec.measures}
-            onDimensionsChange={(keys) => patch({ rows: keys })}
-            onMeasuresChange={(measures) => patch({ measures })}
-            onClose={() => setPanel(null)}
-            onClear={() => patch({ rows: [], measures: [] })}
-          />
-        </>
+        <SummarizePanel
+          cols={selectedCols}
+          lookupCols={lookupCols}
+          dimensions={dimensions}
+          measures={spec.measures}
+          onDimensionsChange={(keys) => patch({ rows: keys })}
+          onMeasuresChange={(measures) => patch({ measures })}
+          onClose={() => setPanel(null)}
+          onClear={() => patch({ rows: [], measures: [] })}
+        />
       )}
 
       {panel === 'columns' && dataset && (

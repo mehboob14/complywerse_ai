@@ -44,6 +44,9 @@ class AuditObservation(Base):
     notes = Column(Text, nullable=True)
     area_domain = Column(String(255), nullable=True)
 
+    # Free-text grouping window (e.g. "IFPD Circular", "Inspection", "Licensing")
+    category = Column(String(120), nullable=True, index=True)
+
     owner_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
     created_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
     closed_at = Column(DateTime, nullable=True)
@@ -84,6 +87,7 @@ class AuditObservation(Base):
         Index("ix_audit_obs_tenant_priority", "tenant_id", "priority"),
         Index("ix_audit_obs_tenant_code", "tenant_id", "code"),
         Index("ix_audit_obs_tenant_source", "tenant_id", "regulator_source"),
+        Index("ix_audit_obs_tenant_category", "tenant_id", "category"),
     )
 
 

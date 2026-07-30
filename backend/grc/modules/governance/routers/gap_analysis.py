@@ -4,13 +4,14 @@ import io
 import csv
 import json
 import math
+import re
 import threading
 from typing import List, Optional
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from pydantic import BaseModel
 from openai import OpenAI
 
@@ -18,7 +19,9 @@ from ....db import open_tenant_session
 from ....models import (
     GovernanceDocument, GovernanceDocumentVersion, PolicyGapAnalysisRun,
     PolicyGapFinding, UploadedFramework, ParsedFrameworkControl, GRCUser,
-    get_db, Risk, PolicyStatement, PolicyStatementVersion
+    get_db, Risk, PolicyStatement, PolicyStatementVersion,
+    StatementControlMapping, NormalizedControl, NormalizedControlLink,
+    InternalControl, InternalControlFrameworkLink, DocumentControlLink,
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 from .policy_parser import extract_text_from_file, _create_version_snapshot
@@ -28,6 +31,9 @@ router = APIRouter(prefix="/gap-analysis", tags=["Policy Gap Analysis"])
 
 AI_INTEGRATIONS_OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 AI_INTEGRATIONS_OPENAI_BASE_URL = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
+_WORD_RE = re.compile(r"[a-z0-9]+")
+_FUZZY_STOP = {"the", "and", "for", "with", "from", "that", "this", "into", "over", "under", "control", "controls", "policy", "shall", "must"}
+_OPEN_GAP_STATUSES = ("not_addressed", "partially_compliant")
 
 
 class GapAnalysisRunRequest(BaseModel):
@@ -1695,6 +1701,436 @@ def get_compliance_summary(
         "document_id": document_id,
         "frameworks": summary,
         "total_frameworks": len(summary)
+    }
+
+
+# ---------------------------------------------------------------------------
+# Recommended controls to link against open gap findings (from frameworks the
+# user actually ran gap analysis against).
+# ---------------------------------------------------------------------------
+
+
+def _tokens(text: Optional[str]) -> set:
+    words = set(_WORD_RE.findall((text or "").lower()))
+    return {w for w in words if len(w) > 2 and w not in _FUZZY_STOP}
+
+
+def _resolve_parsed_control(db: Session, finding: PolicyGapFinding) -> Optional[ParsedFrameworkControl]:
+    if not finding.uploaded_framework_id or not finding.clause_reference:
+        return None
+    ref = (finding.clause_reference or "").strip()
+    if not ref:
+        return None
+    return db.query(ParsedFrameworkControl).filter(
+        ParsedFrameworkControl.uploaded_framework_id == finding.uploaded_framework_id,
+        or_(
+            ParsedFrameworkControl.original_reference == ref,
+            ParsedFrameworkControl.control_id == ref,
+            func.lower(ParsedFrameworkControl.original_reference) == ref.lower(),
+            func.lower(ParsedFrameworkControl.control_id) == ref.lower(),
+        ),
+    ).first()
+
+
+def _doc_statement_ids(db: Session, document_id: int, user_tenants: list) -> List[int]:
+    return [
+        sid for (sid,) in db.query(PolicyStatement.id).filter(
+            PolicyStatement.document_id == document_id,
+            PolicyStatement.tenant_id.in_(user_tenants),
+            PolicyStatement.status == "active",
+        ).all()
+    ]
+
+
+def _already_linked_sets(db: Session, document_id: int, user_tenants: list, stmt_ids: List[int]) -> dict:
+    """Return sets of control ids already linked to this document, by kind."""
+    linked_parsed: set = set()
+    linked_normalized: set = set()
+    linked_internal: set = set()
+
+    # Document ↔ normalized
+    for (ncid,) in db.query(DocumentControlLink.normalized_control_id).filter(
+        DocumentControlLink.document_id == document_id
+    ).all():
+        if ncid:
+            linked_normalized.add(ncid)
+
+    # Internal controls whose source document is this one
+    for (icid,) in db.query(InternalControl.id).filter(
+        InternalControl.tenant_id.in_(user_tenants),
+        InternalControl.source_document_id == document_id,
+    ).all():
+        linked_internal.add(icid)
+
+    # Locked statement mappings count as confirmed links
+    if stmt_ids:
+        for m in db.query(StatementControlMapping).filter(
+            StatementControlMapping.statement_id.in_(stmt_ids),
+            StatementControlMapping.tenant_id.in_(user_tenants),
+            StatementControlMapping.is_locked == True,  # noqa: E712
+        ).all():
+            if m.control_kind == "parsed" and m.parsed_control_id:
+                linked_parsed.add(m.parsed_control_id)
+            elif m.control_kind == "normalized" and m.normalized_control_id:
+                linked_normalized.add(m.normalized_control_id)
+            elif m.control_kind == "internal" and m.internal_control_id:
+                linked_internal.add(m.internal_control_id)
+
+    return {
+        "parsed": linked_parsed,
+        "normalized": linked_normalized,
+        "internal": linked_internal,
+    }
+
+
+def _ctrl_entry(kind: str, cid: int, code: Optional[str], title: Optional[str],
+                match_reason: str, already_linked: bool, framework_name: Optional[str] = None) -> dict:
+    return {
+        "kind": kind,
+        "id": cid,
+        "code": code,
+        "title": title,
+        "match_reason": match_reason,
+        "already_linked": already_linked,
+        "framework_name": framework_name,
+    }
+
+
+def _recommend_for_finding(
+    db: Session,
+    finding: PolicyGapFinding,
+    linked: dict,
+    tenant_ids: list,
+) -> List[dict]:
+    """Build linkable control candidates for one open gap finding."""
+    out: List[dict] = []
+    seen: set = set()  # (kind, id)
+
+    def add(kind, cid, code, title, reason, fw_name=None):
+        key = (kind, cid)
+        if cid is None or key in seen:
+            return
+        seen.add(key)
+        already = cid in linked.get(kind, set())
+        out.append(_ctrl_entry(kind, cid, code, title, reason, already, fw_name))
+
+    parsed = _resolve_parsed_control(db, finding)
+    if parsed:
+        add(
+            "parsed", parsed.id,
+            parsed.original_reference or parsed.control_id,
+            parsed.title,
+            "framework_clause",
+            finding.framework_name,
+        )
+
+        # Related normalized controls via NormalizedControlLink
+        nc_rows = db.query(NormalizedControl).join(
+            NormalizedControlLink,
+            NormalizedControlLink.normalized_control_id == NormalizedControl.id,
+        ).filter(
+            NormalizedControlLink.parsed_control_id == parsed.id,
+        ).all()
+        nc_ids = []
+        for nc in nc_rows:
+            nc_ids.append(nc.id)
+            add("normalized", nc.id, nc.code, nc.name, "normalized_link", finding.framework_name)
+
+        # Internal controls linked to those normalized controls
+        if nc_ids:
+            for icfl in db.query(InternalControlFrameworkLink).filter(
+                InternalControlFrameworkLink.normalized_control_id.in_(nc_ids),
+            ).all():
+                ic = db.query(InternalControl).filter(
+                    InternalControl.id == icfl.internal_control_id,
+                    InternalControl.tenant_id.in_(tenant_ids),
+                ).first()
+                if ic:
+                    add("internal", ic.id, ic.control_id, ic.name, "framework_link", finding.framework_name)
+
+    # Fuzzy match internal controls by code/title against the gap clause
+    clause_toks = _tokens(f"{finding.clause_reference or ''} {finding.clause_title or ''}")
+    ref_lower = (finding.clause_reference or "").strip().lower()
+    title_lower = (finding.clause_title or "").strip().lower()
+    if clause_toks or ref_lower:
+        candidates = db.query(InternalControl).filter(
+            InternalControl.tenant_id.in_(tenant_ids),
+            InternalControl.status.in_(["active", "draft", "pending_approval"]),
+        ).limit(400).all()
+        scored = []
+        for ic in candidates:
+            if ("internal", ic.id) in seen:
+                continue
+            code_l = (ic.control_id or "").lower()
+            name_l = (ic.name or "").lower()
+            score = 0
+            if ref_lower and (ref_lower in code_l or code_l in ref_lower):
+                score += 5
+            if title_lower and title_lower in name_l:
+                score += 4
+            overlap = len(clause_toks & _tokens(f"{ic.control_id} {ic.name}"))
+            score += overlap
+            if score >= 3:
+                scored.append((score, ic))
+        scored.sort(key=lambda x: x[0], reverse=True)
+        for _sc, ic in scored[:3]:
+            add("internal", ic.id, ic.control_id, ic.name, "fuzzy_match", finding.framework_name)
+
+    return out
+
+
+@router.get("/document/{document_id}/recommended-controls")
+def get_gap_recommended_controls(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Recommend linkable controls for open gaps from the latest completed gap
+    runs (frameworks the user actually analyzed against).
+
+    For each not_addressed / partially_compliant finding, resolve the matching
+    ParsedFrameworkControl and surface it plus related NormalizedControl /
+    InternalControl candidates, with already_linked flags from DocumentControlLink,
+    InternalControl.source_document_id, and locked StatementControlMapping.
+    """
+    user_tenants = get_user_tenants(current_user, db)
+
+    document = db.query(GovernanceDocument).filter(
+        GovernanceDocument.id == document_id,
+        GovernanceDocument.tenant_id.in_(user_tenants),
+    ).first()
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found or access denied",
+        )
+
+    latest_run_ids = _get_latest_run_ids(db, document_id, user_tenants)
+    if not latest_run_ids:
+        return {
+            "document_id": document_id,
+            "framework_ids": [],
+            "findings": [],
+            "total_recommendations": 0,
+            "unlinked_count": 0,
+        }
+
+    findings = db.query(PolicyGapFinding).filter(
+        PolicyGapFinding.document_id == document_id,
+        PolicyGapFinding.tenant_id.in_(user_tenants),
+        PolicyGapFinding.analysis_run_id.in_(latest_run_ids),
+        PolicyGapFinding.compliance_status.in_(_OPEN_GAP_STATUSES),
+    ).order_by(PolicyGapFinding.framework_name, PolicyGapFinding.clause_reference).all()
+
+    stmt_ids = _doc_statement_ids(db, document_id, user_tenants)
+    linked = _already_linked_sets(db, document_id, user_tenants, stmt_ids)
+
+    framework_ids = sorted({
+        f.uploaded_framework_id for f in findings if f.uploaded_framework_id
+    })
+
+    grouped = []
+    total_recs = 0
+    unlinked = 0
+    for f in findings:
+        controls = _recommend_for_finding(db, f, linked, user_tenants)
+        if not controls:
+            continue
+        total_recs += len(controls)
+        unlinked += sum(1 for c in controls if not c["already_linked"])
+        grouped.append({
+            "finding_id": f.id,
+            "clause_reference": f.clause_reference,
+            "clause_title": f.clause_title,
+            "compliance_status": f.compliance_status,
+            "framework_name": f.framework_name,
+            "uploaded_framework_id": f.uploaded_framework_id,
+            "controls": controls,
+        })
+
+    return {
+        "document_id": document_id,
+        "framework_ids": framework_ids,
+        "findings": grouped,
+        "total_recommendations": total_recs,
+        "unlinked_count": unlinked,
+    }
+
+
+class GapRecommendedControlLinkRequest(BaseModel):
+    control_kind: str  # parsed | normalized | internal
+    control_id: int
+    finding_id: Optional[int] = None
+
+
+@router.post("/document/{document_id}/recommended-controls/link")
+def link_gap_recommended_control(
+    document_id: int,
+    body: GapRecommendedControlLinkRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Link a recommended control to the document using the appropriate path:
+      - internal  → InternalControl.source_document_id
+      - normalized → DocumentControlLink (+ lock StatementControlMapping if present)
+      - parsed    → lock/create StatementControlMapping on an active statement
+    """
+    user_tenants = get_user_tenants(current_user, db)
+
+    document = db.query(GovernanceDocument).filter(
+        GovernanceDocument.id == document_id,
+        GovernanceDocument.tenant_id.in_(user_tenants),
+    ).first()
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found or access denied",
+        )
+
+    kind = (body.control_kind or "").strip().lower()
+    if kind not in ("parsed", "normalized", "internal"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="control_kind must be parsed, normalized, or internal",
+        )
+
+    method = None
+
+    if kind == "internal":
+        control = db.query(InternalControl).filter(
+            InternalControl.id == body.control_id,
+            InternalControl.tenant_id.in_(user_tenants),
+        ).first()
+        if not control:
+            raise HTTPException(status_code=404, detail="Internal control not found")
+        if control.source_document_id == document_id:
+            return {
+                "document_id": document_id,
+                "control_kind": kind,
+                "control_id": body.control_id,
+                "linked": True,
+                "method": "already_linked",
+            }
+        if control.source_document_id and control.source_document_id != document_id:
+            # Clear statement source when relocating, matching mappings.link_document_to_control
+            control.source_statement_id = None
+        control.source_document_id = document_id
+        control.updated_at = datetime.utcnow()
+        method = "internal_source_document"
+
+    elif kind == "normalized":
+        nc = db.query(NormalizedControl).filter(NormalizedControl.id == body.control_id).first()
+        if not nc:
+            raise HTTPException(status_code=404, detail="Normalized control not found")
+        existing = db.query(DocumentControlLink).filter(
+            DocumentControlLink.document_id == document_id,
+            DocumentControlLink.normalized_control_id == body.control_id,
+        ).first()
+        if not existing:
+            db.add(DocumentControlLink(
+                document_id=document_id,
+                normalized_control_id=body.control_id,
+                link_type="implements",
+                created_by=current_user.id,
+            ))
+            method = "document_control_link"
+        else:
+            method = "already_linked"
+        # Also lock any existing statement mappings for this normalized control
+        stmt_ids = _doc_statement_ids(db, document_id, user_tenants)
+        if stmt_ids:
+            updated = 0
+            for m in db.query(StatementControlMapping).filter(
+                StatementControlMapping.statement_id.in_(stmt_ids),
+                StatementControlMapping.tenant_id.in_(user_tenants),
+                StatementControlMapping.control_kind == "normalized",
+                StatementControlMapping.normalized_control_id == body.control_id,
+            ).all():
+                m.is_locked = True
+                updated += 1
+            if updated and method == "already_linked":
+                method = "statement_mapping_lock"
+
+    else:  # parsed
+        pc = db.query(ParsedFrameworkControl).filter(
+            ParsedFrameworkControl.id == body.control_id
+        ).first()
+        if not pc:
+            raise HTTPException(status_code=404, detail="Parsed framework control not found")
+
+        stmt_ids = _doc_statement_ids(db, document_id, user_tenants)
+        if not stmt_ids:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Document has no active policy statements to map. Parse the document first, or link a normalized/internal control instead.",
+            )
+
+        mappings = db.query(StatementControlMapping).filter(
+            StatementControlMapping.statement_id.in_(stmt_ids),
+            StatementControlMapping.tenant_id.in_(user_tenants),
+            StatementControlMapping.control_kind == "parsed",
+            StatementControlMapping.parsed_control_id == body.control_id,
+        ).all()
+
+        if mappings:
+            for m in mappings:
+                m.is_locked = True
+            method = "statement_mapping_lock"
+        else:
+            # Create a locked mapping on the first active statement (prefer one
+            # whose text overlaps the finding's policy section when available).
+            target_stmt_id = stmt_ids[0]
+            if body.finding_id:
+                finding = db.query(PolicyGapFinding).filter(
+                    PolicyGapFinding.id == body.finding_id,
+                    PolicyGapFinding.document_id == document_id,
+                    PolicyGapFinding.tenant_id.in_(user_tenants),
+                ).first()
+                if finding and finding.policy_section_text:
+                    needle = _tokens(finding.policy_section_text)
+                    if needle:
+                        best_id, best_score = target_stmt_id, 0
+                        for st in db.query(PolicyStatement).filter(PolicyStatement.id.in_(stmt_ids)).all():
+                            score = len(needle & _tokens(st.statement_text))
+                            if score > best_score:
+                                best_id, best_score = st.id, score
+                        target_stmt_id = best_id
+
+            stmt = db.query(PolicyStatement).filter(PolicyStatement.id == target_stmt_id).first()
+            fw_name = None
+            if pc.uploaded_framework_id:
+                uf = db.query(UploadedFramework).filter(
+                    UploadedFramework.id == pc.uploaded_framework_id
+                ).first()
+                if uf:
+                    fw_name = uf.name
+            m = StatementControlMapping(
+                tenant_id=document.tenant_id,
+                statement_id=target_stmt_id,
+                control_kind="parsed",
+                parsed_control_id=pc.id,
+                control_code=pc.original_reference or pc.control_id,
+                control_title=(pc.title or "")[:500],
+                framework_name=fw_name,
+                domain=pc.domain,
+                confidence=1.0,
+                coverage_type="partial",
+                rationale="Linked from gap analysis recommendation",
+                link_source="manual",
+                is_locked=True,
+                created_by_ai=False,
+            )
+            db.add(m)
+            method = "statement_mapping_create"
+
+    db.commit()
+    return {
+        "document_id": document_id,
+        "control_kind": kind,
+        "control_id": body.control_id,
+        "linked": True,
+        "method": method,
+        "finding_id": body.finding_id,
     }
 
 

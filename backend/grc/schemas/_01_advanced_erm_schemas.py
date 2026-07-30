@@ -1,4 +1,5 @@
 from ._00_base import *  # noqa: F401,F403
+from pydantic import field_validator
 
 # =============================================================================
 # Advanced ERM Schemas
@@ -28,6 +29,11 @@ class RiskKRIBase(BaseModel):
     linked_control_ids: Optional[List[int]] = None
     linked_objective_ids: Optional[List[int]] = None
     linked_framework_id: Optional[int] = None
+
+    @field_validator("kind", mode="before")
+    @classmethod
+    def _default_kind(cls, v):
+        return v if v else "kri"
 
 
 class RiskKRICreate(RiskKRIBase):
@@ -94,6 +100,12 @@ class RiskKRIResponse(BaseModel):
     linked_control_ids: Optional[List[int]] = None
     linked_objective_ids: Optional[List[int]] = None
     linked_framework_id: Optional[int] = None
+
+    @field_validator("kind", mode="before")
+    @classmethod
+    def _default_kind(cls, v):
+        # ORM rows may still have NULL kind before backfill; never fail hydration.
+        return v if v else "kri"
 
     class Config:
         from_attributes = True

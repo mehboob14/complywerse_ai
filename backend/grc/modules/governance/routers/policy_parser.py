@@ -214,6 +214,59 @@ def _extract_docx_path(file_path: str) -> str:
     return "\n".join(text_parts)
 
 
+def _extract_spreadsheet_bytes(contents: bytes, filename: str = "") -> str:
+    """Extract readable text from Excel (.xlsx/.xls) or similar workbooks."""
+    import io
+
+    name = (filename or "").lower()
+    parts: List[str] = []
+
+    # Prefer openpyxl for .xlsx (and many .xls that are actually OOXML).
+    try:
+        import openpyxl
+
+        wb = openpyxl.load_workbook(io.BytesIO(contents), read_only=True, data_only=True)
+        for sheet in wb.worksheets:
+            parts.append(f"## Sheet: {sheet.title}")
+            row_count = 0
+            for row in sheet.iter_rows(values_only=True):
+                cells = [str(c).strip() if c is not None else "" for c in row]
+                if any(cells):
+                    parts.append("\t".join(cells))
+                    row_count += 1
+                if row_count >= 2000:
+                    parts.append("...[sheet truncated]")
+                    break
+        wb.close()
+        text = "\n".join(parts).strip()
+        if text:
+            return text
+    except Exception:
+        pass
+
+    # Legacy .xls via xlrd when available.
+    if name.endswith(".xls") and not name.endswith(".xlsx"):
+        try:
+            import xlrd  # type: ignore
+
+            book = xlrd.open_workbook(file_contents=contents)
+            for sheet in book.sheets():
+                parts.append(f"## Sheet: {sheet.name}")
+                for r in range(min(sheet.nrows, 2000)):
+                    cells = [str(sheet.cell_value(r, c)).strip() for c in range(sheet.ncols)]
+                    if any(cells):
+                        parts.append("\t".join(cells))
+            text = "\n".join(parts).strip()
+            if text:
+                return text
+        except Exception:
+            pass
+
+    raise ValueError(
+        "Could not read this spreadsheet. Save as .xlsx or export a CSV/PDF and try again."
+    )
+
+
 def extract_text_from_bytes(
     contents: bytes,
     file_type: str,
@@ -258,21 +311,30 @@ def extract_text_from_bytes(
             except Exception:
                 pass
 
-    if ft in ("txt", "text", "md", "csv", "json", "log") or name.endswith(
-        (".txt", ".md", ".csv", ".json", ".log")
+    if ft in ("xlsx", "xls") or name.endswith((".xlsx", ".xls")):
+        return _sanitize_policy_text(_extract_spreadsheet_bytes(contents, filename))
+
+    if ft in ("txt", "text", "md", "csv", "json", "log", "rtf") or name.endswith(
+        (".txt", ".md", ".csv", ".json", ".log", ".rtf")
     ):
-        for enc in ("utf-8", "utf-16", "latin-1", "cp1252"):
+        for enc in ("utf-8-sig", "utf-8", "utf-16", "latin-1", "cp1252"):
             try:
                 return _sanitize_policy_text(contents.decode(enc))
             except Exception:
                 continue
         return _sanitize_policy_text(contents.decode("utf-8", errors="ignore"))
 
-    # Unknown type: try PDF magic, then text decode.
+    # Unknown type: try PDF magic, OOXML zip (xlsx), then text decode.
     if contents[:4] == b"%PDF":
         return _sanitize_policy_text(
             _extract_pdf_bytes(contents, max_pages=max_pages, allow_ocr=allow_ocr)
         )
+    # XLSX/DOCX are ZIP packages (PK…)
+    if contents[:2] == b"PK":
+        try:
+            return _sanitize_policy_text(_extract_spreadsheet_bytes(contents, filename or "book.xlsx"))
+        except Exception:
+            pass
     try:
         return _sanitize_policy_text(contents.decode("utf-8", errors="ignore"))
     except Exception:
@@ -297,7 +359,9 @@ def extract_text_from_file(file_path: str, file_type: str) -> str:
             extracted_text = _extract_docx_path(file_path)
         except Exception:
             extracted_text = extract_text_from_bytes(contents, ft, file_path)
-    elif ft in ("txt", "text", "md", "csv", "json", "log"):
+    elif ft in ("xlsx", "xls"):
+        extracted_text = extract_text_from_bytes(contents, ft, file_path)
+    elif ft in ("txt", "text", "md", "csv", "json", "log", "rtf"):
         extracted_text = extract_text_from_bytes(contents, ft, file_path)
     else:
         # Auto-detect rather than hard-fail — upload UX expects broad support.
@@ -305,7 +369,10 @@ def extract_text_from_file(file_path: str, file_type: str) -> str:
         if not extracted_text.strip() and ft not in ("",):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Unsupported file type: {file_type}. Use PDF, Word, or plain text.",
+                detail=(
+                    f"Unsupported file type: {file_type}. "
+                    "Use PDF, Word, Excel, CSV, or plain text."
+                ),
             )
 
     return _sanitize_policy_text(extracted_text)
