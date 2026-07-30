@@ -626,10 +626,17 @@ def get_asset_dashboard(
     assets_needing_assessment = 0
     
     for asset in assets:
-        by_type[asset.asset_type] = by_type.get(asset.asset_type, 0) + 1
-        by_criticality[asset.criticality] = by_criticality.get(asset.criticality, 0) + 1
-        by_status[asset.status] = by_status.get(asset.status, 0) + 1
-        
+        # Unprofiled assets (e.g. a freshly discovered host) can have NULL
+        # type/criticality/status. The AssetDashboard response requires STRING
+        # keys, so a None key here 500s Pydantic validation — coalesce to a
+        # stable label instead of emitting None.
+        a_type = asset.asset_type or "unknown"
+        a_crit = asset.criticality or "unassigned"
+        a_status = asset.status or "unknown"
+        by_type[a_type] = by_type.get(a_type, 0) + 1
+        by_criticality[a_crit] = by_criticality.get(a_crit, 0) + 1
+        by_status[a_status] = by_status.get(a_status, 0) + 1
+
         if asset.criticality in ["high", "critical"]:
             high_value_assets += 1
         
@@ -672,15 +679,18 @@ def get_asset_coverage(
     
     coverage_by_criticality = {}
     for asset in assets:
-        if asset.criticality not in coverage_by_criticality:
-            coverage_by_criticality[asset.criticality] = {
+        # Coalesce NULL criticality to a string key — same reason as the
+        # dashboard endpoint: a None key fails the string-keyed response schema.
+        a_crit = asset.criticality or "unassigned"
+        if a_crit not in coverage_by_criticality:
+            coverage_by_criticality[a_crit] = {
                 "total": 0,
                 "with_controls": 0,
                 "coverage_percentage": 0.0
             }
-        coverage_by_criticality[asset.criticality]["total"] += 1
+        coverage_by_criticality[a_crit]["total"] += 1
         if asset.control_links:
-            coverage_by_criticality[asset.criticality]["with_controls"] += 1
+            coverage_by_criticality[a_crit]["with_controls"] += 1
     
     for crit, data in coverage_by_criticality.items():
         if data["total"] > 0:
