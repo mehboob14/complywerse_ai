@@ -65,7 +65,7 @@ interface RecommendedControl {
   framework_name: string | null;
   domain: string | null;
   coverage_type: string | null;
-  link_source: string | null; // ai | derived
+  link_source: string | null; // ai | derived | gap
   max_confidence: number | null;
   statement_count: number;
   control_ref_id: number | null;
@@ -75,6 +75,152 @@ interface RecommendedControl {
   statements: RecStatement[];
   uploaded_framework_id?: number | null;
   rationale?: string | null;
+  /** Present when sourced from gap-analysis recommended-controls. */
+  finding_id?: number | null;
+  source?: 'mapping' | 'gap';
+  compliance_status?: string | null;
+  gap_description?: string | null;
+  missing_requirement?: string | null;
+  remediation?: string | null;
+  risk_severity?: string | null;
+}
+
+interface GapRecommendedFinding {
+  finding_id: number;
+  clause_reference: string | null;
+  clause_title: string | null;
+  clause_requirement_text?: string | null;
+  compliance_status: string;
+  gap_description?: string | null;
+  missing_requirement?: string | null;
+  remediation_recommendation?: string | null;
+  ai_reasoning?: string | null;
+  confidence_score?: number | null;
+  risk_severity?: string | null;
+  framework_name: string | null;
+  uploaded_framework_id: number | null;
+  controls: Array<{
+    kind: string;
+    id: number;
+    code: string | null;
+    title: string | null;
+    match_reason: string;
+    already_linked: boolean;
+    framework_name?: string | null;
+    description?: string | null;
+    domain?: string | null;
+  }>;
+}
+
+// Prefer the linkable control mappings already understand: internal → normalized
+// → framework → parsed. Within a kind, prefer structured links over fuzzy.
+const GAP_KIND_RANK: Record<string, number> = {
+  internal: 4,
+  normalized: 3,
+  framework: 2,
+  parsed: 1,
+};
+const GAP_REASON_RANK: Record<string, number> = {
+  framework_link: 4,
+  normalized_link: 3,
+  framework_clause: 2,
+  fuzzy_match: 1,
+};
+
+const GAP_COVERAGE: Record<string, string> = {
+  partially_compliant: 'partial',
+  not_addressed: 'gap',
+};
+
+function pickBestGapControl(
+  controls: GapRecommendedFinding['controls'],
+): GapRecommendedFinding['controls'][number] | null {
+  if (!controls.length) return null;
+  return [...controls].sort((a, b) => {
+    const kindDelta = (GAP_KIND_RANK[b.kind] ?? 0) - (GAP_KIND_RANK[a.kind] ?? 0);
+    if (kindDelta !== 0) return kindDelta;
+    return (GAP_REASON_RANK[b.match_reason] ?? 0) - (GAP_REASON_RANK[a.match_reason] ?? 0);
+  })[0];
+}
+
+/** Meaningful "Why it matched" prose — never match_reason jargon. */
+function gapRationale(f: GapRecommendedFinding, c: GapRecommendedFinding['controls'][number]): string {
+  const reasoning = (f.ai_reasoning || '').trim();
+  if (reasoning) return reasoning;
+
+  // Readable synthesis: first useful finding narrative, then clause text.
+  for (const raw of [
+    f.gap_description,
+    f.missing_requirement,
+    f.remediation_recommendation,
+    f.clause_requirement_text,
+  ]) {
+    const t = (raw || '').trim();
+    if (t) return t;
+  }
+
+  const ctrlDesc = (c.description || '').trim();
+  if (ctrlDesc) return ctrlDesc;
+
+  const clause = (f.clause_reference || c.code || '').trim();
+  return clause
+    ? `Recommended from gap analysis for clause ${clause}`
+    : 'Recommended from gap analysis';
+}
+
+/** Flatten gap-analysis recommendations into the same shape as statement mappings.
+ * One row per gap clause (per framework): never both Parsed + Normalized. */
+function gapFindingsToRecs(findings: GapRecommendedFinding[]): RecommendedControl[] {
+  const out: RecommendedControl[] = [];
+  const seenClause = new Set<string>(); // framework::clause_reference
+  const seenControl = new Set<string>(); // kind::id
+  for (const f of findings) {
+    const c = pickBestGapControl(f.controls);
+    if (!c) continue;
+
+    const fw = (c.framework_name || f.framework_name || '').trim().toLowerCase();
+    const clause = (f.clause_reference || c.code || '').trim().toLowerCase();
+    const clauseKey = `${fw}::${clause}`;
+    if (clause && seenClause.has(clauseKey)) continue;
+    if (clause) seenClause.add(clauseKey);
+
+    const ctrlKey = `${c.kind}::${c.id}`;
+    if (seenControl.has(ctrlKey)) continue;
+    seenControl.add(ctrlKey);
+
+    const description = (
+      c.description
+      || f.clause_requirement_text
+      || null
+    );
+
+    out.push({
+      control_kind: c.kind,
+      control_code: c.code,
+      control_title: c.title || f.clause_title,
+      framework_name: c.framework_name || f.framework_name,
+      domain: c.domain || null,
+      coverage_type: GAP_COVERAGE[f.compliance_status] || null,
+      link_source: 'gap',
+      max_confidence: typeof f.confidence_score === 'number' ? f.confidence_score : null,
+      statement_count: 0,
+      control_ref_id: c.id,
+      clause_reference: f.clause_reference || c.code,
+      description,
+      is_linked: c.already_linked,
+      statements: [],
+      uploaded_framework_id: f.uploaded_framework_id,
+      rationale: gapRationale(f, c),
+      finding_id: f.finding_id,
+      source: 'gap',
+      compliance_status: f.compliance_status,
+      gap_description: f.gap_description || null,
+      missing_requirement: f.missing_requirement || null,
+      remediation: f.remediation_recommendation || null,
+      risk_severity: f.risk_severity || null,
+    });
+  }
+  return out;
 }
 
 interface DocumentMappings {
@@ -161,10 +307,12 @@ const barColor = (pct: number) => (pct >= 80 ? '#10b981' : pct >= 50 ? '#f59e0b'
 // so the framework→clause coverage story leads. Frameworks collapse (first open)
 // with internally-scrolled lists so the page doesn't grow unbounded.
 function RecommendedControlsSection({
-  recs, documentId, canLink, statementText, coverage = [],
+  recs, documentId, canLink, statementText, coverage = [], gapRecs = [],
 }: {
   recs: RecommendedControl[]; documentId: number | null; canLink: boolean;
   statementText: StatementTextMap; coverage?: CoverageFramework[];
+  /** Gap-analysis recommendations, already converted to RecommendedControl shape. */
+  gapRecs?: RecommendedControl[];
 }) {
   const queryClient = useQueryClient();
   const [detail, setDetail] = useState<RecommendedControl | null>(null);
@@ -172,24 +320,84 @@ function RecommendedControlsSection({
   const [search, setSearch] = useState('');
   const [statusView, setStatusView] = useState<'all' | 'mapped' | 'gaps'>('all');
   const [openFw, setOpenFw] = useState<Set<string> | null>(null); // null = default (first framework open)
-  const keyOf = (r: RecommendedControl) => `${r.control_kind}::${r.control_code ?? ''}`;
+  const keyOf = (r: RecommendedControl) =>
+    r.source === 'gap' && r.control_ref_id != null
+      ? `gap::${r.control_kind}::${r.control_ref_id}`
+      : `${r.control_kind}::${r.control_code ?? ''}`;
   const OTHER = 'Other';
   const fwNameOf = (r: RecommendedControl) => r.framework_name || OTHER;
 
+  // Statement-mapping recs only under "Mapped"; gap-sourced under "Recommended to link".
+  // Hide gap items already covered by a mapped row (same control or same clause in framework).
+  const mappingKeys = useMemo(() => {
+    const byControl = new Set<string>();
+    const byClause = new Set<string>();
+    recs.forEach((r) => {
+      byControl.add(`${r.control_kind}::${r.control_code ?? ''}`.toLowerCase());
+      if (r.control_ref_id != null) byControl.add(`${r.control_kind}::id:${r.control_ref_id}`);
+      // Also match across kinds by code alone (parsed 1.3 ≡ normalized 1.3).
+      const code = (r.control_code || r.clause_reference || '').trim().toLowerCase();
+      if (code) {
+        byControl.add(`code::${code}`);
+        const fw = (r.framework_name || '').trim().toLowerCase();
+        byClause.add(`${fw}::${code}`);
+      }
+    });
+    return { byControl, byClause };
+  }, [recs]);
+
+  const uniqueGapRecs = useMemo(() => {
+    const filtered = gapRecs.filter((r) => {
+      const byCode = `${r.control_kind}::${r.control_code ?? ''}`.toLowerCase();
+      const byId = r.control_ref_id != null ? `${r.control_kind}::id:${r.control_ref_id}` : '';
+      const codeAlone = (r.control_code || r.clause_reference || '').trim().toLowerCase();
+      const clauseKey = `${(r.framework_name || '').trim().toLowerCase()}::${codeAlone}`;
+      if (mappingKeys.byControl.has(byCode)) return false;
+      if (byId && mappingKeys.byControl.has(byId)) return false;
+      if (codeAlone && mappingKeys.byControl.has(`code::${codeAlone}`)) return false;
+      if (codeAlone && mappingKeys.byClause.has(clauseKey)) return false;
+      return true;
+    });
+    // Unlinked first so Link actions lead the list.
+    return filtered.sort((a, b) => Number(a.is_linked) - Number(b.is_linked));
+  }, [gapRecs, mappingKeys]);
+
   const linkMutation = useMutation({
-    mutationFn: ({ r, link }: { r: RecommendedControl; link: boolean }) =>
-      governanceApi.linkRecommendedControl(documentId as number, {
+    mutationFn: async ({ r, link }: { r: RecommendedControl; link: boolean }) => {
+      if (r.source === 'gap') {
+        if (!link) return; // gap API is link-only
+        if (r.control_ref_id == null) throw new Error('Missing control id');
+        return governanceApi.linkGapRecommendedControl(documentId as number, {
+          control_kind: r.control_kind,
+          control_id: r.control_ref_id,
+          finding_id: r.finding_id ?? undefined,
+        });
+      }
+      return governanceApi.linkRecommendedControl(documentId as number, {
         control_kind: r.control_kind, control_code: r.control_code, link,
-      }),
+      });
+    },
     onMutate: ({ r }) => setPendingKey(keyOf(r)),
     onSettled: () => {
       setPendingKey(null);
-      if (documentId) queryClient.invalidateQueries({ queryKey: ['document-mappings', documentId] });
+      if (!documentId) return;
+      queryClient.invalidateQueries({ queryKey: ['document-mappings', documentId] });
+      queryClient.invalidateQueries({ queryKey: ['gap-recommended-controls', documentId] });
+      queryClient.invalidateQueries({ queryKey: ['doc-coverage', documentId] });
+      queryClient.invalidateQueries({ queryKey: ['document-gap-findings', documentId] });
     },
   });
 
   const LinkButton = ({ r, small }: { r: RecommendedControl; small?: boolean }) => {
     const isPending = pendingKey === keyOf(r) && linkMutation.isPending;
+    // Gap API has no unlink — already-linked gap rows show a locked chip instead.
+    if (r.source === 'gap' && r.is_linked) {
+      return (
+        <span className={`inline-flex items-center gap-1 rounded-md ${small ? 'px-2 py-1 text-[11px]' : 'px-2.5 py-1.5 text-xs'} font-medium text-emerald-700 bg-emerald-50`}>
+          <CheckCircle strokeWidth={1.75} className="h-3 w-3" /> Linked
+        </span>
+      );
+    }
     return (
       <button
         onClick={(e) => { e.stopPropagation(); linkMutation.mutate({ r, link: !r.is_linked }); }}
@@ -205,45 +413,60 @@ function RecommendedControlsSection({
     );
   };
 
-  // One entry PER FRAMEWORK: its mapped clauses (from recs) + its coverage/gaps
-  // (from the coverage endpoint). Frameworks come from coverage (authoritative,
-  // scoped) unioned with any framework a mapped rec names (covers pre-restart /
-  // normalized rows). Search matches framework name, clause ref/title, or gaps.
+  // One entry PER FRAMEWORK: mapped clauses + gap recommendations + coverage/gaps.
+  // Frameworks come from coverage ∪ mapped recs ∪ gap recs.
   const groups = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const byName = new Map<string, { name: string; cov: CoverageFramework | null; mapped: RecommendedControl[] }>();
-    coverage.forEach((c) => byName.set(c.framework_name, { name: c.framework_name, cov: c, mapped: [] }));
-    recs.forEach((r) => {
-      const name = fwNameOf(r);
+    type FwGroup = {
+      name: string;
+      cov: CoverageFramework | null;
+      mapped: RecommendedControl[];
+      recommended: RecommendedControl[];
+    };
+    const byName = new Map<string, FwGroup>();
+    const ensure = (name: string) => {
       let g = byName.get(name);
-      if (!g) { g = { name, cov: null, mapped: [] }; byName.set(name, g); }
-      g.mapped.push(r);
-    });
+      if (!g) { g = { name, cov: null, mapped: [], recommended: [] }; byName.set(name, g); }
+      return g;
+    };
+    coverage.forEach((c) => { ensure(c.framework_name).cov = c; });
+    recs.forEach((r) => { ensure(fwNameOf(r)).mapped.push(r); });
+    uniqueGapRecs.forEach((r) => { ensure(fwNameOf(r)).recommended.push(r); });
     let list = Array.from(byName.values());
     if (q) {
       list = list.map((g) => {
         const nameHit = g.name.toLowerCase().includes(q);
         if (nameHit) return g;
-        const mapped = g.mapped.filter((r) =>
-          `${r.clause_reference ?? ''} ${r.control_code ?? ''} ${r.control_title ?? ''}`.toLowerCase().includes(q));
+        const matchRec = (r: RecommendedControl) =>
+          `${r.clause_reference ?? ''} ${r.control_code ?? ''} ${r.control_title ?? ''}`.toLowerCase().includes(q);
+        const mapped = g.mapped.filter(matchRec);
+        const recommended = g.recommended.filter(matchRec);
         const cov = g.cov
           ? { ...g.cov, missing_controls: g.cov.missing_controls.filter((c) => `${c.reference ?? ''} ${c.title ?? ''}`.toLowerCase().includes(q)) }
           : null;
-        return { ...g, mapped, cov };
-      }).filter((g) => g.name.toLowerCase().includes(q) || g.mapped.length > 0 || (g.cov?.missing_controls.length ?? 0) > 0);
+        return { ...g, mapped, recommended, cov };
+      }).filter((g) =>
+        g.name.toLowerCase().includes(q)
+        || g.mapped.length > 0
+        || g.recommended.length > 0
+        || (g.cov?.missing_controls.length ?? 0) > 0
+      );
     }
     list.sort((a, b) => {
       const ap = a.cov?.coverage_pct ?? 999;
       const bp = b.cov?.coverage_pct ?? 999;
       if (ap !== bp) return ap - bp; // worst coverage first
-      if (b.mapped.length !== a.mapped.length) return b.mapped.length - a.mapped.length;
+      const aCount = a.mapped.length + a.recommended.length;
+      const bCount = b.mapped.length + b.recommended.length;
+      if (bCount !== aCount) return bCount - aCount;
       return a.name.localeCompare(b.name);
     });
     return list;
-  }, [recs, coverage, search]);
+  }, [recs, uniqueGapRecs, coverage, search]);
 
   const totalGaps = coverage.reduce((n, c) => n + (c.missing_count || 0), 0);
-  const showToolbar = recs.length > 6 || groups.length > 1 || totalGaps > 0;
+  const totalRecommended = uniqueGapRecs.length;
+  const showToolbar = recs.length > 6 || uniqueGapRecs.length > 0 || groups.length > 1 || totalGaps > 0;
 
   const isOpen = (name: string, idx: number) => (search.trim() ? true : openFw ? openFw.has(name) : idx === 0);
   const toggleFw = (name: string) => setOpenFw((prev) => {
@@ -258,14 +481,16 @@ function RecommendedControlsSection({
       <div className="mb-2 flex flex-wrap items-center gap-2">
         <Sparkles strokeWidth={1.75} className="h-4 w-4 text-primary-600" />
         <h4 className="text-sm font-semibold text-slate-900">Framework mappings</h4>
-        {(recs.length > 0 || coverage.length > 0) && (
+        {(recs.length > 0 || coverage.length > 0 || totalRecommended > 0) && (
           <span className="text-[11px] text-slate-500">
-            {groups.length} framework{groups.length === 1 ? '' : 's'} · {recs.length} mapped{totalGaps ? ` · ${totalGaps} gaps` : ''}
+            {groups.length} framework{groups.length === 1 ? '' : 's'} · {recs.length} mapped
+            {totalRecommended ? ` · ${totalRecommended} recommended` : ''}
+            {totalGaps ? ` · ${totalGaps} gaps` : ''}
           </span>
         )}
       </div>
 
-      {recs.length === 0 && coverage.length === 0 ? (
+      {recs.length === 0 && coverage.length === 0 && totalRecommended === 0 ? (
         <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-center text-xs text-slate-500">
           No framework clauses matched yet. Recommendations populate automatically after the document is parsed into
           statements, scoped to this document&apos;s in-scope &amp; referenced frameworks.
@@ -307,6 +532,29 @@ function RecommendedControlsSection({
               const total = g.cov?.total_controls;
               const gaps = g.cov?.missing_controls ?? [];
               const mappedCount = g.cov?.mapped_count ?? g.mapped.length;
+              const renderControlRow = (r: RecommendedControl, i: number, accent: 'mapped' | 'recommended') => {
+                const pctR = matchPct(r);
+                const clause = r.clause_reference || r.control_code;
+                // Same visual grammar as mapped rows (icon · code · title · % · stmt · Link).
+                // Unlinked recommended uses muted check; linked turns emerald — no kind chips.
+                const iconClass = accent === 'mapped'
+                  ? 'text-emerald-500'
+                  : r.is_linked ? 'text-emerald-500' : 'text-slate-400';
+                return (
+                  <div
+                    key={`${keyOf(r)}-${i}`}
+                    onClick={() => setDetail(r)}
+                    className="flex cursor-pointer items-center gap-2 px-3 py-1.5 hover:bg-slate-50"
+                  >
+                    <CheckCircle strokeWidth={1.75} className={`h-3.5 w-3.5 shrink-0 ${iconClass}`} />
+                    <span className="shrink-0 text-sm font-semibold text-slate-900">{upperCode(clause) || '—'}</span>
+                    <span className="min-w-0 flex-1 truncate text-xs text-slate-500">{r.control_title || ''}</span>
+                    {pctR !== null && <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">{pctR}%</span>}
+                    {r.statement_count > 0 && <span className="shrink-0 text-[10px] text-slate-400">{r.statement_count} stmt</span>}
+                    {canLink && <LinkButton r={r} small />}
+                  </div>
+                );
+              };
               return (
                 <div key={g.name} className="overflow-hidden rounded-lg border border-slate-200">
                   <button
@@ -332,6 +580,9 @@ function RecommendedControlsSection({
                       ) : (
                         <span className="rounded-full bg-primary-50 px-2 py-0.5 font-medium text-primary-700">{g.mapped.length} mapped</span>
                       )}
+                      {g.recommended.length > 0 && (
+                        <span className="rounded-full bg-amber-50 px-2 py-0.5 font-medium text-amber-700">{g.recommended.length} recommended</span>
+                      )}
                       {g.cov && g.cov.missing_count > 0 && (
                         <span className="rounded-full bg-rose-50 px-2 py-0.5 font-medium text-rose-600">{g.cov.missing_count} gaps</span>
                       )}
@@ -347,26 +598,20 @@ function RecommendedControlsSection({
                             <p className="px-3 pb-2 text-xs text-slate-500">No clauses of this framework are mapped by this document yet.</p>
                           ) : (
                             <div className="max-h-72 divide-y divide-slate-50 overflow-y-auto">
-                              {g.mapped.map((r, i) => {
-                                const pctR = matchPct(r);
-                                const clause = r.clause_reference || r.control_code;
-                                return (
-                                  <div
-                                    key={`${keyOf(r)}-${i}`}
-                                    onClick={() => setDetail(r)}
-                                    className="flex cursor-pointer items-center gap-2 px-3 py-1.5 hover:bg-slate-50"
-                                  >
-                                    <CheckCircle strokeWidth={1.75} className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
-                                    <span className="shrink-0 text-sm font-semibold text-slate-900">{upperCode(clause) || '—'}</span>
-                                    <span className="min-w-0 flex-1 truncate text-xs text-slate-500">{r.control_title || ''}</span>
-                                    {pctR !== null && <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">{pctR}%</span>}
-                                    {r.statement_count > 0 && <span className="shrink-0 text-[10px] text-slate-400">{r.statement_count} stmt</span>}
-                                    {canLink && <LinkButton r={r} small />}
-                                  </div>
-                                );
-                              })}
+                              {g.mapped.map((r, i) => renderControlRow(r, i, 'mapped'))}
                             </div>
                           )}
+                        </div>
+                      )}
+
+                      {statusView !== 'mapped' && g.recommended.length > 0 && (
+                        <div className="border-t border-slate-100 bg-primary-50/20">
+                          <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-primary-600">
+                            Recommended to link ({g.recommended.length})
+                          </p>
+                          <div className="max-h-72 divide-y divide-slate-50 overflow-y-auto">
+                            {g.recommended.map((r, i) => renderControlRow(r, i, 'recommended'))}
+                          </div>
                         </div>
                       )}
 
@@ -402,63 +647,151 @@ function RecommendedControlsSection({
         widthClassName="w-[560px]"
       >
         {detail && (
-          <div className="space-y-4">
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-lg font-semibold text-slate-900">{upperCode(detail.clause_reference || detail.control_code) || '—'}</span>
-                {detail.framework_name && <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-xs font-medium text-slate-600">{detail.framework_name}</span>}
+          <div className="space-y-0">
+            {/* Header: code, framework, title — stacked so labels never concatenate */}
+            <div className="pb-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="font-mono text-xl font-semibold tracking-tight text-slate-900">
+                    {upperCode(detail.clause_reference || detail.control_code) || '—'}
+                  </p>
+                  {detail.framework_name && (
+                    <p className="mt-1 text-sm font-medium text-slate-600">{detail.framework_name}</p>
+                  )}
+                  {detail.control_title && (
+                    <p className="mt-1.5 text-sm leading-snug text-slate-800">{detail.control_title}</p>
+                  )}
+                </div>
                 {detail.is_linked && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                  <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-800">
                     <Link2 strokeWidth={1.75} className="h-3 w-3" /> Linked
                   </span>
                 )}
               </div>
-              {detail.control_title && <p className="mt-1 text-sm font-medium text-slate-800">{detail.control_title}</p>}
-              <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                {matchPct(detail) !== null && <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700">{matchPct(detail)}% match</span>}
-                {detail.coverage_type && <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-medium capitalize text-slate-500">{detail.coverage_type}</span>}
-                {detail.domain && <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">{detail.domain}</span>}
+
+              {/* Meta chips — bordered, spaced, high-contrast so they stay distinct */}
+              <div className="mt-3 flex flex-wrap gap-2">
+                {matchPct(detail) !== null && (
+                  <span className="inline-flex items-center rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold tabular-nums text-slate-800">
+                    {matchPct(detail)}% match
+                  </span>
+                )}
+                {detail.source === 'gap' && (
+                  <span className="inline-flex items-center rounded-md border border-primary-200 bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-800">
+                    Gap recommendation
+                  </span>
+                )}
+                {detail.compliance_status && (
+                  <span className="inline-flex items-center rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium capitalize text-amber-900">
+                    {detail.compliance_status.replace(/_/g, ' ')}
+                  </span>
+                )}
+                {detail.risk_severity && (
+                  <span className="inline-flex items-center rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium capitalize text-slate-700">
+                    {detail.risk_severity} risk
+                  </span>
+                )}
+                {/* Kind chips (parsed/normalized) are intentionally omitted — same as mapped rows. */}
+                {detail.coverage_type && detail.source !== 'gap' && (
+                  <span className="inline-flex items-center rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium capitalize text-slate-700">
+                    {detail.coverage_type.replace(/_/g, ' ')}
+                  </span>
+                )}
+                {detail.domain && (
+                  <span className="inline-flex items-center rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700">
+                    {detail.domain}
+                  </span>
+                )}
               </div>
+
+              {canLink && (
+                <div className="mt-3">
+                  <LinkButton r={detail} />
+                </div>
+              )}
             </div>
 
-            {canLink && <div><LinkButton r={detail} /></div>}
-
             {detail.rationale && (
-              <div>
-                <h5 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Why it matched</h5>
-                <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">{detail.rationale}</p>
+              <div className="border-t border-slate-100 pt-4">
+                <h5 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Why it matched</h5>
+                <p className="whitespace-pre-wrap rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-3 text-sm leading-relaxed text-slate-800">
+                  {detail.rationale}
+                </p>
               </div>
             )}
 
             {detail.description && (
-              <div>
-                <h5 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Clause text</h5>
-                <p className="whitespace-pre-wrap rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">{detail.description}</p>
+              <div className="border-t border-slate-100 pt-4">
+                <h5 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  {detail.source === 'gap' ? 'Clause / control text' : 'Clause text'}
+                </h5>
+                <p className="whitespace-pre-wrap rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-3 text-sm leading-relaxed text-slate-800">
+                  {detail.description}
+                </p>
               </div>
             )}
 
-            <div>
-              <h5 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Covered by {detail.statement_count} statement{detail.statement_count === 1 ? '' : 's'}
-              </h5>
-              <div className="space-y-1.5">
-                {detail.statements.length === 0 ? (
-                  <p className="text-xs text-slate-400">No statement detail available.</p>
-                ) : (
-                  detail.statements.map((s) => {
-                    const full = statementText.get(s.id);
-                    return (
-                      <div key={s.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2">
-                        {(s.statement_code || full?.code) && (
-                          <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{s.statement_code || full?.code}</span>
-                        )}
-                        <p className="mt-0.5 text-sm text-slate-700">{full?.text || s.snippet || '—'}</p>
-                      </div>
-                    );
-                  })
-                )}
+            {detail.source === 'gap' && detail.gap_description && detail.gap_description !== detail.rationale && (
+              <div className="border-t border-slate-100 pt-4">
+                <h5 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Gap description</h5>
+                <p className="whitespace-pre-wrap rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-3 text-sm leading-relaxed text-slate-800">
+                  {detail.gap_description}
+                </p>
               </div>
-            </div>
+            )}
+
+            {detail.source === 'gap' && detail.missing_requirement && (
+              <div className="border-t border-slate-100 pt-4">
+                <h5 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Missing requirement</h5>
+                <p className="whitespace-pre-wrap rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-3 text-sm leading-relaxed text-slate-800">
+                  {detail.missing_requirement}
+                </p>
+              </div>
+            )}
+
+            {detail.source === 'gap' && detail.remediation && (
+              <div className="border-t border-slate-100 pt-4">
+                <h5 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Remediation</h5>
+                <p className="whitespace-pre-wrap rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-3 text-sm leading-relaxed text-slate-800">
+                  {detail.remediation}
+                </p>
+              </div>
+            )}
+
+            {detail.source !== 'gap' && (
+              <div className="border-t border-slate-100 pt-4">
+                <h5 className="mb-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  Covered by {detail.statement_count} statement{detail.statement_count === 1 ? '' : 's'}
+                </h5>
+                <div className="space-y-2">
+                  {detail.statements.length === 0 ? (
+                    <p className="text-sm text-slate-500">No statement detail available.</p>
+                  ) : (
+                    detail.statements.map((s) => {
+                      const full = statementText.get(s.id);
+                      return (
+                        <div key={s.id} className="rounded-lg border border-slate-200 bg-white px-3.5 py-3">
+                          {(s.statement_code || full?.code) && (
+                            <p className="mb-1 font-mono text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                              {s.statement_code || full?.code}
+                            </p>
+                          )}
+                          <p className="text-sm leading-relaxed text-slate-800">
+                            {full?.text || s.snippet || '—'}
+                          </p>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            )}
+
+            {detail.source === 'gap' && !detail.description && !detail.gap_description && !detail.remediation && !detail.rationale && (
+              <div className="border-t border-slate-100 pt-4">
+                <p className="text-sm text-slate-500">No additional gap detail is available for this control.</p>
+              </div>
+            )}
           </div>
         )}
       </RightSlidePanel>
@@ -556,6 +889,23 @@ export default function GovernanceMappingsPage({ initialDocumentId }: { initialD
     enabled: !!selectedDocumentId && embedded,
   });
   const coverageFrameworks = coverageData?.frameworks ?? [];
+
+  // Gap-analysis recommended controls — same Link UX as statement mappings,
+  // shown under each framework as "Recommended to link". Embedded document tab
+  // only (that's where gap runs live).
+  const { data: gapRecommendedData } = useQuery({
+    queryKey: ['gap-recommended-controls', selectedDocumentId],
+    queryFn: async () => {
+      if (!selectedDocumentId) return null;
+      const response = await governanceApi.getGapRecommendedControls(selectedDocumentId);
+      return response.data as { findings: GapRecommendedFinding[] };
+    },
+    enabled: !!selectedDocumentId && embedded,
+  });
+  const gapRecs = useMemo(
+    () => gapFindingsToRecs(gapRecommendedData?.findings ?? []),
+    [gapRecommendedData],
+  );
 
   // Which frameworks the mappings were scoped to (in-scope ∪ referenced), plus
   // resolved names (from the recommendation rows) for the "mapped against" header.
@@ -892,7 +1242,7 @@ export default function GovernanceMappingsPage({ initialDocumentId }: { initialD
           <div className="flex items-center justify-center py-10">
             <Loader2 strokeWidth={1.75} className="h-6 w-6 animate-spin text-primary-600" />
           </div>
-        ) : noFrameworks ? (
+        ) : noFrameworks && gapRecs.length === 0 ? (
           <div className="rounded-lg border border-dashed border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
             No in-scope or reference frameworks are set for this document, so there are no framework clauses to map against.
             Edit the document and pick its frameworks — mapping runs only for those.
@@ -904,6 +1254,7 @@ export default function GovernanceMappingsPage({ initialDocumentId }: { initialD
             canLink={canCreate}
             statementText={statementText}
             coverage={coverageFrameworks}
+            gapRecs={gapRecs}
           />
         )}
 

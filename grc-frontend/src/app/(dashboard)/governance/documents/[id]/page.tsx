@@ -422,15 +422,6 @@ export default function PolicyDetailPage() {
     enabled: !!id && activeTab === 'statements',
   });
 
-  const { data: mappings, isLoading: mappingsLoading } = useQuery({
-    queryKey: ['document-mappings', id],
-    queryFn: async () => {
-      const response = await governanceApi.getDocumentMappings(id);
-      return response.data as any;
-    },
-    enabled: !!id && activeTab === 'controls',
-  });
-
   const { data: gapAnalysisRuns } = useQuery({
     queryKey: ['gap-analysis-runs', id],
     queryFn: async () => {
@@ -497,56 +488,6 @@ export default function PolicyDetailPage() {
     enabled: !!id && activeTab === 'gap-analysis',
     refetchInterval: hasRunningAnalysis ? 3000 : false, // Poll every 3 seconds when analysis is running
     placeholderData: keepPreviousData,
-  });
-
-  const { data: gapRecommendedControls, isLoading: gapRecsLoading } = useQuery({
-    queryKey: ['gap-recommended-controls', id],
-    queryFn: async () => {
-      const response = await governanceApi.getGapRecommendedControls(id);
-      return response.data as {
-        document_id: number;
-        framework_ids: number[];
-        findings: Array<{
-          finding_id: number;
-          clause_reference: string | null;
-          clause_title: string | null;
-          compliance_status: string;
-          framework_name: string | null;
-          uploaded_framework_id: number | null;
-          controls: Array<{
-            kind: string;
-            id: number;
-            code: string | null;
-            title: string | null;
-            match_reason: string;
-            already_linked: boolean;
-            framework_name?: string | null;
-          }>;
-        }>;
-        total_recommendations: number;
-        unlinked_count: number;
-      };
-    },
-    enabled: !!id && activeTab === 'gap-analysis' && !hasRunningAnalysis,
-  });
-
-  const linkGapControlMutation = useMutation({
-    mutationFn: (data: { control_kind: string; control_id: number; finding_id?: number }) =>
-      governanceApi.linkGapRecommendedControl(id, data),
-    onSuccess: () => {
-      toast({ type: 'success', title: 'Control linked', message: 'Recommended control linked to this document.' });
-      queryClient.invalidateQueries({ queryKey: ['gap-recommended-controls', id] });
-      queryClient.invalidateQueries({ queryKey: ['document-mappings', id] });
-      queryClient.invalidateQueries({ queryKey: ['doc-coverage', id] });
-      queryClient.invalidateQueries({ queryKey: ['document-gap-findings', id] });
-    },
-    onError: (err: any) => {
-      toast({
-        type: 'error',
-        title: 'Link failed',
-        message: err?.response?.data?.detail || err?.message || 'Could not link control',
-      });
-    },
   });
 
   const { data: uploadedFrameworks } = useQuery({
@@ -930,14 +871,6 @@ export default function PolicyDetailPage() {
     return [];
   }, [gapFindings]);
 
-  const gapRecsByFindingId = useMemo(() => {
-    const map = new Map<number, NonNullable<typeof gapRecommendedControls>['findings'][number]['controls']>();
-    for (const row of gapRecommendedControls?.findings || []) {
-      map.set(row.finding_id, row.controls || []);
-    }
-    return map;
-  }, [gapRecommendedControls]);
-
   const totalFindings = useMemo(() => {
     if (gapFindings?.total) return gapFindings.total;
     return findings.length;
@@ -1164,11 +1097,7 @@ export default function PolicyDetailPage() {
       )}
 
       {activeTab === 'controls' && (
-        <ControlsTab
-          mappings={mappings}
-          mappingsLoading={mappingsLoading}
-          documentId={id}
-        />
+        <ControlsTab documentId={id} />
       )}
 
       {activeTab === 'gap-analysis' && (
@@ -1280,89 +1209,6 @@ export default function PolicyDetailPage() {
 
           {/* Compliance Summary */}
           <ComplianceSummarySection summary={complianceSummary} loading={summaryLoading} />
-
-          {/* Recommended controls to link against open gaps */}
-          {(gapRecsLoading || (gapRecommendedControls?.findings?.length ?? 0) > 0) && (
-            <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-              <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-slate-200">
-                <div className="flex items-center gap-2 min-w-0">
-                  <Link2 className="h-4 w-4 text-primary-600 flex-shrink-0" />
-                  <h3 className="text-sm font-semibold text-slate-900">Recommended controls to link</h3>
-                  {gapRecommendedControls && (
-                    <span className="text-xs text-slate-500">
-                      {gapRecommendedControls.unlinked_count} unlinked · {gapRecommendedControls.total_recommendations} total
-                      from frameworks you analyzed
-                    </span>
-                  )}
-                </div>
-              </div>
-              {gapRecsLoading ? (
-                <div className="flex items-center gap-2 px-4 py-6 text-sm text-slate-500">
-                  <Loader2 className="h-4 w-4 animate-spin" /> Loading recommendations…
-                </div>
-              ) : (
-                <div className="divide-y divide-slate-100 max-h-80 overflow-y-auto">
-                  {(gapRecommendedControls?.findings || []).map((row) => (
-                    <div key={row.finding_id} className="px-4 py-3">
-                      <div className="flex items-baseline gap-2 mb-2 min-w-0">
-                        <span className="font-mono text-[11px] text-primary-700 flex-shrink-0">
-                          {(row.clause_reference || '—').toUpperCase()}
-                        </span>
-                        <span className="text-xs text-slate-700 truncate">{row.clause_title || ''}</span>
-                        {row.framework_name && (
-                          <span className="text-[10px] text-slate-400 flex-shrink-0">{row.framework_name}</span>
-                        )}
-                        <span className={`ml-auto flex-shrink-0 inline-block rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
-                          (COMPLIANCE_STATUS_STYLES[row.compliance_status] || COMPLIANCE_STATUS_STYLES.not_addressed).bg
-                        } ${(COMPLIANCE_STATUS_STYLES[row.compliance_status] || COMPLIANCE_STATUS_STYLES.not_addressed).text}`}>
-                          {(COMPLIANCE_STATUS_STYLES[row.compliance_status] || { label: row.compliance_status }).label}
-                        </span>
-                      </div>
-                      <div className="flex flex-wrap gap-1.5">
-                        {row.controls.map((c) => {
-                          const pendingKey = `${c.kind}:${c.id}`;
-                          const isPending =
-                            linkGapControlMutation.isPending
-                            && linkGapControlMutation.variables?.control_kind === c.kind
-                            && linkGapControlMutation.variables?.control_id === c.id;
-                          return (
-                            <div
-                              key={pendingKey}
-                              className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 pl-2 pr-1 py-1"
-                              title={c.match_reason}
-                            >
-                              <span className="text-[10px] uppercase tracking-wide text-slate-400">{c.kind}</span>
-                              <span className="font-mono text-[11px] text-slate-700">{(c.code || '').toUpperCase()}</span>
-                              <span className="text-xs text-slate-600 max-w-[140px] truncate">{c.title}</span>
-                              {c.already_linked ? (
-                                <span className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 bg-emerald-50">
-                                  <Check className="h-2.5 w-2.5" /> Linked
-                                </span>
-                              ) : (
-                                <button
-                                  type="button"
-                                  disabled={isPending}
-                                  onClick={() => linkGapControlMutation.mutate({
-                                    control_kind: c.kind,
-                                    control_id: c.id,
-                                    finding_id: row.finding_id,
-                                  })}
-                                  className="inline-flex items-center gap-1 rounded bg-primary-600 px-2 py-0.5 text-[11px] font-medium text-white hover:bg-primary-700 disabled:opacity-50"
-                                >
-                                  {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Link2 className="h-3 w-3" />}
-                                  Link
-                                </button>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
 
           {/* Gap Findings Table */}
           <div className="rounded-xl border border-slate-300 bg-white overflow-hidden">
@@ -1493,22 +1339,6 @@ export default function PolicyDetailPage() {
                             onUpdateFinding={(findingId: number, data: any) => updateFindingMutation.mutate({ findingId, data })}
                             onOverride={(findingId: number, data: any) => overrideMutation.mutate({ findingId, data })}
                             onAcceptRisk={(findingId: number, data: any) => acceptRiskMutation.mutate({ findingId, data })}
-                            recommendedControls={gapRecsByFindingId.get(finding.id) || []}
-                            onLinkRecommendedControl={(ctrl: { kind: string; id: number }) =>
-                              linkGapControlMutation.mutate({
-                                control_kind: ctrl.kind,
-                                control_id: ctrl.id,
-                                finding_id: finding.id,
-                              })
-                            }
-                            linkingControl={
-                              linkGapControlMutation.isPending
-                                ? {
-                                    kind: linkGapControlMutation.variables?.control_kind,
-                                    id: linkGapControlMutation.variables?.control_id,
-                                  }
-                                : null
-                            }
                             onAddressGap={(f: any) => {
                               setAddressGapFinding(f);
                               // Pre-fill with whatever the backend already has
@@ -3680,132 +3510,11 @@ function StatementsTab({ statements, statementsLoading, parsePolicyMutation, isP
   );
 }
 
-// Control coverage of the document against its applicable frameworks —
-// mapped / recommended / MISSING (gap) controls per framework (feature #6).
-function ControlCoveragePanel({ documentId }: { documentId: number }) {
-  const [openFw, setOpenFw] = useState<number | null>(null);
-  const { data, isLoading } = useQuery({
-    queryKey: ['doc-coverage', documentId],
-    queryFn: async () => (await governanceApi.getDocumentCoverage(documentId)).data as {
-      frameworks: Array<{
-        framework_id: number; framework_name: string; total_controls: number;
-        mapped_count: number; missing_count: number; coverage_pct: number;
-        missing_controls: Array<{ id: number; reference: string; title: string; domain: string | null }>;
-      }>;
-      recommended_controls: any[];
-      totals: { mapped: number; recommended: number; missing: number; frameworks: number };
-    },
-  });
-
-  if (isLoading) {
-    return (
-      <div className="rounded-xl border border-slate-200 bg-white p-4 flex items-center gap-2 text-sm text-slate-500">
-        <Loader2 className="h-4 w-4 animate-spin" /> Computing framework control coverage…
-      </div>
-    );
-  }
-  const frameworks = data?.frameworks || [];
-  const recommended = data?.recommended_controls || [];
-  if (frameworks.length === 0) {
-    return (
-      <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-600">
-        <p className="font-medium text-slate-700 mb-0.5">No applicable frameworks set</p>
-        Edit this document and pick its <span className="font-medium">Applicable Frameworks</span> to see which
-        of their controls this document covers — and which are missing (the audit gap).
-      </div>
-    );
-  }
-
-  const barColor = (pct: number) => (pct >= 80 ? '#10b981' : pct >= 50 ? '#f59e0b' : '#ef4444');
-
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-2">
-        <ShieldCheck className="h-4 w-4 text-primary-500" />
-        <h3 className="text-sm font-semibold text-slate-900">Framework Control Coverage</h3>
-        <span className="text-xs text-slate-500">
-          {data?.totals.mapped ?? 0} mapped · {data?.totals.missing ?? 0} missing across {frameworks.length} framework{frameworks.length !== 1 ? 's' : ''}
-        </span>
-      </div>
-      {frameworks.map((fw) => {
-        const isOpen = openFw === fw.framework_id;
-        return (
-          <div key={fw.framework_id} className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-            <button
-              type="button"
-              onClick={() => setOpenFw(isOpen ? null : fw.framework_id)}
-              className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-50"
-            >
-              <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-slate-900 truncate">{fw.framework_name}</p>
-                <div className="mt-1.5 flex items-center gap-2">
-                  <div className="h-1.5 flex-1 max-w-[220px] rounded-full bg-slate-100 overflow-hidden">
-                    <div className="h-full rounded-full" style={{ width: `${fw.coverage_pct}%`, backgroundColor: barColor(fw.coverage_pct) }} />
-                  </div>
-                  <span className="text-xs font-medium" style={{ color: barColor(fw.coverage_pct) }}>{fw.coverage_pct}%</span>
-                </div>
-              </div>
-              <div className="flex items-center gap-3 text-xs">
-                <span className="text-emerald-600 font-medium">{fw.mapped_count} mapped</span>
-                <span className={`font-medium ${fw.missing_count > 0 ? 'text-rose-600' : 'text-slate-400'}`}>{fw.missing_count} missing</span>
-              </div>
-            </button>
-            {isOpen && (
-              <div className="border-t border-slate-100 px-4 py-3">
-                {fw.missing_controls.length === 0 ? (
-                  <p className="text-xs text-emerald-700 flex items-center gap-1">
-                    <CheckCircle className="h-3.5 w-3.5" /> Every control of this framework is covered by a statement in this document.
-                  </p>
-                ) : (
-                  <>
-                    <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-rose-600 flex items-center gap-1">
-                      <AlertTriangle className="h-3 w-3" /> {fw.missing_count} control{fw.missing_count !== 1 ? 's' : ''} not covered by this document
-                    </p>
-                    <div className="max-h-64 overflow-y-auto space-y-1.5">
-                      {fw.missing_controls.map((c) => (
-                        <div key={c.id} className="flex items-start gap-2 rounded-md bg-rose-50/60 border border-rose-100 px-2.5 py-1.5">
-                          <span className="font-mono text-[10px] text-rose-600 mt-0.5 shrink-0">{(c.reference ?? '').toUpperCase()}</span>
-                          <div className="min-w-0">
-                            <p className="text-xs text-slate-700 truncate">{c.title}</p>
-                            {c.domain && <p className="text-[10px] text-slate-400">{c.domain}</p>}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-        );
-      })}
-      {recommended.length > 0 && (
-        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-          <p className="text-xs font-semibold text-slate-700 mb-2">{recommended.length} AI-recommended control{recommended.length !== 1 ? 's' : ''} (not yet confirmed)</p>
-          <div className="flex flex-wrap gap-1.5">
-            {recommended.slice(0, 24).map((r: any, i: number) => (
-              <span key={i} className="inline-flex items-center gap-1 rounded-full border border-primary-200 bg-primary-50 px-2 py-0.5 text-[11px] text-primary-700" title={r.control_title || ''}>
-                {(r.clause_reference || r.control_code || '').toUpperCase()}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ControlsTab({ documentId }: any) {
-  // The framework-mapping surface, scoped (auto-selected) to this document. It
-  // now owns the per-framework coverage bars + gap ("not covered") lists that
-  // ControlCoveragePanel used to show separately, so the tab is one coherent
-  // surface instead of two panels that could tell contradictory stories.
-  return (
-    <div className="space-y-4">
-      <GovernanceMappingsPage initialDocumentId={documentId} />
-    </div>
-  );
+function ControlsTab({ documentId }: { documentId: number }) {
+  // Single coherent surface: framework groups (mapped / recommended-to-link /
+  // not-mapped gaps) + linked internal controls. Gap recommendations are fed
+  // into GovernanceMappings' RecommendedControlsSection — not a separate panel.
+  return <GovernanceMappingsPage initialDocumentId={documentId} />;
 }
 
 function ComplianceSummarySection({ summary, loading }: { summary: any; loading: boolean }) {
@@ -3854,7 +3563,6 @@ function GapFindingRow({
   assignOwnerForm, setAssignOwnerForm, targetDateForm, setTargetDateForm,
   statusUpdateForm, setStatusUpdateForm,
   onUpdateFinding, onOverride, onAcceptRisk, onAddressGap, isPending,
-  recommendedControls = [], onLinkRecommendedControl, linkingControl,
 }: any) {
   return (
     <>
@@ -3958,41 +3666,6 @@ function GapFindingRow({
                   <div>
                     <label className="text-xs font-medium uppercase tracking-wider text-slate-600 block mb-1">Remediation Recommendation</label>
                     <p className="text-sm text-slate-700">{finding.remediation_recommendation}</p>
-                  </div>
-                )}
-                {Array.isArray(recommendedControls) && recommendedControls.length > 0 && (
-                  <div className="rounded-lg border border-slate-200 bg-white p-3">
-                    <label className="text-xs font-medium uppercase tracking-wider text-slate-600 block mb-2">
-                      Recommended controls to link
-                    </label>
-                    <div className="space-y-1.5">
-                      {recommendedControls.map((c: any) => {
-                        const isLinking = linkingControl?.kind === c.kind && linkingControl?.id === c.id;
-                        return (
-                          <div key={`${c.kind}-${c.id}`} className="flex items-center gap-2 rounded-md border border-slate-100 bg-slate-50 px-2 py-1.5">
-                            <span className="text-[10px] uppercase text-slate-400 w-16 flex-shrink-0">{c.kind}</span>
-                            <span className="font-mono text-[11px] text-slate-700 flex-shrink-0">{(c.code || '').toUpperCase()}</span>
-                            <span className="text-xs text-slate-600 truncate flex-1">{c.title}</span>
-                            {c.already_linked ? (
-                              <span className="text-[10px] font-medium text-emerald-700 flex-shrink-0">Linked</span>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onLinkRecommendedControl?.({ kind: c.kind, id: c.id });
-                                }}
-                                disabled={isLinking || !onLinkRecommendedControl}
-                                className="inline-flex items-center gap-1 rounded bg-primary-600 px-2 py-0.5 text-[11px] font-medium text-white hover:bg-primary-700 disabled:opacity-50 flex-shrink-0"
-                              >
-                                {isLinking ? <Loader2 className="h-3 w-3 animate-spin" /> : <Link2 className="h-3 w-3" />}
-                                Link
-                              </button>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
                   </div>
                 )}
                 {/* Impact Types */}

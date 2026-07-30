@@ -1783,8 +1783,26 @@ def _already_linked_sets(db: Session, document_id: int, user_tenants: list, stmt
     }
 
 
-def _ctrl_entry(kind: str, cid: int, code: Optional[str], title: Optional[str],
-                match_reason: str, already_linked: bool, framework_name: Optional[str] = None) -> dict:
+def _truncate_text(text: Optional[str], limit: int = 600) -> Optional[str]:
+    if not text:
+        return None
+    text = text.strip()
+    if not text:
+        return None
+    return text[:limit] if len(text) > limit else text
+
+
+def _ctrl_entry(
+    kind: str,
+    cid: int,
+    code: Optional[str],
+    title: Optional[str],
+    match_reason: str,
+    already_linked: bool,
+    framework_name: Optional[str] = None,
+    description: Optional[str] = None,
+    domain: Optional[str] = None,
+) -> dict:
     return {
         "kind": kind,
         "id": cid,
@@ -1793,6 +1811,8 @@ def _ctrl_entry(kind: str, cid: int, code: Optional[str], title: Optional[str],
         "match_reason": match_reason,
         "already_linked": already_linked,
         "framework_name": framework_name,
+        "description": _truncate_text(description),
+        "domain": domain,
     }
 
 
@@ -1802,26 +1822,40 @@ def _recommend_for_finding(
     linked: dict,
     tenant_ids: list,
 ) -> List[dict]:
-    """Build linkable control candidates for one open gap finding."""
-    out: List[dict] = []
+    """Build linkable control candidates for one open gap finding.
+
+    Returns at most one preferred control per finding so the UI never surfaces
+    paired Parsed + Normalized rows for the same clause. Preference:
+    internal (framework_link) > normalized > parsed > internal (fuzzy).
+    """
+    candidates: List[dict] = []
     seen: set = set()  # (kind, id)
 
-    def add(kind, cid, code, title, reason, fw_name=None):
+    def add(kind, cid, code, title, reason, fw_name=None, description=None, domain=None):
         key = (kind, cid)
         if cid is None or key in seen:
             return
         seen.add(key)
         already = cid in linked.get(kind, set())
-        out.append(_ctrl_entry(kind, cid, code, title, reason, already, fw_name))
+        candidates.append(_ctrl_entry(
+            kind, cid, code, title, reason, already, fw_name,
+            description=description, domain=domain,
+        ))
 
     parsed = _resolve_parsed_control(db, finding)
     if parsed:
+        parsed_desc = (
+            parsed.description or parsed.full_text
+            or getattr(parsed, "control_description", None)
+        )
         add(
             "parsed", parsed.id,
             parsed.original_reference or parsed.control_id,
             parsed.title,
             "framework_clause",
             finding.framework_name,
+            description=parsed_desc,
+            domain=getattr(parsed, "domain", None),
         )
 
         # Related normalized controls via NormalizedControlLink
@@ -1834,7 +1868,12 @@ def _recommend_for_finding(
         nc_ids = []
         for nc in nc_rows:
             nc_ids.append(nc.id)
-            add("normalized", nc.id, nc.code, nc.name, "normalized_link", finding.framework_name)
+            add(
+                "normalized", nc.id, nc.code, nc.name, "normalized_link",
+                finding.framework_name,
+                description=nc.statement or nc.objective,
+                domain=getattr(nc, "domain", None),
+            )
 
         # Internal controls linked to those normalized controls
         if nc_ids:
@@ -1846,19 +1885,24 @@ def _recommend_for_finding(
                     InternalControl.tenant_id.in_(tenant_ids),
                 ).first()
                 if ic:
-                    add("internal", ic.id, ic.control_id, ic.name, "framework_link", finding.framework_name)
+                    add(
+                        "internal", ic.id, ic.control_id, ic.name, "framework_link",
+                        finding.framework_name,
+                        description=ic.description,
+                        domain=getattr(ic, "category", None),
+                    )
 
     # Fuzzy match internal controls by code/title against the gap clause
     clause_toks = _tokens(f"{finding.clause_reference or ''} {finding.clause_title or ''}")
     ref_lower = (finding.clause_reference or "").strip().lower()
     title_lower = (finding.clause_title or "").strip().lower()
     if clause_toks or ref_lower:
-        candidates = db.query(InternalControl).filter(
+        candidates_ic = db.query(InternalControl).filter(
             InternalControl.tenant_id.in_(tenant_ids),
             InternalControl.status.in_(["active", "draft", "pending_approval"]),
         ).limit(400).all()
         scored = []
-        for ic in candidates:
+        for ic in candidates_ic:
             if ("internal", ic.id) in seen:
                 continue
             code_l = (ic.control_id or "").lower()
@@ -1874,9 +1918,31 @@ def _recommend_for_finding(
                 scored.append((score, ic))
         scored.sort(key=lambda x: x[0], reverse=True)
         for _sc, ic in scored[:3]:
-            add("internal", ic.id, ic.control_id, ic.name, "fuzzy_match", finding.framework_name)
+            add(
+                "internal", ic.id, ic.control_id, ic.name, "fuzzy_match",
+                finding.framework_name,
+                description=ic.description,
+                domain=getattr(ic, "category", None),
+            )
 
-    return out
+    if not candidates:
+        return []
+
+    kind_rank = {"internal": 4, "normalized": 3, "framework": 2, "parsed": 1}
+    reason_rank = {
+        "framework_link": 4,
+        "normalized_link": 3,
+        "framework_clause": 2,
+        "fuzzy_match": 1,
+    }
+    candidates.sort(
+        key=lambda c: (
+            kind_rank.get(c["kind"], 0),
+            reason_rank.get(c["match_reason"], 0),
+        ),
+        reverse=True,
+    )
+    return [candidates[0]]
 
 
 @router.get("/document/{document_id}/recommended-controls")
@@ -1888,10 +1954,11 @@ def get_gap_recommended_controls(
     """Recommend linkable controls for open gaps from the latest completed gap
     runs (frameworks the user actually analyzed against).
 
-    For each not_addressed / partially_compliant finding, resolve the matching
-    ParsedFrameworkControl and surface it plus related NormalizedControl /
-    InternalControl candidates, with already_linked flags from DocumentControlLink,
-    InternalControl.source_document_id, and locked StatementControlMapping.
+    For each not_addressed / partially_compliant finding, resolve candidates
+    (ParsedFrameworkControl + related NormalizedControl / InternalControl) and
+    return the single preferred control: internal > normalized > parsed.
+    already_linked comes from DocumentControlLink, InternalControl.source_document_id,
+    and locked StatementControlMapping.
     """
     user_tenants = get_user_tenants(current_user, db)
 
@@ -1942,7 +2009,14 @@ def get_gap_recommended_controls(
             "finding_id": f.id,
             "clause_reference": f.clause_reference,
             "clause_title": f.clause_title,
+            "clause_requirement_text": _truncate_text(f.clause_requirement_text, 1200),
             "compliance_status": f.compliance_status,
+            "gap_description": _truncate_text(f.gap_description, 800),
+            "missing_requirement": _truncate_text(f.missing_requirement, 800),
+            "remediation_recommendation": _truncate_text(f.remediation_recommendation, 800),
+            "ai_reasoning": _truncate_text(f.ai_reasoning, 800),
+            "confidence_score": f.confidence_score,
+            "risk_severity": f.risk_severity,
             "framework_name": f.framework_name,
             "uploaded_framework_id": f.uploaded_framework_id,
             "controls": controls,
