@@ -62,14 +62,27 @@ def ensure_kri_columns(db: Session) -> None:
             for name, typ in adds:
                 if name not in cols:
                     try:
-                        db.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {typ}"))
+                        if bind.dialect.name == "postgresql":
+                            db.execute(text(
+                                f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {name} {typ}"
+                            ))
+                        else:
+                            db.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {typ}"))
                     except Exception:  # noqa: BLE001
-                        pass
+                        # Failed DDL aborts the PG transaction — must rollback
+                        # before later seed/KPI steps can continue on this session.
+                        try:
+                            db.rollback()
+                        except Exception:  # noqa: BLE001
+                            pass
         if bind.dialect.name == "postgresql":
             try:
                 db.execute(text("ALTER TABLE grc_risk_kris ALTER COLUMN risk_id DROP NOT NULL"))
             except Exception:  # noqa: BLE001 — already nullable
-                pass
+                try:
+                    db.rollback()
+                except Exception:  # noqa: BLE001
+                    pass
         db.commit()
     except Exception:  # noqa: BLE001
         db.rollback()

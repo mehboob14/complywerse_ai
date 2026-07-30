@@ -24,7 +24,6 @@ from sqlalchemy.orm import Session
 from .db import MasterSession, get_tenant_engine, open_tenant_session
 from .models import (
     AuditPlanEntry,
-    Base,
     CommonControlGroup,
     CommonControlGroupMapping,
     ComplianceAssessmentDocument,
@@ -1211,7 +1210,13 @@ def ensure_startup_seed_data() -> dict:
         db: Optional[Session] = None
         try:
             engine = get_tenant_engine(slug)
-            Base.metadata.create_all(bind=engine)
+            # Race-safe: get_tenant_engine already ran create_all under an
+            # advisory lock; this second pass is a no-op when tables exist.
+            try:
+                from .db import safe_metadata_create_all
+                safe_metadata_create_all(engine, slug=slug)
+            except Exception:
+                logger.exception("startup seed create_all failed for slug=%s", slug)
             db = open_tenant_session(slug)
             _ensure_local_tenant_row(db, tenant)
             catalog = ensure_local_framework_catalog(db)

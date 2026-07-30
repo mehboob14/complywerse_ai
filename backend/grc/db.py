@@ -14,7 +14,8 @@ import os
 import re
 import logging
 import threading
-from typing import Dict, Optional
+from contextlib import contextmanager
+from typing import Dict, Iterator, Optional
 
 from fastapi import HTTPException, Request, status
 from sqlalchemy import create_engine, text
@@ -22,6 +23,11 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 logger = logging.getLogger(__name__)
+
+# Postgres advisory-lock class for tenant schema init (ASCII 'GRCS').
+# Paired with hashtext(slug) so concurrent uvicorn workers serialize
+# create_all / column ensures per tenant DB and avoid pg_type races.
+_SCHEMA_INIT_LOCK_CLASS = 0x47524353
 
 
 def _normalize_pg_url(url: str) -> str:
@@ -89,6 +95,277 @@ _tenant_sessions: Dict[str, sessionmaker] = {}
 _tenant_cache_lock = threading.Lock()
 
 
+def _exception_chain(exc: BaseException) -> Iterator[BaseException]:
+    seen: set[int] = set()
+    cur: Optional[BaseException] = exc
+    while cur is not None and id(cur) not in seen:
+        yield cur
+        seen.add(id(cur))
+        nxt = getattr(cur, "orig", None)
+        if nxt is None:
+            nxt = cur.__cause__ or cur.__context__
+        cur = nxt if isinstance(nxt, BaseException) else None
+
+
+def is_schema_already_exists_error(exc: BaseException) -> bool:
+    """True for concurrent DDL races: duplicate table / type / column / relation.
+
+    Postgres SERIAL/CREATE TABLE registers a composite type named like the
+    table; two workers racing create_all hit UniqueViolation on
+    ``pg_type_typname_nsp_index``. DuplicateColumn races hit ALTER TABLE ADD.
+    """
+    for err in _exception_chain(exc):
+        pgcode = getattr(err, "pgcode", None)
+        # 42P07 duplicate_table, 42701 duplicate_column, 42710 duplicate_object,
+        # 23505 unique_violation (pg_type name collision during CREATE TABLE)
+        if pgcode in ("42P07", "42701", "42710", "23505"):
+            return True
+        msg = str(err).lower()
+        if (
+            "already exists" in msg
+            or "duplicate column" in msg
+            or "duplicate key value violates unique constraint" in msg
+            or "pg_type_typname_nsp_index" in msg
+        ):
+            return True
+    return False
+
+
+def _drop_orphan_relation_type(engine: Engine, table_name: str) -> bool:
+    """Drop a leftover composite type when the matching table is missing.
+
+    Aborted concurrent CREATE TABLE can leave ``pg_type.typname = table`` with
+    no relation; subsequent create_all then fails on UniqueViolation.
+    """
+    if engine.dialect.name != "postgresql":
+        return False
+    # Only allow safe identifier characters from our own metadata names.
+    if not re.match(r"^[a-z_][a-z0-9_]*$", table_name):
+        return False
+    try:
+        with engine.begin() as conn:
+            has_table = conn.execute(
+                text(
+                    "SELECT EXISTS ("
+                    "  SELECT 1 FROM pg_class c"
+                    "  JOIN pg_namespace n ON n.oid = c.relnamespace"
+                    "  WHERE n.nspname = 'public' AND c.relname = :n"
+                    "    AND c.relkind IN ('r', 'p')"
+                    ")"
+                ),
+                {"n": table_name},
+            ).scalar()
+            if has_table:
+                return False
+            has_type = conn.execute(
+                text(
+                    "SELECT EXISTS ("
+                    "  SELECT 1 FROM pg_type t"
+                    "  JOIN pg_namespace n ON n.oid = t.typnamespace"
+                    "  WHERE n.nspname = 'public' AND t.typname = :n AND t.typtype = 'c'"
+                    ")"
+                ),
+                {"n": table_name},
+            ).scalar()
+            if not has_type:
+                return False
+            conn.execute(text(f'DROP TYPE IF EXISTS "{table_name}" CASCADE'))
+        logger.warning(
+            "Dropped orphan PG composite type %s (table missing) on %s",
+            table_name,
+            getattr(engine.url, "database", "?"),
+        )
+        return True
+    except Exception:
+        logger.debug(
+            "orphan type cleanup failed for %s on %s",
+            table_name,
+            getattr(engine.url, "database", "?"),
+            exc_info=True,
+        )
+        return False
+
+
+def safe_metadata_create_all(engine: Engine, *, slug: str, attempts: int = 3) -> None:
+    """Race-tolerant ``Base.metadata.create_all`` for multi-worker startup.
+
+    Prefer calling under :func:`_tenant_schema_init_lock`. Retries after
+    benign duplicate-type/table errors and cleans orphaned composite types.
+    """
+    from .models import Base as _Base
+
+    last_err: Optional[BaseException] = None
+    for attempt in range(1, attempts + 1):
+        try:
+            _Base.metadata.create_all(bind=engine, checkfirst=True)
+            return
+        except Exception as e:
+            last_err = e
+            if not is_schema_already_exists_error(e):
+                raise
+            logger.info(
+                "create_all benign schema race for slug=%s (attempt %s/%s): %s",
+                slug,
+                attempt,
+                attempts,
+                e,
+            )
+            # Recover orphaned types from a prior aborted CREATE TABLE.
+            try:
+                from sqlalchemy import inspect as sa_inspect
+
+                inspector = sa_inspect(engine)
+                for table in _Base.metadata.sorted_tables:
+                    if not inspector.has_table(table.name):
+                        _drop_orphan_relation_type(engine, table.name)
+            except Exception:
+                logger.debug(
+                    "create_all orphan-type scan failed for slug=%s", slug, exc_info=True
+                )
+            if attempt >= attempts:
+                # Winner likely finished; treat as success so migrations/seeds continue.
+                return
+    if last_err is not None:
+        raise last_err
+
+
+def _ensure_statutory_audit_tables(engine: Engine) -> None:
+    """Focused IF NOT EXISTS / checkfirst ensure for statutory-audit tables.
+
+    create_all remains the primary path; this backstops races and orphaned
+    types for the grc_audit_observation* family specifically.
+    """
+    try:
+        from .models import (
+            AuditObservation,
+            AuditObservationActivity,
+            AuditObservationControlLink,
+            AuditObservationDocumentLink,
+            AuditObservationEvidenceLink,
+            AuditObservationIssueLink,
+            AuditObservationRiskLink,
+        )
+    except Exception:
+        logger.debug("statutory audit models unavailable for ensure", exc_info=True)
+        return
+
+    models = (
+        AuditObservation,
+        AuditObservationEvidenceLink,
+        AuditObservationControlLink,
+        AuditObservationRiskLink,
+        AuditObservationIssueLink,
+        AuditObservationDocumentLink,
+        AuditObservationActivity,
+    )
+    try:
+        from sqlalchemy import inspect as sa_inspect
+
+        inspector = sa_inspect(engine)
+        for model in models:
+            table = model.__table__
+            if inspector.has_table(table.name):
+                continue
+            try:
+                table.create(bind=engine, checkfirst=True)
+            except Exception as te:
+                if is_schema_already_exists_error(te):
+                    logger.debug(
+                        "statutory audit table %s already exists (race)", table.name
+                    )
+                    continue
+                if _drop_orphan_relation_type(engine, table.name):
+                    try:
+                        table.create(bind=engine, checkfirst=True)
+                        continue
+                    except Exception as te2:
+                        if is_schema_already_exists_error(te2):
+                            continue
+                        logger.warning(
+                            "statutory audit create %s failed after orphan cleanup: %s",
+                            table.name,
+                            te2,
+                        )
+                        continue
+                logger.warning("statutory audit create %s failed: %s", table.name, te)
+        # Additive column for tenants that got the table before `category` existed.
+        if engine.dialect.name == "postgresql" and inspector.has_table(
+            AuditObservation.__tablename__
+        ):
+            with engine.begin() as conn:
+                conn.execute(
+                    text(
+                        "ALTER TABLE grc_audit_observations "
+                        "ADD COLUMN IF NOT EXISTS category VARCHAR(120)"
+                    )
+                )
+    except Exception:
+        logger.warning(
+            "statutory audit table ensure failed on %s",
+            getattr(engine.url, "database", "?"),
+            exc_info=True,
+        )
+
+
+@contextmanager
+def _tenant_schema_init_lock(engine: Engine, slug: str) -> Iterator[None]:
+    """Serialize schema init across uvicorn workers via a PG session advisory lock."""
+    if engine.dialect.name != "postgresql":
+        yield
+        return
+    lock_key = f"grc:schema_init:{slug}"
+    conn = engine.connect()
+    try:
+        conn.execute(
+            text("SELECT pg_advisory_lock(:c, hashtext(:k))"),
+            {"c": _SCHEMA_INIT_LOCK_CLASS, "k": lock_key},
+        )
+        conn.commit()
+        try:
+            yield
+        finally:
+            try:
+                conn.execute(
+                    text("SELECT pg_advisory_unlock(:c, hashtext(:k))"),
+                    {"c": _SCHEMA_INIT_LOCK_CLASS, "k": lock_key},
+                )
+                conn.commit()
+            except Exception:
+                logger.debug("advisory unlock failed for slug=%s", slug, exc_info=True)
+    finally:
+        conn.close()
+
+
+def _init_tenant_schema(engine: Engine, slug: str) -> None:
+    """create_all + column self-heals under a per-tenant advisory lock."""
+    with _tenant_schema_init_lock(engine, slug):
+        try:
+            safe_metadata_create_all(engine, slug=slug)
+        except Exception:
+            logger.exception("create_all failed for slug=%s", slug)
+        try:
+            _ensure_statutory_audit_tables(engine)
+        except Exception:
+            logger.exception("statutory audit schema ensure failed for slug=%s", slug)
+        try:
+            from .modules.compliance.schema_migrations import _ensure_for_engine
+
+            _ensure_for_engine(engine)
+        except Exception:
+            # Self-heal must never break engine creation; the underlying
+            # query path will surface a clear error if the column is
+            # genuinely missing.
+            logger.exception("schema self-heal failed for slug=%s", slug)
+        try:
+            from .modules.identity.schema_migrations import (
+                _ensure_for_engine as _ensure_identity_for_engine,
+            )
+
+            _ensure_identity_for_engine(engine)
+        except Exception:
+            logger.exception("identity schema self-heal failed for slug=%s", slug)
+
+
 def get_tenant_engine(slug: str) -> Engine:
     validate_slug(slug)
     if slug in _tenant_engines:
@@ -125,33 +402,8 @@ def get_tenant_engine(slug: str) -> Engine:
             # Run any registered idempotent schema self-heals so this engine
             # is safe to use immediately. Local import avoids a circular
             # dependency at module-load time (the migrations module imports
-            # from this file).
-            try:
-                # First, create any tables that the model registry knows
-                # about but this tenant DB hasn't been populated with yet
-                # (e.g. a brand-new pivot table introduced after the tenant
-                # was originally provisioned). `create_all` only creates
-                # missing tables — existing ones are left untouched, so
-                # this is safe to call on every engine init.
-                from .models import Base as _Base
-                _Base.metadata.create_all(bind=engine)
-            except Exception:
-                logger.exception("create_all failed for slug=%s", slug)
-            try:
-                from .modules.compliance.schema_migrations import _ensure_for_engine
-                _ensure_for_engine(engine)
-            except Exception:
-                # Self-heal must never break engine creation; the underlying
-                # query path will surface a clear error if the column is
-                # genuinely missing.
-                logger.exception("schema self-heal failed for slug=%s", slug)
-            try:
-                from .modules.identity.schema_migrations import (
-                    _ensure_for_engine as _ensure_identity_for_engine,
-                )
-                _ensure_identity_for_engine(engine)
-            except Exception:
-                logger.exception("identity schema self-heal failed for slug=%s", slug)
+            # from this file). Serialized across workers via PG advisory lock.
+            _init_tenant_schema(engine, slug)
         return _tenant_engines[slug]
 
 

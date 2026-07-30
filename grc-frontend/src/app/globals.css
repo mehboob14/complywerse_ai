@@ -1212,35 +1212,37 @@
     padding: 0.875rem;
   }
 
-  .governance-light .fixed.inset-0 {
+  /* Centered modal shells only — exclude right slide-overs (data-right-slide-panel)
+     so their full-viewport backdrop is not width-capped / padded / re-centered. */
+  .governance-light .fixed.inset-0:not([data-right-slide-panel]) {
     padding: 0.75rem;
     align-items: center;
     justify-content: center;
   }
 
-  .governance-light .fixed.inset-0 > div {
+  .governance-light .fixed.inset-0:not([data-right-slide-panel]) > div {
     width: min(100%, 52rem);
     max-height: calc(100vh - 1.5rem);
     overflow-y: auto;
   }
 
-  .governance-light .fixed.inset-0 .max-w-4xl {
+  .governance-light .fixed.inset-0:not([data-right-slide-panel]) .max-w-4xl {
     max-width: 52rem !important;
   }
 
-  .governance-light .fixed.inset-0 .max-w-3xl {
+  .governance-light .fixed.inset-0:not([data-right-slide-panel]) .max-w-3xl {
     max-width: 46rem !important;
   }
 
-  .governance-light .fixed.inset-0 .max-w-2xl {
+  .governance-light .fixed.inset-0:not([data-right-slide-panel]) .max-w-2xl {
     max-width: 40rem !important;
   }
 
-  .governance-light .fixed.inset-0 .max-w-lg {
+  .governance-light .fixed.inset-0:not([data-right-slide-panel]) .max-w-lg {
     max-width: 31rem !important;
   }
 
-  .governance-light .fixed.inset-0 .max-w-md {
+  .governance-light .fixed.inset-0:not([data-right-slide-panel]) .max-w-md {
     max-width: 27rem !important;
   }
 

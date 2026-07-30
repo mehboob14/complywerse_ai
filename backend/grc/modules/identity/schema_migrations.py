@@ -22,6 +22,7 @@ _ensured_lock = threading.Lock()
 
 
 def _ensure_column(engine: Engine, table: str, column: str, ddl_type: str) -> bool:
+    """Add the column if missing. DuplicateColumn / concurrent races count as success."""
     try:
         inspector = inspect(engine)
         if not inspector.has_table(table):
@@ -29,12 +30,24 @@ def _ensure_column(engine: Engine, table: str, column: str, ddl_type: str) -> bo
         existing = {c["name"] for c in inspector.get_columns(table)}
         if column in existing:
             return True
+        if engine.dialect.name == "postgresql":
+            ddl = f'ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column} {ddl_type}'
+        else:
+            ddl = f'ALTER TABLE {table} ADD COLUMN {column} {ddl_type}'
         with engine.begin() as conn:
-            conn.execute(text(f'ALTER TABLE {table} ADD COLUMN {column} {ddl_type}'))
+            conn.execute(text(ddl))
         logger.info("Added column %s.%s on engine %s", table, column,
                     getattr(engine.url, "database", "?"))
         return True
-    except Exception:
+    except Exception as e:
+        from ...db import is_schema_already_exists_error
+
+        if is_schema_already_exists_error(e):
+            logger.debug(
+                "Column %s.%s already exists on engine %s (concurrent ensure)",
+                table, column, getattr(engine.url, "database", "?"),
+            )
+            return True
         logger.exception("Failed to ensure column %s.%s on engine %s",
                          table, column, getattr(engine.url, "database", "?"))
         return False

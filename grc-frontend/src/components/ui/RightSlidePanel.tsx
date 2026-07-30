@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -42,15 +43,23 @@ export function RightSlidePanel({
 
   // Prevent body scroll while open
   useEffect(() => {
-    document.body.style.overflow = isOpen ? 'hidden' : '';
-    return () => { document.body.style.overflow = ''; };
+    if (!isOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
   }, [isOpen]);
 
-  if (!isOpen) return null;
+  // Portal to <body> so ancestor styles (e.g. .governance-light .fixed.inset-0
+  // width/padding/centering rules) and containing blocks cannot distort the
+  // full-viewport backdrop or right-docked panel.
+  if (!isOpen || typeof document === 'undefined') return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex">
-      {/* Backdrop */}
+  return createPortal(
+    <div
+      className="fixed inset-0 z-50 flex justify-end"
+      data-right-slide-panel=""
+    >
+      {/* Backdrop — full viewport; must remain unconstrained */}
       <div
         className="absolute inset-0 bg-black/40 transition-opacity"
         onClick={onClose}
@@ -61,7 +70,7 @@ export function RightSlidePanel({
       <div
         ref={panelRef}
         className={clsx(
-          'relative ml-auto flex h-full flex-col bg-white shadow-2xl transition-transform duration-300',
+          'relative flex h-full flex-col bg-white shadow-2xl transition-transform duration-300',
           widthClassName || width,
           isOpen ? 'translate-x-0' : 'translate-x-full'
         )}
@@ -98,6 +107,7 @@ export function RightSlidePanel({
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

@@ -21,7 +21,6 @@ import {
   MessageSquare,
   Sparkles,
   Trash2,
-  Search,
   ArrowRightLeft,
   ExternalLink,
 } from 'lucide-react';
@@ -173,17 +172,6 @@ interface GovernancePolicyOption {
   doc_type?: string;
 }
 
-interface PolicySearchResult {
-  document_id: number;
-  document_title?: string;
-  doc_type?: string;
-  document_code?: string | null;
-  match_field: string;
-  snippet: string;
-  statement_id?: number | null;
-  statement_code?: string | null;
-}
-
 interface ExceptionCandidate {
   document_id: number;
   document_title?: string;
@@ -262,12 +250,8 @@ export default function PolicyExceptionsPage() {
     asset_ids: [] as number[],
   });
 
-  // ── Find & generate (modal: policy-content search + opt-in AI suggestions) ──
+  // ── Find & generate (modal: searchable policy picker + opt-in AI suggestions) ──
   const [discoverOpen, setDiscoverOpen] = useState(false);
-  const [policyQuery, setPolicyQuery] = useState('');
-  const [policyResults, setPolicyResults] = useState<PolicySearchResult[]>([]);
-  const [searchingPolicies, setSearchingPolicies] = useState(false);
-  const [searchedOnce, setSearchedOnce] = useState(false);
   const [candidates, setCandidates] = useState<ExceptionCandidate[]>([]);
   const [loadingCandidates, setLoadingCandidates] = useState(false);
   const [candidateSource, setCandidateSource] = useState('');
@@ -525,7 +509,7 @@ export default function PolicyExceptionsPage() {
     }
   };
 
-  // Open the (existing) create modal pre-filled — used by policy-search results
+  // Open the (existing) create modal pre-filled — used by selected policy
   // and AI candidate suggestions. Does not alter the create flow itself.
   const openCreateForDocument = (
     documentId: number,
@@ -547,21 +531,6 @@ export default function PolicyExceptionsPage() {
     setShowCreateModal(true);
   };
 
-  const runPolicySearch = async () => {
-    const q = policyQuery.trim();
-    if (!q) return;
-    setSearchingPolicies(true);
-    setSearchedOnce(true);
-    try {
-      const res = await policyExceptionApi.searchPolicies(q, 25);
-      setPolicyResults((res.data?.results || []) as PolicySearchResult[]);
-    } catch {
-      setPolicyResults([]);
-    } finally {
-      setSearchingPolicies(false);
-    }
-  };
-
   // Opt-in AI only — requires an explicit Suggest click and a selected target.
   const loadCandidates = async () => {
     if (candidatePolicyId === '') return;
@@ -581,7 +550,8 @@ export default function PolicyExceptionsPage() {
     }
   };
 
-  const onSelectCandidatePolicy = (value: string) => {
+  const onSelectCandidatePolicy = (values: string[]) => {
+    const value = values[0] || '';
     const target: number | 'all' | '' =
       value === '' ? '' : value === 'all' ? 'all' : Number(value);
     setCandidatePolicyId(target);
@@ -589,6 +559,11 @@ export default function PolicyExceptionsPage() {
     setCandidateSource('');
     setCandidatesFetched(false);
   };
+
+  const selectedDiscoverPolicy =
+    typeof candidatePolicyId === 'number'
+      ? (documents || []).find((d) => d.id === candidatePolicyId) || null
+      : null;
 
   const allExceptions = Array.isArray(exceptions) ? exceptions : [];
   const exceptionList = searchTerm.trim()
@@ -850,19 +825,19 @@ export default function PolicyExceptionsPage() {
         />
       </section>
 
-      {/* Find & generate — centered modal (search + opt-in AI), not an inline strip */}
+      {/* Find & generate — searchable policy picker + opt-in AI */}
       <AnimatedModal
         isOpen={discoverOpen}
         onClose={() => setDiscoverOpen(false)}
-        size="2xl"
+        size="lg"
         title="Find & generate exceptions"
-        subtitle="Search policy content or generate AI suggestions for a selected policy"
+        subtitle="Filter and pick a policy, then raise an exception or generate AI suggestions"
       >
         <div className="space-y-5 px-5 py-5">
           <ol className="grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2">
             {[
-              { n: '1', t: 'Search policies', d: 'Match keywords or sentences in policy text and clauses.' },
-              { n: '2', t: 'Suggest with AI', d: 'Pick a policy, then run suggestions when you are ready.' },
+              { n: '1', t: 'Select a policy', d: 'Search and pick from the policy list (or scan all).' },
+              { n: '2', t: 'Suggest with AI', d: 'Run suggestions when you are ready — nothing auto-runs.' },
             ].map((s) => (
               <li key={s.n} className="flex gap-2.5">
                 <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary-600 text-[11px] font-semibold text-white">
@@ -876,134 +851,113 @@ export default function PolicyExceptionsPage() {
             ))}
           </ol>
 
-          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 lg:gap-6">
-            {/* Feature 1 — search across policy content */}
-            <section className="min-w-0 space-y-3">
-              <div className="flex gap-2">
-                <input
-                  value={policyQuery}
-                  onChange={(e) => setPolicyQuery(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') runPolicySearch(); }}
-                  placeholder="Keyword or sentence…"
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
-                />
-                <button
-                  type="button"
-                  onClick={runPolicySearch}
-                  disabled={searchingPolicies || !policyQuery.trim()}
-                  className="btn-primary flex shrink-0 items-center gap-1.5 px-3 py-2 text-sm disabled:opacity-50"
-                >
-                  {searchingPolicies ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-                  Search
-                </button>
-              </div>
-              <div className="max-h-72 space-y-2 overflow-y-auto pr-0.5">
-                {searchedOnce && !searchingPolicies && policyResults.length === 0 && (
-                  <p className="px-1 py-2 text-xs text-slate-400">No policies matched “{policyQuery}”.</p>
-                )}
-                {policyResults.map((r, i) => (
-                  <div key={`${r.document_id}-${r.statement_id ?? 'doc'}-${i}`} className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-slate-900">{r.document_title || `Policy #${r.document_id}`}</p>
-                        <p className="text-[10px] uppercase tracking-wide text-slate-400">
-                          {r.doc_type || 'policy'}{r.document_code ? ` · ${r.document_code}` : ''}{r.match_field === 'policy_statement' ? ' · clause' : ''}
-                        </p>
-                      </div>
-                      {canCreate && (
-                        <button
-                          type="button"
-                          onClick={() => openCreateForDocument(r.document_id)}
-                          className="flex flex-shrink-0 items-center gap-1 rounded-md border border-primary-200 px-2 py-1 text-[11px] font-medium text-primary-700 hover:bg-primary-50"
-                        >
-                          <Plus className="h-3 w-3" /> Exception
-                        </button>
-                      )}
-                    </div>
-                    {r.snippet && <p className="mt-1.5 text-xs leading-snug text-slate-600">{r.snippet}</p>}
-                  </div>
-                ))}
-              </div>
-            </section>
+          <section className="min-w-0 space-y-3">
+            <div>
+              <p className="text-sm font-semibold text-slate-900">Policy</p>
+              <p className="mt-0.5 text-xs text-slate-500">
+                Type in the dropdown to filter policies. Select one to raise an exception or run AI suggestions.
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+              <MultiSelectDropdown
+                title="Policy"
+                items={[
+                  { value: 'all', label: 'All policies', subLabel: 'Scan across every policy' },
+                  ...(documents || []).map((d: GovernancePolicyOption) => ({
+                    value: String(d.id),
+                    label: d.title,
+                    subLabel: d.document_code || d.doc_type,
+                  })),
+                ]}
+                selectedValues={candidatePolicyId === '' ? [] : [String(candidatePolicyId)]}
+                onApply={onSelectCandidatePolicy}
+                multiSelect={false}
+                triggerVariant="input"
+                triggerClassName="w-full"
+                placeholder="Select a policy…"
+                searchPlaceholder="Search policies…"
+                forceSearch
+                className="min-w-0 flex-1"
+              />
+              <button
+                type="button"
+                onClick={loadCandidates}
+                disabled={loadingCandidates || candidatePolicyId === ''}
+                className="btn-primary flex shrink-0 items-center justify-center gap-1.5 px-3 py-2 text-sm disabled:opacity-50"
+              >
+                {loadingCandidates ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                {candidates.length ? 'Refresh' : 'Suggest'}
+              </button>
+            </div>
 
-            {/* Feature 2 — AI-suggested candidate exceptions (gated) */}
-            <section className="min-w-0 space-y-3">
-              <div>
-                <p className="text-sm font-semibold text-slate-900">AI-suggested exceptions</p>
-                <p className="mt-0.5 text-xs text-slate-500">Select a policy, then run suggestions — nothing runs until you ask.</p>
-              </div>
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <select
-                  value={String(candidatePolicyId)}
-                  onChange={(e) => onSelectCandidatePolicy(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
-                >
-                  <option value="">Select a policy…</option>
-                  <option value="all">All policies (scan across every policy)</option>
-                  {(documents || []).map((d: GovernancePolicyOption) => (
-                    <option key={d.id} value={d.id}>
-                      {d.document_code ? `${d.document_code} · ` : ''}{d.title}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  onClick={loadCandidates}
-                  disabled={loadingCandidates || candidatePolicyId === ''}
-                  className="btn-primary flex shrink-0 items-center justify-center gap-1.5 px-3 py-2 text-sm disabled:opacity-50"
-                >
-                  {loadingCandidates ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                  {candidates.length ? 'Refresh' : 'Suggest'}
-                </button>
-              </div>
-              <div className="max-h-72 space-y-2 overflow-y-auto pr-0.5">
-                {loadingCandidates && (
-                  <div className="flex items-center gap-2 px-1 py-3 text-xs text-slate-500">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    {candidatePolicyId === 'all' ? 'Analyzing your policies…' : 'Analyzing this policy…'}
+            {selectedDiscoverPolicy && canCreate && (
+              <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-slate-900">{selectedDiscoverPolicy.title}</p>
+                    <p className="text-[10px] uppercase tracking-wide text-slate-400">
+                      {selectedDiscoverPolicy.doc_type || 'policy'}
+                      {selectedDiscoverPolicy.document_code ? ` · ${selectedDiscoverPolicy.document_code}` : ''}
+                    </p>
                   </div>
-                )}
-                {!loadingCandidates && candidatePolicyId === '' && candidates.length === 0 && (
-                  <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-center text-xs text-slate-400">
-                    Choose a policy above, then click Suggest to generate candidates.
-                  </p>
-                )}
-                {!loadingCandidates && candidatePolicyId !== '' && !candidatesFetched && candidates.length === 0 && (
-                  <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-center text-xs text-slate-400">
-                    Ready — click Suggest to generate candidates for the selected policy.
-                  </p>
-                )}
-                {!loadingCandidates && candidatesFetched && candidates.length === 0 && (
-                  <p className="px-1 py-2 text-xs text-slate-400">
-                    No AI-suggested exceptions found for this selection — click Suggest to retry.
-                  </p>
-                )}
-                {candidates.map((c, i) => (
-                  <div key={`${c.document_id}-${i}`} className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-slate-900">{c.suggested_title}</p>
-                        <p className="text-[11px] text-slate-400">{c.document_title || `Policy #${c.document_id}`} · {c.suggested_priority}</p>
-                      </div>
-                      {canCreate && (
-                        <button
-                          type="button"
-                          onClick={() => openCreateForDocument(c.document_id, { title: c.suggested_title, justification: c.rationale, priority: c.suggested_priority })}
-                          className="flex flex-shrink-0 items-center gap-1 rounded-md border border-primary-200 px-2 py-1 text-[11px] font-medium text-primary-700 hover:bg-primary-50"
-                        >
-                          <Plus className="h-3 w-3" /> Use
-                        </button>
-                      )}
+                  <button
+                    type="button"
+                    onClick={() => openCreateForDocument(selectedDiscoverPolicy.id)}
+                    className="flex flex-shrink-0 items-center gap-1 rounded-md border border-primary-200 px-2 py-1 text-[11px] font-medium text-primary-700 hover:bg-primary-50"
+                  >
+                    <Plus className="h-3 w-3" /> Exception
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="max-h-72 space-y-2 overflow-y-auto pr-0.5">
+              {loadingCandidates && (
+                <div className="flex items-center gap-2 px-1 py-3 text-xs text-slate-500">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  {candidatePolicyId === 'all' ? 'Analyzing your policies…' : 'Analyzing this policy…'}
+                </div>
+              )}
+              {!loadingCandidates && candidatePolicyId === '' && candidates.length === 0 && (
+                <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-center text-xs text-slate-400">
+                  Choose a policy above, then click Suggest to generate candidates.
+                </p>
+              )}
+              {!loadingCandidates && candidatePolicyId !== '' && !candidatesFetched && candidates.length === 0 && (
+                <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-center text-xs text-slate-400">
+                  Ready — click Suggest to generate candidates for the selected policy.
+                </p>
+              )}
+              {!loadingCandidates && candidatesFetched && candidates.length === 0 && (
+                <p className="px-1 py-2 text-xs text-slate-400">
+                  No AI-suggested exceptions found for this selection — click Suggest to retry.
+                </p>
+              )}
+              {candidates.map((c, i) => (
+                <div key={`${c.document_id}-${i}`} className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-slate-900">{c.suggested_title}</p>
+                      <p className="text-[11px] text-slate-400">{c.document_title || `Policy #${c.document_id}`} · {c.suggested_priority}</p>
                     </div>
-                    {c.rationale && <p className="mt-1.5 text-xs leading-snug text-slate-600">{c.rationale}</p>}
+                    {canCreate && (
+                      <button
+                        type="button"
+                        onClick={() => openCreateForDocument(c.document_id, { title: c.suggested_title, justification: c.rationale, priority: c.suggested_priority })}
+                        className="flex flex-shrink-0 items-center gap-1 rounded-md border border-primary-200 px-2 py-1 text-[11px] font-medium text-primary-700 hover:bg-primary-50"
+                      >
+                        <Plus className="h-3 w-3" /> Use
+                      </button>
+                    )}
                   </div>
-                ))}
-                {candidateSource === 'template' && candidates.length > 0 && (
-                  <p className="px-1 text-[10px] italic text-slate-400">Generated from policy metadata (configure an AI key for richer, content-aware suggestions).</p>
-                )}
-              </div>
-            </section>
-          </div>
+                  {c.rationale && <p className="mt-1.5 text-xs leading-snug text-slate-600">{c.rationale}</p>}
+                </div>
+              ))}
+              {candidateSource === 'template' && candidates.length > 0 && (
+                <p className="px-1 text-[10px] italic text-slate-400">Generated from policy metadata (configure an AI key for richer, content-aware suggestions).</p>
+              )}
+            </div>
+          </section>
         </div>
       </AnimatedModal>
 

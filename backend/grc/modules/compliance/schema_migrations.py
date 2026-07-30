@@ -39,7 +39,11 @@ _ensured_lock = threading.Lock()
 
 
 def _ensure_column(engine: Engine, table: str, column: str, ddl_type: str) -> bool:
-    """Add the column if missing. Returns True on success or no-op, False on failure."""
+    """Add the column if missing. Returns True on success or no-op, False on failure.
+
+    Uses ``ADD COLUMN IF NOT EXISTS`` on Postgres and treats DuplicateColumn /
+    concurrent-add races as success so multi-worker startup does not ERROR-spam.
+    """
     try:
         inspector = inspect(engine)
         if not inspector.has_table(table):
@@ -47,11 +51,23 @@ def _ensure_column(engine: Engine, table: str, column: str, ddl_type: str) -> bo
         existing = {c["name"] for c in inspector.get_columns(table)}
         if column in existing:
             return True
+        if engine.dialect.name == "postgresql":
+            ddl = f'ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column} {ddl_type}'
+        else:
+            ddl = f'ALTER TABLE {table} ADD COLUMN {column} {ddl_type}'
         with engine.begin() as conn:
-            conn.execute(text(f'ALTER TABLE {table} ADD COLUMN {column} {ddl_type}'))
+            conn.execute(text(ddl))
         logger.info("Added column %s.%s on engine %s", table, column, engine.url.database)
         return True
-    except Exception:
+    except Exception as e:
+        from ...db import is_schema_already_exists_error
+
+        if is_schema_already_exists_error(e):
+            logger.debug(
+                "Column %s.%s already exists on engine %s (concurrent ensure)",
+                table, column, getattr(engine.url, "database", "?"),
+            )
+            return True
         logger.exception("Failed to ensure column %s.%s on engine %s",
                          table, column, getattr(engine.url, "database", "?"))
         return False
@@ -874,9 +890,12 @@ def _ensure_for_engine(engine: Engine) -> None:
 
         # Create any tables that are in the ORM models but missing from the DB.
         # This handles new tables introduced after a tenant DB was provisioned.
+        # Prefer the race-safe helper (advisory lock is held by get_tenant_engine
+        # callers; still tolerate duplicate type/table if called elsewhere).
         try:
-            from ...models import Base
-            Base.metadata.create_all(engine, checkfirst=True)
+            from ...db import safe_metadata_create_all
+            db_name = getattr(engine.url, "database", None) or "tenant"
+            safe_metadata_create_all(engine, slug=str(db_name))
         except Exception:
             logger.exception("Failed to create missing tables on engine %s", getattr(engine.url, "database", "?"))
 
