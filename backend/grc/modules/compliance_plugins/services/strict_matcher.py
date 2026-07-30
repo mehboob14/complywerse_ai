@@ -35,7 +35,7 @@ from __future__ import annotations
 import logging
 from typing import List, Optional, Tuple
 
-from sqlalchemy import or_
+from sqlalchemy import or_, cast, String
 from sqlalchemy.orm import Session
 
 from ....models import BenchmarkOsMapping, CompliancePlugin
@@ -158,6 +158,24 @@ def applicable_plugins_for_asset(
             ),
             CompliancePlugin.benchmark == benchmark_name,
             CompliancePlugin.enabled.is_(True),
+            # Exclude unimplemented stubs. A rule whose check_definition still
+            # carries a TODO placeholder compares the host's output against the
+            # literal string "TODO_expected_value", so it can only ever fail —
+            # 222 of the 424 rules in one Windows benchmark were these, and they
+            # were being reported as security failures. An unwritten check is
+            # not a finding; running it manufactures one.
+            ~cast(CompliancePlugin.check_definition, String).ilike("%TODO%"),
+            # Also exclude auto-pass placeholders. The PDF-ingest parser writes
+            # expect={"kind":"any"} ("reviewer must tighten") when it cannot derive
+            # a real check — the rule then passes unconditionally. Executing it
+            # manufactures compliance: PostgreSQL 18 has 66 of 70 rules like this,
+            # and ALL network/cloud benchmarks are 100%% of them. An unauthored
+            # check is not a passing check.
+            ~cast(CompliancePlugin.check_definition, String).ilike('%%"kind": "any"%%'),
+            ~cast(CompliancePlugin.check_definition, String).ilike('%%"kind":"any"%%'),
+            # Manual / attestation rules are never auto pass/fail — keep them out
+            # of the automated pass-rate denominator (same n/a scoring rule).
+            CompliancePlugin.runner_type != "manual",
         )
         .all()
     )
@@ -230,6 +248,10 @@ def applicable_plugins_for_asset_multi(
             ),
             CompliancePlugin.benchmark.in_(names),
             CompliancePlugin.enabled.is_(True),
+            CompliancePlugin.runner_type != "manual",
+            ~cast(CompliancePlugin.check_definition, String).ilike("%TODO%"),
+            ~cast(CompliancePlugin.check_definition, String).ilike('%%"kind": "any"%%'),
+            ~cast(CompliancePlugin.check_definition, String).ilike('%%"kind":"any"%%'),
         )
         .all()
     )

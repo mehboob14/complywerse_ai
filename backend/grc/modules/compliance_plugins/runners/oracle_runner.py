@@ -69,6 +69,10 @@ def _is_sql_safe(sql: str) -> tuple[bool, str]:
     """Reject any SQL that isn't a pure read-only SELECT.
 
     Returns (ok, reason). Reason is empty when ok=True.
+
+    String literals are stripped before the write-keyword scan so CIS
+    expected values like ``'(DROP,3)'`` or privilege names like
+    ``'CREATE LIBRARY'`` do not false-positive as mutating SQL.
     """
     s = (sql or "").strip()
     if not s:
@@ -81,9 +85,11 @@ def _is_sql_safe(sql: str) -> tuple[bool, str]:
     # writes (e.g. `-- DELETE FROM x; SELECT 1`) don't reach the DB.
     lines = [ln.split("--", 1)[0] for ln in s.splitlines()]
     s_no_comments = "\n".join(lines).strip()
+    # Strip single-quoted string literals ('' escaped quotes inside).
+    s_no_literals = re.sub(r"'(?:[^']|'')*'", "''", s_no_comments)
     if not s_no_comments.lower().startswith(("select", "with")):
         return False, "SQL must start with SELECT or WITH (read-only)."
-    if _DENY_RE.search(s_no_comments):
+    if _DENY_RE.search(s_no_literals):
         return False, "SQL contains a write keyword (INSERT/UPDATE/DELETE/etc.)."
     if _MULTI_STATEMENT_RE.search(s_no_comments):
         return False, "Multiple SQL statements per check are not allowed."

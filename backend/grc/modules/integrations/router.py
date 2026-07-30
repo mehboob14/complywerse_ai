@@ -1,11 +1,13 @@
 import logging
+import threading
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from grc.db import open_tenant_session
 from grc.models import get_db, GRCUser, IntegrationConnection, SyncHistory, IntegrationAuditLog
 from grc.routers.auth_router import require_auth, get_user_primary_tenant, require_tenant_permission
 from .services.sync_service import SyncService
@@ -195,13 +197,57 @@ def update_connection(
     return {"connection": _connection_to_dict(connection)}
 
 
+def _purge_connection_cascade(db, connection_id: int) -> None:
+    """Delete every row that FKs to this integration connection (sync history, audit
+    logs, scan records, …) in dependency order, so the connection row itself can be
+    removed. Findings are handled by the caller (detached, not deleted). Generic —
+    walks information_schema so a newly added child table can't silently block the
+    delete the way the ORM cascade gaps did."""
+    from sqlalchemy import text as _sql
+
+    def _child_fks(table):
+        return db.execute(_sql("""
+            SELECT tc.table_name, kcu.column_name
+            FROM information_schema.table_constraints tc
+            JOIN information_schema.key_column_usage kcu
+              ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
+            JOIN information_schema.constraint_column_usage ccu
+              ON tc.constraint_name = ccu.constraint_name AND tc.table_schema = ccu.table_schema
+            WHERE tc.constraint_type = 'FOREIGN KEY'
+              AND ccu.table_name = :t AND ccu.column_name = 'id'
+        """), {"t": table}).fetchall()
+
+    def _has_id(table):
+        return db.execute(_sql(
+            "SELECT 1 FROM information_schema.columns WHERE table_name=:t AND column_name='id'"
+        ), {"t": table}).fetchone() is not None
+
+    def _cascade(table, ids, depth=0):
+        if not ids or depth > 6:
+            return
+        for ctable, ccol in _child_fks(table):
+            if ctable == table:
+                continue
+            if _has_id(ctable):
+                child_ids = [r[0] for r in db.execute(
+                    _sql(f'SELECT id FROM "{ctable}" WHERE "{ccol}" = ANY(:ids)'), {"ids": ids}
+                ).fetchall()]
+                _cascade(ctable, child_ids, depth + 1)
+            db.execute(_sql(f'DELETE FROM "{ctable}" WHERE "{ccol}" = ANY(:ids)'), {"ids": ids})
+
+    _cascade("grc_integration_connections", [connection_id])
+
+
 @router.delete("/connections/{connection_id}")
 def delete_connection(
     connection_id: int,
+    purge: bool = False,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
     _perm: bool = Depends(require_tenant_permission("admin:integrations:delete")),
 ):
+    from sqlalchemy import text as _sql
+
     tenant_id = get_user_primary_tenant(current_user, db)
     user_id = current_user.id
 
@@ -212,6 +258,21 @@ def delete_connection(
     if not connection:
         raise HTTPException(status_code=404, detail="Connection not found")
 
+    if purge:
+        # HARD delete — permanently remove the connection so its name is freed and it
+        # stops cluttering the list. Findings are PRESERVED (detached: connection_id
+        # set NULL), only connection-scoped logs are removed.
+        name = connection.connection_name
+        db.execute(_sql("UPDATE grc_vulnerabilities SET connection_id = NULL WHERE connection_id = :id"),
+                   {"id": connection_id})
+        _purge_connection_cascade(db, connection_id)
+        db.execute(_sql("DELETE FROM grc_integration_connections WHERE id = :id"), {"id": connection_id})
+        db.commit()
+        logger.info("Hard-deleted integration connection %s (%s) for tenant %s by user %s",
+                    connection_id, name, tenant_id, user_id)
+        return {"message": "Connection deleted", "id": connection_id, "purged": True}
+
+    # DEFAULT — soft deactivate (reversible; keeps config + history).
     connection.is_active = False
     connection.status = "deactivated"
     connection.updated_at = datetime.utcnow()
@@ -221,7 +282,7 @@ def delete_connection(
                        performed_by_user_id=user_id,
                        details={"connection_name": connection.connection_name})
 
-    return {"message": "Connection deactivated", "id": connection.id}
+    return {"message": "Connection deactivated", "id": connection.id, "purged": False}
 
 
 @router.post("/connections/{connection_id}/test")
@@ -244,6 +305,7 @@ def test_connection(
 @router.post("/connections/{connection_id}/sync")
 def trigger_sync(
     connection_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
     _perm: bool = Depends(require_tenant_permission("admin:integrations:edit")),
@@ -251,18 +313,62 @@ def trigger_sync(
     tenant_id = get_user_primary_tenant(current_user, db)
     user_id = current_user.id
 
-    try:
-        result = SyncService.run_full_sync(
-            db, connection_id, tenant_id,
-            triggered_by_user_id=user_id,
-            sync_type="manual",
+    # Validate the connection up front so a bad/inactive one returns an immediate,
+    # clear error instead of failing silently in the background worker below.
+    conn = db.query(IntegrationConnection).filter(
+        IntegrationConnection.id == connection_id,
+        IntegrationConnection.tenant_id == tenant_id,
+    ).first()
+    if not conn:
+        raise HTTPException(status_code=404, detail="Connection not found")
+    if not conn.is_active:
+        raise HTTPException(
+            status_code=400,
+            detail="Connection is deactivated — reactivate it before syncing.",
         )
-        return result
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        logger.exception(f"Sync trigger failed: {e}")
-        raise HTTPException(status_code=500, detail="Sync failed — check logs")
+
+    # A real scanner sync makes 200+ sequential API calls and can run 30-120s.
+    # Holding the HTTP request open that long trips the dev/reverse-proxy gateway
+    # timeout: the browser's request dies and the UI reports "Sync failed" even
+    # though the sync actually COMPLETES on the server (it just can't deliver the
+    # response). So we run it in a background worker with its own tenant DB
+    # session and return immediately; the client polls the connection's
+    # last_sync_at / status to see when it lands.
+    slug = getattr(request.state, "tenant_slug", None)
+    if not slug:
+        # No tenant context to reopen a session with in a worker — fall back to
+        # the synchronous path rather than silently doing nothing.
+        try:
+            return SyncService.run_full_sync(
+                db, connection_id, tenant_id,
+                triggered_by_user_id=user_id, sync_type="manual",
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=404, detail=str(e))
+        except Exception as e:
+            logger.exception(f"Sync trigger failed: {e}")
+            raise HTTPException(status_code=500, detail="Sync failed — check logs")
+
+    def _run_bg():
+        bg = open_tenant_session(slug)
+        try:
+            SyncService.run_full_sync(
+                bg, connection_id, tenant_id,
+                triggered_by_user_id=user_id, sync_type="manual",
+            )
+        except Exception:
+            logger.exception("Background sync failed for connection %s", connection_id)
+        finally:
+            bg.close()
+
+    threading.Thread(
+        target=_run_bg, name=f"sync-conn-{connection_id}", daemon=True
+    ).start()
+    return {
+        "status": "running",
+        "connection_id": connection_id,
+        "message": "Sync started — it runs in the background; the page updates when it finishes.",
+    }
 
 
 @router.get("/connections/{connection_id}/history")

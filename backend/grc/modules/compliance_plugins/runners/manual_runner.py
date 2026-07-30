@@ -25,6 +25,7 @@ _NA = {"na", "n/a", "not_applicable", "not-applicable", "skip", "skipped", "exem
 def manual_runner(check_definition: Dict[str, Any], credentials: Dict[str, Any]) -> RunnerResult:
     decision = str(check_definition.get("_manual_result") or "").strip().lower()
     note = str(check_definition.get("_manual_note") or "").strip()
+    prompt = str(check_definition.get("attestation_prompt") or "").strip()
     if decision in _PASS:
         return RunnerResult(status="passed",
                             summary=note or "Marked compliant by operator (manual attestation).")
@@ -33,10 +34,21 @@ def manual_runner(check_definition: Dict[str, Any], credentials: Dict[str, Any])
                             summary=note or "Marked non-compliant by operator (manual attestation).")
     if decision in _NA:
         return RunnerResult(status="skipped",
-                            summary=note or "Marked not applicable by operator (manual attestation).")
-    # No decision supplied — surface a clear prompt rather than a hard error.
+                            summary=note or "Marked not applicable by operator (manual attestation).",
+                            raw_output={"not_applicable": True})
+    # No decision — never treat as passed/failed. Excluded from pass/fail
+    # denominator by the overview scorer (status=skipped + requires_attestation).
+    summary = (
+        note
+        or prompt
+        or ("Manual attestation required — review the audit guidance and record a "
+            "pass / fail / N-A decision for this rule.")
+    )
     return RunnerResult(
         status="skipped",
-        summary=("Manual attestation required — review the audit guidance and record a "
-                 "pass / fail / N-A decision for this rule."),
+        summary=summary,
+        raw_output={
+            "requires_attestation": True,
+            "not_assessed": True,
+        },
     )

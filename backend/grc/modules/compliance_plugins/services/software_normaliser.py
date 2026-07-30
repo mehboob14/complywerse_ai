@@ -14,6 +14,7 @@ import re
 from typing import Any, Optional
 
 from sqlalchemy import or_
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 
@@ -142,39 +143,141 @@ def normalise_software(name: str, version: Optional[str] = None) -> Optional[str
     return None
 
 
+def _benchmark_version_tuple(name: str) -> tuple:
+    """Parse a trailing vX.Y.Z out of a benchmark name for comparison.
+    Unparseable names sort lowest so a properly-versioned benchmark wins."""
+    import re as _re
+    m = _re.search(r"[_-]v(\d+)(?:\.(\d+))?(?:\.(\d+))?", name or "")
+    if not m:
+        return (0, 0, 0)
+    return tuple(int(g) if g else 0 for g in m.groups())
+
+
+def _is_unusable_benchmark(name: str) -> bool:
+    """ARCHIVE / parser-junk names must never be offered as 'set up' targets."""
+    upper = (name or "").upper()
+    if "ARCHIVE" in upper:
+        return True
+    return any(t in upper for t in ("VVUNKNOWN", "QUARANTINE", "COMMERCIAL_USE"))
+
+
+def _rank_benchmarks(candidates: list) -> list:
+    """Rank (benchmark_name, rule_count) best-first.
+
+    Preference order, strongest first:
+      1. Highest version.
+      2. Most rules (a fuller benchmark is the better match at equal version).
+      3. Name, purely so the result is deterministic across runs.
+
+    ARCHIVE / junk candidates are dropped entirely — sorting them last still
+    let them win when they were the only hit (WSL → Windows XP ARCHIVE).
+    """
+    usable = [(n, c) for n, c in candidates if n and not _is_unusable_benchmark(n)]
+    def _key(item):
+        name, count = item
+        return (tuple(-v for v in _benchmark_version_tuple(name)), -count, name)
+    return [name for name, _ in sorted(usable, key=_key)]
+
+
+# Catalog / OS family roots — never a valid software→benchmark walk target.
+# Letting the suffix walk reach these is what mapped
+# windows-subsystem-for-linux → windows → Windows XP, and similar false hits.
+_BARE_FAMILY_TOKENS = frozenset({
+    "windows", "linux", "macos", "cisco", "cloud", "container", "db",
+    "network", "app", "unix", "hypervisor", "endpoint", "other",
+})
+
+# Trailing segment that is a version (18, 9.0, 2012, 19c, 23ai) — the only
+# kind of suffix we strip when walking postgresql-18 → postgresql.
+_VERSION_SEGMENT = re.compile(r"^\d+(?:\.\d+)*[a-z]*$", re.I)
+
+
+def _version_parent(software_key: str) -> Optional[str]:
+    """Strip one trailing version segment, or None if the tail isn't a version.
+
+    postgresql-18 → postgresql, tomcat-9.0 → tomcat, mssql-2022 → mssql.
+    windows-subsystem-for-linux → None (linux is not a version).
+    github-cli → None (cli is not a version).
+    """
+    if not software_key or "-" not in software_key:
+        return None
+    stem, tail = software_key.rsplit("-", 1)
+    if not stem or not _VERSION_SEGMENT.match(tail):
+        return None
+    return stem
+
+
+def _is_runnable_check(check_definition) -> bool:
+    """Same exclusions the detected-software API uses for rule_count."""
+    if not isinstance(check_definition, dict):
+        return False
+    text = str(check_definition)
+    if "TODO" in text:
+        return False
+    expect = check_definition.get("expect") or {}
+    if isinstance(expect, dict) and expect.get("kind") == "any":
+        return False
+    return True
+
+
 def benchmark_for_software_key(db: Session, software_key: str) -> Optional[str]:
     """Return the benchmark name whose plugins carry this software_key in
-    os_keys, or None. Tries the exact key first, then walks UP the version
-    suffix ('postgresql-18' → 'postgresql') — the agent often detects a
-    newer version than the library's latest benchmark, and the closest
-    family benchmark is far more useful than nothing."""
+    os_keys, or None.
+
+    Lookup rules (tightened after WSL/GitHub-CLI false positives):
+      1. Try the exact key, then walk UP only through *version* suffixes
+         (postgresql-18 → postgresql). Never strip product tokens
+         (windows-subsystem-for-linux must not become windows).
+      2. Never match bare OS-family tokens (windows/linux/…).
+      3. Ignore ARCHIVE / parser-junk benchmark names.
+      4. Require at least one runnable (non-manual, non-hollow) rule —
+         hollow matches must not light up "set up".
+    """
     if not software_key:
         return None
     from grc.models import CompliancePlugin
     from sqlalchemy.dialects.postgresql import JSONB
 
     def _lookup(key: str) -> Optional[str]:
-        row = (
-            db.query(CompliancePlugin.benchmark)
+        if not key or key in _BARE_FAMILY_TOKENS:
+            return None
+        rows = (
+            db.query(
+                CompliancePlugin.benchmark,
+                CompliancePlugin.runner_type,
+                CompliancePlugin.check_definition,
+            )
             .filter(
                 CompliancePlugin.enabled.is_(True),
                 CompliancePlugin.os_keys.isnot(None),
                 CompliancePlugin.os_keys.cast(JSONB).contains([key]),
             )
-            .first()
+            .all()
         )
-        return row[0] if row else None
+        # Count runnable rules per benchmark (manual/hollow excluded).
+        counts: dict[str, int] = {}
+        for bench, runner, cdef in rows:
+            if not bench or _is_unusable_benchmark(bench):
+                continue
+            if (runner or "").lower() == "manual":
+                continue
+            if not _is_runnable_check(cdef if isinstance(cdef, dict) else {}):
+                continue
+            counts[bench] = counts.get(bench, 0) + 1
+        usable = [(b, n) for b, n in counts.items() if n > 0]
+        if not usable:
+            return None
+        ranked = _rank_benchmarks(usable)
+        return ranked[0] if ranked else None
 
-    # Exact, then progressively strip trailing -<segment> pieces:
-    # tomcat-9.0 → tomcat;  postgresql-18 → postgresql
-    candidate = software_key
-    while candidate:
+    candidate: Optional[str] = software_key
+    seen: set[str] = set()
+    while candidate and candidate not in seen:
+        seen.add(candidate)
         hit = _lookup(candidate)
         if hit:
             return hit
-        if "-" not in candidate:
-            return None
-        candidate = candidate.rsplit("-", 1)[0]
+        candidate = _version_parent(candidate)
     return None
 
 
@@ -213,6 +316,7 @@ def enrich_inventory(db: Session, raw_items: list) -> list:
             continue  # registry + listening often double-report
         seen_keys.add(key)
         staged.append({"name": name, "version": version, "source": source,
+                       "publisher": (item.get("publisher") or "").strip() or None,
                        "software_key": key, "recognized": recognized})
     # Prefix dedup: when both 'postgresql-18' (registry, versioned) and
     # 'postgresql' (bare listening process) survive, keep only the
@@ -228,6 +332,7 @@ def enrich_inventory(db: Session, raw_items: list) -> list:
         bench = benchmark_for_software_key(db, e["software_key"]) if e["recognized"] else None
         enriched.append({
             "name": e["name"], "version": e["version"], "source": e["source"],
+            "publisher": e.get("publisher"),
             "software_key": e["software_key"],
             "benchmark_available": bench is not None,
             "benchmark_name": bench,

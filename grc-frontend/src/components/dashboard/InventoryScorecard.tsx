@@ -22,6 +22,8 @@ const ASSETS_TUNING = { configBase: '/assets', invalidateKey: [...SCORECARD_QUER
 
 type Payload = {
   as_of: string | null;
+  /** True when there is no inventory at all — show "no assets", never a grade. */
+  no_data?: boolean;
   counts: { assets?: number; vulnerabilities?: number; open_vulnerabilities?: number };
   performance: { score: number | null; grade: string | null };
   sections: Record<string, OverviewSection>;
@@ -73,14 +75,17 @@ export default function InventoryScorecard() {
   const sections = ORDER.map((k) => payload.sections[k]).filter((s): s is OverviewSection => Boolean(s));
   const attn = ATTENTION.map((a) => ({ ...a, count: payload.attention_queue?.[a.key] ?? 0 }));
   const attnTotal = payload.attention_queue?.total ?? 0;
-  const scoredSections = sections.filter((s) => s.score != null);
 
   // Design-handoff warm palette. Grade colour by score band (≥80 STRONG green /
   // ≥55 FAIR amber / else WEAK rust); dimension bars ≥70 green / ≥45 amber / rust.
+  // An empty inventory is NOT a bad inventory. Without this, a null score fell
+  // through to the "WEAK" fallback and painted a red verdict over a tenant that
+  // simply has nothing to score yet.
+  const noData = payload.no_data === true || (payload.counts?.assets ?? 0) === 0;
   const s0 = perf.score ?? 0;
-  const sColor = s0 >= 80 ? '#0E5A46' : s0 >= 55 ? '#B08420' : '#A33B1F';
-  const sBg = s0 >= 80 ? '#E2EDE8' : s0 >= 55 ? '#F4ECD2' : '#F7E4DC';
-  const gradeLabel = perf.grade || (s0 >= 80 ? 'STRONG' : s0 >= 55 ? 'FAIR' : 'WEAK');
+  const sColor = noData ? 'var(--as-faint)' : s0 >= 80 ? '#0E5A46' : s0 >= 55 ? '#B08420' : '#A33B1F';
+  const sBg = noData ? 'var(--as-subtle)' : s0 >= 80 ? '#E2EDE8' : s0 >= 55 ? '#F4ECD2' : '#F7E4DC';
+  const gradeLabel = noData ? 'NO DATA' : (perf.grade || (s0 >= 80 ? 'STRONG' : s0 >= 55 ? 'FAIR' : 'WEAK'));
   const dimColor = (n: number | null | undefined) => ((n ?? 0) >= 70 ? '#0E5A46' : (n ?? 0) >= 45 ? '#B08420' : '#C2542E');
 
   return (
@@ -114,20 +119,41 @@ export default function InventoryScorecard() {
                 </button>
               )}
             </div>
-            <div style={{ fontSize: 13, color: 'var(--as-secondary)', marginTop: 4 }}>{payload.counts.assets ?? 0} assets · {payload.counts.open_vulnerabilities ?? 0} open vulns · {attnTotal} attention items</div>
+            <div style={{ fontSize: 13, color: 'var(--as-secondary)', marginTop: 4 }}>
+              {noData
+                ? 'No assets in inventory yet — nothing to score. Connect a discovered device to populate this.'
+                : <>{payload.counts.assets ?? 0} assets · {payload.counts.open_vulnerabilities ?? 0} open vulns on those assets · {attnTotal} attention items</>}
+            </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginTop: 16 }}>
-              {scoredSections.length ? scoredSections.map((s) => {
-                const c = dimColor(s.score);
+              {/* EVERY dimension is listed, including the ones with no data yet.
+                  Hiding an unmeasured dimension made the board look like it only
+                  had four areas, and gave no clue that Vulnerability Exposure,
+                  Remediation Health and CIS Benchmark exist and will populate
+                  once their source data arrives. An unscored dimension shows an
+                  empty track and "not measured", and is excluded from the
+                  weighted score — visible, but not counted as either good or bad. */}
+              {sections.length ? sections.map((s) => {
+                const measured = s.score != null;
+                const c = measured ? dimColor(s.score) : 'var(--as-faint)';
                 const w = (s as unknown as { weight?: number }).weight;
+                const WHY: Record<string, string> = {
+                  vulnerability: 'Populates when vulnerabilities are linked to these assets (scanner import or Nessus sync).',
+                  vuln_health: 'Populates when there are vulnerabilities to remediate — tracks fix rate and SLA adherence.',
+                  cis: 'Populates after a CIS benchmark scan runs against an asset.',
+                  criticality: 'Populates when assets are rated and formally criticality-assessed.',
+                };
                 return (
-                  <div key={s.key} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <span style={{ width: 150, flex: 'none', fontSize: 12.5, color: 'var(--as-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.label}</span>
+                  <div key={s.key} style={{ display: 'flex', alignItems: 'center', gap: 10 }}
+                    title={measured ? undefined : (WHY[s.key] || 'No data for this area yet.')}>
+                    <span style={{ width: 150, flex: 'none', fontSize: 12.5, color: measured ? 'var(--as-primary)' : 'var(--as-faint)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.label}</span>
                     {/* weight may arrive as a fraction (0.18) or a percent (18) */}
                     <span className="as-mono" style={{ width: 32, flex: 'none', fontSize: 11, color: 'var(--as-faint)' }}>{w ? `${Math.round(w <= 1 ? w * 100 : w)}%` : ''}</span>
                     <div style={{ flex: 1, height: 6, background: 'var(--as-track)', borderRadius: 3, overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${s.score ?? 0}%`, background: c, borderRadius: 3 }} />
+                      {measured && <div style={{ height: '100%', width: `${s.score ?? 0}%`, background: c, borderRadius: 3 }} />}
                     </div>
-                    <span className="as-mono" style={{ width: 28, flex: 'none', textAlign: 'right', fontSize: 12, fontWeight: 600, color: c }}>{pct(s.score)}</span>
+                    <span className="as-mono" style={{ width: 74, flex: 'none', textAlign: 'right', fontSize: measured ? 12 : 10.5, fontWeight: measured ? 600 : 500, color: c }}>
+                      {measured ? pct(s.score) : 'not measured'}
+                    </span>
                   </div>
                 );
               }) : (

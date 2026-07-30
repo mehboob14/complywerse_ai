@@ -19,9 +19,14 @@ import Link from 'next/link';
 import {
   Package, Network, Radar, GitBranch, Users, Activity as ActivityIcon,
   ExternalLink, RefreshCw, AlertCircle, Plus, X, ShieldCheck, ShieldAlert,
+  ChevronRight,
 } from 'lucide-react';
 import { assetsApi, softwareIdentifiersApi, compliancePluginsApi, entityExtrasApi } from '@/lib/api';
 import { GuideMarker, useGuide } from '@/components/guide';
+import {
+  SoftwareSetupDrawer,
+  type SoftwareSetupEntry,
+} from '@/components/assets/SoftwareSetupDrawer';
 
 /* ─── shared bits ──────────────────────────────────────────────────── */
 
@@ -140,9 +145,22 @@ const GRID3: React.CSSProperties = { display: 'grid', gridTemplateColumns: 'repe
 
 /* ─── 1. Software ──────────────────────────────────────────────────── */
 
-export function SoftwarePanel({ assetId, canEdit, peers }: { assetId: number; canEdit?: boolean; peers?: any[] }) {
+export function SoftwarePanel({
+  assetId,
+  canEdit,
+  peers,
+  hostName,
+  hostIp,
+}: {
+  assetId: number;
+  canEdit?: boolean;
+  peers?: any[];
+  hostName?: string;
+  hostIp?: string;
+}) {
   const qc = useQueryClient();
   const { enabled: guideEnabled } = useGuide();
+  const [setupEntry, setSetupEntry] = useState<SoftwareSetupEntry | null>(null);
   const detected = useQuery({
     queryKey: ['asset-detected-software', assetId],
     queryFn: async () => (await assetsApi.getDetectedSoftware(assetId)).data as any,
@@ -164,25 +182,37 @@ export function SoftwarePanel({ assetId, canEdit, peers }: { assetId: number; ca
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ['asset-software-identifiers', assetId] });
     qc.invalidateQueries({ queryKey: ['asset-detected-software', assetId] });
+    qc.invalidateQueries({ queryKey: ['assets', assetId, 'detected-software'] });
+    qc.invalidateQueries({ queryKey: ['assets', assetId, 'ip-peers'] });
+    qc.invalidateQueries({ queryKey: ['asset-detail', assetId] });
   };
-  // Promote turns a detected service into its OWN asset (the "room and chair"
-  // model: the host is the room, each service a chair). It does NOT create a
-  // CPE identifier — that is a separate concept shown further down.
-  const promote = useMutation({
-    mutationFn: (key: string) => assetsApi.promoteSoftware(assetId, [key]),
-    onSuccess: refresh,
-  });
   const removeId = useMutation({
     mutationFn: (identifierId: number) => softwareIdentifiersApi.delete(assetId, identifierId),
     onSuccess: refresh,
   });
 
-  /** Already promoted to its own asset? Detected by matching a co-located
-      asset whose name carries this service name. */
+  /** Already promoted to its own asset? Prefer the inventory's promoted_asset_id;
+      fall back to matching a co-located peer by name. */
   const promoted = (s: any) => {
+    if (s.promoted_asset_id) return true;
     const name = String(s.name ?? s.product ?? '').toLowerCase();
     if (!name) return false;
     return (peers ?? []).some((p: any) => String(p.name ?? '').toLowerCase().includes(name));
+  };
+
+  const openSetup = (s: any) => {
+    const key = s.software_key ?? s.key;
+    if (!key) return;
+    setSetupEntry({
+      software_key: String(key),
+      name: s.name ?? s.product ?? String(key),
+      version: s.version,
+      publisher: s.publisher ?? s.vendor,
+      benchmark_available: !!s.benchmark_available,
+      benchmark_name: s.benchmark_name,
+      rule_count: s.rule_count,
+      promoted_asset_id: s.promoted_asset_id ?? null,
+    });
   };
 
   return (
@@ -190,7 +220,7 @@ export function SoftwarePanel({ assetId, canEdit, peers }: { assetId: number; ca
       <PanelHead
         icon={Package}
         title="Installed software"
-        note="Services found on this machine by the agent or agentless scan. Nothing is installed or changed — promoting only creates a separate asset record."
+        note="Services found on this machine by the agent or agentless scan. Click a row to set it up as its own asset (credentials when needed)."
         right={<>
           <span className="as-pill" style={{ background: 'var(--as-track)', color: 'var(--as-muted)' }}>{items.length} detected</span>
           <GuideMarker id="asset.swIntro" n={1} />
@@ -214,9 +244,18 @@ export function SoftwarePanel({ assetId, canEdit, peers }: { assetId: number; ca
             <tbody>
               {items.slice(0, 200).map((s: any, i: number) => {
                 const ok = promoted(s);
-                const key = s.software_key ?? s.key ?? s.name ?? s.product;
+                const key = s.software_key ?? s.key;
+                const clickable = Boolean(key);
                 return (
-                  <tr key={i} style={{ borderBottom: '1px solid var(--as-row)' }}>
+                  <tr
+                    key={i}
+                    onClick={clickable ? () => openSetup(s) : undefined}
+                    style={{
+                      borderBottom: '1px solid var(--as-row)',
+                      cursor: clickable ? 'pointer' : undefined,
+                    }}
+                    className={clickable ? 'hover:bg-[var(--as-subtle)]' : undefined}
+                  >
                     <td style={{ padding: '9px 12px', fontWeight: 600, color: 'var(--as-ink)' }}>{s.name ?? s.product ?? '—'}</td>
                     <td className="as-mono" style={{ padding: '9px 12px', fontSize: 12, color: 'var(--as-secondary)' }}>{s.version ?? '—'}</td>
                     <td style={{ padding: '9px 12px', color: 'var(--as-secondary)' }}>{s.publisher ?? s.vendor ?? '—'}</td>
@@ -225,21 +264,11 @@ export function SoftwarePanel({ assetId, canEdit, peers }: { assetId: number; ca
                       <span className="as-pill" style={ok
                         ? { background: 'var(--as-good-bg)', color: '#0E5A46' }
                         : { background: 'var(--as-warn-bg)', color: '#6E5410' }}>
-                        {ok ? 'Own asset' : 'Part of host'}
+                        {ok ? (s.promoted_asset_id ? `Asset #${s.promoted_asset_id}` : 'Own asset') : 'Part of host'}
                       </span>
                     </td>
-                    <td style={{ padding: '9px 12px' }}>
-                      {canEdit && !ok && key && (
-                        <button
-                          className="as-btn as-btn-secondary"
-                          style={{ padding: '4px 9px', fontSize: 11.5 }}
-                          disabled={promote.isPending}
-                          onClick={() => promote.mutate(String(key))}
-                          title="Create a separate asset for this service so it can be scanned and benchmarked on its own"
-                        >
-                          {promote.isPending ? 'Working…' : 'Promote to asset'}
-                        </button>
-                      )}
+                    <td style={{ padding: '9px 12px', color: 'var(--as-faint)' }}>
+                      {clickable && <ChevronRight className="h-3.5 w-3.5" />}
                     </td>
                   </tr>
                 );
@@ -247,12 +276,24 @@ export function SoftwarePanel({ assetId, canEdit, peers }: { assetId: number; ca
             </tbody>
           </table>
           <p style={{ marginTop: 10, fontSize: 11.5, color: 'var(--as-faint)' }}>
-            "Part of host" means the service is inventoried against this machine. Promoting it creates a separate
-            asset so it can carry its own benchmark and score. We do not track end-of-life dates per package, so no
-            EOL flag is shown — that would be a guess.
+            "Part of host" means the service is inventoried against this machine. Opening a row lets you
+            set it up as a separate asset (with credentials when the benchmark needs them). We do not
+            track end-of-life dates per package, so no EOL flag is shown — that would be a guess.
             <GuideMarker id="asset.swPromote" n={2} className="ml-1.5" />
           </p>
         </div>
+      )}
+
+      {setupEntry && (
+        <SoftwareSetupDrawer
+          open
+          onClose={() => setSetupEntry(null)}
+          hostAssetId={assetId}
+          hostName={hostName}
+          hostIp={hostIp}
+          entry={setupEntry}
+          onComplete={refresh}
+        />
       )}
 
       {/* CPE/PURL identifiers — what vulnerability matching keys off */}

@@ -40,7 +40,11 @@ RUN_STATUSES = ("queued", "running", "succeeded", "failed", "cancelled")
 JOB_STATUSES = ("queued", "leased", "running", "succeeded", "failed")
 # Resolution is owned by the identity step, not by discovery. Everything a scan
 # writes starts 'pending' and stays there until the resolver runs.
-OBSERVATION_RESOLUTIONS = ("pending", "created", "merged", "review", "ignored")
+# 'unclaimed' = a real device the sweep found that is NOT in inventory yet.
+# Discovery deliberately stops here: finding a device is not the same as owning
+# one. It becomes an ITAsset only when a credential authenticates to it and the
+# deep collect succeeds, so IT Asset Inventory never fills with empty shells.
+OBSERVATION_RESOLUTIONS = ("pending", "unclaimed", "created", "merged", "review", "ignored")
 
 
 class DiscoveryCampaign(Base):

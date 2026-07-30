@@ -1,6 +1,6 @@
 ﻿'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { integrationsApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -81,10 +81,19 @@ export default function ConnectionsPage() {
   const [detailConn, setDetailConn] = useState<Connection | null>(null);
   const [testResult, setTestResult] = useState<{ id: number; success?: boolean; message?: string } | null>(null);
   const [syncResult, setSyncResult] = useState<{ id: number; data?: any } | null>(null);
+  // The connection whose sync is running in the background. Sync now returns
+  // immediately and does the work in a server-side worker (so a slow scan can't
+  // trip the proxy gateway timeout and be mis-reported as "failed"); we poll the
+  // connections list until this one's last_sync_at advances past the baseline we
+  // captured when the sync started.
+  const [syncingId, setSyncingId] = useState<number | null>(null);
+  const syncBaselineRef = useRef<Record<number, string | null>>({});
 
   const { data: connectionsData, isLoading, isError } = useQuery({
     queryKey: ['connections'],
     queryFn: () => integrationsApi.listConnections(),
+    // While a background sync is in flight, refetch so we notice it landing.
+    refetchInterval: syncingId != null ? 2500 : false,
   });
   const connections: Connection[] = connectionsData?.data?.connections || [];
 
@@ -111,15 +120,72 @@ export default function ConnectionsPage() {
 
   const syncMutation = useMutation({
     mutationFn: (id: number) => integrationsApi.triggerSync(id),
-    onSuccess: (res, id) => {
-      setSyncResult({ id, data: res.data });
-      queryClient.invalidateQueries({ queryKey: ['connections'] });
+    onMutate: (id: number) => {
+      // Remember where last_sync_at stood, so completion detection knows a NEW
+      // sync result (success OR failure) has landed once it advances.
+      const c = connections.find((x) => x.id === id);
+      syncBaselineRef.current[id] = c?.last_sync_at ?? null;
+      setSyncResult(null);
     },
-    onError: (_, id) => setSyncResult({ id, data: { status: 'failed', error: 'Sync failed' } }),
+    onSuccess: (res, id) => {
+      if (res.data?.status === 'running') {
+        // Async path — the sync runs server-side; poll until it lands.
+        setSyncingId(id);
+      } else {
+        // Synchronous fallback path returned the finished result directly.
+        setSyncResult({ id, data: res.data });
+        queryClient.invalidateQueries({ queryKey: ['connections'] });
+      }
+    },
+    onError: (err: any, id) => {
+      const detail = err?.response?.data?.detail;
+      setSyncResult({ id, data: { status: 'failed', error: detail || 'Could not start sync' } });
+    },
   });
+
+  // Watch for a running background sync to finish: when the polled connection's
+  // last_sync_at moves past the baseline captured at start, show the real result
+  // (drawn from the backend's own recorded stats) and stop polling.
+  useEffect(() => {
+    if (syncingId == null) return;
+    const c = connections.find((x) => x.id === syncingId);
+    if (!c) return;
+    const baseline = syncBaselineRef.current[syncingId] ?? null;
+    if (c.last_sync_at && c.last_sync_at !== baseline) {
+      setSyncResult({
+        id: syncingId,
+        data: {
+          status: c.last_sync_status === 'success' ? 'completed' : 'failed',
+          ...(c.last_sync_stats || {}),
+        },
+      });
+      setSyncingId(null);
+    }
+  }, [connections, syncingId]);
+
+  // Safety net: never poll forever. If a background sync hasn't reported back in
+  // 5 minutes, stop and tell the operator to refresh rather than spinning.
+  useEffect(() => {
+    if (syncingId == null) return;
+    const t = setTimeout(() => {
+      setSyncResult({
+        id: syncingId,
+        data: { status: 'failed', error: 'Still running after 5 min — refresh to check the latest status.' },
+      });
+      setSyncingId(null);
+    }, 5 * 60 * 1000);
+    return () => clearTimeout(t);
+  }, [syncingId]);
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => integrationsApi.deleteConnection(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['connections'] }),
+  });
+
+  // Hard delete — permanently removes the connection and frees its name. Findings
+  // already synced are preserved server-side; only the connection + its logs go.
+  const purgeMutation = useMutation({
+    mutationFn: (id: number) => integrationsApi.deleteConnection(id, true),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['connections'] }),
   });
 
@@ -476,11 +542,12 @@ export default function ConnectionsPage() {
                     </button>
                     <button
                       onClick={() => syncMutation.mutate(conn.id)}
-                      disabled={syncMutation.isPending || !conn.is_active}
+                      disabled={syncMutation.isPending || syncingId != null || !conn.is_active}
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#0a0a0a] bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50"
                     >
-                      {syncMutation.isPending ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
-                      Sync Now
+                      {(syncingId === conn.id || (syncMutation.isPending && syncMutation.variables === conn.id))
+                        ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+                      {syncingId === conn.id ? 'Syncing…' : 'Sync Now'}
                     </button>
                     <button
                       onClick={() => setDetailConn(conn)}
@@ -489,17 +556,32 @@ export default function ConnectionsPage() {
                       <Clock size={13} /> History
                     </button>
                     {canDelete && (
-                      <button
-                        onClick={() => {
-                          if (confirm('Deactivate this connection? Data will be preserved.')) {
-                            deleteMutation.mutate(conn.id);
-                          }
-                        }}
-                        disabled={!conn.is_active}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-rose-600 bg-rose-50 border border-rose-200 rounded-lg hover:bg-rose-100 disabled:opacity-50"
-                      >
-                        <Trash2 size={13} /> Deactivate
-                      </button>
+                      <>
+                        <button
+                          onClick={() => {
+                            if (confirm('Deactivate this connection? It stops syncing but is kept and can be re-activated later. Data is preserved.')) {
+                              deleteMutation.mutate(conn.id);
+                            }
+                          }}
+                          disabled={!conn.is_active}
+                          title="Pause syncing (reversible)"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-lg hover:bg-amber-100 disabled:opacity-50"
+                        >
+                          <WifiOff size={13} /> Deactivate
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (confirm(`Permanently DELETE "${conn.connection_name}"? This removes the connection and frees its name. Findings already synced are kept. This cannot be undone.`)) {
+                              purgeMutation.mutate(conn.id);
+                            }
+                          }}
+                          disabled={purgeMutation.isPending}
+                          title="Permanently remove this connection"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-rose-600 bg-rose-50 border border-rose-200 rounded-lg hover:bg-rose-100 disabled:opacity-50"
+                        >
+                          <Trash2 size={13} /> Delete
+                        </button>
+                      </>
                     )}
 
                     {conn.last_sync_at && (
@@ -519,10 +601,21 @@ export default function ConnectionsPage() {
                     </div>
                   )}
 
-                  {syncResult?.id === conn.id && (
-                    <div className={`p-3 rounded-lg text-sm ${syncResult.data?.status === 'completed' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
-                      Sync {syncResult.data?.status} · Assets: +{syncResult.data?.assets_new || 0} new, {syncResult.data?.assets_updated || 0} updated · Vulns: +{syncResult.data?.vulns_new || 0} new, {syncResult.data?.vulns_updated || 0} updated, {syncResult.data?.vulns_closed || 0} closed
-                      {syncResult.data?.errors_count > 0 && ` · ${syncResult.data.errors_count} errors`}
+                  {syncingId === conn.id && (
+                    <div className="flex items-center gap-2 p-3 rounded-lg text-sm bg-blue-50 text-blue-700">
+                      <Loader2 size={15} className="animate-spin" />
+                      Syncing in the background — pulling findings from the scanner. This can take a minute; the page updates automatically when it&apos;s done.
+                    </div>
+                  )}
+
+                  {syncResult?.id === conn.id && syncingId !== conn.id && (
+                    <div className={`p-3 rounded-lg text-sm ${syncResult.data?.status === 'completed' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
+                      {syncResult.data?.status === 'completed' ? (
+                        <>Sync complete · Assets: +{syncResult.data?.assets_new || 0} new, {syncResult.data?.assets_updated || 0} updated · Vulns: +{syncResult.data?.vulns_new || 0} new, {syncResult.data?.vulns_updated || 0} updated, {syncResult.data?.vulns_closed || 0} closed
+                        {syncResult.data?.errors_count > 0 ? ` · ${syncResult.data.errors_count} errors` : ''}</>
+                      ) : (
+                        <>Sync failed{syncResult.data?.error ? ` · ${syncResult.data.error}` : ''}</>
+                      )}
                     </div>
                   )}
 

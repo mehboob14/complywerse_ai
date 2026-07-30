@@ -23,9 +23,35 @@ from grc.models import (
 from grc.rich_audit import write_rich_audit_log
 
 from ..runners import run_check
+from ..runners.registry import RunnerResult
 from .credentials import resolve_credentials_for_connection
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_host_family(asset: Optional[ITAsset]) -> Optional[str]:
+    """Best-effort host OS family for applicability gates.
+
+    Application assets (e.g. PostgreSQL child) inherit the parent's family
+    when present; otherwise fall back to their own os_family / os_normalized.
+    """
+    if asset is None:
+        return None
+    fam = (getattr(asset, "os_family", None) or "").strip().lower()
+    if fam in ("windows", "linux", "macos", "unix"):
+        return "linux" if fam == "unix" else fam
+    norm = (getattr(asset, "os_normalized", None) or "").strip().lower()
+    if norm.startswith("windows") or "windows" in norm:
+        return "windows"
+    if any(norm.startswith(p) for p in ("ubuntu", "debian", "rhel", "centos", "rocky", "alma", "sles", "suse", "linux", "amazon")):
+        return "linux"
+    if norm.startswith("macos") or "darwin" in norm:
+        return "macos"
+    # Walk parent for application assets
+    parent_id = getattr(asset, "parent_asset_id", None)
+    if parent_id and hasattr(asset, "parent") and asset.parent is not None:
+        return _resolve_host_family(asset.parent)
+    return fam or None
 
 
 def _evidence_hash(payload: dict) -> str:
@@ -189,7 +215,32 @@ def execute_plugin(
     if plugin.runner_type == "manual" and (manual_result is not None or manual_note is not None):
         effective_check["_manual_result"] = manual_result
         effective_check["_manual_note"] = manual_note
-    result = run_check(plugin.runner_type, effective_check, credentials)
+
+    # Host-family gate for OS-level CIS rules (e.g. systemd/umask on Linux,
+    # service ACL on Windows). When the asset's host OS is outside
+    # applicable_host_families, return not_applicable (skipped) — never a
+    # silent auto-pass and never a fabricated fail.
+    host_family = _resolve_host_family(run_asset or asset)
+    applicable_families = effective_check.get("applicable_host_families") or []
+    if applicable_families and host_family:
+        allowed = {str(f).lower() for f in applicable_families}
+        # Windows alternate payload: swap runner + check when present.
+        if host_family == "windows" and isinstance(effective_check.get("windows_winrm"), dict):
+            win_cd = dict(effective_check["windows_winrm"])
+            result = run_check("windows_winrm", win_cd, credentials)
+        elif host_family not in allowed:
+            result = RunnerResult(
+                status="skipped",
+                summary=(
+                    f"Not applicable on host OS family '{host_family}' "
+                    f"(rule applies to: {sorted(allowed)})."
+                ),
+                raw_output={"not_applicable": True, "host_family": host_family},
+            )
+        else:
+            result = run_check(plugin.runner_type, effective_check, credentials)
+    else:
+        result = run_check(plugin.runner_type, effective_check, credentials)
 
     completed = datetime.utcnow()
     duration_ms = int((completed - started).total_seconds() * 1000)

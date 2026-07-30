@@ -23,6 +23,7 @@ that row.
 from __future__ import annotations
 
 import logging
+import os
 import re
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
@@ -30,6 +31,19 @@ from typing import Any, Dict, List, Optional, Tuple
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
+
+
+def auto_link_enabled() -> bool:
+    """Master switch for AUTOMATIC vulnerability→asset linking — both the scanner
+    host-match (sync) and this CPE software-match (enrichment).
+
+    Default OFF (manual-only): a finding is linked to an asset only when a user
+    links it in the UI. This is a deliberate product choice — on a scanner-fed
+    register auto-linking is common, but the operator asked to control it so an
+    asset never appears against a finding they didn't attach. Set
+    ``VULN_AUTO_LINK_ASSETS=1`` to turn auto-linking back on.
+    """
+    return os.getenv("VULN_AUTO_LINK_ASSETS", "0").strip().lower() in ("1", "true", "yes", "on")
 
 _CPE_PREFIX = "cpe:2.3:"
 # Versions: split on '.' / '-' / '_' and try int comparison per part.

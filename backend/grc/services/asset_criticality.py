@@ -273,6 +273,41 @@ def recompute_for_asset(asset) -> float:
     bucket is preserved; the override reason should already be stored
     in `criticality_override_reason`).
     """
+    # With NO inputs at all there is nothing to compute from, and the old
+    # behaviour — falling back to 5.0 / "medium" — manufactured a rating for an
+    # asset nobody had assessed. That placeholder then propagated: risk-posture
+    # derived C/I/A 3/3/3 from it and scored the asset "elevated", and the
+    # register turned 'medium' into a $75,000 valuation estimate. Leave an
+    # unassessed asset unrated and let every consumer say "not assessed".
+    def _rating_unset(v) -> bool:
+        # The CIA scale is 1-5. NULL means "never rated", and so does 0 —
+        # that is what an unselected dropdown writes, and treating it as a
+        # real rating is how an unassessed asset acquired a derived
+        # criticality of "medium" (max(0,0,0) fell through to the neutral
+        # 5.0 default). Anything outside 1-5 is not an assessment.
+        if v is None:
+            return True
+        try:
+            return not (1 <= float(v) <= 5)
+        except (TypeError, ValueError):
+            return True
+
+    def _text_unset(v) -> bool:
+        return v is None or (isinstance(v, str) and not v.strip())
+
+    inputs_unset = (
+        _rating_unset(getattr(asset, "confidentiality_rating", None))
+        and _rating_unset(getattr(asset, "integrity_rating", None))
+        and _rating_unset(getattr(asset, "availability_rating", None))
+        and _text_unset(getattr(asset, "data_classification", None))
+        and _text_unset(getattr(asset, "business_function", None))
+    )
+    if inputs_unset and not getattr(asset, "internet_facing", None):
+        asset.criticality_score = None
+        if not getattr(asset, "criticality_manual_override", False):
+            asset.criticality = None
+        return None
+
     score = compute_criticality_score(
         confidentiality_rating=getattr(asset, "confidentiality_rating", None),
         integrity_rating=getattr(asset, "integrity_rating", None),

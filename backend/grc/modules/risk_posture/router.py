@@ -155,16 +155,23 @@ def preview_asset_posture(
     # business-impact column to `op_dep_business_impact`. The wire field
     # `proposal.operational_dependency` keeps the v2 spec name for the
     # Pydantic body, but it maps to the renamed asset attribute.
+    # Internet-exposure is stored in the canonical `internet_facing` column (the asset
+    # form, CSV import and discovery all write it, and the vuln reachability engine
+    # reads it); the wire field keeps its v2 name `is_internet_facing`. We snapshot /
+    # mutate / restore the CANONICAL column here (key name matches the attribute so the
+    # generic restore loop below targets the right one), retiring the duplicate
+    # `is_internet_facing` column so this editor can never disagree with the asset form
+    # or the vulnerability exposure signal.
     snapshot = {
         "is_customer_facing":     asset.is_customer_facing,
-        "is_internet_facing":     asset.is_internet_facing,
+        "internet_facing":        asset.internet_facing,
         "regulated_data_type":    asset.regulated_data_type,
         "op_dep_business_impact": asset.op_dep_business_impact,
     }
     if proposal.is_customer_facing is not None:
         asset.is_customer_facing = proposal.is_customer_facing
     if proposal.is_internet_facing is not None:
-        asset.is_internet_facing = proposal.is_internet_facing
+        asset.internet_facing = proposal.is_internet_facing
     if proposal.regulated_data_type is not None:
         asset.regulated_data_type = proposal.regulated_data_type
     if proposal.operational_dependency is not None:

@@ -397,6 +397,43 @@ def windows_winrm_runner(check_definition: Dict[str, Any], credentials: Dict[str
 
     expect = check_definition.get("expect") or {}
     ok, detail = _evaluate(out, rc, expect)
+
+    # ── Never infer COMPLIANCE from an absence of evidence ───────────────
+    # Several expectation kinds pass on empty output by construction:
+    #   user_rights_check with expected_sids=[]  ("granted to No One")
+    #   stdout_not_regex / stdout_not_contains   ("must not contain X")
+    #   stdout_regex whose pattern matches ""    (e.g. ^\s*$)
+    # If the command ALSO failed and returned nothing, the check has no idea
+    # what the machine's state is — and reporting "compliant" there is worse
+    # than reporting nothing. Observed live: rule 2.2.31 ('Modify an object
+    # label' → No One) passed because a secedit export exited 1 with empty
+    # stdout, so the parser found no privilege line and concluded nobody held
+    # the privilege. A real holder would have passed identically.
+    #
+    # A FAILING verdict on empty output is left alone: "registry value not
+    # set" is genuinely non-compliant for an "Ensure X is set" rule, and those
+    # verdicts were confirmed correct against the live host.
+    no_evidence = (rc != 0) and not (out or "").strip()
+    if ok and no_evidence:
+        return RunnerResult(
+            status="error",
+            summary=(
+                "Indeterminate — the check command failed and returned no output, "
+                f"so compliance could not be established (exit_status={rc}). "
+                "This is NOT a pass."
+            ),
+            error_message=(err or "")[:2048] or f"command exited {rc} with empty stdout",
+            raw_output={
+                "shell": shell,
+                "command": command,
+                "exit_status": rc,
+                "stdout": out[:8192],
+                "stderr": err[:2048],
+                "expectation_detail": detail,
+                "suppressed_verdict": "passed",
+            },
+        )
+
     msg = (
         check_definition.get("pass_message") if ok else check_definition.get("fail_message")
     ) or detail

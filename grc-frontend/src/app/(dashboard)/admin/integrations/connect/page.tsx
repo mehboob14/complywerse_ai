@@ -6,8 +6,9 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { apiClient } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
+import { SqlDbForm, type SqlPlatformId } from '@/components/integrations/SqlDbForm';
 
-type Platform =
+export type Platform =
   | 'windows' | 'linux'
   | 'cisco'
   | 'oracle' | 'mssql' | 'postgres' | 'mysql'
@@ -30,7 +31,7 @@ type StatusResp = {
   asset_id?: number;
 };
 
-const PLATFORMS: Array<{ id: Platform; label: string; logo: string; subtitle: string }> = [
+export const PLATFORMS: Array<{ id: Platform; label: string; logo: string; subtitle: string }> = [
   { id: 'windows',      label: 'Windows Server',          logo: '🪟', subtitle: 'WinRM over HTTPS — read-only audit account' },
   { id: 'linux',        label: 'Linux Server',            logo: '🐧', subtitle: 'SSH key-based access — read-only audit user' },
   { id: 'cisco',        label: 'Cisco / Network device',  logo: '📡', subtitle: 'SSH port 22 — read-only enable account on the router' },
@@ -48,7 +49,7 @@ const PLATFORMS: Array<{ id: Platform; label: string; logo: string; subtitle: st
 // Categorisation matches the package layout. Each group's hint explains
 // when this scan path is the right choice versus the endpoint-agent
 // alternative on /admin/agents.
-const PLATFORM_GROUPS: Array<{ key: string; title: string; hint: string; ids: Platform[] }> = [
+export const PLATFORM_GROUPS: Array<{ key: string; title: string; hint: string; ids: Platform[] }> = [
   {
     key: 'hosts',
     title: 'Hosts & servers',
@@ -106,7 +107,15 @@ const DEFAULT_PORTS: Record<Platform, string> = {
   k8s: '443',
 };
 
-export default function ConnectWizardPage() {
+export default function ConnectWizardPage({
+  embedded = false,
+  initialPlatform = null,
+}: {
+  /** Compact mode for embedding inside Asset Discovery "Add connection" popup. */
+  embedded?: boolean;
+  /** Skip the platform picker and open directly on this platform. */
+  initialPlatform?: Platform | null;
+} = {}) {
   const router = useRouter();
   const navigate = (path: string) => router.push(path);
   // Spec: this wizard onboards new infrastructure — must be gated to
@@ -114,29 +123,9 @@ export default function ConnectWizardPage() {
   const { hasPermission, isLoading: permsLoading } = usePermissions();
   const canConnect = hasPermission('compliance:agents:manage');
 
-  if (!permsLoading && !canConnect) {
-    return (
-      <div className="min-h-screen bg-slate-50">
-        <div className="max-w-2xl mx-auto px-4 py-16">
-          <div className="bg-white rounded-xl shadow-lg border border-slate-200 p-8 text-center">
-            <div className="text-5xl mb-3">🔒</div>
-            <h1 className="text-xl font-semibold text-slate-900 mb-2">Connect Wizard is locked</h1>
-            <p className="text-sm text-slate-600 mb-4">
-              Onboarding new Windows / Linux / AWS targets is restricted to users with the
-              {' '}<strong>compliance:agents:manage</strong> permission (Tenant Admin or
-              Scanning Admin role). Ask your tenant admin to grant the right role.
-            </p>
-            <button
-              onClick={() => navigate('/dashboard')}
-              className="px-4 py-2 bg-primary-600 text-[color:var(--color-on-base,#0a0a0a)] text-sm rounded-md hover:bg-primary-700"
-            >
-              ← Back to dashboard
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // ALL hooks must run unconditionally — permission early-return goes AFTER
+  // the hook block. Returning above useState/useEffect reintroduces the
+  // "Rendered fewer hooks than expected" crash when perms resolve to denied.
   const [picked, setPicked] = useState<Platform | null>(null);
   const [mode, setMode] = useState<ConnectMode>('manual'); // default to manual — enterprise reality
   const [issuing, setIssuing] = useState(false);
@@ -183,12 +172,14 @@ export default function ConnectWizardPage() {
     }
     const valid = ['windows', 'linux', 'cisco', 'oracle', 'mssql', 'postgres',
                    'mysql', 'ad', 'aws', 'digitalocean', 'azure', 'k8s'] as const;
-    if (p && (valid as readonly string[]).includes(p) && !picked) {
+    // Prefer explicit initialPlatform (embedded discovery popup) over URL.
+    const boot = initialPlatform || p;
+    if (boot && (valid as readonly string[]).includes(boot) && !picked) {
       // Defer to next tick so the empty-state UI doesn't flash first.
-      void startWizard(p as Platform);
+      void startWizard(boot as Platform);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]);
+  }, [searchParams, initialPlatform]);
 
   // Once we have a nonce, poll status every 3s
   useEffect(() => {
@@ -270,8 +261,10 @@ export default function ConnectWizardPage() {
   // Once ready, push the operator either back to the asset they came from
   // (so the Compliance tab can refresh AI Classification + matched benchmark
   // with the new connection data), or to the dashboard when the wizard was
-  // opened standalone (no anchor).
+  // opened standalone (no anchor). Embedded mode stays put — the parent
+  // popup owns dismissal.
   useEffect(() => {
+    if (embedded) return;
     if (status?.state === 'ready') {
       const target = prefillAssetId
         ? `/assets/${prefillAssetId}?tab=compliance`
@@ -279,31 +272,62 @@ export default function ConnectWizardPage() {
       const t = setTimeout(() => navigate(target), 4000);
       return () => clearTimeout(t);
     }
-  }, [status?.state, navigate, prefillAssetId]);
+  }, [status?.state, navigate, prefillAssetId, embedded]);
+
+  // Permission gate — AFTER every hook above. Returning earlier crashes React
+  // when perms flip from loading → denied (fewer hooks on the next render).
+  if (!permsLoading && !canConnect) {
+    return (
+      <div className={embedded ? 'p-6' : 'min-h-screen bg-slate-50'}>
+        <div className={embedded ? '' : 'max-w-2xl mx-auto px-4 py-16'}>
+          <div className="bg-white rounded-xl shadow-lg border border-slate-200 p-8 text-center">
+            <div className="text-5xl mb-3">🔒</div>
+            <h1 className="text-xl font-semibold text-slate-900 mb-2">Connect Wizard is locked</h1>
+            <p className="text-sm text-slate-600 mb-4">
+              Onboarding new Windows / Linux / AWS targets is restricted to users with the
+              {' '}<strong>compliance:agents:manage</strong> permission (Tenant Admin or
+              Scanning Admin role). Ask your tenant admin to grant the right role.
+            </p>
+            {!embedded && (
+              <button
+                onClick={() => navigate('/dashboard')}
+                className="px-4 py-2 bg-primary-600 text-[color:var(--color-on-base,#0a0a0a)] text-sm rounded-md hover:bg-primary-700"
+              >
+                ← Back to dashboard
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <div className="max-w-3xl mx-auto px-4 py-8">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-slate-900 mb-2">Connect your first server</h1>
-          <p className="text-slate-600">
-            Compliverse needs at least one connected server to scan against. Pick a platform — we&apos;ll generate a one-liner that sets up everything for you.
-          </p>
-        </div>
+    <div className={embedded ? '' : 'min-h-screen bg-slate-50'}>
+      <div className={embedded ? 'px-2 py-2' : 'max-w-3xl mx-auto px-4 py-8'}>
+        {!embedded && (
+          <div className="text-center mb-8">
+            <h1 className="text-3xl font-bold text-slate-900 mb-2">Connect your first server</h1>
+            <p className="text-slate-600">
+              Compliverse needs at least one connected server to scan against. Pick a platform — we&apos;ll generate a one-liner that sets up everything for you.
+            </p>
+          </div>
+        )}
 
-        {!tokenData && (
+        {!tokenData && !initialPlatform && (
           <>
             {/* Quick-start callout — explain the one-device-at-a-time flow.
                 Each connection authenticates with a username + password
                 stored encrypted at rest. Operators with 100+ assets work
                 through the IT Assets list one row at a time. */}
+            {!embedded && (
             <div className="mb-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
               <div className="flex items-start gap-3">
                 <span className="text-2xl">🔑</span>
                 <div className="flex-1">
                   <h3 className="text-sm font-semibold text-slate-900">One device at a time</h3>
                   <p className="mt-1 text-xs text-slate-600 leading-relaxed">
-                    Each connection pairs ONE credential (username + password) with ONE target host. Compliverse encrypts the password with your tenant's Fernet key and only uses it at scan time.
+                    Each connection pairs ONE credential (username + password) with ONE target host. Compliverse encrypts the password with your tenant&apos;s Fernet key and only uses it at scan time.
                   </p>
                   <p className="mt-2 text-xs text-slate-600">
                     <strong>Got assets in IT Assets already?</strong>{' '}
@@ -316,6 +340,7 @@ export default function ConnectWizardPage() {
                 </div>
               </div>
             </div>
+            )}
 
             {/* Grouped platform picker — match Hassan's reference layout. */}
             {PLATFORM_GROUPS.map((g) => {
@@ -362,15 +387,37 @@ export default function ConnectWizardPage() {
               </div>
             )}
 
-            <div className="text-center">
-              <button
-                onClick={() => navigate('/dashboard')}
-                className="text-sm text-slate-500 hover:text-slate-700 hover:underline"
-              >
-                Skip for now — I'll connect later
-              </button>
-            </div>
+            {!embedded && (
+              <div className="text-center">
+                <button
+                  onClick={() => navigate('/dashboard')}
+                  className="text-sm text-slate-500 hover:text-slate-700 hover:underline"
+                >
+                  Skip for now — I&apos;ll connect later
+                </button>
+              </div>
+            )}
           </>
+        )}
+
+        {/* Embedded / URL-bootstrapped: wait for issue-token before the form. */}
+        {!tokenData && initialPlatform && (
+          <div className="rounded-xl border border-slate-200 bg-white p-6 text-center text-sm text-slate-600">
+            {error ? (
+              <div className="text-rose-700">
+                <p className="mb-3">{error}</p>
+                <button
+                  type="button"
+                  className="text-primary-600 hover:underline"
+                  onClick={() => void startWizard(initialPlatform)}
+                >
+                  Retry
+                </button>
+              </div>
+            ) : (
+              <p>{issuing ? 'Starting connection…' : 'Preparing form…'}</p>
+            )}
+          </div>
         )}
 
         {/* The installer-script mode (one-liner PowerShell that the IT team
@@ -380,7 +427,13 @@ export default function ConnectWizardPage() {
             the wizard's live pre-flight catches bad creds before save. */}
 
         {tokenData && status?.state !== 'ready' && picked === 'aws' && (
-          <AwsForm token={tokenData.token} onCancel={() => { setTokenData(null); setPicked(null); setStatus(null); }} />
+          <AwsForm
+            token={tokenData.token}
+            onCancel={() => {
+              setTokenData(null); setPicked(null); setStatus(null);
+              if (initialPlatform) void startWizard(initialPlatform);
+            }}
+          />
         )}
 
         {tokenData && status?.state !== 'ready' && picked && ['postgres', 'mssql', 'mysql', 'oracle'].includes(picked) && (
@@ -390,7 +443,10 @@ export default function ConnectWizardPage() {
             initialHostname={prefillHostname}
             initialLabel={prefillLabel}
             assetId={prefillAssetId}
-            onCancel={() => { setTokenData(null); setPicked(null); setStatus(null); }}
+            onCancel={() => {
+              setTokenData(null); setPicked(null); setStatus(null);
+              if (initialPlatform) void startWizard(initialPlatform);
+            }}
           />
         )}
 
@@ -837,435 +893,6 @@ function ManualCredsForm({
 }
 
 // ─── AWS credential form ─────────────────────────────────────────────────────
-// AWS doesn't need an installer script — customer just needs to create an IAM
-// ── Generic SQL-DB credential form ────────────────────────────────────────────
-// Drives the wizard's per-DB credential capture. The four banking-relevant
-// DBs (Postgres, MSSQL, MySQL, Oracle) all flow through the same backend
-// handshake — the only per-platform differences are field labels, default
-// port, default database name, and (for Oracle) the TNS service-name vs SID
-// twist. One component handles all four so they evolve together.
-type SqlPlatformId = 'postgres' | 'mssql' | 'mysql' | 'oracle';
-
-type SqlPlatformConfig = {
-  label: string;
-  runner: string;
-  icon: string;
-  defaultPort: number;
-  // Postgres/MSSQL/MySQL all use "database name"; Oracle uses TNS service.
-  dbFieldLabel: string;
-  dbFieldHint: string;
-  dbPlaceholder: string;
-  dbDefault: string;
-  // True when Oracle — we also render the optional SID field as an alt.
-  isOracle?: boolean;
-  userPlaceholder: string;
-  hostPlaceholder: string;
-  rolePrep: React.ReactNode;
-  unreachableLabel: string;
-};
-
-const SQL_DB_CONFIGS: Record<SqlPlatformId, SqlPlatformConfig> = {
-  postgres: {
-    label: 'PostgreSQL',
-    runner: 'postgres_sql',
-    icon: '🐘',
-    defaultPort: 5432,
-    dbFieldLabel: 'Database name',
-    dbFieldHint: 'Default postgres',
-    dbPlaceholder: 'postgres',
-    dbDefault: 'postgres',
-    userPlaceholder: 'cis_audit_ro',
-    hostPlaceholder: 'pg-prod-01.bank.local',
-    unreachableLabel: 'Cannot reach PostgreSQL host',
-    rolePrep: (
-      <>Use a <strong>read-only</strong> PostgreSQL role (e.g. <code className="font-mono">cis_audit_ro</code> with
-      {' '}<code className="font-mono">pg_read_all_settings, pg_read_all_stats</code>).
-      The CIS PostgreSQL Benchmark checks query <code className="font-mono">pg_settings</code>,{' '}
-      <code className="font-mono">pg_hba_file_rules</code>, and similar catalogs — no writes, no DDL.</>
-    ),
-  },
-  mssql: {
-    label: 'Microsoft SQL Server',
-    runner: 'mssql_sql',
-    icon: '🪟',
-    defaultPort: 1433,
-    dbFieldLabel: 'Database name',
-    dbFieldHint: 'Default master',
-    dbPlaceholder: 'master',
-    dbDefault: 'master',
-    userPlaceholder: 'cis_audit',
-    hostPlaceholder: 'sql-prod-01.bank.local',
-    unreachableLabel: 'Cannot reach SQL Server',
-    rolePrep: (
-      <>Use a SQL login with <strong><code className="font-mono">VIEW SERVER STATE</code></strong> +
-      {' '}<strong><code className="font-mono">VIEW ANY DEFINITION</code></strong> (or the
-      {' '}<code className="font-mono">db_datareader</code> role on each scanned DB).
-      The CIS SQL Server Benchmark checks read <code className="font-mono">sys.configurations</code>,{' '}
-      <code className="font-mono">sys.server_principals</code>, audit policy, and TDE state — no
-      writes. Either a SQL login or a Windows auth login backed by a service account works.</>
-    ),
-  },
-  mysql: {
-    label: 'MySQL / MariaDB',
-    runner: 'mysql_sql',
-    icon: '🐬',
-    defaultPort: 3306,
-    dbFieldLabel: 'Database name',
-    dbFieldHint: 'Default information_schema',
-    dbPlaceholder: 'information_schema',
-    dbDefault: 'information_schema',
-    userPlaceholder: 'cis_audit',
-    hostPlaceholder: 'mysql-prod-01.bank.local',
-    unreachableLabel: 'Cannot reach MySQL host',
-    rolePrep: (
-      <>Use a read-only account with <strong><code className="font-mono">PROCESS, REPLICATION CLIENT, SELECT</code></strong>{' '}
-      grants on <code className="font-mono">mysql.*</code> and{' '}
-      <code className="font-mono">performance_schema.*</code>. The CIS MySQL Benchmark queries
-      {' '}<code className="font-mono">mysql.user</code>, <code className="font-mono">global_variables</code>,{' '}
-      <code className="font-mono">audit_log_filter</code> and similar — no writes. Works against
-      MariaDB too (5.x and 10.x share the catalog shape we read).</>
-    ),
-  },
-  oracle: {
-    label: 'Oracle Database',
-    runner: 'oracle_sql',
-    icon: '🔶',
-    defaultPort: 1521,
-    isOracle: true,
-    dbFieldLabel: 'TNS service name',
-    dbFieldHint: 'Preferred over SID',
-    dbPlaceholder: 'ORCL',
-    dbDefault: 'ORCL',
-    userPlaceholder: 'cis_audit',
-    hostPlaceholder: 'oracle-prod-01.bank.local',
-    unreachableLabel: 'Cannot reach Oracle listener',
-    rolePrep: (
-      <>Create a read-only DB user with <code className="font-mono">SELECT_CATALOG_ROLE</code> and{' '}
-      <code className="font-mono">SELECT ANY DICTIONARY</code>. The CIS Oracle Database Benchmark
-      checks read from <code className="font-mono">v$parameter</code>, <code className="font-mono">dba_users</code>,
-      {' '}<code className="font-mono">dba_profiles</code>, audit settings, etc. — purely read-only via
-      {' '}<code className="font-mono">oracledb</code>. Service name preferred; SID supplied as an
-      alternative for legacy 11g/XE installs.</>
-    ),
-  },
-};
-
-function SqlDbForm({
-  platform,
-  token,
-  onCancel,
-  initialHostname = '',
-  initialLabel = '',
-  assetId = null,
-}: {
-  platform: SqlPlatformId;
-  token: string;
-  onCancel: () => void;
-  initialHostname?: string;
-  initialLabel?: string;
-  assetId?: number | null;
-}) {
-  const cfg = SQL_DB_CONFIGS[platform];
-  const [label, setLabel] = useState(initialLabel);
-  const [hostname, setHostname] = useState(initialHostname);
-  const [port, setPort] = useState<number>(cfg.defaultPort);
-  const [database, setDatabase] = useState(cfg.dbDefault);
-  const [oracleSid, setOracleSid] = useState('');  // only used when platform=oracle
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
-  // Sync state with prop changes that arrive AFTER mount. The wizard page
-  // reads URL params via useSearchParams() and propagates them down as
-  // props; on the first render the URL effect hasn't fired yet so the
-  // props can be empty. Without these effects, useState's lazy initial
-  // captures the empty value and ignores the real one once it lands —
-  // result: the operator sees placeholders instead of the prefilled
-  // friendly label + hostname they expected.
-  useEffect(() => {
-    if (initialLabel && !label) setLabel(initialLabel);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialLabel]);
-  useEffect(() => {
-    if (initialHostname && !hostname) setHostname(initialHostname);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialHostname]);
-
-  const inputCls =
-    "block w-full rounded-md border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 " +
-    "placeholder:text-slate-400 shadow-sm transition " +
-    "focus:border-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-100";
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setSubmitting(true);
-    try {
-      // Trim every input — paste from DB GUIs (DBeaver, SSMS, SQL Developer)
-      // routinely leaves trailing whitespace that the DB auth layer rejects.
-      const cleanHost = (hostname || '').trim();
-      const cleanLabel = (label || '').trim();
-      const cleanDb = (database || '').trim() || cfg.dbDefault;
-      const cleanSid = (oracleSid || '').trim();
-      const cleanUser = (username || '').trim();
-      const cleanPwd = (password || '').trim();
-
-      // For Oracle, validate that EITHER a service name OR a SID is supplied.
-      if (cfg.isOracle && !cleanDb && !cleanSid) {
-        setError('Oracle needs either a TNS service name OR a SID. Both fields are empty.');
-        setSubmitting(false);
-        return;
-      }
-
-      // The handshake endpoint reads `database_name` + `db_port` for any SQL
-      // platform, and `oracle_service_name` / `oracle_sid` for Oracle in
-      // particular. Backend routes by platform — extracted from `tenant_token`.
-      const payload: Record<string, unknown> = {
-        tenant_token: token,
-        hostname: cleanHost,
-        display_label: cleanLabel || cleanHost,
-        os_name: `${cfg.label} · ${cleanDb || cleanSid}`,
-        service_account: cleanUser,
-        agent_password: cleanPwd,
-        db_port: port,
-        asset_id: assetId ?? undefined,
-      };
-      if (cfg.isOracle) {
-        payload.oracle_service_name = cleanDb || undefined;
-        payload.oracle_sid = cleanSid || undefined;
-        // Also send database_name as the legacy alias so manual operators
-        // who already use that field don't have to migrate.
-        payload.database_name = cleanDb || undefined;
-      } else {
-        payload.database_name = cleanDb;
-      }
-
-      const r = await apiClient.post('/connect-wizard/handshake', payload);
-      if (r.status >= 200 && r.status < 300) setSuccess(true);
-    } catch (e: any) {
-      const d = e?.response?.data?.detail;
-      if (d && typeof d === 'object' && d.preflight_failed) {
-        const code = d.code || 'unknown';
-        const codeLabel: Record<string, string> = {
-          auth_failed: 'Authentication rejected',
-          network_unreachable: cfg.unreachableLabel,
-          ssl_error: 'TLS handshake failed',
-          config_error: 'Configuration incomplete',
-          unknown: 'Pre-flight error',
-        };
-        setError(`${codeLabel[code] || 'Pre-flight error'} — ${d.message}\n\nWhat to do: ${d.hint}`);
-      } else if (typeof d === 'string') {
-        setError(d);
-      } else {
-        setError(e?.message || `Failed to register ${cfg.label} connection`);
-      }
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  if (success) {
-    const target = cfg.isOracle
-      ? `${hostname}:${port}/${database || oracleSid}`
-      : `${hostname}:${port}/${database}`;
-    return (
-      <div className="bg-white rounded-xl shadow-md p-8 border-2 border-emerald-300 text-center">
-        <div className="text-5xl mb-3">✅</div>
-        <h2 className="text-2xl font-bold text-slate-900 mb-2">{cfg.label} connected!</h2>
-        <p className="text-slate-600 mb-4">
-          <strong className="text-slate-900">{target}</strong> is now ready to scan.
-        </p>
-        <p className="text-xs text-slate-500 mb-4">
-          Backend runner: <code className="font-mono">{cfg.runner}</code> · CIS {cfg.label} Benchmark plugins will execute on the next scan tick.
-        </p>
-        <button onClick={onCancel} className="text-sm text-primary-600 hover:underline">← Connect another</button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden max-w-3xl mx-auto">
-      <div className="bg-slate-900 px-6 py-5 flex items-center gap-4 text-white">
-        <div className="w-12 h-12 rounded-lg bg-white/10 flex items-center justify-center text-2xl">{cfg.icon}</div>
-        <div className="flex-1">
-          <div className="text-xs uppercase tracking-wide text-slate-300 mb-0.5">Connect Wizard · Step 2 of 2</div>
-          <h2 className="text-lg font-semibold leading-tight">{cfg.label} — Database Credentials</h2>
-        </div>
-        <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 bg-emerald-500/20 text-emerald-300 rounded-full text-xs font-medium">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-          End-to-end encrypted
-        </div>
-      </div>
-
-      <div className="px-6 py-6">
-        {assetId && initialHostname && (
-          <div className="mb-4 flex items-center gap-2 rounded-lg border border-primary-200 bg-primary-50 px-3 py-2 text-xs text-primary-900">
-            <span className="text-base">🔗</span>
-            <div>
-              <span className="font-semibold">Connecting to asset #{assetId}</span> · hostname pre-filled.
-            </div>
-          </div>
-        )}
-
-        <p className="text-sm text-slate-600 mb-5 leading-relaxed">{cfg.rolePrep}</p>
-
-        <form onSubmit={submit} className="space-y-6">
-          <fieldset>
-            <legend className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3 flex items-center gap-2">
-              <span className="w-5 h-5 rounded bg-primary-100 text-primary-700 flex items-center justify-center text-[10px] font-bold">1</span>
-              Connection details
-            </legend>
-            <div className="grid grid-cols-1 gap-4">
-              <div>
-                <label className="flex items-center justify-between mb-1.5">
-                  <span className="text-sm font-medium text-slate-700">Friendly label</span>
-                  <span className="text-xs text-slate-400">Shown in your asset list</span>
-                </label>
-                <input
-                  type="text"
-                  value={label}
-                  onChange={(e) => setLabel(e.target.value)}
-                  placeholder={`Prod ${cfg.label} · core-banking · replica`}
-                  required
-                  className={inputCls}
-                />
-              </div>
-              <div className="grid grid-cols-3 gap-4">
-                <div className="col-span-2">
-                  <label className="flex items-center justify-between mb-1.5">
-                    <span className="text-sm font-medium text-slate-700">Host or IP</span>
-                    <span className="text-xs text-slate-400">FQDN preferred</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={hostname}
-                    onChange={(e) => setHostname(e.target.value)}
-                    placeholder={cfg.hostPlaceholder}
-                    required
-                    className={inputCls + " font-mono"}
-                  />
-                </div>
-                <div>
-                  <label className="flex items-center justify-between mb-1.5">
-                    <span className="text-sm font-medium text-slate-700">Port</span>
-                    <span className="text-xs text-slate-400">Default {cfg.defaultPort}</span>
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={65535}
-                    value={port}
-                    onChange={(e) => setPort(Math.max(1, Math.min(65535, Number(e.target.value) || cfg.defaultPort)))}
-                    className={inputCls + " font-mono"}
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="flex items-center justify-between mb-1.5">
-                  <span className="text-sm font-medium text-slate-700">{cfg.dbFieldLabel}</span>
-                  <span className="text-xs text-slate-400">{cfg.dbFieldHint}</span>
-                </label>
-                <input
-                  type="text"
-                  value={database}
-                  onChange={(e) => setDatabase(e.target.value)}
-                  placeholder={cfg.dbPlaceholder}
-                  required={!cfg.isOracle}
-                  className={inputCls + " font-mono"}
-                />
-                {!cfg.isOracle && (
-                  <p className="mt-1 text-xs text-slate-500">
-                    Most CIS checks read cluster-wide catalogs and work against any database.
-                    Use a real application DB only if your audit role is scoped to it.
-                  </p>
-                )}
-              </div>
-              {cfg.isOracle && (
-                <div>
-                  <label className="flex items-center justify-between mb-1.5">
-                    <span className="text-sm font-medium text-slate-700">SID <span className="font-normal text-slate-400">(alternative to service name)</span></span>
-                    <span className="text-xs text-slate-400">Optional · legacy 11g/XE</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={oracleSid}
-                    onChange={(e) => setOracleSid(e.target.value)}
-                    placeholder="XE"
-                    className={inputCls + " font-mono"}
-                  />
-                  <p className="mt-1 text-xs text-slate-500">
-                    Provide either a TNS service name (above) <strong>or</strong> a SID — at least one is required.
-                  </p>
-                </div>
-              )}
-            </div>
-          </fieldset>
-
-          <fieldset>
-            <legend className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3 flex items-center gap-2">
-              <span className="w-5 h-5 rounded bg-primary-100 text-primary-700 flex items-center justify-center text-[10px] font-bold">2</span>
-              Authentication (read-only)
-            </legend>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="flex items-center justify-between mb-1.5">
-                  <span className="text-sm font-medium text-slate-700">DB user</span>
-                  <span className="text-xs text-slate-400">Account / login name</span>
-                </label>
-                <input
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder={cfg.userPlaceholder}
-                  required
-                  className={inputCls + " font-mono"}
-                />
-              </div>
-              <div>
-                <label className="flex items-center justify-between mb-1.5">
-                  <span className="text-sm font-medium text-slate-700">Password</span>
-                  <span className="text-xs text-slate-400">Stored encrypted</span>
-                </label>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  className={inputCls + " font-mono"}
-                />
-              </div>
-            </div>
-          </fieldset>
-
-          {error && (
-            <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900 whitespace-pre-line">
-              {error}
-            </div>
-          )}
-
-          <div className="flex items-center justify-between pt-2">
-            <button
-              type="button"
-              onClick={onCancel}
-              className="text-sm text-slate-600 hover:text-slate-900"
-            >
-              ← Pick a different platform
-            </button>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="inline-flex items-center gap-2 rounded-md bg-primary-600 px-4 py-2.5 text-sm font-semibold text-[color:var(--color-on-base,#0a0a0a)] shadow-sm hover:bg-primary-700 disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              {submitting ? 'Connecting…' : 'Connect & store securely'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
 
 // AWS quick-connect form. The customer creates an IAM read-only programmatic
 // user with ReadOnlyAccess policy, then paste the access key here. We POST

@@ -183,6 +183,33 @@ def linux_ssh_runner(check_definition: Dict[str, Any], credentials: Dict[str, An
 
     expect = check_definition.get("expect") or {}
     ok, detail = _evaluate_ssh(out, rc, expect)
+
+    # Same integrity rule as the WinRM runner: a check whose command failed and
+    # returned nothing cannot establish compliance. Negative expectations
+    # ("must not contain", "must be empty") pass on empty output by
+    # construction, so a broken command would otherwise be recorded as
+    # compliant. This runner serves Linux, Cisco/netdev and the SQL benchmarks,
+    # so the same false-pass class applies to all of them.
+    no_evidence = (rc != 0) and not (out or "").strip()
+    if ok and no_evidence:
+        return RunnerResult(
+            status="error",
+            summary=(
+                "Indeterminate — the check command failed and returned no output, "
+                f"so compliance could not be established (exit_status={rc}). "
+                "This is NOT a pass."
+            ),
+            error_message=(err or "")[:2048] or f"command exited {rc} with empty stdout",
+            raw_output={
+                "command": command,
+                "exit_status": rc,
+                "stdout": out[:8192],
+                "stderr": err[:2048],
+                "expectation_detail": detail,
+                "suppressed_verdict": "passed",
+            },
+        )
+
     msg = (check_definition.get("pass_message") if ok else check_definition.get("fail_message")) or detail
 
     # Truncate stdout for storage (keep first 8KB).

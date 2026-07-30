@@ -133,7 +133,13 @@ export function RegisterView({
       header: 'Lifecycle',
       minWidth: '74px',
       render: (a) => {
-        const k = (a.lifecycle_state || 'active').toLowerCase();
+        // Same defect: an unset lifecycle_state defaulted to 'active' and lit
+        // 2 of 4 segments, so every asset looked like it had progressed
+        // halfway through a lifecycle nobody had recorded.
+        const k = (a.lifecycle_state || '').toLowerCase();
+        if (!k) {
+          return <span style={{ fontSize: 11.5, color: 'var(--as-faint)' }} title="Lifecycle stage not set">—</span>;
+        }
         const st = k === 'planned' ? { n: 1, c: '#0E5A46' } : (k === 'maintenance' || k === 'aging') ? { n: 3, c: '#B08420' } : (k === 'decommissioned' || k === 'retired' || k === 'retiring') ? { n: 4, c: '#C2542E' } : { n: 2, c: '#0E5A46' };
         return <span style={{ display: 'flex', gap: 3, alignItems: 'center' }}>{[1, 2, 3, 4].map((seg) => <span key={seg} style={{ width: 11, height: 5, borderRadius: 3, background: seg <= st.n ? st.c : 'var(--as-track)' }} />)}</span>;
       },
@@ -158,22 +164,24 @@ export function RegisterView({
       sortable: true,
       minWidth: '66px',
       render: (a) => {
-        // Never blank: fall back to a criticality-based estimate when no explicit
-        // valuation or purchase cost is stored. A real value always wins and shows
-        // in the primary colour; estimates are muted and prefixed "~".
-        const CRIT_EST: Record<string, number> = { critical: 500000, high: 200000, medium: 75000, low: 20000 };
+        // Only a REAL figure. The previous version fell back to a hardcoded
+        // table (critical 500k / high 200k / medium 75k / low 20k) so the
+        // column was "never blank" — which meant an asset nobody had valued
+        // printed a dollar amount derived purely from its criticality bucket.
+        // A promoted application inherited that bucket too, so one laptop
+        // showed as $200K twice. A currency figure in a register gets copied
+        // into board packs; it must come from finance, not from a lookup.
         const explicit = a.valuation || a.purchase_cost;
-        const v = explicit || CRIT_EST[(a.criticality || '').toLowerCase()] || 50000;
-        const est = !explicit;
+        if (!explicit) {
+          return (
+            <span style={{ fontSize: 11.5, color: 'var(--as-faint)' }}
+              title="No valuation or purchase cost recorded. Set one on the asset.">—</span>
+          );
+        }
+        const v = explicit;
         const m = v >= 1e6 ? `$${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `$${Math.round(v / 1e3)}K` : `$${Math.round(v)}`;
         return (
-          <span
-            className="as-mono"
-            style={{ fontSize: 12.5, color: est ? 'var(--as-secondary)' : 'var(--as-primary)' }}
-            title={est ? 'Estimated from criticality — set a valuation on the asset to override' : undefined}
-          >
-            {est ? `~${m}` : m}
-          </span>
+          <span className="as-mono" style={{ fontSize: 12.5, color: 'var(--as-primary)' }}>{m}</span>
         );
       },
     },
@@ -183,8 +191,15 @@ export function RegisterView({
       accessor: 'status',
       minWidth: '92px',
       render: (a) => {
+        // `|| 'active'` used to paint a green "Active" dot on every row whose
+        // status column was simply never set — the creation default. It read
+        // as a live observation of the machine; it was the absence of one.
         const m: Record<string, { c: string; label: string }> = { active: { c: '#0E5A46', label: 'Active' }, inactive: { c: '#55606B', label: 'Inactive' }, decommissioned: { c: '#C2542E', label: 'Decommissioned' } };
-        const s = m[(a.status || 'active').toLowerCase()] || m.active;
+        const raw = (a.status || '').toLowerCase();
+        if (!raw) {
+          return <span style={{ fontSize: 11.5, color: 'var(--as-faint)' }} title="Lifecycle status not set">—</span>;
+        }
+        const s = m[raw] || m.active;
         return <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 600, color: s.c }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: s.c }} />{s.label}</span>;
       },
     },

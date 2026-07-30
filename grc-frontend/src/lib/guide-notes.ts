@@ -769,6 +769,22 @@ export const GUIDE_NOTES: Record<string, GuideNote> = {
     why: "Two findings can carry an identical CVSS score and still represent very different real-world risk, depending on whether a working exploit actually exists, whether the flaw is reachable over the network, and whether the host it sits on faces the internet. This score is what lets those two findings be ranked honestly against each other, rather than tied at the same CVSS-only value.",
     misreading: "A very high score — whether it comes from a KEV floor, from the other six signals independently, or both at once — should be read as \"nearly every input signal available points the same direction\" — it is not one bad signal dragging an otherwise calm finding upward, as the full breakdown below demonstrates.",
   },
+  // Before / After panels on Analysis — the explanation lives here in Guide
+  // mode, not as paragraphs under the cards.
+  'vuln.scoreBefore': {
+    title: "Before · CVSS alone — the full math",
+    what: "The finding scored from nothing but the CVSS vector's own parameters — attack vector, attack complexity, privileges required, user interaction, scope and the three impact ratings — scaled to a 0–100 number. Nothing else counts in this panel: no EPSS, no exploit intelligence, no KEV status, no asset context. When no CVSS score is stored there is nothing to score, so the panel shows a dash — it never invents a number from the severity label. The ×0.85-style figure beside each row is that parameter's official CVSS v3.1 multiplier (Scope shows \"rule\" because it switches the formula rather than multiplying).",
+    where: "The weights and formulas are the CVSS v3.1 specification's (first.org), not ours. Exploitability = 8.22 × AV × AC × PR × UI, using the row multipliers (e.g. Network 0.85 · Low complexity 0.77 · Low privileges 0.62 · No interaction 0.85 → 2.8). Impact starts from ISS = 1 − (1−C)(1−I)(1−A) with High = 0.56, Low = 0.22, None = 0; with Scope unchanged, Impact = 6.42 × ISS (three Highs → ISS 0.91 → 5.9); with Scope changed a steeper curve applies and the sum is stretched by 1.08. Base = the two sub-scores added, rounded UP to one decimal and capped at 10 (2.8 + 5.9 → 8.8). The panel score is simply that CVSS base × 10 (8.8 → 88). The score and vector themselves come from the scanner or the NVD record — both listed in Data by source below; the indigo badge matches the NVD card on purpose.",
+    why: "This is the industry's default way of ranking a flaw: the worst-case reading, which assumes the flaw is reachable and fully exploitable everywhere — e.g. \"reachable over the network, low complexity, no user interaction, full loss of confidentiality, integrity and availability\" is exactly what a vector of Network/Low/None/High-High-High is saying. It is the number most scanners and reports lead with, which is exactly why it needs a counterpart panel weighing what actually applies on this specific host.",
+    misreading: "A 98 here does not mean this host is 98-urgent — it means the flaw in the abstract is near-maximal. Read it side by side with After: the gap between the two numbers is what context (exposure, exploit evidence, asset criticality) actually changed. And note the roundup: CVSS rounds the base UP, so the recomputed math can land a decimal below a scanner-stored value — the stored value is the one that counts.",
+  },
+  'vuln.scoreAfter': {
+    title: "After · on this host — the formula and the difference",
+    what: "The same flaw re-scored by the seven contextual signals, each row showing its actual evidence and its exact points. The formula, out of 100: CVSS severity = (CVSS ÷ 10) × 20 · Exploit probability = EPSS × 20 · Exploit maturity = up to 15 (weaponized or actively exploited 15, proof of concept 6, none known 1.5, unrated 4.5) · Known exploited = 15 if on CISA KEV, else 0 · Attack vector = up to 10 (Network 10, Adjacent 6, Local 3, Physical 1, unknown 5) · Internet exposure = 10 if the asset is internet-facing, else 0 · Asset criticality = the asset's 0–10 criticality score. Any CVE on CISA KEV is floored at 80 regardless of the sum. The small arrow chip is the difference between the two panels — After minus Before.",
+    where: "Computed on this platform from the enrichment fields plus the linked asset's exposure and criticality — the slate badge matches the \"Contextual · this platform\" card in Data by source. The same seven contributions are drawn as bars in the Score breakdown further down the page.",
+    why: "The difference between Before and After is the entire point of enrichment. A downward arrow means the flaw is severe on paper but less urgent here — typically not internet-exposed, no public exploit, low EPSS. An upward arrow means context is worse than the paper severity — actively exploited in the wild, an exposed or critical asset, or the KEV floor lifting the score. CVSS is deliberately only 20 of the 100: it measures how bad the flaw is, not how likely it is to be used against this host.",
+    misreading: "A large drop (say ↓46) is not the score being broken or the flaw being dismissed — the flaw is exactly as severe as CVSS says in the abstract. It is a statement about this host: the conditions the worst case assumes are not present here. Fix the exposure (or link the right asset) and the After number moves back up.",
+  },
   // source: v-breakdown
   'vuln.breakdown': {
     title: "7-signal score breakdown",
@@ -784,6 +800,35 @@ export const GUIDE_NOTES: Record<string, GuideNote> = {
     where: "CISA KEV — a specific, authoritative, binary government feed of vulnerabilities confirmed to have been exploited in real attacks, checked directly against this finding's CVE identifier.",
     why: "A flaw that is actively being used in real attacks right now must never sit in a merely \"medium priority\" queue simply because one input signal — say, an unusually low asset criticality, or an unknown attack vector — happened to pull the raw weighted sum down. The floor is a deliberate override of the formula's own arithmetic, not a bug or an inconsistency in it: it encodes a hard business rule (\"known exploitation in the wild always means at least this urgent\") on top of a more nuanced underlying calculation.",
     misreading: "Sometimes the floor is not actually doing any work — the seven signals alone can already sum to a total well above the 80 floor — but the floor exists precisely for the cases where they would not, which is why it is worth understanding even when it is not the deciding factor.",
+  },
+  // Source cards on Analysis — explanations live in Guide mode, not under the cards.
+  'vuln.source.epss': {
+    title: "EPSS · FIRST.org",
+    what: "EPSS (Exploit Prediction Scoring System) estimates how likely this CVE is to be exploited in the wild in the next 30 days, as a probability and a percentile among all scored CVEs.",
+    where: "Published live by FIRST.org and enriched onto the finding when you run Enrich (or the daily refresh).",
+    why: "CVSS says how bad a flaw could be; EPSS says how likely attackers are to use it soon. A high CVSS with a tiny EPSS is often less urgent than a medium CVSS with a climbing EPSS.",
+    misreading: "\"Probability 0.4%\" is not \"0.4 out of 10\" — it is a percentage chance. Percentile tells you how it ranks versus other CVEs (35th ≈ below average urgency on this axis).",
+  },
+  'vuln.source.kev': {
+    title: "CISA KEV",
+    what: "CISA's Known Exploited Vulnerabilities catalog lists CVEs confirmed to have been exploited in real attacks. \"No\" means this CVE is not on that list.",
+    where: "Checked against the CISA KEV feed during enrichment; when listed, a link opens the public catalog.",
+    why: "KEV is the strongest binary exploitation signal we use — stronger than a GitHub PoC count — and it can floor the contextual priority at 80.",
+    misreading: "\"No\" is a real answer, not missing data. There is nothing to open when the CVE is not in the catalog.",
+  },
+  'vuln.source.exploitIntel': {
+    title: "Exploit intel · Exploit-DB + GitHub",
+    what: "Two independent public sources: Exploit-DB entry count and GitHub PoC repository count. \"Maturity\" is our verdict derived from them (and KEV): none known → proof of concept → weaponized → actively exploited.",
+    where: "Exploit-DB comes from our offline mirror (point-in-time); GitHub PoCs from a live search API, cached. A source only links when it has at least one entry.",
+    why: "Public exploit code is the practical \"can someone run this tomorrow?\" signal, separate from CISA confirming exploitation in the wild.",
+    misreading: "Zero here means no indexed public PoC / Exploit-DB hit — not that exploitation is impossible. Advisory write-ups can still describe the flaw without counting as this signal.",
+  },
+  'vuln.source.contextual': {
+    title: "Contextual · this platform",
+    what: "Composite is the 7-signal score (CVSS · EPSS · exploit maturity · KEV · attack vector · exposure · asset criticality). Raw is CVSS/severity alone. Context change is how far enrichment moved the number.",
+    where: "Computed on this platform from enrichment fields plus the linked asset's exposure and criticality — the full per-signal math is in the Score breakdown above.",
+    why: "Raw CVSS treats every host the same; composite answers \"how urgent is this finding on this asset, given real exploit and exposure signals.\"",
+    misreading: "A large downward arrow (context change) usually means the flaw looks severe on paper but is less urgent here (e.g. not exposed, no public exploit, low EPSS) — not that the score is broken.",
   },
   // source: v-description
   'vuln.description': {
@@ -867,11 +912,11 @@ export const GUIDE_NOTES: Record<string, GuideNote> = {
   },
   // source: v-killchain
   'vuln.killChain': {
-    title: "MITRE ATT&CK kill chain",
-    what: "This maps this specific finding, on this specific asset, against six standard stages of a real-world attack (from MITRE's widely-used ATT&CK framework): Reconnaissance, Initial access, Execution, Privilege escalation, Lateral movement, and Impact — each marked Reached, Possible, or Blocked.",
-    where: "Every marking here is derived entirely from evidence already on record: this asset's internet exposure, its declared relationships (Relationships tab), and known network-segmentation rules. Nothing on this tab is executed — no scanner, exploit, or payload is ever run against any real host.",
-    why: "A kill-chain view translates a technical vulnerability into an attacker's actual journey, which is a far more intuitive way to communicate real risk than a bare CVSS score — \"here is exactly how far an attacker could get, and where they would be stopped\" is a story, not just a number.",
-    misreading: "The blockers used to mark a stage \"Blocked\" are heuristics — informed judgements based on known facts like segmentation rules — not yet linked to your formal ISO or NIST control library. Treat a \"Blocked\" marking as a reasoned estimate, not as certified control evidence you could cite directly to an auditor without further backup.",
+    title: "Attack chain — the MITRE ATT&CK kill chain",
+    what: "This is the full MITRE ATT&CK kill chain — all 15 tactics an attack can move through, in order, from Reconnaissance on the left to Impact on the right. Each stage is either lit with a specific technique (for example T1190 \"Exploit Public-Facing Application\") or left greyed. A lit technique carries one of three states: Likely, Possible, or Blocked.",
+    where: "The techniques come from the MITRE ATT&CK catalogue bundled with the platform (v19.1 — 367 techniques, 15 tactics, held locally as a data file, not fetched live). WHICH techniques attach to this finding is decided by translating the CVE → its weakness type (CWE) → an attacker technique, using three sources in order: the standards crosswalk (CWE→CAPEC→ATT&CK), a curated list, and — the backbone — rules that read the CVSS attack vector (e.g. AV:N → T1190 / T1210 / T1595). Each technique's state is then set by the reachability check against stored facts (internet exposure, public exploit, KEV). Nothing is executed against any host.",
+    why: "A kill-chain view turns a bare CVSS number into an attacker's actual journey — \"here is how far someone could get, and exactly where they'd be stopped.\" Showing all 15 tactics, not just the lit ones, is deliberate: the greyed stages are the honest statement that the data can't justify a technique there.",
+    misreading: "Greyed does NOT mean \"safe\" and it does NOT mean \"missing data\" — it means no technique this finding's weakness + vector can defensibly justify maps to that stage. Likewise, most findings only light Reconnaissance / Initial-Access / Execution because those are the only stages the CVE+CVSS backbone can prove; that is coverage honesty, not an under-count.",
   },
   // source: v-exploit-nothing-executed
   'vuln.exploitNothingExecuted': {
@@ -883,11 +928,11 @@ export const GUIDE_NOTES: Record<string, GuideNote> = {
   },
   // source: v-exploit-evidence-table
   'vuln.exploitEvidenceTable': {
-    title: "Evidence table",
-    what: "This table lists the specific, concrete evidence behind each kill-chain stage's marking — for example, \"Reconnaissance: Asset is internet-facing; port scan shows VPN service banner exposed,\" rated High confidence.",
-    where: "Each row draws from a specific, named source of evidence already on record elsewhere in the system: asset exposure fields, the CVE's own technical description, GitHub exploit-repository counts, declared relationships, and known network-segmentation configuration.",
-    why: "A kill-chain stage marked \"Reached\" with no visible justification is just an assertion; this table exists so every marking can be traced back to the specific fact that justified it, the same \"show your work\" principle applied throughout this whole scoring system.",
-    misreading: "Pay attention to the confidence column, not just the verdict — a \"Medium\" confidence marking (like Privilege escalation here, based on an unconfirmed assumption about the service's run-as user) is weaker evidence than a \"High\" confidence one, even when both point the same direction.",
+    title: "Evidence — the six facts behind the verdict",
+    what: "Six chips, each green (helps your defence) or red (helps the attacker): Internet-facing, Attack vector, Public exploit, CISA KEV, EPSS, and Patch. Together they are the raw facts the verdict is built from — every one is a stored value, not an opinion or a guess.",
+    where: "Each chip is drawn from a different named source: Internet-facing from this asset's own record; Attack vector parsed from the CVE's CVSS vector (NVD); Public exploit from the GitHub + Exploit-DB check; CISA KEV from CISA's actively-exploited catalogue; EPSS from FIRST.org; Patch from the vendor-advisory sync. Each chip below carries its own guide marker explaining its exact source and how it is fetched.",
+    why: "A verdict with no visible facts is just an assertion. This row is the \"show your work\" — every chip traces to the one fact that justified it, so you can audit the reasoning instead of trusting it.",
+    misreading: "Red isn't automatically bad news and green isn't automatically safe — read them together. \"Network attack vector\" (red) only matters if the asset is also reachable; here \"Not exposed\" (green) is what severs the chain. It is the combination that decides the verdict, not any single chip.",
   },
   // source: v-exploit-retest
   'vuln.exploitRetest': {
@@ -920,6 +965,84 @@ export const GUIDE_NOTES: Record<string, GuideNote> = {
     where: "Privilege escalation is Possible because the service's run-as user privilege level is not fully confirmed (Medium confidence, per the evidence table). Lateral movement is Possible directly because of this asset's three declared relationships (to the identity provider, the firewall, and the SIEM collector) — see the Relationships tab.",
     why: "\"Possible\" is an honest middle category, distinct from both the confidence of \"Reached\" and the reassurance of \"Blocked\" — collapsing genuine uncertainty into one of those two more definitive labels would misrepresent how much is actually known.",
     misreading: "A \"Possible\" marking is exactly where more evidence-gathering (confirming the service's actual run-as privileges, for instance) would most improve the overall confidence of this whole kill-chain assessment — it is the weakest link in an otherwise fairly well-evidenced chain.",
+  },
+  // ── Exploit Test tab — added guide (parent sections + child boxes) ──────────
+  'vuln.exploitVerdict': {
+    title: "The verdict — Unlikely / Possibly / Likely, plus signals % and data %",
+    what: "The headline answers \"could an attacker actually use this here?\" — Unlikely, Possibly, or Likely exploitable, judged per asset. Beside it sit two small percentages people often confuse: \"signals\" and \"data.\"",
+    where: "The verdict looks only at the ENTRY techniques (Initial-Access and Execution): if every way in is Blocked → Unlikely; one Possible → Possibly; one Likely → Likely; no network entry at all → Unlikely (\"an attacker would already need local access\"). \"Signals %\" = how many of 4 danger flags are on (internet-exposed, public exploit, in KEV, EPSS ≥ 10%). \"Data %\" = how many of the 10 facts the engine needs are actually known. Both are computed by the engine from stored evidence.",
+    why: "Severity says how bad the flaw is; this verdict says whether it can be reached on THIS box — a High-severity flaw on an internal machine can honestly be \"Unlikely.\" The two percentages let you tell a confident answer from a guess.",
+    misreading: "\"0% signals, 100% data\" is the reassuring case, not a broken one: full picture, and none of the four dangerous things is true. Low DATA % is the real warning sign — it means facts are missing, so treat the verdict as provisional.",
+  },
+  'vuln.exploitWalkthrough': {
+    title: "Attacker walkthrough (AI · grounded)",
+    what: "A plain-English story of how an attacker would move through this specific chain, step by step — written by an AI model as a readable narration layer on top of the computed assessment.",
+    where: "Generated by a language model (gpt-4o-mini) from the already-computed chain and evidence — the model is handed the engine's result and asked only to describe it. It is a separate API call from the chain, so the chain paints instantly and the story streams in a second later. It decides nothing.",
+    why: "A grid of tactic codes is precise but hard to feel; the walkthrough turns it into \"first they scan, then they're stopped at the door because it isn't internet-facing\" — the same facts in the language a non-specialist reads.",
+    misreading: "The AI never overrides the engine. If its story would contradict the verdict, an automatic check catches it and the narration is withheld with a banner — so a missing walkthrough means \"we refused to show an inconsistent story,\" not \"the assessment failed.\" The chain below is always the source of truth.",
+  },
+  'vuln.exploitTechnique': {
+    title: "A technique card (click any lit stage)",
+    what: "Clicking a lit stage opens its detail, deliberately split into three voices at three scopes: \"On this asset\" (the per-asset verdict and its reason — the conclusion), \"Why it's in this chain\" (the mapping rationale — a claim about the flaw, not this asset, with a coloured source badge), and \"What this technique is · MITRE's general description\" (the generic encyclopedia text). \"What stops it\" lists the matching ATT&CK mitigations.",
+    where: "\"On this asset\" comes from the reachability check (the specific fact that made it Likely / Possible / Blocked on this host). \"Why it's in this chain\" is the provenance layer — Standards (CAPEC), CVSS heuristic, Curated, or Assumed — telling you which source tied this technique to the flaw. The description at the bottom is MITRE's own catalogue text, unchanged.",
+    why: "The three voices answer different questions at different scopes — this asset, this flaw, the technique in general. Kept separate and labelled, a card can say \"blocked here\" and still explain why the technique is in the chain and what MITRE says about it, without reading as a contradiction.",
+    misreading: "On a Blocked card the lower sections are NOT walking back the verdict: \"Why it's in this chain\" is about the flaw and is phrased as would-apply-if, and the MITRE text is generic background — neither claims the technique works on this asset. The source badge still matters too: \"CVSS heuristic\" is a reasoned rule, not a confirmed standards mapping — treat \"Curated\" / \"Standards\" as stronger evidence than \"CVSS\" / \"Assumed.\"",
+  },
+  'vuln.exploitBlastRadius': {
+    title: "Blast radius",
+    what: "A different question from \"can they get in\": if this one asset were fully compromised, which other assets sit next to it that an attacker could try to reach next.",
+    where: "Built from two sources unioned together: this asset's declared relationships (the Relationships tab) plus other assets sharing its network — loopback (127.0.0.1) excluded so unrelated machines aren't merged. It is an asset-graph lookup, not part of the reachability verdict.",
+    why: "Getting in is only half the risk; the other half is how far it spreads. Blast radius turns that into a concrete list — declare fewer unnecessary trust links and it shrinks; discover a hidden dependency and it grows.",
+    misreading: "An empty blast radius means \"no neighbours have been mapped,\" NOT \"this asset is safely isolated.\" Absence of data and true isolation look identical here — only declared relationships make a non-empty number trustworthy.",
+  },
+  'vuln.exploitThreatIntel': {
+    title: "Threat intelligence (technique-level)",
+    what: "For each technique in this chain, the real-world threat groups and malware / tools that MITRE records as using that technique — for example \"T1190 is used by APT28, APT29, Sandworm…\"",
+    where: "Looked up from the MITRE ATT&CK Groups & Software dataset bundled with the platform (held locally — 170 groups plus malware / tools), matched to the techniques in this finding's chain and capped at 12 names per technique for readability.",
+    why: "It answers \"do real attackers actually bother with this kind of move?\" — useful context for how seriously to take a technique that is only \"Possible\" on paper.",
+    misreading: "The single most-misread panel: it is a TECHNIQUE-level association, NOT \"these actors attacked this CVE.\" MITRE has no CVE-to-actor link, so \"APT28 uses T1190\" never means \"APT28 exploited this vulnerability.\" The panel says so itself — read it as context, not attribution.",
+  },
+  'vuln.ev.internetFacing': {
+    title: "Evidence · Internet-facing",
+    what: "Whether this asset can be reached directly from the public internet — the single biggest factor in whether a network flaw can actually be attacked here.",
+    where: "Read from THIS asset's own record (the internet-facing field on the asset), not from the CVE. Today that field is set by an operator or an import — it is not yet auto-detected by a live scanner, which is why the tab notes reachability is derived from the asset's stored state.",
+    why: "It's what flips a network-exploitable flaw from \"Likely\" to \"Blocked.\" On this finding, \"Not exposed\" is exactly why the entry technique is Blocked and the verdict is Unlikely.",
+    misreading: "Because it's an operator-set field, a wrong value here quietly skews the verdict — if an asset really is exposed but the field says no, fix it on the asset and the whole assessment recomputes.",
+  },
+  'vuln.ev.attackVector': {
+    title: "Evidence · Attack vector",
+    what: "How close an attacker must be to exploit the flaw — Network (from anywhere), Adjacent (same LAN), Local (already on the box), or Physical. Shown red when it's Network / Adjacent.",
+    where: "Parsed from the CVE's CVSS vector string (the AV: field), which comes from NVD. It is a property of the vulnerability itself, not of your asset.",
+    why: "It's one half of reachability: a Network-vector flaw CAN be hit remotely — but only if the asset is also exposed (see Internet-facing). The engine's CVSS rules also use it to pick the entry technique (AV:N → T1190).",
+    misreading: "\"Network\" (red) alone is not danger — it's danger only when paired with exposure. Here the Network vector is red but the asset isn't exposed, so it stays contained.",
+  },
+  'vuln.ev.publicExploit': {
+    title: "Evidence · Public exploit",
+    what: "Whether ready-made attack code for this CVE exists in public — and whether any of it is confirmed working (\"Verified\").",
+    where: "Two separate sources combined: a LIVE search of GitHub for repositories named after the CVE (a breadth count), plus the bundled Exploit-DB dataset where some entries carry a \"verified\" flag (a quality signal). The chip shows the combined provenance, e.g. \"github; exploit-db (verified).\"",
+    why: "Public exploit code sharply raises real-world risk — it's one of the four danger signals and a red-flag trigger on the Remediation tab. \"None found\" (green), as here, is part of why this finding scores low.",
+    misreading: "Don't confuse this with the ATT&CK mapping. GitHub / Exploit-DB answer \"is there attack CODE?\" — they do NOT decide which techniques appear in the chain (that is ATT&CK + the CVSS rules). Two different databases, two different jobs.",
+  },
+  'vuln.ev.kev': {
+    title: "Evidence · CISA KEV",
+    what: "Whether this CVE is on CISA's Known Exploited Vulnerabilities catalogue — the US government's authoritative list of flaws being actively exploited in the wild right now.",
+    where: "Checked against CISA's published KEV catalogue (pulled from CISA and cached). It's a yes / no on the CVE.",
+    why: "KEV is the strongest single urgency signal there is. On the Analysis tab it acts as a floor — a KEV finding can't score below 80 / 100 — because a bug attackers are already using is never \"medium.\" Here it's \"Not listed\" (green).",
+    misreading: "KEV is about the CVE globally, not your asset. \"Listed\" means \"attacked somewhere in the world,\" which raises priority everywhere — but whether it can be reached on THIS asset is still decided by exposure and vector.",
+  },
+  'vuln.ev.epss': {
+    title: "Evidence · EPSS",
+    what: "A percentage: the modelled probability this CVE will be exploited in the wild within the next 30 days. It answers \"how likely is this to actually be attacked soon?\"",
+    where: "From FIRST.org's EPSS service (Exploit Prediction Scoring System), pulled via its public API and refreshed daily. It's a forward-looking model, not a fact about your asset.",
+    why: "It separates the thousands of theoretical flaws from the few likely to be hit. It's 20% of the Analysis risk score and one of the four danger signals (it flips on at ≥ 10%). Here it's near zero, part of why the verdict is Unlikely.",
+    misreading: "EPSS is a probability, not proof — a low EPSS doesn't mean \"impossible,\" and a high EPSS doesn't mean \"already exploited\" (that's what KEV is for). Read it as a forecast.",
+  },
+  'vuln.ev.patch': {
+    title: "Evidence · Patch",
+    what: "Whether a vendor fix (or official guidance) exists for this CVE — and, on the Remediation tab, what it is.",
+    where: "From the patch-intel sync: vendor PSIRT advisories, Microsoft MSRC for Microsoft products, and CISA's KEV required-action guidance. Stored as patch references / remediation guidance on the finding.",
+    why: "It's the difference between \"we can fix this properly\" and \"we can only apply a compensating control.\" Here \"None\" means no vendor patch is recorded yet, which is why the advice is to mitigate until one ships.",
+    misreading: "\"None found\" doesn't always mean no fix exists in the world — it means none is recorded here yet. Running the Remediation tab's patch Sync can pull it in if the vendor has since published one.",
   },
   // source: v-hist-why
   'vuln.historyWhy': {

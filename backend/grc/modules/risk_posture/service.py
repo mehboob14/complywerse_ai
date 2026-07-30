@@ -248,12 +248,19 @@ def _cis_gap_self(db: Session, tenant_id: int, asset_id: int) -> Dict[str, Any]:
     if not latest or total == 0:
         return {
             "score": 0.0, "known": False,
-            "passed": 0, "failed": 0, "never_scanned": total, "total": total,
+            "passed": 0, "failed": 0, "errored": 0, "never_scanned": total, "total": total,
             "pass_rate": None,
         }
 
     passed = sum(1 for s in latest.values() if s == "passed")
     failed = sum(1 for s in latest.values() if s == "failed")
+    # Rules that ran but returned neither pass nor fail (status "error" — the check
+    # couldn't be evaluated). They ARE in `latest`, so they're not never_scanned, but
+    # they're not a pass or a fail either. Surfaced so the card's breakdown reconciles
+    # (passed + failed + errored + never_scanned == total) instead of silently going
+    # missing, and folded into the coverage gap below so they aren't dropped from the
+    # score.
+    errored = len(latest) - passed - failed
     never_scanned = total - len(latest)
     scanned = passed + failed
     pass_rate = round(passed / total * 100, 1)
@@ -267,13 +274,15 @@ def _cis_gap_self(db: Session, tenant_id: int, asset_id: int) -> Dict[str, Any]:
         score = 1.0
     else:
         scanned_gap = failed / scanned
-        coverage_penalty = never_scanned / total
+        # never_scanned AND errored are both "not effectively measured" — treat both
+        # as coverage gap (uncertainty), rather than ignoring the errored ones.
+        coverage_penalty = (never_scanned + errored) / total
         score = 0.8 * scanned_gap + 0.2 * coverage_penalty
 
     return {
         "score": round(score, 4), "known": True,
-        "passed": passed, "failed": failed, "never_scanned": never_scanned,
-        "total": total, "pass_rate": pass_rate,
+        "passed": passed, "failed": failed, "errored": errored,
+        "never_scanned": never_scanned, "total": total, "pass_rate": pass_rate,
     }
 
 
@@ -528,7 +537,9 @@ def _vuln_score(
             kev_flag=bool(v.kev_flag),
             asset_cia_max=asset_cia_max,
             is_customer_facing=bool(getattr(asset, "is_customer_facing", False)) if asset else False,
-            is_internet_facing=bool(getattr(asset, "is_internet_facing", False)) if asset else False,
+            # Read the canonical `internet_facing` column (the RiskInputs field keeps its
+            # v2 name). The old `is_internet_facing` column is retired.
+            is_internet_facing=bool(getattr(asset, "internet_facing", False)) if asset else False,
             regulated_data_type=(getattr(asset, "regulated_data_type", "none") if asset else "none"),
             # Renamed from the v2 plan's `operational_dependency` because
             # we already have a column with that name on ITAsset (Integer
@@ -645,7 +656,15 @@ def _cia_value(asset: ITAsset) -> Dict[str, Any]:
     #
     # Known when a human set at least one rating, or when criticality gives us a
     # real basis to derive from. An asset with neither is genuinely unmeasured.
-    _cia_known = has_any_explicit or crit in DEFAULTS
+    # Known ONLY when a human actually rated something. Deriving C/I/A from
+    # `criticality` was laundering an assumption into evidence: a discovered
+    # asset is created with criticality='medium' by default, which produced
+    # 3/3/3, which scored 0.5, which — as the only "known" dimension — became
+    # 100% of the asset's risk score and printed "elevated · remediate soon"
+    # over a machine nobody had assessed. An asset with no ratings is
+    # unmeasured, and the honest output is that the dimension drops out of the
+    # weighting exactly like cis/vuln/ctrl already do.
+    _cia_known = has_any_explicit
     return {
         "score": round(norm, 4), "known": _cia_known,
         "confidentiality": c,
@@ -817,7 +836,7 @@ def compute_asset_risk(
             # body) but read from the renamed column to avoid the
             # collision with the Criticality-Assessments Integer column.
             "is_customer_facing": getattr(asset, "is_customer_facing", None),
-            "is_internet_facing": getattr(asset, "is_internet_facing", None),
+            "is_internet_facing": getattr(asset, "internet_facing", None),
             "regulated_data_type": getattr(asset, "regulated_data_type", None),
             "operational_dependency": getattr(asset, "op_dep_business_impact", None),
             "business_impact_notes": getattr(asset, "business_impact_notes", None),
@@ -830,7 +849,7 @@ def compute_asset_risk(
         # original v2 page uses `data.is_customer_facing`) still works.
         # Both paths now return the same values.
         "is_customer_facing": getattr(asset, "is_customer_facing", None),
-        "is_internet_facing": getattr(asset, "is_internet_facing", None),
+        "is_internet_facing": getattr(asset, "internet_facing", None),
         "regulated_data_type": getattr(asset, "regulated_data_type", None),
         "operational_dependency": getattr(asset, "op_dep_business_impact", None),
         "business_impact_notes": getattr(asset, "business_impact_notes", None),

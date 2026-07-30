@@ -17,6 +17,7 @@ from grc.models import (
 )
 from ..adapters.base_adapter import BaseAdapter, ConnectionTestResult
 from ..adapters.adapter_factory import build_adapter, get_transformer
+from grc.services.cpe_matcher import auto_link_enabled
 
 logger = logging.getLogger(__name__)
 DEBUG_PAYLOADS = os.environ.get("INTEGRATIONS_DEBUG_PAYLOADS", "true").lower() == "true"
@@ -43,12 +44,17 @@ class SyncService:
     def _map_asset_fields(transformed: Dict[str, Any]) -> Dict[str, Any]:
         critical = transformed.get("critical_vulns", 0) or 0
         severe = transformed.get("severe_vulns", 0) or 0
-        if critical > 0:
-            criticality = "critical"
-        elif severe > 0:
-            criticality = "high"
-        else:
-            criticality = "medium"
+        # NOTE: criticality is deliberately NOT derived here and is not part of
+        # the mapped fields below.
+        #
+        # Asset criticality is BUSINESS importance — the harm if this asset is
+        # compromised, from its C/I/A ratings, data classification and business
+        # function. It is not a count of findings. Deriving it from vulnerability
+        # severity said "this laptop has critical CVEs, therefore this laptop is
+        # a critical asset", which is a different claim entirely, and because the
+        # update loop setattr()s mapped fields it also OVERWROTE ratings a human
+        # had set. The vulnerability counts still reach the asset — as
+        # vulnerabilities, which is what they are.
 
         lines = [
             "Auto-synced from vulnerability scanner",
@@ -77,7 +83,6 @@ class SyncService:
             "asset_type": "infrastructure",
             "host_name": transformed.get("host_name") or None,
             "ip_address": transformed.get("ip_address") or None,
-            "criticality": criticality,
             "status": "active",
             "description": "\n".join(lines),
             "vendor": transformed.get("scanner_source") or None,
@@ -100,7 +105,12 @@ class SyncService:
             "cvss_score": transformed.get("cvss_score"),
             "cvss_vector": transformed.get("cvss_vector"),
             "cve_id": transformed.get("cve_id"),
+            "cwe_id": transformed.get("cwe_id"),
+            "cwe_ids": transformed.get("cwe_ids"),
             "affected_host": transformed.get("affected_host"),
+            "plugin_family": transformed.get("plugin_family"),
+            "vpr_score": transformed.get("vpr_score"),
+            "cpe": transformed.get("cpe"),
             "evidence": transformed.get("proof"),
             "status": transformed.get("status") or "open",
             "discovered_at": discovered_at,
@@ -173,15 +183,45 @@ class SyncService:
             SyncService._sync_vulnerabilities(db, adapter, connection, tenant_id, stats, synced_assets=synced_assets)
             SyncService._sync_scans(db, adapter, connection, tenant_id, stats)
 
+            # Score every synced vuln from its stored signals so freshly-imported
+            # findings carry the correct composite priority immediately, instead of
+            # sitting at 0 until the next enrichment (which made the Remediation
+            # plan read "0/100" while the Analysis tab computed the real score).
+            try:
+                from grc.modules.vuln_management.enrichment.enrichment_service import (
+                    recompute_composite_priority,
+                )
+                _vq = db.query(Vulnerability).filter(Vulnerability.tenant_id == tenant_id)
+                if hasattr(Vulnerability, "connection_id"):
+                    _vq = _vq.filter(Vulnerability.connection_id == connection.id)
+                for _v in _vq.all():
+                    try:
+                        recompute_composite_priority(_v, db)
+                    except Exception:
+                        pass
+                db.commit()
+            except Exception:
+                logger.exception("post-sync composite scoring failed (non-fatal)")
+
             history.status = "completed"
             connection.last_sync_status = "success"
             connection.consecutive_failures = 0
+            # A completed sync IS proof the connection is live — flip a freshly created
+            # "pending" (or a recovered "error") connection to "connected" so the status
+            # badge stops lagging behind a successful pull.
+            if connection.status != "deactivated":
+                connection.status = "connected"
         except Exception as e:
             logger.exception(f"Sync failed for connection {connection_id}: {e}")
             history.status = "failed"
             stats["errors_count"] += 1
             stats["error_details"].append({"phase": "general", "error": str(e)[:500]})
             connection.last_sync_status = "failed"
+            # Surface the failure on the status badge too (mirrors the success
+            # path flipping it to "connected"), so a broken sync doesn't keep
+            # showing a stale "connected" pill.
+            if connection.status != "deactivated":
+                connection.status = "error"
             connection.consecutive_failures = (connection.consecutive_failures or 0) + 1
         finally:
             now = datetime.utcnow()
@@ -301,22 +341,21 @@ class SyncService:
                         "ip_address": ip_address or "",
                     })
                 else:
-                    asset = ITAsset(
-                        tenant_id=tenant_id,
-                        **mapped_asset,
-                    )
-                    # First sighting — set both the bump fields and the
-                    # lifecycle state (defaults to "active" but make it explicit
-                    # so new tenant DBs and old ones look identical).
-                    if hasattr(asset, "last_seen_at"):
-                        asset.last_seen_at = _now
-                        asset.last_seen_source = _source_label
-                    if hasattr(asset, "lifecycle_state") and asset.lifecycle_state is None:
-                        asset.lifecycle_state = "active"
-                    db.add(asset)
-                    stats["assets_new"] += 1
+                    # A scanner import does NOT create inventory. IT Asset
+                    # Inventory is populated by discovery, and only after a
+                    # credential authenticated and the host was profiled —
+                    # a scan result is evidence about a host, not proof we
+                    # own or manage it. Creating one here produced shell
+                    # assets with no OS, no hardware and no owner, which then
+                    # counted as devices and carried risk scores.
+                    #
+                    # The host is still carried forward with asset=None so its
+                    # vulnerabilities are imported into the vulnerability
+                    # module as normal; they simply aren't linked to an asset
+                    # until that host legitimately enters inventory.
+                    stats["assets_unmatched"] = stats.get("assets_unmatched", 0) + 1
                     synced_assets.append({
-                        "asset": asset,
+                        "asset": None,
                         "external_asset_id": ext_id,
                         "host_name": host_name or "",
                         "ip_address": ip_address or "",
@@ -390,9 +429,9 @@ class SyncService:
                     )
                 else:
                     instances = adapter.get_asset_vulnerabilities(external_asset_id)
-                SyncService._debug_shape(f"sync_vulns.instances.asset_{asset.id}", instances)
+                SyncService._debug_shape(f"sync_vulns.instances.asset_{getattr(asset, 'id', None)}", instances)
             except Exception as e:
-                logger.error(f"Error fetching vulns for asset {asset.id}: {e}")
+                logger.error(f"Error fetching vulns for asset {getattr(asset, 'id', None)}: {e}")
                 stats["errors_count"] += 1
                 continue
 
@@ -474,20 +513,26 @@ class SyncService:
                         Vulnerability.tenant_id == tenant_id,
                         Vulnerability.vuln_id == gen_vuln_id,
                     ).first()
-                    if db_vuln:
-                        existing_link = db.query(VulnerabilityAssetLink).filter(
-                            VulnerabilityAssetLink.vulnerability_id == db_vuln.id,
-                            VulnerabilityAssetLink.asset_id == asset.id,
-                        ).first()
-                        if not existing_link:
-                            db.add(VulnerabilityAssetLink(
-                                vulnerability_id=db_vuln.id,
-                                asset_id=asset.id,
-                                impact_on_asset="Detected by scanner on linked asset",
-                                created_by=None,
-                                link_source="scanner",
-                                auto_linked=True,
-                            ))
+                    # Auto-link the finding to its scanned host — but ONLY when
+                    # auto-linking is enabled (default OFF: findings link to assets
+                    # manually). Even matched, an unmatched host still gets its
+                    # vulnerability rows; they stay unlinked rather than inventing
+                    # something to attach them to. Enrichment below runs regardless.
+                    if db_vuln and asset is not None:
+                        if auto_link_enabled():
+                            existing_link = db.query(VulnerabilityAssetLink).filter(
+                                VulnerabilityAssetLink.vulnerability_id == db_vuln.id,
+                                VulnerabilityAssetLink.asset_id == asset.id,
+                            ).first()
+                            if not existing_link:
+                                db.add(VulnerabilityAssetLink(
+                                    vulnerability_id=db_vuln.id,
+                                    asset_id=asset.id,
+                                    impact_on_asset="Detected by scanner on linked asset",
+                                    created_by=None,
+                                    link_source="scanner",
+                                    auto_linked=True,
+                                ))
 
                         # Fan out enrichment for any vuln that has a CVE-ID.
                         # Wrapped in try/except so a broker/redis issue can

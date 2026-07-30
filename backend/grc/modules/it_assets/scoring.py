@@ -99,8 +99,13 @@ def score_inventory(db, tids, now=None):
             "assets with an approved criticality assessment / all"),
         _cm("score_derived", "Criticality score derived", 0.18, sum(1 for a in assets if getattr(a, "criticality_score", None) is not None), N,
             "assets with a derived criticality score / all"),
+        # Vacuously-true only if criticality has actually been rated somewhere.
+        # With every asset unrated, "there are no high/critical assets" is
+        # ignorance, not a clean bill of health — and this metric alone was
+        # lifting an otherwise-0 section to 20.
         _cm("high_assessed", "High/critical assessed", 0.15, sum(1 for a in high_assets if a.id in assessed_ids), len(high_assets),
-            "high/critical assets formally assessed / all high-critical assets", empty=100),
+            "high/critical assets formally assessed / all high-critical assets",
+            empty=(100 if any(getattr(a, "criticality", None) for a in assets) else None)),
         _cm("assessment_quality", "Assessments scored", 0.15, quality_scored, n_approved,
             "approved assessments with a computed total score + criticality band / all approved assessments", empty=None),
         _cm("assessment_freshness", "Assessments current", 0.10, fresh_scored, n_approved,
@@ -108,11 +113,25 @@ def score_inventory(db, tids, now=None):
     ]
 
     # ---------- 3) Vulnerability exposure ----------
-    vulns = db.query(Vulnerability).filter(Vulnerability.tenant_id.in_(tids)).all()
+    # Scoped to THIS inventory. Querying every vulnerability in the tenant made
+    # the inventory board report the vuln module's backlog instead of its own
+    # posture — with zero assets it still showed 205 open vulns and scored the
+    # sections off them. A vulnerability only belongs on this board if it is
+    # linked to an asset we actually hold.
+    #
+    # The link query was also unfiltered (every tenant's links), so restricting
+    # it to this tenant's asset ids closes a cross-tenant read at the same time.
+    links = db.query(VulnerabilityAssetLink).filter(
+        VulnerabilityAssetLink.asset_id.in_(asset_ids)
+    ).all() if asset_ids else []
+    inventory_vuln_ids = {l.vulnerability_id for l in links}
+    vulns = db.query(Vulnerability).filter(
+        Vulnerability.tenant_id.in_(tids),
+        Vulnerability.id.in_(inventory_vuln_ids),
+    ).all() if inventory_vuln_ids else []
     open_states = {None, "open", "in_progress"}
     open_vulns = [v for v in vulns if getattr(v, "status", None) in open_states]
     severe_open = [v for v in open_vulns if str(getattr(v, "severity", "") or "").lower() in severe_crit]
-    links = db.query(VulnerabilityAssetLink).all()
     vuln_to_assets = {}
     for l in links:
         vuln_to_assets.setdefault(l.vulnerability_id, set()).add(l.asset_id)
@@ -128,15 +147,24 @@ def score_inventory(db, tids, now=None):
                          if getattr(v, "kev_flag", None)
                          or (getattr(v, "public_exploit_count", 0) or 0) > 0
                          or (getattr(v, "epss_score", 0) or 0) >= 0.5)
+    # `empty=100` is only honest when the universe is empty as a MEASURED
+    # fact. With no vulnerability data at all — nothing scanned, nothing
+    # imported — an empty universe means "we never looked", and scoring that
+    # 100 told an operator their exposure was perfect on a machine that had
+    # never been assessed. When there is no data the metrics report n/a and
+    # drop out of the weighting instead.
+    _vuln_measured = len(vulns) > 0
+    _v_empty = 100 if _vuln_measured else None
     vuln = [
-        _cm("clean", "Clean of critical/high", 0.30, N - len(assets_with_severe), N,
-            "assets with no open critical/high vulnerability / all"),
+        _cm("clean", "Clean of critical/high", 0.30,
+            (N - len(assets_with_severe)) if _vuln_measured else 0, N if _vuln_measured else 0,
+            "assets with no open critical/high vulnerability / all", empty=None),
         _cm("not_overdue", "Remediation on time", 0.25, overdue_open, len(open_vulns),
-            "1 - (overdue open vulnerabilities / open vulnerabilities)", inverse=True, empty=100),
+            "1 - (overdue open vulnerabilities / open vulnerabilities)", inverse=True, empty=_v_empty),
         _cm("kev_handled", "Known-exploited handled", 0.20, kev_resolved, len(kev),
-            "CISA known-exploited vulnerabilities resolved / all known-exploited", empty=100),
+            "CISA known-exploited vulnerabilities resolved / all known-exploited", empty=_v_empty),
         _cm("exploit_exposure", "Actively-exploited resolved", 0.25, dangerous_open, len(open_vulns),
-            "1 - (open KEV / public-exploit / EPSS>=0.5 vulnerabilities / all open vulnerabilities)", inverse=True, empty=100),
+            "1 - (open KEV / public-exploit / EPSS>=0.5 vulnerabilities / all open vulnerabilities)", inverse=True, empty=_v_empty),
     ]
 
     # ---------- 4) Scan & monitoring coverage ----------
@@ -200,15 +228,15 @@ def score_inventory(db, tids, now=None):
     bad_exceptions = sum(1 for v in excepted if _bad_exception(v))
     vuln_health = [
         _cm("remediation_rate", "Vulnerabilities remediated", 0.22, len(remediated), len(actionable),
-            "resolved or accepted vulnerabilities / all actionable vulnerabilities", empty=100),
+            "resolved or accepted vulnerabilities / all actionable vulnerabilities", empty=_v_empty),
         _cm("severe_remediation", "Critical/high remediated", 0.26, len(severe_remediated), len(severe_actionable),
-            "critical/high vulnerabilities remediated / all critical/high vulnerabilities", empty=100),
+            "critical/high vulnerabilities remediated / all critical/high vulnerabilities", empty=_v_empty),
         _cm("sla_adherence", "Remediated within SLA", 0.22, sla_met, len(sla_dated),
-            "vulnerabilities remediated on/before their SLA due date / remediated vulns with an SLA date", empty=100),
+            "vulnerabilities remediated on/before their SLA due date / remediated vulns with an SLA date", empty=_v_empty),
         _cm("backlog_currency", "Open backlog on time", 0.15, open_overdue, len(open_dated),
-            "1 - (overdue open vulnerabilities / open vulnerabilities with a due date)", inverse=True, empty=100),
+            "1 - (overdue open vulnerabilities / open vulnerabilities with a due date)", inverse=True, empty=_v_empty),
         _cm("exception_hygiene", "Exceptions in good standing", 0.15, bad_exceptions, len(excepted),
-            "1 - (expired / unapproved granted exceptions / all vulnerabilities with an exception)", inverse=True, empty=100),
+            "1 - (expired / unapproved granted exceptions / all vulnerabilities with an exception)", inverse=True, empty=_v_empty),
     ]
 
     # ---------- 7) CIS benchmark compliance ----------
@@ -229,7 +257,16 @@ def score_inventory(db, tids, now=None):
             CompliancePluginRun.id, CompliancePluginRun.asset_id,
             CompliancePluginRun.plugin_id, CompliancePluginRun.status,
         ).filter(CompliancePluginRun.tenant_id.in_(tids),
-                 CompliancePluginRun.is_leaked.is_(False)).order_by(
+                 CompliancePluginRun.is_leaked.is_(False),
+                 # Scoped to assets CURRENTLY in inventory — same rule as the
+                 # vulnerability sections. Runs detached from a deleted asset
+                 # (asset_id NULL) are history, not evidence about this
+                 # inventory: 2,590 orphaned runs made `has_cis` true, so the
+                 # section reported "0% scanned" for a tenant that had never
+                 # scanned anything, instead of n/a.
+                 CompliancePluginRun.asset_id.in_(asset_ids) if asset_ids
+                 else CompliancePluginRun.asset_id.is_(None) & False,
+                 ).order_by(
                      CompliancePluginRun.started_at.desc().nullslast(),
                      CompliancePluginRun.id.desc()).all()
     except Exception:  # noqa: BLE001 — missing model/table/column → treat as no CIS data
@@ -259,8 +296,11 @@ def score_inventory(db, tids, now=None):
     cis = [
         _cm("benchmark_pass_rate", "Benchmark checks passing", 0.55, cis_passed, cis_definitive,
             "CIS benchmark checks passed / checks with a definitive pass or fail"),
+        # Denominator 0 when no CIS scan has ever run, so the metric is n/a and
+        # the whole section drops out. It previously scored 0/N = 0, which reads
+        # as "you FAILED the benchmark" when the truth is "you have not run it".
         _cm("scan_coverage", "Assets scanned", 0.30, cis_scanned_assets, (N if has_cis else 0),
-            "assets with a CIS benchmark scan / all assets"),
+            "assets with a CIS benchmark scan / all assets", empty=None),
         _cm("scan_reliability", "Scans without errors", 0.15, cis_error, cis_total_checks,
             "1 - (errored checks / all checks run)", inverse=True),
     ]
@@ -282,6 +322,18 @@ def score_inventory(db, tids, now=None):
     _cfg = sc_cfg.get_config(db, tids[0], "assets") if tids else {}
     _target = _cfg.get("target", TARGET)
     sc_cfg.apply_overrides(list(sections.values()), _cfg)
+    # No inventory → no score. Several metrics carry empty=100 ("nothing bad
+    # found"), which is right when a universe is legitimately empty (no
+    # internet-facing assets) but wrong when there is no inventory at all: it
+    # turned an empty tenant into 78/100 "good", so deleting every asset RAISED
+    # the score. Absence of evidence is not evidence of health — report n/a and
+    # let the UI say "no assets" instead of inventing a grade.
+    if N == 0:
+        for s in sections.values():
+            s["score"] = None
+            for m in s.get("metrics", []):
+                m["score"] = None
+
     comps = [{"key": s["key"], "label": s["label"], "score": s["score"], "weight": s["weight"], "target": _target}
              for s in sections.values()]
     scored = [c for c in comps if c["score"] is not None]
@@ -292,6 +344,9 @@ def score_inventory(db, tids, now=None):
 
     return {
         "as_of": now.isoformat(),
+        # True when there is no inventory to score at all — the UI should show
+        # "No assets yet", never a number.
+        "no_data": N == 0,
         "counts": {"assets": N, "vulnerabilities": len(vulns), "open_vulnerabilities": len(open_vulns)},
         "performance": {"score": perf, "grade": grade, "components": comps},
         "sections": sections,

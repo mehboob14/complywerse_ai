@@ -43,7 +43,16 @@ logger = logging.getLogger(__name__)
 # (SMB/Windows, SSH/Linux, RDP). A host answering ANY of them is recorded. This
 # is host-presence discovery, not a service scan; deep fingerprinting is a later
 # authenticated step.
-NETWORK_SWEEP_PORTS: tuple = (445, 22, 3389)
+# 5985/5986 are WinRM (HTTP/HTTPS) — the port the agentless Windows collector
+# actually dials. Without probing them, a host that answers on 445 looks
+# "Windows, ready to connect", the collector then waits out a 65s connect
+# timeout on 5986, and the failure gets reported as a refused login. Knowing up
+# front whether WinRM is listening is the difference between "your password is
+# wrong" and "WinRM is not enabled on this machine" — completely different fixes.
+NETWORK_SWEEP_PORTS: tuple = (445, 22, 3389, 5985, 5986)
+# Ports that mean "an agentless credential can actually be used here".
+WINRM_PORTS = (5985, 5986)
+SSH_PORT = 22
 
 # Type of the injectable probe: (ip, port, timeout_s) -> result dict with a
 # 'status' of 'reachable'|'unreachable' and optional 'hostname'/'rtt_ms'.
@@ -200,8 +209,12 @@ def _run_job(
             tenant_id=run.tenant_id, run_id=run.id, job_id=job.id,
             source="cidr", observed_at=now,
             host_name=f.get("hostname"), ip_address=f["ip"],
+            # probed_ports records what this sweep actually checked, so a later
+            # step can tell "WinRM was closed" from "we never looked". Without
+            # it, observations written by an older build would be wrongly read
+            # as proof that WinRM is disabled.
             raw={"open_ports": f["open_ports"], "rtt_ms": f.get("rtt_ms"),
-                 "scope": scope.value},
+                 "scope": scope.value, "probed_ports": list(NETWORK_SWEEP_PORTS)},
             resolution="pending",
         ))
 

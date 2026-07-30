@@ -164,7 +164,11 @@ def _create_from(db: Session, tenant_id: int, obs: DiscoveryObservation) -> ITAs
         ip_address=obs.ip_address,
         fqdn=obs.fqdn,
         primary_mac=obs.mac_address,
-        criticality="medium",
+        # NOT "medium". A sweep cannot assess criticality, and a default here is
+        # indistinguishable downstream from a real rating — it fed the CIA
+        # auto-derivation and the register's valuation estimate. Unrated until
+        # a human rates it.
+        criticality=None,
         source_system="discovery",
         last_seen_source=obs.source or "discovery",
         last_seen_at=now,
@@ -244,11 +248,16 @@ def resolve_observation(db: Session, obs: DiscoveryObservation) -> Dict[str, Any
         )
         return {"action": "review", "candidates": candidate_ids, "tier": tier}
 
-    asset = _create_from(db, obs.tenant_id, obs)
-    obs.resolution = "created"
-    obs.resolved_asset_id = asset.id
-    obs.resolution_note = f"created new discovered asset #{asset.id}"
-    return {"action": "created", "asset_id": asset.id}
+    # No match, nothing ignored: this is a device we found but do not own yet.
+    # It stays in discovery as 'unclaimed'. It becomes inventory only once a
+    # credential authenticates and the deep collect succeeds (see
+    # promote_observation) — a sweep alone must never create an asset row,
+    # because an asset with no OS, no hardware and no software is not an asset,
+    # it is a rumour.
+    obs.resolution = "unclaimed"
+    obs.resolved_asset_id = None
+    obs.resolution_note = "found on the network — needs a login before it enters inventory"
+    return {"action": "unclaimed"}
 
 
 # ── Operator-driven resolution (the Inbox actions) ──────────────────────────
@@ -294,7 +303,7 @@ def resolve_run(db: Session, run_id: int) -> Dict[str, int]:
         DiscoveryObservation.resolution == "pending",
     ).order_by(DiscoveryObservation.id).all()
 
-    created = updated = review = ignored = 0
+    created = updated = review = ignored = unclaimed = 0
     for obs in pending:
         try:
             # Savepoint per observation: a failure resolving one host rolls back
@@ -314,10 +323,16 @@ def resolve_run(db: Session, run_id: int) -> Dict[str, int]:
             review += 1
         elif action == "ignored":
             ignored += 1
+        elif action == "unclaimed":
+            unclaimed += 1
         db.flush()  # so same-run duplicates of a host see the row we just created
 
     run = db.get(DiscoveryRun, run_id)
+    # assets_new counts rows that actually entered inventory. A sweep now
+    # creates none, so this stays 0 until credentials promote the devices —
+    # which is the honest number, not a count of things we merely saw.
     run.assets_new = (run.assets_new or 0) + created
     run.assets_updated = (run.assets_updated or 0) + updated
     db.commit()
-    return {"created": created, "updated": updated, "review": review, "ignored": ignored}
+    return {"created": created, "updated": updated, "review": review,
+            "ignored": ignored, "unclaimed": unclaimed}

@@ -21,10 +21,14 @@ import { useRouter } from 'next/navigation';
 import {
   Network, Server, Database, Globe, Cog, ChevronRight, Loader2,
   ShieldCheck, ShieldAlert, ShieldX, Info, Zap, AlertTriangle,
-  ArrowUpRight, CheckCircle2, Minus, PlusCircle, PackageOpen,
+  ArrowUpRight, CheckCircle2, Minus, PackageOpen,
   ServerCog, Radio, Boxes, Layers, ChevronDown, Settings2, Save, RotateCcw, X,
 } from 'lucide-react';
 import { assetsApi, compliancePluginsApi } from '@/lib/api';
+import {
+  SoftwareSetupDrawer,
+  type SoftwareSetupEntry,
+} from '@/components/assets/SoftwareSetupDrawer';
 import { useRoomScan } from './_room-scan-context';
 
 // ── helpers ─────────────────────────────────────────────────────────────────
@@ -293,57 +297,71 @@ const sourceBadge: Record<string, { label: string; cls: string }> = {
   rpm:               { label: 'Package',     cls: 'bg-sky-50 text-sky-700 ring-sky-200' },
 };
 
-function AgentDiscoveryPanel({ assetId }: { assetId: number }) {
+function AgentDiscoveryPanel({
+  assetId,
+  hostName: hostNameProp,
+  hostIp: hostIpProp,
+}: {
+  assetId: number;
+  hostName?: string;
+  hostIp?: string;
+}) {
   const qc = useQueryClient();
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [toast, setToast] = useState<{ msg: string; kind: 'info' | 'warn' | 'error' } | null>(null);
+  const [setupEntry, setSetupEntry] = useState<SoftwareSetupEntry | null>(null);
 
   const detectedQ = useQuery({
     queryKey: ['assets', assetId, 'detected-software'],
     queryFn: () => assetsApi.getDetectedSoftware(assetId).then((r: any) => r.data),
   });
 
-  const promoteMut = useMutation({
-    mutationFn: (keys: string[]) => assetsApi.promoteSoftware(assetId, keys).then((r: any) => r.data),
-    onSuccess: (d: any) => {
-      const created: any[] = d.created ?? [];
-      const skipped: any[] = d.skipped ?? [];
-      const alreadyPromoted = skipped.filter((s: any) => s.reason === 'already promoted');
-      if (created.length === 0 && alreadyPromoted.length > 0) {
-        const names = alreadyPromoted.map((s: any) => s.software_key).join(', ');
-        const ids = alreadyPromoted.map((s: any) => s.asset_id ? `#${s.asset_id}` : null).filter(Boolean).join(', ');
-        setToast({ kind: 'warn', msg: `Already registered: ${names}${ids ? ` (asset ${ids})` : ''}. This application already exists as an asset — it appears in the Co-located assets list above.` });
-      } else {
-        const skippedNote = alreadyPromoted.length > 0 ? ` (${alreadyPromoted.length} skipped — already existed)` : '';
-        setToast({ kind: 'info', msg: `${created.length} app asset(s) created${skippedNote}.` });
-      }
-      setSelected(new Set());
-      qc.invalidateQueries({ queryKey: ['assets', assetId, 'detected-software'] });
-      qc.invalidateQueries({ queryKey: ['assets', assetId, 'ip-peers'] });
-    },
-    onError: (e: any) => setToast({ kind: 'error', msg: e?.response?.data?.detail || 'Promotion failed — please try again.' }),
+  // Lightweight host lookup when the parent did not pass name/ip.
+  // Separate cache key so we don't overwrite ['asset-detail'] (getDetail shape).
+  const hostQ = useQuery({
+    queryKey: ['asset-host-lite', assetId],
+    queryFn: () => assetsApi.getById(assetId).then((r: any) => r.data),
+    enabled: !hostNameProp && !hostIpProp,
   });
 
+  const hostName = hostNameProp || hostQ.data?.name || hostQ.data?.host_name || undefined;
+  const hostIp = hostIpProp || hostQ.data?.ip_address || undefined;
+
   const inv = detectedQ.data;
-  const promotable = useMemo(
-    () => (inv?.inventory ?? []).filter((e: any) => e.benchmark_available && !e.promoted_asset_id),
-    [inv],
+  const inventory: any[] = inv?.inventory ?? [];
+  const benchmarked = useMemo(
+    () => inventory.filter((e: any) => e.benchmark_available),
+    [inventory],
   );
   const otherSw = useMemo(
-    () => (inv?.inventory ?? []).filter((e: any) => !e.benchmark_available && !e.promoted_asset_id),
-    [inv],
+    () => inventory.filter((e: any) => !e.benchmark_available),
+    [inventory],
   );
 
-  const toggle = (key: string) => {
-    setSelected(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
+  const invalidateAfterSetup = () => {
+    qc.invalidateQueries({ queryKey: ['assets', assetId, 'detected-software'] });
+    qc.invalidateQueries({ queryKey: ['asset-detected-software', assetId] });
+    qc.invalidateQueries({ queryKey: ['assets', assetId, 'ip-peers'] });
+    qc.invalidateQueries({ queryKey: ['asset-detail', assetId] });
+  };
+
+  const openSetup = (e: any) => {
+    if (!e?.software_key) return;
+    setSetupEntry({
+      software_key: e.software_key,
+      name: e.name || e.software_key,
+      version: e.version,
+      publisher: e.publisher ?? e.vendor,
+      benchmark_available: !!e.benchmark_available,
+      benchmark_name: e.benchmark_name,
+      rule_count: e.rule_count,
+      promoted_asset_id: e.promoted_asset_id ?? null,
+    });
   };
 
   if (detectedQ.isLoading) {
     return <div className="flex items-center gap-2 py-4 text-xs text-gray-400"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading agent inventory…</div>;
   }
 
-  const totalDetected = (inv?.inventory ?? []).length;
-  if (totalDetected === 0) {
+  if (inventory.length === 0) {
     return (
       <div className="flex items-center gap-2 py-3 text-xs text-gray-400">
         <PackageOpen className="h-4 w-4" />
@@ -354,45 +372,42 @@ function AgentDiscoveryPanel({ assetId }: { assetId: number }) {
 
   return (
     <div className="space-y-3">
-      {/* Promotable (benchmark-available) */}
-      {promotable.length > 0 && (
+      {/* Benchmarked (CIS available) */}
+      {benchmarked.length > 0 && (
         <div>
-          <div className="mb-1.5 flex items-center justify-between">
-            <h5 className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider text-amber-600">
-              <ShieldAlert className="h-3 w-3" /> Awaiting protection ({promotable.length})
-            </h5>
-            <button
-              onClick={() => promoteMut.mutate(Array.from(selected))}
-              disabled={selected.size === 0 || promoteMut.isPending}
-              className="inline-flex items-center gap-1 rounded-md bg-slate-800 px-2.5 py-1 text-[11px] font-semibold text-white disabled:opacity-40"
-            >
-              {promoteMut.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <PlusCircle className="h-3 w-3" />}
-              Add {selected.size > 0 ? `${selected.size} selected` : 'selected'}
-            </button>
-          </div>
+          <h5 className="mb-1.5 flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider text-amber-600">
+            <ShieldAlert className="h-3 w-3" /> CIS-ready software ({benchmarked.length})
+          </h5>
           <ul className="divide-y divide-amber-100/60 overflow-hidden rounded-lg border border-amber-200/70 bg-amber-50/30">
-            {promotable.map((e: any) => {
+            {benchmarked.map((e: any) => {
               const Icon = typeIcon('application', e.software_key);
               const badge = sourceBadge[e.source] ?? { label: e.source, cls: 'bg-gray-50 text-gray-600 ring-gray-200' };
-              const checked = selected.has(e.software_key);
+              const promoted = Boolean(e.promoted_asset_id);
               return (
-                <li key={e.software_key} onClick={() => toggle(e.software_key)}
-                  className={`flex cursor-pointer items-center gap-2.5 px-3 py-2 text-xs transition ${checked ? 'bg-amber-50' : 'hover:bg-amber-50/60'}`}>
-                  <input type="checkbox" checked={checked} onChange={() => toggle(e.software_key)}
-                    onClick={ev => ev.stopPropagation()}
-                    className="h-3.5 w-3.5 rounded border-gray-300" />
-                  <Icon className="h-3.5 w-3.5 text-amber-600 flex-shrink-0" />
+                <li
+                  key={e.software_key}
+                  onClick={() => openSetup(e)}
+                  className="flex cursor-pointer items-center gap-2.5 px-3 py-2 text-xs transition hover:bg-amber-50/60"
+                >
+                  <Icon className="h-3.5 w-3.5 flex-shrink-0 text-amber-600" />
                   <div className="min-w-0 flex-1">
                     <span className="font-medium text-gray-900">{e.name}</span>
                     {e.version && <span className="ml-1 text-gray-400">v{e.version}</span>}
-                    <div className="flex items-center gap-1 mt-0.5">
+                    <div className="mt-0.5 flex items-center gap-1">
                       <code className="font-mono text-[10px] text-gray-400">{e.software_key}</code>
                       <span className={`rounded-full px-1.5 py-px text-[10px] font-medium ring-1 ${badge.cls}`}>{badge.label}</span>
                     </div>
                   </div>
-                  <span className="hidden items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 ring-1 ring-emerald-200 sm:inline-flex">
-                    <CheckCircle2 className="h-3 w-3" /> CIS ready
-                  </span>
+                  {promoted ? (
+                    <span className="hidden items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600 ring-1 ring-slate-200 sm:inline-flex">
+                      Asset #{e.promoted_asset_id}
+                    </span>
+                  ) : (
+                    <span className="hidden items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 ring-1 ring-emerald-200 sm:inline-flex">
+                      <CheckCircle2 className="h-3 w-3" /> CIS ready
+                    </span>
+                  )}
+                  <ChevronRight className="h-3.5 w-3.5 flex-shrink-0 text-gray-300" />
                 </li>
               );
             })}
@@ -411,43 +426,45 @@ function AgentDiscoveryPanel({ assetId }: { assetId: number }) {
             {otherSw.map((e: any) => {
               const Icon = typeIcon('application', e.software_key);
               const badge = sourceBadge[e.source] ?? { label: e.source, cls: 'bg-gray-50 text-gray-600 ring-gray-200' };
-              const checked = selected.has(e.software_key);
+              const promoted = Boolean(e.promoted_asset_id);
               return (
-                <li key={e.software_key} onClick={() => toggle(e.software_key)}
-                  className={`flex cursor-pointer items-center gap-2.5 px-3 py-2 text-xs transition ${checked ? 'bg-slate-50' : 'hover:bg-gray-50'}`}>
-                  <input type="checkbox" checked={checked} onChange={() => toggle(e.software_key)}
-                    onClick={ev => ev.stopPropagation()} className="h-3.5 w-3.5 rounded border-gray-300" />
-                  <Icon className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
+                <li
+                  key={e.software_key}
+                  onClick={() => openSetup(e)}
+                  className="flex cursor-pointer items-center gap-2.5 px-3 py-2 text-xs transition hover:bg-gray-50"
+                >
+                  <Icon className="h-3.5 w-3.5 flex-shrink-0 text-gray-400" />
                   <div className="min-w-0 flex-1">
                     <span className="font-medium text-gray-700">{e.name}</span>
                     {e.version && <span className="ml-1 text-gray-400">v{e.version}</span>}
-                    <div><code className="font-mono text-[10px] text-gray-400">{e.software_key}</code>
+                    <div>
+                      <code className="font-mono text-[10px] text-gray-400">{e.software_key}</code>
                       <span className={`ml-1 rounded-full px-1.5 py-px text-[10px] font-medium ring-1 ${badge.cls}`}>{badge.label}</span>
                     </div>
                   </div>
+                  {promoted && (
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600 ring-1 ring-slate-200">
+                      Asset #{e.promoted_asset_id}
+                    </span>
+                  )}
+                  <ChevronRight className="h-3.5 w-3.5 flex-shrink-0 text-gray-300" />
                 </li>
               );
             })}
           </ul>
-          {selected.size > 0 && (
-            <button onClick={() => promoteMut.mutate(Array.from(selected))} disabled={promoteMut.isPending}
-              className="mt-1.5 inline-flex items-center gap-1 rounded-md bg-slate-800 px-2.5 py-1 text-[11px] font-semibold text-white disabled:opacity-40">
-              {promoteMut.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <PlusCircle className="h-3 w-3" />}
-              Add {selected.size} as tracked assets
-            </button>
-          )}
         </details>
       )}
 
-      {toast && (
-        <div className={`flex items-start justify-between gap-2 rounded-lg border px-3 py-2 text-xs ${
-          toast.kind === 'warn'  ? 'border-amber-200 bg-amber-50 text-amber-800' :
-          toast.kind === 'error' ? 'border-red-200 bg-red-50 text-red-800' :
-                                   'border-blue-200 bg-blue-50 text-blue-800'
-        }`}>
-          <span>{toast.msg}</span>
-          <button onClick={() => setToast(null)} className="shrink-0 text-[10px] underline opacity-60 hover:opacity-100">dismiss</button>
-        </div>
+      {setupEntry && (
+        <SoftwareSetupDrawer
+          open
+          onClose={() => setSetupEntry(null)}
+          hostAssetId={assetId}
+          hostName={hostName}
+          hostIp={hostIp}
+          entry={setupEntry}
+          onComplete={invalidateAfterSetup}
+        />
       )}
     </div>
   );
@@ -1038,6 +1055,20 @@ export default function HostApplicationsPanel({ assetId }: { assetId: number }) 
           </p>
         )}
 
+        {/* ── Advanced: agent-detected software set-up ──────────────────── */}
+        <details className="group rounded-lg border border-gray-100 bg-slate-50/40">
+          <summary className="flex cursor-pointer list-none items-center gap-1.5 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400 hover:text-gray-600">
+            <ChevronRight className="h-3 w-3 transition group-open:rotate-90" />
+            <PackageOpen className="h-3 w-3" /> Agent-detected software
+          </summary>
+          <div className="border-t border-gray-100 px-3 pb-3 pt-2">
+            <AgentDiscoveryPanel
+              assetId={assetId}
+              hostName={hostEntry?.name || selfEntry?.name}
+              hostIp={ip || undefined}
+            />
+          </div>
+        </details>
 
       </div>
     </section>

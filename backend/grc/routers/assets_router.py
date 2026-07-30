@@ -38,6 +38,10 @@ from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 from ..services.asset_criticality import recompute_for_asset as recompute_asset_criticality
 from ..services import asset_lifecycle
 from ..services.asset_control_recommender import recommend_for_asset
+
+import logging
+
+logger = logging.getLogger(__name__)
 # Per-database-per-tenant: the tenant DB *is* the active session, so tenant
 # users are just GRCUser rows in the current request's session.
 
@@ -1196,6 +1200,11 @@ def get_asset(
         "created_at": asset.created_at.isoformat(),
         # Phase 5 operational context fields.
         "internet_facing": bool(asset.internet_facing) if asset.internet_facing is not None else False,
+        # `is_internet_facing` is a legacy wire alias (the Risk Posture page still uses
+        # this key). It now mirrors the CANONICAL `internet_facing` column so the page's
+        # checkbox reflects — and its Save round-trips through — the same value the asset
+        # form, the composite score and the vuln reachability engine all use.
+        "is_internet_facing": bool(asset.internet_facing) if asset.internet_facing is not None else False,
         "network_segment": asset.network_segment,
         "data_classification": asset.data_classification,
         "business_function": asset.business_function,
@@ -1270,6 +1279,14 @@ def update_asset(
         if field == "operational_dependency":
             setattr(asset, "op_dep_business_impact", value)
             continue
+        # Internet-exposure has a single canonical column, `internet_facing` (the asset
+        # form, CSV import and discovery all write it, and the vuln reachability engine
+        # reads it). The Risk Posture page's wire field is still `is_internet_facing`;
+        # map it to the canonical column so its Save persists where everything else
+        # reads, instead of the retired duplicate column that nothing reads anymore.
+        if field == "is_internet_facing":
+            setattr(asset, "internet_facing", value)
+            continue
         setattr(asset, field, value)
 
     # Auto-derive os_normalized from os_family when the caller set the
@@ -1306,6 +1323,22 @@ def update_asset(
     }
     if _criticality_inputs.intersection(update_data.keys()):
         recompute_asset_criticality(asset)
+        # An explicitly-submitted criticality is a HUMAN DECISION and must
+        # survive the recompute. The trigger set above includes "criticality"
+        # itself, so editing only that field ran the derivation and then
+        # overwrote the chosen bucket with whatever CIA/classification implied
+        # — picking "high" and saving silently stored the derived value
+        # instead. Re-apply the operator's choice and record it as a manual
+        # override so the next recompute (and the UI) knows it is deliberate.
+        _chosen = update_data.get("criticality")
+        if _chosen and not update_data.get("criticality_manual_override"):
+            if not is_valid_bucket(_chosen):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="criticality must be one of low/medium/high/critical",
+                )
+            asset.criticality = str(_chosen).lower().strip()
+            asset.criticality_manual_override = True
 
     db.commit()
     db.refresh(asset)
@@ -1399,8 +1432,92 @@ def delete_asset(
             detail="Asset not found"
         )
     
-    db.delete(asset)
-    db.commit()
+    # An asset is referenced by ~23 tables. A bare db.delete() raises a
+    # ForeignKeyViolation on the first of them (vulnerability links, in
+    # practice), the request 500s, and the row silently stays — which is what
+    # "the delete button does nothing" looked like from the UI.
+    #
+    # Two different treatments, chosen per table by what the row MEANS:
+    #   DETACH  — the row is evidence in its own right and outlives the asset
+    #             (a CIS scan happened; a discovery observation was recorded).
+    #             Its asset reference is nulled so history survives.
+    #   DELETE  — the row is a pure association that cannot exist without the
+    #             asset (asset↔control link, asset↔vulnerability link).
+    from sqlalchemy import text as _sql
+
+    detach = [
+        ("grc_compliance_plugin_runs", "asset_id"),        # scan evidence
+        ("grc_discovery_observations", "resolved_asset_id"),  # sweep evidence
+        ("grc_info_system_criticality_items", "linked_asset_id"),
+        ("grc_infra_asset_criticality_items", "linked_asset_id"),
+    ]
+    purge = [
+        ("grc_vulnerability_asset_links", "asset_id"),
+        ("grc_asset_control_links", "asset_id"),
+        ("grc_asset_framework_control_links", "asset_id"),
+        ("grc_asset_internal_control_links", "asset_id"),
+        ("grc_asset_evidence_links", "asset_id"),
+        ("grc_asset_risk_assessments", "asset_id"),
+        ("grc_asset_external_identities", "asset_id"),
+        ("grc_asset_security_compliance_selections", "asset_id"),
+        ("grc_asset_alert_states", "asset_id"),
+        ("grc_risk_asset_links", "asset_id"),
+        ("grc_document_asset_links", "asset_id"),
+        ("grc_incident_asset_links", "asset_id"),
+        ("grc_issue_asset_links", "asset_id"),
+        ("grc_software_identifiers", "asset_id"),
+        ("grc_compliance_agents", "asset_id"),
+        ("grc_asset_relationships", "source_asset_id"),
+        ("grc_asset_relationships", "target_asset_id"),
+    ]
+    # Discovery-state cleanup. An asset promoted from discovery leaves behind a
+    # DiscoveryObservation (resolution='created') and an agentless
+    # IntegrationConnection keyed to its host. If we only null the observation's
+    # FK, the row keeps resolution='created' and the connection stays active —
+    # so the Connect queue shows the (now-deleted) device as "In inventory" with
+    # a Disconnect button that targets a gone asset and does nothing. Revert the
+    # observation to 'unclaimed' so the device becomes connectable again, and
+    # deactivate the host's agentless connection.
+    _host = (asset.host_name or asset.ip_address or "").strip()
+    try:
+        for table, col in detach:
+            db.execute(_sql(f"UPDATE {table} SET {col} = NULL WHERE {col} = :aid"), {"aid": asset_id})
+        for table, col in purge:
+            db.execute(_sql(f"DELETE FROM {table} WHERE {col} = :aid"), {"aid": asset_id})
+        # Observation(s) that resolved to this asset → back to unclaimed.
+        db.execute(_sql(
+            "UPDATE grc_discovery_observations "
+            "SET resolution='unclaimed', resolved_asset_id=NULL, "
+            "    resolution_note='asset deleted — found on the network, needs a login' "
+            "WHERE resolved_asset_id = :aid OR "
+            "      (resolution='created' AND resolved_asset_id IS NULL AND "
+            "       (host_name = :h OR ip_address = :ip))"),
+            {"aid": asset_id, "h": asset.host_name, "ip": asset.ip_address})
+        # Deactivate agentless connections pinned to this host (they can't scan a
+        # deleted asset; a fresh connect re-creates one).
+        if _host:
+            db.execute(_sql(
+                "UPDATE grc_integration_connections SET is_active=false, status='disconnected' "
+                "WHERE console_url = :h AND integration_type IN "
+                "('windows_winrm','linux_ssh','netdev_ssh')"), {"h": _host})
+        # Self-references: promoted applications point at this host as parent,
+        # and other assets may name it as their replacement. Detach rather than
+        # cascade — deleting a laptop must not silently delete the PostgreSQL
+        # asset someone promoted from it, along with its own scan history.
+        db.execute(_sql("UPDATE grc_it_assets SET parent_asset_id = NULL WHERE parent_asset_id = :aid"),
+                   {"aid": asset_id})
+        db.execute(_sql("UPDATE grc_it_assets SET replacement_asset_id = NULL WHERE replacement_asset_id = :aid"),
+                   {"aid": asset_id})
+        db.delete(asset)
+        db.commit()
+    except Exception as exc:  # noqa: BLE001
+        db.rollback()
+        # Never fail silently again: say which constraint blocked it.
+        logger.exception("asset %s delete failed", asset_id)
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Could not delete this asset — it is still referenced: {str(exc)[:300]}",
+        )
     return None
 
 
@@ -1747,7 +1864,10 @@ def get_asset_detail(
         custodian=asset.custodian,
         host_name=asset.host_name,
         ip_address=asset.ip_address,
-        criticality=asset.criticality or "medium",
+        # Pass NULL through as NULL — "unrated" is a real state the UI must
+        # be able to show. Coercing it to "medium" here re-created the same
+        # fabricated rating the model default used to produce.
+        criticality=asset.criticality,
         confidentiality_rating=asset.confidentiality_rating,
         integrity_rating=asset.integrity_rating,
         availability_rating=asset.availability_rating,
@@ -1803,6 +1923,23 @@ def get_asset_detail(
         memory_gb=_g("memory_gb"),
         storage_gb=_g("storage_gb"),
         agent_version=_g("agent_version"),
+        # Machine-derived (read-only) — stored by the collector all along, but
+        # never served, so the UI could not display what the scan found.
+        os_build=_g("os_build"),
+        os_edition=_g("os_edition"),
+        fqdn=_g("fqdn"),
+        primary_mac=_g("primary_mac"),
+        detected_software_json=_g("detected_software_json"),
+        security_posture=_g("security_posture"),
+        source_system=_g("source_system"),
+        discovery_state=_g("discovery_state"),
+        first_seen_at=_g("first_seen_at"),
+        asset_role=_g("asset_role"),
+        app_attributes_json=_g("app_attributes_json"),
+        parent_asset_id=_g("parent_asset_id"),
+        cloud_resource_id=_g("cloud_resource_id"),
+        cde_environment=_g("cde_environment"),
+        pci_dss=_g("pci_dss"),
         manufacturer=_g("manufacturer"),
         model=_g("model"),
         serial_number=_g("serial_number"),
@@ -3015,7 +3152,47 @@ def get_detected_software(
     carries software_key, benchmark availability, and (if already promoted)
     the child asset id. Drives the "Detected on this server" panel."""
     asset = _tenant_asset_or_404(db, current_user, asset_id)
-    inventory = asset.detected_software_json or []
+    inventory = list(asset.detected_software_json or [])
+    # Enrich each entry with live benchmark + executable rule count (same
+    # exclusions as the scanner — never advertise hollow expect:any rules).
+    try:
+        from sqlalchemy import cast as _cast, String as _String
+        from ..models import CompliancePlugin
+        from ..modules.compliance_plugins.services.software_normaliser import (
+            benchmark_for_software_key,
+        )
+        tid = asset.tenant_id
+        enriched = []
+        for e in inventory:
+            row = dict(e) if isinstance(e, dict) else {"name": str(e)}
+            key = row.get("software_key")
+            bname = row.get("benchmark_name")
+            if not bname and key:
+                bname = benchmark_for_software_key(db, key)
+            count = 0
+            if bname:
+                count = db.query(CompliancePlugin).filter(
+                    CompliancePlugin.benchmark == bname,
+                    CompliancePlugin.enabled.is_(True),
+                    (CompliancePlugin.tenant_id == tid) | (CompliancePlugin.tenant_id.is_(None)),
+                    CompliancePlugin.runner_type != "manual",
+                    ~_cast(CompliancePlugin.check_definition, _String).ilike("%TODO%"),
+                    ~_cast(CompliancePlugin.check_definition, _String).ilike('%"kind": "any"%'),
+                    ~_cast(CompliancePlugin.check_definition, _String).ilike('%"kind":"any"%'),
+                ).count()
+            # "set up" only when the matched benchmark has runnable rules —
+            # hollow / zero-rule hits fall through to track-anyway.
+            if bname and count > 0:
+                row["benchmark_name"] = bname
+                row["benchmark_available"] = True
+            else:
+                row["benchmark_name"] = None
+                row["benchmark_available"] = False
+            row["rule_count"] = count
+            enriched.append(row)
+        inventory = enriched
+    except Exception:  # noqa: BLE001
+        logger.exception("detected-software enrichment failed (non-fatal)")
     promotable = [e for e in inventory if e.get("benchmark_available") and not e.get("promoted_asset_id")]
     # Security posture: prefer the stored value (computed at collection time),
     # but recompute on the fly for assets last inventoried before the posture
@@ -3055,6 +3232,12 @@ def promote_software(
     parent's owner + criticality + CIA ratings.
 
     Idempotent: an entry already promoted is skipped, not duplicated.
+
+    Benchmarked software can NO LONGER be created here — that path must go
+    through POST /setup-software (validated credential or explicit track).
+    Calling promote on a CIS-ready key returns it in ``skipped`` with reason
+    ``requires_setup_scan`` so old UI buttons fail closed instead of creating
+    unscannable shell assets.
     """
     import copy as _copy
 
@@ -3078,39 +3261,360 @@ def promote_software(
                 "asset_id": entry["promoted_asset_id"],
             })
             continue
-        child = ITAsset(
-            tenant_id=asset.tenant_id,
-            name=f"{entry.get('name') or key} @ {asset.host_name or asset.name}",
-            description=(
-                f"Application asset promoted from detected software on "
-                f"'{asset.name}' (source: {entry.get('source')})"
-            ),
-            asset_type="application",
-            asset_role="application",
-            parent_asset_id=asset.id,
-            host_name=asset.host_name,
-            ip_address=asset.ip_address,
-            os_family=asset.os_family,
-            os_version=(
-                f"{entry.get('name')} {entry.get('version')}"
-                if entry.get("version") else entry.get("name")
-            ),
-            os_normalized=key,
-            criticality=body.criticality or asset.criticality,
-            status="active",
-            owner_id=asset.owner_id,
-            owner_name=asset.owner_name,
-            confidentiality_rating=asset.confidentiality_rating,
-            integrity_rating=asset.integrity_rating,
-            availability_rating=asset.availability_rating,
+        if entry.get("benchmark_available"):
+            skipped.append({
+                "software_key": key,
+                "reason": "requires_setup_scan",
+                "hint": "Use POST /assets/{id}/setup-software with mode=scan (or host_connection). "
+                        "Benchmarked software cannot be promoted without a validated credential.",
+            })
+            continue
+        child = _create_child_from_software_entry(
+            db, asset, entry, criticality=body.criticality,
         )
-        db.add(child)
-        db.flush()
         entry["promoted_asset_id"] = child.id
         created.append({"software_key": key, "asset_id": child.id, "name": child.name})
     asset.detected_software_json = inventory
     db.commit()
     return {"created": created, "skipped": skipped}
+
+
+class SetupSoftwareIn(BaseModel):
+    """Bring detected software into inventory — only after reachability is proven
+    for scannable products. Modes:
+      scan            — SQL product: validate DB creds, create child + connection
+      host_connection — non-SQL with benchmark: require parent host connection,
+                        create child (room-scan model)
+      track           — no benchmark: inventory only, no scan connection
+    """
+    mode: str  # scan | host_connection | track
+    software_key: str
+    hostname: Optional[str] = None
+    display_label: Optional[str] = None
+    port: Optional[int] = None
+    database: Optional[str] = None
+    oracle_sid: Optional[str] = None
+    username: Optional[str] = None
+    password: Optional[str] = None
+
+
+def _software_platform(software_key: str) -> Optional[str]:
+    k = (software_key or "").lower()
+    if k.startswith("postgres") or k.startswith("postgresql"):
+        return "postgres"
+    if k.startswith("mssql") or k.startswith("sql-server"):
+        return "mssql"
+    if k.startswith("mysql") or k.startswith("mariadb"):
+        return "mysql"
+    if k.startswith("oracle"):
+        return "oracle"
+    return None
+
+
+def _create_child_from_software_entry(
+    db: Session,
+    asset: ITAsset,
+    entry: dict,
+    *,
+    criticality: Optional[str] = None,
+) -> ITAsset:
+    """Shared child-asset constructor used by promote + setup-software."""
+    key = entry.get("software_key") or "application"
+    child = ITAsset(
+        tenant_id=asset.tenant_id,
+        name=f"{entry.get('name') or key} @ {asset.host_name or asset.name}",
+        description=(
+            f"Application asset from detected software on "
+            f"'{asset.name}' (source: {entry.get('source')})"
+        ),
+        asset_type="application",
+        asset_role="application",
+        parent_asset_id=asset.id,
+        host_name=asset.host_name,
+        ip_address=asset.ip_address,
+        os_family=asset.os_family,
+        os_version=(
+            f"{entry.get('name')} {entry.get('version')}"
+            if entry.get("version") else entry.get("name")
+        ),
+        os_normalized=key,
+        criticality=criticality or asset.criticality,
+        status=asset.status,
+        owner_id=asset.owner_id,
+        owner_name=asset.owner_name,
+        confidentiality_rating=asset.confidentiality_rating,
+        integrity_rating=asset.integrity_rating,
+        availability_rating=asset.availability_rating,
+        fqdn=asset.fqdn,
+        primary_mac=asset.primary_mac,
+        network_segment=asset.network_segment,
+        internet_facing=asset.internet_facing,
+        is_internet_facing=getattr(asset, "is_internet_facing", None) or asset.internet_facing,
+        data_classification=asset.data_classification,
+        business_function=asset.business_function,
+        last_seen_at=asset.last_seen_at,
+        last_seen_source=asset.last_seen_source,
+        first_seen_at=asset.first_seen_at,
+        source_system=asset.source_system,
+    )
+    if isinstance(entry.get("attributes"), dict) and entry["attributes"]:
+        child.app_attributes_json = entry["attributes"]
+    else:
+        try:
+            from ..modules.compliance_plugins.services.software_profiler import (
+                profile_software, probes_for,
+            )
+            from ..models import IntegrationConnection as _IC
+            fam = (asset.os_family or "").lower()
+            transport = "windows" if fam.startswith("windows") else "linux"
+            if probes_for(key, transport):
+                from ..modules.compliance_plugins.services.credentials import (
+                    resolve_credentials_for_connection,
+                )
+                conn = (
+                    db.query(_IC)
+                    .filter(
+                        _IC.tenant_id == asset.tenant_id,
+                        _IC.console_url == (asset.host_name or asset.ip_address),
+                        _IC.is_active.is_(True),
+                    )
+                    .first()
+                )
+                if conn is not None:
+                    creds = resolve_credentials_for_connection(conn)
+
+                    def _run(shell: str, command: str):
+                        from ..modules.compliance_plugins.runners.winrm_runner import (
+                            windows_winrm_runner,
+                        )
+                        from ..modules.compliance_plugins.runners.ssh_runner import (
+                            linux_ssh_runner,
+                        )
+                        cd = {"shell": shell, "command": command, "expect": {"kind": "exit_zero"}}
+                        r = (windows_winrm_runner if transport == "windows" else linux_ssh_runner)(cd, creds)
+                        raw = r.raw_output or {}
+                        return raw.get("stdout", ""), raw.get("exit_status", 1)
+
+                    attrs = profile_software(_run, key, transport)
+                    if attrs:
+                        child.app_attributes_json = attrs
+        except Exception:  # noqa: BLE001
+            logger.exception("software profiling failed for %s (non-fatal)", key)
+    db.add(child)
+    db.flush()
+    return child
+
+
+@router.post("/{asset_id}/setup-software")
+def setup_software(
+    asset_id: int,
+    body: SetupSoftwareIn,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Create a child application asset only when the chosen mode's gate passes.
+
+    scan:            live DB preflight must succeed → child + IntegrationConnection
+    host_connection: parent must already have an active OS connection → child only
+    track:           no credential / no scan — inventory tracking only
+    """
+    import copy as _copy
+    from ..crypto import encrypt_secret
+    from ..models import IntegrationConnection
+    from ..modules.compliance_plugins.services.preflight import preflight_check
+
+    mode = (body.mode or "").strip().lower()
+    if mode == "scan_via_host":
+        mode = "host_connection"
+    if mode not in ("scan", "host_connection", "track"):
+        raise HTTPException(400, f"Unsupported mode {body.mode!r}")
+
+    asset = _tenant_asset_or_404(db, current_user, asset_id)
+    inventory = _copy.deepcopy(asset.detected_software_json or [])
+    entry = next((e for e in inventory if e.get("software_key") == body.software_key), None)
+    if entry is None:
+        raise HTTPException(404, f"software_key {body.software_key!r} not in detected inventory")
+    if entry.get("promoted_asset_id"):
+        return {
+            "created": False,
+            "asset_id": entry["promoted_asset_id"],
+            "reason": "already_promoted",
+            "mode": mode,
+        }
+
+    platform = _software_platform(body.software_key)
+    connection_id = None
+
+    if mode == "scan":
+        if not platform:
+            raise HTTPException(
+                400,
+                "mode=scan requires a SQL software_key (postgres/mssql/mysql/oracle); "
+                "use mode=host_connection for OS-scanned apps",
+            )
+        host = (body.hostname or asset.ip_address or asset.host_name or "").strip()
+        user = (body.username or "").strip()
+        pw = (body.password or "").strip()
+        if not host or not user or not pw:
+            raise HTTPException(400, "hostname, username, and password are required for mode=scan")
+        default_port = {"postgres": 5432, "mssql": 1433, "mysql": 3306, "oracle": 1521}[platform]
+        port = int(body.port or default_port)
+        dbname = (body.database or "").strip() or (
+            "postgres" if platform == "postgres" else
+            "master" if platform == "mssql" else
+            "information_schema" if platform == "mysql" else (body.database or "")
+        )
+        itype = {
+            "postgres": "postgres_sql",
+            "mssql": "mssql_sql",
+            "mysql": "mysql_sql",
+            "oracle": "oracle_sql",
+        }[platform]
+        prefix = {"postgres": "postgres", "mssql": "mssql", "mysql": "mysql", "oracle": "oracle"}[platform]
+        test_creds = {
+            f"{prefix}_host": host,
+            f"{prefix}_port": port,
+            f"{prefix}_username": user,
+            f"{prefix}_password": pw,
+            f"{prefix}_database": dbname or None,
+        }
+        if platform == "oracle":
+            test_creds["oracle_service_name"] = dbname or None
+            test_creds["oracle_sid"] = (body.oracle_sid or "").strip() or None
+        # Oracle preflight may not exist yet — fall back to TCP-only then auth via runner later.
+        pf = preflight_check(itype, test_creds)
+        if not pf.ok and itype != "oracle_sql":
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "preflight_failed": True,
+                    "code": pf.code,
+                    "message": pf.detail,
+                    "hint": "Fix credentials / reachability, then retry. No asset was created.",
+                },
+            )
+        # console_url must match the child asset's host_name for scan/probe
+        # lookup (multiple connections can share a host). The real DB endpoint
+        # lives in credentials_extra_json[{prefix}_host].
+        match_url = (asset.host_name or host).strip()
+        label = (body.display_label or entry.get("name") or body.software_key).strip()
+        conn_name = f"{label} @ {host}:{port}"
+        extra = {
+            f"{prefix}_host": host,
+            f"{prefix}_port": port,
+            f"{prefix}_username": user,
+            f"{prefix}_password": encrypt_secret(pw),
+            f"{prefix}_database": dbname or None,
+        }
+        if platform == "oracle":
+            extra["oracle_service_name"] = dbname or None
+            extra["oracle_sid"] = (body.oracle_sid or "").strip() or None
+        existing = (
+            db.query(IntegrationConnection)
+            .filter(
+                IntegrationConnection.tenant_id == asset.tenant_id,
+                IntegrationConnection.connection_name == conn_name,
+            )
+            .first()
+        )
+        if existing:
+            conn = existing
+            conn.console_url = match_url
+            conn.console_port = port
+            conn.username = user
+            conn.password = encrypt_secret(pw)
+            conn.credentials_extra_json = extra
+            conn.status = "connected"
+            conn.is_active = True
+            conn.integration_type = itype
+            if hasattr(conn, "category") and not conn.category:
+                conn.category = "compliance_db"
+        else:
+            conn = IntegrationConnection(
+                tenant_id=asset.tenant_id,
+                connection_name=conn_name,
+                integration_type=itype,
+                category="compliance_db",
+                console_url=match_url,
+                console_port=port,
+                username=user,
+                password=encrypt_secret(pw),
+                credentials_extra_json=extra,
+                status="connected",
+                is_active=True,
+                auth_method="basic",
+            )
+            db.add(conn)
+            db.flush()
+        connection_id = conn.id
+
+
+    elif mode == "host_connection":
+        from ..models import IntegrationConnection as _IC
+        host_key = (asset.host_name or asset.ip_address or "").strip()
+        parent_conn = None
+        if host_key:
+            parent_conn = (
+                db.query(_IC)
+                .filter(
+                    _IC.tenant_id == asset.tenant_id,
+                    _IC.is_active.is_(True),
+                    _IC.console_url == host_key,
+                )
+                .first()
+            )
+        if parent_conn is None and asset.ip_address:
+            parent_conn = (
+                db.query(_IC)
+                .filter(
+                    _IC.tenant_id == asset.tenant_id,
+                    _IC.is_active.is_(True),
+                    _IC.console_url == asset.ip_address,
+                )
+                .first()
+            )
+        if parent_conn is None:
+            raise HTTPException(
+                400,
+                detail={
+                    "preflight_failed": True,
+                    "code": "no_host_connection",
+                    "message": (
+                        f"Host '{asset.name}' has no active OS connection. "
+                        "Connect the host first, then add this software."
+                    ),
+                    "hint": "Open Admin → Integrations → Connect, or Asset Discovery → Connect.",
+                },
+            )
+        connection_id = parent_conn.id
+
+    # track / scan / host_connection all create the child only after gates above
+    child = _create_child_from_software_entry(db, asset, entry)
+    # Stamp vendor so OS-detect / preferred-runner pick the SQL runner,
+    # not the parent's Windows/Linux connection.
+    if platform == "postgres":
+        child.vendor = "postgresql"
+    elif platform == "mssql":
+        child.vendor = "microsoft"
+    elif platform == "mysql":
+        child.vendor = "mysql"
+    elif platform == "oracle":
+        child.vendor = "oracle"
+    if mode == "scan" and connection_id:
+        conn = db.query(IntegrationConnection).get(connection_id)
+        if conn is not None and hasattr(conn, "asset_id"):
+            conn.asset_id = child.id
+    entry["promoted_asset_id"] = child.id
+    asset.detected_software_json = inventory
+    db.commit()
+    return {
+        "created": True,
+        "asset_id": child.id,
+        "name": child.name,
+        "mode": mode,
+        "connection_id": connection_id,
+        "software_key": body.software_key,
+    }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -3266,10 +3770,20 @@ def get_ip_peers(
             bname = benchmark_for_software_key(db, a.os_normalized)
         count = 0
         if bname:
+            from sqlalchemy import cast as _cast, String as _String
+            # Count only rules that would ACTUALLY run — same exclusions as the
+            # scanner. Otherwise the panel advertised "70 rules" for PostgreSQL
+            # when 66 were unauthored auto-pass placeholders; the operator saw a
+            # benchmark that looked complete and, if scanned, reported ~91%
+            # compliant while checking nothing.
             count = db.query(CompliancePlugin).filter(
                 CompliancePlugin.benchmark == bname,
                 CompliancePlugin.enabled.is_(True),
                 (CompliancePlugin.tenant_id == tid) | (CompliancePlugin.tenant_id.is_(None)),
+                CompliancePlugin.runner_type != "manual",
+                ~_cast(CompliancePlugin.check_definition, _String).ilike('%TODO%'),
+                ~_cast(CompliancePlugin.check_definition, _String).ilike('%"kind": "any"%'),
+                ~_cast(CompliancePlugin.check_definition, _String).ilike('%"kind":"any"%'),
             ).count()
         return bname, count
 
@@ -3304,10 +3818,10 @@ def get_ip_peers(
             "name": a.name,
             "asset_type": a.asset_type or "infrastructure",
             "os_normalized": a.os_normalized,
-            "criticality": a.criticality or "medium",
+            "criticality": a.criticality,
             "status": a.status,
-            "benchmark_name": bname,
-            "benchmark_available": bname is not None,
+            "benchmark_name": bname if rcount > 0 else None,
+            "benchmark_available": bool(bname) and rcount > 0,
             "rule_count": rcount,
             "score": score,
             "never_scanned": score is None,

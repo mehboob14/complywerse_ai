@@ -16,6 +16,7 @@ from ....models import (
     IssueEvidenceLink, IssueControlLink,
 )
 from ....routers.auth_router import require_auth, get_user_tenants, require_tenant_permission
+from ...erm.schema_migrations import ensure_incident_schema
 
 _require_view = require_tenant_permission("issue_management:issues:view")
 
@@ -460,6 +461,12 @@ def get_issue_incident_sections_overview(
     """Issue & Incident Management board — one scored section for Issues and one
     for Incidents. Same numerator/denominator formula-card shape as the other
     module scorecards; feeds the module overview page + the main-dashboard card."""
+    # This endpoint is often the FIRST thing to query RiskIncident after login
+    # (the main-dashboard card fires immediately). Every ERM incidents endpoint
+    # self-heals the incident schema before querying; without the same call
+    # here, a tenant DB that predates the `tags` column 500s on the dashboard
+    # until some ERM incidents page happens to be visited first.
+    ensure_incident_schema(db)
     user_tenants = get_user_tenants(current_user, db)
     scoped = [tenant_id] if (tenant_id and tenant_id in user_tenants) else user_tenants
     now = datetime.utcnow()

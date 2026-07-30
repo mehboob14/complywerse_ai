@@ -64,6 +64,18 @@ const nextConfig = {
       ],
     }
   },
+  async redirects() {
+    return [
+      // Connectors were merged into IT Asset Discovery — one place to discover
+      // AND connect. The old standalone Connect Wizard URL now lands on the
+      // Discovery → Connectors tab so old links / bookmarks still work.
+      {
+        source: '/admin/integrations/connect',
+        destination: '/asset-discovery?tab=connectors',
+        permanent: false,
+      },
+    ];
+  },
   webpack: (config, { isServer }) => {
     if (isServer) {
       config.resolve = config.resolve || {};

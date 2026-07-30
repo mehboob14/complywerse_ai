@@ -24,7 +24,7 @@ type Posture = {
   data_quality: number;
   known_dimensions: string[];
   components: {
-    cis: { score: number; known: boolean; passed: number; failed: number; never_scanned?: number; total: number; pass_rate: number | null };
+    cis: { score: number; known: boolean; passed: number; failed: number; errored?: number; never_scanned?: number; total: number; pass_rate: number | null };
     vuln: {
       score: number; known: boolean; raw_points: number; open_count: number; active_count: number; total_linked: number;
       by_severity: Record<string, number>; by_status: Record<string, number>;
@@ -267,7 +267,7 @@ export default function RiskPostureAssetPage() {
     },
   });
 
-  const [openTile, setOpenTile] = useState<null | 'business' | 'vulns'>(null);
+  const [openTile, setOpenTile] = useState<null | 'business'>(null);
 
   if (postureQ.isLoading || assetQ.isLoading) return <div className="p-6 text-sm text-slate-500">Loading risk breakdown…</div>;
   if (postureQ.isError || !postureQ.data || assetQ.isError || !assetQ.data) {
@@ -294,11 +294,6 @@ export default function RiskPostureAssetPage() {
   // weighted-base equation on each card stays frozen at the saved values
   // while everything else on the screen recomputes — confusing for the
   // operator who toggled something and expects the math to follow.
-  const previewPerVuln = previewQ.data?.after_effective?.per_vuln as PerVulnRow[] | undefined;
-  const savedPerVuln = components.vuln?.effective_risk?.per_vuln || [];
-  const perVuln: PerVulnRow[] = (isDirty && previewPerVuln && previewPerVuln.length > 0)
-    ? previewPerVuln
-    : savedPerVuln;
 
   return (
     <div className="p-4 space-y-4">
@@ -662,29 +657,10 @@ export default function RiskPostureAssetPage() {
                   </div>
                 </div>
 
-                {/* Per-vuln re-score list */}
-                {previewQ.data.before_effective?.per_vuln && previewQ.data.after_effective?.per_vuln && (
-                  <div className="mt-3 border-t border-primary-100 pt-2">
-                    <div className="text-[11px] uppercase tracking-wide text-primary-700 mb-1.5">Vulnerabilities re-scored</div>
-                    <div className="space-y-1">
-                      {previewQ.data.before_effective.per_vuln.map((b) => {
-                        const a = previewQ.data!.after_effective!.per_vuln.find(x => x.vuln_id === b.vuln_id);
-                        if (!a) return null;
-                        const d = a.score - b.score;
-                        const arrow = d > 0.005 ? '▲' : d < -0.005 ? '▼' : '·';
-                        const cls = d > 0.005 ? 'text-rose-700' : d < -0.005 ? 'text-emerald-700' : 'text-slate-500';
-                        return (
-                          <div key={b.vuln_id} className="flex items-center justify-between text-xs">
-                            <span className="font-mono text-slate-700">{b.cve_id || `VULN-${b.vuln_id}`}</span>
-                            <span className={`font-mono ${cls}`}>
-                              {(b.score * 10).toFixed(1)} → {(a.score * 10).toFixed(1)} {arrow}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
+                {/* The per-vuln re-score list was removed: it printed each finding's
+                    effective-risk (0–10) here, a different number from the finding's
+                    priority shown on the vulnerability page — two scores for one finding
+                    read as a contradiction. The preview shows the ASSET-level move only. */}
               </>
             )}
           </div>
@@ -746,23 +722,11 @@ export default function RiskPostureAssetPage() {
         </div>
       </div>
 
-      {/* Per-vulnerability breakdown — compact card opens the full triage-lens
-          analysis in a popup, so the page stays short. */}
-      {perVuln.length > 0 && (
-        <button
-          onClick={() => setOpenTile('vulns')}
-          className="group flex w-full items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-4 text-left shadow-sm transition-colors hover:border-primary-300 hover:bg-slate-50"
-        >
-          <span className="flex items-center gap-3">
-            <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-orange-50 text-orange-600"><ShieldAlert className="h-4 w-4" /></span>
-            <span>
-              <span className="block text-sm font-semibold text-slate-800">Per-vulnerability risk breakdown</span>
-              <span className="block text-xs text-slate-400">{perVuln.length} {perVuln.length === 1 ? 'vulnerability' : 'vulnerabilities'} · scanner vs. effective (triage lens)</span>
-            </span>
-          </span>
-          <span className="inline-flex items-center gap-1 text-xs font-medium text-primary-700">View <ChevronRight className="h-4 w-4" /></span>
-        </button>
-      )}
+      {/* The per-vulnerability re-scoring card/popup was removed: it re-implemented
+          finding scoring with its OWN weights — a fourth, inconsistent formula that
+          duplicated the vulnerability module and doesn't belong on the risk-posture
+          page. The Vulnerabilities dimension panel below links straight to this asset's
+          findings instead, where each opens its own detail. */}
 
       {/* Existing 5 dimension panels */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -773,7 +737,7 @@ export default function RiskPostureAssetPage() {
               CIS Benchmark
               <GuideMarker id="posture.cisDimension" n={6} className="ml-1.5" />
             </h3>
-            <Link href={`/compliance/plugins/asset/${asset.id}`} className="text-xs text-primary-700 hover:underline">
+            <Link href={`/compliance-plugins/asset/${asset.id}`} className="text-xs text-primary-700 hover:underline">
               View CIS details →
             </Link>
           </div>
@@ -790,6 +754,7 @@ export default function RiskPostureAssetPage() {
               <div className="text-xs text-slate-600 mt-2 space-y-0.5">
                 <div>✅ Passed: <strong>{components.cis.passed}</strong></div>
                 <div>❌ Failed: <strong>{components.cis.failed}</strong></div>
+                {components.cis.errored ? <div>⚠️ Errored: <strong>{components.cis.errored}</strong> (couldn&apos;t evaluate · counted toward gap)</div> : null}
                 {components.cis.never_scanned ? <div>⏳ Never scanned: <strong>{components.cis.never_scanned}</strong> (counted toward gap)</div> : null}
                 <div>Total rules: {components.cis.total}</div>
               </div>
@@ -804,7 +769,7 @@ export default function RiskPostureAssetPage() {
               Vulnerabilities
               <GuideMarker id="posture.vulnDimension" n={7} className="ml-1.5" />
             </h3>
-            <Link href="/vulnerabilities" className="text-xs text-primary-700 hover:underline">View all vulns →</Link>
+            <Link href={`/assets/${asset.id}?tab=vulnerabilities`} className="text-xs text-primary-700 hover:underline">View this asset&apos;s findings →</Link>
           </div>
           <div className="flex items-end gap-3">
             <div className="text-3xl font-semibold text-slate-900">{components.vuln.active_count}</div>
@@ -871,20 +836,6 @@ export default function RiskPostureAssetPage() {
         </div>
       </div>
 
-      {/* Per-vulnerability breakdown popup */}
-      {openTile === 'vulns' && perVuln.length > 0 && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" onClick={() => setOpenTile(null)}>
-          <div className="flex max-h-[90vh] w-full max-w-5xl flex-col rounded-xl border border-slate-200 bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between border-b border-slate-200 px-4 py-2.5">
-              <h4 className="text-sm font-semibold text-slate-900">Per-vulnerability risk breakdown</h4>
-              <button onClick={() => setOpenTile(null)}><X className="h-4 w-4 text-slate-400" /></button>
-            </div>
-            <div className="min-h-0 flex-1 overflow-y-auto p-4">
-              <TriagedVulnSection perVuln={perVuln} asset={asset} />
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -1200,10 +1151,10 @@ function VulnBreakdownCard({ v }: { v: NonNullable<Posture['components']['vuln']
   return (
     <div className="rounded-md border border-slate-200">
       <div className={`flex items-center justify-between px-4 py-2 border-b border-slate-200 ${BAND_COLOR[v.band] || ''}`}>
-        <div className="flex items-center gap-3 text-sm">
+        <Link href={`/vulnerabilities/${v.vuln_id}`} className="flex items-center gap-3 text-sm hover:underline" title="Open this finding">
           <span className="font-mono font-medium">{v.cve_id || `VULN-${v.vuln_id}`}</span>
           <span className="text-slate-700">{v.title || 'Untitled'}</span>
-        </div>
+        </Link>
         <div className="text-sm font-semibold">
           {(v.score * 10).toFixed(1)} / 10 <span className="uppercase text-[10px]">{v.band}</span>
           {v.escalated && <span className="ml-1 text-amber-800">⚠</span>}

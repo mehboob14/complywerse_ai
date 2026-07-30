@@ -26,7 +26,14 @@ class ConnectionTestResult:
 class BaseAdapter(ABC):
 
     def __init__(self, console_url: str, console_port: int, credentials: Dict[str, str], verify_ssl: bool = True):
-        self.console_url = console_url.rstrip("/")
+        _url = console_url.rstrip("/")
+        # Strip a port already embedded in the URL (e.g. "https://host:8834") so
+        # combining it with console_port below can't double it into
+        # "https://host:8834:8834" and break the connection.
+        _head, _sep, _tail = _url.rpartition(":")
+        if _sep and _tail.isdigit() and "//" in _head:
+            _url = _head
+        self.console_url = _url
         self.console_port = console_port
         self.credentials = credentials
         self.verify_ssl = verify_ssl

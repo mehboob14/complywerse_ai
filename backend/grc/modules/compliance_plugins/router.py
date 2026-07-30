@@ -7,7 +7,7 @@ from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
-from sqlalchemy import func, text
+from sqlalchemy import func, text, cast, String
 from sqlalchemy.orm import Session
 
 from grc.models import (
@@ -532,6 +532,14 @@ _RUNNER_TYPE_TO_OS = {
     "gcp_readonly": "gcp_account",
     "vmware_vcenter": "vmware_host",
     "netdev_ssh": "network_device",
+    # SQL runners — without these, a DB connection never drives the overview
+    # bucket (and apps that only have a SQL credential would fall through).
+    "postgres_sql": "database",
+    "mssql_sql": "database",
+    "mysql_sql": "database",
+    "oracle_sql": "database",
+    "k8s_api": "container",
+    "ldap_query": "identity",
 }
 
 _OS_FAMILY_LABELS = {
@@ -544,28 +552,101 @@ _OS_FAMILY_LABELS = {
     "vmware_host": "VMware Hosts",
     "network_device": "Network Devices",
     "database": "Databases",
+    "identity": "Identity / AD",
     "container": "Containers / Orchestration",
     "unclassified": "Unclassified",
 }
+
+# software_key / os_normalized prefix → overview family. Used for application
+# assets that inherit the host's os_family for scan routing — bucketing must
+# follow the app, not the host WinRM/SSH connection.
+_SOFTWARE_KEY_TO_OS = (
+    (("postgresql", "postgres"), "database"),
+    (("mssql", "sql-server", "sqlserver"), "database"),
+    (("mysql", "mariadb"), "database"),
+    (("oracle-db", "oracle"), "database"),
+    (("iis",), "windows_server"),
+    (("nginx", "apache", "tomcat"), "linux_server"),
+    (("docker", "kubernetes", "k8s"), "container"),
+)
+
+
+def _classify_from_software_key(asset: ITAsset) -> Optional[str]:
+    """Map an application asset to an overview family via vendor / os_normalized.
+
+    Returns None when we can't tell — caller falls through to host heuristics.
+    """
+    v = (asset.vendor or "").lower().strip()
+    if v == "postgresql":
+        return "database"
+    if v in ("mysql", "mariadb"):
+        return "database"
+    if v == "oracle":
+        return "database"
+    if v == "microsoft" and (asset.asset_type or "") == "application":
+        return "database"  # MSSQL — Windows OS apps use asset_role host
+    if v == "iis":
+        return "windows_server"
+    if v in ("apache", "nginx", "tomcat"):
+        return "linux_server"
+
+    k = (asset.os_normalized or "").lower().strip()
+    if not k:
+        return None
+    for prefixes, family in _SOFTWARE_KEY_TO_OS:
+        if any(k.startswith(p) for p in prefixes):
+            return family
+    return None
+
+
+def _is_application_asset(asset: ITAsset) -> bool:
+    role = (getattr(asset, "asset_role", None) or "").lower().strip()
+    if role == "application":
+        return True
+    if getattr(asset, "parent_asset_id", None):
+        return True
+    return (asset.asset_type or "").lower().strip() == "application"
 
 
 def _classify_asset_os(
     asset: ITAsset,
     connections_by_host: dict[str, IntegrationConnection],
+    connections_by_host_all: Optional[dict[str, list]] = None,
 ) -> str:
-    """Best-effort OS classification for an asset.
+    """Best-effort overview category for an asset.
 
-    Priority: explicit runner_type on a matched connection → keyword match
-    on name/description/asset_type → unclassified.
+    Priority:
+      1. Application assets → software key / vendor (NOT the host's WinRM/SSH
+         connection — children inherit host os_family for scan routing and would
+         otherwise land under Windows/Linux hosts).
+      2. Preferred runner on the host when multiple connections exist.
+      3. First connection matched by host_name → console_url.
+      4. Keyword scan on name/description/asset_type/vendor.
+      5. unclassified.
     """
-    # 1. Match by host_name → connection.console_url
+    # 1. Applications bucket by what they are, not what host they ride on.
+    if _is_application_asset(asset):
+        from_sw = _classify_from_software_key(asset)
+        if from_sw:
+            return from_sw
+
+    # 2/3. Match by host_name → connection(s). Prefer a runner that matches
+    # the asset's software signal when several connections share a host
+    # (WinRM + postgres_sql on the same box is the common case).
     host = (asset.host_name or "").lower().strip()
     if host:
+        preferred = _classify_from_software_key(asset)
+        all_conns = (connections_by_host_all or {}).get(host) or []
+        if preferred and all_conns:
+            for conn in all_conns:
+                mapped = _RUNNER_TYPE_TO_OS.get(conn.integration_type)
+                if mapped == preferred:
+                    return mapped
         conn = connections_by_host.get(host)
         if conn and conn.integration_type in _RUNNER_TYPE_TO_OS:
             return _RUNNER_TYPE_TO_OS[conn.integration_type]
 
-    # 2. Keyword scan over name + description + asset_type
+    # 4. Keyword scan over name + description + asset_type
     hay = " ".join([
         asset.name or "",
         asset.description or "",
@@ -602,16 +683,22 @@ def assets_overview(
         .all()
     )
 
-    # Tenant connections — keyed by host so we can match assets by host_name
+    # Tenant connections — keyed by host so we can match assets by host_name.
+    # Keep BOTH a first-wins map (legacy) and an all-connections map so a host
+    # with WinRM + postgres_sql can resolve the right runner per asset.
     connections = (
         db.query(IntegrationConnection)
         .filter(IntegrationConnection.tenant_id == tenant_id)
         .all()
     )
     connections_by_host: dict[str, IntegrationConnection] = {}
+    connections_by_host_all: dict[str, list] = {}
     for c in connections:
         h = (c.console_url or "").lower().strip()
-        if h and h not in connections_by_host:
+        if not h:
+            continue
+        connections_by_host_all.setdefault(h, []).append(c)
+        if h not in connections_by_host:
             connections_by_host[h] = c
 
     # Approved rule total — the per-asset pass-rate denominator
@@ -666,6 +753,15 @@ def assets_overview(
     from .services.strict_matcher import applicable_plugins_for_asset
     applicable_count_by_asset: dict[int, int] = {}
     matched_benchmark_by_asset: dict[int, Optional[str]] = {}
+    # Plugin ids that are CURRENTLY applicable, per asset. Results from a
+    # benchmark the asset is no longer matched to must not be counted: an
+    # earlier scan against a superseded benchmark leaves its own plugin rows
+    # behind, and because those ids differ from the current benchmark's,
+    # "latest result per plugin" happily counted BOTH. Live symptom: a device
+    # with a 538-rule benchmark reported 962 checks — 538 current + 424 from a
+    # retired ARCHIVE benchmark — so the headline compliance % blended a live
+    # scan with a stale one.
+    applicable_ids_by_asset: dict[int, set] = {}
     for a in assets:
         if a.os_normalized:
             plugins_for_a, bench_for_a = applicable_plugins_for_asset(
@@ -673,32 +769,51 @@ def assets_overview(
             )
             applicable_count_by_asset[a.id] = len(plugins_for_a)
             matched_benchmark_by_asset[a.id] = bench_for_a
+            applicable_ids_by_asset[a.id] = {p.id for p in plugins_for_a}
         else:
             applicable_count_by_asset[a.id] = 0
             matched_benchmark_by_asset[a.id] = None
+            applicable_ids_by_asset[a.id] = set()
 
     for a in assets:
-        os_family = _classify_asset_os(a, connections_by_host)
+        os_family = _classify_asset_os(a, connections_by_host, connections_by_host_all)
         statuses = per_asset_latest.get(a.id, {})
+        # Current posture only. History stays in grc_compliance_plugin_runs and
+        # is still readable per run; it just doesn't inflate the live numbers.
+        _appl = applicable_ids_by_asset.get(a.id) or set()
+        if _appl:
+            statuses = {pid: st for pid, st in statuses.items() if pid in _appl}
         passed = sum(1 for s in statuses.values() if s == "passed")
         failed = sum(1 for s in statuses.values() if s == "failed")
         errored = sum(1 for s in statuses.values() if s == "error")
+        skipped = sum(1 for s in statuses.values() if s == "skipped")
         scanned = len(statuses)
         # Pass rate uses the asset's APPLICABLE rule count (Stage 2 strict
         # pick), not the whole library. Mehboob → 63 / 538 = 11.7%, not
         # 63 / 4855 = 1.3% which was the historical mis-reporting.
+        # Skipped / not_applicable / not_assessed results drop from the
+        # denominator (same n/a scoring rule as inventory scoring).
         applicable_for_this_asset = applicable_count_by_asset.get(a.id, 0) or total_rules
-        pass_rate = round(passed / applicable_for_this_asset * 100, 1) if applicable_for_this_asset else 0.0
+        denom = max(int(applicable_for_this_asset) - int(skipped), 0)
+        pass_rate = round(passed / denom * 100, 1) if denom else None
         last_scan = per_asset_last_scan.get(a.id)
 
-        # Connection match — STRICT, host_name → console_url only. We used
-        # to fall back to "any connection of the same runner_type" which
-        # lied to operators: an asset with no real credentials appeared
-        # to be scannable because some other Windows host had a connection.
-        # If the asset's own host doesn't have a connection row, it's
-        # genuinely not scannable.
+        # Connection match — STRICT, host_name → console_url only. Prefer a
+        # runner that matches the asset's software signal when the host has
+        # multiple credentials (e.g. WinRM + postgres_sql). Never invent a
+        # connection for a different host.
         host_lc = (a.host_name or "").lower().strip()
-        matched_conn = connections_by_host.get(host_lc) if host_lc else None
+        host_conns = connections_by_host_all.get(host_lc, []) if host_lc else []
+        matched_conn = None
+        if host_conns:
+            want_family = os_family if _is_application_asset(a) else None
+            if want_family:
+                for c in host_conns:
+                    if _RUNNER_TYPE_TO_OS.get(c.integration_type) == want_family:
+                        matched_conn = c
+                        break
+            if matched_conn is None:
+                matched_conn = connections_by_host.get(host_lc)
 
         groups.setdefault(os_family, []).append({
             "id": a.id,
@@ -706,6 +821,8 @@ def assets_overview(
             "host_name": a.host_name,
             "ip_address": a.ip_address,
             "asset_type": a.asset_type,
+            "asset_role": getattr(a, "asset_role", None),
+            "parent_asset_id": getattr(a, "parent_asset_id", None),
             "criticality": a.criticality,
             "owner_name": a.owner_name,
             "confidentiality_rating": a.confidentiality_rating,
@@ -732,14 +849,15 @@ def assets_overview(
 
         if scanned > 0:
             totals_scanned += 1
-            total_pass_rate_sum += pass_rate
-            total_pass_rate_count += 1
+            if pass_rate is not None:
+                total_pass_rate_sum += pass_rate
+                total_pass_rate_count += 1
 
     # Order groups for stable UI rendering
     group_order = [
         "windows_server", "linux_server", "aws_account", "azure_account",
         "gcp_account", "vmware_host", "network_device", "database",
-        "container", "windows_workstation", "unclassified",
+        "identity", "container", "windows_workstation", "unclassified",
     ]
     ordered_groups = []
     for fam in group_order:
@@ -1600,8 +1718,21 @@ def library_tree(
         _rollup(_root)
 
     # Build family roots
-    family_labels = {"windows": "Windows", "linux": "Linux", "cisco": "Cisco",
-                     "cloud": "Cloud Accounts", "db": "Databases", "other": "Other"}
+    family_labels = {
+        "windows": "Windows",
+        "linux": "Linux",
+        "macos": "macOS",
+        "cisco": "Cisco",
+        "cloud": "Cloud Accounts",
+        "container": "Containers",
+        "db": "Databases",
+        "network": "Network",
+        "app": "Applications",
+        "unix": "Unix / Mainframe",
+        "hypervisor": "Hypervisors",
+        "endpoint": "Endpoints",
+        "other": "Other",
+    }
     tree = []
     for fam in sorted(families):
         # roots inside this family = parent_key IS NULL nodes whose family matches
@@ -3365,6 +3496,22 @@ def _do_scan_all(
         # Only approved rules are scan-eligible. Pending/rejected stay
         # in the review queue and can't be executed.
         CompliancePlugin.review_status.in_(["approved", "auto_approved"]),
+        # Unimplemented stubs are not scan-eligible either. This worker builds
+        # its own query rather than calling applicable_plugins_for_asset(), so
+        # the exclusion added there did NOT reach the scan path — a re-scan
+        # still executed the benchmark's remaining TODO rule and recorded it as
+        # a security failure. Any rule whose check_definition still contains a
+        # TODO placeholder compares host output against the literal string
+        # "TODO_expected_value" and can only ever fail.
+        ~cast(CompliancePlugin.check_definition, String).ilike("%TODO%"),
+        # Also exclude auto-pass placeholders. The PDF-ingest parser writes
+        # expect={"kind":"any"} ("reviewer must tighten") when it cannot derive
+        # a real check — the rule then passes unconditionally. Executing it
+        # manufactures compliance: PostgreSQL 18 has 66 of 70 rules like this,
+        # and ALL network/cloud benchmarks are 100%% of them. An unauthored
+        # check is not a passing check.
+        ~cast(CompliancePlugin.check_definition, String).ilike('%%"kind": "any"%%'),
+        ~cast(CompliancePlugin.check_definition, String).ilike('%%"kind":"any"%%'),
     )
     if benchmark:
         q = q.filter(CompliancePlugin.benchmark == benchmark)

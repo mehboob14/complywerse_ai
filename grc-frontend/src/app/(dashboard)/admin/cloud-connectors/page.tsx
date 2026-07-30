@@ -222,8 +222,10 @@ export default function CloudConnectorsAdminPage() {
                     setPresetProvider(p.provider);
                     setShowAdd(true);
                   } else {
-                    // Legacy scanners live in /admin → Integrations.
-                    window.location.href = '/admin#integrations';
+                    // Legacy scanners live in /admin → Integrations. The admin
+                    // page reads the tab from ?tab=, not the URL hash — using a
+                    // hash here silently landed the user on the default Company tab.
+                    window.location.href = '/admin?tab=integrations';
                   }
                 }}
                 className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 text-left hover:border-primary-300 hover:bg-primary-50/30 transition"
@@ -375,7 +377,7 @@ export default function CloudConnectorsAdminPage() {
                       </div>
                     </div>
                     <a
-                      href="/admin"
+                      href="/admin?tab=integrations"
                       className="px-2 py-1 border border-slate-300 bg-white text-slate-700 rounded text-xs hover:bg-slate-50"
                       title="Manage in Integrations tab"
                     >

@@ -776,6 +776,25 @@ export const assetsApi = {
   getDetectedSoftware: (id: number) => apiClient.get(`/assets/${id}/detected-software`),
   promoteSoftware: (id: number, software_keys: string[], criticality?: string) =>
     apiClient.post(`/assets/${id}/promote-software`, { software_keys, criticality }),
+  // Software set-up / scan-connect flow (Task B). Modes:
+  //   scan            — SQL-style: validate creds + promote + attach connection
+  //   host_connection — non-SQL with benchmark: promote using host OS creds
+  //   track           — no benchmark: promote inventory-only, no scan
+  setupSoftware: (
+    id: number,
+    payload: {
+      mode: 'scan' | 'host_connection' | 'track' | 'scan_via_host';
+      software_key: string;
+      hostname?: string;
+      display_label?: string;
+      port?: number;
+      database?: string;
+      oracle_sid?: string;
+      username?: string;
+      password?: string;
+      [key: string]: unknown;
+    },
+  ) => apiClient.post(`/assets/${id}/setup-software`, payload),
   getMappingRecommendations: (
     id: number,
     params?: { framework_id?: number; min_score?: number; limit?: number; include_linked?: boolean }
@@ -849,6 +868,27 @@ export const discoveryApi = {
   runNow: (id: number) => apiClient.post(`/discovery/campaigns/${id}/run`),
   listRuns: (campaignId?: number, limit = 50) =>
     apiClient.get('/discovery/runs', { params: { campaign_id: campaignId, limit } }),
+  runObservations: (runId: number) =>
+    apiClient.get(`/discovery/runs/${runId}/observations`),
+  // runId scopes the queue to one discovery run; omit for the full backlog.
+  discoveredDevices: (runId?: number) =>
+    apiClient.get('/discovery/discovered-devices', { params: runId != null ? { run_id: runId } : undefined }),
+  // Promote an unclaimed discovered device (keyed by OBSERVATION id) — it only
+  // becomes an asset if the login works.
+  connectDevice: (observationId: number, data: { username: string; password: string; domain?: string; transport?: string }) =>
+    apiClient.post(`/discovery/devices/${observationId}/connect`, data),
+  // Re-collect a device that is already in inventory (keyed by asset id).
+  reconnectAsset: (assetId: number, data: { username: string; password: string; domain?: string; transport?: string }) =>
+    apiClient.post(`/discovery/assets/${assetId}/reconnect`, data),
+  disconnectDevice: (assetId: number) =>
+    apiClient.post(`/discovery/devices/${assetId}/disconnect`),
+  connectProgress: () => apiClient.get('/discovery/connect-progress'),
+  // kind: 'winrm' tries Windows devices only, 'ssh' Linux only.
+  // runId scopes the sweep to one run (matches the queue's run filter).
+  connectAllDiscovered: (kind?: 'winrm' | 'ssh', runId?: number) =>
+    apiClient.post('/discovery/connect-all-discovered', undefined, {
+      params: { ...(kind ? { kind } : {}), ...(runId != null ? { run_id: runId } : {}) },
+    }),
   inbox: (statusFilter: 'open' | 'review' | 'pending' | 'all' = 'open') =>
     apiClient.get('/discovery/inbox', { params: { status_filter: statusFilter } }),
   resolve: (obsId: number, action: 'adopt' | 'merge' | 'ignore', targetAssetId?: number) =>
@@ -2537,6 +2577,15 @@ export const vulnManagementApi = {
       // Filter by template source. "NCA Template" → only NCA-bridged vulns,
       // "_general" → only non-template vulns, omit/undefined → all.
       template_type?: string;
+      // Domain filter — a single scanner family, used by the grouped register
+      // to load one domain's findings on expand. `limit` widens the page so a
+      // large domain (e.g. 120 Windows findings) loads in full.
+      plugin_family?: string;
+      limit?: number;
+      // Public-exploit filter (GitHub PoC OR Exploit-DB).
+      has_exploit?: boolean;
+      // ATT&CK tactic richness (≥7 distinct tactics in the mapped chain).
+      high_tactics?: boolean;
     }) =>
       apiClient.get('/vuln-management/vulnerabilities', {
         params: params ? {
@@ -2547,8 +2596,17 @@ export const vulnManagementApi = {
           include_closed: params.include_closed,
           closed_only: params.closed_only,
           template_type: params.template_type,
+          plugin_family: params.plugin_family,
+          limit: params.limit,
+          has_exploit: params.has_exploit,
+          high_tactics: params.high_tactics,
         } : undefined
       }),
+    // Runtime-derived domains (the scanner's plugin family) for the grouped
+    // register — aggregated server-side over the WHOLE register so counts match
+    // the KPI cards, ordered worst-severity-first.
+    getDomains: (params?: { include_closed?: boolean; template_type?: string }) =>
+      apiClient.get('/vuln-management/vulnerabilities/domains', { params }),
     getById: (id: number) => apiClient.get(`/vuln-management/vulnerabilities/${id}`),
     // ATT&CK exploitability assessment for one finding on one asset (the Exploit
     // Test tab). Returns the computed attack chain + verdict + graded exploit
@@ -2583,8 +2641,15 @@ export const vulnManagementApi = {
     update: (id: number, data: Record<string, unknown>) => 
       apiClient.put(`/vuln-management/vulnerabilities/${id}`, data),
     delete: (id: number) => apiClient.delete(`/vuln-management/vulnerabilities/${id}`),
-    assign: (id: number, userId: number) => 
+    assign: (id: number, userId: number) =>
       apiClient.post(`/vuln-management/vulnerabilities/${id}/assign`, { user_id: userId }),
+    // Manually attach / detach an IT asset — the operator's control to fix the
+    // "no asset linked" case so internet-exposure + asset-criticality become real
+    // (the backend recomputes the contextual score on link/unlink).
+    linkAsset: (id: number, assetId: number) =>
+      apiClient.post(`/vuln-management/vulnerabilities/${id}/link-asset`, { asset_id: assetId }),
+    unlinkAsset: (id: number, assetId: number) =>
+      apiClient.delete(`/vuln-management/vulnerabilities/${id}/link-asset/${assetId}`),
     changeStatus: (id: number, status: string, notes?: string) =>
       apiClient.post(`/vuln-management/vulnerabilities/${id}/status`, { status, notes }),
     // Accepting risk is deliberately NOT a changeStatus('accepted') call: this
@@ -4273,8 +4338,8 @@ export const integrationsApi = {
     apiClient.post('/integrations/connections', data),
   updateConnection: (id: number, data: Record<string, unknown>) =>
     apiClient.put(`/integrations/connections/${id}`, data),
-  deleteConnection: (id: number) =>
-    apiClient.delete(`/integrations/connections/${id}`),
+  deleteConnection: (id: number, purge = false) =>
+    apiClient.delete(`/integrations/connections/${id}${purge ? '?purge=true' : ''}`),
   testConnection: (id: number) =>
     apiClient.post(`/integrations/connections/${id}/test`),
   triggerSync: (id: number) =>

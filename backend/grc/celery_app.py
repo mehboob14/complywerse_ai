@@ -179,6 +179,14 @@ celery_app.conf.update(
             "schedule": 24 * 60 * 60,   # 24h cadence (Python int seconds)
             "options": {"queue": "parsing"},
         },
+        # Weekly Exploit-DB mirror refresh. The CSV is ~10 MB / 47k rows — too
+        # heavy for the daily KEV path — so it runs on a 7-day cadence and the
+        # UI surfaces the mirror's generated_at as the as-of date.
+        "exploitdb-weekly-refresh": {
+            "task": "grc.tasks.vulnerabilities.refresh_exploitdb",
+            "schedule": 7 * 24 * 60 * 60,
+            "options": {"queue": "parsing"},
+        },
         # Phase 6 — Daily PSIRT (MSRC) refresh. Stagger from the enrichment
         # refresh so the two don't compete for the same MSRC/redis pool
         # bandwidth at the same minute (the actual offset is whatever beat

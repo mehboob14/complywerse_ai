@@ -43,6 +43,8 @@ type AssetRow = {
   host_name?: string | null;
   ip_address?: string | null;
   asset_type?: string | null;
+  asset_role?: string | null;
+  parent_asset_id?: number | null;
   criticality?: string | null;
   os_family?: string | null;
   os_normalized?: string | null;
@@ -150,6 +152,26 @@ const RUNNER_TO_BENCHMARK_SHORT: Record<string, string> = {
   aws_readonly:  'CIS AWS',
   k8s_api:       'CIS Kubernetes',
 };
+
+/** Defense-in-depth: if an older backend still classifies apps via host WinRM,
+ *  map application software keys to the Databases / etc. category ourselves. */
+function categoryKeyFromSoftware(a: AssetRow): string | null {
+  const role = (a.asset_role || '').toLowerCase();
+  const isApp = role === 'application'
+    || a.parent_asset_id != null
+    || (a.asset_type || '').toLowerCase() === 'application';
+  if (!isApp) return null;
+  const k = (a.os_normalized || '').toLowerCase();
+  if (!k) return null;
+  if (k.startsWith('postgres') || k.startsWith('postgresql')
+    || k.startsWith('mssql') || k.startsWith('sql-server')
+    || k.startsWith('mysql') || k.startsWith('mariadb')
+    || k.startsWith('oracle')) return 'databases';
+  if (k.startsWith('docker') || k.startsWith('kubernetes') || k.startsWith('k8s')) return 'containers';
+  if (k.startsWith('iis')) return 'windows';
+  if (k.startsWith('nginx') || k.startsWith('apache') || k.startsWith('tomcat')) return 'linux';
+  return null;
+}
 
 function fmtAgo(iso?: string | null): string {
   if (!iso) return 'never scanned';
@@ -496,12 +518,16 @@ function OverviewTabContent() {
     CATEGORIES.forEach(c => { out[c.key] = []; });
     out['other'] = [];
     const groups: AssetsOverviewGroup[] = Array.isArray(overviewQ.data?.groups) ? overviewQ.data!.groups : [];
-    const rawConnections = (connectionsQ.data as any)?.connections ?? (Array.isArray(connectionsQ.data) ? connectionsQ.data : []);
-    const connections: Connection[] = Array.isArray(rawConnections) ? rawConnections : [];
-    const seenHosts = new Set<string>();
     groups.forEach(group => {
       const groupOs = (group.os_family || '').toLowerCase();
       (group.assets || []).forEach(a => {
+        // Applications: prefer software-key category over inherited host OS /
+        // WinRM runner so PostgreSQL children leave "Windows hosts".
+        const fromSw = categoryKeyFromSoftware(a);
+        if (fromSw && out[fromSw]) {
+          out[fromSw].push(a);
+          return;
+        }
         const fam = (a.os_family || groupOs || '').toLowerCase();
         const rt  = (a.runner_type || '').toLowerCase();
         let placed = false;
@@ -511,19 +537,15 @@ function OverviewTabContent() {
           }
         }
         if (!placed) out['other'].push(a);
-        if (a.host_name) seenHosts.add(a.host_name.toLowerCase().trim());
       });
     });
-    connections.forEach(conn => {
-      const host = (conn.console_url || '').toLowerCase().trim();
-      if (!host || seenHosts.has(host)) return;
-      const cat = CATEGORIES.find(c => c.matchRunner?.includes(conn.integration_type));
-      if (!cat) return;
-      out[cat.key].push({
-        id: -conn.id, name: conn.connection_name || host, host_name: conn.console_url,
-        runner_type: conn.integration_type, connection_id: conn.id, has_connection: true,
-      });
-    });
+    // A connection is a stored credential, NOT a device. Counting one as a
+    // device meant a stale test row ("VERIFY PG chair SSH" → pg-chair-host,
+    // created months ago) appeared as a live Linux host, and a scanner's target
+    // (127.0.0.1) appeared as a second Windows machine — so "0 of 3 devices
+    // scanned" described an estate of one real machine. Devices are assets.
+    // Connections that DO correspond to an asset are already represented by
+    // that asset row, which carries the real scan counts.
     return out;
   }, [overviewQ.data, connectionsQ.data]);
 

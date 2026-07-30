@@ -308,17 +308,34 @@ class NessusTransformer:
 
         ref_info = plugin_attrs.get("ref_information", {})
         refs = ref_info.get("ref", []) if isinstance(ref_info, dict) else []
-        cve_ids = []
+
+        def _ref_values(ref):
+            # Nessus stores ref values in EITHER shape: {"value": ["327", ...]} (the
+            # common one — cwe/cve both use it) or a bare list of str/dict. The old code
+            # only read the list shape, so any CVE/CWE delivered as {"value": [...]} was
+            # silently dropped. Handle both.
+            vals = ref.get("values", [])
+            out = []
+            if isinstance(vals, dict):
+                vv = vals.get("value", [])
+                out = vv if isinstance(vv, list) else [vv]
+            elif isinstance(vals, list):
+                for v in vals:
+                    out.append(v.get("value", "") if isinstance(v, dict) else v)
+            return [str(x).strip() for x in out if x and str(x).strip()]
+
+        cve_ids, cwe_ids = [], []
         if isinstance(refs, list):
             for ref in refs:
-                if isinstance(ref, dict) and ref.get("name") == "cve":
-                    vals = ref.get("values", [])
-                    if isinstance(vals, list):
-                        for v in vals:
-                            if isinstance(v, dict):
-                                cve_ids.append(v.get("value", ""))
-                            elif isinstance(v, str):
-                                cve_ids.append(v)
+                if not isinstance(ref, dict):
+                    continue
+                if ref.get("name") == "cve":
+                    cve_ids.extend(_ref_values(ref))
+                elif ref.get("name") == "cwe":
+                    # Nessus gives the bare number ("327"); normalise to "CWE-327".
+                    for raw in _ref_values(ref):
+                        num = raw.upper().replace("CWE-", "").replace("CWE", "").strip()
+                        cwe_ids.append(f"CWE-{num}" if num.isdigit() else raw)
 
         vuln_info = plugin_attrs.get("vuln_information", {})
         exploit_available = False
@@ -368,10 +385,18 @@ class NessusTransformer:
             "compliverse_severity": _compute_compliverse_severity(composite),
             "cve_id": cve_ids[0] if cve_ids else None,
             "cve_ids": cve_ids if cve_ids else None,
+            "cwe_id": cwe_ids[0] if cwe_ids else None,
+            "cwe_ids": cwe_ids if cwe_ids else None,
             "published_date": _epoch_to_dt(plugin_attrs.get("plugin_information", {}).get("plugin_publication_date")),
             "modified_date": _epoch_to_dt(plugin_attrs.get("plugin_information", {}).get("plugin_modification_date")),
             "added_to_scanner": None,
             "categories": categories,
+            # Scanner-provided family, surfaced as the register's grouping domain.
+            "plugin_family": plugin_family or None,
+            # Scanner-native VPR + affected-product CPE for the "Data by source" view.
+            "vpr_score": vuln_data.get("vpr_score"),
+            "cpe": (vuln_data.get("cpe")[0] if isinstance(vuln_data.get("cpe"), list) and vuln_data.get("cpe")
+                    else (vuln_data.get("cpe") if isinstance(vuln_data.get("cpe"), str) else None)),
             "known_exploits": [{"source": "nessus", "available": True}] if exploit_available else None,
             "exploit_count": exploit_count,
             "malware_kits": None,
