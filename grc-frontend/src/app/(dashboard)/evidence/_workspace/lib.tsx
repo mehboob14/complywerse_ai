@@ -80,31 +80,37 @@ export const STATUS_LABEL: Record<string, string> = {
   rejected: 'Rejected',
   expired: 'Expired',
   archived: 'Archived',
+  // Filter-only: stale is `is_stale` on the model, not a workflow status value.
+  stale: 'Stale',
 };
 export function statusLabel(s: string): string {
   return STATUS_LABEL[s] || s.replace(/_/g, ' ');
 }
-export type StatusTone = 'draft' | 'pending' | 'approved' | 'rejected' | 'expired' | 'archived';
+export type StatusTone = 'draft' | 'pending' | 'approved' | 'rejected' | 'expired' | 'archived' | 'stale';
 export function statusTone(s: string): StatusTone {
   if (s === 'draft') return 'draft';
   if (s === 'pending_review') return 'pending';
   if (s === 'approved') return 'approved';
   if (s === 'rejected') return 'rejected';
   if (s === 'expired') return 'expired';
+  if (s === 'stale') return 'stale';
   return 'archived';
 }
 const STATUS_DOT: Record<StatusTone, string> = {
   draft: 'bg-slate-400', pending: 'bg-amber-500', approved: 'bg-emerald-500',
   rejected: 'bg-rose-500', expired: 'bg-orange-500', archived: 'bg-slate-400',
+  stale: 'bg-rose-500',
 };
 const STATUS_TEXT: Record<StatusTone, string> = {
   draft: 'text-slate-600', pending: 'text-amber-700', approved: 'text-emerald-700',
   rejected: 'text-rose-600', expired: 'text-orange-700', archived: 'text-slate-500',
+  stale: 'text-rose-700',
 };
 const STATUS_PILL: Record<StatusTone, string> = {
   draft: 'bg-slate-100 text-slate-600', pending: 'bg-amber-50 text-amber-700',
   approved: 'bg-emerald-50 text-emerald-700', rejected: 'bg-rose-50 text-rose-600',
   expired: 'bg-orange-50 text-orange-700', archived: 'bg-slate-100 text-slate-500',
+  stale: 'bg-rose-50 text-rose-700',
 };
 
 export function StatusDot({ status, className = '' }: { status: string; className?: string }) {
@@ -119,6 +125,10 @@ export function StatusDot({ status, className = '' }: { status: string; classNam
 export function StatusPill({ status }: { status: string }) {
   const t = statusTone(status);
   return <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_PILL[t]}`}>{statusLabel(status)}</span>;
+}
+/** Badge for the computed `is_stale` flag (past expiry / marked stale) — orthogonal to workflow status. */
+export function StalePill() {
+  return <StatusPill status="stale" />;
 }
 
 // ─── Type icon / letter ──────────────────────────────────────────────────────

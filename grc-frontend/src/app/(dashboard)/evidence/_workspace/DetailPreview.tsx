@@ -16,6 +16,7 @@ import QualityBreakdownModal from '../_QualityBreakdownModal';
 import OcrContentModal from '../_OcrContentModal';
 import {
   StatusPill,
+  StalePill,
   ExpiryStatus,
   QualityBar,
   FrameworkTagPill,
@@ -200,6 +201,7 @@ export function DetailPreview({
 
   const name = str(detail.name) ?? 'Untitled evidence';
   const status = str(detail.status) ?? 'draft';
+  const isStale = Boolean(detail.is_stale);
   const fileName = str(detail.file_name);
   const version = num(detail.version);
   const committee = str(detail.committee_name);
@@ -247,6 +249,7 @@ export function DetailPreview({
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <StatusPill status={status} />
+          {isStale && <StalePill />}
           {canReview && status === 'pending_review' && (
             <button
               type="button"

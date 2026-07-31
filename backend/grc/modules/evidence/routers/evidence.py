@@ -345,11 +345,16 @@ def list_evidence(
     if tenant_id:
         validate_tenant_access(current_user, tenant_id, db)
         query = query.filter(Evidence.tenant_id == tenant_id)
-    if status_filter:
+    # `stale` is not a workflow status column value — it is Evidence.is_stale
+    # (past expiry / expired lifecycle). Accept status=stale as a first-class
+    # filter alias so list clients can filter the same way as the UI Status menu.
+    if status_filter == "stale":
+        query = query.filter(Evidence.is_stale == True)  # noqa: E712
+    elif status_filter:
         query = query.filter(Evidence.status == status_filter)
     if evidence_type:
         query = query.filter(Evidence.evidence_type == evidence_type)
-    if is_stale is not None:
+    if is_stale is not None and status_filter != "stale":
         query = query.filter(Evidence.is_stale == is_stale)
     if search:
         search_term = f"%{search}%"

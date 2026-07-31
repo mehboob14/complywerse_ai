@@ -35,7 +35,8 @@ export interface EvidenceWorkspaceProps {
   onUploadClick: () => void;
 }
 
-const STATUS_OPTIONS = ['draft', 'pending_review', 'approved', 'rejected', 'expired', 'archived']
+// `stale` is not a workflow status — it maps to Evidence.is_stale (past validity).
+const STATUS_OPTIONS = ['draft', 'pending_review', 'approved', 'rejected', 'expired', 'archived', 'stale']
   .map((s) => ({ value: s, label: statusLabel(s) }));
 
 export function EvidenceWorkspace({ canCreate, canDelete, onUploadClick }: EvidenceWorkspaceProps) {
@@ -75,7 +76,11 @@ export function EvidenceWorkspace({ canCreate, canDelete, onUploadClick }: Evide
   const items = useMemo(() => {
     const q = search.trim().toLowerCase();
     return allItems.filter((e) => {
-      if (statusFilter && e.status !== statusFilter) return false;
+      if (statusFilter === 'stale') {
+        if (!e.is_stale) return false;
+      } else if (statusFilter && e.status !== statusFilter) {
+        return false;
+      }
       if (typeFilter && e.evidence_type !== typeFilter) return false;
       if (q) {
         const hay = `${e.name} ${e.owner_name ?? ''} ${e.uploader_name ?? ''} ${e.source_system ?? ''}`.toLowerCase();

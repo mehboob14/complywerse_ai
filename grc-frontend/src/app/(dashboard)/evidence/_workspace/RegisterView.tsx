@@ -25,6 +25,7 @@ import {
 import {
   type EvidenceItem,
   StatusPill,
+  StalePill,
   OwnerChip,
   ownerOf,
   typeLabel,
@@ -145,6 +146,7 @@ function ExpandedPanel({
           <div className="flex items-center gap-2">
             <h3 className="truncate text-sm font-semibold text-slate-900">{item.name}</h3>
             <StatusPill status={item.status} />
+            {item.is_stale && <StalePill />}
           </div>
           <p className="mt-0.5 truncate text-xs text-slate-500">
             {typeLabel(item.evidence_type)} · {ownerOf(item) || 'Unassigned'}
@@ -283,7 +285,12 @@ export function RegisterView({
         header: 'Status',
         accessor: (row) => row.status,
         sortable: true,
-        render: (row) => <StatusPill status={row.status} />,
+        render: (row) => (
+          <span className="inline-flex items-center gap-1">
+            <StatusPill status={row.status} />
+            {row.is_stale && <StalePill />}
+          </span>
+        ),
       },
       {
         id: 'owner',

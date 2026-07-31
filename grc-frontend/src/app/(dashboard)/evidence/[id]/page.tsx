@@ -811,6 +811,11 @@ export default function EvidenceDetailPage() {
             <span className={`rounded-full ${statusStyle.bg} px-2.5 py-1 text-xs ${statusStyle.text}`}>
               {statusStyle.label}
             </span>
+            {evidence.is_stale && (
+              <span className="rounded-full bg-rose-50 px-2.5 py-1 text-xs text-rose-700">
+                Stale
+              </span>
+            )}
             <button
               type="button"
               onClick={() => setShowDetailsOverlay(true)}

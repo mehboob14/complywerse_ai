@@ -9,6 +9,7 @@ import {
   type EvidenceItem,
   EvidenceLetterTile,
   StatusPill,
+  StalePill,
   ExpiryStatus,
   typeLabel,
   ownerOf,
@@ -44,7 +45,10 @@ export function EvidenceRow({
       </span>
 
       <span className="flex shrink-0 flex-col items-end gap-1">
-        <StatusPill status={item.status} />
+        <span className="inline-flex items-center gap-1">
+          <StatusPill status={item.status} />
+          {item.is_stale && <StalePill />}
+        </span>
         <ExpiryStatus expiry={item.expiry_date} />
       </span>
     </button>

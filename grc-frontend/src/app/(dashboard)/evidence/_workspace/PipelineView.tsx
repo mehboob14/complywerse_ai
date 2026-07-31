@@ -21,6 +21,7 @@ import {
   typeLabel,
   InitialsAvatar,
   ExpiryStatus,
+  StalePill,
   ownerOf,
 } from './lib';
 
@@ -40,6 +41,7 @@ const COLUMN_DOT: Record<StatusTone, string> = {
   rejected: 'bg-rose-500',
   expired: 'bg-orange-500',
   archived: 'bg-slate-400',
+  stale: 'bg-rose-500',
 };
 
 /** Which advance action (if any) applies to a card in a given status. */
@@ -81,6 +83,12 @@ function PipelineCard({
         <p className="mt-2 line-clamp-2 text-sm font-medium text-slate-900">{item.name}</p>
 
         {meta && <p className="mt-0.5 line-clamp-1 text-xs text-slate-500">{meta}</p>}
+
+        {item.is_stale && (
+          <div className="mt-1.5">
+            <StalePill />
+          </div>
+        )}
 
         <div className="mt-2.5 flex items-center justify-between gap-2">
           <InitialsAvatar name={owner} size="sm" />
