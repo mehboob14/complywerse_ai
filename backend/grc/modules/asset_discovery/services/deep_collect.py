@@ -432,6 +432,32 @@ def collect_host(db: Session, asset: ITAsset, profile: CredentialProfile,
     except Exception:
         logger.info("deep_collect: OS detection failed for %s", asset.ip_address, exc_info=True)
 
+    # Deep, OS-appropriate structured inventory → asset.platform_properties.
+    # A SECOND read-only probe (per-DIMM / per-disk / per-NIC / services /
+    # security config) that lives alongside — never replacing — the flat columns
+    # and detected_software_json set above. Each section is status-wrapped
+    # (discovered / permission_denied / not_supported / …), so a block the
+    # credential can't read degrades to a tagged-empty section and the overall
+    # collect still succeeds. Best-effort: any failure here leaves the summary
+    # inventory we already wrote intact.
+    try:
+        from grc.modules.compliance_plugins.services.agentless_inventory import (
+            collect_windows_deep, collect_linux_deep,
+        )
+        sections = (collect_windows_deep(creds) if transport == "windows"
+                    else collect_linux_deep(creds))
+        if sections:
+            props = dict(asset.platform_properties or {})
+            props.update(sections)  # merge/refresh sections; keep unrelated keys
+            asset.platform_properties = props
+        # platform_kind stays "server" for an agentless OS host (the UI routes
+        # the detail card off it); set it if nothing else has.
+        if not getattr(asset, "platform_kind", None):
+            asset.platform_kind = "server"
+    except Exception:  # noqa: BLE001 — deep inventory must never fail the collect
+        logger.info("deep_collect: deep platform inventory failed for %s",
+                    asset.ip_address, exc_info=True)
+
     asset.last_seen_at = datetime.utcnow()
     asset.last_seen_source = "agentless"
     db.add(asset)

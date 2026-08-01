@@ -979,6 +979,19 @@ export default function AssetDetailPage() {
                     </OverviewCard>
                     )}
 
+                    {/* Deep host inventory for servers — the agentless probe writes
+                        per-DIMM / per-disk / per-NIC / services / security into
+                        platform_properties (platform_kind="server"). Rendered by the
+                        same dynamic, contract-driven card the typed platforms use, so
+                        it stays in sync with whatever sections the backend collects. */}
+                    {asset.platform_kind === 'server' && asset.platform_properties
+                      && typeof asset.platform_properties === 'object'
+                      && Object.keys(asset.platform_properties).length > 0 && (
+                      <OverviewCard title="Deep Inventory" icon={Layers} source="Auto-collected · agentless scan">
+                        <PlatformDetails kind="server" props={asset.platform_properties} />
+                      </OverviewCard>
+                    )}
+
 
                     {/* Procurement lives in the right column (not a full-width row
                         below) so it balances the taller Identity + Network stack on
