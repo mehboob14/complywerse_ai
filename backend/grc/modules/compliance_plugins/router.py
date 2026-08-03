@@ -3731,7 +3731,14 @@ def _do_scan_all(
             # Pinned asset → ONLY the asset's own connection (or explicit
             # one if caller passed it). No tenant-wide fallback.
             connection = explicit_connection or asset_pinned_connection
-            if connection and plugin.runner_type and connection.integration_type != plugin.runner_type:
+            # A runner may accept multiple connection families: OpenSCAP evaluates
+            # over the linux_ssh transport (or locally), so an oscap plugin is
+            # served by a linux_ssh / netdev_ssh connection. Match by compatibility
+            # not exact equality — otherwise every oscap plugin is skipped against
+            # a linux_ssh connection and the scan creates 0 runs.
+            _accept = {"oscap": ("oscap", "linux_ssh", "netdev_ssh")}.get(
+                plugin.runner_type, (plugin.runner_type,))
+            if connection and plugin.runner_type and connection.integration_type not in _accept:
                 continue
             effective_asset = asset
         else:
