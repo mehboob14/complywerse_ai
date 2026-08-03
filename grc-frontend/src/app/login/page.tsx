@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, Lock, Mail, Eye, EyeOff, ArrowRight, CheckCircle2 } from 'lucide-react';
@@ -86,6 +87,7 @@ export default function LoginPage() {
   // True only when ?tenant= was used — host-derived tenants should not change
   // the heading (keeps subdomain login visually identical to localhost).
   const [tenantFromQuery, setTenantFromQuery] = useState(false);
+  const [registrationOpen, setRegistrationOpen] = useState(false);
 
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
@@ -121,6 +123,22 @@ export default function LoginPage() {
       setError(map[ssoErr] || 'Microsoft sign-in failed.');
     }
   }, [searchParams]);
+
+  // Fail closed: only show Register organization when the backend says so.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/auth/registration-status', { credentials: 'include' });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled) setRegistrationOpen(Boolean(data?.open));
+      } catch {
+        // leave closed
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   // If the user comes BACK from the Microsoft page (browser back button /
   // bfcache restore), the redirecting card would otherwise be stuck on
@@ -494,6 +512,18 @@ export default function LoginPage() {
           >
             Reset your password
           </a>
+        </p>
+      )}
+
+      {registrationOpen && (
+        <p className="mt-4 text-center text-[13px] text-slate-500">
+          New organization?{' '}
+          <Link
+            href="/register"
+            className="font-semibold text-primary-700 underline-offset-2 hover:text-primary-800 hover:underline"
+          >
+            Register organization
+          </Link>
         </p>
       )}
 

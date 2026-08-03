@@ -91,6 +91,25 @@ export default function RegisterPage() {
     localStorage.clear();
   }, []);
 
+  // Fail closed: if self-serve registration is off, bounce to login.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/auth/registration-status', { credentials: 'include' });
+        if (!res.ok) {
+          if (!cancelled) router.replace('/login');
+          return;
+        }
+        const data = await res.json();
+        if (!cancelled && !data?.open) router.replace('/login');
+      } catch {
+        if (!cancelled) router.replace('/login');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [router]);
+
   const [formData, setFormData] = useState<FormData>({
     email: '',
     password: '',

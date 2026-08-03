@@ -48,6 +48,27 @@ def is_corporate_email(email: str) -> bool:
         return False
 
 
+def _env_flag_true(name: str) -> bool:
+    return (os.getenv(name) or "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def is_org_registration_open(master: Session) -> bool:
+    """Self-serve org registration is open when explicitly enabled, or on a
+    fresh install with zero tenants (bootstrap). Production leaves
+    ALLOW_ORG_REGISTRATION unset so the UI and API stay closed after the
+    first organization exists.
+    """
+    if _env_flag_true("ALLOW_ORG_REGISTRATION"):
+        return True
+    return master.query(Tenant).count() == 0
+
+
+@router.get("/registration-status")
+def registration_status(master: Session = Depends(get_master_db)):
+    """Public flag for the login page: whether Register organization is shown."""
+    return {"open": is_org_registration_open(master)}
+
+
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
@@ -680,6 +701,12 @@ def register_organization(
     master: Session = Depends(get_master_db),
 ):
     """Provision a new tenant (master row + dedicated DB + seed data + first admin user)."""
+    if not is_org_registration_open(master):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Organization registration is disabled. Contact your administrator.",
+        )
+
     if not is_corporate_email(request.email):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
