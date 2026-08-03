@@ -1,0 +1,1061 @@
+<title>Cybersecurity Assurance — Field Guide</title>
+
+<style>
+  :root{
+    --bg:#fbfcfc; --panel:#ffffff; --ink:#12201f; --ink-2:#3d5250; --ink-3:#6d817f;
+    --line:#e2e9e8; --line-2:#eef3f2;
+    --accent:#0f8f78; --accent-soft:#e6f5f1; --accent-ink:#0a6d5c;
+    --sev-crit:#b3261e; --sev-high:#c2410c; --sev-med:#a16207; --sev-low:#0f766e; --sev-none:#6d817f;
+    --ok:#0f766e; --warn:#a16207; --bad:#b3261e;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#0d1413; --panel:#131c1b; --ink:#e8efee; --ink-2:#b3c2c0; --ink-3:#829895;
+      --line:#243230; --line-2:#1b2624;
+      --accent:#3ddfc2; --accent-soft:#12312b; --accent-ink:#6de8d4;
+      --sev-crit:#ff8a80; --sev-high:#ffab70; --sev-med:#e8c168; --sev-low:#5ecfba; --sev-none:#829895;
+      --ok:#5ecfba; --warn:#e8c168; --bad:#ff8a80;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0d1413; --panel:#131c1b; --ink:#e8efee; --ink-2:#b3c2c0; --ink-3:#829895;
+    --line:#243230; --line-2:#1b2624;
+    --accent:#3ddfc2; --accent-soft:#12312b; --accent-ink:#6de8d4;
+    --sev-crit:#ff8a80; --sev-high:#ffab70; --sev-med:#e8c168; --sev-low:#5ecfba; --sev-none:#829895;
+    --ok:#5ecfba; --warn:#e8c168; --bad:#ff8a80;
+  }
+  :root[data-theme="light"]{
+    --bg:#fbfcfc; --panel:#ffffff; --ink:#12201f; --ink-2:#3d5250; --ink-3:#6d817f;
+    --line:#e2e9e8; --line-2:#eef3f2;
+    --accent:#0f8f78; --accent-soft:#e6f5f1; --accent-ink:#0a6d5c;
+    --sev-crit:#b3261e; --sev-high:#c2410c; --sev-med:#a16207; --sev-low:#0f766e; --sev-none:#6d817f;
+    --ok:#0f766e; --warn:#a16207; --bad:#b3261e;
+  }
+
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+       font-size:16px;line-height:1.62;-webkit-font-smoothing:antialiased}
+
+  .shell{display:grid;grid-template-columns:290px minmax(0,1fr);gap:0;min-height:100vh}
+  @media (max-width:900px){.shell{grid-template-columns:1fr}}
+
+  /* ── nav ─────────────────────────────────────────────── */
+  .nav{border-right:1px solid var(--line);background:var(--panel);
+       position:sticky;top:0;height:100vh;overflow-y:auto;padding:26px 20px 60px}
+  @media (max-width:900px){.nav{position:static;height:auto;border-right:0;border-bottom:1px solid var(--line)}}
+  .brand{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent-ink);font-weight:700}
+  .brand-sub{font-size:19px;font-weight:650;line-height:1.25;margin:6px 0 22px;text-wrap:balance}
+  .nav-grp{font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3);
+           font-weight:700;margin:22px 0 7px}
+  .nav a{display:block;padding:5px 10px;margin:1px -10px;border-radius:6px;color:var(--ink-2);
+         text-decoration:none;font-size:14px;cursor:pointer;border-left:2px solid transparent}
+  .nav a:hover{background:var(--line-2);color:var(--ink)}
+  .nav a.on{background:var(--accent-soft);color:var(--accent-ink);font-weight:600;border-left-color:var(--accent)}
+  .nav a.sub{padding-left:20px;font-size:13.4px}
+
+  /* ── content ─────────────────────────────────────────── */
+  .main{padding:52px 46px 120px;max-width:920px}
+  @media (max-width:640px){.main{padding:30px 20px 80px}}
+  section{display:none}
+  section.on{display:block;animation:in .18s ease}
+  @keyframes in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+  @media (prefers-reduced-motion:reduce){section.on{animation:none}}
+
+  .eyebrow{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent-ink);font-weight:700;margin-bottom:9px}
+  h1{font-size:34px;line-height:1.16;font-weight:660;margin:0 0 14px;letter-spacing:-.02em;text-wrap:balance}
+  h2{font-size:21px;font-weight:640;margin:44px 0 12px;letter-spacing:-.01em;padding-bottom:8px;border-bottom:1px solid var(--line)}
+  h3{font-size:16.5px;font-weight:640;margin:30px 0 8px}
+  h4{font-size:14px;font-weight:660;margin:22px 0 6px;color:var(--ink-2)}
+  p{margin:0 0 14px;max-width:68ch}
+  .lede{font-size:18px;color:var(--ink-2);max-width:64ch;margin-bottom:26px}
+  ul,ol{max-width:66ch;padding-left:22px;margin:0 0 14px}
+  li{margin-bottom:6px}
+  code{font-family:var(--mono);font-size:.87em;background:var(--line-2);padding:1.5px 5px;border-radius:4px;color:var(--accent-ink)}
+  strong{font-weight:640;color:var(--ink)}
+
+  .wrap{overflow-x:auto;margin:0 0 18px;border:1px solid var(--line);border-radius:9px}
+  table{border-collapse:collapse;width:100%;font-size:14px;min-width:520px}
+  th{text-align:left;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);
+     font-weight:700;padding:10px 13px;background:var(--line-2);border-bottom:1px solid var(--line);white-space:nowrap}
+  td{padding:10px 13px;border-bottom:1px solid var(--line-2);vertical-align:top}
+  tr:last-child td{border-bottom:0}
+  td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+  .fld{font-family:var(--mono);font-size:12.5px;color:var(--accent-ink);white-space:nowrap}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:18px 20px;margin:0 0 18px}
+  .card h4{margin-top:0}
+
+  .note{border-left:3px solid var(--accent);background:var(--accent-soft);padding:13px 17px;
+        border-radius:0 8px 8px 0;margin:0 0 18px;font-size:14.6px}
+  .note.warn{border-left-color:var(--warn);background:color-mix(in srgb,var(--warn) 9%,transparent)}
+  .note.bad{border-left-color:var(--bad);background:color-mix(in srgb,var(--bad) 9%,transparent)}
+  .note p:last-child{margin-bottom:0}
+  .note .lbl{display:block;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;font-weight:700;margin-bottom:5px}
+
+  .biz{border:1px dashed var(--line);border-radius:9px;padding:14px 17px;margin:0 0 18px;background:var(--panel)}
+  .biz .lbl{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;font-weight:700;color:var(--ink-3);display:block;margin-bottom:5px}
+
+  .pill{display:inline-block;font-size:11px;font-weight:650;padding:2px 8px;border-radius:20px;
+        border:1px solid currentColor;white-space:nowrap}
+  .p-crit{color:var(--sev-crit)} .p-high{color:var(--sev-high)} .p-med{color:var(--sev-med)}
+  .p-low{color:var(--sev-low)} .p-none{color:var(--sev-none)}
+
+  .flow{display:flex;flex-wrap:wrap;gap:7px;align-items:center;margin:0 0 18px;font-size:13.4px}
+  .flow .step{border:1px solid var(--line);background:var(--panel);border-radius:7px;padding:7px 12px;font-weight:600}
+  .flow .arw{color:var(--ink-3)}
+
+  pre{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:15px 17px;
+      overflow-x:auto;font-family:var(--mono);font-size:13px;line-height:1.62;margin:0 0 18px}
+
+  .src{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:11px;margin:0 0 18px}
+  .src div{border:1px solid var(--line);border-radius:9px;padding:12px 14px;background:var(--panel)}
+  .src .n{font-weight:650;font-size:14px;margin-bottom:3px}
+  .src .u{font-family:var(--mono);font-size:11.5px;color:var(--ink-3);word-break:break-all}
+
+  .toggle{position:fixed;top:14px;right:16px;z-index:20;background:var(--panel);border:1px solid var(--line);
+          color:var(--ink-2);border-radius:7px;padding:6px 11px;font-size:12.5px;cursor:pointer;font-family:inherit}
+  .toggle:focus-visible,.nav a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  hr{border:0;border-top:1px solid var(--line);margin:34px 0}
+  .foot{color:var(--ink-3);font-size:13.4px;margin-top:44px;padding-top:18px;border-top:1px solid var(--line)}
+</style>
+
+<button class="toggle" id="tt">Theme</button>
+
+<div class="shell">
+<nav class="nav">
+  <div class="brand">Compliverse</div>
+  <div class="brand-sub">Cybersecurity Assurance — Field Guide</div>
+
+  <div class="nav-grp">Start</div>
+  <a data-go="intro" class="on">What this module does</a>
+  <a data-go="model">The mental model</a>
+
+  <div class="nav-grp">IT Asset Inventory</div>
+  <a data-go="assets">Asset register</a>
+  <a data-go="a-overview" class="sub">Overview</a>
+  <a data-go="a-risk" class="sub">Risk &amp; Controls</a>
+  <a data-go="a-vulns" class="sub">Vulnerabilities</a>
+  <a data-go="a-software" class="sub">Software</a>
+  <a data-go="a-rel" class="sub">Relationships</a>
+  <a data-go="a-cis" class="sub">Compliance (CIS)</a>
+  <a data-go="a-crit" class="sub">Criticality Assessments</a>
+  <a data-go="a-rest" class="sub">Lifecycle · Files · Notes · History</a>
+
+  <div class="nav-grp">Risk Posture</div>
+  <a data-go="rp">What it is</a>
+  <a data-go="rp-dims" class="sub">The five dimensions</a>
+  <a data-go="rp-known" class="sub">Known vs unknown</a>
+  <a data-go="rp-biz" class="sub">Business impact inputs</a>
+
+  <div class="nav-grp">Vulnerabilities</div>
+  <a data-go="v-reg">The register</a>
+  <a data-go="v-analysis" class="sub">Analysis</a>
+  <a data-go="v-remed" class="sub">Remediation</a>
+  <a data-go="v-exploit" class="sub">Exploit Test</a>
+  <a data-go="v-hist" class="sub">History &amp; Notes</a>
+
+  <div class="nav-grp">Scoring</div>
+  <a data-go="s-priority">Vulnerability priority</a>
+  <a data-go="s-exploit">Exploit &amp; weaponised</a>
+  <a data-go="s-trigger">What starts remediation</a>
+
+  <div class="nav-grp">Reference</div>
+  <a data-go="sources">Where the data comes from</a>
+  <a data-go="glossary">Glossary</a>
+  <a data-go="limits">Honest limitations</a>
+</nav>
+
+<main class="main">
+
+<!-- ═══════════════ INTRO ═══════════════ -->
+<section id="intro" class="on">
+  <div class="eyebrow">Start here</div>
+  <h1>What this module actually does</h1>
+  <p class="lede">Cybersecurity Assurance answers one question for an auditor or an executive: <em>do you know what you own, do you know what's wrong with it, and can you prove you did something about it?</em></p>
+
+  <p>Everything in this module exists to support that sentence. There are three moving parts and they are deliberately separate:</p>
+
+  <div class="wrap"><table>
+    <thead><tr><th>Part</th><th>Answers</th><th>Lives at</th></tr></thead>
+    <tbody>
+      <tr><td><strong>IT Asset Inventory</strong></td><td>What do we own, who owns it, how much does it matter?</td><td><code>/assets</code></td></tr>
+      <tr><td><strong>Vulnerabilities</strong></td><td>What is wrong with those things, and how urgent is each one?</td><td><code>/vulnerabilities</code></td></tr>
+      <tr><td><strong>Risk Posture</strong></td><td>Putting both together — how exposed is this asset, overall?</td><td><code>/risk-posture</code></td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="biz">
+    <span class="lbl">Why a business reader should care</span>
+    <p>A vulnerability scanner tells you there are 4,000 problems. That is not useful to anyone who has to decide what to fund. This module's job is to turn 4,000 findings into <strong>an ordered list with owners, deadlines and evidence</strong> — and to be able to show, months later, why a particular decision was made and who made it.</p>
+  </div>
+
+  <div class="note">
+    <span class="lbl">How to read this guide</span>
+    <p>Each page explains three things: <strong>what you see</strong>, <strong>where every number comes from</strong>, and <strong>why it exists at all</strong>. If a number is derived, assumed or borrowed, this guide says so — that distinction matters more than the number itself.</p>
+  </div>
+</section>
+
+<!-- ═══════════════ MODEL ═══════════════ -->
+<section id="model">
+  <div class="eyebrow">Start here</div>
+  <h1>The mental model</h1>
+  <p class="lede">Three objects, two relationships. Everything else is presentation.</p>
+
+  <div class="flow">
+    <span class="step">Asset</span><span class="arw">←—</span>
+    <span class="step">Vulnerability</span><span class="arw">—→</span>
+    <span class="step">Risk Posture</span>
+  </div>
+
+  <h3>1. An <em>asset</em> is a thing you own</h3>
+  <p>A server, a laptop, a database, an application. It has an owner, a criticality, and a set of properties that describe how much damage its loss would cause. Assets are the anchor — a vulnerability with no asset is an abstract fact about software, not a risk to your business.</p>
+
+  <h3>2. A <em>vulnerability</em> is a defect found on one or more assets</h3>
+  <p>Usually a CVE (a publicly catalogued flaw). The same CVE can affect many assets, and one asset can carry many CVEs. That's a many-to-many link, and it's why "how bad is this CVE" and "how bad is this for us" are different questions.</p>
+
+  <h3>3. <em>Risk posture</em> is the asset's overall exposure</h3>
+  <p>It blends five signals — benchmark compliance, open vulnerabilities, data sensitivity, control coverage, and linked risks — into one 0–100 score. It is the only number that tries to summarise an asset in a single figure.</p>
+
+  <div class="note">
+    <span class="lbl">The distinction that trips everyone up</span>
+    <p><strong>Vulnerability priority</strong> (0–100) ranks findings against each other so you know what to fix first. <strong>Risk posture</strong> (0–100) rates an <em>asset</em>. They are different numbers on different scales measuring different things, and they will not match. That is correct, not a bug.</p>
+  </div>
+
+  <h2>How a change travels</h2>
+  <p>Change one thing and it should move everywhere downstream. This is the chain:</p>
+  <div class="wrap"><table>
+    <thead><tr><th>You change</th><th>It moves</th><th>Because</th></tr></thead>
+    <tbody>
+      <tr><td>Asset criticality</td><td>Vulnerability priority on that asset · asset posture</td><td>Criticality is 10% of vulnerability priority and feeds the CIA dimension</td></tr>
+      <tr><td>Internet-facing flag</td><td>Vulnerability priority · exploit-test verdict · business multiplier</td><td>Exposure is 10% of priority and gates reachability</td></tr>
+      <tr><td>Link a control</td><td>Control coverage % · posture score</td><td>Coverage is 15% of posture</td></tr>
+      <tr><td>Close a finding</td><td>Open-findings count · posture vuln dimension · register count</td><td>Closed findings stop counting toward open risk</td></tr>
+      <tr><td>A new CVE is published</td><td>Nothing, until enrichment runs</td><td>External data is fetched, not pushed</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ═══════════════ ASSET REGISTER ═══════════════ -->
+<section id="assets">
+  <div class="eyebrow">IT Asset Inventory</div>
+  <h1>The asset register</h1>
+  <p class="lede">The list of everything you own. This is the foundation — every score in the module ultimately hangs off an asset record.</p>
+
+  <h2>How assets get here</h2>
+  <div class="wrap"><table>
+    <thead><tr><th>Route</th><th>What it means</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Manual entry</strong></td><td>Someone typed it in. Trustworthy for identity, usually thin on technical detail.</td></tr>
+      <tr><td><strong>CSV import</strong></td><td>Bulk load from a spreadsheet or another CMDB.</td></tr>
+      <tr><td><strong>Agent / scan discovery</strong></td><td>Found automatically. Rich technical detail, carries a <span class="fld">last_seen_at</span> timestamp.</td></tr>
+      <tr><td><strong>Promoted from software</strong></td><td>An application found running on a host is promoted to its own asset record. See <em>Software</em>.</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="biz">
+    <span class="lbl">Why provenance matters</span>
+    <p>An asset last seen 200 days ago may not exist any more. Findings against it are noise, and they inflate your risk numbers. Discovery source and last-seen date are how you tell a live estate from a stale one.</p>
+  </div>
+
+  <h2>Criticality — the most consequential field</h2>
+  <p>Criticality (<span class="pill p-low">low</span> <span class="pill p-med">medium</span> <span class="pill p-high">high</span> <span class="pill p-crit">critical</span>) feeds vulnerability priority, posture scoring and remediation triggers. Get it wrong and every downstream number is wrong.</p>
+  <p>It can be set two ways, and this module currently supports both:</p>
+  <ul>
+    <li><strong>Derived from CIA ratings</strong> — Confidentiality, Integrity and Availability each rated 1–5; the system maps the result to a criticality band.</li>
+    <li><strong>A formal criticality assessment</strong> — a reviewed, approved workflow (see <em>Criticality Assessments</em>).</li>
+  </ul>
+  <div class="note warn">
+    <span class="lbl">Known gap</span>
+    <p>These two mechanisms do not currently reconcile with each other. An asset can carry a derived criticality and a formally assessed one that disagree. Treat the derived value as the one the scoring engine actually uses.</p>
+  </div>
+</section>
+
+<!-- ═══════════════ OVERVIEW ═══════════════ -->
+<section id="a-overview">
+  <div class="eyebrow">Asset detail · tab 1</div>
+  <h1>Overview</h1>
+  <p class="lede">Identity, ownership, and the five headline numbers. The page you'd show someone who asked "what is this machine?"</p>
+
+  <h2>The stat strip</h2>
+  <div class="wrap"><table>
+    <thead><tr><th>Stat</th><th>Where it comes from</th><th>What it means</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Risk Score</strong></td><td><code>/risk-posture/asset/{id}</code></td><td>The composite posture score, 0–100. Higher is worse. Same number the Risk &amp; Controls tab shows.</td></tr>
+      <tr><td><strong>Open Findings</strong></td><td>Linked vulnerabilities, filtered to open statuses</td><td>Excludes remediated, verified, closed, resolved and accepted findings.</td></tr>
+      <tr><td><strong>Blast Radius</strong></td><td>Declared relationships + assets sharing an IP</td><td>How many other assets an attacker could reach from here.</td></tr>
+      <tr><td><strong>Control Coverage</strong></td><td><code>/assets/{id}/coverage-analysis</code></td><td>Linked controls ÷ 12 target. See <em>Risk &amp; Controls</em>.</td></tr>
+      <tr><td><strong>Refresh Due</strong></td><td>End-of-life date, else purchase date + 4 years</td><td>Hardware lifecycle, not security.</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2>Identity &amp; ownership</h2>
+  <p>Owner, custodian, business owner, escalation contact, department, owning team. Nine role fields in total, with a completeness indicator.</p>
+  <div class="biz">
+    <span class="lbl">Why so many owner fields</span>
+    <p>In a real incident, "who owns this" has several answers: who is accountable (business owner), who operates it (custodian), who to phone at 3am (escalation contact). Remediation approval is blocked until at least one of these — a person or a department — is set, because approving work nobody has been assigned is an instruction addressed to nobody.</p>
+  </div>
+
+  <h2>Network, platform, hardware, procurement</h2>
+  <p>Host name, IP, OS family and version, serial number, vendor, location, purchase and EOL dates. Mostly descriptive — but two fields do real work:</p>
+  <ul>
+    <li><span class="fld">ip_address</span> — used to group co-located assets. <strong>Loopback (127.0.0.1) and link-local addresses are excluded</strong>, because every locally-discovered asset carries them and grouping on them merges unrelated machines.</li>
+    <li><span class="fld">os_family</span> — decides which CIS benchmark rules apply, and shapes the remediation instructions generated for a finding.</li>
+  </ul>
+</section>
+
+<!-- ═══════════════ RISK & CONTROLS ═══════════════ -->
+<section id="a-risk">
+  <div class="eyebrow">Asset detail · tab 2</div>
+  <h1>Risk &amp; Controls</h1>
+  <p class="lede">The asset's risk score, broken into its parts, plus the controls that cover it and the risks linked to it.</p>
+
+  <h2>Residual risk card</h2>
+  <p>Shows the composite posture score and a bar for each of the five dimensions. It reads from exactly the same endpoint as the Risk Posture page — one asset, one risk number.</p>
+
+  <h2>CIA card</h2>
+  <p>Confidentiality, Integrity and Availability, each 1–5. These describe <strong>what happens if this asset is compromised</strong>, not how likely that is.</p>
+  <div class="wrap"><table>
+    <thead><tr><th>Rating</th><th>Confidentiality</th><th>Integrity</th><th>Availability</th></tr></thead>
+    <tbody>
+      <tr><td class="num">1</td><td>Public information</td><td>Errors are harmless</td><td>Can be down indefinitely</td></tr>
+      <tr><td class="num">3</td><td>Internal only</td><td>Errors cause rework</td><td>Hours of downtime tolerable</td></tr>
+      <tr><td class="num">5</td><td>Regulated / secret</td><td>Errors cause financial or legal harm</td><td>Downtime stops the business</td></tr>
+    </tbody>
+  </table></div>
+  <div class="note">
+    <span class="lbl">Set vs assumed</span>
+    <p>If nobody sets these, the system falls back to a value derived from criticality — and marks the CIA dimension as <strong>not known</strong>, so it is excluded from the score rather than counted as evidence. An asset with guessed CIA has lower <em>data quality</em>, which is the honest outcome.</p>
+  </div>
+
+  <h2>CIS benchmark card</h2>
+  <p>Summarises hardening-benchmark results. Detail lives on the Compliance tab.</p>
+
+  <h2>Linked controls</h2>
+  <p>Which of your framework or internal controls cover this asset. Coverage is measured against a target of <strong>12 controls per asset</strong>.</p>
+  <pre>coverage % = linked controls ÷ 12 (capped at 100%)</pre>
+  <div class="biz">
+    <span class="lbl">Why 12, and why it's arbitrary on purpose</span>
+    <p>There is no universal right number of controls per asset. Twelve is a house convention that makes coverage comparable <em>between</em> assets. What matters is that every part of the product uses the same number — an asset that reads 8% here must read 8% everywhere.</p>
+  </div>
+
+  <h3>Auto-suggested framework mappings</h3>
+  <p>The system proposes controls to link, based on the asset's profile — OS family, vendor, business function, data classification and network segment. Each suggestion carries a confidence band, and you accept or dismiss it.</p>
+  <p><strong>Why suggest at all:</strong> mapping controls to assets by hand across a large estate is the single most tedious task in GRC, and the one most often skipped. Suggestions make it a review task instead of an authoring task. <strong>Why they are suggestions and not automatic:</strong> a control mapping is an assertion you may have to defend to an auditor. A human accepts it.</p>
+  <div class="note warn">
+    <span class="lbl">If suggestions look empty</span>
+    <p>Signals are skipped silently when the profile field they depend on is unset. An asset with no OS family, vendor or business function recorded will produce few or no recommendations — the fix is filling in the profile, not re-running the suggester.</p>
+  </div>
+
+  <h2>Linked risks</h2>
+  <p>Entries from the enterprise risk register that name this asset. This connects technical findings to board-level risk language, which is usually what a GRC purchase is actually for.</p>
+</section>
+
+<!-- ═══════════════ ASSET VULNS ═══════════════ -->
+<section id="a-vulns">
+  <div class="eyebrow">Asset detail · tab 3</div>
+  <h1>Vulnerabilities (on this asset)</h1>
+  <p class="lede">Every finding linked to this machine, with the ones needing attention surfaced on top.</p>
+
+  <h2>Alerts strip</h2>
+  <p>Derived live from the findings below plus the asset's own state — nothing is stored. Alert kinds:</p>
+  <div class="wrap"><table>
+    <thead><tr><th>Alert</th><th>Fires when</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pill p-crit">KEV</span></td><td>A linked finding is on CISA's actively-exploited list</td></tr>
+      <tr><td><span class="pill p-high">SLA breach</span></td><td>A finding is past its due date</td></tr>
+      <tr><td><span class="pill p-high">Exposure</span></td><td>Asset is internet-facing and has open findings</td></tr>
+      <tr><td><span class="pill p-crit">Acceptance expired</span></td><td>A risk acceptance passed its review date</td></tr>
+      <tr><td><span class="pill p-med">Acceptance undated</span></td><td>A risk was accepted with no review date — accepted forever</td></tr>
+      <tr><td><span class="pill p-none">Stale</span></td><td>Asset not seen by discovery for 30+ days</td></tr>
+    </tbody>
+  </table></div>
+  <div class="biz">
+    <span class="lbl">Why "accepted forever" is called out</span>
+    <p>Nobody consciously decides to accept a risk permanently — it's what you get when the review-date field was left blank. Six months later it is invisible and unreviewed. Naming it is the difference between a decision and an oversight.</p>
+  </div>
+
+  <h2>The findings list</h2>
+  <p>Each row shows severity, priority, status and due date. Linking and unlinking is manual here; automatic linking happens through scan import and CPE matching.</p>
+</section>
+
+<!-- ═══════════════ SOFTWARE ═══════════════ -->
+<section id="a-software">
+  <div class="eyebrow">Asset detail · tab 4</div>
+  <h1>Software</h1>
+  <p class="lede">What is installed on this machine, and which of it can be matched to CVEs.</p>
+
+  <h2>Installed software</h2>
+  <p>Package inventory from discovery — name, version, publisher. Descriptive on its own.</p>
+
+  <h2>Software identifiers (CPE / PURL)</h2>
+  <p>A <strong>CPE</strong> is the standard machine-readable name for a product ("cpe:2.3:a:apache:log4j:2.14.1"). It is how NVD describes what a CVE affects. Without a CPE, software cannot be automatically matched to vulnerabilities.</p>
+  <div class="biz">
+    <span class="lbl">Business translation</span>
+    <p>"We have Log4j 2.14.1 installed" and "we are affected by Log4Shell" are only connected if something speaks both languages. CPE is that language. An estate with no identifiers can only find vulnerabilities by scanning, never by matching a published advisory against what it already knows.</p>
+  </div>
+
+  <h2>Promote to asset</h2>
+  <p>Turns a detected application into its own asset record — a child of the host. Use it when the application deserves its own owner, criticality and control mappings (a database engine), and leave it as software when it doesn't (a PDF reader).</p>
+  <div class="note">
+    <span class="lbl">The room-and-chair model</span>
+    <p>The host is the room; applications running on it are the chairs. Both can be assets, and the room's compliance posture is partly a function of what's in it — which is why co-located assets influence each other's CIS scores.</p>
+  </div>
+</section>
+
+<!-- ═══════════════ RELATIONSHIPS ═══════════════ -->
+<section id="a-rel">
+  <div class="eyebrow">Asset detail · tab 5</div>
+  <h1>Relationships</h1>
+  <p class="lede">Declared dependencies between assets — your CMDB graph.</p>
+
+  <div class="wrap"><table>
+    <thead><tr><th>Type</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><span class="fld">depends_on</span></td><td>This asset needs the other to function</td></tr>
+      <tr><td><span class="fld">hosts</span> / <span class="fld">runs_on</span></td><td>Physical or virtual containment</td></tr>
+      <tr><td><span class="fld">connects_to</span></td><td>Network reachability</td></tr>
+      <tr><td><span class="fld">backs_up</span> / <span class="fld">replicates_to</span></td><td>Data flows to the other asset</td></tr>
+      <tr><td><span class="fld">member_of</span></td><td>Part of a cluster or group</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2>Why this matters for security, not just inventory</h2>
+  <p>Relationships drive <strong>blast radius</strong> — what an attacker reaches next after compromising this asset. They also change the Lateral Movement stage of the exploit assessment.</p>
+  <div class="note warn">
+    <span class="lbl">Empty means unmapped, not safe</span>
+    <p>An asset with no declared relationships shows an empty blast radius. That is an absence of data, not evidence of isolation. The product says so explicitly rather than implying containment.</p>
+  </div>
+</section>
+
+<!-- ═══════════════ CIS ═══════════════ -->
+<section id="a-cis">
+  <div class="eyebrow">Asset detail · tab 6</div>
+  <h1>Compliance — CIS benchmark</h1>
+  <p class="lede">Hardening checks. A vulnerability is a defect someone else shipped; a benchmark failure is a configuration <em>you</em> chose.</p>
+
+  <h2>What a CIS benchmark is</h2>
+  <p>The Center for Internet Security publishes hardening baselines per platform — hundreds of individual checks like "password minimum length ≥ 14" or "SMBv1 disabled". Each check passes, fails, errors, or was never run.</p>
+
+  <h2>How the score is built</h2>
+  <pre>pass rate      = passed ÷ total applicable rules
+scanned gap    = failed ÷ (passed + failed)
+coverage penalty = never-scanned ÷ total
+CIS gap        = 0.8 × scanned gap  +  0.2 × coverage penalty</pre>
+  <p>Two things are being measured at once, deliberately: <strong>how much failed</strong>, and <strong>how much was never checked</strong>. An asset with 10 rules passed out of 10 scanned, but 200 rules never run, is not a hardened asset.</p>
+
+  <div class="wrap"><table>
+    <thead><tr><th>Situation</th><th>Result</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td>No applicable rules in the library</td><td><strong>Not known</strong></td><td>Nothing to measure — excluded from the score</td></tr>
+      <tr><td>Rules exist, none ever run</td><td><strong>Not known</strong></td><td>Same reason</td></tr>
+      <tr><td>Runs exist but every one errored</td><td><strong>Gap = 1.0 (worst)</strong></td><td>A broken scan is maximum uncertainty, not a clean bill of health</td></tr>
+      <tr><td>Mixed pass / fail</td><td>Formula above</td><td>Normal case</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2>Co-located blending</h2>
+  <p>When several assets share a real host address, their compliance is blended — 60% the host's own score, 40% a criticality-weighted average of the applications on it. The room-and-chair model again: a hardened host running an unpatched database is not a hardened environment.</p>
+  <div class="note">
+    <span class="lbl">Borrowed scores are labelled</span>
+    <p>If an asset has never been scanned but its neighbours have, the blended figure is used and flagged as borrowed. It is a defensible signal, but it is not this asset's own evidence and the page must not pretend otherwise.</p>
+  </div>
+</section>
+
+<!-- ═══════════════ CRITICALITY ═══════════════ -->
+<section id="a-crit">
+  <div class="eyebrow">Asset detail · tab 7</div>
+  <h1>Criticality Assessments</h1>
+  <p class="lede">The formal, reviewed version of "how much does this asset matter".</p>
+
+  <p>Two assessment types are supported:</p>
+  <ul>
+    <li><strong>ISCA</strong> — Information System Criticality Assessment. Rates the system as a whole.</li>
+    <li><strong>IACA</strong> — Information Asset Criticality Assessment. Rates the data the system holds.</li>
+  </ul>
+  <p>Each produces a score, a band, and a status (draft, submitted, approved). Approved assessments are the ones an auditor will ask to see.</p>
+
+  <div class="biz">
+    <span class="lbl">Why a formal workflow exists alongside a simple field</span>
+    <p>The CIA sliders let an engineer record a working judgement in ten seconds. A regulator wants something else: a documented assessment, with a named approver and a date. Both are legitimate; they serve different audiences.</p>
+  </div>
+  <div class="note warn">
+    <span class="lbl">Known gap</span>
+    <p>The formal assessment and the derived criticality do not reconcile. The scoring engine uses the derived value. Where they disagree, nothing currently flags it.</p>
+  </div>
+</section>
+
+<!-- ═══════════════ REST ═══════════════ -->
+<section id="a-rest">
+  <div class="eyebrow">Asset detail · tabs 8–12</div>
+  <h1>Lifecycle, Attachments, Notes, History, Trajectory</h1>
+
+  <h2>Lifecycle</h2>
+  <p>Where the asset sits in its life: requested → procured → deployed → active → maintenance → retired → disposed. Plus warranty and EOL dates.</p>
+  <div class="biz">
+    <span class="lbl">Why security cares</span>
+    <p>An asset past end-of-life stops receiving vendor patches. At that point "apply the vendor patch" is no longer available as a remediation, and every finding on it becomes a compensating-control or replacement decision.</p>
+  </div>
+  <div class="note warn"><span class="lbl">Note</span><p>State changes update the asset in place; there is no transition history table, so there is no record of who changed a lifecycle state or when.</p></div>
+
+  <h2>Attachments</h2>
+  <p>Evidence documents linked to the asset — architecture diagrams, approvals, scan reports. In an audit, an assertion without an artefact behind it is just a claim.</p>
+
+  <h2>Notes</h2>
+  <p>Free-text, attributed and timestamped. For context that doesn't fit a field: "scheduled for decommission Q3, do not remediate".</p>
+
+  <h2>History</h2>
+  <p>The audit trail — who changed which field, when. Populated from the moment journalling was enabled; assets edited before then show nothing.</p>
+
+  <h2>Trajectory</h2>
+  <p>A graph view: asset → vulnerability → business risk. The same records as the Vulnerabilities and Risk &amp; Controls tabs, drawn as a chain rather than a list. Useful for explaining a path to a non-technical audience.</p>
+</section>
+
+<!-- ═══════════════ RISK POSTURE ═══════════════ -->
+<section id="rp">
+  <div class="eyebrow">Risk Posture</div>
+  <h1>What risk posture is</h1>
+  <p class="lede">One number, 0–100, summarising how exposed an asset is. Higher is worse.</p>
+
+  <p>The dashboard shows the portfolio: an average score, a band distribution, and every asset ranked. Clicking through gives the per-asset breakdown.</p>
+
+  <h2>Bands</h2>
+  <div class="wrap"><table>
+    <thead><tr><th>Score</th><th>Band</th><th>Means</th></tr></thead>
+    <tbody>
+      <tr><td class="num">0–25</td><td><span class="pill p-low">contained</span></td><td>Healthy posture</td></tr>
+      <tr><td class="num">25–50</td><td><span class="pill p-med">watch</span></td><td>Watch list</td></tr>
+      <tr><td class="num">50–75</td><td><span class="pill p-high">elevated</span></td><td>Remediate soon</td></tr>
+      <tr><td class="num">75–100</td><td><span class="pill p-crit">severe</span></td><td>Immediate action</td></tr>
+    </tbody>
+  </table></div>
+  <div class="note">
+    <span class="lbl">Why these words and not low/medium/high</span>
+    <p>Asset <em>criticality</em> already uses low/medium/high/critical. Reusing those words for posture produced sentences like "a high asset with high risk", which nobody could parse. Different concepts get different vocabulary.</p>
+  </div>
+</section>
+
+<!-- ═══════════════ DIMENSIONS ═══════════════ -->
+<section id="rp-dims">
+  <div class="eyebrow">Risk Posture</div>
+  <h1>The five dimensions</h1>
+  <p class="lede">Each scores 0–1 where 1 is worst. They are weighted, summed, and expressed out of 100.</p>
+
+  <div class="wrap"><table>
+    <thead><tr><th>Dimension</th><th class="num">Weight</th><th>Measures</th><th>Source</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Vulnerabilities</strong></td><td class="num">30%</td><td>The worst effective risk among open findings</td><td>Linked vulnerabilities</td></tr>
+      <tr><td><strong>CIS benchmark</strong></td><td class="num">25%</td><td>Hardening failures + unscanned coverage</td><td>Compliance scan runs</td></tr>
+      <tr><td><strong>CIA value</strong></td><td class="num">15%</td><td>How much damage compromise causes</td><td>C/I/A ratings</td></tr>
+      <tr><td><strong>Control coverage</strong></td><td class="num">15%</td><td>Controls not covering this asset</td><td>Control links ÷ 12</td></tr>
+      <tr><td><strong>Linked risks</strong></td><td class="num">15%</td><td>Open entries in the risk register</td><td>Risk-asset links</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2>Why vulnerabilities carry the most weight</h2>
+  <p>It is the only dimension describing something an attacker can act on <em>today</em>. Control coverage and CIA describe preparedness and consequence; a weaponised CVE on an internet-facing box describes an opportunity.</p>
+
+  <h2>Why the vulnerability dimension takes the maximum, not the sum</h2>
+  <p>An attacker needs one way in. An asset with one critical finding is not safer than an asset with twenty medium ones just because the arithmetic is smaller. The dimension takes the <strong>worst</strong> effective risk among open findings.</p>
+</section>
+
+<!-- ═══════════════ KNOWN ═══════════════ -->
+<section id="rp-known">
+  <div class="eyebrow">Risk Posture</div>
+  <h1>Known vs unknown — the most important idea here</h1>
+  <p class="lede">A dimension with no evidence behind it is excluded, not scored as zero.</p>
+
+  <p>Scoring a missing dimension as 0 would mean "we have no scan data" produced the same result as "everything passed". So each dimension carries a <span class="fld">known</span> flag, and the composite is normalised over only the known ones:</p>
+  <pre>score = Σ(weight × dimension score) for known dimensions
+        ────────────────────────────────────────────────
+                 Σ(weight) for known dimensions</pre>
+
+  <h2>Data quality</h2>
+  <p>The share of total weight that is actually known. An asset scored on vulnerabilities and CIA alone (30% + 15%) has <strong>45% data quality</strong>.</p>
+
+  <div class="wrap"><table>
+    <thead><tr><th>Dimension</th><th>Unknown when</th></tr></thead>
+    <tbody>
+      <tr><td>CIS</td><td>No applicable rules, or no runs against them</td></tr>
+      <tr><td>Vulnerabilities</td><td>No findings linked to the asset at all</td></tr>
+      <tr><td>CIA</td><td>No ratings set and no criticality to derive from</td></tr>
+      <tr><td>Control coverage</td><td>No controls linked</td></tr>
+      <tr><td>Linked risks</td><td>No risk-register entries reference the asset</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="note bad">
+    <span class="lbl">Read the score and the data quality together</span>
+    <p>A brand-new asset with nothing recorded can show a low score and a reassuring band, because it is being judged on one or two dimensions. <strong>A low score at 20% data quality means "we don't know", not "it's fine."</strong> This is the single most common way to misread this page.</p>
+  </div>
+</section>
+
+<!-- ═══════════════ BUSINESS INPUTS ═══════════════ -->
+<section id="rp-biz">
+  <div class="eyebrow">Risk Posture</div>
+  <h1>Business impact &amp; scoring inputs</h1>
+  <p class="lede">Where a business owner, not an engineer, tells the system what this asset is worth.</p>
+
+  <p>These are <strong>multipliers</strong> on a finding's effective risk — they don't add points, they scale them. The same CVE on a dev box and on the payment gateway should not rank equally.</p>
+
+  <div class="wrap"><table>
+    <thead><tr><th>Input</th><th class="num">Multiplier</th><th>Set it when</th></tr></thead>
+    <tbody>
+      <tr><td>Customer-facing</td><td class="num">1.2×</td><td>External customers use it directly</td></tr>
+      <tr><td>Internet-facing</td><td class="num">1.3×</td><td>Reachable from the public internet</td></tr>
+      <tr><td>Regulated data — none</td><td class="num">1.0×</td><td>No PII, PCI, PHI or financial records</td></tr>
+      <tr><td>Regulated data — any category</td><td class="num">1.4×</td><td>PII, PCI, PHI, financial, or several</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Operational dependency</h3>
+  <div class="wrap"><table>
+    <thead><tr><th>Level</th><th class="num">×</th><th>Test</th></tr></thead>
+    <tbody>
+      <tr><td>Low</td><td class="num">0.8</td><td>Down for days is survivable — dev box, internal wiki</td></tr>
+      <tr><td>Medium</td><td class="num">1.0</td><td>Workarounds exist — internal CRM, service desk</td></tr>
+      <tr><td>High</td><td class="num">1.3</td><td>SLA breaches and revenue loss within hours</td></tr>
+      <tr><td>Critical</td><td class="num">1.5</td><td>The asset <em>is</em> the business line — core banking, payment gateway</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="biz">
+    <span class="lbl">Why this is a business form, not a technical one</span>
+    <p>Every other input in this module is measured. These are <em>declared</em> — nobody can scan for "this is regulated data". They are the point where business context enters a technical scoring system, and they are the reason the same CVE ranks differently across your estate.</p>
+  </div>
+
+  <div class="note">
+    <span class="lbl">Live preview</span>
+    <p>The panel shows the score before and after your proposed change before you save. Nothing is written until you save; closing the panel discards the edits.</p>
+  </div>
+</section>
+
+<!-- ═══════════════ REGISTER ═══════════════ -->
+<section id="v-reg">
+  <div class="eyebrow">Vulnerabilities</div>
+  <h1>The vulnerability register</h1>
+  <p class="lede">Every finding across the estate, ranked. This is the work queue.</p>
+
+  <div class="wrap"><table>
+    <thead><tr><th>Column</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Severity</strong></td><td>Critical/High/Medium/Low, from CVSS. How bad the flaw is <em>in general</em>.</td></tr>
+      <tr><td><strong>Priority</strong></td><td>0–100, ours. How urgent it is <em>for you</em>. See Scoring.</td></tr>
+      <tr><td><strong>Status</strong></td><td>open → in progress → remediated → verified, or accepted / false positive.</td></tr>
+      <tr><td><strong>Due date</strong></td><td>From your SLA policy, driven by severity.</td></tr>
+      <tr><td><strong>KEV / exploit chips</strong></td><td>Threat-intel flags at a glance.</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="note warn">
+    <span class="lbl">Severity is not priority</span>
+    <p>A CVSS 9.8 with no exploit, on an internal test box, behind a patch you already applied, is not your most urgent problem. Severity describes the flaw; priority describes your exposure to it. Sort by priority.</p>
+  </div>
+
+  <h2>Statuses that stop a finding counting as open</h2>
+  <p><span class="fld">remediated</span> <span class="fld">verified</span> <span class="fld">closed</span> <span class="fld">resolved</span> <span class="fld">accepted</span> — these leave the open queue and stop contributing to asset posture. Everything else counts.</p>
+</section>
+
+<!-- ═══════════════ ANALYSIS ═══════════════ -->
+<section id="v-analysis">
+  <div class="eyebrow">Vulnerability detail · tab 1</div>
+  <h1>Analysis</h1>
+  <p class="lede">What is this, how bad is it, and where did every number come from? This tab diagnoses. It does not propose fixes.</p>
+
+  <h2>The score card</h2>
+  <p>The priority score with a full breakdown — each of seven signals, the points it contributed, and the evidence behind it.</p>
+  <div class="wrap"><table>
+    <thead><tr><th>Field</th><th>Source</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><strong>CVSS</strong></td><td>NVD</td><td>Technical severity 0–10. Not ours; we don't compute it.</td></tr>
+      <tr><td><strong>EPSS</strong></td><td>FIRST</td><td><strong>Probability</strong> of exploitation in the next 30 days. 0.5% means 0.5%.</td></tr>
+      <tr><td><strong>EPSS percentile</strong></td><td>FIRST</td><td>Where it ranks against all CVEs. A <em>different number</em> — 37th percentile is not a 37% chance.</td></tr>
+      <tr><td><strong>CISA KEV</strong></td><td>CISA</td><td>Confirmed exploited in the wild. Yes/no.</td></tr>
+      <tr><td><strong>Attack vector</strong></td><td>CVSS vector string</td><td>Network / adjacent / local / physical. Unknown if no vector stored.</td></tr>
+      <tr><td><strong>Exploit maturity</strong></td><td>Derived — see Scoring</td><td>Weaponised / proof-of-concept / unproven.</td></tr>
+      <tr><td><strong>Patch available</strong></td><td>Vendor PSIRT, NVD</td><td>Whether a fix exists to apply.</td></tr>
+      <tr><td><strong>Asset criticality</strong></td><td>Linked asset</td><td>Scored against the <em>worst</em> affected asset.</td></tr>
+      <tr><td><strong>Internet exposed</strong></td><td>Linked asset</td><td>Whether it's reachable from outside.</td></tr>
+      <tr><td><strong>Age</strong></td><td>Discovery date</td><td>How long it has been open.</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="note">
+    <span class="lbl">"Unknown" is shown as unknown</span>
+    <p>If no CVSS vector is stored, attack vector reads <em>unknown</em> and the breakdown says the value was assumed. It does not render a confident green tick for data that doesn't exist.</p>
+  </div>
+
+  <h2>Threat narrative</h2>
+  <p>The score in plain English, generated from the same fields — for the person who needs to explain it in a meeting rather than read a table.</p>
+
+  <h2>Supporting evidence (collapsed by default)</h2>
+  <p>Threat intelligence, description, affected assets, and the compliance controls this finding breaks. Collapsed so the tab opens as the score and nothing else.</p>
+
+  <h3>Linked controls</h3>
+  <p>Which of your controls this vulnerability undermines — auto-mapped from the finding's CWE (weakness type), or linked manually. This is the bridge between "a server is unpatched" and "control A.12.6.1 is not effective".</p>
+</section>
+
+<!-- ═══════════════ REMEDIATION ═══════════════ -->
+<section id="v-remed">
+  <div class="eyebrow">Vulnerability detail · tab 2</div>
+  <h1>Remediation</h1>
+  <p class="lede">What are we doing about it? Three groups, because there are only three possible answers.</p>
+
+  <div class="flow">
+    <span class="step">1 · The fix</span><span class="arw">→</span>
+    <span class="step">2 · Who owns it</span><span class="arw">→</span>
+    <span class="step">3 · If we're not fixing it yet</span>
+  </div>
+
+  <h2>Group 1 — The fix</h2>
+
+  <h3>Why this needs action now</h3>
+  <p>The red flags that justified acting, each naming its evidence. If none fire, the panel says so — the finding waits for the normal patch cycle. See <em>What starts remediation</em>.</p>
+
+  <h3>The remediation plan</h3>
+  <p>A concrete fix: title, type (patch / config / IaC), a copyable artefact of the actual steps, and a rationale. Generated from the finding's context — CVE, asset type, OS family, exposure.</p>
+  <p>A <strong>draft</strong> is shown immediately without being saved. Adopting it is the moment of intent, because a saved plan carries an approval trail and approvals should attach to text someone chose.</p>
+
+  <h3>The four-stage lifecycle</h3>
+  <div class="wrap"><table>
+    <thead><tr><th>Stage</th><th>Advanced by</th><th>Records</th><th>Gate</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Recommended</strong></td><td>Adopting the plan</td><td>The plan text, and why it was warranted</td><td>—</td></tr>
+      <tr><td><strong>Approved</strong></td><td>A human click</td><td>Who authorised it, when, change window</td><td><strong>Requires an owner</strong></td></tr>
+      <tr><td><strong>Applied</strong></td><td>A human click</td><td>An execution log of the steps</td><td>Auto-apply refused on critical assets</td></tr>
+      <tr><td><strong>Verified</strong></td><td>A human click</td><td>An attestation with evidence</td><td><strong>Requires evidence text</strong></td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="note bad">
+    <span class="lbl">Two things this stage model does not claim</span>
+    <p><strong>"Applied" does not patch anything.</strong> Execution runs through a simulated executor that records the steps without touching a host. Connecting a real executor is a deliberate, separate decision.</p>
+    <p><strong>"Verified" does not re-scan.</strong> It records that a named person, on a named date, attested the fix is in place — and what they offered as grounds. Evidence text is mandatory, because a confirmation with nothing behind it looks like proof in an audit export.</p>
+  </div>
+
+  <h3>Patch information</h3>
+  <p>Vendor advisories and KB articles from PSIRT feeds. When a lookup finds nothing, it says so and dates it — "no vendor patch published" is the fact that decides whether compensating controls are your only option.</p>
+
+  <h2>Group 2 — Who owns it</h2>
+  <p>Department assignment, with its own SLA override and escalation path. Distinct from the individual assignee in the sidebar: one routes to a person, one to a queue. Either satisfies the approval gate.</p>
+
+  <h2>Group 3 — If we're not fixing it yet</h2>
+
+  <h3>Mitigations (compensating controls)</h3>
+  <p>Tracked tasks with owner, priority, status, target date and effort. The plan is <em>the fix</em>; mitigations are <em>the work</em>, and specifically the work that reduces exposure without removing the flaw — segmentation, WAF rules, monitoring, access restriction.</p>
+
+  <h3>Suggest compensating controls</h3>
+  <p>AI proposes candidate mitigations from the finding's context. It is explicitly forbidden from proposing the patch, from asserting whether a patch exists, and from setting deadlines — those belong to the plan and the SLA. Accept a suggestion and it becomes a tracked mitigation.</p>
+
+  <h3>Exception workflow</h3>
+  <p>The formal "we are deliberately not fixing this" decision.</p>
+  <pre>none → requested → approved → expired
+                  ↘ denied → requested
+       approved → revoked (terminal)</pre>
+  <p>An approved exception carries a review date. When it passes, the exception expires <strong>and the finding reopens</strong> — because lapsing on paper while staying invisible in every queue is the worst of both outcomes.</p>
+  <div class="biz">
+    <span class="lbl">Remediate vs mitigate vs accept</span>
+    <p><strong>Remediation</strong> — the flaw is gone. <strong>Mitigation</strong> — the flaw is still there, you put a guard on it. <strong>Acceptance</strong> — the flaw is still there and you've decided to live with it, on the record, with a date. These are the only three answers, which is why the tab has exactly three groups.</p>
+  </div>
+</section>
+
+<!-- ═══════════════ EXPLOIT ═══════════════ -->
+<section id="v-exploit">
+  <div class="eyebrow">Vulnerability detail · tab 3</div>
+  <h1>Exploit Test</h1>
+  <p class="lede">Could this actually be reached and used against this asset — and how far would it spread?</p>
+
+  <div class="note bad">
+    <span class="lbl">Nothing is executed</span>
+    <p>This assessment reads stored evidence only. No scanner, exploit or payload is run against any host. Every verdict is a <em>derivation</em> from data already held, and the page says so.</p>
+  </div>
+
+  <h2>Group 1 — Can it be reached?</h2>
+
+  <h3>The MITRE ATT&amp;CK kill chain</h3>
+  <p>ATT&amp;CK is the industry catalogue of attacker techniques. Six stages are mapped, each marked <strong>reached</strong> (evidence says yes), <strong>possible</strong> (can't rule out) or <strong>blocked</strong> (something upstream stops it). Clicking a stage explains why it is in that state and what would stop it.</p>
+  <div class="wrap"><table>
+    <thead><tr><th>Stage</th><th>Technique</th><th>Question</th></tr></thead>
+    <tbody>
+      <tr><td>Reconnaissance</td><td>T1595</td><td>Can an attacker find this asset?</td></tr>
+      <tr><td>Initial access</td><td>T1190</td><td>Can they get in through this flaw?</td></tr>
+      <tr><td>Execution</td><td>T1203</td><td>Can they run code?</td></tr>
+      <tr><td>Privilege escalation</td><td>T1068</td><td>Can they become admin?</td></tr>
+      <tr><td>Lateral movement</td><td>T1210</td><td>Can they reach other assets?</td></tr>
+      <tr><td>Impact</td><td>T1005</td><td>What can they take or break?</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>The evidence table</h3>
+  <p>One row per fact: what we know, and what would block it. The five checks are always the same questions; the answers come from this finding and its asset.</p>
+  <div class="wrap"><table>
+    <thead><tr><th>Check</th><th>Source</th></tr></thead>
+    <tbody>
+      <tr><td>Internet-facing</td><td>Asset record</td></tr>
+      <tr><td>Network attack vector</td><td>The <code>AV:</code> field of the CVSS vector</td></tr>
+      <tr><td>Known-exploited / public exploit</td><td>CISA KEV + public exploit count</td></tr>
+      <tr><td>Patch available but unapplied</td><td>Vendor patch refs + finding status</td></tr>
+      <tr><td>Network segmentation</td><td>Adjacent asset count</td></tr>
+    </tbody>
+  </table></div>
+  <div class="note warn">
+    <span class="lbl">These blockers are heuristics</span>
+    <p>They are derived from the same evidence, inverted — they are <strong>not</strong> linked to your ISO or NIST control library. A "blocked" step here is not yet usable as control evidence.</p>
+  </div>
+
+  <h2>Group 2 — How far would it spread?</h2>
+  <p><strong>Blast radius</strong>: assets reachable next, each labelled by how we know — a declared relationship (a stated fact) or a shared address (our inference). <strong>Vulnerability chain</strong>: prerequisite findings that must also exist for this one to be exploitable, and findings that depend on this one.</p>
+  <div class="biz">
+    <span class="lbl">Why prerequisites change urgency</span>
+    <p>A privilege-escalation flaw on a server is far more urgent when a remote-code-execution flaw lets an attacker reach that server in the first place. Fixing the RCE makes the escalation flaw academic. Chains let you fix one thing and close several.</p>
+  </div>
+
+  <h2>Group 3 — Prove it</h2>
+  <p>The retest log. A human records date, tester, result (pass / fail / partial), findings and evidence. Everything above is derivation; <strong>this is the only part that is proof.</strong> Until a retest exists, remediation is claimed but not demonstrated.</p>
+</section>
+
+<!-- ═══════════════ HISTORY ═══════════════ -->
+<section id="v-hist">
+  <div class="eyebrow">Vulnerability detail · tabs 4–5</div>
+  <h1>History &amp; Notes</h1>
+
+  <h2>History</h2>
+  <p>The audit trail: every status change, assignment, plan adoption, approval, application and attestation — with actor and timestamp.</p>
+  <div class="biz">
+    <span class="lbl">Why this is the tab an auditor opens first</span>
+    <p>An auditor rarely disputes that you fixed something. They ask <em>who decided</em>, <em>when</em>, and <em>on what basis</em>. A product that changes state without recording those three things cannot answer, however good its remediation workflow looks.</p>
+  </div>
+
+  <h2>Notes</h2>
+  <p>Free-text, attributed, timestamped. For reasoning that must outlive a status field: why an exception was granted, what the vendor said, why this is a false positive.</p>
+  <p>Notes are deliberately separate from history. History is what the <em>system</em> observed; notes are what a <em>person</em> chose to record.</p>
+</section>
+
+<!-- ═══════════════ PRIORITY ═══════════════ -->
+<section id="s-priority">
+  <div class="eyebrow">Scoring</div>
+  <h1>How vulnerability priority is calculated</h1>
+  <p class="lede">Seven weighted signals, 0–10 internally, displayed ×10 as N/100.</p>
+
+  <div class="wrap"><table>
+    <thead><tr><th>Signal</th><th class="num">Weight</th><th>Why it's in</th></tr></thead>
+    <tbody>
+      <tr><td>CVSS severity</td><td class="num">20%</td><td>How bad the flaw is if used</td></tr>
+      <tr><td>EPSS probability</td><td class="num">20%</td><td>How likely anyone is to use it</td></tr>
+      <tr><td>Exploit maturity</td><td class="num">15%</td><td>How ready-made the attack is</td></tr>
+      <tr><td>CISA KEV</td><td class="num">15%</td><td>Whether it is being used <em>right now</em></td></tr>
+      <tr><td>Attack vector</td><td class="num">10%</td><td>How reachable the flaw is</td></tr>
+      <tr><td>Internet exposure</td><td class="num">10%</td><td>Whether the host faces outward</td></tr>
+      <tr><td>Asset criticality</td><td class="num">10%</td><td>How much the host matters</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2>Why CVSS is only 20%</h2>
+  <p>CVSS is a <em>static</em> severity rating. Two findings with identical CVSS can differ enormously in real risk depending on whether an exploit is weaponised, whether the flaw is network-reachable, and whether the host faces the internet. Sixty percent of the weight sits on exploitability and context for that reason.</p>
+
+  <h2>The KEV floor</h2>
+  <p>Anything on CISA's Known Exploited Vulnerabilities list is floored at <strong>80/100</strong> regardless of everything else. A bug being actively used in the wild is never a medium priority, whatever the arithmetic says.</p>
+
+  <h2>A worked example</h2>
+  <pre>signal                value/10   weight   points
+CVSS severity            7.100     0.20    1.420
+EPSS probability         0.045     0.20    0.009
+Exploit maturity        10.000     0.15    1.500
+CISA KEV                 0.000     0.15    0.000
+Attack vector            5.000     0.10    0.500
+Internet exposure        0.000     0.10    0.000
+Asset criticality        7.000     0.10    0.700
+                                  TOTAL    4.129   →  41 / 100</pre>
+  <p>Reading it: the score is driven by CVSS and exploit maturity. EPSS contributes almost nothing because 0.5% is genuinely low. Attack vector contributed 0.5 points from an <em>assumed</em> mid value, because no CVSS vector was stored — which is why unknown fields are worth chasing.</p>
+</section>
+
+<!-- ═══════════════ EXPLOIT SCORING ═══════════════ -->
+<section id="s-exploit">
+  <div class="eyebrow">Scoring</div>
+  <h1>Exploit availability and "weaponised"</h1>
+  <p class="lede">The rule you asked about: if an exploit exists, what changes — and how do we know it exists at all?</p>
+
+  <h2>The maturity ladder</h2>
+  <div class="wrap"><table>
+    <thead><tr><th>Maturity</th><th>Assigned when</th><th class="num">Signal value</th><th>Points (of 15)</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pill p-crit">Weaponised</span></td><td>On CISA KEV, <em>or</em> more than 2 public exploit repos</td><td class="num">1.0</td><td class="num">15.0</td></tr>
+      <tr><td><span class="pill p-high">Functional</span></td><td>A working exploit exists but isn't packaged</td><td class="num">0.7</td><td class="num">10.5</td></tr>
+      <tr><td><span class="pill p-med">Proof of concept</span></td><td>1–2 public repos</td><td class="num">0.4</td><td class="num">6.0</td></tr>
+      <tr><td><span class="pill p-low">Unproven</span></td><td>No public exploit found</td><td class="num">0.1</td><td class="num">1.5</td></tr>
+      <tr><td><span class="pill p-none">Unknown</span></td><td>Never enriched</td><td class="num">0.3</td><td class="num">4.5</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="note">
+    <span class="lbl">Unknown is not zero</span>
+    <p>A CVE nobody has assessed still carries latent risk. Scoring it 0 would rank an unexamined finding below one confirmed harmless. It sits at 0.3 — below proof-of-concept, above unproven.</p>
+  </div>
+
+  <h2>How we find out whether an exploit exists</h2>
+  <p>Two independent sources:</p>
+  <ol>
+    <li><strong>CISA KEV</strong> — an authoritative government list of CVEs confirmed exploited in the wild. Binary and trustworthy. KEV alone is enough for weaponised.</li>
+    <li><strong>Public exploit repositories</strong> — a GitHub search for repositories <em>named after the CVE</em>.</li>
+  </ol>
+
+  <div class="note warn">
+    <span class="lbl">Why the search is narrow on purpose</span>
+    <p>Searching names, descriptions <em>and</em> readmes matches every CVE catalogue, scanner and "awesome-security" list on GitHub — a CVE that does not exist returned 258 hits that way, which then read as 258 public exploits and stamped the finding weaponised.</p>
+    <p>Repositories that genuinely target a CVE almost always <strong>name themselves after it</strong>; catalogues do not. Measured on the same two CVEs: name-only search gives Log4Shell <strong>183</strong> and a nonexistent CVE <strong>0</strong>. Aggregators are filtered out of the displayed list on top of that.</p>
+  </div>
+
+  <h2>So: if an exploit is available, does priority change?</h2>
+  <p><strong>Yes, substantially.</strong> Moving from unproven to weaponised swings 13.5 points of the 100. Add KEV and it also swings the 15-point KEV signal <em>and</em> triggers the 80-point floor.</p>
+  <div class="wrap"><table>
+    <thead><tr><th>Scenario</th><th>Maturity</th><th>KEV</th><th>Effect on a 7.1 CVSS finding</th></tr></thead>
+    <tbody>
+      <tr><td>No exploit published</td><td>Unproven</td><td>No</td><td>≈ 29 / 100</td></tr>
+      <tr><td>One PoC on GitHub</td><td>Proof of concept</td><td>No</td><td>≈ 34 / 100</td></tr>
+      <tr><td>Several exploit repos</td><td>Weaponised</td><td>No</td><td>≈ 41 / 100</td></tr>
+      <tr><td>Listed by CISA</td><td>Weaponised</td><td>Yes</td><td><strong>80 / 100 minimum</strong></td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="biz">
+    <span class="lbl">The business version</span>
+    <p>A flaw only a national intelligence service could exploit is a different problem from one with a working script on GitHub. The first is a patching-cycle item; the second is reachable by anyone who can copy and paste. Exploit maturity is how the system tells those apart — and it is why two findings with identical CVSS can sit at opposite ends of your queue.</p>
+  </div>
+</section>
+
+<!-- ═══════════════ TRIGGER ═══════════════ -->
+<section id="s-trigger">
+  <div class="eyebrow">Scoring</div>
+  <h1>What actually starts remediation</h1>
+  <p class="lede">Not the score. Six independent red flags, each naming a specific fact.</p>
+
+  <p>Priority <em>ranks the queue</em>. It does not decide that something needs work today. That is done by red flags — and if none fire, the finding waits for the normal patch cycle.</p>
+
+  <div class="wrap"><table>
+    <thead><tr><th>Red flag</th><th>Fires when</th><th>Source</th></tr></thead>
+    <tbody>
+      <tr><td>Actively exploited</td><td>Listed in CISA KEV</td><td>CISA</td></tr>
+      <tr><td>Public exploit</td><td>Exploit count &gt; 0</td><td>GitHub</td></tr>
+      <tr><td>High exploitation probability</td><td>EPSS ≥ 10%</td><td>FIRST</td></tr>
+      <tr><td>SLA breach</td><td>Past its due date</td><td>Your SLA policy</td></tr>
+      <tr><td>Internet-facing</td><td>Asset reachable externally</td><td>Asset record</td></tr>
+      <tr><td>Business-critical</td><td>Asset criticality = critical</td><td>Asset record</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="note">
+    <span class="lbl">Why raw facts and not the blended score</span>
+    <p>"41/100" tells you where something sits in a list. It does not tell you what is wrong. "183 public exploits" and "6 days past its due date" are actionable — you can act on each independently, and you can argue with each independently. A blended number hides both.</p>
+  </div>
+
+  <div class="biz">
+    <span class="lbl">The emergency-room analogy</span>
+    <p>Every patient gets a triage score deciding who is seen first — that's priority. But some things take you straight through regardless of your score: chest pain, bleeding. Those are red flags. A finding can score modestly and still jump the queue because working exploit code is public and the deadline has passed.</p>
+  </div>
+
+  <p><strong>An empty flag list is a real answer</strong>, not missing data. A CVSS 9.8 that is not due yet, has no published exploit, low EPSS, and sits on an internal non-critical box raises nothing — correctly. It goes into the normal patch cycle.</p>
+</section>
+
+<!-- ═══════════════ SOURCES ═══════════════ -->
+<section id="sources">
+  <div class="eyebrow">Reference</div>
+  <h1>Where the data comes from</h1>
+  <p class="lede">Four external feeds and your own records. Nothing in the scoring is invented.</p>
+
+  <div class="src">
+    <div><div class="n">NVD</div><div class="u">services.nvd.nist.gov</div><p style="margin:7px 0 0;font-size:13.6px">CVE descriptions, CVSS scores and vectors, publication dates, affected-product configurations.</p></div>
+    <div><div class="n">FIRST EPSS</div><div class="u">api.first.org/data/v1/epss</div><p style="margin:7px 0 0;font-size:13.6px">Exploit Prediction Scoring System — probability and percentile.</p></div>
+    <div><div class="n">CISA KEV</div><div class="u">cisa.gov · known_exploited_vulnerabilities</div><p style="margin:7px 0 0;font-size:13.6px">Vulnerabilities confirmed exploited in the wild.</p></div>
+    <div><div class="n">GitHub</div><div class="u">api.github.com/search/repositories</div><p style="margin:7px 0 0;font-size:13.6px">Public exploit repositories, matched on repository name.</p></div>
+    <div><div class="n">Vendor PSIRT</div><div class="u">Microsoft MSRC and others</div><p style="margin:7px 0 0;font-size:13.6px">Patch availability, KB articles, advisories.</p></div>
+    <div><div class="n">Your estate</div><div class="u">assets · scans · controls · risks</div><p style="margin:7px 0 0;font-size:13.6px">Criticality, exposure, CIA, control links, CIS runs — the context that makes a CVE <em>yours</em>.</p></div>
+  </div>
+
+  <h2>Enrichment is pulled, not pushed</h2>
+  <p>External data is fetched when a finding is enriched — on demand or on a refresh cycle. A CVE added to KEV this morning does not change your scores until enrichment next runs. The Analysis tab shows when a finding was last enriched, and flags a stored score that has drifted from current evidence.</p>
+
+  <div class="note warn">
+    <span class="lbl">Practical limits</span>
+    <p>NVD rate-limits unauthenticated callers to roughly 5 requests per 30 seconds — set an API key before bulk enrichment. Findings using non-public or internal CVE identifiers will legitimately return nothing from every feed; empty is the correct answer, not a failure.</p>
+  </div>
+</section>
+
+<!-- ═══════════════ GLOSSARY ═══════════════ -->
+<section id="glossary">
+  <div class="eyebrow">Reference</div>
+  <h1>Glossary</h1>
+  <p class="lede">The dozen terms that carry most of the meaning.</p>
+
+  <div class="wrap"><table>
+    <thead><tr><th>Term</th><th>Plain meaning</th></tr></thead>
+    <tbody>
+      <tr><td><strong>CVE</strong></td><td>A publicly catalogued software flaw with a unique ID.</td></tr>
+      <tr><td><strong>CVSS</strong></td><td>Standard 0–10 severity rating for a CVE. How bad, in general.</td></tr>
+      <tr><td><strong>EPSS</strong></td><td>Probability a CVE will be exploited in the next 30 days. <em>Probability, not percentile.</em></td></tr>
+      <tr><td><strong>KEV</strong></td><td>CISA's list of CVEs confirmed exploited in the wild.</td></tr>
+      <tr><td><strong>CWE</strong></td><td>The <em>type</em> of weakness (e.g. SQL injection). Used to map findings to controls.</td></tr>
+      <tr><td><strong>CPE</strong></td><td>Standard machine-readable product name. Lets installed software be matched to CVEs.</td></tr>
+      <tr><td><strong>CIS benchmark</strong></td><td>Hardening baseline — hundreds of configuration checks per platform.</td></tr>
+      <tr><td><strong>CIA</strong></td><td>Confidentiality, Integrity, Availability. What breaks if the asset is compromised.</td></tr>
+      <tr><td><strong>MITRE ATT&amp;CK</strong></td><td>Catalogue of attacker techniques, referenced as T-numbers.</td></tr>
+      <tr><td><strong>Weaponised</strong></td><td>Ready-made exploit code exists. Low skill required to use it.</td></tr>
+      <tr><td><strong>Compensating control</strong></td><td>A measure that reduces exposure without removing the flaw.</td></tr>
+      <tr><td><strong>Exception</strong></td><td>A recorded, dated decision to accept a risk rather than fix it.</td></tr>
+      <tr><td><strong>Blast radius</strong></td><td>Which other assets an attacker reaches after compromising this one.</td></tr>
+      <tr><td><strong>SLA</strong></td><td>Your policy deadline for remediating a finding of a given severity.</td></tr>
+      <tr><td><strong>Data quality</strong></td><td>Share of scoring weight actually backed by evidence.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ═══════════════ LIMITS ═══════════════ -->
+<section id="limits">
+  <div class="eyebrow">Reference</div>
+  <h1>Honest limitations</h1>
+  <p class="lede">What this module does <em>not</em> currently do. Worth knowing before you present it.</p>
+
+  <div class="wrap"><table>
+    <thead><tr><th>Limitation</th><th>What it means in practice</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Applying a fix is simulated</strong></td><td>No command is executed on any host. The lifecycle records intent and steps; a human still carries out the work.</td></tr>
+      <tr><td><strong>Verification is an attestation</strong></td><td>Nothing re-scans. A named person asserts the fix is in place and supplies evidence.</td></tr>
+      <tr><td><strong>Exploit-test blockers aren't control-mapped</strong></td><td>They are heuristics, so a "blocked" step is not yet usable as control evidence.</td></tr>
+      <tr><td><strong>Two criticality mechanisms</strong></td><td>Derived-from-CIA and the formal assessment do not reconcile. Scoring uses the derived value.</td></tr>
+      <tr><td><strong>No lifecycle transition history</strong></td><td>Asset lifecycle states change in place, with no record of who or when.</td></tr>
+      <tr><td><strong>Enrichment is on demand</strong></td><td>Scores reflect the last enrichment, not this minute. Stored-vs-current drift is flagged on the Analysis tab.</td></tr>
+      <tr><td><strong>Empty ≠ safe</strong></td><td>Empty blast radius, 0% coverage and unknown dimensions all mean unmeasured. Read data quality alongside every score.</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="note">
+    <span class="lbl">The principle behind all of these</span>
+    <p>Where the system does not know something, it is designed to say so rather than render a confident-looking number. An absent value is recoverable; a wrong value that looks authoritative is not.</p>
+  </div>
+
+  <div class="foot">
+    Cybersecurity Assurance — field guide covering IT Asset Inventory, Risk Posture, Criticality and Vulnerability Management. Weights, thresholds and formulas reflect the current scoring engine.
+  </div>
+</section>
+
+</main>
+</div>
+
+<script>
+  const links = document.querySelectorAll('.nav a[data-go]');
+  const secs  = document.querySelectorAll('main section');
+  function go(id){
+    secs.forEach(s => s.classList.toggle('on', s.id === id));
+    links.forEach(a => a.classList.toggle('on', a.dataset.go === id));
+    window.scrollTo({top:0, behavior:'instant'});
+    if (window.innerWidth <= 900) document.querySelector('main').scrollIntoView({block:'start'});
+  }
+  links.forEach(a => a.addEventListener('click', e => { e.preventDefault(); go(a.dataset.go); }));
+
+  const root = document.documentElement, tt = document.getElementById('tt');
+  tt.addEventListener('click', () => {
+    const dark = root.getAttribute('data-theme') === 'dark'
+      || (!root.hasAttribute('data-theme') && matchMedia('(prefers-color-scheme: dark)').matches);
+    root.setAttribute('data-theme', dark ? 'light' : 'dark');
+  });
+</script>
