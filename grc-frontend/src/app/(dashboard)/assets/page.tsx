@@ -660,6 +660,19 @@ export function AssetModal({
     manufacturer: ((initialData as any)?.manufacturer || '') as string,
     model: ((initialData as any)?.model || '') as string,
     serial_number: ((initialData as any)?.serial_number || '') as string,
+    // Ownership chain + CMDB details + procurement (full record capture).
+    secondary_owner_id: (((initialData as any)?.secondary_owner_id ?? null)) as number | null,
+    business_owner_id: (((initialData as any)?.business_owner_id ?? null)) as number | null,
+    escalation_contact_id: (((initialData as any)?.escalation_contact_id ?? null)) as number | null,
+    owning_team: ((initialData as any)?.owning_team || '') as string,
+    department: ((initialData as any)?.department || '') as string,
+    assigned_user: ((initialData as any)?.assigned_user || '') as string,
+    environment: ((initialData as any)?.environment || '') as string,
+    lifecycle_state: ((initialData as any)?.lifecycle_state || '') as string,
+    purchase_cost: (((initialData as any)?.purchase_cost ?? null)) as number | null,
+    purchase_date: (String((initialData as any)?.purchase_date || '')).slice(0, 10),
+    warranty_expiry: (String((initialData as any)?.warranty_expiry || '')).slice(0, 10),
+    eol_date: (String((initialData as any)?.eol_date || '')).slice(0, 10),
   });
   const [customSubComponent, setCustomSubComponent] = useState('');
 
@@ -702,6 +715,14 @@ export function AssetModal({
     }
     return groups;
   }, [businessFunctionsData]);
+
+  // Users for the ownership pickers (owner / secondary / business / escalation).
+  const { data: userOptionsData } = useQuery<Array<{ id: number; display_name: string; email?: string | null }>>({
+    queryKey: ['asset-form-user-options'],
+    queryFn: async () => (await apiClient.get('/criticality-assessments/users')).data,
+    staleTime: 5 * 60_000,
+  });
+  const userOptions = userOptionsData || [];
 
   // Live derived criticality — recomputed client-side via debounced POST to
   // /assets/criticality/preview whenever an input changes.
@@ -779,6 +800,19 @@ export function AssetModal({
       manufacturer: formData.manufacturer || undefined,
       model: formData.model || undefined,
       serial_number: formData.serial_number || undefined,
+      // Ownership chain + CMDB details + procurement.
+      secondary_owner_id: formData.secondary_owner_id || undefined,
+      business_owner_id: formData.business_owner_id || undefined,
+      escalation_contact_id: formData.escalation_contact_id || undefined,
+      owning_team: formData.owning_team || undefined,
+      department: formData.department || undefined,
+      assigned_user: formData.assigned_user || undefined,
+      environment: formData.environment || undefined,
+      lifecycle_state: formData.lifecycle_state || undefined,
+      purchase_cost: formData.purchase_cost ?? undefined,
+      purchase_date: formData.purchase_date || undefined,
+      warranty_expiry: formData.warranty_expiry || undefined,
+      eol_date: formData.eol_date || undefined,
     };
     if (isEditMode) {
       submitData.status = formData.status;
@@ -1293,6 +1327,99 @@ export function AssetModal({
                   ariaLabel="Business function"
                   displayLabelInsteadOfValue
                 />
+              </div>
+
+              {/* Ownership chain — people & team responsible (all asset types). */}
+              <div className="grid grid-cols-2 gap-x-4 gap-y-3 mb-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-0.5">Owner</label>
+                  <select value={formData.owner_id ?? ''} onChange={(e) => setFormData({ ...formData, owner_id: e.target.value ? Number(e.target.value) : null })} className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none">
+                    <option value="">— Unassigned —</option>
+                    {userOptions.map((u) => (<option key={u.id} value={u.id}>{u.display_name}</option>))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-0.5">Secondary Owner</label>
+                  <select value={formData.secondary_owner_id ?? ''} onChange={(e) => setFormData({ ...formData, secondary_owner_id: e.target.value ? Number(e.target.value) : null })} className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none">
+                    <option value="">— None —</option>
+                    {userOptions.map((u) => (<option key={u.id} value={u.id}>{u.display_name}</option>))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-0.5">Business Owner</label>
+                  <select value={formData.business_owner_id ?? ''} onChange={(e) => setFormData({ ...formData, business_owner_id: e.target.value ? Number(e.target.value) : null })} className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none">
+                    <option value="">— None —</option>
+                    {userOptions.map((u) => (<option key={u.id} value={u.id}>{u.display_name}</option>))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-0.5">Escalation Contact</label>
+                  <select value={formData.escalation_contact_id ?? ''} onChange={(e) => setFormData({ ...formData, escalation_contact_id: e.target.value ? Number(e.target.value) : null })} className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none">
+                    <option value="">— None —</option>
+                    {userOptions.map((u) => (<option key={u.id} value={u.id}>{u.display_name}</option>))}
+                  </select>
+                </div>
+              </div>
+
+              {/* CMDB details — team / department / assigned user / environment / lifecycle. */}
+              <div className="grid grid-cols-2 gap-x-4 gap-y-3 mb-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-0.5">Owning Team</label>
+                  <input type="text" value={formData.owning_team} onChange={(e) => setFormData({ ...formData, owning_team: e.target.value })} placeholder="e.g., Platform Engineering" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-0.5">Department</label>
+                  <input type="text" value={formData.department} onChange={(e) => setFormData({ ...formData, department: e.target.value })} placeholder="e.g., IT Operations" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-0.5">Assigned User</label>
+                  <input type="text" value={formData.assigned_user} onChange={(e) => setFormData({ ...formData, assigned_user: e.target.value })} placeholder="Primary day-to-day user" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-0.5">Environment</label>
+                  <select value={formData.environment} onChange={(e) => setFormData({ ...formData, environment: e.target.value })} className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none">
+                    <option value="">— Not set —</option>
+                    <option value="production">Production</option>
+                    <option value="staging">Staging</option>
+                    <option value="development">Development</option>
+                    <option value="test">Test</option>
+                    <option value="dr">DR</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-0.5">Lifecycle</label>
+                  <select value={formData.lifecycle_state} onChange={(e) => setFormData({ ...formData, lifecycle_state: e.target.value })} className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none">
+                    <option value="">— Not set —</option>
+                    <option value="planned">Planned</option>
+                    <option value="active">Active</option>
+                    <option value="maintenance">Maintenance</option>
+                    <option value="end_of_life">End of life</option>
+                    <option value="decommissioned">Decommissioned</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Procurement & Cost */}
+              <div className="border-t border-slate-200 pt-3 mb-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 mb-2">Procurement &amp; Cost</p>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-0.5">Purchase Cost (USD)</label>
+                    <input type="number" min="0" value={formData.purchase_cost ?? ''} onChange={(e) => setFormData({ ...formData, purchase_cost: e.target.value ? Number(e.target.value) : null })} placeholder="0" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-0.5">Purchase Date</label>
+                    <input type="date" value={formData.purchase_date} onChange={(e) => setFormData({ ...formData, purchase_date: e.target.value })} className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-0.5">Warranty Expiry</label>
+                    <input type="date" value={formData.warranty_expiry} onChange={(e) => setFormData({ ...formData, warranty_expiry: e.target.value })} className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-0.5">End of Life</label>
+                    <input type="date" value={formData.eol_date} onChange={(e) => setFormData({ ...formData, eol_date: e.target.value })} className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
+                  </div>
+                </div>
               </div>
 
               {/* Derived criticality — live preview + override */}

@@ -574,6 +574,22 @@ def create_asset(
         os_normalized=_os_normalized,
         os_build=_os_build,
         os_edition=_os_edition,
+        # Hardware — manual entry (previously dropped on create; only agent /
+        # agentless scans populated these).
+        cpu_cores=asset.cpu_cores,
+        memory_gb=asset.memory_gb,
+        storage_gb=asset.storage_gb,
+        manufacturer=asset.manufacturer,
+        model=asset.model,
+        serial_number=asset.serial_number,
+        # CMDB details + procurement / cost — manual entry.
+        department=asset.department,
+        assigned_user=asset.assigned_user,
+        environment=asset.environment,
+        purchase_cost=asset.purchase_cost,
+        purchase_date=asset.purchase_date,
+        warranty_expiry=asset.warranty_expiry,
+        eol_date=asset.eol_date,
     )
 
     # Auto-resolve owner_name from owner_id if not provided
