@@ -1,0 +1,384 @@
+{
+  "id": "doh_adhie",
+  "name": "DOH Policy on the Abu Dhabi Health Information Exchange (ADHIE)",
+  "version": "1.1",
+  "official_sources": [
+    {
+      "title": "DOH Policy on the Abu Dhabi Health Information Exchange (ADHIE)",
+      "url": "https://www.doh.gov.ae/-/media/Feature/Resources/Standards/EN/DOH-Policy-on-ADHIE.pdf"
+    },
+    {
+      "title": "DOH Standard - Healthcare Stakeholder Connection to ADHIE (Malaffi)",
+      "url": "https://www.doh.gov.ae/en"
+    },
+    {
+      "title": "Reference - ADHICS (sister control standard for cyber security)",
+      "url": "https://www.doh.gov.ae/-/media/Feature/Resources/Standards/EN/DOH-Abu-Dhabi-Healthcare-Information-and-Cyber-Security-Standard.pdf"
+    },
+    {
+      "title": "Methodology - ISO/IEC 27005 (information security risk management)",
+      "url": "https://www.iso.org/standard/80585.html"
+    }
+  ],
+  "assessment_shapes": [
+    "attestation"
+  ],
+  "methodology": "DOH ADHIE policy compliance is assessed against the eight policy domains covering universal stakeholder and patient participation, procedural roles and responsibilities, data quality, data management and implementation oversight. Each requirement is rated for implementation status, evidence available and residual risk to patient safety, privacy and data integrity. Risks meeting the threshold are escalated to DOH for enforcement under the implementation domain. The methodology aligns with ADHICS Section 4 risk management and ISO/IEC 27005, treating ADHIE-data sharing risks (consent breach, inaccurate health record, mis-routing) on the same 5x5 likelihood × impact matrix.",
+  "scoping_inputs": [
+    {
+      "id": "stakeholder_type",
+      "type": "select",
+      "options": [
+        "Hospital",
+        "Clinic / Day surgery",
+        "Diagnostic centre",
+        "Pharmacy",
+        "Laboratory",
+        "Insurance / TPA",
+        "Government healthcare entity",
+        "Other DOH-licensed facility"
+      ],
+      "label": "ADHIE stakeholder type"
+    },
+    {
+      "id": "doh_license_number",
+      "type": "text",
+      "label": "DOH facility licence reference"
+    },
+    {
+      "id": "adhie_connection_method",
+      "type": "select",
+      "options": [
+        "Direct (Malaffi API)",
+        "Via HIS/EMR connector",
+        "Via integration partner",
+        "Not yet connected"
+      ],
+      "label": "ADHIE connection method"
+    },
+    {
+      "id": "patient_volume",
+      "type": "select",
+      "options": [
+        "< 10,000 unique patients / year",
+        "10,000 - 100,000",
+        "100,000 - 1,000,000",
+        "> 1,000,000"
+      ],
+      "label": "Annual unique-patient volume contributed to ADHIE"
+    },
+    {
+      "id": "data_categories",
+      "type": "multi_select",
+      "options": [
+        "Demographics",
+        "Diagnoses / problem list",
+        "Medications",
+        "Allergies",
+        "Lab results",
+        "Imaging reports",
+        "Discharge summaries",
+        "Immunisations",
+        "Vital signs",
+        "Genomic / sensitive data"
+      ],
+      "label": "Health-data categories shared with ADHIE"
+    }
+  ],
+  "risk_model": {
+    "factors": [
+      "asset",
+      "threat",
+      "vulnerability",
+      "likelihood",
+      "impact_c",
+      "impact_i",
+      "impact_a",
+      "impact_patient_safety",
+      "impact_compliance"
+    ],
+    "scales": {
+      "likelihood": [
+        { "value": 1, "label": "Rare",           "definition": "Highly unlikely under documented ADHIE workflows (<5%)." },
+        { "value": 2, "label": "Unlikely",       "definition": "Could occur but not expected (5-25%)." },
+        { "value": 3, "label": "Possible",       "definition": "May occur given current data-sharing volumes (25-50%)." },
+        { "value": 4, "label": "Likely",         "definition": "Will probably occur during normal ADHIE operations (50-75%)." },
+        { "value": 5, "label": "Almost Certain", "definition": "Expected to occur (>75%)." }
+      ],
+      "impact": [
+        { "value": 1, "label": "Insignificant", "definition": "Negligible impact on patient care or DOH compliance." },
+        { "value": 2, "label": "Minor",         "definition": "Limited data-quality issue or single-patient confidentiality concern." },
+        { "value": 3, "label": "Moderate",      "definition": "Notable patient-safety or privacy event; DOH notification required." },
+        { "value": 4, "label": "Major",         "definition": "Serious patient-safety, mass-privacy or ADHIE-availability event; formal DOH escalation." },
+        { "value": 5, "label": "Severe",        "definition": "Patient harm, large-scale privacy breach, or loss of ADHIE participation status; risk to DOH licence." }
+      ],
+      "maturity": [
+        { "value": 0, "label": "Non-existent" },
+        { "value": 1, "label": "Initial / Ad-hoc" },
+        { "value": 2, "label": "Repeatable but Informal" },
+        { "value": 3, "label": "Defined Process" },
+        { "value": 4, "label": "Managed and Measurable" },
+        { "value": 5, "label": "Optimised" }
+      ],
+      "implementation_status": [
+        { "value": "NI", "label": "Not Implemented" },
+        { "value": "PI", "label": "Partially Implemented" },
+        { "value": "LI", "label": "Largely Implemented" },
+        { "value": "FI", "label": "Fully Implemented" },
+        { "value": "NA", "label": "Not Applicable (justify to DOH)" }
+      ]
+    },
+    "matrix": "5x5",
+    "calculation": "likelihood * max(impact_c, impact_i, impact_a, impact_patient_safety, impact_compliance)",
+    "acceptance_threshold": 6,
+    "thresholds": {
+      "low":      [1, 4],
+      "medium":   [5, 9],
+      "high":     [10, 16],
+      "critical": [17, 25]
+    }
+  },
+  "domains": [
+    {
+      "id": "ADHIE_1_STAKEHOLDER",
+      "name": "Universal Stakeholder Participation",
+      "controls": [
+        {
+          "id": "4.1.1.1",
+          "title": "DOH — Develop and Oversee ADHIE Policies",
+          "description": "Confirm the stakeholder participates in DOH-led ADHIE policy development and governance forums.",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              { "field": "implementation_status", "type": "select", "scale": "implementation_status", "prompt": "Participation in DOH ADHIE policy governance?" },
+              { "field": "designated_representative", "type": "text", "prompt": "Designated stakeholder representative (name + role)." },
+              { "field": "evidence", "type": "text", "prompt": "Evidence (meeting attendance, DOH correspondence)." },
+              { "field": "owner", "type": "text", "prompt": "Owner." },
+              { "field": "target_date", "type": "date", "prompt": "Target date." }
+            ]
+          }
+        },
+        {
+          "id": "4.1.1.2",
+          "title": "Stakeholder commitment to ADHIE participation",
+          "description": "Formal stakeholder commitment to contribute and consume ADHIE data per DOH requirements.",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              { "field": "implementation_status", "type": "select", "scale": "implementation_status", "prompt": "Implementation status?" },
+              { "field": "participation_agreement_signed", "type": "boolean", "prompt": "ADHIE participation agreement signed?" },
+              { "field": "data_contribution_active", "type": "boolean", "prompt": "Actively contributing data to ADHIE?" },
+              { "field": "evidence", "type": "text", "prompt": "Evidence." },
+              { "field": "owner", "type": "text", "prompt": "Owner." },
+              { "field": "target_date", "type": "date", "prompt": "Target date." }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "ADHIE_2_PATIENT",
+      "name": "Universal Patient Participation",
+      "controls": [
+        {
+          "id": "4.2.1.1",
+          "title": "Patient consent management",
+          "description": "Establish a documented process for capturing, storing and respecting patient consent preferences for ADHIE participation.",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              { "field": "implementation_status", "type": "select", "scale": "implementation_status", "prompt": "Implementation status of consent management?" },
+              { "field": "consent_capture_point", "type": "text", "prompt": "Where / how is consent captured (registration, kiosk, online portal)?" },
+              { "field": "opt_out_workflow", "type": "text", "prompt": "Patient opt-out / withdrawal workflow." },
+              { "field": "evidence", "type": "text", "prompt": "Evidence (consent form, sample consent records)." },
+              { "field": "owner", "type": "text", "prompt": "Owner." },
+              { "field": "target_date", "type": "date", "prompt": "Target date." }
+            ]
+          }
+        },
+        {
+          "id": "4.2.1.2",
+          "title": "Patient information and education",
+          "description": "Provide patients with information about ADHIE, their rights and how their data is used.",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              { "field": "implementation_status", "type": "select", "scale": "implementation_status", "prompt": "Implementation status?" },
+              { "field": "communication_channels", "type": "text", "prompt": "Patient communication channels (leaflets, multilingual notices, website)." },
+              { "field": "languages_supported", "type": "text", "prompt": "Languages supported in patient materials." },
+              { "field": "evidence", "type": "text", "prompt": "Evidence (sample leaflets, intranet pages)." },
+              { "field": "owner", "type": "text", "prompt": "Owner." },
+              { "field": "target_date", "type": "date", "prompt": "Target date." }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "ADHIE_3_PROCEDURAL_ROLES",
+      "name": "Procedural Roles and Responsibilities",
+      "controls": [
+        {
+          "id": "4.3.1.1",
+          "title": "ADHIE data steward role",
+          "description": "Appoint and document a data steward accountable for ADHIE data quality and policy compliance.",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              { "field": "implementation_status", "type": "select", "scale": "implementation_status", "prompt": "Implementation status?" },
+              { "field": "steward_name", "type": "text", "prompt": "Data steward (name + role)." },
+              { "field": "reporting_line", "type": "text", "prompt": "Reporting line and authority." },
+              { "field": "evidence", "type": "text", "prompt": "Evidence (appointment letter, job description)." },
+              { "field": "owner", "type": "text", "prompt": "Owner." },
+              { "field": "target_date", "type": "date", "prompt": "Target date." }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "ADHIE_4_DATA_QUALITY",
+      "name": "Data Quality",
+      "controls": [
+        {
+          "id": "4.4.1.1",
+          "title": "Data accuracy and completeness",
+          "description": "Implement processes to ensure data contributed to ADHIE is accurate, complete and current.",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              { "field": "implementation_status", "type": "select", "scale": "implementation_status", "prompt": "Implementation status?" },
+              { "field": "quality_metrics", "type": "text", "prompt": "Quantitative data-quality metrics (completeness %, error rate, duplication)." },
+              { "field": "review_cycle", "type": "text", "prompt": "Frequency of data-quality reviews." },
+              { "field": "evidence", "type": "text", "prompt": "Evidence (DQ dashboards, audit reports)." },
+              { "field": "owner", "type": "text", "prompt": "Owner." },
+              { "field": "target_date", "type": "date", "prompt": "Target date." }
+            ]
+          }
+        },
+        {
+          "id": "4.4.1.2",
+          "title": "Patient identification accuracy",
+          "description": "Verify and reconcile patient identifiers (EID, MRN, demographics) before submitting to ADHIE to prevent mis-attribution.",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              { "field": "implementation_status", "type": "select", "scale": "implementation_status", "prompt": "Implementation status?" },
+              { "field": "id_reconciliation_process", "type": "text", "prompt": "Identifier reconciliation process (EMPI / EID verification)." },
+              { "field": "mismatch_rate", "type": "text", "prompt": "Identifier mismatch / rejection rate from ADHIE." },
+              { "field": "evidence", "type": "text", "prompt": "Evidence." },
+              { "field": "owner", "type": "text", "prompt": "Owner." },
+              { "field": "target_date", "type": "date", "prompt": "Target date." }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "ADHIE_5_DATA_MGMT",
+      "name": "Data Management",
+      "controls": [
+        {
+          "id": "4.5.1.1",
+          "title": "Standardised data formats and codesets",
+          "description": "Use DOH-mandated codesets and HL7 / FHIR data formats for ADHIE submissions.",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              { "field": "implementation_status", "type": "select", "scale": "implementation_status", "prompt": "Implementation status?" },
+              { "field": "codesets_used", "type": "text", "prompt": "Code sets in use (ICD-10, LOINC, SNOMED CT, RxNorm)." },
+              { "field": "fhir_version", "type": "text", "prompt": "HL7 FHIR version used for ADHIE integration." },
+              { "field": "evidence", "type": "text", "prompt": "Evidence." },
+              { "field": "owner", "type": "text", "prompt": "Owner." },
+              { "field": "target_date", "type": "date", "prompt": "Target date." }
+            ]
+          }
+        },
+        {
+          "id": "4.5.1.2",
+          "title": "Data security and confidentiality",
+          "description": "Apply encryption in transit and at rest, role-based access, and confidentiality controls per ADHICS for data shared with ADHIE.",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              { "field": "implementation_status", "type": "select", "scale": "implementation_status", "prompt": "Implementation status?" },
+              { "field": "encryption_in_transit", "type": "text", "prompt": "Encryption in transit (TLS version, mutual TLS to ADHIE endpoints)." },
+              { "field": "encryption_at_rest", "type": "text", "prompt": "Encryption at rest for ADHIE-staging stores." },
+              { "field": "access_controls", "type": "text", "prompt": "Role-based access controls for ADHIE data." },
+              { "field": "evidence", "type": "text", "prompt": "Evidence." },
+              { "field": "owner", "type": "text", "prompt": "Owner." },
+              { "field": "target_date", "type": "date", "prompt": "Target date." }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "ADHIE_6_IMPL_ROLES",
+      "name": "Implementation — Roles and Responsibilities",
+      "controls": [
+        {
+          "id": "4.6.1.1",
+          "title": "Stakeholder accountability for ADHIE implementation",
+          "description": "Document accountability for ADHIE implementation, including executive sponsor, project owner and technical lead.",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              { "field": "implementation_status", "type": "select", "scale": "implementation_status", "prompt": "Implementation status?" },
+              { "field": "exec_sponsor", "type": "text", "prompt": "Executive sponsor for ADHIE programme." },
+              { "field": "project_owner", "type": "text", "prompt": "Project owner / programme manager." },
+              { "field": "evidence", "type": "text", "prompt": "Evidence (RACI, programme charter)." },
+              { "field": "owner", "type": "text", "prompt": "Owner." },
+              { "field": "target_date", "type": "date", "prompt": "Target date." }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "ADHIE_7_MONITORING",
+      "name": "Implementation — Monitoring and Evaluation",
+      "controls": [
+        {
+          "id": "4.7.1.1",
+          "title": "Monitoring of ADHIE participation",
+          "description": "Monitor data-contribution volumes, error rates and consumption of ADHIE data; report metrics to DOH on schedule.",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              { "field": "implementation_status", "type": "select", "scale": "implementation_status", "prompt": "Implementation status?" },
+              { "field": "contribution_volume_monthly", "type": "text", "prompt": "Monthly ADHIE data-contribution volume." },
+              { "field": "error_rate", "type": "text", "prompt": "Error / rejection rate on ADHIE submissions." },
+              { "field": "consumption_metrics", "type": "text", "prompt": "ADHIE-data consumption metrics (clinician views, API calls)." },
+              { "field": "evidence", "type": "text", "prompt": "Evidence (dashboard, DOH reports)." },
+              { "field": "owner", "type": "text", "prompt": "Owner." },
+              { "field": "target_date", "type": "date", "prompt": "Target date." }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "ADHIE_8_ENFORCEMENT",
+      "name": "Implementation — Escalation and Enforcement",
+      "controls": [
+        {
+          "id": "4.8.1.1",
+          "title": "DOH escalation and corrective action",
+          "description": "Maintain a process to receive, respond to and remediate DOH ADHIE compliance findings within agreed timelines.",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              { "field": "implementation_status", "type": "select", "scale": "implementation_status", "prompt": "Implementation status?" },
+              { "field": "open_doh_findings", "type": "text", "prompt": "Number of open DOH ADHIE findings by severity." },
+              { "field": "remediation_sla", "type": "text", "prompt": "Internal SLA for closing DOH findings." },
+              { "field": "evidence", "type": "text", "prompt": "Evidence (DOH correspondence log, CAP register)." },
+              { "field": "owner", "type": "text", "prompt": "Owner." },
+              { "field": "target_date", "type": "date", "prompt": "Target date." }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,1363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GRC Platform. System Architecture Reference</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: #ffffff;
+    color: #000000;
+    font-family: "Helvetica Neue", Arial, sans-serif;
+    font-size: 14px;
+    line-height: 1.55;
+  }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 28px 24px 80px; }
+
+  header.hero {
+    border-bottom: 2px solid #000;
+    padding-bottom: 16px;
+    margin-bottom: 24px;
+  }
+  header.hero h1 {
+    margin: 0 0 4px;
+    font-size: 26px;
+    letter-spacing: 0.01em;
+  }
+  header.hero .sub {
+    color: #444;
+    font-size: 13px;
+  }
+  header.hero .meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 12px;
+  }
+  header.hero .meta-pill {
+    border: 1px solid #000;
+    padding: 4px 10px;
+    font-size: 11px;
+    background: #fff;
+  }
+
+  nav.toc {
+    background: #fafafa;
+    border: 1px solid #000;
+    padding: 14px 18px;
+    margin-bottom: 26px;
+  }
+  nav.toc h2 {
+    margin: 0 0 8px;
+    font-size: 11px;
+    color: #000;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+  nav.toc ol {
+    margin: 0;
+    padding-left: 18px;
+    columns: 2;
+    column-gap: 30px;
+  }
+  nav.toc ol li {
+    padding: 2px 0;
+    break-inside: avoid;
+  }
+  nav.toc a {
+    color: #000;
+    text-decoration: none;
+    border-bottom: 1px solid #888;
+  }
+  nav.toc a:hover { border-bottom: 1px solid #000; }
+
+  section.layer {
+    border: 1px solid #000;
+    margin: 28px 0;
+    background: #fff;
+  }
+  section.layer > header {
+    padding: 12px 18px;
+    background: #f2f2f2;
+    border-bottom: 1px solid #000;
+  }
+  section.layer > header h2 {
+    margin: 0;
+    font-size: 17px;
+    letter-spacing: 0.005em;
+    text-transform: uppercase;
+  }
+  section.layer > header .tag {
+    font-size: 11px;
+    color: #444;
+    text-transform: none;
+    margin-top: 2px;
+    display: block;
+  }
+  section.layer > .body { padding: 18px; }
+
+  .diagram-frame {
+    border: 1px solid #000;
+    background: #fff;
+    padding: 16px;
+    margin: 14px 0 22px;
+    overflow-x: auto;
+  }
+  .diagram-frame h4 {
+    margin: 0 0 12px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #000;
+    border-bottom: 1px solid #ccc;
+    padding-bottom: 6px;
+  }
+  .legend {
+    margin-top: 12px;
+    padding: 10px 12px;
+    background: #fafafa;
+    border: 1px solid #ccc;
+    font-size: 11px;
+    color: #000;
+    line-height: 1.7;
+  }
+  .legend strong { display: inline-block; margin-right: 4px; }
+
+  svg { display: block; max-width: 100%; height: auto; }
+  svg text { font-family: "Helvetica Neue", Arial, sans-serif; fill: #000; }
+  svg .box { fill: #ffffff; stroke: #000000; stroke-width: 1.5; }
+  svg .box-strong { stroke-width: 2.5; }
+  svg .box-shaded { fill: #f0f0f0; }
+  svg .box-hatched { fill: url(#hatch); }
+  svg .label { font-size: 12px; font-weight: 600; }
+  svg .label-sm { font-size: 10px; fill: #444; }
+  svg .label-xs { font-size: 9px; fill: #555; font-weight: 500; }
+  svg .arrow { stroke: #000; stroke-width: 1.4; fill: none; }
+  svg .arrow-thick { stroke-width: 2; }
+  svg .arrow-dotted { stroke-dasharray: 3 2; }
+  svg .arrow-label { font-size: 9px; fill: #000; font-weight: 500; }
+  svg .group-frame { fill: none; stroke: #000; stroke-width: 1; stroke-dasharray: 4 3; }
+  svg .group-label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    fill: #000;
+  }
+
+  table.facts {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12.5px;
+    margin: 8px 0 14px;
+  }
+  table.facts th, table.facts td {
+    text-align: left;
+    padding: 6px 10px;
+    border: 1px solid #000;
+    vertical-align: top;
+  }
+  table.facts th {
+    background: #f2f2f2;
+    font-weight: 600;
+  }
+
+  ul.feat {
+    margin: 4px 0 10px;
+    padding-left: 18px;
+  }
+  ul.feat li { margin: 2px 0; }
+
+  .note {
+    margin: 12px 0;
+    padding: 10px 14px;
+    border: 1px solid #000;
+    background: #fafafa;
+    font-size: 12px;
+  }
+  .note strong { font-weight: 700; }
+
+  footer.endnote {
+    margin-top: 40px;
+    padding-top: 18px;
+    border-top: 2px solid #000;
+    color: #444;
+    font-size: 12px;
+  }
+
+  @media (max-width: 760px) {
+    nav.toc ol { columns: 1; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <h1>GRC Platform. System Architecture Reference</h1>
+  <div class="sub">Containers, modules, integrations, data linkages, and runtime flows.</div>
+  <div class="meta-row">
+    <span class="meta-pill">6 diagrams</span>
+    <span class="meta-pill">12 top level modules</span>
+    <span class="meta-pill">28 frameworks</span>
+    <span class="meta-pill">15+ external integrations</span>
+    <span class="meta-pill">30+ link tables</span>
+    <span class="meta-pill">Per tenant database isolation</span>
+  </div>
+</header>
+
+<nav class="toc">
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#context">1. System Context</a></li>
+    <li><a href="#container">2. Container Diagram</a></li>
+    <li><a href="#modules">3. Module Architecture</a></li>
+    <li><a href="#linkages">4. Data Linkage Graph</a></li>
+    <li><a href="#flow">5. End to End Runtime Flow</a></li>
+    <li><a href="#stack">6. Technology Stack</a></li>
+    <li><a href="#data">7. Data Model Summary</a></li>
+    <li><a href="#integrations">8. External Integration Inventory</a></li>
+    <li><a href="#multitenancy">9. Multi Tenancy and Security</a></li>
+    <li><a href="#deployment">10. Deployment Topology</a></li>
+  </ol>
+</nav>
+
+<section class="layer" id="context">
+  <header>
+    <h2>1. System Context</h2>
+    <span class="tag">C4 level 1. People, systems, and the platform boundary.</span>
+  </header>
+  <div class="body">
+
+    <div class="diagram-frame">
+      <h4>Diagram 1. System context</h4>
+      <svg viewBox="0 0 1100 560" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="System context diagram">
+        <defs>
+          <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#000"/>
+          </marker>
+          <pattern id="hatch" patternUnits="userSpaceOnUse" width="6" height="6">
+            <path d="M 0,6 L 6,0" stroke="#000" stroke-width="0.5"/>
+          </pattern>
+        </defs>
+
+        <text x="20" y="22" class="group-label">External actors</text>
+
+        <g>
+          <rect class="box" x="40"  y="40" width="170" height="56" rx="2"/>
+          <text class="label" x="125" y="62" text-anchor="middle">CISO</text>
+          <text class="label-sm" x="125" y="80" text-anchor="middle">strategic view, sign offs</text>
+
+          <rect class="box" x="240" y="40" width="170" height="56" rx="2"/>
+          <text class="label" x="325" y="62" text-anchor="middle">Risk and Compliance</text>
+          <text class="label-sm" x="325" y="80" text-anchor="middle">daily operations</text>
+
+          <rect class="box" x="440" y="40" width="170" height="56" rx="2"/>
+          <text class="label" x="525" y="62" text-anchor="middle">SecOps and IT</text>
+          <text class="label-sm" x="525" y="80" text-anchor="middle">vulnerabilities, assets</text>
+
+          <rect class="box" x="640" y="40" width="170" height="56" rx="2"/>
+          <text class="label" x="725" y="62" text-anchor="middle">Auditor (internal)</text>
+          <text class="label-sm" x="725" y="80" text-anchor="middle">read only review</text>
+
+          <rect class="box" x="840" y="40" width="170" height="56" rx="2"/>
+          <text class="label" x="925" y="62" text-anchor="middle">External Auditor</text>
+          <text class="label-sm" x="925" y="80" text-anchor="middle">scoped portal access</text>
+        </g>
+
+        <g>
+          <rect class="group-frame" x="40" y="140" width="1020" height="190"/>
+          <text class="group-label" x="60" y="158">GRC platform (single tenant scope shown)</text>
+
+          <rect class="box box-strong box-shaded" x="430" y="200" width="240" height="100" rx="2"/>
+          <text class="label" x="550" y="232" text-anchor="middle" font-size="14">GRC Platform</text>
+          <text class="label-sm" x="550" y="252" text-anchor="middle">Governance, Risk, Compliance,</text>
+          <text class="label-sm" x="550" y="266" text-anchor="middle">Assets, Vulnerabilities, Workflows,</text>
+          <text class="label-sm" x="550" y="280" text-anchor="middle">Issues, AI assistant, Auditor portal</text>
+        </g>
+
+        <g>
+          <path class="arrow" d="M125,96 L 125,160 L 480,200" marker-end="url(#arrow)"/>
+          <path class="arrow" d="M325,96 L 325,160 L 510,200" marker-end="url(#arrow)"/>
+          <path class="arrow" d="M525,96 L 525,200" marker-end="url(#arrow)"/>
+          <path class="arrow" d="M725,96 L 725,160 L 620,200" marker-end="url(#arrow)"/>
+          <path class="arrow" d="M925,96 L 925,160 L 660,200" marker-end="url(#arrow)"/>
+        </g>
+
+        <text x="20" y="362" class="group-label">External systems</text>
+
+        <g>
+          <rect class="box" x="40"  y="380" width="170" height="56" rx="2"/>
+          <text class="label" x="125" y="402" text-anchor="middle">Vuln Scanners</text>
+          <text class="label-sm" x="125" y="420" text-anchor="middle">Nessus, Rapid7, Wazuh</text>
+
+          <rect class="box" x="240" y="380" width="170" height="56" rx="2"/>
+          <text class="label" x="325" y="402" text-anchor="middle">Cloud Providers</text>
+          <text class="label-sm" x="325" y="420" text-anchor="middle">AWS, Azure, GCP, K8s</text>
+
+          <rect class="box" x="440" y="380" width="170" height="56" rx="2"/>
+          <text class="label" x="525" y="402" text-anchor="middle">Identity Providers</text>
+          <text class="label-sm" x="525" y="420" text-anchor="middle">Entra ID, Google, LDAP</text>
+
+          <rect class="box" x="640" y="380" width="170" height="56" rx="2"/>
+          <text class="label" x="725" y="402" text-anchor="middle">Ticketing and Chat</text>
+          <text class="label-sm" x="725" y="420" text-anchor="middle">ServiceNow, Teams, Slack</text>
+
+          <rect class="box" x="840" y="380" width="170" height="56" rx="2"/>
+          <text class="label" x="925" y="402" text-anchor="middle">SIEM</text>
+          <text class="label-sm" x="925" y="420" text-anchor="middle">Splunk, Wazuh, QRadar</text>
+
+          <rect class="box" x="240" y="465" width="170" height="56" rx="2"/>
+          <text class="label" x="325" y="487" text-anchor="middle">Customer Hosts</text>
+          <text class="label-sm" x="325" y="505" text-anchor="middle">WinRM, SSH probes</text>
+
+          <rect class="box" x="440" y="465" width="170" height="56" rx="2"/>
+          <text class="label" x="525" y="487" text-anchor="middle">Regulatory Feeds</text>
+          <text class="label-sm" x="525" y="505" text-anchor="middle">RSS regulator updates</text>
+
+          <rect class="box" x="640" y="465" width="170" height="56" rx="2"/>
+          <text class="label" x="725" y="487" text-anchor="middle">Email and Calendar</text>
+          <text class="label-sm" x="725" y="505" text-anchor="middle">SMTP, Office 365, Zoom</text>
+        </g>
+
+        <g>
+          <path class="arrow" d="M450,300 L 125,380" marker-end="url(#arrow)" marker-start="url(#arrow)"/>
+          <path class="arrow" d="M480,300 L 325,380" marker-end="url(#arrow)" marker-start="url(#arrow)"/>
+          <path class="arrow" d="M525,300 L 525,380" marker-end="url(#arrow)" marker-start="url(#arrow)"/>
+          <path class="arrow" d="M610,300 L 725,380" marker-end="url(#arrow)" marker-start="url(#arrow)"/>
+          <path class="arrow" d="M640,300 L 925,380" marker-end="url(#arrow)" marker-start="url(#arrow)"/>
+          <path class="arrow" d="M530,300 L 325,465" marker-end="url(#arrow)"/>
+          <path class="arrow" d="M555,300 L 525,465" marker-end="url(#arrow)" marker-start="url(#arrow)"/>
+          <path class="arrow" d="M580,300 L 725,465" marker-end="url(#arrow)"/>
+        </g>
+
+      </svg>
+      <div class="legend">
+        <strong>Solid arrow:</strong> HTTPS or API call. <strong>Bidirectional arrow:</strong> two way sync (push and pull).
+        <strong>Shaded box:</strong> system in scope. <strong>White box:</strong> external actor or system.
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="layer" id="container">
+  <header>
+    <h2>2. Container Diagram</h2>
+    <span class="tag">C4 level 2. Deployable units, protocols, and storage.</span>
+  </header>
+  <div class="body">
+
+    <div class="diagram-frame">
+      <h4>Diagram 2. Container view</h4>
+      <svg viewBox="0 0 1100 720" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Container diagram">
+        <defs>
+          <marker id="arrow2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#000"/>
+          </marker>
+        </defs>
+
+        <g>
+          <text class="group-label" x="20" y="22">Client tier</text>
+          <rect class="box" x="380" y="40" width="340" height="60"/>
+          <text class="label" x="550" y="64" text-anchor="middle">Web Browser</text>
+          <text class="label-sm" x="550" y="80" text-anchor="middle">desktop and tablet, MFA capable, JWT cookie</text>
+        </g>
+
+        <g>
+          <text class="group-label" x="20" y="138">Presentation tier</text>
+          <rect class="box box-shaded" x="240" y="156" width="620" height="80"/>
+          <text class="label" x="550" y="180" text-anchor="middle">Next.js Frontend (App Router)</text>
+          <text class="label-sm" x="550" y="200" text-anchor="middle">React 19, TanStack Query, Tailwind, Recharts, Lucide icons</text>
+          <text class="label-sm" x="550" y="216" text-anchor="middle">Server Components for heavy dashboards, Client Components for interactivity</text>
+        </g>
+
+        <g>
+          <text class="group-label" x="20" y="272">Application tier</text>
+          <rect class="box box-shaded box-strong" x="140" y="292" width="820" height="100"/>
+          <text class="label" x="550" y="316" text-anchor="middle" font-size="14">FastAPI Backend</text>
+          <text class="label-sm" x="550" y="334" text-anchor="middle">Python 3.11, Pydantic v2, SQLAlchemy 2, JWT auth, RBAC middleware</text>
+          <text class="label-sm" x="550" y="350" text-anchor="middle">32 routers, 19 module packages, 80+ sub modules</text>
+          <text class="label-sm" x="550" y="368" text-anchor="middle">Per tenant connection pool, request scoped session, tenant slug routing</text>
+        </g>
+
+        <g>
+          <text class="group-label" x="20" y="428">Data and storage tier</text>
+
+          <rect class="box" x="40"  y="448" width="220" height="100"/>
+          <text class="label" x="150" y="472" text-anchor="middle">Master Registry DB</text>
+          <text class="label-sm" x="150" y="490" text-anchor="middle">PostgreSQL 15+</text>
+          <text class="label-sm" x="150" y="506" text-anchor="middle">tenants, users, role mappings,</text>
+          <text class="label-sm" x="150" y="522" text-anchor="middle">DB connection registry</text>
+
+          <rect class="box" x="280" y="448" width="220" height="100"/>
+          <text class="label" x="390" y="472" text-anchor="middle">Per Tenant Databases</text>
+          <text class="label-sm" x="390" y="490" text-anchor="middle">PostgreSQL 15+, isolated</text>
+          <text class="label-sm" x="390" y="506" text-anchor="middle">risks, controls, evidence,</text>
+          <text class="label-sm" x="390" y="522" text-anchor="middle">assets, vulnerabilities, logs</text>
+
+          <rect class="box" x="520" y="448" width="220" height="100"/>
+          <text class="label" x="630" y="472" text-anchor="middle">Object Store</text>
+          <text class="label-sm" x="630" y="490" text-anchor="middle">S3 or Azure Blob</text>
+          <text class="label-sm" x="630" y="506" text-anchor="middle">evidence files (Fernet</text>
+          <text class="label-sm" x="630" y="522" text-anchor="middle">encrypted at rest per tenant)</text>
+
+          <rect class="box" x="760" y="448" width="220" height="100"/>
+          <text class="label" x="870" y="472" text-anchor="middle">Vector Store</text>
+          <text class="label-sm" x="870" y="490" text-anchor="middle">Qdrant</text>
+          <text class="label-sm" x="870" y="506" text-anchor="middle">embedding index for</text>
+          <text class="label-sm" x="870" y="522" text-anchor="middle">ComplyChat and search</text>
+        </g>
+
+        <g>
+          <text class="group-label" x="20" y="592">Async tier</text>
+          <rect class="box" x="140" y="612" width="240" height="80"/>
+          <text class="label" x="260" y="636" text-anchor="middle">Celery Workers</text>
+          <text class="label-sm" x="260" y="654" text-anchor="middle">framework upload, OCR, AI</text>
+          <text class="label-sm" x="260" y="670" text-anchor="middle">assessment, scanner sync, embed</text>
+
+          <rect class="box" x="420" y="612" width="240" height="80"/>
+          <text class="label" x="540" y="636" text-anchor="middle">Message Broker</text>
+          <text class="label-sm" x="540" y="654" text-anchor="middle">Redis or RabbitMQ</text>
+          <text class="label-sm" x="540" y="670" text-anchor="middle">task queue, results, locks</text>
+
+          <rect class="box" x="700" y="612" width="240" height="80"/>
+          <text class="label" x="820" y="636" text-anchor="middle">SMTP and Notifications</text>
+          <text class="label-sm" x="820" y="654" text-anchor="middle">email, Teams, Slack webhooks</text>
+        </g>
+
+        <g>
+          <path class="arrow arrow-thick" d="M550,100 L 550,156" marker-end="url(#arrow2)"/>
+          <text class="arrow-label" x="568" y="130">HTTPS</text>
+
+          <path class="arrow arrow-thick" d="M550,236 L 550,292" marker-end="url(#arrow2)"/>
+          <text class="arrow-label" x="568" y="266">/api proxy to /grc</text>
+
+          <path class="arrow" d="M250,392 L 150,448" marker-end="url(#arrow2)"/>
+          <text class="arrow-label" x="155" y="430">tenant resolve</text>
+
+          <path class="arrow arrow-thick" d="M420,392 L 390,448" marker-end="url(#arrow2)"/>
+          <text class="arrow-label" x="430" y="430">SQL per request</text>
+
+          <path class="arrow" d="M620,392 L 630,448" marker-end="url(#arrow2)"/>
+          <text class="arrow-label" x="640" y="430">S3 SDK</text>
+
+          <path class="arrow" d="M820,392 L 870,448" marker-end="url(#arrow2)"/>
+          <text class="arrow-label" x="850" y="430">gRPC</text>
+
+          <path class="arrow arrow-dotted" d="M460,392 L 260,612" marker-end="url(#arrow2)"/>
+          <text class="arrow-label" x="320" y="500">enqueue</text>
+
+          <path class="arrow arrow-dotted" d="M380,652 L 420,652" marker-end="url(#arrow2)" marker-start="url(#arrow2)"/>
+
+          <path class="arrow arrow-dotted" d="M550,392 L 820,612" marker-end="url(#arrow2)"/>
+          <text class="arrow-label" x="730" y="500">send mail</text>
+        </g>
+      </svg>
+      <div class="legend">
+        <strong>Thick solid arrow:</strong> synchronous user request path. <strong>Thin solid arrow:</strong> service call.
+        <strong>Dotted arrow:</strong> asynchronous task or message. <strong>Shaded box:</strong> primary execution unit.
+      </div>
+    </div>
+
+    <h3 style="margin-top: 22px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.08em;">Container responsibilities</h3>
+    <table class="facts">
+      <thead><tr><th>Container</th><th>Responsibility</th><th>Scaling</th></tr></thead>
+      <tbody>
+        <tr><td>Next.js Frontend</td><td>Render UI, hold session, proxy /api requests, server side render heavy dashboards</td><td>Horizontal behind ALB</td></tr>
+        <tr><td>FastAPI Backend</td><td>Tenant resolution, RBAC, business logic, ORM, JWT issuance, workflow execution</td><td>Horizontal, stateless</td></tr>
+        <tr><td>Master Registry DB</td><td>Tenants table, GRCUser, role mappings, identity provider configs, password policies</td><td>One primary, read replica optional</td></tr>
+        <tr><td>Per Tenant DBs</td><td>All tenant scoped data (risks, controls, evidence, assets, vulnerabilities, audit log)</td><td>One database per tenant on managed cluster</td></tr>
+        <tr><td>Object Store</td><td>Evidence files, document attachments, exported reports</td><td>S3, Blob, or compatible</td></tr>
+        <tr><td>Vector Store</td><td>Embeddings for ComplyChat and semantic search</td><td>Qdrant cluster</td></tr>
+        <tr><td>Celery Workers</td><td>OCR, AI assessment, embedding, framework parsing, scanner sync, regulatory feed ingest</td><td>Horizontal, queue partitioned</td></tr>
+        <tr><td>Message Broker</td><td>Task queue, distributed locks, rate limits</td><td>Redis cluster or RabbitMQ</td></tr>
+        <tr><td>Notification Gateway</td><td>Email through SMTP, Teams or Slack webhooks, in app delivery</td><td>Stateless</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="layer" id="modules">
+  <header>
+    <h2>3. Module Architecture</h2>
+    <span class="tag">C4 level 3. Module clusters, internal sub modules, and inter cluster relationships.</span>
+  </header>
+  <div class="body">
+
+    <div class="diagram-frame">
+      <h4>Diagram 3. Module clusters inside the backend</h4>
+      <svg viewBox="0 0 1100 760" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Module architecture">
+        <defs>
+          <marker id="arrow3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#000"/>
+          </marker>
+        </defs>
+
+        <g>
+          <rect class="group-frame" x="20" y="20" width="1060" height="100"/>
+          <text class="group-label" x="40" y="38">Cross cutting</text>
+
+          <rect class="box" x="50"  y="50" width="150" height="56"/>
+          <text class="label" x="125" y="74" text-anchor="middle">Auth and JWT</text>
+          <text class="label-sm" x="125" y="92" text-anchor="middle">tenant scoping</text>
+
+          <rect class="box" x="220" y="50" width="150" height="56"/>
+          <text class="label" x="295" y="74" text-anchor="middle">RBAC</text>
+          <text class="label-sm" x="295" y="92" text-anchor="middle">140+ permissions</text>
+
+          <rect class="box" x="390" y="50" width="150" height="56"/>
+          <text class="label" x="465" y="74" text-anchor="middle">Audit Log</text>
+          <text class="label-sm" x="465" y="92" text-anchor="middle">tamper evident</text>
+
+          <rect class="box" x="560" y="50" width="160" height="56"/>
+          <text class="label" x="640" y="74" text-anchor="middle">Workflow Engine</text>
+          <text class="label-sm" x="640" y="92" text-anchor="middle">config driven</text>
+
+          <rect class="box" x="740" y="50" width="160" height="56"/>
+          <text class="label" x="820" y="74" text-anchor="middle">Evidence Library</text>
+          <text class="label-sm" x="820" y="92" text-anchor="middle">OCR, versioned</text>
+
+          <rect class="box" x="920" y="50" width="150" height="56"/>
+          <text class="label" x="995" y="74" text-anchor="middle">ComplyChat AI</text>
+          <text class="label-sm" x="995" y="92" text-anchor="middle">NL query + RAG</text>
+        </g>
+
+        <g>
+          <rect class="group-frame" x="20" y="140" width="350" height="200"/>
+          <text class="group-label" x="40" y="158">Governance cluster</text>
+
+          <rect class="box" x="40" y="170" width="150" height="40"/>
+          <text class="label-sm" x="115" y="194" text-anchor="middle" font-weight="600">Documents</text>
+
+          <rect class="box" x="200" y="170" width="150" height="40"/>
+          <text class="label-sm" x="275" y="194" text-anchor="middle" font-weight="600">Committees</text>
+
+          <rect class="box" x="40" y="220" width="150" height="40"/>
+          <text class="label-sm" x="115" y="244" text-anchor="middle" font-weight="600">Exceptions</text>
+
+          <rect class="box" x="200" y="220" width="150" height="40"/>
+          <text class="label-sm" x="275" y="244" text-anchor="middle" font-weight="600">Attestations</text>
+
+          <rect class="box" x="40" y="270" width="150" height="40"/>
+          <text class="label-sm" x="115" y="294" text-anchor="middle" font-weight="600">Regulatory Change</text>
+
+          <rect class="box" x="200" y="270" width="150" height="40"/>
+          <text class="label-sm" x="275" y="294" text-anchor="middle" font-weight="600">Policy Gap</text>
+        </g>
+
+        <g>
+          <rect class="group-frame" x="390" y="140" width="340" height="200"/>
+          <text class="group-label" x="410" y="158">Risk cluster (ERM)</text>
+
+          <rect class="box" x="410" y="170" width="140" height="40"/>
+          <text class="label-sm" x="480" y="194" text-anchor="middle" font-weight="600">Risk Register</text>
+
+          <rect class="box" x="560" y="170" width="160" height="40"/>
+          <text class="label-sm" x="640" y="194" text-anchor="middle" font-weight="600">KRIs and KPIs</text>
+
+          <rect class="box" x="410" y="220" width="140" height="40"/>
+          <text class="label-sm" x="480" y="244" text-anchor="middle" font-weight="600">Incidents</text>
+
+          <rect class="box" x="560" y="220" width="160" height="40"/>
+          <text class="label-sm" x="640" y="244" text-anchor="middle" font-weight="600">Reviews and Sign offs</text>
+
+          <rect class="box" x="410" y="270" width="140" height="40"/>
+          <text class="label-sm" x="480" y="294" text-anchor="middle" font-weight="600">RCSA</text>
+
+          <rect class="box" x="560" y="270" width="160" height="40"/>
+          <text class="label-sm" x="640" y="294" text-anchor="middle" font-weight="600">Vendor Risk</text>
+        </g>
+
+        <g>
+          <rect class="group-frame" x="750" y="140" width="330" height="200"/>
+          <text class="group-label" x="770" y="158">Compliance cluster</text>
+
+          <rect class="box" x="770" y="170" width="140" height="40"/>
+          <text class="label-sm" x="840" y="194" text-anchor="middle" font-weight="600">Framework Library</text>
+
+          <rect class="box" x="920" y="170" width="150" height="40"/>
+          <text class="label-sm" x="995" y="194" text-anchor="middle" font-weight="600">Normalized Controls</text>
+
+          <rect class="box" x="770" y="220" width="140" height="40"/>
+          <text class="label-sm" x="840" y="244" text-anchor="middle" font-weight="600">Assessments</text>
+
+          <rect class="box" x="920" y="220" width="150" height="40"/>
+          <text class="label-sm" x="995" y="244" text-anchor="middle" font-weight="600">Certification Journey</text>
+
+          <rect class="box" x="770" y="270" width="140" height="40"/>
+          <text class="label-sm" x="840" y="294" text-anchor="middle" font-weight="600">CIS Plugins</text>
+
+          <rect class="box" x="920" y="270" width="150" height="40"/>
+          <text class="label-sm" x="995" y="294" text-anchor="middle" font-weight="600">NCA Templates</text>
+        </g>
+
+        <g>
+          <rect class="group-frame" x="20" y="360" width="350" height="160"/>
+          <text class="group-label" x="40" y="378">Asset cluster</text>
+
+          <rect class="box" x="40" y="390" width="150" height="40"/>
+          <text class="label-sm" x="115" y="414" text-anchor="middle" font-weight="600">IT Asset Inventory</text>
+
+          <rect class="box" x="200" y="390" width="150" height="40"/>
+          <text class="label-sm" x="275" y="414" text-anchor="middle" font-weight="600">Criticality (ISCA, IACA)</text>
+
+          <rect class="box" x="40" y="440" width="150" height="40"/>
+          <text class="label-sm" x="115" y="464" text-anchor="middle" font-weight="600">Connect Wizard</text>
+
+          <rect class="box" x="200" y="440" width="150" height="40"/>
+          <text class="label-sm" x="275" y="464" text-anchor="middle" font-weight="600">Control Recommender</text>
+        </g>
+
+        <g>
+          <rect class="group-frame" x="390" y="360" width="340" height="160"/>
+          <text class="group-label" x="410" y="378">Vulnerability cluster</text>
+
+          <rect class="box" x="410" y="390" width="140" height="40"/>
+          <text class="label-sm" x="480" y="414" text-anchor="middle" font-weight="600">Vuln Register</text>
+
+          <rect class="box" x="560" y="390" width="160" height="40"/>
+          <text class="label-sm" x="640" y="414" text-anchor="middle" font-weight="600">KEV and EPSS enrichment</text>
+
+          <rect class="box" x="410" y="440" width="140" height="40"/>
+          <text class="label-sm" x="480" y="464" text-anchor="middle" font-weight="600">SLA and Exceptions</text>
+
+          <rect class="box" x="560" y="440" width="160" height="40"/>
+          <text class="label-sm" x="640" y="464" text-anchor="middle" font-weight="600">NCA Saudi Template</text>
+        </g>
+
+        <g>
+          <rect class="group-frame" x="750" y="360" width="330" height="160"/>
+          <text class="group-label" x="770" y="378">Operational cluster</text>
+
+          <rect class="box" x="770" y="390" width="140" height="40"/>
+          <text class="label-sm" x="840" y="414" text-anchor="middle" font-weight="600">Issues (CAPA)</text>
+
+          <rect class="box" x="920" y="390" width="150" height="40"/>
+          <text class="label-sm" x="995" y="414" text-anchor="middle" font-weight="600">Critical Tasks</text>
+
+          <rect class="box" x="770" y="440" width="140" height="40"/>
+          <text class="label-sm" x="840" y="464" text-anchor="middle" font-weight="600">IS Projects</text>
+
+          <rect class="box" x="920" y="440" width="150" height="40"/>
+          <text class="label-sm" x="995" y="464" text-anchor="middle" font-weight="600">Auditor Portal</text>
+        </g>
+
+        <g>
+          <rect class="group-frame" x="20" y="540" width="510" height="200"/>
+          <text class="group-label" x="40" y="558">Administration cluster</text>
+
+          <rect class="box" x="40"  y="570" width="150" height="40"/>
+          <text class="label-sm" x="115" y="594" text-anchor="middle" font-weight="600">Users and Tenants</text>
+
+          <rect class="box" x="200" y="570" width="150" height="40"/>
+          <text class="label-sm" x="275" y="594" text-anchor="middle" font-weight="600">Roles and Permissions</text>
+
+          <rect class="box" x="360" y="570" width="160" height="40"/>
+          <text class="label-sm" x="440" y="594" text-anchor="middle" font-weight="600">Teams and Business Units</text>
+
+          <rect class="box" x="40"  y="620" width="150" height="40"/>
+          <text class="label-sm" x="115" y="644" text-anchor="middle" font-weight="600">Identity Providers</text>
+
+          <rect class="box" x="200" y="620" width="150" height="40"/>
+          <text class="label-sm" x="275" y="644" text-anchor="middle" font-weight="600">Password and Session</text>
+
+          <rect class="box" x="360" y="620" width="160" height="40"/>
+          <text class="label-sm" x="440" y="644" text-anchor="middle" font-weight="600">Audit Logs UI</text>
+
+          <rect class="box" x="40"  y="670" width="150" height="40"/>
+          <text class="label-sm" x="115" y="694" text-anchor="middle" font-weight="600">Scanner Management</text>
+
+          <rect class="box" x="200" y="670" width="150" height="40"/>
+          <text class="label-sm" x="275" y="694" text-anchor="middle" font-weight="600">Bulk Discovery</text>
+
+          <rect class="box" x="360" y="670" width="160" height="40"/>
+          <text class="label-sm" x="440" y="694" text-anchor="middle" font-weight="600">Workflow Designer</text>
+        </g>
+
+        <g>
+          <rect class="group-frame" x="550" y="540" width="530" height="200"/>
+          <text class="group-label" x="570" y="558">Integrations cluster</text>
+
+          <rect class="box" x="570" y="570" width="150" height="40"/>
+          <text class="label-sm" x="645" y="594" text-anchor="middle" font-weight="600">Vuln Scanners</text>
+
+          <rect class="box" x="730" y="570" width="160" height="40"/>
+          <text class="label-sm" x="810" y="594" text-anchor="middle" font-weight="600">Cloud Connectors</text>
+
+          <rect class="box" x="900" y="570" width="160" height="40"/>
+          <text class="label-sm" x="980" y="594" text-anchor="middle" font-weight="600">Ticketing Systems</text>
+
+          <rect class="box" x="570" y="620" width="150" height="40"/>
+          <text class="label-sm" x="645" y="644" text-anchor="middle" font-weight="600">SIEM Connectors</text>
+
+          <rect class="box" x="730" y="620" width="160" height="40"/>
+          <text class="label-sm" x="810" y="644" text-anchor="middle" font-weight="600">Benchmark Runners</text>
+
+          <rect class="box" x="900" y="620" width="160" height="40"/>
+          <text class="label-sm" x="980" y="644" text-anchor="middle" font-weight="600">Chat Platforms</text>
+
+          <rect class="box" x="570" y="670" width="150" height="40"/>
+          <text class="label-sm" x="645" y="694" text-anchor="middle" font-weight="600">Regulatory Feeds (RSS)</text>
+
+          <rect class="box" x="730" y="670" width="160" height="40"/>
+          <text class="label-sm" x="810" y="694" text-anchor="middle" font-weight="600">Meeting Transcripts</text>
+
+          <rect class="box" x="900" y="670" width="160" height="40"/>
+          <text class="label-sm" x="980" y="694" text-anchor="middle" font-weight="600">Email and SMTP</text>
+        </g>
+
+        <g>
+          <path class="arrow" d="M730,240 L 770,240" marker-end="url(#arrow3)"/>
+          <path class="arrow" d="M555,340 L 555,360" marker-end="url(#arrow3)"/>
+          <path class="arrow" d="M555,360 L 555,340" marker-end="url(#arrow3)"/>
+          <path class="arrow" d="M370,440 L 390,440" marker-end="url(#arrow3)"/>
+          <path class="arrow" d="M730,440 L 750,440" marker-end="url(#arrow3)"/>
+          <path class="arrow" d="M390,240 L 370,240" marker-end="url(#arrow3)" marker-start="url(#arrow3)"/>
+          <path class="arrow arrow-dotted" d="M640,108 L 640,170" marker-end="url(#arrow3)"/>
+          <path class="arrow arrow-dotted" d="M640,108 L 295,170" marker-end="url(#arrow3)"/>
+          <path class="arrow arrow-dotted" d="M640,108 L 995,170" marker-end="url(#arrow3)"/>
+          <path class="arrow arrow-dotted" d="M640,108 L 840,390" marker-end="url(#arrow3)"/>
+          <path class="arrow arrow-dotted" d="M820,108 L 480,390" marker-end="url(#arrow3)"/>
+          <path class="arrow arrow-dotted" d="M820,108 L 480,240" marker-end="url(#arrow3)"/>
+          <path class="arrow" d="M440,690 L 640,108" marker-end="url(#arrow3)" stroke-dasharray="2 3"/>
+          <path class="arrow" d="M645,610 L 480,480" marker-end="url(#arrow3)"/>
+          <path class="arrow" d="M810,610 L 275,480" marker-end="url(#arrow3)"/>
+        </g>
+
+      </svg>
+      <div class="legend">
+        <strong>Solid arrow:</strong> data ownership or producer to consumer relationship.
+        <strong>Dotted arrow:</strong> cross cutting service (workflow, evidence, audit log) wired into modules.
+        <strong>Dashed group frame:</strong> module cluster boundary.
+      </div>
+    </div>
+
+    <h3 style="margin-top: 22px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.08em;">Module cluster summary</h3>
+    <table class="facts">
+      <thead><tr><th>Cluster</th><th>Sub modules</th><th>Key consumers</th></tr></thead>
+      <tbody>
+        <tr><td>Governance</td><td>Documents, Committees, Exceptions, Attestations, Regulatory Change, Policy Gap, Objectives</td><td>Risk, Compliance, Operational</td></tr>
+        <tr><td>Risk (ERM)</td><td>Risk Register, KRIs, Incidents, Reviews, Mitigation, RCSA, Vendor Risk, Appetite, Cascade</td><td>Operational, Auditor Portal</td></tr>
+        <tr><td>Compliance</td><td>Framework Library (28 frameworks), Normalized Controls, Assessments, Policy Statements, Certification, CIS Plugins, Framework Upload, NCA Templates</td><td>Governance, Risk, Auditor Portal</td></tr>
+        <tr><td>Asset</td><td>IT Asset Inventory, Criticality (ISCA, IACA), Connect Wizard, Auto Classify, Control Recommender</td><td>Vulnerability, Compliance, Risk</td></tr>
+        <tr><td>Vulnerability</td><td>Register, Reports, KEV and EPSS enrichment, SLA, Exceptions, NCA Saudi Template, Patch Correlation</td><td>Risk, Operational</td></tr>
+        <tr><td>Operational</td><td>Issues (CAPA), Critical Tasks, IS Projects, Auditor Portal</td><td>Everyone</td></tr>
+        <tr><td>Administration</td><td>Users, Tenants, Roles, Permissions, Teams, Identity Providers, Password and Session Policy, Audit Log UI, Scanner Management, Discovery, Workflow Designer</td><td>All clusters (security boundary)</td></tr>
+        <tr><td>Integrations</td><td>Scanners, Cloud, Ticketing, SIEM, Chat, Email, Benchmark Runners, Regulatory RSS, Meeting Transcripts, Identity</td><td>Assets, Vulnerabilities, Workflows</td></tr>
+        <tr><td>Cross cutting</td><td>Auth, RBAC, Audit Log, Workflow Engine, Evidence Library, ComplyChat AI, Search and Analytics</td><td>Embedded in every cluster</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="layer" id="linkages">
+  <header>
+    <h2>4. Data Linkage Graph</h2>
+    <span class="tag">Entity relationships across modules. The cross module link tables that make the platform traceable.</span>
+  </header>
+  <div class="body">
+
+    <div class="diagram-frame">
+      <h4>Diagram 4. Entity linkage graph</h4>
+      <svg viewBox="0 0 1100 760" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Linkage graph">
+        <defs>
+          <marker id="arrow4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#000"/>
+          </marker>
+        </defs>
+
+        <rect class="box box-strong" x="460" y="20" width="180" height="60"/>
+        <text class="label" x="550" y="44" text-anchor="middle">Framework</text>
+        <text class="label-sm" x="550" y="62" text-anchor="middle">28 pre seeded</text>
+
+        <rect class="box" x="370" y="120" width="170" height="60"/>
+        <text class="label" x="455" y="144" text-anchor="middle">Framework Control</text>
+        <text class="label-sm" x="455" y="162" text-anchor="middle">domain, objective, control, sub</text>
+
+        <rect class="box" x="560" y="120" width="180" height="60"/>
+        <text class="label" x="650" y="144" text-anchor="middle">Normalized Control</text>
+        <text class="label-sm" x="650" y="162" text-anchor="middle">cross framework dedupe</text>
+
+        <rect class="box" x="760" y="120" width="180" height="60"/>
+        <text class="label" x="850" y="144" text-anchor="middle">Internal Control</text>
+        <text class="label-sm" x="850" y="162" text-anchor="middle">tenant defined</text>
+
+        <rect class="box" x="40" y="120" width="170" height="60"/>
+        <text class="label" x="125" y="144" text-anchor="middle">Document</text>
+        <text class="label-sm" x="125" y="162" text-anchor="middle">policy, procedure</text>
+
+        <rect class="box box-strong" x="40" y="260" width="170" height="60"/>
+        <text class="label" x="125" y="284" text-anchor="middle">Evidence</text>
+        <text class="label-sm" x="125" y="302" text-anchor="middle">files, OCR, versions</text>
+
+        <rect class="box box-strong" x="240" y="260" width="180" height="60"/>
+        <text class="label" x="330" y="284" text-anchor="middle">IT Asset</text>
+        <text class="label-sm" x="330" y="302" text-anchor="middle">criticality, OS, owner</text>
+
+        <rect class="box box-strong" x="450" y="260" width="180" height="60"/>
+        <text class="label" x="540" y="284" text-anchor="middle">Vulnerability</text>
+        <text class="label-sm" x="540" y="302" text-anchor="middle">CVSS, KEV, EPSS</text>
+
+        <rect class="box box-strong" x="660" y="260" width="180" height="60"/>
+        <text class="label" x="750" y="284" text-anchor="middle">Risk</text>
+        <text class="label-sm" x="750" y="302" text-anchor="middle">inherent, residual</text>
+
+        <rect class="box" x="870" y="260" width="180" height="60"/>
+        <text class="label" x="960" y="284" text-anchor="middle">Risk Incident</text>
+        <text class="label-sm" x="960" y="302" text-anchor="middle">realized risk</text>
+
+        <rect class="box" x="870" y="360" width="180" height="50"/>
+        <text class="label" x="960" y="382" text-anchor="middle">KRI Measurement</text>
+
+        <rect class="box box-strong" x="320" y="420" width="200" height="60"/>
+        <text class="label" x="420" y="444" text-anchor="middle">Issue (CAPA)</text>
+        <text class="label-sm" x="420" y="462" text-anchor="middle">workflow state machine</text>
+
+        <rect class="box" x="40" y="420" width="180" height="60"/>
+        <text class="label" x="130" y="444" text-anchor="middle">Critical Task</text>
+        <text class="label-sm" x="130" y="462" text-anchor="middle">9 sources</text>
+
+        <rect class="box" x="660" y="420" width="180" height="60"/>
+        <text class="label" x="750" y="444" text-anchor="middle">Vendor</text>
+        <text class="label-sm" x="750" y="462" text-anchor="middle">tier, contract</text>
+
+        <rect class="box" x="870" y="420" width="180" height="60"/>
+        <text class="label" x="960" y="444" text-anchor="middle">IS Project</text>
+        <text class="label-sm" x="960" y="462" text-anchor="middle">milestones, status</text>
+
+        <rect class="box" x="40" y="540" width="180" height="60"/>
+        <text class="label" x="130" y="564" text-anchor="middle">Committee Meeting</text>
+        <text class="label-sm" x="130" y="582" text-anchor="middle">agenda, votes, minutes</text>
+
+        <rect class="box" x="240" y="540" width="180" height="60"/>
+        <text class="label" x="330" y="564" text-anchor="middle">Attestation</text>
+        <text class="label-sm" x="330" y="582" text-anchor="middle">campaign, request</text>
+
+        <rect class="box" x="440" y="540" width="180" height="60"/>
+        <text class="label" x="530" y="564" text-anchor="middle">Policy Exception</text>
+        <text class="label-sm" x="530" y="582" text-anchor="middle">approval, expiry</text>
+
+        <rect class="box box-hatched" x="660" y="540" width="180" height="60"/>
+        <text class="label" x="750" y="564" text-anchor="middle">Audit Log</text>
+        <text class="label-sm" x="750" y="582" text-anchor="middle">every CRUD, diff</text>
+
+        <rect class="box box-hatched" x="870" y="540" width="180" height="60"/>
+        <text class="label" x="960" y="564" text-anchor="middle">User and Tenant</text>
+        <text class="label-sm" x="960" y="582" text-anchor="middle">RBAC, business unit</text>
+
+        <rect class="box" x="40" y="660" width="280" height="60"/>
+        <text class="label" x="180" y="684" text-anchor="middle">Regulatory Change</text>
+        <text class="label-sm" x="180" y="702" text-anchor="middle">RSS ingest, impact mapping</text>
+
+        <rect class="box" x="350" y="660" width="280" height="60"/>
+        <text class="label" x="490" y="684" text-anchor="middle">Compliance Assessment</text>
+        <text class="label-sm" x="490" y="702" text-anchor="middle">multi tier approval workflow</text>
+
+        <rect class="box" x="660" y="660" width="390" height="60"/>
+        <text class="label" x="855" y="684" text-anchor="middle">Artifact Catalog</text>
+        <text class="label-sm" x="855" y="702" text-anchor="middle">framework staged deliverables, completeness tracking</text>
+
+        <g>
+          <path class="arrow" d="M510,80 L 455,120" marker-end="url(#arrow4)"/>
+          <text class="arrow-label" x="450" y="105">contains</text>
+
+          <path class="arrow" d="M600,80 L 650,120" marker-end="url(#arrow4)"/>
+          <text class="arrow-label" x="610" y="105">mapped to</text>
+
+          <path class="arrow" d="M540,150 L 560,150" marker-end="url(#arrow4)" marker-start="url(#arrow4)"/>
+          <text class="arrow-label" x="525" y="142">ControlMapping</text>
+
+          <path class="arrow" d="M740,150 L 760,150" marker-end="url(#arrow4)" marker-start="url(#arrow4)"/>
+
+          <path class="arrow" d="M210,150 L 370,150" marker-end="url(#arrow4)" marker-start="url(#arrow4)"/>
+          <text class="arrow-label" x="245" y="142">DocumentControlLink</text>
+
+          <path class="arrow" d="M125,180 L 125,260" marker-end="url(#arrow4)"/>
+          <text class="arrow-label" x="130" y="225">DocumentRiskLink</text>
+
+          <path class="arrow" d="M125,260 L 410,180" marker-end="url(#arrow4)" marker-start="url(#arrow4)"/>
+          <text class="arrow-label" x="240" y="230">EvidenceControlMapping</text>
+
+          <path class="arrow" d="M240,290 L 210,290" marker-end="url(#arrow4)" marker-start="url(#arrow4)"/>
+          <text class="arrow-label" x="200" y="280">AssetEvidenceLink</text>
+
+          <path class="arrow" d="M420,290 L 450,290" marker-end="url(#arrow4)" marker-start="url(#arrow4)"/>
+          <text class="arrow-label" x="408" y="280">VulnAssetLink</text>
+
+          <path class="arrow" d="M330,260 L 410,180" marker-end="url(#arrow4)" marker-start="url(#arrow4)"/>
+          <text class="arrow-label" x="335" y="225">AssetFrameworkControlLink</text>
+
+          <path class="arrow" d="M380,260 L 800,180" marker-end="url(#arrow4)" marker-start="url(#arrow4)"/>
+
+          <path class="arrow" d="M630,290 L 660,290" marker-end="url(#arrow4)" marker-start="url(#arrow4)"/>
+
+          <path class="arrow" d="M540,260 L 620,180" marker-end="url(#arrow4)" marker-start="url(#arrow4)"/>
+          <text class="arrow-label" x="535" y="225">VulnControlLink</text>
+
+          <path class="arrow" d="M700,260 L 510,180" marker-end="url(#arrow4)" marker-start="url(#arrow4)"/>
+          <text class="arrow-label" x="615" y="220">RiskFrameworkControlLink</text>
+
+          <path class="arrow" d="M750,260 L 700,180" marker-end="url(#arrow4)" marker-start="url(#arrow4)"/>
+
+          <path class="arrow" d="M660,290 L 210,290" marker-end="url(#arrow4)" marker-start="url(#arrow4)"/>
+          <text class="arrow-label" x="270" y="318">RiskEvidenceLink</text>
+
+          <path class="arrow" d="M840,290 L 870,290" marker-end="url(#arrow4)" marker-start="url(#arrow4)"/>
+
+          <path class="arrow" d="M820,320 L 920,360" marker-end="url(#arrow4)"/>
+
+          <path class="arrow" d="M780,260 L 800,225 L 720,225 L 730,260" marker-end="url(#arrow4)"/>
+          <text class="arrow-label" x="715" y="220">RiskDependency</text>
+
+          <path class="arrow" d="M340,420 L 540,320" marker-end="url(#arrow4)" marker-start="url(#arrow4)"/>
+          <text class="arrow-label" x="430" y="370">IssueVulnLink</text>
+
+          <path class="arrow" d="M400,420 L 750,320" marker-end="url(#arrow4)" marker-start="url(#arrow4)"/>
+          <text class="arrow-label" x="600" y="375">IssueRiskLink</text>
+
+          <path class="arrow" d="M390,420 L 330,320" marker-end="url(#arrow4)" marker-start="url(#arrow4)"/>
+          <text class="arrow-label" x="400" y="370">IssueAssetLink</text>
+
+          <path class="arrow" d="M420,420 L 125,320" marker-end="url(#arrow4)" marker-start="url(#arrow4)"/>
+          <text class="arrow-label" x="220" y="370">IssueEvidenceLink</text>
+
+          <path class="arrow" d="M420,420 L 850,180" marker-end="url(#arrow4)" marker-start="url(#arrow4)"/>
+
+          <path class="arrow" d="M320,450 L 220,450" marker-end="url(#arrow4)"/>
+          <text class="arrow-label" x="232" y="442">CAPA promotion</text>
+
+          <path class="arrow" d="M520,450 L 660,450" marker-end="url(#arrow4)" marker-start="url(#arrow4)"/>
+          <path class="arrow" d="M520,455 L 870,455" marker-end="url(#arrow4)" marker-start="url(#arrow4)"/>
+
+          <path class="arrow" d="M750,420 L 750,320" marker-end="url(#arrow4)" marker-start="url(#arrow4)"/>
+
+          <path class="arrow arrow-dotted" d="M130,540 L 125,180" marker-end="url(#arrow4)"/>
+          <path class="arrow arrow-dotted" d="M220,540 L 750,320" marker-end="url(#arrow4)"/>
+          <path class="arrow arrow-dotted" d="M130,600 L 180,660" marker-end="url(#arrow4)"/>
+
+          <path class="arrow arrow-dotted" d="M330,540 L 125,180" marker-end="url(#arrow4)"/>
+
+          <path class="arrow arrow-dotted" d="M280,540 L 125,320" marker-end="url(#arrow4)"/>
+
+          <path class="arrow arrow-dotted" d="M530,540 L 125,180" marker-end="url(#arrow4)"/>
+
+          <path class="arrow arrow-dotted" d="M750,540 L 750,320" marker-start="url(#arrow4)"/>
+          <text class="arrow-label" x="755" y="430">writes from every entity</text>
+
+          <path class="arrow" d="M490,660 L 455,180" marker-end="url(#arrow4)" marker-start="url(#arrow4)"/>
+          <path class="arrow" d="M390,660 L 125,320" marker-end="url(#arrow4)" marker-start="url(#arrow4)"/>
+
+          <path class="arrow" d="M180,660 L 125,180" marker-end="url(#arrow4)"/>
+          <path class="arrow" d="M260,660 L 750,320" marker-end="url(#arrow4)"/>
+        </g>
+      </svg>
+      <div class="legend">
+        <strong>Strong border:</strong> first class entity. <strong>Hatched fill:</strong> infrastructure entity (audit, users, tenants).
+        <strong>Solid bidirectional arrow:</strong> dedicated link table or many to many bridge.
+        <strong>Dotted arrow:</strong> soft reference or read time lookup.
+      </div>
+    </div>
+
+    <h3 style="margin-top: 22px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.08em;">Link table inventory (selected)</h3>
+    <table class="facts">
+      <thead><tr><th>Link table</th><th>Connects</th><th>Notable fields</th></tr></thead>
+      <tbody>
+        <tr><td>AssetFrameworkControlLink</td><td>IT Asset to Framework Control</td><td>coverage_status, notes</td></tr>
+        <tr><td>AssetControlLink</td><td>IT Asset to Normalized Control</td><td>implementation_status</td></tr>
+        <tr><td>AssetEvidenceLink</td><td>IT Asset to Evidence</td><td>relationship_type</td></tr>
+        <tr><td>VulnerabilityAssetLink</td><td>Vulnerability to IT Asset</td><td>link_source (scanner, manual, AI)</td></tr>
+        <tr><td>VulnerabilityControlLink</td><td>Vulnerability to Normalized Control</td><td>remediation mapping</td></tr>
+        <tr><td>RiskAssetLink</td><td>Risk to IT Asset</td><td>impact role</td></tr>
+        <tr><td>RiskControlLink</td><td>Risk to Normalized Control</td><td>effectiveness_rating</td></tr>
+        <tr><td>RiskFrameworkControlLink</td><td>Risk to Framework Control</td><td>mitigation_effectiveness</td></tr>
+        <tr><td>RiskEvidenceLink</td><td>Risk to Evidence</td><td>linkage type</td></tr>
+        <tr><td>RiskDependency</td><td>Risk to Risk (cascade)</td><td>impact_factor, dependency_type</td></tr>
+        <tr><td>DocumentControlLink</td><td>Document to Normalized Control</td><td>traceability</td></tr>
+        <tr><td>DocumentRiskLink</td><td>Document to Risk</td><td>policy applicability</td></tr>
+        <tr><td>EvidenceControlMapping</td><td>Evidence to Framework Control or Normalized Control</td><td>confidence_score, coverage_type, matched_text_snippets</td></tr>
+        <tr><td>IssueVulnerabilityLink, IssueRiskLink, IssueAssetLink, IssueControlLink, IssueEvidenceLink, IssueVendorLink, IssueGovernanceLink, IssueISProjectLink</td><td>Issue to eight other entities</td><td>soft references for resilience</td></tr>
+        <tr><td>MeetingAgendaItem.linked_risk_id, linked_document_id, linked_regulatory_change_id</td><td>Committee meeting to risk, doc, regulatory change</td><td>committee oversight</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="layer" id="flow">
+  <header>
+    <h2>5. End to End Runtime Flow</h2>
+    <span class="tag">Scanner ingestion to compliance evidence to risk treatment.</span>
+  </header>
+  <div class="body">
+
+    <div class="diagram-frame">
+      <h4>Diagram 5. Vulnerability ingestion to compliance and risk flow</h4>
+      <svg viewBox="0 0 1100 420" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Runtime flow">
+        <defs>
+          <marker id="arrow5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#000"/>
+          </marker>
+        </defs>
+
+        <rect class="box" x="20" y="60" width="170" height="80"/>
+        <text class="label" x="105" y="86" text-anchor="middle">1. Scanner</text>
+        <text class="label-sm" x="105" y="106" text-anchor="middle">Nessus, Rapid7,</text>
+        <text class="label-sm" x="105" y="122" text-anchor="middle">Wazuh, AWS Inspector</text>
+
+        <rect class="box box-shaded" x="220" y="60" width="170" height="80"/>
+        <text class="label" x="305" y="86" text-anchor="middle">2. Connector</text>
+        <text class="label-sm" x="305" y="106" text-anchor="middle">scheduled sync,</text>
+        <text class="label-sm" x="305" y="122" text-anchor="middle">encrypted creds</text>
+
+        <rect class="box box-shaded" x="420" y="60" width="170" height="80"/>
+        <text class="label" x="505" y="86" text-anchor="middle">3. Normalize</text>
+        <text class="label-sm" x="505" y="106" text-anchor="middle">CVE dedupe, asset match,</text>
+        <text class="label-sm" x="505" y="122" text-anchor="middle">severity normalize</text>
+
+        <rect class="box box-shaded" x="620" y="60" width="170" height="80"/>
+        <text class="label" x="705" y="86" text-anchor="middle">4. Enrich</text>
+        <text class="label-sm" x="705" y="106" text-anchor="middle">KEV, EPSS,</text>
+        <text class="label-sm" x="705" y="122" text-anchor="middle">composite priority</text>
+
+        <rect class="box" x="820" y="60" width="240" height="80"/>
+        <text class="label" x="940" y="86" text-anchor="middle">5. Persist</text>
+        <text class="label-sm" x="940" y="106" text-anchor="middle">Vulnerability, link to Asset,</text>
+        <text class="label-sm" x="940" y="122" text-anchor="middle">write Audit Log</text>
+
+        <rect class="box" x="20" y="200" width="170" height="80"/>
+        <text class="label" x="105" y="226" text-anchor="middle">6. Workflow Trigger</text>
+        <text class="label-sm" x="105" y="246" text-anchor="middle">on critical or KEV</text>
+        <text class="label-sm" x="105" y="262" text-anchor="middle">vuln created</text>
+
+        <rect class="box" x="220" y="200" width="170" height="80"/>
+        <text class="label" x="305" y="226" text-anchor="middle">7. Auto Open Issue</text>
+        <text class="label-sm" x="305" y="246" text-anchor="middle">CAPA, severity matrix,</text>
+        <text class="label-sm" x="305" y="262" text-anchor="middle">assign by team</text>
+
+        <rect class="box" x="420" y="200" width="170" height="80"/>
+        <text class="label" x="505" y="226" text-anchor="middle">8. Critical Task</text>
+        <text class="label-sm" x="505" y="246" text-anchor="middle">remediation owner,</text>
+        <text class="label-sm" x="505" y="262" text-anchor="middle">SLA, evidence required</text>
+
+        <rect class="box" x="620" y="200" width="170" height="80"/>
+        <text class="label" x="705" y="226" text-anchor="middle">9. Risk Update</text>
+        <text class="label-sm" x="705" y="246" text-anchor="middle">residual recompute,</text>
+        <text class="label-sm" x="705" y="262" text-anchor="middle">linked risks updated</text>
+
+        <rect class="box" x="820" y="200" width="240" height="80"/>
+        <text class="label" x="940" y="226" text-anchor="middle">10. Evidence and Control</text>
+        <text class="label-sm" x="940" y="246" text-anchor="middle">patch evidence linked to</text>
+        <text class="label-sm" x="940" y="262" text-anchor="middle">framework control, OCR + AI assess</text>
+
+        <rect class="box" x="20" y="320" width="510" height="80"/>
+        <text class="label" x="275" y="344" text-anchor="middle">11. Compliance posture recomputed</text>
+        <text class="label-sm" x="275" y="362" text-anchor="middle">Framework readiness percentage updates, gap lists refresh,</text>
+        <text class="label-sm" x="275" y="378" text-anchor="middle">Auditor Portal sees the new pass rate live</text>
+
+        <rect class="box" x="560" y="320" width="500" height="80"/>
+        <text class="label" x="810" y="344" text-anchor="middle">12. Stakeholder notification</text>
+        <text class="label-sm" x="810" y="362" text-anchor="middle">workflow engine fires email, Teams or Slack to risk owner,</text>
+        <text class="label-sm" x="810" y="378" text-anchor="middle">Committee sees agenda item if material</text>
+
+        <g>
+          <path class="arrow arrow-thick" d="M190,100 L 220,100" marker-end="url(#arrow5)"/>
+          <path class="arrow arrow-thick" d="M390,100 L 420,100" marker-end="url(#arrow5)"/>
+          <path class="arrow arrow-thick" d="M590,100 L 620,100" marker-end="url(#arrow5)"/>
+          <path class="arrow arrow-thick" d="M790,100 L 820,100" marker-end="url(#arrow5)"/>
+        </g>
+        <path class="arrow arrow-thick" d="M940,140 L 940,170 L 105,170 L 105,200" marker-end="url(#arrow5)"/>
+        <g>
+          <path class="arrow arrow-thick" d="M190,240 L 220,240" marker-end="url(#arrow5)"/>
+          <path class="arrow arrow-thick" d="M390,240 L 420,240" marker-end="url(#arrow5)"/>
+          <path class="arrow arrow-thick" d="M590,240 L 620,240" marker-end="url(#arrow5)"/>
+          <path class="arrow arrow-thick" d="M790,240 L 820,240" marker-end="url(#arrow5)"/>
+        </g>
+        <path class="arrow arrow-thick" d="M940,280 L 940,300 L 275,300 L 275,320" marker-end="url(#arrow5)"/>
+        <path class="arrow arrow-thick" d="M940,280 L 940,300 L 810,300 L 810,320" marker-end="url(#arrow5)"/>
+      </svg>
+      <div class="legend">
+        <strong>Thick solid arrow:</strong> deterministic flow. <strong>Shaded box:</strong> async worker step.
+        Every step also writes to the cross cutting Audit Log container.
+      </div>
+    </div>
+
+    <div class="note">
+      <strong>Flow summary.</strong> Twelve steps from raw scanner output to executive notification. Each step is an isolated, audited operation. Steps 2 to 4 run in async workers. Steps 6 to 12 run through the workflow engine, so the entire chain is configurable per tenant without code changes.
+    </div>
+  </div>
+</section>
+
+<section class="layer" id="stack">
+  <header>
+    <h2>6. Technology Stack</h2>
+    <span class="tag">Languages, frameworks, infrastructure.</span>
+  </header>
+  <div class="body">
+    <table class="facts">
+      <thead><tr><th>Layer</th><th>Choice</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td>Backend language</td><td>Python 3.11</td><td>type hints, asyncio</td></tr>
+        <tr><td>Web framework</td><td>FastAPI</td><td>OpenAPI auto generated, dependency injection</td></tr>
+        <tr><td>Validation</td><td>Pydantic v2</td><td>request and response schemas</td></tr>
+        <tr><td>ORM</td><td>SQLAlchemy 2.x</td><td>per tenant connection pooling</td></tr>
+        <tr><td>Async tasks</td><td>Celery</td><td>worker pool, scheduled tasks via beat</td></tr>
+        <tr><td>Message broker</td><td>Redis (default) or RabbitMQ</td><td>queue and locks</td></tr>
+        <tr><td>Database</td><td>PostgreSQL 15+</td><td>per tenant DB on managed cluster</td></tr>
+        <tr><td>Vector store</td><td>Qdrant</td><td>embeddings for chat and search</td></tr>
+        <tr><td>Frontend</td><td>Next.js 15 (App Router)</td><td>React 19, server components</td></tr>
+        <tr><td>UI components</td><td>Tailwind CSS, Recharts, Lucide</td><td>headless components, no design system lock in</td></tr>
+        <tr><td>Data fetching</td><td>TanStack Query</td><td>caching, optimistic updates</td></tr>
+        <tr><td>Auth</td><td>JWT HS256 + bcrypt</td><td>SSO via SAML, OIDC, Entra ID, Google, LDAP</td></tr>
+        <tr><td>File storage</td><td>S3, Azure Blob, or local</td><td>Fernet encrypted per tenant</td></tr>
+        <tr><td>Email</td><td>SMTP, SendGrid, SES (pluggable)</td><td>templated notifications</td></tr>
+        <tr><td>AI</td><td>OpenAI, Anthropic Claude</td><td>NL Q+A, document AI, evidence assess</td></tr>
+        <tr><td>Containers</td><td>Docker, docker compose</td><td>portable dev and prod</td></tr>
+        <tr><td>Orchestration</td><td>Kubernetes, ECS, or App Service</td><td>any container target</td></tr>
+        <tr><td>Observability</td><td>OpenTelemetry, Sentry compatible</td><td>structured logs, traces</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="layer" id="data">
+  <header>
+    <h2>7. Data Model Summary</h2>
+    <span class="tag">38 model files grouped by domain.</span>
+  </header>
+  <div class="body">
+    <table class="facts">
+      <thead><tr><th>Domain</th><th>Primary models</th></tr></thead>
+      <tbody>
+        <tr><td>Multi tenancy and RBAC</td><td>Tenant, TenantUser, BusinessUnit, GRCUser, Role, Permission, RolePermission, UserRole, PasswordSessionPolicy, IdentityProviderConfig, IdentityGroupRoleMapping</td></tr>
+        <tr><td>Audit</td><td>AuditLog, IntegrationAuditLog</td></tr>
+        <tr><td>Framework normalization</td><td>Framework, FrameworkDomain, ControlObjective, FrameworkControl, FrameworkSubControl, NormalizedControl, ControlMapping, GRCRequiredEvidence</td></tr>
+        <tr><td>Evidence</td><td>Evidence, EvidenceVersion, EvidenceControlMapping, EvidenceAIAssessment, EvidencePolicyLink, EvidenceIncidentLink, AssetEvidenceLink, RiskEvidenceLink, AuditPackageEvidence, CuratedEvidenceItem</td></tr>
+        <tr><td>Enterprise Risk Management</td><td>Risk, RiskScoreHistory, RiskKRI, RiskKRIMeasurement, RiskIncident, RiskReview, RiskDependency, RiskAppetiteConfig, RiskMitigationAction, RiskMitigationActionEvidence, RiskAssetLink, RiskControlLink, RiskFrameworkControlLink, RiskEvidenceLink, RiskReport</td></tr>
+        <tr><td>Internal Control Register</td><td>InternalControl, InternalControlEvidence, AssetInternalControlLink</td></tr>
+        <tr><td>RCSA</td><td>RCSAAssessment, RCSAQuestion, RCSAResponse</td></tr>
+        <tr><td>Governance</td><td>GovernanceObjective, GovernanceCommittee, CommitteeMember, CommitteeCharter, CommitteeMeeting, MeetingAgendaItem, MeetingAgendaItemVote, MeetingMinutes, OversightAction</td></tr>
+        <tr><td>Document Management</td><td>GovernanceDocument, GovernanceDocumentVersion, DocumentApprovalStep, DocumentReviewer, DocumentAuditLog, DocumentAnnotation, DocumentControlLink, DocumentAssetLink, DocumentRegulatoryLink, DocumentRiskLink, DocumentWorkflowInstance, PolicyReviewHistory</td></tr>
+        <tr><td>Attestation and Certification</td><td>AttestationCampaign, AttestationRequest, EscalationChain, CertificationJourney, ControlImplementation, ImplementationEvidence, CertificationPhase</td></tr>
+        <tr><td>Regulatory Change</td><td>RegulatoryChange, RSSFeedSource, RSSFeedItem</td></tr>
+        <tr><td>Policy Compliance</td><td>PolicyStatement, PolicyGapFinding, PolicyGapAnalysisByFramework, PolicyException, PolicyExceptionComment, GovernanceActionReview, Exception</td></tr>
+        <tr><td>IT Asset Inventory</td><td>ITAsset, AssetRiskAssessment, AssetControlLink, AssetInternalControlLink, AssetFrameworkControlLink, AssetEvidenceLink, AssetSecurityComplianceSelection, SoftwareIdentifier, InfoSystemCriticalityItem, InfraAssetCriticalityItem, CriticalityAssessmentActivity, CriticalityAssessmentEvidence, CriticalityAssessmentComment</td></tr>
+        <tr><td>Compliance Programs and Assessments</td><td>ComplianceProgram, ComplianceAssessmentDocument, ComplianceAssessmentDocumentItem, AssessmentEvidenceApprovalWorkflow, AssessmentEvidenceApprovalTier, AssessmentItemEvidence, AssessmentEvidenceApprovalHistory</td></tr>
+        <tr><td>Framework upload pipeline</td><td>UploadedFramework, ParsedFrameworkControl, FrameworkUploadJob</td></tr>
+        <tr><td>Vulnerability Management</td><td>Vulnerability, VulnerabilityReport, VulnerabilityWorkflowTemplate, VulnerabilityWorkflowState, VulnerabilityAssetLink, VulnerabilityControlLink, VulnerabilityMitigation</td></tr>
+        <tr><td>NCA Templates</td><td>NcaRiskEntry, NcaVulnEntry</td></tr>
+        <tr><td>Cloud Connector Framework</td><td>CloudConnector, IntegrationConnection, SyncHistory</td></tr>
+        <tr><td>Workflow Engine</td><td>WorkflowTemplate, WorkflowStep, WorkflowStepApprover, WorkflowDefinition, WorkflowNode, WorkflowEdge, WorkflowInstance, WorkflowNodeExecution, WorkflowInstanceLog</td></tr>
+        <tr><td>Issue Management</td><td>Issue, IssueAction, IssueActionEvidence, IssueComment, IssueActivity, IssueSeverityMatrix, IssueClassificationMatrix, IssueVulnerabilityLink, IssueRiskLink, IssueAssetLink, IssueControlLink, IssueEvidenceLink, IssueVendorLink, IssueISProjectLink, IssueGovernanceLink</td></tr>
+        <tr><td>Critical Tasks and Projects</td><td>CriticalTask, CriticalTaskSubTask, CriticalTaskComment, CriticalTaskHistory, CriticalTaskTemplate, CriticalTaskApproval, ISProject, ISProjectMilestone, ISProjectTask, ISProjectTeamMember, ISProjectStatusUpdate, ISProjectRisk, ISProjectDocument, ISProjectBudgetItem, ISProjectComplianceMapping, ISProjectLessonLearned, ISProjectDependency</td></tr>
+        <tr><td>Vendor Risk</td><td>Vendor, VendorAssessment, VendorQuestionnaireTemplate, VendorQuestionnaireResponse, VendorSLARecord, VendorIncident</td></tr>
+        <tr><td>Artifacts</td><td>ArtifactCatalogItem</td></tr>
+        <tr><td>Audit Planning</td><td>AuditPlanEntry</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="layer" id="integrations">
+  <header>
+    <h2>8. External Integration Inventory</h2>
+    <span class="tag">Vendors, protocols, and credential models.</span>
+  </header>
+  <div class="body">
+
+    <h3 style="margin-top: 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em;">Vulnerability scanners</h3>
+    <table class="facts">
+      <thead><tr><th>Vendor</th><th>Auth</th><th>Sync mode</th></tr></thead>
+      <tbody>
+        <tr><td>Tenable Nessus and Tenable.io</td><td>API key</td><td>scheduled cron, manual, incremental</td></tr>
+        <tr><td>Rapid7 InsightVM and Nexpose</td><td>API key</td><td>scheduled, manual</td></tr>
+        <tr><td>Qualys VMDR</td><td>API key</td><td>scheduled, manual</td></tr>
+        <tr><td>Wazuh</td><td>API token</td><td>continuous (agent based)</td></tr>
+        <tr><td>Microsoft Defender for Endpoint</td><td>OAuth</td><td>scheduled</td></tr>
+        <tr><td>OpenVAS and Greenbone</td><td>basic or API</td><td>scheduled</td></tr>
+        <tr><td>Burp Suite and OWASP ZAP</td><td>API or file upload</td><td>on demand</td></tr>
+      </tbody>
+    </table>
+
+    <h3 style="font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em;">Cloud connectors</h3>
+    <table class="facts">
+      <thead><tr><th>Provider</th><th>Service</th><th>Credentials</th></tr></thead>
+      <tbody>
+        <tr><td>AWS Inspector</td><td>EC2, ECR, Lambda findings</td><td>Role ARN + External ID</td></tr>
+        <tr><td>AWS Security Hub</td><td>aggregated findings</td><td>Role ARN</td></tr>
+        <tr><td>Azure Defender for Cloud</td><td>VMs, App Service, SQL</td><td>SP (tenant + client + secret)</td></tr>
+        <tr><td>GCP Security Command Center</td><td>org level findings</td><td>SA JSON or WIF</td></tr>
+        <tr><td>Kubernetes</td><td>kube bench, kube hunter, Trivy</td><td>kubeconfig</td></tr>
+      </tbody>
+    </table>
+
+    <h3 style="font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em;">Ticketing, chat, and identity</h3>
+    <table class="facts">
+      <thead><tr><th>System</th><th>Direction</th><th>Use case</th></tr></thead>
+      <tbody>
+        <tr><td>ServiceNow ITSM and CMDB</td><td>bidirectional</td><td>tickets, asset import, incident sync</td></tr>
+        <tr><td>BMC Remedy</td><td>bidirectional</td><td>tickets</td></tr>
+        <tr><td>Microsoft Teams</td><td>outbound</td><td>workflow notifications, approval requests</td></tr>
+        <tr><td>Slack</td><td>outbound</td><td>workflow notifications</td></tr>
+        <tr><td>Office 365</td><td>outbound</td><td>calendar invites for committee meetings</td></tr>
+        <tr><td>Zoom</td><td>outbound</td><td>meeting links for committees</td></tr>
+        <tr><td>Fireflies.ai</td><td>inbound</td><td>meeting transcripts feed minute generation</td></tr>
+        <tr><td>Microsoft Entra ID</td><td>SAML or OIDC, OAuth</td><td>SSO, group to role sync</td></tr>
+        <tr><td>Google Workspace</td><td>OAuth + Directory API</td><td>SSO, user provisioning</td></tr>
+        <tr><td>Generic SAML 2.0 IdP</td><td>SAML</td><td>SSO</td></tr>
+        <tr><td>Generic OIDC IdP</td><td>OIDC</td><td>SSO</td></tr>
+        <tr><td>Active Directory and LDAP</td><td>bind and search</td><td>legacy SSO, group based provisioning</td></tr>
+        <tr><td>SCIM 2.0 provider</td><td>inbound</td><td>user provisioning and deprovisioning</td></tr>
+      </tbody>
+    </table>
+
+    <h3 style="font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em;">SIEM and log sources</h3>
+    <table class="facts">
+      <thead><tr><th>System</th><th>Mode</th></tr></thead>
+      <tbody>
+        <tr><td>Splunk</td><td>index based event routing, push from platform</td></tr>
+        <tr><td>Wazuh</td><td>log ingest and alert pull</td></tr>
+        <tr><td>IBM QRadar</td><td>API ingest</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="layer" id="multitenancy">
+  <header>
+    <h2>9. Multi Tenancy and Security</h2>
+    <span class="tag">Isolation model, encryption, audit, RBAC.</span>
+  </header>
+  <div class="body">
+
+    <table class="facts">
+      <thead><tr><th>Concern</th><th>Mechanism</th></tr></thead>
+      <tbody>
+        <tr><td>Tenant isolation</td><td>One PostgreSQL database per tenant. Tenants table in master registry holds connection strings. Sessions opened per request after slug or header resolution.</td></tr>
+        <tr><td>Request authentication</td><td>JWT HS256 cookie, 24 hour TTL, 6 hour refresh threshold, MFA capable</td></tr>
+        <tr><td>Authorization</td><td>140+ permissions on (resource, action). Roles compose permissions. Optional business unit scoping.</td></tr>
+        <tr><td>Password policy</td><td>Per tenant configurable. Complexity, history, lockout, idle timeout.</td></tr>
+        <tr><td>SSO</td><td>Entra ID, Google Workspace, SAML, OIDC, LDAP. SCIM 2.0 inbound provisioning.</td></tr>
+        <tr><td>Audit trail</td><td>Every CRUD writes AuditLog with actor, IP, before and after JSON diff. Indexed by (tenant_id, timestamp).</td></tr>
+        <tr><td>Secret storage</td><td>Integration credentials Fernet encrypted. Cloud connector credentials AES via CONNECTOR_MASTER_KEY. OAuth tokens encrypted separately.</td></tr>
+        <tr><td>Evidence files</td><td>Fernet encrypted at rest per tenant. Object store layer abstracted.</td></tr>
+        <tr><td>Background tasks</td><td>Celery args[0] always tenant slug. Validation in _payload_tenant before any DB access.</td></tr>
+        <tr><td>Cookie domain</td><td>Configurable via AUTH_COOKIE_DOMAIN env. Defaults to .localhost in dev.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="layer" id="deployment">
+  <header>
+    <h2>10. Deployment Topology</h2>
+    <span class="tag">Reference target for production deploys.</span>
+  </header>
+  <div class="body">
+
+    <div class="diagram-frame">
+      <h4>Diagram 6. Reference production topology</h4>
+      <svg viewBox="0 0 1100 540" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Deployment topology">
+        <defs>
+          <marker id="arrow6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#000"/>
+          </marker>
+        </defs>
+
+        <text class="group-label" x="20" y="22">Internet</text>
+        <rect class="box" x="450" y="40" width="200" height="50"/>
+        <text class="label" x="550" y="64" text-anchor="middle">User Browser</text>
+        <text class="label-sm" x="550" y="80" text-anchor="middle">TLS 1.3 only</text>
+
+        <text class="group-label" x="20" y="120">Edge</text>
+        <rect class="box" x="350" y="140" width="180" height="50"/>
+        <text class="label" x="440" y="164" text-anchor="middle">CDN or WAF</text>
+        <text class="label-sm" x="440" y="180" text-anchor="middle">CloudFront, Front Door</text>
+
+        <rect class="box" x="570" y="140" width="180" height="50"/>
+        <text class="label" x="660" y="164" text-anchor="middle">Load Balancer</text>
+        <text class="label-sm" x="660" y="180" text-anchor="middle">ALB, NLB, App GW</text>
+
+        <g>
+          <rect class="group-frame" x="20" y="220" width="1060" height="160"/>
+          <text class="group-label" x="40" y="238">Private subnets (VPC)</text>
+
+          <rect class="box box-shaded" x="60" y="252" width="220" height="100"/>
+          <text class="label" x="170" y="278" text-anchor="middle">Frontend Pods</text>
+          <text class="label-sm" x="170" y="296" text-anchor="middle">Next.js, 2 to N replicas</text>
+          <text class="label-sm" x="170" y="312" text-anchor="middle">HPA on CPU and req rate</text>
+
+          <rect class="box box-shaded" x="310" y="252" width="240" height="100"/>
+          <text class="label" x="430" y="278" text-anchor="middle">Backend Pods</text>
+          <text class="label-sm" x="430" y="296" text-anchor="middle">FastAPI, 3 to N replicas</text>
+          <text class="label-sm" x="430" y="312" text-anchor="middle">HPA on CPU and queue depth</text>
+
+          <rect class="box box-shaded" x="580" y="252" width="220" height="100"/>
+          <text class="label" x="690" y="278" text-anchor="middle">Celery Worker Pods</text>
+          <text class="label-sm" x="690" y="296" text-anchor="middle">2 to N per queue partition</text>
+          <text class="label-sm" x="690" y="312" text-anchor="middle">long, ai, sync, ocr queues</text>
+
+          <rect class="box" x="830" y="252" width="220" height="100"/>
+          <text class="label" x="940" y="278" text-anchor="middle">Beat Scheduler</text>
+          <text class="label-sm" x="940" y="296" text-anchor="middle">single instance leader elect</text>
+          <text class="label-sm" x="940" y="312" text-anchor="middle">cron triggers, RSS pulls</text>
+        </g>
+
+        <g>
+          <rect class="group-frame" x="20" y="400" width="1060" height="120"/>
+          <text class="group-label" x="40" y="418">Data layer</text>
+
+          <rect class="box" x="60" y="430" width="220" height="70"/>
+          <text class="label" x="170" y="454" text-anchor="middle">Managed Postgres</text>
+          <text class="label-sm" x="170" y="472" text-anchor="middle">RDS, Cloud SQL, Flex Server</text>
+          <text class="label-sm" x="170" y="488" text-anchor="middle">multi AZ, daily backups</text>
+
+          <rect class="box" x="300" y="430" width="180" height="70"/>
+          <text class="label" x="390" y="454" text-anchor="middle">Redis</text>
+          <text class="label-sm" x="390" y="472" text-anchor="middle">Elasticache or Memorystore</text>
+          <text class="label-sm" x="390" y="488" text-anchor="middle">broker + locks</text>
+
+          <rect class="box" x="500" y="430" width="180" height="70"/>
+          <text class="label" x="590" y="454" text-anchor="middle">Object Store</text>
+          <text class="label-sm" x="590" y="472" text-anchor="middle">S3 or Azure Blob</text>
+          <text class="label-sm" x="590" y="488" text-anchor="middle">versioned bucket</text>
+
+          <rect class="box" x="700" y="430" width="180" height="70"/>
+          <text class="label" x="790" y="454" text-anchor="middle">Qdrant</text>
+          <text class="label-sm" x="790" y="472" text-anchor="middle">managed or self host</text>
+
+          <rect class="box" x="900" y="430" width="160" height="70"/>
+          <text class="label" x="980" y="454" text-anchor="middle">Secrets Manager</text>
+          <text class="label-sm" x="980" y="472" text-anchor="middle">KMS, Key Vault</text>
+        </g>
+
+        <g>
+          <path class="arrow arrow-thick" d="M550,90 L 440,140" marker-end="url(#arrow6)"/>
+          <path class="arrow arrow-thick" d="M530,190 L 660,140" marker-end="url(#arrow6)" marker-start="url(#arrow6)"/>
+          <path class="arrow arrow-thick" d="M660,190 L 170,252" marker-end="url(#arrow6)"/>
+          <path class="arrow arrow-thick" d="M170,352 L 430,252" marker-end="url(#arrow6)" marker-start="url(#arrow6)"/>
+          <path class="arrow arrow-thick" d="M430,352 L 170,430" marker-end="url(#arrow6)"/>
+          <path class="arrow arrow-thick" d="M450,352 L 390,430" marker-end="url(#arrow6)" marker-start="url(#arrow6)"/>
+          <path class="arrow arrow-thick" d="M470,352 L 590,430" marker-end="url(#arrow6)" marker-start="url(#arrow6)"/>
+          <path class="arrow arrow-thick" d="M490,352 L 790,430" marker-end="url(#arrow6)" marker-start="url(#arrow6)"/>
+          <path class="arrow arrow-dotted" d="M690,352 L 390,430" marker-end="url(#arrow6)" marker-start="url(#arrow6)"/>
+          <path class="arrow arrow-dotted" d="M940,352 L 940,430" marker-end="url(#arrow6)" marker-start="url(#arrow6)"/>
+          <path class="arrow arrow-dotted" d="M430,275 L 980,430" marker-end="url(#arrow6)"/>
+        </g>
+      </svg>
+      <div class="legend">
+        <strong>Solid arrow:</strong> synchronous request path. <strong>Dotted arrow:</strong> async or secret fetch.
+        <strong>Shaded box:</strong> auto scaling pod set. Reference targets: AWS (ALB, ECS or EKS, RDS, ElastiCache, S3, KMS) or Azure (App Gateway, AKS, Flex Server, Cache for Redis, Blob, Key Vault).
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<footer class="endnote">
+  Generated from a structural audit of backend/grc (32 routers, 38 model files, 19 module packages) and grc-frontend/src/app/(dashboard). Diagrams 1 to 6 use inline SVG so the document is self contained and prints clean to PDF.
+</footer>
+
+</div>
+</body>
+</html>

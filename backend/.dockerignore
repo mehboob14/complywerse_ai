@@ -1,0 +1,34 @@
+# Keep image small and avoid leaking local state into the build context.
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local venv & dotfiles
+venv/
+.venv/
+env/
+.env
+.env.*
+!.env.example
+
+# Local DB / runtime data
+*.sqlite
+*.db
+uploads/
+static/uploads/
+logs/
+*.log
+
+# Editor / OS junk
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore

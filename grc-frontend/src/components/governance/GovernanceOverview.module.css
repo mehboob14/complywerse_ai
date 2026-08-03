@@ -1,0 +1,93 @@
+/* GovernanceOverview — pseudo-states, animation & layout that inline styles can't express */
+
+.root {
+  font-family: "Poppins", system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  color: #1a1a1a;
+}
+
+.inner {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  animation: govFade 0.3s ease-out both;
+}
+
+@keyframes govFade {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+.heroGrid {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 18px;
+  align-items: stretch;
+}
+
+.momentumGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 13px 18px;
+  border: none;
+  border-bottom: 1px solid #f6f8fa;
+  border-right: 1px solid #f6f8fa;
+  background: #fff;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.12s ease;
+  width: 100%;
+}
+.row:hover { background: #f6fbfa; }
+
+/* modal */
+.modalWrap {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+}
+.backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(10, 25, 35, 0.5);
+  backdrop-filter: blur(3px);
+}
+.modal {
+  position: relative;
+  width: 540px;
+  max-width: 100%;
+  max-height: 88vh;
+  overflow: hidden;
+  background: #fff;
+  border-radius: 18px;
+  box-shadow: 0 24px 60px -12px rgba(0, 0, 0, 0.45);
+  display: flex;
+  flex-direction: column;
+  animation: govFade 0.2s ease-out;
+}
+.close {
+  border: none;
+  background: #f1f5f9;
+  border-radius: 9px;
+  padding: 7px;
+  color: #64748b;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.12s ease;
+}
+.close:hover { background: #e2e8f0; }
+
+@media (max-width: 860px) {
+  .heroGrid { grid-template-columns: 1fr; }
+  .momentumGrid { grid-template-columns: 1fr; }
+}
