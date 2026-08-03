@@ -1,0 +1,102 @@
+<!doctype html>
+<!--
+  APPROVED (deferred) redesign of the Vulnerabilities dashboard — the KPI strip +
+  donuts above the register. Approved by the user 2026-07-29; build deferred until
+  after Phase 1/2 of the finding-detail rework.
+
+  REMOVE: "By status" donut (100% open), "By SLA" donut (100% on-track),
+          "Open" KPI (== Total), "SLA compliance 0%" KPI (misleading).
+  KEEP:   Total, Critical (raw CVSS), "By severity".
+  ADD:    KPI "Urgent now" (contextual >= high), "Actively exploited" (KEV),
+          "Internet-exposed"; panel "Raw severity -> Contextual priority" (the
+          enrichment story); panel "By domain" (reuses /vulnerabilities/domains);
+          threat band (KEV / public-exploit / high-EPSS / patch-available).
+  NEEDS:  new server-side aggregates on the vuln dashboard endpoint — kev_count,
+          exploit_count, high_epss_count, internet_exposed_count, patch_count,
+          contextual-priority buckets. by-domain already exists.
+-->
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Vuln dashboard redesign (approved mockup)</title></head>
+<body style="margin:0;padding:20px;background:#f8fafc">
+<div class="vd">
+  <p style="font-size:12px;color:#64748b;margin:0 0 14px">Approved mockup — Vulnerabilities dashboard redesign (build deferred). Numbers illustrative; contextual buckets computed at build time.</p>
+</div>
+<style>
+  .vd { --card:#ffffff; --ink:#0f172a; --muted:#64748b; --faint:#94a3b8; --border:#e2e8f0; --track:#f1f5f9;
+        --crit:#e11d48; --high:#f97316; --med:#f59e0b; --info:#94a3b8; --good:#10b981; --accent:#0d9488; --amber:#b45309;
+        font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; color:var(--ink); }
+  .vd *{ box-sizing:border-box; }
+  .vd .row{ display:grid; gap:12px; margin-bottom:12px; }
+  .vd .kpis{ grid-template-columns:repeat(5,1fr); }
+  .vd .panels{ grid-template-columns:1.05fr 1.15fr 1fr; }
+  .vd .card{ background:var(--card); border:1px solid var(--border); border-radius:14px; padding:14px 16px; }
+  .vd .kpi .v{ font-size:26px; font-weight:700; line-height:1; }
+  .vd .kpi .l{ font-size:12px; color:var(--muted); margin-top:6px; }
+  .vd .kpi .s{ font-size:10.5px; color:var(--faint); margin-top:2px; }
+  .vd .tag{ display:inline-block; font-size:9px; font-weight:700; letter-spacing:.4px; text-transform:uppercase; padding:2px 6px; border-radius:5px; margin-bottom:7px; }
+  .vd .tag.new{ background:rgba(13,148,136,.12); color:var(--accent); }
+  .vd .tag.keep{ background:var(--track); color:var(--muted); }
+  .vd h4{ font-size:13px; font-weight:700; margin:0 0 12px; }
+  .vd .bar{ display:flex; align-items:center; gap:9px; margin:7px 0; font-size:12px; }
+  .vd .bar .name{ width:72px; color:var(--muted); flex:none; }
+  .vd .bar .num{ width:34px; text-align:right; font-variant-numeric:tabular-nums; font-weight:600; flex:none; }
+  .vd .track{ flex:1; height:8px; background:var(--track); border-radius:5px; overflow:hidden; }
+  .vd .fill{ height:100%; border-radius:5px; }
+  .vd .split{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  .vd .col-h{ font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; color:var(--faint); margin-bottom:8px; }
+  .vd .pill{ display:flex; justify-content:space-between; font-size:12px; padding:4px 0; }
+  .vd .arrow{ text-align:center; color:var(--good); font-size:11.5px; font-weight:600; margin-top:8px; padding-top:8px; border-top:1px dashed var(--border); }
+  .vd .threat{ grid-template-columns:repeat(4,1fr); }
+  .vd .tw{ text-align:center; }
+  .vd .tw .v{ font-size:22px; font-weight:700; }
+  .vd .tw .l{ font-size:11px; color:var(--muted); margin-top:3px; }
+  .vd .tw .z{ color:var(--good); }
+  .vd .note{ font-size:11px; color:var(--faint); margin-top:2px; }
+</style>
+<div class="vd">
+  <div class="row kpis">
+    <div class="card kpi"><span class="tag keep">keep</span><div class="v">205</div><div class="l">Total findings</div><div class="s">across 12 domains</div></div>
+    <div class="card kpi"><span class="tag keep">keep</span><div class="v" style="color:var(--crit)">3</div><div class="l">Critical (CVSS)</div><div class="s">raw severity</div></div>
+    <div class="card kpi"><span class="tag new">new</span><div class="v" style="color:var(--good)">0</div><div class="l">Urgent now</div><div class="s">contextual &ge; high &middot; all demoted</div></div>
+    <div class="card kpi"><span class="tag new">new</span><div class="v">0</div><div class="l">Actively exploited</div><div class="s">in CISA KEV</div></div>
+    <div class="card kpi"><span class="tag new">new</span><div class="v">0</div><div class="l">Internet-exposed</div><div class="s">on public assets</div></div>
+  </div>
+  <div class="row panels">
+    <div class="card">
+      <span class="tag keep">keep</span><h4>Severity &mdash; raw (CVSS)</h4>
+      <div class="bar"><span class="name">Critical</span><div class="track"><div class="fill" style="width:6%;background:var(--crit)"></div></div><span class="num">3</span></div>
+      <div class="bar"><span class="name">High</span><div class="track"><div class="fill" style="width:14%;background:var(--high)"></div></div><span class="num">13</span></div>
+      <div class="bar"><span class="name">Medium</span><div class="track"><div class="fill" style="width:9%;background:var(--med)"></div></div><span class="num">8</span></div>
+      <div class="bar"><span class="name">Info</span><div class="track"><div class="fill" style="width:100%;background:var(--info)"></div></div><span class="num">181</span></div>
+    </div>
+    <div class="card">
+      <span class="tag new">new</span><h4>Raw severity &rarr; Contextual priority</h4>
+      <div class="split">
+        <div><div class="col-h">Raw looks like</div>
+          <div class="pill"><span style="color:var(--crit)">Critical</span><b>3</b></div>
+          <div class="pill"><span style="color:var(--high)">High</span><b>13</b></div>
+          <div class="pill"><span style="color:var(--med)">Medium</span><b>8</b></div></div>
+        <div><div class="col-h">Actually is</div>
+          <div class="pill"><span style="color:var(--crit)">Urgent</span><b>0</b></div>
+          <div class="pill"><span style="color:var(--amber)">Moderate</span><b>24</b></div>
+          <div class="pill"><span style="color:var(--good)">Low</span><b>181</b></div></div>
+      </div>
+      <div class="arrow">&darr; enrichment demoted all 16 "urgent-looking" &mdash; internal, no exploit, low EPSS</div>
+    </div>
+    <div class="card">
+      <span class="tag new">new</span><h4>By domain</h4>
+      <div class="bar"><span class="name">Windows</span><div class="track"><div class="fill" style="width:100%;background:var(--accent)"></div></div><span class="num">120</span></div>
+      <div class="bar"><span class="name">Misc.</span><div class="track"><div class="fill" style="width:14%;background:var(--crit)"></div></div><span class="num">17</span></div>
+      <div class="bar"><span class="name">Gen.</span><div class="track"><div class="fill" style="width:20%;background:var(--accent)"></div></div><span class="num">24</span></div>
+      <div class="bar"><span class="name">Svc det.</span><div class="track"><div class="fill" style="width:10%;background:var(--accent)"></div></div><span class="num">12</span></div>
+      <div class="bar"><span class="name">Databases</span><div class="track"><div class="fill" style="width:8%;background:var(--high)"></div></div><span class="num">5</span></div>
+      <div class="note">ordered worst-severity first &middot; Misc. holds the 3 criticals</div>
+    </div>
+  </div>
+  <div class="row threat">
+    <div class="card tw"><span class="tag new">new</span><div class="v z">0</div><div class="l">In CISA KEV</div></div>
+    <div class="card tw"><span class="tag new">new</span><div class="v z">0</div><div class="l">Public exploit</div></div>
+    <div class="card tw"><span class="tag new">new</span><div class="v z">0</div><div class="l">High EPSS (&ge;10%)</div></div>
+    <div class="card tw"><span class="tag new">new</span><div class="v">205</div><div class="l">Patch available</div></div>
+  </div>
+</div>
+</body></html>

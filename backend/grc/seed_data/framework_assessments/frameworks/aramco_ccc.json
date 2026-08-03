@@ -1,0 +1,2520 @@
+{
+  "id": "aramco_ccc",
+  "name": "Saudi Aramco CCC / SACS-002 Third Party Cybersecurity Standard",
+  "version": "Current",
+  "official_sources": [
+    {
+      "title": "Aramco CCC Program",
+      "url": "https://www.aramco.com/en/what-we-do/suppliers/supplier-resources/cybersecurity-compliance-certificate-program"
+    },
+    {
+      "title": "SACS-002 Standard",
+      "url": "https://www.aramco.com/-/media/downloads/working-with-us/ccc/sacs-002-third-party-cybersecurity-standard.pdf"
+    },
+    {
+      "title": "Third Party Manual",
+      "url": "https://www.aramco.com/-/media/downloads/working-with-us/ccc/ccc-third-party-manual.pdf"
+    },
+    {
+      "title": "Cybersecurity Controls Requirements Guideline",
+      "url": "https://www.aramco.com/-/media/downloads/working-with-us/ccc/cybersecurity-controls-requirements-guideline.pdf"
+    }
+  ],
+  "assessment_shapes": [
+    "attestation"
+  ],
+  "methodology": "100% compliance required. CCC = remote validation; CCC+ = on-site (for Network Connectivity / Critical Data Processor). Validity: 2 years. Derived from NIST CSF.",
+  "scoping_inputs": [
+    {
+      "id": "third_party_classification",
+      "type": "multi_select",
+      "options": [
+        "General",
+        "Network Connectivity",
+        "Outsourced Infrastructure",
+        "Critical Data Processor",
+        "Software Customization"
+      ],
+      "label": "Third party classification(s)"
+    },
+    {
+      "id": "certificate_type",
+      "type": "select",
+      "options": [
+        "CCC",
+        "CCC+"
+      ],
+      "label": "Required certificate type"
+    }
+  ],
+  "risk_model": {
+    "factors": [
+      "asset",
+      "threat",
+      "vulnerability",
+      "likelihood",
+      "impact_c",
+      "impact_i",
+      "impact_a"
+    ],
+    "scales": {
+      "likelihood": [
+        {
+          "value": 1,
+          "label": "Rare",
+          "definition": "May occur only in exceptional circumstances (<5% per year)."
+        },
+        {
+          "value": 2,
+          "label": "Unlikely",
+          "definition": "Could occur but not expected (5-25% per year)."
+        },
+        {
+          "value": 3,
+          "label": "Possible",
+          "definition": "Might occur at some time (25-50% per year)."
+        },
+        {
+          "value": 4,
+          "label": "Likely",
+          "definition": "Will probably occur in most circumstances (50-75% per year)."
+        },
+        {
+          "value": 5,
+          "label": "Almost Certain",
+          "definition": "Expected to occur in most circumstances (>75% per year)."
+        }
+      ],
+      "impact": [
+        {
+          "value": 1,
+          "label": "Insignificant",
+          "definition": "Negligible operational, financial, regulatory or reputational impact."
+        },
+        {
+          "value": 2,
+          "label": "Minor",
+          "definition": "Limited impact contained within a single team or system; recoverable in <1 day."
+        },
+        {
+          "value": 3,
+          "label": "Moderate",
+          "definition": "Notable impact on a business unit; recoverable in 1-7 days; minor regulatory attention."
+        },
+        {
+          "value": 4,
+          "label": "Major",
+          "definition": "Significant impact across multiple business units; >1 week to recover; regulatory action probable."
+        },
+        {
+          "value": 5,
+          "label": "Severe",
+          "definition": "Existential or systemic impact; loss of license, major fines, sustained customer loss."
+        }
+      ],
+      "maturity": [
+        {
+          "value": 0,
+          "label": "Non-Existent",
+          "definition": "No process or control in place."
+        },
+        {
+          "value": 1,
+          "label": "Initial / Ad Hoc",
+          "definition": "Process exists but is informal and inconsistent."
+        },
+        {
+          "value": 2,
+          "label": "Repeatable",
+          "definition": "Process is documented and repeated, but not standardized across the organization."
+        },
+        {
+          "value": 3,
+          "label": "Defined",
+          "definition": "Process is documented, standardized, and integrated across the organization."
+        },
+        {
+          "value": 4,
+          "label": "Managed",
+          "definition": "Process is measured, monitored with KPIs, and controlled."
+        },
+        {
+          "value": 5,
+          "label": "Optimized",
+          "definition": "Process is continuously improved through monitoring, metrics, and lessons learned."
+        }
+      ],
+      "implementation_status": [
+        {
+          "value": "NI",
+          "label": "Not Implemented"
+        },
+        {
+          "value": "PI",
+          "label": "Partially Implemented"
+        },
+        {
+          "value": "LI",
+          "label": "Largely Implemented"
+        },
+        {
+          "value": "FI",
+          "label": "Fully Implemented"
+        }
+      ]
+    },
+    "matrix": "5x5",
+    "calculation": "max(impact_c, impact_i, impact_a) * likelihood",
+    "acceptance_threshold": 6,
+    "thresholds": {
+      "low": [
+        1,
+        4
+      ],
+      "medium": [
+        5,
+        9
+      ],
+      "high": [
+        10,
+        16
+      ],
+      "critical": [
+        17,
+        25
+      ]
+    }
+  },
+  "domains": [
+    {
+      "id": "GEN",
+      "name": "General Requirements (apply to all third parties)",
+      "controls": [
+        {
+          "id": "TPC-1",
+          "title": "Cybersecurity Strategy",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              {
+                "field": "compliance_status",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Non-Compliant",
+                  "Compensating Control",
+                  "N/A"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence (documents, screenshots, configurations)?"
+              },
+              {
+                "field": "compensating_control",
+                "type": "text",
+                "prompt": "If compensating control, describe it."
+              },
+              {
+                "field": "remediation_required",
+                "type": "boolean",
+                "prompt": "Remediation required?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan if non-compliant."
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "TPC-2",
+          "title": "Cybersecurity Policies and Standards",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              {
+                "field": "compliance_status",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Non-Compliant",
+                  "Compensating Control",
+                  "N/A"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence (documents, screenshots, configurations)?"
+              },
+              {
+                "field": "compensating_control",
+                "type": "text",
+                "prompt": "If compensating control, describe it."
+              },
+              {
+                "field": "remediation_required",
+                "type": "boolean",
+                "prompt": "Remediation required?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan if non-compliant."
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "TPC-3",
+          "title": "Cybersecurity Roles and Responsibilities",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              {
+                "field": "compliance_status",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Non-Compliant",
+                  "Compensating Control",
+                  "N/A"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence (documents, screenshots, configurations)?"
+              },
+              {
+                "field": "compensating_control",
+                "type": "text",
+                "prompt": "If compensating control, describe it."
+              },
+              {
+                "field": "remediation_required",
+                "type": "boolean",
+                "prompt": "Remediation required?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan if non-compliant."
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "TPC-4",
+          "title": "Cybersecurity Risk Management",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              {
+                "field": "compliance_status",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Non-Compliant",
+                  "Compensating Control",
+                  "N/A"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence (documents, screenshots, configurations)?"
+              },
+              {
+                "field": "compensating_control",
+                "type": "text",
+                "prompt": "If compensating control, describe it."
+              },
+              {
+                "field": "remediation_required",
+                "type": "boolean",
+                "prompt": "Remediation required?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan if non-compliant."
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "TPC-5",
+          "title": "Cybersecurity Compliance",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              {
+                "field": "compliance_status",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Non-Compliant",
+                  "Compensating Control",
+                  "N/A"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence (documents, screenshots, configurations)?"
+              },
+              {
+                "field": "compensating_control",
+                "type": "text",
+                "prompt": "If compensating control, describe it."
+              },
+              {
+                "field": "remediation_required",
+                "type": "boolean",
+                "prompt": "Remediation required?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan if non-compliant."
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "TPC-6",
+          "title": "Cybersecurity Awareness and Training",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              {
+                "field": "compliance_status",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Non-Compliant",
+                  "Compensating Control",
+                  "N/A"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence (documents, screenshots, configurations)?"
+              },
+              {
+                "field": "compensating_control",
+                "type": "text",
+                "prompt": "If compensating control, describe it."
+              },
+              {
+                "field": "remediation_required",
+                "type": "boolean",
+                "prompt": "Remediation required?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan if non-compliant."
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "TPC-7",
+          "title": "Cybersecurity in Human Resources",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              {
+                "field": "compliance_status",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Non-Compliant",
+                  "Compensating Control",
+                  "N/A"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence (documents, screenshots, configurations)?"
+              },
+              {
+                "field": "compensating_control",
+                "type": "text",
+                "prompt": "If compensating control, describe it."
+              },
+              {
+                "field": "remediation_required",
+                "type": "boolean",
+                "prompt": "Remediation required?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan if non-compliant."
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "TPC-8",
+          "title": "Asset Management",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              {
+                "field": "compliance_status",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Non-Compliant",
+                  "Compensating Control",
+                  "N/A"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence (documents, screenshots, configurations)?"
+              },
+              {
+                "field": "compensating_control",
+                "type": "text",
+                "prompt": "If compensating control, describe it."
+              },
+              {
+                "field": "remediation_required",
+                "type": "boolean",
+                "prompt": "Remediation required?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan if non-compliant."
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "TPC-9",
+          "title": "Acceptable Use Policy",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              {
+                "field": "compliance_status",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Non-Compliant",
+                  "Compensating Control",
+                  "N/A"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence (documents, screenshots, configurations)?"
+              },
+              {
+                "field": "compensating_control",
+                "type": "text",
+                "prompt": "If compensating control, describe it."
+              },
+              {
+                "field": "remediation_required",
+                "type": "boolean",
+                "prompt": "Remediation required?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan if non-compliant."
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "TPC-10",
+          "title": "Information Classification",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              {
+                "field": "compliance_status",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Non-Compliant",
+                  "Compensating Control",
+                  "N/A"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence (documents, screenshots, configurations)?"
+              },
+              {
+                "field": "compensating_control",
+                "type": "text",
+                "prompt": "If compensating control, describe it."
+              },
+              {
+                "field": "remediation_required",
+                "type": "boolean",
+                "prompt": "Remediation required?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan if non-compliant."
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "TPC-11",
+          "title": "Physical Security",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              {
+                "field": "compliance_status",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Non-Compliant",
+                  "Compensating Control",
+                  "N/A"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence (documents, screenshots, configurations)?"
+              },
+              {
+                "field": "compensating_control",
+                "type": "text",
+                "prompt": "If compensating control, describe it."
+              },
+              {
+                "field": "remediation_required",
+                "type": "boolean",
+                "prompt": "Remediation required?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan if non-compliant."
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "TPC-12",
+          "title": "Access Control",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              {
+                "field": "compliance_status",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Non-Compliant",
+                  "Compensating Control",
+                  "N/A"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence (documents, screenshots, configurations)?"
+              },
+              {
+                "field": "compensating_control",
+                "type": "text",
+                "prompt": "If compensating control, describe it."
+              },
+              {
+                "field": "remediation_required",
+                "type": "boolean",
+                "prompt": "Remediation required?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan if non-compliant."
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "TPC-13",
+          "title": "Strong Authentication",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              {
+                "field": "compliance_status",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Non-Compliant",
+                  "Compensating Control",
+                  "N/A"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence (documents, screenshots, configurations)?"
+              },
+              {
+                "field": "compensating_control",
+                "type": "text",
+                "prompt": "If compensating control, describe it."
+              },
+              {
+                "field": "remediation_required",
+                "type": "boolean",
+                "prompt": "Remediation required?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan if non-compliant."
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "TPC-14",
+          "title": "Password Management",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              {
+                "field": "compliance_status",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Non-Compliant",
+                  "Compensating Control",
+                  "N/A"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence (documents, screenshots, configurations)?"
+              },
+              {
+                "field": "compensating_control",
+                "type": "text",
+                "prompt": "If compensating control, describe it."
+              },
+              {
+                "field": "remediation_required",
+                "type": "boolean",
+                "prompt": "Remediation required?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan if non-compliant."
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "TPC-15",
+          "title": "Privileged Access Management",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              {
+                "field": "compliance_status",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Non-Compliant",
+                  "Compensating Control",
+                  "N/A"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence (documents, screenshots, configurations)?"
+              },
+              {
+                "field": "compensating_control",
+                "type": "text",
+                "prompt": "If compensating control, describe it."
+              },
+              {
+                "field": "remediation_required",
+                "type": "boolean",
+                "prompt": "Remediation required?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan if non-compliant."
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "TPC-16",
+          "title": "Cybersecurity Incident Management",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              {
+                "field": "compliance_status",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Non-Compliant",
+                  "Compensating Control",
+                  "N/A"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence (documents, screenshots, configurations)?"
+              },
+              {
+                "field": "compensating_control",
+                "type": "text",
+                "prompt": "If compensating control, describe it."
+              },
+              {
+                "field": "remediation_required",
+                "type": "boolean",
+                "prompt": "Remediation required?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan if non-compliant."
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "TPC-17",
+          "title": "Incident Reporting to Saudi Aramco",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              {
+                "field": "compliance_status",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Non-Compliant",
+                  "Compensating Control",
+                  "N/A"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence (documents, screenshots, configurations)?"
+              },
+              {
+                "field": "compensating_control",
+                "type": "text",
+                "prompt": "If compensating control, describe it."
+              },
+              {
+                "field": "remediation_required",
+                "type": "boolean",
+                "prompt": "Remediation required?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan if non-compliant."
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "TPC-18",
+          "title": "Backup Management",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              {
+                "field": "compliance_status",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Non-Compliant",
+                  "Compensating Control",
+                  "N/A"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence (documents, screenshots, configurations)?"
+              },
+              {
+                "field": "compensating_control",
+                "type": "text",
+                "prompt": "If compensating control, describe it."
+              },
+              {
+                "field": "remediation_required",
+                "type": "boolean",
+                "prompt": "Remediation required?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan if non-compliant."
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "TPC-19",
+          "title": "Acceptable Use of Removable Media",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              {
+                "field": "compliance_status",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Non-Compliant",
+                  "Compensating Control",
+                  "N/A"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence (documents, screenshots, configurations)?"
+              },
+              {
+                "field": "compensating_control",
+                "type": "text",
+                "prompt": "If compensating control, describe it."
+              },
+              {
+                "field": "remediation_required",
+                "type": "boolean",
+                "prompt": "Remediation required?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan if non-compliant."
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "TPC-20",
+          "title": "CCC Submission",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              {
+                "field": "compliance_status",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Non-Compliant",
+                  "Compensating Control",
+                  "N/A"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence (documents, screenshots, configurations)?"
+              },
+              {
+                "field": "compensating_control",
+                "type": "text",
+                "prompt": "If compensating control, describe it."
+              },
+              {
+                "field": "remediation_required",
+                "type": "boolean",
+                "prompt": "Remediation required?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan if non-compliant."
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "TPC-21",
+          "title": "CCC Renewal (every 2 years)",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              {
+                "field": "compliance_status",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Non-Compliant",
+                  "Compensating Control",
+                  "N/A"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence (documents, screenshots, configurations)?"
+              },
+              {
+                "field": "compensating_control",
+                "type": "text",
+                "prompt": "If compensating control, describe it."
+              },
+              {
+                "field": "remediation_required",
+                "type": "boolean",
+                "prompt": "Remediation required?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan if non-compliant."
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "TPC-22",
+          "title": "Firewall Configuration",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              {
+                "field": "compliance_status",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Non-Compliant",
+                  "Compensating Control",
+                  "N/A"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence (documents, screenshots, configurations)?"
+              },
+              {
+                "field": "compensating_control",
+                "type": "text",
+                "prompt": "If compensating control, describe it."
+              },
+              {
+                "field": "remediation_required",
+                "type": "boolean",
+                "prompt": "Remediation required?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan if non-compliant."
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "TPC-23",
+          "title": "Email and Web Filtering",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              {
+                "field": "compliance_status",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Non-Compliant",
+                  "Compensating Control",
+                  "N/A"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence (documents, screenshots, configurations)?"
+              },
+              {
+                "field": "compensating_control",
+                "type": "text",
+                "prompt": "If compensating control, describe it."
+              },
+              {
+                "field": "remediation_required",
+                "type": "boolean",
+                "prompt": "Remediation required?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan if non-compliant."
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "TPC-24",
+          "title": "Anti-Malware",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              {
+                "field": "compliance_status",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Non-Compliant",
+                  "Compensating Control",
+                  "N/A"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence (documents, screenshots, configurations)?"
+              },
+              {
+                "field": "compensating_control",
+                "type": "text",
+                "prompt": "If compensating control, describe it."
+              },
+              {
+                "field": "remediation_required",
+                "type": "boolean",
+                "prompt": "Remediation required?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan if non-compliant."
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "NETWORK_CONNECTIVITY",
+      "name": "Specific Requirements — Network Connectivity",
+      "controls": [
+        {
+          "id": "TPC-25",
+          "title": "Network segmentation for Aramco connectivity",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              {
+                "field": "compliance_status",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Non-Compliant",
+                  "Compensating Control",
+                  "N/A"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence (documents, screenshots, configurations)?"
+              },
+              {
+                "field": "compensating_control",
+                "type": "text",
+                "prompt": "If compensating control, describe it."
+              },
+              {
+                "field": "remediation_required",
+                "type": "boolean",
+                "prompt": "Remediation required?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan if non-compliant."
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "TPC-26",
+          "title": "Encrypted VPN tunnels (IPSec/SSL)",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              {
+                "field": "compliance_status",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Non-Compliant",
+                  "Compensating Control",
+                  "N/A"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence (documents, screenshots, configurations)?"
+              },
+              {
+                "field": "compensating_control",
+                "type": "text",
+                "prompt": "If compensating control, describe it."
+              },
+              {
+                "field": "remediation_required",
+                "type": "boolean",
+                "prompt": "Remediation required?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan if non-compliant."
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "TPC-27",
+          "title": "Dedicated network for Aramco services",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              {
+                "field": "compliance_status",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Non-Compliant",
+                  "Compensating Control",
+                  "N/A"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence (documents, screenshots, configurations)?"
+              },
+              {
+                "field": "compensating_control",
+                "type": "text",
+                "prompt": "If compensating control, describe it."
+              },
+              {
+                "field": "remediation_required",
+                "type": "boolean",
+                "prompt": "Remediation required?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan if non-compliant."
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "TPC-28",
+          "title": "Network monitoring and logging",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              {
+                "field": "compliance_status",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Non-Compliant",
+                  "Compensating Control",
+                  "N/A"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence (documents, screenshots, configurations)?"
+              },
+              {
+                "field": "compensating_control",
+                "type": "text",
+                "prompt": "If compensating control, describe it."
+              },
+              {
+                "field": "remediation_required",
+                "type": "boolean",
+                "prompt": "Remediation required?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan if non-compliant."
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "TPC-29",
+          "title": "Wireless segmentation",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              {
+                "field": "compliance_status",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Non-Compliant",
+                  "Compensating Control",
+                  "N/A"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence (documents, screenshots, configurations)?"
+              },
+              {
+                "field": "compensating_control",
+                "type": "text",
+                "prompt": "If compensating control, describe it."
+              },
+              {
+                "field": "remediation_required",
+                "type": "boolean",
+                "prompt": "Remediation required?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan if non-compliant."
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "OUTSOURCED_INFRASTRUCTURE",
+      "name": "Specific Requirements — Outsourced Infrastructure",
+      "controls": [
+        {
+          "id": "TPC-30",
+          "title": "Infrastructure security baseline",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              {
+                "field": "compliance_status",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Non-Compliant",
+                  "Compensating Control",
+                  "N/A"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence (documents, screenshots, configurations)?"
+              },
+              {
+                "field": "compensating_control",
+                "type": "text",
+                "prompt": "If compensating control, describe it."
+              },
+              {
+                "field": "remediation_required",
+                "type": "boolean",
+                "prompt": "Remediation required?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan if non-compliant."
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "TPC-31",
+          "title": "Hardening of operating systems",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              {
+                "field": "compliance_status",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Non-Compliant",
+                  "Compensating Control",
+                  "N/A"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence (documents, screenshots, configurations)?"
+              },
+              {
+                "field": "compensating_control",
+                "type": "text",
+                "prompt": "If compensating control, describe it."
+              },
+              {
+                "field": "remediation_required",
+                "type": "boolean",
+                "prompt": "Remediation required?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan if non-compliant."
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "TPC-32",
+          "title": "Database security",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              {
+                "field": "compliance_status",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Non-Compliant",
+                  "Compensating Control",
+                  "N/A"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence (documents, screenshots, configurations)?"
+              },
+              {
+                "field": "compensating_control",
+                "type": "text",
+                "prompt": "If compensating control, describe it."
+              },
+              {
+                "field": "remediation_required",
+                "type": "boolean",
+                "prompt": "Remediation required?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan if non-compliant."
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "TPC-33",
+          "title": "Hypervisor and virtualization security",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              {
+                "field": "compliance_status",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Non-Compliant",
+                  "Compensating Control",
+                  "N/A"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence (documents, screenshots, configurations)?"
+              },
+              {
+                "field": "compensating_control",
+                "type": "text",
+                "prompt": "If compensating control, describe it."
+              },
+              {
+                "field": "remediation_required",
+                "type": "boolean",
+                "prompt": "Remediation required?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan if non-compliant."
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "TPC-34",
+          "title": "Patch and vulnerability management",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              {
+                "field": "compliance_status",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Non-Compliant",
+                  "Compensating Control",
+                  "N/A"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence (documents, screenshots, configurations)?"
+              },
+              {
+                "field": "compensating_control",
+                "type": "text",
+                "prompt": "If compensating control, describe it."
+              },
+              {
+                "field": "remediation_required",
+                "type": "boolean",
+                "prompt": "Remediation required?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan if non-compliant."
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "CRITICAL_DATA_PROCESSOR",
+      "name": "Specific Requirements — Critical Data Processor",
+      "controls": [
+        {
+          "id": "TPC-35",
+          "title": "Data classification and labelling for Aramco data",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              {
+                "field": "compliance_status",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Non-Compliant",
+                  "Compensating Control",
+                  "N/A"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence (documents, screenshots, configurations)?"
+              },
+              {
+                "field": "compensating_control",
+                "type": "text",
+                "prompt": "If compensating control, describe it."
+              },
+              {
+                "field": "remediation_required",
+                "type": "boolean",
+                "prompt": "Remediation required?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan if non-compliant."
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "TPC-36",
+          "title": "Encryption of Aramco data at rest",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              {
+                "field": "compliance_status",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Non-Compliant",
+                  "Compensating Control",
+                  "N/A"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence (documents, screenshots, configurations)?"
+              },
+              {
+                "field": "compensating_control",
+                "type": "text",
+                "prompt": "If compensating control, describe it."
+              },
+              {
+                "field": "remediation_required",
+                "type": "boolean",
+                "prompt": "Remediation required?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan if non-compliant."
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "TPC-37",
+          "title": "Encryption of Aramco data in transit",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              {
+                "field": "compliance_status",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Non-Compliant",
+                  "Compensating Control",
+                  "N/A"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence (documents, screenshots, configurations)?"
+              },
+              {
+                "field": "compensating_control",
+                "type": "text",
+                "prompt": "If compensating control, describe it."
+              },
+              {
+                "field": "remediation_required",
+                "type": "boolean",
+                "prompt": "Remediation required?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan if non-compliant."
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "TPC-38",
+          "title": "Data loss prevention",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              {
+                "field": "compliance_status",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Non-Compliant",
+                  "Compensating Control",
+                  "N/A"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence (documents, screenshots, configurations)?"
+              },
+              {
+                "field": "compensating_control",
+                "type": "text",
+                "prompt": "If compensating control, describe it."
+              },
+              {
+                "field": "remediation_required",
+                "type": "boolean",
+                "prompt": "Remediation required?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan if non-compliant."
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "TPC-39",
+          "title": "Data residency requirements",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              {
+                "field": "compliance_status",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Non-Compliant",
+                  "Compensating Control",
+                  "N/A"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence (documents, screenshots, configurations)?"
+              },
+              {
+                "field": "compensating_control",
+                "type": "text",
+                "prompt": "If compensating control, describe it."
+              },
+              {
+                "field": "remediation_required",
+                "type": "boolean",
+                "prompt": "Remediation required?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan if non-compliant."
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "TPC-40",
+          "title": "Secure data disposal",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              {
+                "field": "compliance_status",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Non-Compliant",
+                  "Compensating Control",
+                  "N/A"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence (documents, screenshots, configurations)?"
+              },
+              {
+                "field": "compensating_control",
+                "type": "text",
+                "prompt": "If compensating control, describe it."
+              },
+              {
+                "field": "remediation_required",
+                "type": "boolean",
+                "prompt": "Remediation required?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan if non-compliant."
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "SOFTWARE_CUSTOMIZATION",
+      "name": "Specific Requirements — Software Customization",
+      "controls": [
+        {
+          "id": "TPC-41",
+          "title": "Secure SDLC",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              {
+                "field": "compliance_status",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Non-Compliant",
+                  "Compensating Control",
+                  "N/A"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence (documents, screenshots, configurations)?"
+              },
+              {
+                "field": "compensating_control",
+                "type": "text",
+                "prompt": "If compensating control, describe it."
+              },
+              {
+                "field": "remediation_required",
+                "type": "boolean",
+                "prompt": "Remediation required?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan if non-compliant."
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "TPC-42",
+          "title": "Code review and SAST",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              {
+                "field": "compliance_status",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Non-Compliant",
+                  "Compensating Control",
+                  "N/A"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence (documents, screenshots, configurations)?"
+              },
+              {
+                "field": "compensating_control",
+                "type": "text",
+                "prompt": "If compensating control, describe it."
+              },
+              {
+                "field": "remediation_required",
+                "type": "boolean",
+                "prompt": "Remediation required?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan if non-compliant."
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "TPC-43",
+          "title": "DAST and penetration testing",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              {
+                "field": "compliance_status",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Non-Compliant",
+                  "Compensating Control",
+                  "N/A"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence (documents, screenshots, configurations)?"
+              },
+              {
+                "field": "compensating_control",
+                "type": "text",
+                "prompt": "If compensating control, describe it."
+              },
+              {
+                "field": "remediation_required",
+                "type": "boolean",
+                "prompt": "Remediation required?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan if non-compliant."
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "TPC-44",
+          "title": "Application security baselines (OWASP)",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              {
+                "field": "compliance_status",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Non-Compliant",
+                  "Compensating Control",
+                  "N/A"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence (documents, screenshots, configurations)?"
+              },
+              {
+                "field": "compensating_control",
+                "type": "text",
+                "prompt": "If compensating control, describe it."
+              },
+              {
+                "field": "remediation_required",
+                "type": "boolean",
+                "prompt": "Remediation required?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan if non-compliant."
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "TPC-45",
+          "title": "Third-party component management (SCA)",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              {
+                "field": "compliance_status",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Non-Compliant",
+                  "Compensating Control",
+                  "N/A"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence (documents, screenshots, configurations)?"
+              },
+              {
+                "field": "compensating_control",
+                "type": "text",
+                "prompt": "If compensating control, describe it."
+              },
+              {
+                "field": "remediation_required",
+                "type": "boolean",
+                "prompt": "Remediation required?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan if non-compliant."
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "TPC-46",
+          "title": "Source code escrow / protection",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              {
+                "field": "compliance_status",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Non-Compliant",
+                  "Compensating Control",
+                  "N/A"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence (documents, screenshots, configurations)?"
+              },
+              {
+                "field": "compensating_control",
+                "type": "text",
+                "prompt": "If compensating control, describe it."
+              },
+              {
+                "field": "remediation_required",
+                "type": "boolean",
+                "prompt": "Remediation required?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan if non-compliant."
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

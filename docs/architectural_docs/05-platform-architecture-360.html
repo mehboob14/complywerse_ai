@@ -1,0 +1,1590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GRC Platform. 360° Architecture Reference</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --panel: #ffffff;
+    --panel-2: #f5f5f5;
+    --border: #000000;
+    --text: #000000;
+    --muted: #444444;
+    --accent: #000000;
+    --accent-2: #000000;
+    --warn: #000000;
+    --danger: #000000;
+    --pill-bg: #f0f0f0;
+    --pill-border: #999999;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    font-size: 14.5px;
+    line-height: 1.55;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 32px 28px 96px; }
+  header.hero {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 18px;
+    margin-bottom: 22px;
+  }
+  header.hero h1 {
+    margin: 0 0 6px;
+    font-size: 28px;
+    letter-spacing: -0.01em;
+  }
+  header.hero .sub {
+    color: var(--muted);
+    font-size: 14px;
+  }
+  header.hero .stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 14px;
+  }
+  .stat {
+    border: 1px solid var(--border);
+    background: var(--panel);
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 12px;
+  }
+  .stat .n { font-weight: 700; color: var(--accent-2); margin-right: 4px; }
+  nav.toc {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px;
+    margin-bottom: 26px;
+  }
+  nav.toc h2 {
+    margin: 0 0 10px;
+    font-size: 13px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  nav.toc ol {
+    margin: 0;
+    padding-left: 18px;
+    columns: 2;
+    column-gap: 30px;
+  }
+  nav.toc ol li {
+    padding: 3px 0;
+    break-inside: avoid;
+  }
+  nav.toc a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+  nav.toc a:hover { text-decoration: underline; }
+
+  section.module {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    margin: 22px 0;
+    overflow: hidden;
+    background: var(--panel);
+  }
+  section.module > header {
+    padding: 14px 18px;
+    background: var(--panel-2);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  section.module > header h2 {
+    margin: 0;
+    font-size: 18px;
+    letter-spacing: -0.005em;
+  }
+  section.module > header .tag {
+    font-size: 11px;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    padding: 3px 8px;
+    border-radius: 999px;
+  }
+  section.module > .body { padding: 4px 18px 14px; }
+
+  .sub {
+    border-top: 1px dashed var(--border);
+    padding: 14px 0 10px;
+  }
+  .sub:first-of-type { border-top: 0; }
+  .sub h3 {
+    margin: 0 0 8px;
+    font-size: 15px;
+    color: var(--accent-2);
+  }
+  .feat-list, .link-list {
+    margin: 6px 0 4px;
+    padding-left: 20px;
+  }
+  .feat-list li, .link-list li {
+    margin: 2px 0;
+  }
+  .link-list li code {
+    background: var(--pill-bg);
+    border: 1px solid var(--pill-border);
+    color: var(--text);
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 12px;
+  }
+  .meta {
+    color: var(--muted);
+    font-size: 12.5px;
+    margin: 4px 0 8px;
+  }
+  .pill-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 6px 0 10px;
+  }
+  .pill {
+    background: var(--pill-bg);
+    border: 1px solid var(--pill-border);
+    color: var(--text);
+    font-size: 11.5px;
+    padding: 3px 9px;
+    border-radius: 999px;
+  }
+  .pill.ai { border-color: rgba(255,181,71,0.4); color: var(--warn); }
+  .pill.crit { border-color: rgba(239,90,115,0.4); color: var(--danger); }
+
+  .linkage-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 10px;
+  }
+  .link-card {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 12.5px;
+  }
+  .link-card .from-to {
+    color: var(--accent);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 4px;
+  }
+  .link-card code { font-size: 12px; color: var(--accent-2); }
+
+  /* SVG diagram block */
+  .diagram-wrap {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    margin: 16px 0;
+    overflow-x: auto;
+  }
+  .diagram-wrap h4 {
+    margin: 0 0 10px;
+    font-size: 13px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .ascii {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: 12px;
+    line-height: 1.35;
+    color: var(--muted);
+    white-space: pre;
+    margin: 0;
+  }
+  table.facts {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12.5px;
+    margin: 8px 0 4px;
+  }
+  table.facts th, table.facts td {
+    text-align: left;
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  table.facts th {
+    color: var(--muted);
+    font-weight: 600;
+    background: var(--panel-2);
+  }
+  table.facts td code {
+    background: var(--pill-bg);
+    border: 1px solid var(--pill-border);
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 11.5px;
+  }
+  .callout {
+    background: #fafafa;
+    border: 1px solid #000;
+    padding: 12px 16px;
+    margin: 14px 0;
+    font-size: 13px;
+  }
+  .callout strong { color: #000; }
+  /* Remove AI flavoured pills, normalize to plain black border */
+  .pill.ai { border-color: #999 !important; color: #000 !important; }
+  .pill.crit { border-color: #999 !important; color: #000 !important; }
+  footer.endnote {
+    margin-top: 40px;
+    padding-top: 18px;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 12.5px;
+  }
+  @media (max-width: 760px) {
+    nav.toc ol { columns: 1; }
+    .linkage-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <h1>GRC Platform. Architecture Reference</h1>
+  <div class="sub">Every module, sub-module, feature, AI surface, and cross-module linkage in one document.</div>
+  <div class="stats">
+    <span class="stat"><span class="n">12</span> top-level modules</span>
+    <span class="stat"><span class="n">80+</span> sub-modules</span>
+    <span class="stat"><span class="n">28</span> pre-seeded frameworks</span>
+    <span class="stat"><span class="n">38</span> database model files</span>
+    <span class="stat"><span class="n">32</span> backend routers</span>
+    <span class="stat"><span class="n">30+</span> cross-module link tables</span>
+    <span class="stat"><span class="n">10+</span> AI / regex surfaces</span>
+    <span class="stat"><span class="n">15+</span> external integrations</span>
+  </div>
+</header>
+
+<nav class="toc">
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#governance">Governance</a></li>
+    <li><a href="#erm">Enterprise Risk Management (ERM)</a></li>
+    <li><a href="#compliance">Compliance &amp; Frameworks</a></li>
+    <li><a href="#evidence">Evidence Library</a></li>
+    <li><a href="#assets">IT Assets</a></li>
+    <li><a href="#vulnerabilities">Vulnerability Management</a></li>
+    <li><a href="#issues">Issue Management (CAPA)</a></li>
+    <li><a href="#tasks">Critical Tasks</a></li>
+    <li><a href="#projects">IS Projects</a></li>
+    <li><a href="#admin">Administration / Auth / RBAC</a></li>
+    <li><a href="#workflows">Workflow Engine</a></li>
+    <li><a href="#integrations">Integrations &amp; Connectors</a></li>
+    <li><a href="#auditor">Auditor Portal</a></li>
+    <li><a href="#vendor">Vendor Risk</a></li>
+    <li><a href="#ai">AI / ComplyChat</a></li>
+    <li><a href="#search">Search &amp; Analytics</a></li>
+    <li><a href="#artifacts">Artifacts Catalog</a></li>
+    <li><a href="#linkages">Cross-Module Linkage Map</a></li>
+    <li><a href="#cross">Cross-Cutting (Multi-Tenancy, Audit, RBAC, Encryption, Async)</a></li>
+  </ol>
+</nav>
+
+<div class="diagram-wrap">
+  <h4>System topology. high level</h4>
+  <pre class="ascii">
+            ┌────────────────────────────────────────────────────────────┐
+            │                     Tenant Users                           │
+            │   CISO · Risk Owners · Auditors · SecOps · Compliance     │
+            └─────────────────────────────┬──────────────────────────────┘
+                                          │ HTTPS, JWT, MFA
+                          ┌───────────────▼───────────────┐
+                          │       Next.js Frontend         │
+                          │  App Router · TanStack Query   │
+                          │  Tailwind · Recharts · Lucide  │
+                          └───────────────┬───────────────┘
+                                          │ /api → /grc rewrites
+                          ┌───────────────▼───────────────┐
+                          │       FastAPI Backend          │
+                          │  32 routers · 19 modules       │
+                          │  Pydantic v2 · SQLAlchemy 2    │
+                          │  Celery async + Qdrant vectors │
+                          └─┬─────────┬─────────┬─────────┘
+                            │         │         │
+              ┌─────────────▼┐ ┌──────▼──────┐ ┌▼─────────────────┐
+              │  Postgres    │ │ Object Store│ │  Connectors      │
+              │  (DB per     │ │  S3 / Azure │ │  · Nessus/Rapid7 │
+              │   tenant) +  │ │  Blob/Local │ │  · Wazuh/Qualys  │
+              │  registry DB │ │  for evid.  │ │  · AWS/Azure/GCP │
+              └──────────────┘ └─────────────┘ │  · ServiceNow    │
+                                                │  · Splunk/Teams  │
+                                                │  · Entra/Google  │
+                                                │  · WinRM/SSH/AD  │
+                                                └──────────────────┘
+  </pre>
+</div>
+
+<!-- ───────────────────────── GOVERNANCE ───────────────────────── -->
+<section class="module" id="governance">
+  <header>
+    <h2>1. Governance</h2>
+    <span class="tag">7 sub-modules · 14+ link tables · 4 AI surfaces</span>
+  </header>
+  <div class="body">
+
+    <div class="sub">
+      <h3>1.1 Governance Objectives &amp; Strategic Alignment</h3>
+      <div class="meta">Strategic direction tracking with cross-domain impact analysis.</div>
+      <ul class="feat-list">
+        <li><strong>CRUD on <code>GovernanceObjective</code></strong>. name, description, owner, status, target_date.</li>
+        <li>Tracks alignment of operational activity against board-set objectives.</li>
+        <li>Dashboard aggregates objectives + exceptions by status; flags overdue + pending approvals.</li>
+      </ul>
+      <div class="pill-row">
+        <span class="pill">RiskGovernanceLink</span>
+        <span class="pill">IssueGovernanceLink</span>
+        <span class="pill">DocumentRiskLink</span>
+      </div>
+    </div>
+
+    <div class="sub">
+      <h3>1.2 Document Management (Policies, Procedures, Standards)</h3>
+      <div class="meta">Full lifecycle, immutable versions, multi-step approval chains, annotations.</div>
+      <ul class="feat-list">
+        <li><strong>Lifecycle states</strong>: draft → pending_review → pending_approval → approved → published → expired → archived.</li>
+        <li><strong>Versioning</strong>: <code>GovernanceDocumentVersion</code> with change_type (major/minor/patch), change_summary, approval history.</li>
+        <li><strong>Multi-step approval</strong>: <code>DocumentApprovalStep</code> with sequence, approval_type (single/any/all), delegations, due dates.</li>
+        <li><strong>Reviewers</strong>: <code>DocumentReviewer</code> with owner/author/reviewer/approver/stakeholder roles + notification prefs.</li>
+        <li><strong>Audit trail</strong>: <code>DocumentAuditLog</code> tracks every field-level change with diff.</li>
+        <li><strong>Collaborative review</strong>: <code>DocumentAnnotation</code> for inline comments at text-range or general level.</li>
+        <li><strong>Policy review cycles</strong>: <code>PolicyReviewHistory</code> records periodic / ad-hoc / triggered reviews.</li>
+      </ul>
+      <div class="pill-row">
+        <span class="pill ai">AI: policy auto-classify</span>
+        <span class="pill ai">AI: section extraction</span>
+        <span class="pill">DocumentControlLink</span>
+        <span class="pill">DocumentAssetLink</span>
+        <span class="pill">DocumentRegulatoryLink</span>
+        <span class="pill">DocumentRiskLink</span>
+      </div>
+    </div>
+
+    <div class="sub">
+      <h3>1.3 Policy Exceptions Management</h3>
+      <div class="meta">Formal acceptance of risk against published policy, with AI-drafted justification.</div>
+      <ul class="feat-list">
+        <li><code>PolicyException</code> with priority, effective/expiry dates, risk assessment, compensating controls.</li>
+        <li><strong>AI suggestion endpoint</strong>: <code>POST /policy-exceptions/suggest-content</code>. uses OpenAI/Claude to draft justification + risk assessment + compensating controls from policy context (≤3500 char excerpt).</li>
+        <li>Lifecycle: draft → pending_approval → approved / rejected / revoked.</li>
+        <li>Threaded discussion via <code>PolicyExceptionComment</code>.</li>
+        <li>Expiry tracking with automatic re-review reminders; when exception expires, dependent risks revert to "unmitigated".</li>
+      </ul>
+      <div class="pill-row">
+        <span class="pill ai">AI: OpenAI exception draft</span>
+        <span class="pill">PolicyException → GovernanceDocument</span>
+      </div>
+    </div>
+
+    <div class="sub">
+      <h3>1.4 Attestation &amp; Certification Campaigns</h3>
+      <div class="meta">Periodic user sign-offs on policies, with multi-tier escalation chains.</div>
+      <ul class="feat-list">
+        <li><strong>Campaign types</strong>: sox_302, sox_404, policy_signoff, bcp_awareness, training_acknowledgment.</li>
+        <li><strong>Audience targeting</strong>: all_users, by_department, by_role, custom.</li>
+        <li><strong>Per-request tracking</strong>: <code>AttestationRequest</code> with reminder_sent_at, escalation_sent_at.</li>
+        <li><strong>Escalation chains</strong>: <code>EscalationChain</code> defines 4 tiers (staff → manager → director → CRO) with delay periods.</li>
+        <li>Optional evidence attachment per attestation for compliance proof.</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>1.5 Board &amp; Committee Management</h3>
+      <div class="meta">Charters, meetings, agendas, voting, minutes. all auditable.</div>
+      <ul class="feat-list">
+        <li><strong>Committee types</strong>: board, risk_committee, audit_committee, compliance_committee, it_steering, custom.</li>
+        <li><strong>Membership</strong>: <code>CommitteeMember</code> with role (chair/secretary/member/observer), joined_at, left_at.</li>
+        <li><strong>Charter management</strong>: <code>CommitteeCharter</code> with versioning, effective/expiry dates, structured <code>sections_json</code> (supports both AI-generated and uploaded charters).</li>
+        <li><strong>Meetings</strong>: <code>CommitteeMeeting</code> with quorum tracking, virtual_link, status state machine.</li>
+        <li><strong>Agenda items</strong>: <code>MeetingAgendaItem</code> (approval / discussion / information / action_review) with linked document / risk / regulatory_change, time_allocated, outcome.</li>
+        <li><strong>Per-member voting</strong>: <code>MeetingAgendaItemVote</code> tracks consensus (agreed / disagreed / partial / abstain) with comments.</li>
+        <li><strong>Minutes</strong>: <code>MeetingMinutes</code> one-to-one with meeting.</li>
+        <li><strong>Oversight actions</strong>: <code>OversightAction</code> ties committee decisions to Issue tracking.</li>
+      </ul>
+      <div class="pill-row">
+        <span class="pill ai">AI: meeting transcript → minutes</span>
+        <span class="pill ai">AI: charter generator</span>
+      </div>
+    </div>
+
+    <div class="sub">
+      <h3>1.6 Regulatory Change Management</h3>
+      <div class="meta">Automated regulatory intelligence pulled from RSS feeds, with impact mapping to policies + risks + controls.</div>
+      <ul class="feat-list">
+        <li><code>RegulatoryChange</code> tracks framework changes, applicability, impact assessment.</li>
+        <li><strong>RSS ingestion</strong>: <code>RSSFeedSource</code> + <code>RSSFeedItem</code> for automated regulatory intelligence feeds.</li>
+        <li>Impact mapping field <code>impact_risk_ids</code> (JSON array) links directly to risks affected by the change.</li>
+        <li>Committee linkage: <code>MeetingAgendaItem.linked_regulatory_change_id</code> brings changes into committee oversight.</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>1.7 Policy Gap Analysis</h3>
+      <div class="meta">Cross-framework gap detection between policy statements and regulatory requirements.</div>
+      <ul class="feat-list">
+        <li>Per-framework gap reports via <code>PolicyGapAnalysisByFramework</code>.</li>
+        <li><code>PolicyGapFinding</code> ties gaps to regulatory clauses + affected controls + suggested remediation.</li>
+        <li>Findings can promote directly to risk register (auto-create Risk with source_type = "framework_gap").</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ───────────────────────── ERM ───────────────────────── -->
+<section class="module" id="erm">
+  <header>
+    <h2>2. Enterprise Risk Management (ERM)</h2>
+    <span class="tag">10 sub-modules · 10+ link tables · RCSA + KRI + Cascade + Appetite</span>
+  </header>
+  <div class="body">
+
+    <div class="sub">
+      <h3>2.1 Risk Register (Core)</h3>
+      <ul class="feat-list">
+        <li><strong>Risk taxonomy</strong>: category (strategic / operational / financial / compliance / technology / third_party / project_change), risk_sub_category.</li>
+        <li><strong>Dual scoring</strong>: inherent (likelihood × impact, both 1 to 5) and residual (post-mitigation).</li>
+        <li><strong>Lifecycle</strong>: open → mitigating → mitigated → accepted → closed; closure_status (pending_closure / closed).</li>
+        <li><strong>Provenance tracking</strong>: source_type. manual / register_import / assessment / incident / rcsa / framework_gap / ubl_import / nca_import.</li>
+        <li><strong>Risk appetite alignment</strong>: appetite field + breach detection.</li>
+        <li><strong>Excel import</strong>: smart header detection, flexible field mapping, category inference from threat / vulnerability / title.</li>
+        <li><strong>Heatmap</strong>: 2D likelihood × impact visualisation with counts per intersection.</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>2.2 Risk Assessment &amp; Scoring</h3>
+      <ul class="feat-list">
+        <li><code>/assess</code> endpoint computes inherent + residual scores (L × I).</li>
+        <li><code>/treatment</code> captures mitigation narrative + sets status to "mitigating".</li>
+        <li><strong>Score history</strong>: <code>RiskScoreHistory</code> logs every change with change_reason + changed_by.</li>
+        <li><strong>Trend analysis</strong>: <code>/trends</code> shows score_change vs initial; trend_direction (stable / increasing / decreasing).</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>2.3 Key Risk Indicators (KRIs)</h3>
+      <ul class="feat-list">
+        <li><strong>Metric types</strong>: numeric / percentage / count / boolean.</li>
+        <li><strong>Threshold tiers</strong>: green / amber / red with threshold_direction (lower_is_better or higher_is_better).</li>
+        <li><strong>Measurement frequency</strong>: daily / weekly / monthly / quarterly.</li>
+        <li><strong>Historical data</strong>: <code>RiskKRIMeasurement</code> records values + status + audit trail.</li>
+        <li>Trend endpoint returns last N days for charting; alerts endpoint surfaces red/amber KRIs platform-wide.</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>2.4 Risk Incidents &amp; Realization Tracking</h3>
+      <ul class="feat-list">
+        <li><code>RiskIncident</code> with incident_date / discovered_date, severity, status, financial_impact (USD), operational_impact.</li>
+        <li><strong>Root cause + lessons learned</strong> captured as structured fields.</li>
+        <li>Bidirectional linkage to risks (incident.risk_id ↔ Risk.source_incident_id) so realized risks can be traced.</li>
+        <li>Average resolution time computed from resolved_at − discovered_date.</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>2.5 Risk Review &amp; Approval Workflow</h3>
+      <ul class="feat-list">
+        <li><code>RiskReview</code> with cycle (monthly / quarterly / semi_annual / annual), review_type (periodic / triggered / adhoc).</li>
+        <li>Score delta tracking: previous vs new inherent + residual scores.</li>
+        <li>Reviewer + Approver roles distinct; findings + approval_notes fields.</li>
+        <li>Bulk scheduling endpoint assigns reviews across many risks for quarterly cycles.</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>2.6 Risk Dependencies &amp; Cascade Analysis</h3>
+      <ul class="feat-list">
+        <li><code>RiskDependency</code> with dependency_type (causes / aggravates / mitigates / related) + impact_factor.</li>
+        <li><strong>Cascade compute</strong>: <code>/dependencies/{risk_id}/cascade</code> recursively traverses downstream risks (max depth 10, cycle-safe).</li>
+        <li>Cascade score = target_score × impact_factor per level; total_cascade_score sums tree.</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>2.7 Risk Appetite &amp; Breach Management</h3>
+      <ul class="feat-list">
+        <li><code>RiskAppetiteConfig</code> per tenant/category with appetite_level (averse / minimal / cautious / moderate / open / hungry).</li>
+        <li><code>/appetite/breaches</code> lists risks exceeding category thresholds, sorted by breach_amount.</li>
+        <li>Per-category escalation owners route alerts automatically.</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>2.8 Risk Mitigation Actions &amp; Evidence</h3>
+      <ul class="feat-list">
+        <li><code>RiskMitigationAction</code> with action_type (mitigate / transfer / avoid / accept), priority, expected_residual_reduction, actual_residual_reduction.</li>
+        <li><strong>Many-to-many evidence</strong>: <code>RiskMitigationActionEvidence</code> pivot (mirrors InternalControl pattern).</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>2.9 RCSA. Risk and Control Self-Assessment</h3>
+      <ul class="feat-list">
+        <li><code>RCSAQuestion</code> with ai_suggestion_enabled flag.</li>
+        <li><code>RCSAResponse</code> stores ai_suggestion + ai_suggestion_accepted boolean (tracks whether assessor used the AI hint).</li>
+        <li><strong>AI gap detection</strong>: ai_gap_detected + ai_gap_description; aggregate ai_gaps_identified counter on <code>RCSAAssessment</code>.</li>
+        <li><strong>Quality scoring</strong>: ai_quality_score (0 to 100) rates response completeness; ai_suggestions_used counter tracks adoption.</li>
+      </ul>
+      <div class="pill-row">
+        <span class="pill ai">AI: question hints</span>
+        <span class="pill ai">AI: gap detection</span>
+        <span class="pill ai">AI: quality score</span>
+      </div>
+    </div>
+
+    <div class="sub">
+      <h3>2.10 Compliance Framework Assessments (Bridge to Compliance Module)</h3>
+      <ul class="feat-list">
+        <li>Launch an assessment against any of 28 frameworks; workbook auto-populates with every applicable control.</li>
+        <li>Per control: implementation_status (Not / Partial / Implemented / Tested), effectiveness_rating (1 to 5), evidence attachments, internal control mapping, owner + reviewer + sign-off.</li>
+        <li>Readiness % per framework, unmapped controls list, insufficient-evidence flag, failing-test view.</li>
+        <li>Multi-tier approval workflow with <code>AssessmentEvidenceApprovalTier</code>.</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>2.11 Advanced Reporting &amp; Executive Dashboards</h3>
+      <ul class="feat-list">
+        <li><strong>Executive dashboard</strong>: total_risks, risks_by_category/status/score_band, top_risks (top 10), kri_alerts, pending/overdue reviews.</li>
+        <li><strong>Board summary</strong>: executive_summary, appetite_status per category, top 5 risks, key_changes, recommendations.</li>
+        <li><strong>Department summary</strong>: per-business-unit risk roll-up.</li>
+        <li><strong>Audit export</strong>: JSON dump of risks + incidents + reviews + appetite for compliance reviews.</li>
+        <li><strong>COSO ERM wheel</strong>: Strategy / Operations / Reporting / Compliance categories visualisation.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ───────────────────────── COMPLIANCE ───────────────────────── -->
+<section class="module" id="compliance">
+  <header>
+    <h2>3. Compliance &amp; Frameworks</h2>
+    <span class="tag">8 sub-modules · 28 pre-seeded frameworks · NCA Saudi support</span>
+  </header>
+  <div class="body">
+
+    <div class="callout">
+      <strong>28 pre-seeded frameworks</strong>. ISO 27001:2022, ISO 22301, ISO 42001, NIST CSF 2.0, NIST 800-53, PCI DSS v4, CIS Controls v8 (+ all CIS OS benchmarks), COBIT, SOC 2, HITRUST CSF, GDPR, NIS2, DORA, SOX, HIPAA, SAMA CSF, Aramco CCC, SABIC CyberTrust, ADHICS, DOH ADHIE, QCB Technology Risks, MAS TRM, SL CSF, SBP ETGRMF, SBP Cloud, SBP Internet Banking, SWIFT CSCF.
+    </div>
+
+    <div class="sub">
+      <h3>3.1 Framework Library</h3>
+      <ul class="feat-list">
+        <li><strong>Hierarchy</strong>: Framework → Domain → ControlObjective → FrameworkControl → FrameworkSubControl.</li>
+        <li>Each control has statement, implementation_guidance, testing_guidance, evidence_requirements baked in.</li>
+        <li><strong>Lifecycle</strong>: draft → text_extracted → classifying → classified → parsed → published → completed.</li>
+        <li>Mandatory flag (locks framework against deletion). Per-region tags. Custom frameworks supported via parsing pipeline.</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>3.2 Normalized Control Library</h3>
+      <ul class="feat-list">
+        <li><code>NormalizedControl</code> deduplicates equivalent controls across frameworks (immutable code, maturity_level 0 to 5).</li>
+        <li><code>ControlMapping</code> bridges NormalizedControl ↔ FrameworkControl (type: direct / partial / related).</li>
+        <li><code>GRCRequiredEvidence</code> defines evidence types + validation criteria per control.</li>
+        <li>Reverse lookup: given a framework control, resolve normalized equivalent + all sibling framework mappings.</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>3.3 Compliance Assessments &amp; Approval Workflow</h3>
+      <ul class="feat-list">
+        <li><code>ComplianceAssessmentDocument</code> lifecycle: draft → submitted → in_approval → approved / rejected.</li>
+        <li>Multi-tier approval: <code>AssessmentEvidenceApprovalTier</code> with tier_order, approver_type (role / user), auto_approve_days, delegation.</li>
+        <li>Per-item evidence linkage with current_tier tracking and full audit trail.</li>
+        <li><strong>AI evidence recommendations</strong> per item (EVIDENCE_RECOMMENDATION_PROMPT via OpenAI/Claude).</li>
+        <li>DCC compliance assessment (66 DCC-1:2022 controls auto-seeded with AI recommendations).</li>
+      </ul>
+      <div class="pill-row">
+        <span class="pill ai">AI: evidence recommendations</span>
+        <span class="pill ai">AI: DCC seeding</span>
+      </div>
+    </div>
+
+    <div class="sub">
+      <h3>3.4 Policy Statement Compliance</h3>
+      <ul class="feat-list">
+        <li><code>PolicyStatement</code> categories: security / privacy / operational / financial / regulatory / governance.</li>
+        <li>Compliance states: compliant / partially_compliant / non_compliant / not_assessed / not_applicable.</li>
+        <li>Dashboard rolls up status counts per policy type.</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>3.5 Certification Journey (v2)</h3>
+      <ul class="feat-list">
+        <li>Framework selection → certification roadmap auto-populated with control checklist.</li>
+        <li>Per-control implementation status (not_started / in_progress / implemented / verified).</li>
+        <li>Evidence bundling: upload many files per control (<code>CuratedEvidenceItem</code>).</li>
+        <li>Progress summary: % implemented, % verified, domain-grouped gap analysis.</li>
+        <li>OCR + AI assessment kicked off on every evidence upload in background.</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>3.6 Compliance Plugins (CIS Benchmark Scanning)</h3>
+      <ul class="feat-list">
+        <li><strong>Multi-runner</strong>: WinRM (Windows), SSH (Linux), AWS/Azure/Oracle APIs.</li>
+        <li>Encrypted per-tenant credentials (Fernet). Scope selection by asset.</li>
+        <li><strong>CIS benchmarks</strong>: all current generations (Windows 7 to 11, Server 2008 to 2022, Ubuntu 20/22/24, Debian, RHEL, AlmaLinux, OracleLinux, Amazon Linux, Rocky, Cisco IOS/NX-OS, K8s).</li>
+        <li><strong>Strict-matcher</strong>: <code>BenchmarkOsMapping</code> table picks the right plugin set per asset OS automatically.</li>
+        <li>Auto-create Evidence from scan results; auto-match Evidence ↔ FrameworkControl via benchmark_matcher.</li>
+      </ul>
+      <div class="pill-row">
+        <span class="pill ai">AI: OS normalizer</span>
+        <span class="pill">Strict matcher (regex)</span>
+        <span class="pill ai">AI: benchmark-OS mapping suggester (anti-hallucination)</span>
+      </div>
+    </div>
+
+    <div class="sub">
+      <h3>3.7 Framework Upload &amp; Parsing</h3>
+      <ul class="feat-list">
+        <li>PDF ingest pipeline: extract_pages → parse_fields → classify → gen_check → benchmark_supersession.</li>
+        <li>Field extraction: original_reference, title, description, control_level.</li>
+        <li>Supersession resolution for CIS benchmark version conflicts (v4 → v5 → v6).</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>3.8 NCA (Saudi National Cybersecurity Authority) Templates</h3>
+      <ul class="feat-list">
+        <li>Templated intake: <code>NcaRiskEntry</code>, <code>NcaVulnEntry</code>.</li>
+        <li>NCA-specific fields preserved verbatim on bridged Risk/Vulnerability (<code>template_fields</code> JSON).</li>
+        <li>Status bridge: NCA {OPEN / IN PROGRESS / ON HOLD / RESOLVED} → general {open / in_progress / resolved}.</li>
+        <li>Idempotent sync. re-importing the same NCA file updates the existing bridged record.</li>
+        <li>Five routers: <code>nca_risk_router</code>, <code>nca_vuln_router</code>, <code>nca_templates_router</code>, <code>nca_container_router</code>, <code>nca_kpi_router</code>.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ───────────────────────── EVIDENCE ───────────────────────── -->
+<section class="module" id="evidence">
+  <header>
+    <h2>4. Evidence Library</h2>
+    <span class="tag">3 sub-modules · OCR + AI Quick-Assess · 16 evidence types</span>
+  </header>
+  <div class="body">
+
+    <div class="sub">
+      <h3>4.1 Evidence Library &amp; Versioning</h3>
+      <ul class="feat-list">
+        <li><strong>States</strong>: draft → pending_review → approved → rejected; stale-flag once past validity_period_days.</li>
+        <li><strong>16 evidence types</strong>: policy, procedure, log, report, screenshot, record, configuration, certificate, contract, attestation, test_results, register, inventory, plan, matrix, training.</li>
+        <li><strong>Ownership chain</strong>: uploader (uploaded_by) ≠ owner (designated keeper); review/approval lifecycle (submitted_by → reviewed_by → approved_by).</li>
+        <li><strong>OCR pipeline</strong>: pending → processing → completed/failed; content_summary, quality_score.</li>
+        <li><strong>Expiry management</strong>: collection_date + validity_period_days → expiry_date; recertification_date; stale flag for dashboard.</li>
+        <li><strong>Version history</strong>: <code>EvidenceVersion</code> (number, changes, created_by) audit trail of file replacements.</li>
+        <li><strong>Encryption at rest</strong>: Fernet per-tenant keys.</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>4.2 Evidence Quick-Assess (AI)</h3>
+      <ul class="feat-list">
+        <li>AI semantic matching of evidence content to control requirements.</li>
+        <li>Matched-text snippet extraction (literal quotes from evidence body).</li>
+        <li>Similarity_score + confidence_score (0 to 100).</li>
+        <li>Locking mechanism: evidence owner can lock mappings to prevent AI drift on re-assessment.</li>
+        <li>Bulk endpoint: <code>/evidence/*/assess-bulk</code>.</li>
+      </ul>
+      <div class="pill-row">
+        <span class="pill ai">AI: semantic match</span>
+        <span class="pill ai">AI: snippet extraction</span>
+        <span class="pill ai">Bulk assess</span>
+      </div>
+    </div>
+
+    <div class="sub">
+      <h3>4.3 Evidence Cross-Links (the glue)</h3>
+      <ul class="feat-list">
+        <li><code>EvidenceControlMapping</code>. Evidence ↔ NormalizedControl / FrameworkControl / ParsedFrameworkControl (with confidence_score, coverage_type: full / partial / supporting / not_applicable).</li>
+        <li><code>RiskEvidenceLink</code>, <code>AssetEvidenceLink</code>, <code>EvidenceIncidentLink</code>, <code>AuditPackageEvidence</code>.</li>
+        <li><code>RiskMitigationActionEvidence</code>, <code>AttestationRequest.evidence_id</code>, <code>IssueEvidenceLink</code>.</li>
+        <li>Reverse-lookup endpoints: <code>/evidence/{id}/risks</code>, <code>/evidence/{id}/assets</code>, <code>/evidence/{id}/control-mappings</code>.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ───────────────────────── ASSETS ───────────────────────── -->
+<section class="module" id="assets">
+  <header>
+    <h2>5. IT Assets</h2>
+    <span class="tag">4 sub-modules · ISO 27005 criticality scoring · Connect Wizard</span>
+  </header>
+  <div class="body">
+
+    <div class="sub">
+      <h3>5.1 IT Asset Inventory</h3>
+      <ul class="feat-list">
+        <li><strong>Attributes</strong>: name, asset_type (application / infrastructure / data / cloud / third_party), host_name, IP, status.</li>
+        <li><strong>Ownership chain</strong>: primary_owner_id, secondary_owner_id, business_owner_id, escalation_contact_id, owning_team_id (FK to Teams).</li>
+        <li><strong>Exposure metadata</strong>: internet_facing, network_segment (dmz / prod-app-tier / …), data_classification, business_function, compliance_scope (["PCI-DSS","HIPAA",…]).</li>
+        <li><strong>CIA ratings</strong>: confidentiality / integrity / availability (1 to 5) → derived criticality_score (0.0 to 10.0 ISO 27005).</li>
+        <li><strong>Lifecycle state machine</strong>: planned → active → maintenance → decommissioned → retired; replacement_asset_id (self-FK).</li>
+        <li><strong>Last-seen tracking</strong>: last_seen_at + last_seen_source (nessus / manual / azure_defender / …).</li>
+        <li><strong>OS fingerprinting</strong>: os_family, os_version, os_normalized, os_build, os_edition (auto-populated by Connect Wizard).</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>5.2 Asset Criticality Assessments (Bank Template Parity)</h3>
+      <ul class="feat-list">
+        <li><strong>ISCA</strong>. Information System Criticality Assessment (apps, middleware, DBs).</li>
+        <li><strong>IACA</strong>. Infrastructure Asset Criticality Assessment (network, storage, physical).</li>
+        <li>Server-computed scoring bands → criticality level (low / medium / high / critical).</li>
+        <li>Multi-tier approval: business owner → CISO (permission: <code>assets:criticality_assessments:approve_ciso</code>).</li>
+        <li>Evidence attachments, activity audit trail, threaded comments.</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>5.3 Asset Auto-Classification &amp; Control Recommender</h3>
+      <ul class="feat-list">
+        <li><strong>Auto-classify</strong>: regex-driven asset_type inference from name + vendor + network_segment.</li>
+        <li><strong>Criticality formula</strong>: ISO 27005 base (CIA) + internet_facing (+2.5) + data_classification (+1.0 to 1.5) + business_function (+1.5), clamped [0,10].</li>
+        <li><strong>Mapping recommender</strong>. pure regex (no LLM), 45+ signals per asset_type. Confidence buckets: ≥8 high, ≥4 medium, ≥1 low. Operator one-clicks to accept and link.</li>
+        <li><strong>Manual override</strong>: criticality_manual_override flag + criticality_override_reason audit field.</li>
+      </ul>
+      <div class="pill-row">
+        <span class="pill">Regex (no LLM)</span>
+        <span class="pill ai">AI fallback: anti-hallucination</span>
+      </div>
+    </div>
+
+    <div class="sub">
+      <h3>5.4 Connect Wizard (Agentless OS Probing)</h3>
+      <ul class="feat-list">
+        <li>One-liner customer onboarding: issue token → PowerShell / bash one-liner → handshake within 60-min TTL window.</li>
+        <li>Security: JWT token (tenant_id + nonce), per-machine random agent password (never echoed).</li>
+        <li>Probes: WinRM (Get-CimInstance), SSH (uname / apt list), AWS boto3. auto-detects OS, normalises, creates asset.</li>
+        <li>Preflight: auth_failed, network_unreachable, ssl_error hints to UI before scan.</li>
+        <li>Credentials encrypted via Fernet (per-tenant key).</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ───────────────────────── VULNERABILITIES ───────────────────────── -->
+<section class="module" id="vulnerabilities">
+  <header>
+    <h2>6. Vulnerability Management</h2>
+    <span class="tag">3 sub-modules · KEV + EPSS enrichment · NCA Saudi template</span>
+  </header>
+  <div class="body">
+
+    <div class="sub">
+      <h3>6.1 Vulnerability Register</h3>
+      <ul class="feat-list">
+        <li><strong>Lifecycle</strong>: open → in_progress → resolved / accepted / false_positive.</li>
+        <li><strong>Per-vulnerability</strong>: title, severity (critical / high / medium / low / info), CVSS_score, CVE_id, CWE_id, affected_component / host / port / URL.</li>
+        <li><strong>Threat-intel enrichment</strong>: EPSS score + percentile, KEV flag (CISA Known Exploited Vulnerabilities list), NVD pub/mod dates, exploit references, GitHub PoC count.</li>
+        <li><strong>Composite priority formula</strong>: 0.4 × CVSS + 0.3 × (EPSS × 10) + 0.2 × (KEV ? 10 : 0) + 0.1 × asset_criticality.</li>
+        <li><strong>Exception workflow</strong>: is_exception, exception_reason, exception_expiry, exception_approved_by.</li>
+        <li><strong>Workflow template binding</strong>: workflow_template_id, current_state_id.</li>
+        <li><strong>SLA tracking</strong>: per-severity remediation deadlines, overdue highlighting, MTTR per team, aging buckets (0 to 30d / 31 to 60d / 61 to 90d / 90+).</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>6.2 Vulnerability Reports &amp; Scanner Ingestion</h3>
+      <ul class="feat-list">
+        <li><code>VulnerabilityReport</code> with type (vulnerability_scan / penetration_test / code_review / configuration_audit) and scan_tool (nessus / qualys / burp / owasp_zap / manual).</li>
+        <li>Bulk import with auto-dedup, asset auto-link, severity normalisation.</li>
+        <li>Lifecycle: uploaded → parsing → parsed → analyzed → closed.</li>
+        <li>Patch correlation: which patches close which vulns.</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>6.3 NCA Saudi Vulnerability Template</h3>
+      <ul class="feat-list">
+        <li>NCA-specific fields preserved on bridged Vulnerability (<code>template_fields</code> JSON): vendor_link, cve_score, affected_technology, threat_analysis, threat_severity, risk_likelihood, risk_severity, first_observation_date, due_date, resolution_date, comments, vuln_identifier.</li>
+        <li>Idempotent backing. re-importing the same NCA spreadsheet updates the same Vulnerability row.</li>
+        <li>Bridged detail page surfaces NCA fields in a read-only panel.</li>
+      </ul>
+    </div>
+
+  </div>
+</section>
+
+<!-- ───────────────────────── ISSUES ───────────────────────── -->
+<section class="module" id="issues">
+  <header>
+    <h2>7. Issue Management (CAPA)</h2>
+    <span class="tag">5 sub-modules · 8 link tables · auto-promotion to Critical Tasks</span>
+  </header>
+  <div class="body">
+
+    <div class="sub">
+      <h3>7.1 Issue Lifecycle &amp; Triage</h3>
+      <ul class="feat-list">
+        <li><strong>Issue types</strong>: incident / audit_finding / non_conformance / vendor_breach / process_gap / capa / other.</li>
+        <li><strong>Categories</strong>: security / privacy / operations / contract / data / regulatory / safety.</li>
+        <li><strong>Severity</strong>: computed from (urgency, impact) matrix with user override and audit trail.</li>
+        <li><strong>State machine</strong>: new → triage → in_progress → resolution → closure_review → closed / cancelled.</li>
+        <li>Root cause analysis (5-whys, fishbone) via structured field.</li>
+        <li>SLA breach tracking from severity + target_closure_date.</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>7.2 Issue Actions (CAPA)</h3>
+      <ul class="feat-list">
+        <li><strong>Action types</strong>: corrective / preventive / containment / verification.</li>
+        <li><strong>Status</strong>: planned → in_progress → blocked → completed → verified → cancelled.</li>
+        <li>Per-action assignee + due date + evidence attachments.</li>
+        <li>Effectiveness review timestamp (was the fix effective 30/60/90 days later?).</li>
+        <li><strong>Auto-promotion to <code>CriticalTask</code></strong> with bidirectional sync.</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>7.3 Cross-Entity Issue Linking (8 link tables)</h3>
+      <div class="linkage-grid">
+        <div class="link-card"><div class="from-to">Issue ↔ Vulnerability</div><code>IssueVulnerabilityLink</code></div>
+        <div class="link-card"><div class="from-to">Issue ↔ Risk</div><code>IssueRiskLink</code></div>
+        <div class="link-card"><div class="from-to">Issue ↔ Asset</div><code>IssueAssetLink</code></div>
+        <div class="link-card"><div class="from-to">Issue ↔ Control</div><code>IssueControlLink</code></div>
+        <div class="link-card"><div class="from-to">Issue ↔ Evidence</div><code>IssueEvidenceLink</code></div>
+        <div class="link-card"><div class="from-to">Issue ↔ Vendor</div><code>IssueVendorLink</code></div>
+        <div class="link-card"><div class="from-to">Issue ↔ IS Project</div><code>IssueISProjectLink</code></div>
+        <div class="link-card"><div class="from-to">Issue ↔ Governance</div><code>IssueGovernanceLink</code></div>
+      </div>
+    </div>
+
+    <div class="sub">
+      <h3>7.4 Comments, Activity, Frontend</h3>
+      <ul class="feat-list">
+        <li><code>IssueComment</code> threaded discussion. <code>IssueActivity</code> logs state changes, field updates, automation flags.</li>
+        <li>Frontend offers list, Kanban, matrix views with severity calculator.</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>7.5 Severity &amp; Classification Matrices</h3>
+      <ul class="feat-list">
+        <li><code>IssueSeverityMatrix</code> defines per-tenant urgency × impact → severity rules.</li>
+        <li><code>IssueClassificationMatrix</code> applies issue_type + category taxonomy.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ───────────────────────── CRITICAL TASKS ───────────────────────── -->
+<section class="module" id="tasks">
+  <header>
+    <h2>8. Critical Tasks</h2>
+    <span class="tag">5 sub-modules · 9 source types · recurrence engine</span>
+  </header>
+  <div class="body">
+
+    <div class="sub">
+      <h3>8.1 Task Lifecycle &amp; Source Tracking</h3>
+      <ul class="feat-list">
+        <li><strong>9 sources</strong>: Manual, Vulnerability, Risk, Control Test, Audit, Vendor Review, Incident, Asset, Issue (CAPA).</li>
+        <li><strong>Statuses</strong>: Open → In Progress → Completed → Verified → Closed.</li>
+        <li>Priority + category + SLA days; escalation_level auto-computed.</li>
+        <li>Recurrence patterns (one-time, daily, weekly, monthly, annual) with next_recurrence_date.</li>
+        <li>Parent-child task hierarchy (parent_task_id self-FK).</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>8.2 Task Assignment &amp; Multi-User Support</h3>
+      <ul class="feat-list">
+        <li>Primary assignee (legacy) plus multi-assignment (<code>assigned_user_ids</code> JSON array).</li>
+        <li>Reviewer role distinct from assignee.</li>
+        <li>Completion + verification timestamps distinct.</li>
+        <li>History log (status changes, field updates, actor + timestamp).</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>8.3 Subtasks &amp; Threaded Comments</h3>
+      <ul class="feat-list">
+        <li><code>CriticalTaskSubTask</code>. hierarchical breakdown with per-subtask assignee + due date.</li>
+        <li><code>CriticalTaskComment</code>. comment threading with user metadata.</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>8.4 Task Templates &amp; Approval Chains</h3>
+      <ul class="feat-list">
+        <li><code>CriticalTaskTemplate</code> reuse. title, description, assignee defaults, category, priority.</li>
+        <li><code>CriticalTaskApproval</code> with multi-approver support.</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>8.5 Cross-Module Linkages</h3>
+      <ul class="feat-list">
+        <li>Soft refs to Issue, Risk, Vulnerability, InternalControl, Framework.</li>
+        <li><code>IssueAction.linked_critical_task_id</code>. CAPA promotion.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ───────────────────────── PROJECTS ───────────────────────── -->
+<section class="module" id="projects">
+  <header>
+    <h2>9. IS Projects (Information Security Projects)</h2>
+    <span class="tag">4 sub-modules · portfolio view · dependency graph</span>
+  </header>
+  <div class="body">
+
+    <div class="sub">
+      <h3>9.1 Project Core</h3>
+      <ul class="feat-list">
+        <li><strong>Status</strong>: Planning → Active → Completed → Archived.</li>
+        <li><strong>Health</strong>: On Track / At Risk / Off Track.</li>
+        <li>Budget tracking (estimated vs actual). Sponsor + owner. Business justification field.</li>
+        <li>Linked risks, controls, frameworks (JSON arrays for traceability).</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>9.2 Milestones, Tasks &amp; Evidence</h3>
+      <ul class="feat-list">
+        <li><code>ISProjectMilestone</code> with target_date, deliverables, completion %, status.</li>
+        <li><code>ISProjectTask</code> with assignee, due_date, status, priority.</li>
+        <li><code>ISProjectMilestoneEvidence</code>. per-milestone evidence attachments.</li>
+        <li>Task dependencies JSON array for ordering.</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>9.3 Governance &amp; Status Reporting</h3>
+      <ul class="feat-list">
+        <li><code>ISProjectTeamMember</code> roles: PM / Tech Lead / SME / Member / Sponsor / Stakeholder.</li>
+        <li><code>ISProjectStatusUpdate</code> weekly/monthly: what done, what planned, blockers.</li>
+        <li><code>ISProjectRisk</code>. project-level risk register.</li>
+        <li><code>ISProjectDependency</code>. cross-project + external system dependencies.</li>
+        <li><code>ISProjectLessonLearned</code>. post-project review capture.</li>
+        <li><code>ISProjectComplianceMapping</code>. links project to compliance requirements + framework controls.</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>9.4 Frontend Portfolio &amp; Detail Views</h3>
+      <ul class="feat-list">
+        <li>Portfolio view, project detail (overview / milestones / tasks / team / risks / compliance), status updates, resource histogram, dependency graph.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ───────────────────────── ADMINISTRATION ───────────────────────── -->
+<section class="module" id="admin">
+  <header>
+    <h2>10. Administration · Auth · Identity · RBAC</h2>
+    <span class="tag">7 sub-modules · 140+ permissions · 4 SSO types</span>
+  </header>
+  <div class="body">
+
+    <div class="sub">
+      <h3>10.1 Users &amp; Identity</h3>
+      <ul class="feat-list">
+        <li><code>GRCUser</code> (global) + <code>TenantUser</code> (bridge with is_primary flag) supports user belonging to multiple tenants.</li>
+        <li>Password hashing (bcrypt). Session tokens (HS256, 24h TTL, 6h refresh threshold).</li>
+        <li>Email domain filtering (personal-domain block-list).</li>
+        <li>Per-tenant <code>IdentityProviderConfig</code> with <code>entra_directory_id</code>.</li>
+        <li>SSO reconciliation: Entra group → role mapping (source='sso' field protects from manual overwrites).</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>10.2 Roles &amp; Permissions (RBAC)</h3>
+      <ul class="feat-list">
+        <li><code>Role</code> system roles (<code>is_system_role=True</code>) plus tenant-scoped custom roles.</li>
+        <li><code>Permission</code> table indexed on (resource, action). 140+ permissions across all modules.</li>
+        <li>Custom roles with granular permission picker.</li>
+        <li>Role assignment scoped per tenant + optional <code>BusinessUnit</code>.</li>
+        <li>Manual vs SSO-sourced assignments tracked separately (source field).</li>
+      </ul>
+      <div class="pill-row">
+        <span class="pill">resource:action grid</span>
+        <span class="pill">tenant + BU scoping</span>
+        <span class="pill">SSO reconciliation</span>
+      </div>
+    </div>
+
+    <div class="sub">
+      <h3>10.3 Tenants &amp; Multi-Tenancy</h3>
+      <ul class="feat-list">
+        <li>Slug-based subdomain routing (e.g. <code>acme.localhost</code>).</li>
+        <li>Organisation metadata: legal_entity, industry, regulatory_scope, geography, company_size.</li>
+        <li>Per-tenant settings JSON blob.</li>
+        <li><code>BusinessUnit</code> hierarchy (parent_id self-FK) for resource scoping.</li>
+        <li><strong>Database-per-tenant</strong> isolation (separate Postgres DB per tenant + master registry DB).</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>10.4 Password &amp; Session Policy</h3>
+      <ul class="feat-list">
+        <li><code>PasswordSessionPolicy</code> single row per tenant.</li>
+        <li>Configurable complexity, expiry, history, lockout threshold, idle timeout.</li>
+        <li>MFA: optional / required.</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>10.5 Audit Trail (Tamper-Evident)</h3>
+      <ul class="feat-list">
+        <li><code>AuditLog</code> captures every CRUD: actor, timestamp, resource_type, resource_id, IP, before/after diff (JSON).</li>
+        <li>Plain-English action summaries auto-generated.</li>
+        <li><code>IntegrationAuditLog</code> separately for integration connection events.</li>
+        <li>Indexed by (tenant_id, timestamp) for efficient queries.</li>
+        <li>CSV/JSON export to satisfy auditor requests.</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>10.6 SSO &amp; Identity Providers</h3>
+      <ul class="feat-list">
+        <li><strong>Microsoft Entra ID / Azure AD</strong>. multi-tenant via <code>entra_directory_id</code>, OAuth2, group → role mapping.</li>
+        <li><strong>SAML 2.0</strong>. generic SAML provider support.</li>
+        <li><strong>OIDC</strong>. OpenID Connect.</li>
+        <li><strong>LDAP / Active Directory bind</strong>. bind-and-search for legacy environments.</li>
+        <li><strong>Google Workspace</strong>. OAuth + Directory API for Google-native organisations.</li>
+        <li>Per-tenant test-connection diagnostic with last_test_status + last_test_message.</li>
+        <li>Auto-provisioning toggle (configurable).</li>
+      </ul>
+      <div class="pill-row">
+        <span class="pill">Entra ID</span>
+        <span class="pill">SAML 2.0</span>
+        <span class="pill">OIDC</span>
+        <span class="pill">LDAP</span>
+        <span class="pill">Google Workspace</span>
+        <span class="pill">SCIM provisioning</span>
+      </div>
+    </div>
+
+    <div class="sub">
+      <h3>10.7 Teams &amp; Business Units</h3>
+      <ul class="feat-list">
+        <li><code>Team</code> entity (org-internal grouping for asset ownership, workflow routing).</li>
+        <li>Drives asset owning_team_id, workflow approval routing, dashboard scoping.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ───────────────────────── WORKFLOWS ───────────────────────── -->
+<section class="module" id="workflows">
+  <header>
+    <h2>11. Workflow Engine</h2>
+    <span class="tag">3 sub-modules · canvas builder · config-driven automation</span>
+  </header>
+  <div class="body">
+
+    <div class="sub">
+      <h3>11.1 Workflow Templates &amp; Definitions</h3>
+      <ul class="feat-list">
+        <li><code>WorkflowTemplate</code>, <code>WorkflowStep</code>, <code>WorkflowStepApprover</code>. declarative step definitions.</li>
+        <li><strong>Approval modes</strong>: any / all / sequential.</li>
+        <li>Optional steps + auto-skip capability. Step timeouts + auto-escalation (days-based).</li>
+        <li>On-approval status transitions; on-reject actions (return_to_draft / return_to_previous / cancel).</li>
+        <li>Notification toggles (on_pending, on_complete) + reminder schedules.</li>
+        <li><strong>Canvas-based definition</strong>: <code>WorkflowDefinition</code> with position_x/y + viewport JSON.</li>
+        <li><strong>Node types</strong>: start / approval / condition / action / end.</li>
+        <li><strong>Conditional edges</strong> with priority ordering (e.g. "if risk > $1M escalate to Board").</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>11.2 Workflow Instances &amp; Execution</h3>
+      <ul class="feat-list">
+        <li><code>DocumentWorkflowInstance</code>, <code>WorkflowInstance</code>, <code>WorkflowNodeExecution</code>, <code>WorkflowInstanceLog</code>.</li>
+        <li>Instance state machine: draft → pending → active → completed → archived.</li>
+        <li>Step-level approvals with per-approver sign-off captured.</li>
+        <li>Auto-publish on complete (configurable). Pause / resume support.</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>11.3 Automation Engine (Config-Driven)</h3>
+      <ul class="feat-list">
+        <li><strong>Trigger events</strong>: on_entity_created / updated / status_change / deadline_approach / manual_trigger.</li>
+        <li><strong>Conditions</strong>: field equality, date comparisons, list membership, cross-entity references.</li>
+        <li><strong>Actions</strong>: send_notification, create_task, update_field, webhook call, trigger_another_workflow.</li>
+        <li>Expression evaluation via Jinja2-like templates for dynamic values.</li>
+        <li>Dry-run / test mode before publishing.</li>
+        <li>Binds to Issues, CriticalTasks, Risks, Documents, plus external webhooks.</li>
+      </ul>
+    </div>
+
+  </div>
+</section>
+
+<!-- ───────────────────────── INTEGRATIONS ───────────────────────── -->
+<section class="module" id="integrations">
+  <header>
+    <h2>12. Integrations &amp; Connectors</h2>
+    <span class="tag">6 sub-modules · 15+ external systems · encrypted creds</span>
+  </header>
+  <div class="body">
+
+    <div class="sub">
+      <h3>12.1 Vulnerability Scanners</h3>
+      <table class="facts">
+        <tr><th>Scanner</th><th>Type</th><th>Auth</th></tr>
+        <tr><td><strong>Tenable Nessus / Tenable.io</strong></td><td>VA</td><td>API key</td></tr>
+        <tr><td><strong>Rapid7 InsightVM / Nexpose</strong></td><td>VA</td><td>API key</td></tr>
+        <tr><td><strong>Qualys VMDR</strong></td><td>VA</td><td>API key</td></tr>
+        <tr><td><strong>Wazuh</strong></td><td>SIEM + XDR + VA</td><td>API token</td></tr>
+        <tr><td><strong>Microsoft Defender for Endpoint</strong></td><td>VA</td><td>OAuth</td></tr>
+        <tr><td><strong>OpenVAS / Greenbone</strong></td><td>VA (open source)</td><td>basic / API</td></tr>
+        <tr><td><strong>Metasploit / Core Impact</strong></td><td>Pentest</td><td>API</td></tr>
+        <tr><td><strong>Burp Suite / OWASP ZAP</strong></td><td>App VA</td><td>API / file</td></tr>
+      </table>
+      <ul class="feat-list">
+        <li>Encrypted credentials (Fernet) plus per-provider config JSON.</li>
+        <li>Scheduled syncs (cron format), full / incremental / manual modes.</li>
+        <li>Sync history with health status (ok / partial / error) + consecutive_failures counter; auto-disable after threshold.</li>
+        <li>Normalised into <code>Vulnerability</code> model with KEV / EPSS / NVD enrichment.</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>12.2 Cloud Connectors</h3>
+      <table class="facts">
+        <tr><th>Provider</th><th>Service</th><th>Auth</th></tr>
+        <tr><td><strong>AWS Inspector</strong></td><td>EC2 + ECR + Lambda</td><td>Role ARN + External ID</td></tr>
+        <tr><td><strong>AWS Security Hub</strong></td><td>Aggregated findings</td><td>Role ARN</td></tr>
+        <tr><td><strong>Azure Defender for Cloud</strong></td><td>VMs + App Service + SQL</td><td>SP (tenant + client + secret)</td></tr>
+        <tr><td><strong>GCP Security Command Center</strong></td><td>Org findings</td><td>SA JSON / WIF</td></tr>
+        <tr><td><strong>Kubernetes</strong></td><td>kube-bench, kube-hunter, Trivy</td><td>kubeconfig</td></tr>
+      </table>
+      <ul class="feat-list">
+        <li>AES-encrypted credential blobs per provider via <code>CONNECTOR_MASTER_KEY</code>.</li>
+        <li>Default 6-hour sync schedule, configurable per connector.</li>
+        <li>Last sync timestamp + status + error log + health metrics.</li>
+        <li>Connector reset capability for credential rotation.</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>12.3 Ticketing &amp; Collaboration</h3>
+      <ul class="feat-list">
+        <li><strong>ServiceNow</strong> (ITSM, CMDB, Incident). bidirectional ticket sync.</li>
+        <li><strong>BMC Remedy</strong>. same flow.</li>
+        <li><strong>Microsoft Teams</strong>. notifications, approval requests, chat integration.</li>
+        <li><strong>Slack</strong>. workflow notifications, approval requests.</li>
+        <li><strong>Zoom</strong>. meeting link generation for committee schedules.</li>
+        <li><strong>Office 365</strong>. calendar + email.</li>
+        <li><strong>Fireflies.ai</strong>. meeting transcript ingestion → committee minutes via AI.</li>
+        <li>OAuth2 token refresh handling; custom field mapping per ticketing system.</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>12.4 SIEM / Log Sources</h3>
+      <ul class="feat-list">
+        <li><strong>Splunk</strong>. index-based event routing.</li>
+        <li><strong>Wazuh</strong>. log + alert ingestion.</li>
+        <li><strong>IBM QRadar</strong>. supported.</li>
+        <li>Query-based evidence collection; alert routing to Issues; custom source field per connector.</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>12.5 Compliance Benchmark Runners (Connect Wizard)</h3>
+      <ul class="feat-list">
+        <li>CIS Benchmarks for Windows, Linux, Docker, Kubernetes.</li>
+        <li>LDAP / Active Directory audit (binding probe).</li>
+        <li>MSSQL / MySQL / PostgreSQL configuration audit.</li>
+        <li>Kubernetes API audit (RBAC, network policies, secrets).</li>
+        <li>Azure subscription audit (resource-scope read-only).</li>
+        <li>Per-integration structured credential schema with encrypted secret fields.</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>12.6 Identity Providers (covered under Admin §10.6)</h3>
+      <ul class="feat-list">
+        <li>Entra ID / Azure AD, SAML 2.0, OIDC, LDAP, Google Workspace, SCIM provisioning.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ───────────────────────── AUDITOR PORTAL ───────────────────────── -->
+<section class="module" id="auditor">
+  <header>
+    <h2>13. Auditor Portal</h2>
+    <span class="tag">4 sub-modules · read-only view across the platform</span>
+  </header>
+  <div class="body">
+
+    <div class="sub">
+      <h3>13.1 Auditor Dashboard &amp; Overview</h3>
+      <ul class="feat-list">
+        <li>Executive view: open issues, compliance gaps, SLA breaches.</li>
+        <li>Audit plan management. Audit / Review entries per compliance assessment.</li>
+        <li>Exception review queue (outstanding policy exceptions awaiting approval).</li>
+        <li>Artifact completeness dashboard per framework.</li>
+        <li>Trend analytics: exception aging, remediation velocity.</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>13.2 Audit Trail &amp; Evidence Browser</h3>
+      <ul class="feat-list">
+        <li>Filtered audit log view (resource type / actor / action / date range).</li>
+        <li>Evidence traceability: control → tests → evidence files.</li>
+        <li>Artifact staging visualisation (framework stage → deliverables → status).</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>13.3 Controls &amp; Exceptions Review</h3>
+      <ul class="feat-list">
+        <li>Control design effectiveness review (normalised controls + evidence of design).</li>
+        <li>Operational effectiveness assessment (test results, exceptions, gaps).</li>
+        <li>Policy exception queue with aging analytics + SLA breach flag.</li>
+        <li>Compensating-controls review.</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>13.4 Risk Assessment &amp; Reviews</h3>
+      <ul class="feat-list">
+        <li>RCSA review surface.</li>
+        <li>Risk residual vs inherent comparison.</li>
+        <li>Control effectiveness matrix (design + ops effectiveness inputs).</li>
+        <li>Audit findings → risk impact assessment.</li>
+        <li>Third-party risk review.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ───────────────────────── VENDOR RISK ───────────────────────── -->
+<section class="module" id="vendor">
+  <header>
+    <h2>14. Vendor Risk Management</h2>
+    <span class="tag">3 sub-modules · questionnaire engine · SLA tracking</span>
+  </header>
+  <div class="body">
+
+    <div class="sub">
+      <h3>14.1 Vendor Master</h3>
+      <ul class="feat-list">
+        <li>Vendor info: name, type, industry, tier (Critical / High / Medium / Low).</li>
+        <li>Contract lifecycle: start_date, end_date, value, services_provided (JSON).</li>
+        <li>Data access classification (none / PII / PHI / Trade Secrets / Financial).</li>
+        <li>Risk scoring (inherent + residual) with rating bucket.</li>
+        <li>Geographic locations served.</li>
+        <li>Owner (CISO / procurement / ops stakeholder) + business unit assignment.</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>14.2 Vendor Questionnaires &amp; Assessments</h3>
+      <ul class="feat-list">
+        <li>Reusable templates: Security, Privacy, Business Continuity, Compliance.</li>
+        <li>Template versioning; per-assessment instantiation per vendor.</li>
+        <li>Question-level evidence attachment + assessor notes.</li>
+        <li>Category-based scoring (security_score, compliance_score, etc.).</li>
+        <li>Annual / on-change / incident-driven scheduling.</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>14.3 Vendor Incidents &amp; SLAs</h3>
+      <ul class="feat-list">
+        <li><code>VendorIncident</code> with severity, impact, resolution time.</li>
+        <li><code>VendorSLARecord</code> with target vs actual response/resolution times + breach flag.</li>
+        <li>Incident correlation with Critical Tasks / Issues.</li>
+        <li>MTBF / MTTR trend analysis.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ───────────────────────── AI / COMPLYCHAT ───────────────────────── -->
+<section class="module" id="ai">
+  <header>
+    <h2>15. AI / ComplyChat</h2>
+    <span class="tag">3 sub-modules · NL Q&amp;A · vector search · Qdrant</span>
+  </header>
+  <div class="body">
+
+    <div class="sub">
+      <h3>15.1 Conversational GRC Assistant</h3>
+      <ul class="feat-list">
+        <li>Natural language querying. "What are our open critical risks?", "Show me non-compliant controls", "Which vulnerabilities should we patch first?".</li>
+        <li>NL → SQL agent (text → SQL via LLM), tenant-scoped, role-filtered.</li>
+        <li>Multi-turn conversations with session history.</li>
+        <li>Agent reasoning step logging (for debug + audit transparency).</li>
+        <li>Safety guardrails: deny data exfiltration, enforce tenant isolation.</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>15.2 Embedding &amp; Vector Search</h3>
+      <ul class="feat-list">
+        <li>Document embedding (Evidence, Governance Documents, Policies).</li>
+        <li>Semantic search. find evidence relevant to a control.</li>
+        <li>Async embedding pipeline (Celery).</li>
+        <li>Qdrant vector store (self-hosted or managed).</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>15.3 AI Surfaces Across the Platform (Inventory)</h3>
+      <table class="facts">
+        <tr><th>Where</th><th>What</th><th>Backend</th></tr>
+        <tr><td>Governance / Policy Exceptions</td><td>Justification + risk + compensating-control draft</td><td>OpenAI/Claude</td></tr>
+        <tr><td>Governance / Document upload</td><td>Auto-classify + metadata extraction</td><td>LLM</td></tr>
+        <tr><td>Governance / Committee minutes</td><td>Transcript → draft minutes</td><td>LLM</td></tr>
+        <tr><td>Governance / Charter generation</td><td>Structured charter sections</td><td>LLM</td></tr>
+        <tr><td>ERM / RCSA</td><td>Question hints, gap detection, quality score</td><td>LLM</td></tr>
+        <tr><td>Compliance / Assessments</td><td>Evidence recommendations per item</td><td>LLM</td></tr>
+        <tr><td>Compliance / DCC</td><td>66 DCC-1:2022 items auto-seeded with recommendations</td><td>LLM</td></tr>
+        <tr><td>Evidence / Quick-Assess</td><td>Semantic evidence ↔ control matching</td><td>LLM + regex hybrid</td></tr>
+        <tr><td>Assets / Mapping Recommender</td><td>Asset → framework control suggestions</td><td><strong>Regex only</strong></td></tr>
+        <tr><td>Assets / OS normaliser</td><td>WinRM/SSH probe → normalised OS key</td><td>LLM + lookup table</td></tr>
+        <tr><td>Assets / Benchmark-OS suggester</td><td>Suggest CIS plugin per asset (anti-hallucination)</td><td>LLM gated by whitelist</td></tr>
+        <tr><td>ComplyChat</td><td>NL Q&amp;A across all modules</td><td>LLM + SQL agent</td></tr>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ───────────────────────── SEARCH ───────────────────────── -->
+<section class="module" id="search">
+  <header>
+    <h2>16. Search &amp; Analytics</h2>
+    <span class="tag">2 sub-modules · executive + analyst dashboards · cross-entity</span>
+  </header>
+  <div class="body">
+
+    <div class="sub">
+      <h3>16.1 Power Search (Cross-Entity)</h3>
+      <ul class="feat-list">
+        <li><code>/search/power</code>. unified full-text search across Risks, Vulnerabilities, Issues, Controls, Evidence, Documents.</li>
+        <li>Case-insensitive ILIKE pattern. Pagination + sorting. CSV / XLSX export.</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>16.2 Analytics &amp; Reporting Endpoints</h3>
+      <ul class="feat-list">
+        <li><code>/analytics/exception-aging</code>. compliance exception aging.</li>
+        <li><code>/analytics/executive-dashboard</code>. open risks, SLA breaches, exception backlog.</li>
+        <li><code>/analytics/analyst-dashboard</code>. detailed risk + control analysis.</li>
+        <li><code>/analytics/patch-correlation</code>. vuln → remediation tracking.</li>
+        <li><code>/analytics/vendor-risk</code>. vendor scoring trends.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ───────────────────────── ARTIFACTS ───────────────────────── -->
+<section class="module" id="artifacts">
+  <header>
+    <h2>17. Artifacts Catalog</h2>
+    <span class="tag">2 sub-modules · framework-staged delivery</span>
+  </header>
+  <div class="body">
+
+    <div class="sub">
+      <h3>17.1 Artifact Catalog (Master)</h3>
+      <ul class="feat-list">
+        <li><code>ArtifactCatalogItem</code> per framework (e.g. ISO 27001:2022 → ISO27-001 "Information Policy").</li>
+        <li>Staged delivery: Stage 1 (Planning) → Stage 5 (Continuous Improvement).</li>
+        <li>Artifact types: Policy, Procedure, Register, Assessment, Audit Plan, Minutes, …</li>
+        <li>Mandatory vs optional artifacts per stage.</li>
+        <li>Platform-native mappings (e.g. Risk Register → <code>grc_risks</code> table) so the catalog auto-tracks completion using existing platform data.</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>17.2 Tenant Artifact Status Tracking</h3>
+      <ul class="feat-list">
+        <li>Per-tenant artifact completion % via Evidence linkage.</li>
+        <li>Stage completion scoring (% artifacts delivered per stage).</li>
+        <li>Audit-readiness indicator (all mandatory artifacts present + approved).</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ───────────────────────── LINKAGES ───────────────────────── -->
+<section class="module" id="linkages">
+  <header>
+    <h2>18. Cross-Module Linkage Map (the differentiator)</h2>
+    <span class="tag">30+ link tables · the data graph that auditors actually need</span>
+  </header>
+  <div class="body">
+
+    <div class="diagram-wrap">
+      <h4>The platform data graph</h4>
+      <pre class="ascii">
+                  ┌──────────────┐
+                  │   Framework  │ NIST CSF · ISO 27001 · PCI DSS · NCA · SAMA · …
+                  └──────┬───────┘
+                         │ contains
+                  ┌──────▼───────┐         ControlMapping       ┌──────────────────┐
+                  │   Control    │ ◄──────────────────────────► │ NormalizedControl│
+                  └──┬───────────┘                              └────────┬─────────┘
+                     │                                                    │
+       AssetFrameworkControlLink                            AssetControlLink
+                     │                                                    │
+                     ▼                                                    ▼
+              ┌───────────┐  AssetEvidenceLink     ┌──────────────┐  AssetRiskLink
+              │ IT Asset  │ ◄──────────────────────│   Evidence   │ ────────────┐
+              └─────┬─────┘                        └──────┬───────┘             │
+                    │                                     │                     │
+                    │ VulnerabilityAssetLink              │ EvidenceControlMap  │
+                    ▼                                     │                     ▼
+              ┌──────────┐                                ▼                ┌─────────┐
+              │  Vuln    │  VulnerabilityControlLink   ┌────────┐          │  Risk   │
+              └────┬─────┘ ──────────────────────────► │Control │ ◄─────── └────┬────┘
+                   │                                   └────────┘  RiskControl  │
+                   │                                                            │
+                   │             ┌────────────────────────────────┐             │
+                   └────────────►│            Issue (CAPA)         │◄────────────┘
+                                 └──────────┬─────────────────────┘
+                                            │
+                       ┌────────────────────┼──────────────────┐
+                       ▼                    ▼                  ▼
+               ┌──────────────┐   ┌──────────────────┐  ┌─────────────┐
+               │ Critical Task│   │  Governance Obj  │  │   Vendor    │
+               └──────────────┘   └──────────────────┘  └─────────────┘
+      </pre>
+    </div>
+
+    <div class="linkage-grid">
+      <div class="link-card"><div class="from-to">Risk ↔ Asset</div><code>RiskAssetLink</code></div>
+      <div class="link-card"><div class="from-to">Risk ↔ NormalizedControl</div><code>RiskControlLink</code></div>
+      <div class="link-card"><div class="from-to">Risk ↔ FrameworkControl</div><code>RiskFrameworkControlLink</code></div>
+      <div class="link-card"><div class="from-to">Risk ↔ Evidence</div><code>RiskEvidenceLink</code></div>
+      <div class="link-card"><div class="from-to">Risk ↔ Governance Objective</div><code>RiskGovernanceLink</code></div>
+      <div class="link-card"><div class="from-to">Risk ↔ Risk (cascade)</div><code>RiskDependency</code></div>
+      <div class="link-card"><div class="from-to">Risk ↔ Incident</div><code>Risk.source_incident_id</code></div>
+      <div class="link-card"><div class="from-to">Asset ↔ NormalizedControl</div><code>AssetControlLink</code></div>
+      <div class="link-card"><div class="from-to">Asset ↔ InternalControl</div><code>AssetInternalControlLink</code></div>
+      <div class="link-card"><div class="from-to">Asset ↔ FrameworkControl</div><code>AssetFrameworkControlLink</code></div>
+      <div class="link-card"><div class="from-to">Asset ↔ Evidence</div><code>AssetEvidenceLink</code></div>
+      <div class="link-card"><div class="from-to">Asset ↔ CIS controls</div><code>AssetSecurityComplianceSelection</code></div>
+      <div class="link-card"><div class="from-to">Vulnerability ↔ Asset</div><code>VulnerabilityAssetLink</code></div>
+      <div class="link-card"><div class="from-to">Vulnerability ↔ Control</div><code>VulnerabilityControlLink</code></div>
+      <div class="link-card"><div class="from-to">Evidence ↔ FrameworkControl</div><code>EvidenceControlMapping</code></div>
+      <div class="link-card"><div class="from-to">Document ↔ Control</div><code>DocumentControlLink</code></div>
+      <div class="link-card"><div class="from-to">Document ↔ Asset</div><code>DocumentAssetLink</code></div>
+      <div class="link-card"><div class="from-to">Document ↔ Framework</div><code>DocumentRegulatoryLink</code></div>
+      <div class="link-card"><div class="from-to">Document ↔ Risk</div><code>DocumentRiskLink</code></div>
+      <div class="link-card"><div class="from-to">Issue ↔ Vulnerability</div><code>IssueVulnerabilityLink</code></div>
+      <div class="link-card"><div class="from-to">Issue ↔ Risk</div><code>IssueRiskLink</code></div>
+      <div class="link-card"><div class="from-to">Issue ↔ Asset</div><code>IssueAssetLink</code></div>
+      <div class="link-card"><div class="from-to">Issue ↔ Control</div><code>IssueControlLink</code></div>
+      <div class="link-card"><div class="from-to">Issue ↔ Evidence</div><code>IssueEvidenceLink</code></div>
+      <div class="link-card"><div class="from-to">Issue ↔ Vendor</div><code>IssueVendorLink</code></div>
+      <div class="link-card"><div class="from-to">Issue ↔ Governance</div><code>IssueGovernanceLink</code></div>
+      <div class="link-card"><div class="from-to">Issue ↔ IS Project</div><code>IssueISProjectLink</code></div>
+      <div class="link-card"><div class="from-to">Issue Action ↔ Critical Task</div><code>IssueAction.linked_critical_task_id</code></div>
+      <div class="link-card"><div class="from-to">Committee ↔ Risk / Doc / Reg Change</div><code>MeetingAgendaItem.linked_*</code></div>
+      <div class="link-card"><div class="from-to">Attestation ↔ Document</div><code>AttestationCampaign.linked_document_id</code></div>
+      <div class="link-card"><div class="from-to">Attestation ↔ Evidence</div><code>AttestationRequest.evidence_id</code></div>
+      <div class="link-card"><div class="from-to">Mitigation Action ↔ Evidence</div><code>RiskMitigationActionEvidence</code></div>
+      <div class="link-card"><div class="from-to">Incident ↔ Evidence</div><code>EvidenceIncidentLink</code></div>
+      <div class="link-card"><div class="from-to">Vendor Incident ↔ Critical Task</div><code>VendorIncident → CriticalTask</code></div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ───────────────────────── CROSS-CUTTING ───────────────────────── -->
+<section class="module" id="cross">
+  <header>
+    <h2>19. Cross-Cutting Concerns</h2>
+    <span class="tag">Multi-tenancy · Audit · RBAC · Encryption · Async</span>
+  </header>
+  <div class="body">
+
+    <div class="sub">
+      <h3>19.1 Multi-Tenancy Isolation</h3>
+      <ul class="feat-list">
+        <li><strong>Pattern</strong>: database-per-tenant (separate Postgres database per customer) + master registry DB.</li>
+        <li>Tenant resolution from subdomain or header on every request.</li>
+        <li>All routers enforce <code>require_tenant_permission()</code> + tenant_id filtering.</li>
+        <li>Cookie domain configurable via <code>AUTH_COOKIE_DOMAIN</code> env.</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>19.2 Audit Trail Coverage</h3>
+      <ul class="feat-list">
+        <li>Logged entities: Risks, Evidence, Vulnerabilities, Frameworks, Controls, Governance docs, Compliance items, Assets, Integrations, Workflows, Users, Chat sessions.</li>
+        <li>AuditLog.changes JSON captures before/after. never overwritten.</li>
+        <li>Timestamps UTC with millisecond precision, indexed (tenant_id, timestamp).</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>19.3 Encryption &amp; Secrets</h3>
+      <ul class="feat-list">
+        <li>Integration credentials: Fernet-encrypted <code>encrypted_credentials</code> blob.</li>
+        <li>Cloud connector creds: AES via <code>CONNECTOR_MASTER_KEY</code>.</li>
+        <li>OAuth2 tokens: separate encrypted <code>oauth_tokens</code> field.</li>
+        <li>Per-tenant Evidence file encryption with Fernet.</li>
+        <li>CIS benchmark scanner creds: per-field encryption (decrypt on demand).</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>19.4 Async Task Management</h3>
+      <ul class="feat-list">
+        <li><strong>Framework</strong>: Celery for long-running ops (gap analysis, document parsing, framework upload, vulnerability sync, embedding pipeline).</li>
+        <li><code>/tasks/{task_id}</code> polls status: PENDING / STARTED / SUCCESS / FAILURE / REVOKED.</li>
+        <li>Tenant isolation: task args[0] = tenant_slug; validation in <code>_payload_tenant()</code>.</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>19.5 Permission Matrix</h3>
+      <ul class="feat-list">
+        <li>Permission = (resource, action). resources: risks, controls, evidence, workflows, integrations, vendors, issues, tasks, projects, audit_logs, admin, governance, assets, vulnerabilities, frameworks, …</li>
+        <li>Actions: view / create / update / delete / approve / verify / publish / execute / manage.</li>
+        <li>Tenant + optional business-unit scoping on every role assignment.</li>
+        <li>UI hides forbidden buttons; backend denies forbidden requests.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<footer class="endnote">
+  Generated from a structural audit of <code>backend/grc/</code> (32 routers, 38 model files, 19 module folders) and <code>grc-frontend/src/app/(dashboard)/</code>. Every sub-module, model, link table, and AI surface listed corresponds to code on disk in this repository. Use this document as a 360° reference to walk a client through the architecture without screen-sharing.
+</footer>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,1786 @@
+{
+ "iso_27001_2022/ISO27-001": {
+  "hash": "5f135e0cc7200b61e6ac866acc9ba062f24e264a",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_27001_2022\\ISO27-001__ISMS_Project_Charter.docx"
+ },
+ "iso_27001_2022/ISO27-002": {
+  "hash": "3299c348abc6c3e71976f8b704a176d84854dcc5",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_27001_2022\\ISO27-002__ISMS_Scope_Statement.docx"
+ },
+ "iso_27001_2022/ISO27-003": {
+  "hash": "24f07fc6cd091fe93025fdc1693afc844a61c2c9",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_27001_2022\\ISO27-003__Interested_Parties_Register.xlsx"
+ },
+ "iso_27001_2022/ISO27-004": {
+  "hash": "077d8abfe210707411801db74764c327cc378272",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_27001_2022\\ISO27-004__Context_of_the_Organisation_Document.docx"
+ },
+ "iso_27001_2022/ISO27-005": {
+  "hash": "723942bdbde26df0a7860ec2410444635a901358",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_27001_2022\\ISO27-005__ISO_27001_Gap_Analysis_Report.docx"
+ },
+ "iso_27001_2022/ISO27-006": {
+  "hash": "33c95b504cfc0e3b17488a82cb6353a098a6e24e",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_27001_2022\\ISO27-006__ISMS_Implementation_Roadmap.xlsx"
+ },
+ "iso_27001_2022/ISO27-007": {
+  "hash": "c106f2e7dea3d3c6b7dddf3d085b4ae76b7ebe15",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_27001_2022\\ISO27-007__Risk_Assessment_Methodology.docx"
+ },
+ "iso_27001_2022/ISO27-008": {
+  "hash": "e8f877b391bb39db5b7e48875e0b7ecd78bbdaf1",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_27001_2022\\ISO27-008__Asset_Inventory_Register.xlsx"
+ },
+ "iso_27001_2022/ISO27-009": {
+  "hash": "310d3842ba509113f81f37f7b1831883018f0e9e",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_27001_2022\\ISO27-009__Risk_Register.xlsx"
+ },
+ "iso_27001_2022/ISO27-010": {
+  "hash": "9282c032949634f2b6d0381d42db6ebd58a6222b",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_27001_2022\\ISO27-010__Risk_Treatment_Plan.xlsx"
+ },
+ "iso_27001_2022/ISO27-011": {
+  "hash": "28988d9a2e7354561f56c66c8f6758a3117a3433",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_27001_2022\\ISO27-011__Statement_of_Applicability_SoA_.xlsx"
+ },
+ "iso_27001_2022/ISO27-012": {
+  "hash": "90aa0e64d935a29844f6d9245058cec00ea4187a",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_27001_2022\\ISO27-012__Information_Security_Policy.docx"
+ },
+ "iso_27001_2022/ISO27-013": {
+  "hash": "ae8a7ae42e257d705705d3f3f95d5b1ff8a021c1",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_27001_2022\\ISO27-013__Information_Security_Objectives.docx"
+ },
+ "iso_27001_2022/ISO27-014": {
+  "hash": "2a786fda0366b9384e6fc1f6547f4b297037f08e",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_27001_2022\\ISO27-014__Roles_Responsibilities_Authorities.docx"
+ },
+ "iso_27001_2022/ISO27-015": {
+  "hash": "11220c57633f0cc14c175f2d97662cf50cc3dadb",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_27001_2022\\ISO27-015__Acceptable_Use_Policy.docx"
+ },
+ "iso_27001_2022/ISO27-016": {
+  "hash": "7b38482fa2f27fa936440d55e993800c1bf7b718",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_27001_2022\\ISO27-016__Access_Control_Policy.docx"
+ },
+ "iso_27001_2022/ISO27-017": {
+  "hash": "fb59d9b787dbf16bf32cffb91fa7cbf5b2197e9d",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_27001_2022\\ISO27-017__Information_Classification_Handling_Policy.docx"
+ },
+ "iso_27001_2022/ISO27-018": {
+  "hash": "726b14d4a4af5807c9833862ee50a09d34044d8d",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_27001_2022\\ISO27-018__Cryptography_Policy.docx"
+ },
+ "iso_27001_2022/ISO27-019": {
+  "hash": "41da752f61b97a413600cb9d86a2313a7136bcf8",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_27001_2022\\ISO27-019__Physical_Environmental_Security_Policy.docx"
+ },
+ "iso_27001_2022/ISO27-020": {
+  "hash": "4b6165f72097259528f9c5c594528aac2981b211",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_27001_2022\\ISO27-020__Operations_Security_Policy.docx"
+ },
+ "iso_27001_2022/ISO27-021": {
+  "hash": "3d1647aaa28cebeb6237425e083b58894e0d371a",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_27001_2022\\ISO27-021__Communications_Security_Policy.docx"
+ },
+ "iso_27001_2022/ISO27-022": {
+  "hash": "0ccf46f91b3e7e790efeab859afacff7c6c8753c",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_27001_2022\\ISO27-022__Secure_Development_Policy.docx"
+ },
+ "iso_27001_2022/ISO27-023": {
+  "hash": "b5bf6351fc37a24f28ab83c70ee380f05b316434",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_27001_2022\\ISO27-023__Supplier_Information_Security_Policy.docx"
+ },
+ "iso_27001_2022/ISO27-024": {
+  "hash": "842128b8441e37e749dd1afdd47bb7343f53931d",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_27001_2022\\ISO27-024__Incident_Management_Policy_Procedure.docx"
+ },
+ "iso_27001_2022/ISO27-025": {
+  "hash": "26b8fe82cb12962a1d8fdf1983ae11ae162efee1",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_27001_2022\\ISO27-025__Business_Continuity_ICT_Readiness_Policy.docx"
+ },
+ "iso_27001_2022/ISO27-026": {
+  "hash": "703c3651dc35627a44403dfa5d7ea42a7401bbb7",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_27001_2022\\ISO27-026__Privacy_PII_Protection_Policy.docx"
+ },
+ "iso_27001_2022/ISO27-027": {
+  "hash": "10a2ef4117313677b3097f80ad63f9f2b648a1b4",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_27001_2022\\ISO27-027__Document_Control_Procedure.docx"
+ },
+ "iso_27001_2022/ISO27-028": {
+  "hash": "f18c2a77ed51a7da277fc6da97065d9442ebf298",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_27001_2022\\ISO27-028__Records_Control_Procedure.docx"
+ },
+ "iso_27001_2022/ISO27-029": {
+  "hash": "4497b3fc3d9424f3e4419f876da07c3d49e4cf53",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_27001_2022\\ISO27-029__Competence_Training_Records.xlsx"
+ },
+ "iso_27001_2022/ISO27-030": {
+  "hash": "ce868c49e636732824e878cd54bc7c5d2ef8209a",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_27001_2022\\ISO27-030__Awareness_Programme_Materials.docx"
+ },
+ "iso_27001_2022/ISO27-031": {
+  "hash": "3887c12c90ebfe7a4d0cc988c2ea02fdaba9d6a2",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_27001_2022\\ISO27-031__Access_Review_Records.xlsx"
+ },
+ "iso_27001_2022/ISO27-032": {
+  "hash": "1ed1e9b0ad2a584d7be93bf60c8fd7fb16607cc6",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_27001_2022\\ISO27-032__Change_Management_Records.xlsx"
+ },
+ "iso_27001_2022/ISO27-033": {
+  "hash": "3010b79866263c5fd60ab93232729a80ab69021d",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_27001_2022\\ISO27-033__Backup_Records_Test_Results.xlsx"
+ },
+ "iso_27001_2022/ISO27-034": {
+  "hash": "c70261a2bbd381db53ffea47479d0b52914e98ea",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_27001_2022\\ISO27-034__Vulnerability_Management_Records.xlsx"
+ },
+ "iso_27001_2022/ISO27-035": {
+  "hash": "a92c8215b228d2eaa861ed941f41942130065d5c",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_27001_2022\\ISO27-035__Incident_Log_Register.xlsx"
+ },
+ "iso_27001_2022/ISO27-036": {
+  "hash": "7107e7300c55a990553e6a36dc30c42f9b075b87",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_27001_2022\\ISO27-036__Supplier_Due_Diligence_File.pdf"
+ },
+ "iso_27001_2022/ISO27-037": {
+  "hash": "666a92e02313b1cbda5f0a682afce0fa7c01a656",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_27001_2022\\ISO27-037__Business_Continuity_Plan_Test_Results.docx"
+ },
+ "iso_27001_2022/ISO27-038": {
+  "hash": "008a603e10b4da38d318de91df113c2fac7e9a85",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_27001_2022\\ISO27-038__Internal_Audit_Programme.xlsx"
+ },
+ "iso_27001_2022/ISO27-039": {
+  "hash": "87a17eddbd81053220d169f141bf388ac1a37f66",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_27001_2022\\ISO27-039__Internal_Audit_Report.docx"
+ },
+ "iso_27001_2022/ISO27-040": {
+  "hash": "57c8e4c1edbe4683a6b9b54f3f340ccaa90cdbb5",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_27001_2022\\ISO27-040__Nonconformity_Corrective_Action_Register.xlsx"
+ },
+ "iso_27001_2022/ISO27-041": {
+  "hash": "9e70c8dd34e0aba703cc9a0a51c89bba6bab9de4",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_27001_2022\\ISO27-041__Management_Review_Minutes.xlsx"
+ },
+ "iso_27001_2022/ISO27-042": {
+  "hash": "2bbefa0aa52155d34397100feee2dc35d404be9d",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_27001_2022\\ISO27-042__ISMS_KPI_Performance_Metrics_Report.xlsx"
+ },
+ "iso_27001_2022/ISO27-043": {
+  "hash": "1eb5d20716b6b5785c2bbeae7906ae078ba11734",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_27001_2022\\ISO27-043__Stage_1_Audit_Evidence_Pack.docx"
+ },
+ "iso_27001_2022/ISO27-044": {
+  "hash": "4933e222054f7346fe5e33db77bd2b418f4b9ed7",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_27001_2022\\ISO27-044__Stage_2_Audit_Evidence_Pack.docx"
+ },
+ "iso_27001_2022/ISO27-045": {
+  "hash": "d30c6eff47f629cfd8d969d1d6df3dd5d6527c84",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_27001_2022\\ISO27-045__ISO_27001_Certificate.pdf"
+ },
+ "iso_27001_2022/ISO27-046": {
+  "hash": "e4056d6713604f6a9fe10a8dd2e5edd789009579",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_27001_2022\\ISO27-046__Surveillance_Audit_Evidence_Pack.docx"
+ },
+ "iso_27001_2022/ISO27-047": {
+  "hash": "9f45c611974e30bafbc3db358ac9514fe201915f",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_27001_2022\\ISO27-047__Continual_Improvement_Register.xlsx"
+ },
+ "iso_27001_2022/ISO27-048": {
+  "hash": "961f7ce9be5b8119eec8fe3a98b919a9046dedd8",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_27001_2022\\ISO27-048__Recertification_Audit_Evidence_Pack.docx"
+ },
+ "dora/DORA-001": {
+  "hash": "49693da1d8fbdd0e9e85cb8e0af9b3d0de45c216",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\dora\\DORA-001__DORA_Applicability_Determination.docx"
+ },
+ "iso_41001_2018/ISO41-001": {
+  "hash": "8e46247a740aed5b428e7b1d78e7ee66399cac7f",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_41001_2018\\ISO41-001__FMS_Project_Charter.docx"
+ },
+ "iso_41001_2018/ISO41-002": {
+  "hash": "5459016dcebb11d02a11c389a6ff118518df2e5c",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_41001_2018\\ISO41-002__FMS_Scope_Statement.docx"
+ },
+ "iso_41001_2018/ISO41-003": {
+  "hash": "f0e3adf68e8cabcc1f6554152a6e1696e9522c10",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_41001_2018\\ISO41-003__Demand_Organisation_Requirements.docx"
+ },
+ "iso_41001_2018/ISO41-004": {
+  "hash": "a6afff046a32c9248c2e6ed89f75d0d2cab90c83",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_41001_2018\\ISO41-004__Interested_Parties_Register_FM_.xlsx"
+ },
+ "iso_41001_2018/ISO41-005": {
+  "hash": "e6349162a3f4f363a78ed14819ee1a12bbcbbbe9",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_41001_2018\\ISO41-005__FMS_Gap_Analysis.docx"
+ },
+ "iso_41001_2018/ISO41-006": {
+  "hash": "6675cfdcc3f77d1bd0e229dfa6eaad7ef0163b88",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_41001_2018\\ISO41-006__FM_Risk_Opportunity_Register.xlsx"
+ },
+ "iso_41001_2018/ISO41-007": {
+  "hash": "794c5c2dba401d66271877ffd002f23982dba90c",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_41001_2018\\ISO41-007__FM_Service_Catalogue.xlsx"
+ },
+ "iso_41001_2018/ISO41-008": {
+  "hash": "5fec1f7028c8c2239275d714b81a316e112724da",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_41001_2018\\ISO41-008__Facility_Management_Manual.docx"
+ },
+ "iso_41001_2018/ISO41-009": {
+  "hash": "ff431de130134dde1bd7ba36d3214aefc060f666",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_41001_2018\\ISO41-009__FM_Policy.docx"
+ },
+ "iso_41001_2018/ISO41-010": {
+  "hash": "0f87809fb1c81468b03c11811746debc758805cd",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_41001_2018\\ISO41-010__FM_Objectives_Targets.docx"
+ },
+ "iso_41001_2018/ISO41-011": {
+  "hash": "b1e1b94bb269c87072bc795d6e0086d522965411",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_41001_2018\\ISO41-011__FM_Roles_Responsibilities_Matrix.xlsx"
+ },
+ "iso_41001_2018/ISO41-012": {
+  "hash": "09399ef6d0e88627756af68eec1b4149e7f3a0cf",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_41001_2018\\ISO41-012__Operational_Procedures_SOPs_.docx"
+ },
+ "iso_41001_2018/ISO41-013": {
+  "hash": "7270d94705bd8448d4f9a938733f920c75d8f71f",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_41001_2018\\ISO41-013__Lifecycle_Management_Plan.docx"
+ },
+ "iso_41001_2018/ISO41-014": {
+  "hash": "c6d87797877ddcdaa402aee79042b8c1ffc77bcf",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_41001_2018\\ISO41-014__Outsourcing_Contractor_Management_Procedure.docx"
+ },
+ "iso_41001_2018/ISO41-015": {
+  "hash": "89ec002ab57641383dcb2f842ff4ea356d7ad6aa",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_41001_2018\\ISO41-015__Emergency_Preparedness_Response_Plan.docx"
+ },
+ "iso_41001_2018/ISO41-016": {
+  "hash": "a1e207b5ae1a0726c93329a081d0ba19f5066b6a",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_41001_2018\\ISO41-016__Communication_Plan.docx"
+ },
+ "iso_41001_2018/ISO41-017": {
+  "hash": "f5a53aea3c9fdf21da3c16dd7307b2cc79de02d7",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_41001_2018\\ISO41-017__FM_Document_Control_Procedure.docx"
+ },
+ "iso_41001_2018/ISO41-018": {
+  "hash": "1ee6df6733438b581b27dfa9437db9fb102e19f2",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_41001_2018\\ISO41-018__Maintenance_Records_Work_Orders.xlsx"
+ },
+ "iso_41001_2018/ISO41-019": {
+  "hash": "4c2e433d2e13ab48a26613d3604784aead59127a",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_41001_2018\\ISO41-019__Asset_Register_Equipment_Inventory.xlsx"
+ },
+ "iso_41001_2018/ISO41-020": {
+  "hash": "ddd655a26dddd014c4d41cb6a87e751876e07b13",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_41001_2018\\ISO41-020__Inspection_Test_Records.xlsx"
+ },
+ "iso_41001_2018/ISO41-021": {
+  "hash": "baee81553dad0cf08269649c94afffb74af19ce6",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_41001_2018\\ISO41-021__Energy_Utility_Consumption_Logs.xlsx"
+ },
+ "iso_41001_2018/ISO41-022": {
+  "hash": "605b6f3b3ec86deb236bf51e7409a8aa1155aedf",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_41001_2018\\ISO41-022__Competence_Training_Records_FM_.xlsx"
+ },
+ "iso_41001_2018/ISO41-023": {
+  "hash": "32d5a68d7dbf32fff6c20124de1395205fd24f21",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_41001_2018\\ISO41-023__Supplier_Contractor_Performance_Records.xlsx"
+ },
+ "iso_41001_2018/ISO41-024": {
+  "hash": "9a962bf26851542a12c486b2a31ae45d0a81c5dc",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_41001_2018\\ISO41-024__Occupant_Satisfaction_Survey_Results.pdf"
+ },
+ "iso_41001_2018/ISO41-025": {
+  "hash": "fb9a25d2cc767184ac15ce072d31516a07c771e8",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_41001_2018\\ISO41-025__Internal_FMS_Audit_Programme.xlsx"
+ },
+ "iso_41001_2018/ISO41-026": {
+  "hash": "c296221b2694507707e13a1926a42c06cb25d91a",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_41001_2018\\ISO41-026__Internal_FMS_Audit_Report.docx"
+ },
+ "iso_41001_2018/ISO41-027": {
+  "hash": "8b9845a1b84ca2cc184e4cf47268a01fca726fee",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_41001_2018\\ISO41-027__Nonconformity_Corrective_Action_Register_FM_.xlsx"
+ },
+ "iso_41001_2018/ISO41-028": {
+  "hash": "517cf25f75b28a945cd33b2be3fa6723c8252066",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_41001_2018\\ISO41-028__FM_Management_Review_Minutes.xlsx"
+ },
+ "iso_41001_2018/ISO41-029": {
+  "hash": "449bd8bcdff54cd5ffeb9259f5846e0b127c92b5",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_41001_2018\\ISO41-029__FM_KPI_Performance_Report.xlsx"
+ },
+ "iso_41001_2018/ISO41-030": {
+  "hash": "54bfa5d20d7683c2fef6c2e6fd2df8b39eb2bea0",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_41001_2018\\ISO41-030__Stage_1_Audit_Evidence_Pack_FM_.docx"
+ },
+ "iso_41001_2018/ISO41-031": {
+  "hash": "4746a7ca48a149408a832318089ba040da904229",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_41001_2018\\ISO41-031__Stage_2_Audit_Evidence_Pack_FM_.docx"
+ },
+ "iso_41001_2018/ISO41-032": {
+  "hash": "2463049523f58982ed47b9bd2521a331bf9cb379",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_41001_2018\\ISO41-032__ISO_41001_Certificate.pdf"
+ },
+ "iso_41001_2018/ISO41-033": {
+  "hash": "8c0e088e5bbccf1ab942f953fd290170b22fa124",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_41001_2018\\ISO41-033__Surveillance_Audit_Evidence_Pack_FM_.docx"
+ },
+ "iso_41001_2018/ISO41-034": {
+  "hash": "7a1d9c3934c9a5f3e3e07825f1568707f9d8f76a",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\iso_41001_2018\\ISO41-034__FM_Continual_Improvement_Register.xlsx"
+ },
+ "pci_dss_v4/PCI-001": {
+  "hash": "c03f9cafc1c922ee0998e50e0e200b9712c3ca8f",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pci_dss_v4\\PCI-001__PCI_Project_Charter_Scope.docx"
+ },
+ "pci_dss_v4/PCI-002": {
+  "hash": "b434e1a1a11b9ee0b5bb8a3c9aeee69c38cd5e20",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pci_dss_v4\\PCI-002__Cardholder_Data_Environment_Scope_Document.docx"
+ },
+ "pci_dss_v4/PCI-003": {
+  "hash": "f277a652bc1436b2b75fd4bccde041b94b77f481",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pci_dss_v4\\PCI-003__Cardholder_Data_Flow_Diagram.docx"
+ },
+ "pci_dss_v4/PCI-004": {
+  "hash": "ec4e5e383dcff92972b75bc2033f50604c541504",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pci_dss_v4\\PCI-004__Network_Diagram.docx"
+ },
+ "pci_dss_v4/PCI-005": {
+  "hash": "75644cc648b7cce3b49cc69260e08439cbf054ec",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pci_dss_v4\\PCI-005__PCI_Gap_Assessment_Report.docx"
+ },
+ "pci_dss_v4/PCI-006": {
+  "hash": "ea890860e132b92f096e40a4ae802d6fb5d883ce",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pci_dss_v4\\PCI-006__PCI_Remediation_Plan.xlsx"
+ },
+ "pci_dss_v4/PCI-007": {
+  "hash": "cf154bec548d960e510c17c9d763a3e2726981ab",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pci_dss_v4\\PCI-007__Targeted_Risk_Analysis_-_Customised_Approach.docx"
+ },
+ "pci_dss_v4/PCI-008": {
+  "hash": "517887d3ddd632f28625ac0165fcde661604b298",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pci_dss_v4\\PCI-008__Targeted_Risk_Analysis_-_Activity_Frequency.docx"
+ },
+ "pci_dss_v4/PCI-009": {
+  "hash": "6d6beda010ddd173d976a988d404ce66ac984ee1",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pci_dss_v4\\PCI-009__Annual_PCI_Risk_Assessment.docx"
+ },
+ "pci_dss_v4/PCI-010": {
+  "hash": "719dfc080763e7c89f2d7170cafab440f661ffe9",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pci_dss_v4\\PCI-010__Information_Security_Policy_PCI_.docx"
+ },
+ "pci_dss_v4/PCI-011": {
+  "hash": "4fa74f1c2f61e970edda6aa1ec9b9335c90de28d",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pci_dss_v4\\PCI-011__Acceptable_Use_Policy.docx"
+ },
+ "pci_dss_v4/PCI-012": {
+  "hash": "5fb9d1cca1c132399a38daa1121ada3c0b49be01",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pci_dss_v4\\PCI-012__Roles_Responsibilities_Matrix_PCI_.xlsx"
+ },
+ "pci_dss_v4/PCI-013": {
+  "hash": "0dc6172f74a7825c853e7a710f834d82d50cba2c",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pci_dss_v4\\PCI-013__Network_Security_Controls_NSC_Policy.docx"
+ },
+ "pci_dss_v4/PCI-014": {
+  "hash": "a04bfea82a87b299cc077f4c5e209f43b08e7b8f",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pci_dss_v4\\PCI-014__System_Configuration_Standards.docx"
+ },
+ "pci_dss_v4/PCI-015": {
+  "hash": "8e654c4dbf4fb905709a3e703ef94c2c5abf249f",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pci_dss_v4\\PCI-015__Data_Retention_Disposal_Policy.docx"
+ },
+ "pci_dss_v4/PCI-016": {
+  "hash": "22ac558b8f51205bcd7932f0b3a9c7764545f6a4",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pci_dss_v4\\PCI-016__Cryptographic_Key_Management_Procedure.docx"
+ },
+ "pci_dss_v4/PCI-017": {
+  "hash": "53c53e0019d73e4670d1a15768eb87e4560df192",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pci_dss_v4\\PCI-017__Anti-Phishing_Anti-Malware_Policy.docx"
+ },
+ "pci_dss_v4/PCI-018": {
+  "hash": "4f622840b4b23eb8a255482b6796fbae9635babc",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pci_dss_v4\\PCI-018__Secure_Software_Development_Policy.docx"
+ },
+ "pci_dss_v4/PCI-019": {
+  "hash": "707137ae2a8ebfa56b2e06640e0dabcda610b6f8",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pci_dss_v4\\PCI-019__Software_Inventory_Bespoke_Custom_3rd-party_.xlsx"
+ },
+ "pci_dss_v4/PCI-020": {
+  "hash": "edaab45fe61a86e1ee0c5fd93b10632f9e5af61b",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pci_dss_v4\\PCI-020__Access_Control_Policy.docx"
+ },
+ "pci_dss_v4/PCI-021": {
+  "hash": "b1b5f69f9ec50549c3e80fd006356e1864ca438a",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pci_dss_v4\\PCI-021__Identification_Authentication_Policy.docx"
+ },
+ "pci_dss_v4/PCI-022": {
+  "hash": "d30ef998391af6435a8f2557e9fbd4ebcdab82bc",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pci_dss_v4\\PCI-022__Physical_Security_Policy.docx"
+ },
+ "pci_dss_v4/PCI-023": {
+  "hash": "79ee7554c7c0e3ff713cb6eb1e3914f61f2ae173",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pci_dss_v4\\PCI-023__Logging_Monitoring_Policy.docx"
+ },
+ "pci_dss_v4/PCI-024": {
+  "hash": "3d89cefc50773c95dae630245c848053ebe73242",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pci_dss_v4\\PCI-024__Incident_Response_Plan_PCI_.docx"
+ },
+ "pci_dss_v4/PCI-025": {
+  "hash": "76f53fb14421689cfeb79b9b370e6ca50b0d34ca",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pci_dss_v4\\PCI-025__Third-Party_Service_Provider_Management_Policy.docx"
+ },
+ "pci_dss_v4/PCI-026": {
+  "hash": "69f22ea1149c45de2539f9d796f79fdc4b6eab7f",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pci_dss_v4\\PCI-026__Firewall_NSC_Rule_Reviews.xlsx"
+ },
+ "pci_dss_v4/PCI-027": {
+  "hash": "cdb7c7847ce0932190c66dd96b151b2dad0478b6",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pci_dss_v4\\PCI-027__Quarterly_Internal_Vulnerability_Scan_Reports.xlsx"
+ },
+ "pci_dss_v4/PCI-028": {
+  "hash": "d71456a368ebbe6f01a9997149dee1ade129a83f",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pci_dss_v4\\PCI-028__Quarterly_External_ASV_Scan_Reports.xlsx"
+ },
+ "pci_dss_v4/PCI-029": {
+  "hash": "a814fe4065b24765acbf91750b92e6e65b6a344a",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pci_dss_v4\\PCI-029__Annual_Penetration_Test_Reports.xlsx"
+ },
+ "pci_dss_v4/PCI-030": {
+  "hash": "014e7adfee98afb2c08d69ed04713f1d42fe1733",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pci_dss_v4\\PCI-030__Application-Layer_Vuln_Detection_WAF_.docx"
+ },
+ "pci_dss_v4/PCI-031": {
+  "hash": "0a5e1f95a1102a675e39df8f77300722f934e1d1",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pci_dss_v4\\PCI-031__Payment_Page_Script_Inventory_Integrity.xlsx"
+ },
+ "pci_dss_v4/PCI-032": {
+  "hash": "050ebb0b8a9e86b1bd06e0923d8f3d311e62e3dd",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pci_dss_v4\\PCI-032__Trusted_Keys_Certificates_Inventory.xlsx"
+ },
+ "pci_dss_v4/PCI-033": {
+  "hash": "4934665c9a7128fdb637bcf705da30700beac839",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pci_dss_v4\\PCI-033__Access_Review_Records.xlsx"
+ },
+ "pci_dss_v4/PCI-034": {
+  "hash": "a2529ced74ed23d26a4733ace4ad9dfc24972a22",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pci_dss_v4\\PCI-034__Security_Awareness_Training_Records.xlsx"
+ },
+ "pci_dss_v4/PCI-035": {
+  "hash": "3ba5917cadac6b2bfe252d88eafdc4f895968b57",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pci_dss_v4\\PCI-035__Daily_Log_Review_Evidence.docx"
+ },
+ "pci_dss_v4/PCI-036": {
+  "hash": "4787a5235c01bb4cb868ab667fe8d2a93c2f8ba1",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pci_dss_v4\\PCI-036__POI_Device_Inventory_Inspection_Logs.xlsx"
+ },
+ "pci_dss_v4/PCI-037": {
+  "hash": "bf6414e5c8decd6546640c2189c0397d6384e608",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pci_dss_v4\\PCI-037__TPSP_List_Agreements_AOCs.xlsx"
+ },
+ "pci_dss_v4/PCI-038": {
+  "hash": "d445664a468988ed24110b53c6d6a9d11acdb73c",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pci_dss_v4\\PCI-038__Incident_Response_Test_Records.xlsx"
+ },
+ "pci_dss_v4/PCI-039": {
+  "hash": "bff3e1b2a2a7fb449bd982e5088810bc1fc86724",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pci_dss_v4\\PCI-039__Internal_PCI_Compliance_Review.docx"
+ },
+ "pci_dss_v4/PCI-040": {
+  "hash": "cd21c02035b54929c9561f0f8d5549a1525b2422",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pci_dss_v4\\PCI-040__Nonconformity_Remediation_Tracker.xlsx"
+ },
+ "pci_dss_v4/PCI-041": {
+  "hash": "abf5367ab97473c74ec2efec6b8bce60622fa837",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pci_dss_v4\\PCI-041__Self-Assessment_Questionnaire_SAQ_.pdf"
+ },
+ "pci_dss_v4/PCI-042": {
+  "hash": "c8f538d9076db116ea9625865c038fa03be9627b",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pci_dss_v4\\PCI-042__Report_on_Compliance_ROC_.pdf"
+ },
+ "pci_dss_v4/PCI-043": {
+  "hash": "894c81187919dfb57ce342a53d33d777ed50599f",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pci_dss_v4\\PCI-043__Attestation_of_Compliance_AOC_.pdf"
+ },
+ "pci_dss_v4/PCI-044": {
+  "hash": "a427f52a1c00775737d33c2f863fc03b6dadeb07",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pci_dss_v4\\PCI-044__Compensating_Controls_Worksheet.docx"
+ },
+ "pci_dss_v4/PCI-045": {
+  "hash": "d89f334626e58074fbfe81d557856e5dd3078763",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pci_dss_v4\\PCI-045__Customised_Approach_Templates.docx"
+ },
+ "pci_dss_v4/PCI-046": {
+  "hash": "07326cc6d0a7a10700e65cbbca8d2fa11e9149b0",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pci_dss_v4\\PCI-046__Prioritised_Approach_Tool.xlsx"
+ },
+ "pci_dss_v4/PCI-047": {
+  "hash": "ee2b810dc6035f543df878658a3323aee88c6c04",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pci_dss_v4\\PCI-047__Annual_Re-Assessment_Updated_AOC.pdf"
+ },
+ "pci_dss_v4/PCI-048": {
+  "hash": "ac89263f1a88bab83275343431e0c9a0213234ff",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pci_dss_v4\\PCI-048__BAU_Evidence_Repository_continuous_.docx"
+ },
+ "swift_cscf/SWF-001": {
+  "hash": "409d358470dfe8234e22b711181bc86b1bc94e44",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\swift_cscf\\SWF-001__Swift_Architecture_Type_Determination.docx"
+ },
+ "swift_cscf/SWF-002": {
+  "hash": "4ae69ef6aafe83718cff9cd5652992188df657c9",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\swift_cscf\\SWF-002__Swift_Secure_Zone_Scope_Document.docx"
+ },
+ "swift_cscf/SWF-003": {
+  "hash": "7747d53633f0ccf07429d7cbf0124d692503192a",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\swift_cscf\\SWF-003__Swift_Local_Infrastructure_Inventory.xlsx"
+ },
+ "swift_cscf/SWF-004": {
+  "hash": "c06a253a896a9214e0c5a0208e9aa0b7ab39033a",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\swift_cscf\\SWF-004__Swift_Data_Flow_Diagram.docx"
+ },
+ "swift_cscf/SWF-005": {
+  "hash": "e54558dc88762a0c11ffb5b4835d6e620c5adfc7",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\swift_cscf\\SWF-005__CSCF_Gap_Assessment.docx"
+ },
+ "swift_cscf/SWF-006": {
+  "hash": "7809f5d9d8f2455d9fcbdf2fb0ba2a89fab3de45",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\swift_cscf\\SWF-006__Remediation_Plan_CSCF_.xlsx"
+ },
+ "swift_cscf/SWF-007": {
+  "hash": "3dfe6c9bb764ec5d670bf270d38266cefbf30fc5",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\swift_cscf\\SWF-007__Swift_Risk_Assessment.docx"
+ },
+ "swift_cscf/SWF-008": {
+  "hash": "aeb67f4db8314f0e1fb8f0948707b5d209a38a0b",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\swift_cscf\\SWF-008__Swift_Information_Security_Policy.docx"
+ },
+ "swift_cscf/SWF-009": {
+  "hash": "83bf675f23fbcbbf8b0323a722996e6dc791833e",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\swift_cscf\\SWF-009__Swift_Operator_Security_Policy.docx"
+ },
+ "swift_cscf/SWF-010": {
+  "hash": "3f6cd7ed699d05be96f03ca95e670658d557acb9",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\swift_cscf\\SWF-010__Internet_Access_Restriction_Procedure.docx"
+ },
+ "swift_cscf/SWF-011": {
+  "hash": "6cdcb78131b4f62f2eadde2d68b72b8bf38cbfde",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\swift_cscf\\SWF-011__Swift_System_Hardening_Standards.docx"
+ },
+ "swift_cscf/SWF-012": {
+  "hash": "f2ca8feabe6705b848e91cfd098a5ea9f0dea887",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\swift_cscf\\SWF-012__Patch_Vuln_Mgmt_Procedure_Swift_.docx"
+ },
+ "swift_cscf/SWF-013": {
+  "hash": "00c8012ef69db8c62504912229bf55fcd8f7d1b6",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\swift_cscf\\SWF-013__Logical_Access_Control_Procedure_Swift_.docx"
+ },
+ "swift_cscf/SWF-014": {
+  "hash": "158af96eee80fb86c88620b568f17b3b24eb96b8",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\swift_cscf\\SWF-014__Password_Token_Management_Procedure.docx"
+ },
+ "swift_cscf/SWF-015": {
+  "hash": "5bee4973ebaddb5c0c0203b7981aace05f5aa1a1",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\swift_cscf\\SWF-015__Multi-Factor_Authentication_Procedure.docx"
+ },
+ "swift_cscf/SWF-016": {
+  "hash": "3d779438f225e06ea8bde7013396ed77b8ad8df5",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\swift_cscf\\SWF-016__Incident_Response_Plan_Swift_.docx"
+ },
+ "swift_cscf/SWF-017": {
+  "hash": "1a1111ac58e31c2c213ad3ad429c92a9873459c2",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\swift_cscf\\SWF-017__Cyber_Threat_Intelligence_ISAC_Procedure.docx"
+ },
+ "swift_cscf/SWF-018": {
+  "hash": "4c9766fd35fe941216b7025f2054a9d3c909fd1f",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\swift_cscf\\SWF-018__Swift_Server_Hardening_Evidence.pdf"
+ },
+ "swift_cscf/SWF-019": {
+  "hash": "2b38bf8ef2835091c2da3ce5d79b0bdda4c06f92",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\swift_cscf\\SWF-019__Vulnerability_Scan_Reports_Swift_Zone_.xlsx"
+ },
+ "swift_cscf/SWF-020": {
+  "hash": "c5adc6ec47c1677fae2f0bcc13c74d7d7cdb650a",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\swift_cscf\\SWF-020__Patch_Records_Swift_Zone_.xlsx"
+ },
+ "swift_cscf/SWF-021": {
+  "hash": "4d5e3d4e5c38991120e8e7cf9b1b72ea18a8c7f8",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\swift_cscf\\SWF-021__Operator_Training_Records_Swift_.xlsx"
+ },
+ "swift_cscf/SWF-022": {
+  "hash": "86dd8fc594df62a3e2fc191c5e8ec1bb991041a4",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\swift_cscf\\SWF-022__Privileged_Access_Reviews_Swift_.xlsx"
+ },
+ "swift_cscf/SWF-023": {
+  "hash": "79f2dc1841d748377aabe3271afc403907bdacc4",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\swift_cscf\\SWF-023__Logging_Monitoring_Evidence_Swift_.docx"
+ },
+ "swift_cscf/SWF-024": {
+  "hash": "b87e48cc707c6b41765f2f66f89e0f22fadff05a",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\swift_cscf\\SWF-024__Anti-Malware_Evidence_Swift_.xlsx"
+ },
+ "swift_cscf/SWF-025": {
+  "hash": "4480576353a9d515b65e5278a315c7226c264558",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\swift_cscf\\SWF-025__Backup_Records_Swift_.xlsx"
+ },
+ "swift_cscf/SWF-026": {
+  "hash": "2db0f66bc917c68c0d8ba5179b917ff2343898d4",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\swift_cscf\\SWF-026__Physical_Security_Evidence_Swift_.pdf"
+ },
+ "swift_cscf/SWF-027": {
+  "hash": "aa4f5e22f002bd47e7fc1971cb61b4056a5465c6",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\swift_cscf\\SWF-027__Independent_Assessment_Document_Request_List.xlsx"
+ },
+ "swift_cscf/SWF-028": {
+  "hash": "96650667010cd9b12dd41fdfc37b5484f65cecce",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\swift_cscf\\SWF-028__Independent_Assessment_Workpapers.docx"
+ },
+ "swift_cscf/SWF-029": {
+  "hash": "f1bca67629dffb4643113e7dfda93fde18192c2b",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\swift_cscf\\SWF-029__Independent_Assessment_Report.docx"
+ },
+ "swift_cscf/SWF-030": {
+  "hash": "620a924271aec1d5a252a6fb143c19b84ec06172",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\swift_cscf\\SWF-030__Completion_Letter.pdf"
+ },
+ "swift_cscf/SWF-031": {
+  "hash": "d74bc48ab31e09c87d9e35f14fbb54386e2b12e8",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\swift_cscf\\SWF-031__Nonconformity_Remediation_Register_Swift_.xlsx"
+ },
+ "swift_cscf/SWF-032": {
+  "hash": "47745a4d4bb3211c20a1e7280cbaf4d597c199ff",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\swift_cscf\\SWF-032__KYC-Security_Attestation_Submission_Pack.docx"
+ },
+ "swift_cscf/SWF-033": {
+  "hash": "03e4513680acd11afd222580e7feef3989635c1b",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\swift_cscf\\SWF-033__Controls_Summary_Report_KYC-SA_.docx"
+ },
+ "swift_cscf/SWF-034": {
+  "hash": "0ea143a0781e15ea45946258419ed0928f17b5bf",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\swift_cscf\\SWF-034__Counterparty_Sharing_Permissions_Register.xlsx"
+ },
+ "swift_cscf/SWF-035": {
+  "hash": "9c327b8eb5208401dc48b92fe33754a2a5fdb861",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\swift_cscf\\SWF-035__Annual_Re-Attestation_Pack.pdf"
+ },
+ "swift_cscf/SWF-036": {
+  "hash": "2a862c3bc942a64f4322230099e511775fe05d9f",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\swift_cscf\\SWF-036__CSCF_Version_Upgrade_Impact_Analysis.docx"
+ },
+ "swift_cscf/SWF-037": {
+  "hash": "3f7169aa9afc18b84bfef77fcda39b47db07bc02",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\swift_cscf\\SWF-037__Continuous_Compliance_Evidence_Repository.docx"
+ },
+ "cobit_2019/COB-001": {
+  "hash": "4fff7ef9b5e0a8e6b27e46731ec7bd3f594740e2",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cobit_2019\\COB-001__Governance_System_Design_Charter.docx"
+ },
+ "cobit_2019/COB-002": {
+  "hash": "85b037ff1fcd92c63ee1fde700c0ad552ae8a5ca",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cobit_2019\\COB-002__Stakeholder_Needs_Drivers_Analysis.docx"
+ },
+ "cobit_2019/COB-003": {
+  "hash": "a3165191a2d2fa0f93f68ed6fa8791142c0f2104",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cobit_2019\\COB-003__Design_Factors_Analysis.xlsx"
+ },
+ "cobit_2019/COB-004": {
+  "hash": "72212fbdd959cfba653a176b35418efb251d1c10",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cobit_2019\\COB-004__COBIT_Maturity_Capability_Assessment.xlsx"
+ },
+ "cobit_2019/COB-005": {
+  "hash": "e90be13aaae3e55182f65905d8ee823a9cf5eff3",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cobit_2019\\COB-005__Gap_Analysis_Current_vs_Target_Capability_.docx"
+ },
+ "cobit_2019/COB-006": {
+  "hash": "2fde50310c5d03142bd3a8b6cdfcc5ad24d83a4a",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cobit_2019\\COB-006__IT_Risk_Register.xlsx"
+ },
+ "cobit_2019/COB-007": {
+  "hash": "74c003c3231e2ab5568c14aecb73efb4150139dd",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cobit_2019\\COB-007__Enterprise_Architecture_Repository.xlsx"
+ },
+ "cobit_2019/COB-008": {
+  "hash": "84fbddbceef3d60c15d26739818adcacc116c4a2",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cobit_2019\\COB-008__Governance_Charter_Framework_Document.docx"
+ },
+ "cobit_2019/COB-009": {
+  "hash": "41013fce4cb1d81a80ef4b51573c75cea17fb94d",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cobit_2019\\COB-009__IT_Strategy_Roadmap.docx"
+ },
+ "cobit_2019/COB-010": {
+  "hash": "1e93bc9e533d2be032779ef873cedf3935e548a6",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cobit_2019\\COB-010__IT_Policies_Catalogue_master_list_.xlsx"
+ },
+ "cobit_2019/COB-011": {
+  "hash": "fb1ce057ac6a1b60bad2fec4d7a5ec6a5b9ce32f",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cobit_2019\\COB-011__Organisational_Structure_RACI_IT_.xlsx"
+ },
+ "cobit_2019/COB-012": {
+  "hash": "4bdbaec2f1cbb99c2c7191e281d0044678a6a231",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cobit_2019\\COB-012__Data_Management_Policy_Catalogue.docx"
+ },
+ "cobit_2019/COB-013": {
+  "hash": "a21b125d5de72b0be34067b6234e930ed533855c",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cobit_2019\\COB-013__Innovation_Strategy.docx"
+ },
+ "cobit_2019/COB-014": {
+  "hash": "a5aee0e4378055c8247b69cb3b0cef6588bb784e",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cobit_2019\\COB-014__Portfolio_Programme_Plan.xlsx"
+ },
+ "cobit_2019/COB-015": {
+  "hash": "34b7a2463e889e9534fcad968380ec601d189a75",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cobit_2019\\COB-015__Budget_Cost_Management_Plan.xlsx"
+ },
+ "cobit_2019/COB-016": {
+  "hash": "9807dcbe7fabdfea3071a71681ee0f64f0e09eb3",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cobit_2019\\COB-016__HR_Plan_for_IT.xlsx"
+ },
+ "cobit_2019/COB-017": {
+  "hash": "3ff83a619470d5c9bed2b4c19c38a700bcd30750",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cobit_2019\\COB-017__Vendor_Supplier_Management_Policy.docx"
+ },
+ "cobit_2019/COB-018": {
+  "hash": "eeb12464f967f60ec5e2bbda91645f6511262b02",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cobit_2019\\COB-018__Quality_Management_System_IT_.docx"
+ },
+ "cobit_2019/COB-019": {
+  "hash": "e24258648d9ad9eae95e6642397047f120692fa4",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cobit_2019\\COB-019__Information_Security_Policy_per_APO13_.docx"
+ },
+ "cobit_2019/COB-020": {
+  "hash": "11659370dc0c6007229937d4f41fc89962c90405",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cobit_2019\\COB-020__Change_Management_Policy_Procedure.docx"
+ },
+ "cobit_2019/COB-021": {
+  "hash": "8c319870517a4268403671a94e38386ff7fd718b",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cobit_2019\\COB-021__Configuration_Management_Policy.docx"
+ },
+ "cobit_2019/COB-022": {
+  "hash": "11a521d5d1d21903c8ab0d22de0b738a1634b9b9",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cobit_2019\\COB-022__Project_Charters_Solution_Design_Docs.docx"
+ },
+ "cobit_2019/COB-023": {
+  "hash": "d3e86824eda05d6e03486b50e3358a35c0fba95f",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cobit_2019\\COB-023__Service_Catalogue_SLAs.xlsx"
+ },
+ "cobit_2019/COB-024": {
+  "hash": "4bfe95e0f28472323478e1415909cef8bd9815b3",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cobit_2019\\COB-024__Operations_Procedures.docx"
+ },
+ "cobit_2019/COB-025": {
+  "hash": "e8c7dcf97eca1412e4116b06e2677678b12a3884",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cobit_2019\\COB-025__Service_Request_Incident_Records.xlsx"
+ },
+ "cobit_2019/COB-026": {
+  "hash": "242369ddac5ca0d0c6c0e21817b50507fbd7ea50",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cobit_2019\\COB-026__Problem_Management_Records.xlsx"
+ },
+ "cobit_2019/COB-027": {
+  "hash": "85e72763cbf23352969865193e43292b7f9597a2",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cobit_2019\\COB-027__Continuity_Resilience_Plans_IT_.docx"
+ },
+ "cobit_2019/COB-028": {
+  "hash": "09f8ae26683c1c510eea0895de4588666c62418a",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cobit_2019\\COB-028__Security_Operations_Records.docx"
+ },
+ "cobit_2019/COB-029": {
+  "hash": "531a6a883948152768f3b54203a59ccbc8eb7681",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cobit_2019\\COB-029__Business_Process_Controls_Evidence.docx"
+ },
+ "cobit_2019/COB-030": {
+  "hash": "2533ec3216728ed87443d736b3d96e15b68079ca",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cobit_2019\\COB-030__Performance_Conformance_Reports.xlsx"
+ },
+ "cobit_2019/COB-031": {
+  "hash": "588c0882281ce79e4d780ec49600a0eb64487759",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cobit_2019\\COB-031__Internal_Control_Self-Assessment_Report.docx"
+ },
+ "cobit_2019/COB-032": {
+  "hash": "4a17742aca602d02b4ff2e624b4269e7be6b6753",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cobit_2019\\COB-032__Compliance_with_External_Requirements_Report.xlsx"
+ },
+ "cobit_2019/COB-033": {
+  "hash": "e5554118aa22c2da1210988c3cf0e897f7563417",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cobit_2019\\COB-033__Independent_Assurance_Reports.pdf"
+ },
+ "cobit_2019/COB-034": {
+  "hash": "020faedb5330cb1eeaf936299f232fb0b36208f6",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cobit_2019\\COB-034__Board_Steering_Committee_Minutes.xlsx"
+ },
+ "cobit_2019/COB-035": {
+  "hash": "34e157ef50bc0d3f81d5786ad98182ca3f448c74",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cobit_2019\\COB-035__Continual_Improvement_Register_IT_Governance_.xlsx"
+ },
+ "dora/DORA-002": {
+  "hash": "c32422b0a79391ee6f2c2034e7213bd2eb9a42be",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\dora\\DORA-002__Management_Body_DORA_Mandate.docx"
+ },
+ "dora/DORA-003": {
+  "hash": "c29723d62f760a0001c925dd65a0b6631d122480",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\dora\\DORA-003__ICT_Risk_Mgmt_Project_Charter.docx"
+ },
+ "dora/DORA-004": {
+  "hash": "1ad643ede7962c41074273125113a8a07a8ebbbd",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\dora\\DORA-004__DORA_Gap_Assessment.docx"
+ },
+ "dora/DORA-005": {
+  "hash": "763079c52eb349b828764628764865f3d15ab6bb",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\dora\\DORA-005__ICT_Risk_Mgmt_Framework_Document.docx"
+ },
+ "dora/DORA-006": {
+  "hash": "b0f24bb8234fa8613d6395e98f241c3ace06408c",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\dora\\DORA-006__Annual_ICT_RMF_Review_Report.docx"
+ },
+ "dora/DORA-007": {
+  "hash": "2060d3740df10257a3f6d0b6def2caabd42f7713",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\dora\\DORA-007__ICT-Supported_Business_Functions_Inventory.xlsx"
+ },
+ "dora/DORA-008": {
+  "hash": "6e23699fe7ea5bb076c6aebb201dea0424c37e0b",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\dora\\DORA-008__ICT_Asset_Inventory.xlsx"
+ },
+ "dora/DORA-009": {
+  "hash": "fb127fc6986c9e33b2e1a5b67a485b3924a34f7c",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\dora\\DORA-009__Legacy_ICT_System_Risk_Assessment.docx"
+ },
+ "dora/DORA-010": {
+  "hash": "fa271de51d15f123e72dbed6a7595aeb9f956e9e",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\dora\\DORA-010__Cyber_Threat_Landscape_Assessment.docx"
+ },
+ "dora/DORA-011": {
+  "hash": "cf5b705c50aa5cd7f088b877cc9e8d729d6353e8",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\dora\\DORA-011__Digital_Operational_Resilience_Strategy.docx"
+ },
+ "dora/DORA-012": {
+  "hash": "eae223e041dfc35f834e83f516bf1e3c12b479a1",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\dora\\DORA-012__ICT_Security_Policies_Procedures.docx"
+ },
+ "dora/DORA-013": {
+  "hash": "0f9c9d8d56a0aa16625f1a4b07dc56705cd36e5d",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\dora\\DORA-013__ICT_Business_Continuity_Policy.docx"
+ },
+ "dora/DORA-014": {
+  "hash": "80f64232c1ed742a9c232215dc903101809b87e6",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\dora\\DORA-014__ICT_Response_Recovery_Plans.docx"
+ },
+ "dora/DORA-015": {
+  "hash": "aff8bde4c377154cd68a19cbdd2cc250c4e8395a",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\dora\\DORA-015__Backup_Policies_Restoration_Procedures.docx"
+ },
+ "dora/DORA-016": {
+  "hash": "b245eb246878af098d673148a95b61ceaf50d48b",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\dora\\DORA-016__Crisis_Communication_Plan.docx"
+ },
+ "dora/DORA-017": {
+  "hash": "d682d7cfb35b93bbfb5b5f5eded55ccc63291045",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\dora\\DORA-017__Awareness_Training_Programme.docx"
+ },
+ "dora/DORA-018": {
+  "hash": "e09b7880546e23bddd8f27bb6df1be1c0aeadb45",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\dora\\DORA-018__ICT_Incident_Detection_Procedures.docx"
+ },
+ "dora/DORA-019": {
+  "hash": "e064c7ed082de5ff546cc74588189a22b645fda6",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\dora\\DORA-019__ICT_Incident_Classification_Reporting_Procedure.docx"
+ },
+ "dora/DORA-020": {
+  "hash": "ef640c87e20a6ca12b2cedd0ce76e272f60d5c6a",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\dora\\DORA-020__Major_ICT_Incident_Initial_Notification.docx"
+ },
+ "dora/DORA-021": {
+  "hash": "2bebf705680451b2c3360dda4d60b9f1e314e69f",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\dora\\DORA-021__Major_ICT_Incident_Intermediate_Final_Reports.docx"
+ },
+ "dora/DORA-022": {
+  "hash": "c0be79dfbc9abcc63cc234a5fb246394b653a8f2",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\dora\\DORA-022__Significant_Cyber_Threat_Voluntary_Notification.docx"
+ },
+ "dora/DORA-023": {
+  "hash": "a9a1822082684cd1ebc133f62d083d55173b9f57",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\dora\\DORA-023__Vulnerability_Mgmt_Patch_Mgmt_Records.xlsx"
+ },
+ "dora/DORA-024": {
+  "hash": "e434bfa7e3c62fb8418050174870d420bafa162c",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\dora\\DORA-024__Identity_Access_Mgmt_Records.docx"
+ },
+ "dora/DORA-025": {
+  "hash": "8ebeb2d6222e3202522b952302c5ea5e59b15396",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\dora\\DORA-025__Cryptographic_Key_Mgmt_Procedures.docx"
+ },
+ "dora/DORA-026": {
+  "hash": "1f2a3e82cfef438de6c4835a1e9199580d30ddaf",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\dora\\DORA-026__Network_Security_Controls_Documentation.docx"
+ },
+ "dora/DORA-027": {
+  "hash": "67371d2f1bdd4e7a992fcf5e501d89f5901fc3b2",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\dora\\DORA-027__Digital_Operational_Resilience_Testing_Programme.docx"
+ },
+ "dora/DORA-028": {
+  "hash": "43fd3bb4ca663a0e5fbf4ebbdb988cbff1d3b5c8",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\dora\\DORA-028__Annual_Resilience_Test_Plan_Reports.docx"
+ },
+ "dora/DORA-029": {
+  "hash": "9473736cb1067fae6cab5f28f9b4f62c49b9d137",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\dora\\DORA-029__Threat-Led_Penetration_Testing_TLPT_Reports.pdf"
+ },
+ "dora/DORA-030": {
+  "hash": "b52c2cab81c365e2865a874f563f40281281ad4a",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\dora\\DORA-030__TLPT_Attestation_by_Competent_Authority.pdf"
+ },
+ "dora/DORA-031": {
+  "hash": "710c6973f90a7858034a3fb4871152e78f492218",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\dora\\DORA-031__ICT_Internal_Audit_Reports.docx"
+ },
+ "dora/DORA-032": {
+  "hash": "70b1806e456d851be8fbf8b5f7b9c0a2704f2903",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\dora\\DORA-032__Third-Party_ICT_Provider_Strategy.docx"
+ },
+ "dora/DORA-033": {
+  "hash": "8df76452ee85fd35b98d9aa72261b004919e9309",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\dora\\DORA-033__Register_of_Information_ICT_Third-Party_Arrangements_.xlsx"
+ },
+ "dora/DORA-034": {
+  "hash": "599c4bb4744cd14c36f37afc8a5cf3aef606e363",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\dora\\DORA-034__Pre-Contractual_Due_Diligence_Records_TPP_.xlsx"
+ },
+ "dora/DORA-035": {
+  "hash": "88814d423b6a9d5bd6f75eb61c002a15191b374f",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\dora\\DORA-035__ICT_TPP_Contractual_Provisions_Library.docx"
+ },
+ "dora/DORA-036": {
+  "hash": "1c840154c7fe82512af8d574bfa3bbd88ac27a68",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\dora\\DORA-036__Critical_Important_Function_TPP_Exit_Strategy.docx"
+ },
+ "dora/DORA-037": {
+  "hash": "e3075bea8589028f2ef551d9983d00d53c5f2a0b",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\dora\\DORA-037__TPP_Concentration_Risk_Analysis.docx"
+ },
+ "dora/DORA-038": {
+  "hash": "07f9a227441a5f77c400a02c137649a6c34d8b1b",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\dora\\DORA-038__Information_Sharing_Agreements_Cyber_Threat_Intel_.docx"
+ },
+ "dora/DORA-039": {
+  "hash": "ef737e2fdbbc710c70e6af0e868a0a14a9bb7cdd",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\dora\\DORA-039__Annual_Compliance_Report_to_Competent_Authority.pdf"
+ },
+ "dora/DORA-040": {
+  "hash": "bbe2cc7177103777d9ed6643996622ce4ffe2efa",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\dora\\DORA-040__Continuous_Monitoring_Dashboard.docx"
+ },
+ "hipaa/HIPAA-001": {
+  "hash": "6a9be16ff96f530ac92003f38803362c512e3f83",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\hipaa\\HIPAA-001__HIPAA_Applicability_Entity_Type_Determination.docx"
+ },
+ "hipaa/HIPAA-002": {
+  "hash": "455ea197daca79d5d185ae409b1841ee38fd81a3",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\hipaa\\HIPAA-002__PHI_ePHI_Inventory_Data_Map.xlsx"
+ },
+ "hipaa/HIPAA-003": {
+  "hash": "28b15a3a6e6ad15042ef71327d227abba40fe1c8",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\hipaa\\HIPAA-003__Designated_Privacy_Officer_Appointment.docx"
+ },
+ "hipaa/HIPAA-004": {
+  "hash": "c92beafd3a13d5b23306ae657c445881f4cd3124",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\hipaa\\HIPAA-004__Designated_Security_Officer_Appointment.docx"
+ },
+ "hipaa/HIPAA-005": {
+  "hash": "bd4b2bfb04e3aa93f86da726baa25d4c9b1eb0b3",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\hipaa\\HIPAA-005__HIPAA_Compliance_Gap_Analysis.docx"
+ },
+ "hipaa/HIPAA-006": {
+  "hash": "ba71d8eae1f9573d6510f2860cee10a0770f9147",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\hipaa\\HIPAA-006__Security_Risk_Analysis_SRA_.docx"
+ },
+ "hipaa/HIPAA-007": {
+  "hash": "1f844897dd07d0d1202b038862c085c37f228c87",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\hipaa\\HIPAA-007__Risk_Management_Plan.xlsx"
+ },
+ "hipaa/HIPAA-008": {
+  "hash": "aaf3818dadc19e2f4e5c0b5f64130b1d789cdee7",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\hipaa\\HIPAA-008__Notice_of_Privacy_Practices_NPP_.docx"
+ },
+ "hipaa/HIPAA-009": {
+  "hash": "eaafc718123c755667074274e204acbde9e64d17",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\hipaa\\HIPAA-009__Privacy_Policies_Procedures.docx"
+ },
+ "hipaa/HIPAA-010": {
+  "hash": "1e56b89f290f8600e8ae105e29f51f67712647fa",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\hipaa\\HIPAA-010__Security_Policies_Procedures.docx"
+ },
+ "hipaa/HIPAA-011": {
+  "hash": "38f27375117753dfa9f97336eb4b9833fa7df47c",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\hipaa\\HIPAA-011__Sanction_Policy.docx"
+ },
+ "hipaa/HIPAA-012": {
+  "hash": "32c9b3b571d1fe43c0517167c6eab707cec793ff",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\hipaa\\HIPAA-012__Workforce_Clearance_Procedure.docx"
+ },
+ "hipaa/HIPAA-013": {
+  "hash": "8ed30ecf223f56b3d5d82564958481fd3f515d97",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\hipaa\\HIPAA-013__Termination_Procedures_Workforce_.docx"
+ },
+ "hipaa/HIPAA-014": {
+  "hash": "8bbf3fc024912e0062f1018ad6365f7a0ab811ca",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\hipaa\\HIPAA-014__Information_Access_Mgmt_Policy.docx"
+ },
+ "hipaa/HIPAA-015": {
+  "hash": "c49dbb5f83c7578020d08103a09176f07044f2a8",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\hipaa\\HIPAA-015__Workstation_Use_Security_Policy.docx"
+ },
+ "hipaa/HIPAA-016": {
+  "hash": "792941e2366d2555a20674ad7948bbb81408d828",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\hipaa\\HIPAA-016__Device_Media_Controls_Policy.docx"
+ },
+ "hipaa/HIPAA-017": {
+  "hash": "d96ec5de1a696119cdb75c46fe71126a1d110a68",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\hipaa\\HIPAA-017__Audit_Controls_Policy.docx"
+ },
+ "hipaa/HIPAA-018": {
+  "hash": "d096a67dbb349a4a950d00734b6e7d7fccbc9664",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\hipaa\\HIPAA-018__Encryption_Decryption_Policy.docx"
+ },
+ "hipaa/HIPAA-019": {
+  "hash": "1154e56b01f464c85b2351f628d8d5e761004d70",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\hipaa\\HIPAA-019__Contingency_Plan_Disaster_Recovery_.docx"
+ },
+ "hipaa/HIPAA-020": {
+  "hash": "1efb19644e43b3f095f3d4d3dc3c20991c0f7120",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\hipaa\\HIPAA-020__Breach_Notification_Policy_Procedure.docx"
+ },
+ "hipaa/HIPAA-021": {
+  "hash": "9bf9d0ff46981bcef559315fe820b8c561f2c0e4",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\hipaa\\HIPAA-021__Business_Associate_Agreement_BAA_Template.docx"
+ },
+ "hipaa/HIPAA-022": {
+  "hash": "2c26c1c315943f4ce56973439ac56829926e5e99",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\hipaa\\HIPAA-022__Workforce_Training_Records_Privacy_Security_.xlsx"
+ },
+ "hipaa/HIPAA-023": {
+  "hash": "49d60facd11efa9597bbacfbec61689dd5a38079",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\hipaa\\HIPAA-023__Access_Authorisation_Modification_Records.xlsx"
+ },
+ "hipaa/HIPAA-024": {
+  "hash": "0f9c801ea663a64e31139c2d5e1682ecb78c181e",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\hipaa\\HIPAA-024__Periodic_Security_Evaluations.docx"
+ },
+ "hipaa/HIPAA-025": {
+  "hash": "cee1458211281a4006b168207b44eb67a31f3eae",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\hipaa\\HIPAA-025__Audit_Logs_Reviews.docx"
+ },
+ "hipaa/HIPAA-026": {
+  "hash": "af031f4d6e7c6cceeb7242dab69860a0f80d9f00",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\hipaa\\HIPAA-026__Incident_Response_Records.xlsx"
+ },
+ "hipaa/HIPAA-027": {
+  "hash": "362b78c0ed8cd6c29037e5ff2f464c8ea72f79fc",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\hipaa\\HIPAA-027__Contingency_Plan_Test_Records.xlsx"
+ },
+ "hipaa/HIPAA-028": {
+  "hash": "39e16c4d4afe8c792aa95ab97c56679f1244f9c0",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\hipaa\\HIPAA-028__BA_Agreements_Register_Executed_BAAs.xlsx"
+ },
+ "hipaa/HIPAA-029": {
+  "hash": "0e9a3ec6d75bc48d2f931b79ee750bffadc00e0d",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\hipaa\\HIPAA-029__Authorisation_Forms_PHI_Use_Disclosure_.pdf"
+ },
+ "hipaa/HIPAA-030": {
+  "hash": "ebda68fb8eecd3633ab56823f86b3adfd1d6bc7c",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\hipaa\\HIPAA-030__Accounting_of_Disclosures_Log.xlsx"
+ },
+ "hipaa/HIPAA-031": {
+  "hash": "b3674048e9ffd64de73b170b5d80fb4332d0c9a5",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\hipaa\\HIPAA-031__Patient_Rights_Request_Records_Access_Amend_Restrict_.xlsx"
+ },
+ "hipaa/HIPAA-032": {
+  "hash": "5232625d6b9a5a86b8dca62a561b8c79dcb2311d",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\hipaa\\HIPAA-032__Documentation_Retention_Records.docx"
+ },
+ "hipaa/HIPAA-033": {
+  "hash": "9b3627bf0ff557a9a2b830875e305f2abc946768",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\hipaa\\HIPAA-033__Breach_Notification_to_HHS_Individuals_Media.docx"
+ },
+ "hipaa/HIPAA-034": {
+  "hash": "777452c7945a61ae65d7957c477ff4f0389daae2",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\hipaa\\HIPAA-034__OCR_HHS_Audit_Response_Pack.docx"
+ },
+ "hipaa/HIPAA-035": {
+  "hash": "aa000d00303ee03f3d9656a982029a428ee6392b",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\hipaa\\HIPAA-035__Annual_Risk_Analysis_Update.docx"
+ },
+ "hipaa/HIPAA-036": {
+  "hash": "40956fa52f1e3ad9beeec5a94708b8ae0fb1724b",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\hipaa\\HIPAA-036__Annual_Compliance_Programme_Report.docx"
+ },
+ "gdpr/GDPR-001": {
+  "hash": "4132ba9d7714fdb7661b95cb163a1a8b6bdb8042",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\gdpr\\GDPR-001__GDPR_Applicability_Establishment_Determination.docx"
+ },
+ "gdpr/GDPR-002": {
+  "hash": "cf843b0ca1af0717c1695be1d85e8237560af613",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\gdpr\\GDPR-002__Roles_Determination_Controller_Processor_Joint_.docx"
+ },
+ "gdpr/GDPR-003": {
+  "hash": "f5e8888861d9a004dcd128f836445a95f38683fd",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\gdpr\\GDPR-003__Data_Protection_Officer_Appointment.docx"
+ },
+ "gdpr/GDPR-004": {
+  "hash": "da8a042256c12e58253e18e6733780c8c4a5376f",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\gdpr\\GDPR-004__Representative_Designation_non-EU_.docx"
+ },
+ "gdpr/GDPR-005": {
+  "hash": "636eef2d090095c4732a08b99f41a9a5b4078165",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\gdpr\\GDPR-005__GDPR_Gap_Analysis.docx"
+ },
+ "gdpr/GDPR-006": {
+  "hash": "0ced47615b51714f750617deba7fa10702869a8a",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\gdpr\\GDPR-006__Data_Inventory_Data_Map.xlsx"
+ },
+ "gdpr/GDPR-007": {
+  "hash": "da9a95e3201834d30ea91698c35dbf4d7f995e17",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\gdpr\\GDPR-007__Records_of_Processing_Activities_RoPA_-_Controller.xlsx"
+ },
+ "gdpr/GDPR-008": {
+  "hash": "dbb2ae47d1c298636bcf53d61777966ecd0c365b",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\gdpr\\GDPR-008__Records_of_Processing_Activities_RoPA_-_Processor.xlsx"
+ },
+ "gdpr/GDPR-009": {
+  "hash": "e779aebfcceeb7599788b0f5f829d4791bbf1545",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\gdpr\\GDPR-009__Lawful_Basis_Register.xlsx"
+ },
+ "gdpr/GDPR-010": {
+  "hash": "358b74398a425dc86217d8e969809466d967bdee",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\gdpr\\GDPR-010__Legitimate_Interests_Assessment_LIA_.docx"
+ },
+ "gdpr/GDPR-011": {
+  "hash": "5d67894e8a9b0ea58b8f1d0b9c6eb775a6c4de83",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\gdpr\\GDPR-011__Data_Protection_Impact_Assessment_DPIA_.docx"
+ },
+ "gdpr/GDPR-012": {
+  "hash": "7bd7de3c4f98a8ad306638eb06769dacd3f45259",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\gdpr\\GDPR-012__Transfer_Impact_Assessment_TIA_.docx"
+ },
+ "gdpr/GDPR-013": {
+  "hash": "96e3b1842b2ac2914af8785a21308c019984b8ff",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\gdpr\\GDPR-013__External_Privacy_Notice.docx"
+ },
+ "gdpr/GDPR-014": {
+  "hash": "69d8c25330bf5d26342ab26d45f93a5a2b1f7406",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\gdpr\\GDPR-014__Internal_Data_Protection_Policy.docx"
+ },
+ "gdpr/GDPR-015": {
+  "hash": "8c4c633d164c6de402d66eab78c3cdbb3fa90ab0",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\gdpr\\GDPR-015__Data_Retention_Policy_Schedule.docx"
+ },
+ "gdpr/GDPR-016": {
+  "hash": "4860bbdc9209dda360a772d430d806c3c7a316ed",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\gdpr\\GDPR-016__Consent_Mgmt_Policy_Records.docx"
+ },
+ "gdpr/GDPR-017": {
+  "hash": "215dea9b8c9e2f2d4c20e22787684a4471d93aff",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\gdpr\\GDPR-017__Data_Subject_Rights_Procedure_DSAR_.docx"
+ },
+ "gdpr/GDPR-018": {
+  "hash": "879ca97ccf3432c1f621ec9c286544949156bed3",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\gdpr\\GDPR-018__Personal_Data_Breach_Procedure.docx"
+ },
+ "gdpr/GDPR-019": {
+  "hash": "439d53d8cd577461cfbff2e660bd421d4976e848",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\gdpr\\GDPR-019__Data_Sharing_Disclosure_Procedure.docx"
+ },
+ "gdpr/GDPR-020": {
+  "hash": "4bc0f7df2acd058b0d85be2a00839a9fc0d71be7",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\gdpr\\GDPR-020__Data_Protection_by_Design_by_Default_Procedure.docx"
+ },
+ "gdpr/GDPR-021": {
+  "hash": "4ddd59752ef2d354c19f1dc2b29f21b38ed47d51",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\gdpr\\GDPR-021__Cookie_Tracking_Technologies_Policy.docx"
+ },
+ "gdpr/GDPR-022": {
+  "hash": "f06b72847e0ea38a0d86e6f38cba6741d9a46f71",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\gdpr\\GDPR-022__Data_Protection_Training_Programme.docx"
+ },
+ "gdpr/GDPR-023": {
+  "hash": "a928e13da7409b6a2afbb811f89b46a41fbb4d8d",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\gdpr\\GDPR-023__Data_Processing_Agreements_Art._28_Contracts_.docx"
+ },
+ "gdpr/GDPR-024": {
+  "hash": "5b298f952dfe662d06ae05614ea6d14f6b1807fb",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\gdpr\\GDPR-024__Standard_Contractual_Clauses_SCCs_.docx"
+ },
+ "gdpr/GDPR-025": {
+  "hash": "8df66267008a4b551e649e3034902cf9f6004bab",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\gdpr\\GDPR-025__Joint_Controller_Arrangement.docx"
+ },
+ "gdpr/GDPR-026": {
+  "hash": "1b33e75d9b0c6c590478608d99a71c27498478d3",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\gdpr\\GDPR-026__DSAR_Log_Register.xlsx"
+ },
+ "gdpr/GDPR-027": {
+  "hash": "f11bec232028d968c9d146bfa3f3d58d26743de2",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\gdpr\\GDPR-027__Personal_Data_Breach_Register.xlsx"
+ },
+ "gdpr/GDPR-028": {
+  "hash": "e0b8673c9aaa8400146842f348d6b43914377209",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\gdpr\\GDPR-028__Breach_Notification_to_SA_Art._33_.docx"
+ },
+ "gdpr/GDPR-029": {
+  "hash": "5338e43700931c36ce6e63997cdeda3d0c5373f8",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\gdpr\\GDPR-029__Breach_Notification_to_Data_Subject_Art._34_.docx"
+ },
+ "gdpr/GDPR-030": {
+  "hash": "a8f954cfafc1e19a1fb050db489a841439e9047e",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\gdpr\\GDPR-030__Training_Records.xlsx"
+ },
+ "gdpr/GDPR-031": {
+  "hash": "1ecda06320a415a838cce1659647a5733e552a63",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\gdpr\\GDPR-031__Consent_Records.docx"
+ },
+ "gdpr/GDPR-032": {
+  "hash": "9a40e2a2ae925fbc80a82537dacf5dbd5e0c5b18",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\gdpr\\GDPR-032__Vendor_Processor_Due_Diligence_Records.xlsx"
+ },
+ "gdpr/GDPR-033": {
+  "hash": "8d89f24661b30b829b806cf6b65a414b3a6b6cc2",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\gdpr\\GDPR-033__Anonymisation_Pseudonymisation_Standard.docx"
+ },
+ "gdpr/GDPR-034": {
+  "hash": "066f57d4d0237be369033d21635d2c023571bc7f",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\gdpr\\GDPR-034__Internal_Audit_Privacy_Audit_Reports.docx"
+ },
+ "gdpr/GDPR-035": {
+  "hash": "d57beb100a342fe8608336a4d157510203659897",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\gdpr\\GDPR-035__Privacy_Programme_Performance_Metrics.xlsx"
+ },
+ "gdpr/GDPR-036": {
+  "hash": "75d0d5c0238883e6d45fd675811c5e4f9037143d",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\gdpr\\GDPR-036__SA_Inquiry_Investigation_Response_Pack.docx"
+ },
+ "gdpr/GDPR-037": {
+  "hash": "3b119afa6b33d79fc6778196485157e3f02961d5",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\gdpr\\GDPR-037__Annual_DPIA_Review_Cycle.docx"
+ },
+ "gdpr/GDPR-038": {
+  "hash": "4f22137a482b69c2b728d6e2888a0dcf6f6d60da",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\gdpr\\GDPR-038__Privacy_Programme_Annual_Report.docx"
+ },
+ "pdpl_ksa/PDPL-001": {
+  "hash": "d99f88e5adc1241d32b69bccdec64826bd89a5dd",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pdpl_ksa\\PDPL-001__PDPL_Applicability_Determination.docx"
+ },
+ "pdpl_ksa/PDPL-002": {
+  "hash": "5cf3bc699d2c8a3d884acebed09dcf125c738891",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pdpl_ksa\\PDPL-002__Controller_Processor_Role_Determination.docx"
+ },
+ "pdpl_ksa/PDPL-003": {
+  "hash": "464ac3b70a19c63c812111caca4b38d8ab3111ea",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pdpl_ksa\\PDPL-003__SDAIA_Controller_Registration_National_Data_Governance_Platform_.docx"
+ },
+ "pdpl_ksa/PDPL-004": {
+  "hash": "0d788b6d92c0498e8bdf4fdfee6d738681569012",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pdpl_ksa\\PDPL-004__Data_Protection_Officer_Appointment.docx"
+ },
+ "pdpl_ksa/PDPL-008": {
+  "hash": "cfaf2474295dc41b6d2f485853e36d1f83bcd387",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pdpl_ksa\\PDPL-008__Lawful_Basis_Register.xlsx"
+ },
+ "pdpl_ksa/PDPL-009": {
+  "hash": "b76a957a4672e1a0a7d98f1c74e9dea7fb274d4a",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pdpl_ksa\\PDPL-009__Data_Protection_Impact_Assessment_DPIA_.docx"
+ },
+ "pdpl_ksa/PDPL-010": {
+  "hash": "469005b1df892cd4bc7b85c7c3b456ef8d545c82",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pdpl_ksa\\PDPL-010__Data_Transfer_Impact_Assessment.docx"
+ },
+ "pdpl_ksa/PDPL-011": {
+  "hash": "0c770c462ea73df30fd8a919a496c187e1af447e",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pdpl_ksa\\PDPL-011__Legitimate_Interest_Assessment_LIA_.docx"
+ },
+ "pdpl_ksa/PDPL-012": {
+  "hash": "80333bf3364714d39e900cbebc24d5262d5bc064",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pdpl_ksa\\PDPL-012__Privacy_Policy_Public-Facing_-_Arabic_English.docx"
+ },
+ "pdpl_ksa/PDPL-013": {
+  "hash": "7d59b61802eff36528f4298903fd079a53e51f4e",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pdpl_ksa\\PDPL-013__Internal_Data_Protection_Policy.docx"
+ },
+ "pdpl_ksa/PDPL-014": {
+  "hash": "2e86726d91a06e00dbfc29883a6f6f07510efd24",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pdpl_ksa\\PDPL-014__Data_Retention_Destruction_Policy.docx"
+ },
+ "pdpl_ksa/PDPL-015": {
+  "hash": "9d3ec83020c196c834029e31991cd54a9c3380b7",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pdpl_ksa\\PDPL-015__Anonymisation_Procedure.docx"
+ },
+ "pdpl_ksa/PDPL-016": {
+  "hash": "8066437e436ff9f15778153ebfe38f6ff066fd04",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pdpl_ksa\\PDPL-016__Data_Subject_Rights_Procedure.docx"
+ },
+ "pdpl_ksa/PDPL-017": {
+  "hash": "608a22da8400622f2e43902311d77a2e1cbb52f6",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pdpl_ksa\\PDPL-017__Personal_Data_Breach_Notification_Procedure.docx"
+ },
+ "pdpl_ksa/PDPL-018": {
+  "hash": "1992d47d893cbc58a8c1cf82fb183c859cfb717b",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pdpl_ksa\\PDPL-018__Marketing_Consent_Procedure_opt-in_.docx"
+ },
+ "pdpl_ksa/PDPL-019": {
+  "hash": "82c30cb949ad68017c67308f111c6cdbdd46808c",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pdpl_ksa\\PDPL-019__Health_Credit_Data_Handling_Procedure.docx"
+ },
+ "pdpl_ksa/PDPL-020": {
+  "hash": "1c37e09dc91acb91e9c857640bdf05251704f079",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pdpl_ksa\\PDPL-020__Information_Security_Standards_Adoption_NCA-aligned_.docx"
+ },
+ "pdpl_ksa/PDPL-021": {
+  "hash": "ab82b529446d94fe9511e40a2cbcd4c1eb027036",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pdpl_ksa\\PDPL-021__Public_Authority_Disclosure_Procedure.docx"
+ },
+ "pdpl_ksa/PDPL-022": {
+  "hash": "fd876b77856bbef56d96395579363a568be4a26a",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pdpl_ksa\\PDPL-022__Data_Sharing_Agreement_DSA_Template.docx"
+ },
+ "pdpl_ksa/PDPL-023": {
+  "hash": "0f8c8a831ebdc7f14a00e6218628ea79ffa40228",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pdpl_ksa\\PDPL-023__Data_Processing_Agreement_Template.docx"
+ },
+ "pdpl_ksa/PDPL-024": {
+  "hash": "a2d15a8d65ffcb5b3d12ed10ce2610eb90999212",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pdpl_ksa\\PDPL-024__Standard_Contractual_Clauses_for_Cross-Border_Transfer.docx"
+ },
+ "pdpl_ksa/PDPL-025": {
+  "hash": "dcf75e0cd45c5b000516ad1cb5d55128df85b896",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pdpl_ksa\\PDPL-025__Vendor_Processor_Due_Diligence_Records.xlsx"
+ },
+ "pdpl_ksa/PDPL-026": {
+  "hash": "bee87c837e9ea95b4a289534825337000190340a",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pdpl_ksa\\PDPL-026__Data_Subject_Request_DSR_Log.xlsx"
+ },
+ "pdpl_ksa/PDPL-027": {
+  "hash": "d401d05c0acedb9bef9713674d4db667e4c56537",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pdpl_ksa\\PDPL-027__Personal_Data_Breach_Register.xlsx"
+ },
+ "pdpl_ksa/PDPL-028": {
+  "hash": "ce56242d2a042ddb7592311eaccf800f4ce2ba02",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pdpl_ksa\\PDPL-028__SDAIA_Breach_Notification.docx"
+ },
+ "pdpl_ksa/PDPL-029": {
+  "hash": "b5802e52701826f9c7a80dba0a2ebbfb484b2aae",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pdpl_ksa\\PDPL-029__Data_Subject_Breach_Notification.docx"
+ },
+ "pdpl_ksa/PDPL-030": {
+  "hash": "ad1068066fb0fca02140e2ed2cd2d3ffc8738fb5",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pdpl_ksa\\PDPL-030__Consent_Records.docx"
+ },
+ "pdpl_ksa/PDPL-031": {
+  "hash": "085093044a518d20c74aecc34cb8280ceba12fa7",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pdpl_ksa\\PDPL-031__Privacy_Training_Records.xlsx"
+ },
+ "pdpl_ksa/PDPL-032": {
+  "hash": "5a9e648cd40b548aff9ef72c8d8a33e42f699d40",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pdpl_ksa\\PDPL-032__Disclosure_Request_Documentation.xlsx"
+ },
+ "pdpl_ksa/PDPL-033": {
+  "hash": "65a581bcd48dcb6eac289f1d81af6228b3d2240c",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pdpl_ksa\\PDPL-033__Privacy_Programme_Internal_Audit_Report.docx"
+ },
+ "pdpl_ksa/PDPL-034": {
+  "hash": "ac94504e5a574726ec889d19745a625022db4bef",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pdpl_ksa\\PDPL-034__SDAIA_Inquiry_Complaint_Response_Pack.docx"
+ },
+ "pdpl_ksa/PDPL-035": {
+  "hash": "f52508654442f5fd987ed84309cf700dff855e12",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\pdpl_ksa\\PDPL-035__Annual_Programme_Review.docx"
+ },
+ "cis_v8/CIS-001": {
+  "hash": "bdcb90a20f9a588c9c066ac833b7c78470ba65ed",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cis_v8\\CIS-001__Implementation_Group_IG1_IG2_IG3_Determination.docx"
+ },
+ "cis_v8/CIS-002": {
+  "hash": "cc260969292a4a2a826c706a2cf6c6801d18ced2",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cis_v8\\CIS-002__CIS_v8_Self-Assessment_Gap_Report.xlsx"
+ },
+ "cis_v8/CIS-003": {
+  "hash": "ef56c6be0729e5328e2d113936cfd5d3d7700dde",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cis_v8\\CIS-003__C1_-_Enterprise_Asset_Inventory.xlsx"
+ },
+ "cis_v8/CIS-004": {
+  "hash": "7f2735e815d0415f7b129062609dad5e049e6681",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cis_v8\\CIS-004__C2_-_Software_Inventory.xlsx"
+ },
+ "cis_v8/CIS-005": {
+  "hash": "1bd8d52129930d0fc5f85d0bf8e20825ed272b21",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cis_v8\\CIS-005__C3_-_Data_Inventory_Mgmt.xlsx"
+ },
+ "cis_v8/CIS-006": {
+  "hash": "92cfaffe32dfc8258c751e60b894bd48e344b2e0",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cis_v8\\CIS-006__C3_-_Data_Mgmt_Policy.docx"
+ },
+ "cis_v8/CIS-007": {
+  "hash": "499222d137ab107746acbd634519482b81d14e15",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cis_v8\\CIS-007__C4_-_Secure_Configuration_of_Enterprise_Assets_Software.docx"
+ },
+ "cis_v8/CIS-008": {
+  "hash": "86061cdb4f24fc8fbe506d183f6fd41c6ee83a86",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cis_v8\\CIS-008__C5_-_Account_Management_Records.xlsx"
+ },
+ "cis_v8/CIS-009": {
+  "hash": "622280dc702cab9a00c59e1cdfa62d0da5064931",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cis_v8\\CIS-009__C6_-_Access_Control_Mgmt_Records.xlsx"
+ },
+ "cis_v8/CIS-010": {
+  "hash": "7ceaca6efe6c5fc616b42c80a06313f35b9de410",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cis_v8\\CIS-010__C7_-_Continuous_Vulnerability_Mgmt_Records.xlsx"
+ },
+ "cis_v8/CIS-011": {
+  "hash": "41ffe7ac3cc79d191c8c985dd9ef0ad45c02f740",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cis_v8\\CIS-011__C8_-_Audit_Log_Mgmt.docx"
+ },
+ "cis_v8/CIS-012": {
+  "hash": "348cd4f262609991e97f7da5c3b80f9693886e76",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cis_v8\\CIS-012__C9_-_Email_Web_Browser_Protections.docx"
+ },
+ "cis_v8/CIS-013": {
+  "hash": "63d13150b96d5275797538ba3ad2e8ec1a040e19",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cis_v8\\CIS-013__C10_-_Malware_Defenses.docx"
+ },
+ "cis_v8/CIS-014": {
+  "hash": "0e37cb9efb1cd6d15fe4f2b436d326a13b47071b",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cis_v8\\CIS-014__C11_-_Data_Recovery.docx"
+ },
+ "cis_v8/CIS-015": {
+  "hash": "ac2f315d8956214d0208f37e2b7f67768148009e",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cis_v8\\CIS-015__C12_-_Network_Infrastructure_Mgmt.docx"
+ },
+ "cis_v8/CIS-016": {
+  "hash": "9fcea4e54256ff5566156133cfd9689bcfbacec0",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cis_v8\\CIS-016__C13_-_Network_Monitoring_Defense.docx"
+ },
+ "cis_v8/CIS-017": {
+  "hash": "c60e0d85faf69f4e7fd8f29a0594372c5b5ff9c1",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cis_v8\\CIS-017__C14_-_Security_Awareness_Skills_Training.docx"
+ },
+ "cis_v8/CIS-018": {
+  "hash": "a96506f563f25167f6416829e0f1333282dfa2b6",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cis_v8\\CIS-018__C15_-_Service_Provider_Mgmt_Register.xlsx"
+ },
+ "cis_v8/CIS-019": {
+  "hash": "86643f9b418e2f4df11cca6418ebe424189b4d7c",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cis_v8\\CIS-019__C16_-_Application_Software_Security.docx"
+ },
+ "cis_v8/CIS-020": {
+  "hash": "c4515fe798f26c98f6674d5321cd93ed922ee59d",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cis_v8\\CIS-020__C17_-_Incident_Response_Mgmt.docx"
+ },
+ "cis_v8/CIS-021": {
+  "hash": "fc02ec3e9a50f7d67883b3e83eef9b7b3de51b11",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cis_v8\\CIS-021__C18_-_Penetration_Testing.pdf"
+ },
+ "cis_v8/CIS-022": {
+  "hash": "4f9afd0c63c6f24b8d2d1eb144add6fe70dee30f",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cis_v8\\CIS-022__CIS_Controls_KPI_Dashboard.docx"
+ },
+ "cis_v8/CIS-023": {
+  "hash": "3a87981a1e06ed505197865f4c37b5592b7c8d02",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cis_v8\\CIS-023__CIS_RAM_Risk_Assessment_Method_Report.docx"
+ },
+ "cis_v8/CIS-024": {
+  "hash": "818d4393c86adb416db394da5b93ee0ec067d055",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\cis_v8\\CIS-024__Annual_CIS_Controls_Re-Assessment.xlsx"
+ },
+ "sox_itgc/SOX-001": {
+  "hash": "d7ae915165e725508a9d19b765b25597c929c5bf",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\sox_itgc\\SOX-001__ITGC_Scoping_Memo.docx"
+ },
+ "sox_itgc/SOX-002": {
+  "hash": "756b2de209523c2e9205bdf9cb40479967aed0e4",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\sox_itgc\\SOX-002__Significant_Application_List.xlsx"
+ },
+ "sox_itgc/SOX-003": {
+  "hash": "29a9515016f27acfbf40b81d8e1e6081df5a3934",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\sox_itgc\\SOX-003__IT_Process_Risk_Walkthroughs.docx"
+ },
+ "sox_itgc/SOX-004": {
+  "hash": "5b52b73b3bae047be11526ce6bdb3a95b95c3462",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\sox_itgc\\SOX-004__ITGC_Risk_Control_Matrix_RACM_.xlsx"
+ },
+ "sox_itgc/SOX-005": {
+  "hash": "09089fba030ace2d4706ae4e041bb1606f3fd070",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\sox_itgc\\SOX-005__IT_Risk_Assessment_Financial_Reporting_.docx"
+ },
+ "sox_itgc/SOX-006": {
+  "hash": "5381ac1419d16f4ffac856079a3f079bcf32100e",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\sox_itgc\\SOX-006__IT_Policies_Access_Change_Operations_.docx"
+ },
+ "sox_itgc/SOX-007": {
+  "hash": "fed4658dd950ee10fe33e6737b85ae10c42566f4",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\sox_itgc\\SOX-007__Logical_Access_Mgmt_Policy_Procedure.docx"
+ },
+ "sox_itgc/SOX-008": {
+  "hash": "3c3c479f9e4925ba4c9c1ee7e48f55771b46e346",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\sox_itgc\\SOX-008__Privileged_Access_Mgmt_Policy.docx"
+ },
+ "sox_itgc/SOX-009": {
+  "hash": "a8b3b64033c0b106ed61c194b91edbcc8ba48564",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\sox_itgc\\SOX-009__Change_Management_Policy_Procedure.docx"
+ },
+ "sox_itgc/SOX-010": {
+  "hash": "79aa38bc60d78aedcf8ad841a02f3465a2b8d8dd",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\sox_itgc\\SOX-010__IT_Operations_Job_Scheduling_Policy.docx"
+ },
+ "sox_itgc/SOX-011": {
+  "hash": "80fed58a1fb68cdd1236332e1627d75484c4a99b",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\sox_itgc\\SOX-011__Data_Backup_Recovery_Policy.docx"
+ },
+ "sox_itgc/SOX-012": {
+  "hash": "2e88836336cd1ca02d064106759be6ec6d7b5d95",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\sox_itgc\\SOX-012__Pre-Implementation_Review_Policy.docx"
+ },
+ "sox_itgc/SOX-013": {
+  "hash": "85a385db6554bea5f1d0b83aa62aa125626eeb81",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\sox_itgc\\SOX-013__Segregation_of_Duties_SoD_Matrix.xlsx"
+ },
+ "sox_itgc/SOX-014": {
+  "hash": "c76517de439374bdd68ef7dbaa4af567cf697397",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\sox_itgc\\SOX-014__User_Access_Listings_UALs_.xlsx"
+ },
+ "sox_itgc/SOX-015": {
+  "hash": "2f34266960107f370a2f32725a2abb1f9c5fe398",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\sox_itgc\\SOX-015__Quarterly_Periodic_Access_Reviews.xlsx"
+ },
+ "sox_itgc/SOX-016": {
+  "hash": "e773d1ec4f384b7cfbdaf7879b7bf2cba31c3c7e",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\sox_itgc\\SOX-016__New_Hire_Termination_Tickets.docx"
+ },
+ "sox_itgc/SOX-017": {
+  "hash": "8ad91cb0d2b561d83874c09de505ddf7dce017ad",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\sox_itgc\\SOX-017__Privileged_User_Activity_Logs.docx"
+ },
+ "sox_itgc/SOX-018": {
+  "hash": "7d5efa4ca7dea01569bd1946c5aa79ae5e0da4df",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\sox_itgc\\SOX-018__Change_Tickets_-_Sample_Pop.docx"
+ },
+ "sox_itgc/SOX-019": {
+  "hash": "882db962053fbf425ce8c8a0cf0c5a5dab39a7fd",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\sox_itgc\\SOX-019__Emergency_Change_Records.docx"
+ },
+ "sox_itgc/SOX-020": {
+  "hash": "505e6991f3d9c0a9bd790c2795fa743983c4b349",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\sox_itgc\\SOX-020__Job_Scheduling_Batch_Run_Logs.docx"
+ },
+ "sox_itgc/SOX-021": {
+  "hash": "40306e65cf7c25876677ca36d92d0c293e275a24",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\sox_itgc\\SOX-021__Backup_Job_Logs_Restore_Tests.docx"
+ },
+ "sox_itgc/SOX-022": {
+  "hash": "1dd05f7cc2f83432e5553264bf95dad07ae325ea",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\sox_itgc\\SOX-022__Incident_Problem_Records_Production_.docx"
+ },
+ "sox_itgc/SOX-023": {
+  "hash": "5998b98917bf63580a4a12d060d064ab41861006",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\sox_itgc\\SOX-023__Pre-Implementation_Review_Reports.docx"
+ },
+ "sox_itgc/SOX-024": {
+  "hash": "b167e3ca2f37681c0be6127448a4419550fde29d",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\sox_itgc\\SOX-024__Vendor_SOC_Reports_3rd-party_financial_systems_.pdf"
+ },
+ "sox_itgc/SOX-025": {
+  "hash": "d4717decc8ab508c8edaed01d54c38b1a6b91610",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\sox_itgc\\SOX-025__Internal_Audit_ITGC_Test_Workpapers.docx"
+ },
+ "sox_itgc/SOX-026": {
+  "hash": "56ed3ea40cb1340cf6c739b3b8ee22b27aae393f",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\sox_itgc\\SOX-026__ITGC_Deficiency_Log_Inherent_Significant_Material_.xlsx"
+ },
+ "sox_itgc/SOX-027": {
+  "hash": "b1e3c7381351190abc7e4c5d382869ed0daca03e",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\sox_itgc\\SOX-027__Remediation_Tracker.xlsx"
+ },
+ "sox_itgc/SOX-028": {
+  "hash": "55841fe3196b20d00152dbe8769afdfc5eb1e51d",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\sox_itgc\\SOX-028__Management_Quarterly_Sub-Cert.docx"
+ },
+ "sox_itgc/SOX-029": {
+  "hash": "15d3b19b9578094aa2543d5b9abb957ce1e4f1c4",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\sox_itgc\\SOX-029__Management_Assertion_404_.docx"
+ },
+ "sox_itgc/SOX-030": {
+  "hash": "302d57381ae04d28c8c41db3762cf708108d9e01",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\sox_itgc\\SOX-030__External_Auditor_Walkthrough_Pack.docx"
+ },
+ "sox_itgc/SOX-031": {
+  "hash": "75e9b494ec7bcdff804088bbe945f32015535243",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\sox_itgc\\SOX-031__External_Auditor_ITGC_Test_Reliance_Memo.pdf"
+ },
+ "sox_itgc/SOX-032": {
+  "hash": "5c5849b253525f3ec5f6d9cbd55b51cfd7a091c4",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\sox_itgc\\SOX-032__Annual_ITGC_Refresh_Re-Walkthrough.docx"
+ },
+ "soc2/SOC2-001": {
+  "hash": "ade7f1082b9c075693aebac64e0084437f8a755d",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\soc2\\SOC2-001__Scope_TSC_Selection_Memo.docx"
+ },
+ "soc2/SOC2-002": {
+  "hash": "d0c7ce22141455c540a3cd165d54593bffd1573f",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\soc2\\SOC2-002__Type_1_vs_Type_2_Decision_Document.docx"
+ },
+ "soc2/SOC2-003": {
+  "hash": "ad3cbd0fc0471625a81bfe3eaa972bfd5353e3d5",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\soc2\\SOC2-003__System_Description_Outline_Section_III_.docx"
+ },
+ "soc2/SOC2-004": {
+  "hash": "6fea10c4446d245a3aa8e41b1b62a5b0e7fd89e4",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\soc2\\SOC2-004__SOC_2_Readiness_Assessment.docx"
+ },
+ "soc2/SOC2-005": {
+  "hash": "d47a4030bdddab01fb9c46b6d72e4a0bbbb402f2",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\soc2\\SOC2-005__Risk_Assessment_Report.docx"
+ },
+ "soc2/SOC2-006": {
+  "hash": "dcb5fd22c328fe64a7498f0dd1a9515ccdc43617",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\soc2\\SOC2-006__Vendor_Risk_Assessment_Report.docx"
+ },
+ "soc2/SOC2-007": {
+  "hash": "0895eb893eab1d26575c445663408bcf7ba59e50",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\soc2\\SOC2-007__Information_Security_Policy.docx"
+ },
+ "soc2/SOC2-008": {
+  "hash": "be6bbbde8b9c585e09e72818e840bc7ea11ae59f",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\soc2\\SOC2-008__Acceptable_Use_Policy.docx"
+ },
+ "soc2/SOC2-009": {
+  "hash": "f8280a31dfad153d162f51b7c3d071310cde0908",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\soc2\\SOC2-009__Access_Control_Policy.docx"
+ },
+ "soc2/SOC2-010": {
+  "hash": "c318865b545f8c0a91c9c42796ff5ebdcf5628c6",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\soc2\\SOC2-010__Code_of_Conduct_Ethics.docx"
+ },
+ "soc2/SOC2-011": {
+  "hash": "270546600f03e8bed00081784ce76795efb030ad",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\soc2\\SOC2-011__Vendor_Mgmt_Policy.docx"
+ },
+ "soc2/SOC2-012": {
+  "hash": "e68e9c975ebb9010cfeb3063bdc7b989fdf2ab3b",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\soc2\\SOC2-012__Change_Management_Policy.docx"
+ },
+ "soc2/SOC2-013": {
+  "hash": "1465fca7e19fae9114825cd26dcb62c5147a6015",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\soc2\\SOC2-013__Incident_Response_Policy_Plan.docx"
+ },
+ "soc2/SOC2-014": {
+  "hash": "1a6f69517991384be0357c79a88c6d81468552d1",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\soc2\\SOC2-014__Business_Continuity_DR_Policy.docx"
+ },
+ "soc2/SOC2-015": {
+  "hash": "df8ac23b320075311f1a238fb070af8c4e6f4402",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\soc2\\SOC2-015__Confidentiality_Policy.docx"
+ },
+ "soc2/SOC2-016": {
+  "hash": "f58ae012e479aecbae3693239d6b56a32f2be2aa",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\soc2\\SOC2-016__Privacy_Policy_Notice.docx"
+ },
+ "soc2/SOC2-017": {
+  "hash": "ce2c634a014c883833921d83323dbedd21415967",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\soc2\\SOC2-017__Processing_Integrity_Policy.docx"
+ },
+ "soc2/SOC2-018": {
+  "hash": "7440135abffd33fcef97984e8f770073fb441506",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\soc2\\SOC2-018__HR_Policies_Hiring_Onboarding_Termination_.docx"
+ },
+ "soc2/SOC2-019": {
+  "hash": "4e2dbe74c07852bb995cf247b06de728dcb07d18",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\soc2\\SOC2-019__Training_Awareness_Policy.docx"
+ },
+ "soc2/SOC2-020": {
+  "hash": "d03a5122a55979f56a8249de2f849829add17e92",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\soc2\\SOC2-020__User_Access_Reviews.xlsx"
+ },
+ "soc2/SOC2-021": {
+  "hash": "03d24d1d1b534a07105ce4a38dc7b1967b218246",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\soc2\\SOC2-021__New_Hire_Termination_Records.xlsx"
+ },
+ "soc2/SOC2-022": {
+  "hash": "022f27d2f3f482586e5802337cd0e3a644c66a6c",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\soc2\\SOC2-022__Background_Check_Records.xlsx"
+ },
+ "soc2/SOC2-023": {
+  "hash": "0c29f87afe516909f977af36c7ec639f9df1444d",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\soc2\\SOC2-023__Training_Completion_Records.xlsx"
+ },
+ "soc2/SOC2-024": {
+  "hash": "f6616eca89bead902d87c9e08d322ecb805152b5",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\soc2\\SOC2-024__Change_Tickets_Approvals.docx"
+ },
+ "soc2/SOC2-025": {
+  "hash": "cdd7888f2b52f5974cbe1a60f6c763b681296130",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\soc2\\SOC2-025__Vulnerability_Scan_Reports.xlsx"
+ },
+ "soc2/SOC2-026": {
+  "hash": "1a7977fdc0d69625ba97fcd8f2fdafade4563196",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\soc2\\SOC2-026__Penetration_Test_Report_Annual_.pdf"
+ },
+ "soc2/SOC2-027": {
+  "hash": "1c52ffff9d3f79c6f63a0eec3e4268b888da7f37",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\soc2\\SOC2-027__Backup_Restore_Records.docx"
+ },
+ "soc2/SOC2-028": {
+  "hash": "d52f7735a334a262dbddcb8f1185339a939a2a59",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\soc2\\SOC2-028__Disaster_Recovery_Test_Records.xlsx"
+ },
+ "soc2/SOC2-029": {
+  "hash": "f2d631a4ee6929e387d90be75f02cc7ed29a626f",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\soc2\\SOC2-029__Capacity_Monitoring_Records.docx"
+ },
+ "soc2/SOC2-030": {
+  "hash": "52a09bfa258715dcb6af70609ecc700c60e8a92d",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\soc2\\SOC2-030__Incident_Tickets_Post-Mortems.docx"
+ },
+ "soc2/SOC2-031": {
+  "hash": "587056340f1416db6d626f44306ab885776827d7",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\soc2\\SOC2-031__Vendor_SOC_Reports_Due_Diligence.xlsx"
+ },
+ "soc2/SOC2-032": {
+  "hash": "db084f3350bba8468e12067e5bca93f0a01187a4",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\soc2\\SOC2-032__Encryption_Configuration_Evidence.docx"
+ },
+ "soc2/SOC2-033": {
+  "hash": "79e046886d38ce92c53a9b9481c9a780a2db1488",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\soc2\\SOC2-033__Logging_Monitoring_Configurations.docx"
+ },
+ "soc2/SOC2-034": {
+  "hash": "08c4fdfcac3370e8b53365d7742ccdc49788d6a3",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\soc2\\SOC2-034__Internal_Risk_Committee_Minutes.xlsx"
+ },
+ "soc2/SOC2-035": {
+  "hash": "db0c55337951d4ca60258bca7dc70537af381b60",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\soc2\\SOC2-035__Internal_Audit_Self-Assessment.docx"
+ },
+ "soc2/SOC2-036": {
+  "hash": "6c43d6e8488ea35a34deeba1952178279d6c6f2a",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\soc2\\SOC2-036__SOC_2_Type_1_Report.pdf"
+ },
+ "soc2/SOC2-037": {
+  "hash": "dbed043aa83c1bfb26a298252552690715fac222",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\soc2\\SOC2-037__SOC_2_Type_2_Report.pdf"
+ },
+ "soc2/SOC2-038": {
+  "hash": "8edcd9ef76f85e63b113d2fa4597905b2bc2e0ec",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\soc2\\SOC2-038__Bridge_Letter_between_report_periods_.docx"
+ },
+ "soc2/SOC2-039": {
+  "hash": "0b5de4cb3832fcb4216766485c4d8d41611c8e11",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\soc2\\SOC2-039__Continuous_Monitoring_Dashboard.docx"
+ },
+ "soc2/SOC2-040": {
+  "hash": "d8fe437229e08f68013455bd4fd3db12a4f16b6e",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\soc2\\SOC2-040__Annual_SOC_2_Renewal_Cycle_Plan.docx"
+ },
+ "nist_csf_2/NIST-001": {
+  "hash": "68e2fe05007fe4522c2a6c2bd38bf5dd6755dc12",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\nist_csf_2\\NIST-001__Scope_Definition_Org_System_.docx"
+ },
+ "nist_csf_2/NIST-002": {
+  "hash": "e50cfb10e5e36f76d3f6213b3fa06922537d2bf5",
+  "file": "C:\\Users\\Admin\\Documents\\GRC-Tenant\\backend\\_artifact_documents\\nist_csf_2\\NIST-002__Stakeholder_Communication_Plan.docx"
+ }
+}

@@ -1,0 +1,1389 @@
+{
+  "id": "adhics",
+  "name": "Abu Dhabi Healthcare Information and Cyber Security Standard",
+  "version": "0.9",
+  "official_sources": [
+    {
+      "title": "ADHICS v0.9 - Department of Health, Abu Dhabi",
+      "url": "https://www.doh.gov.ae/-/media/Feature/Resources/Standards/EN/DOH-Abu-Dhabi-Healthcare-Information-and-Cyber-Security-Standard.pdf"
+    },
+    {
+      "title": "ADHICS Section 4 - Risk Management",
+      "url": ""
+    },
+    {
+      "title": "ADHICS Section 6 - Control Adoption, Compliance and Audit",
+      "url": ""
+    },
+    {
+      "title": "ISO/IEC 27005:2022 - Information security risk management (methodology basis)",
+      "url": "https://www.iso.org/standard/80585.html"
+    }
+  ],
+  "assessment_shapes": [
+    "asset_threat_vulnerability"
+  ],
+  "methodology": "ADHICS Section 4 (Risk Management) mandates a documented risk-assessment methodology aligned with industry standards (ISO/IEC 27005). Entities classify information assets per Section 5, evaluate threats and vulnerabilities against each ADHICS clause, and rate likelihood x impact across confidentiality (PHI), integrity (patient-safety / data accuracy), availability (continuity of care delivery), and DOH regulatory compliance. Control adoption follows the entity's tier - Basic / Transitional / Advanced - per Section 6.1. Risks meeting Section 4.4 thresholds are reported to the Department of Health (DOH), Abu Dhabi.",
+  "scoping_inputs": [
+    {
+      "id": "entity_tier",
+      "type": "select",
+      "options": [
+        "Basic",
+        "Transitional",
+        "Advanced"
+      ],
+      "label": "Entity ADHICS tier (Basic / Transitional / Advanced)"
+    },
+    {
+      "id": "phi_systems",
+      "type": "list",
+      "label": "Systems that create / receive / maintain / transmit PHI"
+    },
+    {
+      "id": "medical_devices",
+      "type": "list",
+      "label": "Connected medical devices and equipment in scope"
+    },
+    {
+      "id": "locations",
+      "type": "list",
+      "label": "Physical facility locations (within Abu Dhabi Emirate)"
+    },
+    {
+      "id": "doh_license_number",
+      "type": "text",
+      "label": "DOH facility / professional licence reference"
+    }
+  ],
+  "risk_model": {
+    "factors": [
+      "asset",
+      "threat",
+      "vulnerability",
+      "likelihood",
+      "impact_c",
+      "impact_i",
+      "impact_a",
+      "impact_compliance"
+    ],
+    "scales": {
+      "likelihood": [
+        {
+          "value": 1,
+          "label": "Rare",
+          "definition": "May occur only in exceptional circumstances (<5% per year)."
+        },
+        {
+          "value": 2,
+          "label": "Unlikely",
+          "definition": "Could occur but not expected (5-25% per year)."
+        },
+        {
+          "value": 3,
+          "label": "Possible",
+          "definition": "Might occur at some time (25-50% per year)."
+        },
+        {
+          "value": 4,
+          "label": "Likely",
+          "definition": "Will probably occur in most circumstances (50-75% per year)."
+        },
+        {
+          "value": 5,
+          "label": "Almost Certain",
+          "definition": "Expected to occur in most circumstances (>75% per year)."
+        }
+      ],
+      "impact": [
+        {
+          "value": 1,
+          "label": "Insignificant",
+          "definition": "Negligible — no impact on patient safety, PHI confidentiality, care delivery or DOH compliance."
+        },
+        {
+          "value": 2,
+          "label": "Minor",
+          "definition": "Limited impact contained to one team/system. No patient harm; routine recoverability."
+        },
+        {
+          "value": 3,
+          "label": "Moderate",
+          "definition": "Notable impact on a unit; possible PHI exposure or short interruption to care. DOH notification may be required."
+        },
+        {
+          "value": 4,
+          "label": "Major",
+          "definition": "Significant impact across multiple units; PHI breach probable; care delivery degraded for >1 week. DOH escalation expected."
+        },
+        {
+          "value": 5,
+          "label": "Severe",
+          "definition": "Patient safety event, large-scale PHI breach, sustained loss of care delivery, or loss of DOH licensure."
+        }
+      ],
+      "maturity": [
+        {
+          "value": 0,
+          "label": "Non-Existent",
+          "definition": "No process or control in place."
+        },
+        {
+          "value": 1,
+          "label": "Initial / Ad Hoc",
+          "definition": "Process exists but is informal and inconsistent."
+        },
+        {
+          "value": 2,
+          "label": "Repeatable",
+          "definition": "Process is documented and repeated, but not standardised across the entity."
+        },
+        {
+          "value": 3,
+          "label": "Defined",
+          "definition": "Process is documented, standardised, and integrated across the entity."
+        },
+        {
+          "value": 4,
+          "label": "Managed",
+          "definition": "Process is measured, monitored with KPIs, and controlled."
+        },
+        {
+          "value": 5,
+          "label": "Optimised",
+          "definition": "Process is continuously improved through monitoring, metrics, and lessons learned."
+        }
+      ],
+      "implementation_status": [
+        {
+          "value": "NI",
+          "label": "Not Implemented"
+        },
+        {
+          "value": "PI",
+          "label": "Partially Implemented"
+        },
+        {
+          "value": "LI",
+          "label": "Largely Implemented"
+        },
+        {
+          "value": "FI",
+          "label": "Fully Implemented"
+        },
+        {
+          "value": "NA",
+          "label": "Not Applicable (justified per Section 6)"
+        }
+      ]
+    },
+    "matrix": "5x5",
+    "calculation": "max(impact_c, impact_i, impact_a, impact_compliance) * likelihood",
+    "acceptance_threshold": 6,
+    "thresholds": {
+      "low": [
+        1,
+        4
+      ],
+      "medium": [
+        5,
+        9
+      ],
+      "high": [
+        10,
+        16
+      ],
+      "critical": [
+        17,
+        25
+      ]
+    }
+  },
+  "domains": [
+    {
+      "id": "HR",
+      "name": "Domain HR - Human Resources Security",
+      "controls": [
+        {
+          "id": "HR 1.1",
+          "title": "Security Aspects of Employment and Termination",
+          "description": "The healthcare entity shall develop, enforce and maintain a human resources security policy covering the security aspects of employment and termination.",
+          "tier": "Basic",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "adhics_reference",
+                "type": "text",
+                "prompt": "ADHICS control reference (e.g. HR 1.1, AM 2.3)?"
+              },
+              {
+                "field": "adhics_domain",
+                "type": "select",
+                "options": [
+                  "Human Resources Security",
+                  "Asset Management",
+                  "Physical and Environmental Security",
+                  "Access Control",
+                  "Operations Management",
+                  "Communications",
+                  "Health Information and Security",
+                  "Third Party Security",
+                  "Information Systems Acquisition, Development, and Maintenance",
+                  "Information Security Incident Management",
+                  "Information Systems Continuity Management"
+                ],
+                "prompt": "ADHICS domain?"
+              },
+              {
+                "field": "adhics_tier",
+                "type": "select",
+                "options": [
+                  "Basic",
+                  "Transitional",
+                  "Advanced"
+                ],
+                "prompt": "Control criteria tier the entity operates under (Basic / Transitional / Advanced)?"
+              },
+              {
+                "field": "phi_asset",
+                "type": "text",
+                "prompt": "Which PHI/health-information asset, medical device, system or process is in scope?"
+              },
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset (e.g. ransomware, insider misuse, device tampering)?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place (per ADHICS clause)?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact — PHI / patient privacy (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact — clinical-data accuracy / patient safety (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact — care delivery continuity (1-5)?"
+              },
+              {
+                "field": "impact_compliance",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "DOH regulatory / compliance impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a, impact_compliance)"
+              },
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "options": [
+                  "NI",
+                  "PI",
+                  "LI",
+                  "FI",
+                  "NA"
+                ],
+                "prompt": "Current implementation status (per ADHICS Section 6 self-assessment)?"
+              },
+              {
+                "field": "maturity",
+                "type": "scale",
+                "scale": "maturity",
+                "prompt": "Process maturity (0-5)?"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner (CISO / Department head / DOH-licensed practitioner)?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "doh_notification_required",
+                "type": "boolean",
+                "prompt": "Does this risk meet ADHICS DOH-notification thresholds (Section 4.4)?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "HR 2.1",
+          "title": "Background Verification Check",
+          "description": "The healthcare entity shall conduct background verification checks on all candidates for employment, contractors and third-party users.",
+          "tier": "Basic"
+        },
+        {
+          "id": "HR 2.2",
+          "title": "Terms and Condition of Employment",
+          "description": "The healthcare entity shall establish specific terms and condition of employment.",
+          "tier": "Basic"
+        },
+        {
+          "id": "HR 3.1",
+          "title": "Compliance to Organizational Policies and Procedures",
+          "description": "The healthcare entity management shall ensure employees, contractors and third party users adopt and apply security in accordance with established entity policies and procedures.",
+          "tier": "Basic"
+        },
+        {
+          "id": "HR 3.2",
+          "title": "Awareness and Training",
+          "description": "The healthcare entity shall develop new or modify existing awareness and training programs.",
+          "tier": "Transitional"
+        },
+        {
+          "id": "HR 3.3",
+          "title": "Training Needs",
+          "description": "The healthcare entity shall identify and address skill and competency demands and gaps.",
+          "tier": "Basic"
+        },
+        {
+          "id": "HR 3.4",
+          "title": "Awareness Campaign",
+          "description": "The healthcare entity shall conduct periodic security awareness campaigns, based on established yearly schedules.",
+          "tier": "Basic"
+        },
+        {
+          "id": "HR 3.5",
+          "title": "Disciplinary Process",
+          "description": "The healthcare entity shall establish and enforce a disciplinary process for security breaches.",
+          "tier": "Transitional"
+        },
+        {
+          "id": "HR 4.1",
+          "title": "Termination Responsibility",
+          "description": "The healthcare entity shall define responsibilities concerning information security for performing employment termination or change of employment.",
+          "tier": "Basic"
+        },
+        {
+          "id": "HR 4.2",
+          "title": "Return of Assets",
+          "description": "The healthcare entity shall ensure recovery of all organizational assets upon termination of employment, contract or agreement.",
+          "tier": "Basic"
+        },
+        {
+          "id": "HR 4.3",
+          "title": "Removal of Access Rights",
+          "description": "The healthcare entity shall remove access rights and revoke privileges of individuals upon termination of employment, contract or agreement.",
+          "tier": "Basic"
+        },
+        {
+          "id": "HR 4.4",
+          "title": "Internal Transfers and Change of Role",
+          "description": "The healthcare entity shall develop internal process to manage internal transfers and change of role.",
+          "tier": "Basic"
+        }
+      ]
+    },
+    {
+      "id": "AM",
+      "name": "Domain AM - Asset Management",
+      "controls": [
+        {
+          "id": "AM 1.1",
+          "title": "Asset Management Policy",
+          "description": "The healthcare entity shall develop, implement and maintain an asset management policy.",
+          "tier": "Basic"
+        },
+        {
+          "id": "AM 1.2",
+          "title": "Allocation of Assets",
+          "description": "Where applicable, the healthcare entity shall pay specific attention to medical equipment and devices while defining policy.",
+          "tier": "Basic"
+        },
+        {
+          "id": "AM 2.1",
+          "title": "Asset Inventory",
+          "description": "The healthcare entity shall have all their information assets identified, recorded and maintained through an information asset inventory.",
+          "tier": "Basic"
+        },
+        {
+          "id": "AM 2.2",
+          "title": "Asset Ownership",
+          "description": "Ownership for each identified assets shall be assigned to a designated role.",
+          "tier": "Basic"
+        },
+        {
+          "id": "AM 2.3",
+          "title": "Acceptable Use of Asset",
+          "description": "The healthcare entity shall establish and enforce rules on the acceptable use of information assets.",
+          "tier": "Basic"
+        },
+        {
+          "id": "AM 2.4",
+          "title": "Acceptable Bring Your Own Device Arrangements",
+          "description": "Entity management shall address risk due to the exploitation of Bring Your Own Device (BYOD).",
+          "tier": "Basic"
+        },
+        {
+          "id": "AM 3.1",
+          "title": "Information Classification",
+          "description": "The healthcare entity shall classify all information assets.",
+          "tier": "Basic"
+        },
+        {
+          "id": "AM 3.2",
+          "title": "Value of Information during Classification",
+          "description": "Information classification shall consider value of the information.",
+          "tier": "Transitional"
+        },
+        {
+          "id": "AM 3.3",
+          "title": "Identification of Essential Protection",
+          "description": "The level of essential protection needed for an asset shall be considered while determining asset classification.",
+          "tier": "Transitional"
+        },
+        {
+          "id": "AM 3.4",
+          "title": "Reclassification of Assets",
+          "description": "The healthcare entity shall establish process to reassess and/or change information classification.",
+          "tier": "Transitional"
+        },
+        {
+          "id": "AM 3.5",
+          "title": "Interpretation of Third Party Classification Scheme",
+          "description": "The healthcare entity shall establish process to interpret classification schemes from third parties.",
+          "tier": "Transitional"
+        },
+        {
+          "id": "AM 3.6",
+          "title": "Criteria for Automated Classification",
+          "description": "The healthcare entity shall establish criteria for automated classification of information.",
+          "tier": "Advanced"
+        },
+        {
+          "id": "AM 3.7",
+          "title": "Asset Labelling",
+          "description": "The healthcare entity shall establish process to label its information assets.",
+          "tier": "Basic"
+        },
+        {
+          "id": "AM 4.1",
+          "title": "Handling Procedures",
+          "description": "Handling procedures shall be defined for information, consistent with their classification.",
+          "tier": "Basic"
+        },
+        {
+          "id": "AM 4.2",
+          "title": "Enforcement of Handling Procedures",
+          "description": "Ensure adoption and application of handling procedures while handling information.",
+          "tier": "Basic"
+        },
+        {
+          "id": "AM 4.3",
+          "title": "Management of Removable Media",
+          "description": "The healthcare entity shall manage removable media in accordance with the classification scheme.",
+          "tier": "Basic"
+        },
+        {
+          "id": "AM 4.4",
+          "title": "Usage of Removable Media",
+          "description": "Access and usage of removable media shall be controlled.",
+          "tier": "Basic"
+        },
+        {
+          "id": "AM 4.5",
+          "title": "Medical Devices Management Procedures",
+          "description": "The healthcare entity shall establish medical devices and equipment management procedures.",
+          "tier": "Basic"
+        },
+        {
+          "id": "AM 4.6",
+          "title": "Access Allocation for Medical Devices",
+          "description": "Access and privilege allocation for medical devices shall be provided to defined roles.",
+          "tier": "Basic"
+        },
+        {
+          "id": "AM 4.7",
+          "title": "Security of Information within Medical Devices",
+          "description": "The healthcare entity shall prevent unauthorized disclosure, modification, destruction or loss of patient health information stored on medical devices.",
+          "tier": "Transitional"
+        },
+        {
+          "id": "AM 4.8",
+          "title": "Communication Facility for Medical Devices",
+          "description": "Healthcare facilities shall consider wired communication facility for medical devices.",
+          "tier": "Transitional"
+        },
+        {
+          "id": "AM 4.9",
+          "title": "Removable Media Security",
+          "description": "Entity shall deploy technology solution to white list removable media.",
+          "tier": "Advanced"
+        },
+        {
+          "id": "AM 4.10",
+          "title": "Removal and Movement of Information Assets",
+          "description": "The healthcare entity shall establish control procedures for the removal, movement, and transfer of information assets.",
+          "tier": "Transitional"
+        },
+        {
+          "id": "AM 5.1",
+          "title": "Information Asset Disposal",
+          "description": "The healthcare entity shall dispose information assets, when no longer required.",
+          "tier": "Basic"
+        },
+        {
+          "id": "AM 5.2",
+          "title": "Secure Disposal",
+          "description": "The healthcare entity shall establish a control process that ensures data once destroyed is not recovered.",
+          "tier": "Basic"
+        },
+        {
+          "id": "AM 5.3",
+          "title": "Disposal of Physical & Digital Media",
+          "description": "Media, both digital and physical, when no longer required shall be destroyed by the entity.",
+          "tier": "Basic"
+        },
+        {
+          "id": "AM 5.4",
+          "title": "Procedures for Secure Disposal and Re-Use",
+          "description": "The healthcare entity shall establish control procedures for the secure disposal or reuse of media.",
+          "tier": "Transitional"
+        },
+        {
+          "id": "AM 5.5",
+          "title": "Verification before Disposal",
+          "description": "Retention requirement of data shall be verified prior to disposal.",
+          "tier": "Basic"
+        },
+        {
+          "id": "AM 5.6",
+          "title": "Authorization for Disposal",
+          "description": "All disposal requirement shall be authorized by entity management prior to disposal.",
+          "tier": "Basic"
+        },
+        {
+          "id": "AM 5.7",
+          "title": "Records on Disposal",
+          "description": "The healthcare entity shall maintain records on media disposal.",
+          "tier": "Advanced"
+        }
+      ]
+    },
+    {
+      "id": "PE",
+      "name": "Domain PE - Physical and Environmental Security",
+      "controls": [
+        {
+          "id": "PE 1.1",
+          "title": "Physical and Environmental Security Policy",
+          "description": "The healthcare entity shall develop, implement and maintain a physical and environmental security policy.",
+          "tier": "Basic"
+        },
+        {
+          "id": "PE 1.2",
+          "title": "Procedural Guidelines",
+          "description": "The healthcare entity shall establish procedures and guidelines in support of policy implementation.",
+          "tier": "Transitional"
+        },
+        {
+          "id": "PE 1.3",
+          "title": "Requirements on Physical and Environmental Policy",
+          "description": "The physical and environmental policy shall consider equipment and medical devices.",
+          "tier": "Basic"
+        },
+        {
+          "id": "PE 2.1",
+          "title": "Physical Security Perimeter",
+          "description": "The healthcare entity shall define and use security perimeters to protect facilities.",
+          "tier": "Basic"
+        },
+        {
+          "id": "PE 2.2",
+          "title": "Private Areas",
+          "description": "Allocate secure private areas to discuss personal health information.",
+          "tier": "Advanced"
+        },
+        {
+          "id": "PE 2.3",
+          "title": "Secure Areas Control Measures",
+          "description": "Secure areas shall be protected by appropriate control measures.",
+          "tier": "Basic"
+        },
+        {
+          "id": "PE 2.4",
+          "title": "Ownership of Secure Areas",
+          "description": "The healthcare entity shall nominate owners for each identified secure areas.",
+          "tier": "Transitional"
+        },
+        {
+          "id": "PE 2.5",
+          "title": "Secure Office/Meeting Rooms",
+          "description": "Offices, meeting rooms and facilities shall be equipped with adequate physical security measures.",
+          "tier": "Basic"
+        },
+        {
+          "id": "PE 2.6",
+          "title": "Protection against External & Environmental Threats",
+          "description": "The healthcare entity shall design and apply physical protection against natural disasters, environmental threats, external attacks and/or accidents.",
+          "tier": "Basic"
+        },
+        {
+          "id": "PE 2.7",
+          "title": "Adequacy/Effectiveness of Control Measures",
+          "description": "Physical and environmental countermeasures shall be aligned with risk assessment outcomes.",
+          "tier": "Transitional"
+        },
+        {
+          "id": "PE 2.8",
+          "title": "Working in Secure Areas",
+          "description": "The healthcare entity shall design physical protection and guidelines for working in secure areas.",
+          "tier": "Basic"
+        },
+        {
+          "id": "PE 2.9",
+          "title": "Stakeholder Awareness",
+          "description": "Ensure all personnel accessing secure areas is aware of security requirements.",
+          "tier": "Transitional"
+        },
+        {
+          "id": "PE 2.10",
+          "title": "Deliver and Loading Areas",
+          "description": "The healthcare entity shall have segregated delivery and loading areas.",
+          "tier": "Basic"
+        },
+        {
+          "id": "PE 3.1",
+          "title": "Equipment Siting and Protection",
+          "description": "The healthcare entity shall site/position equipment and medical devices in manner that they are always protected.",
+          "tier": "Basic"
+        },
+        {
+          "id": "PE 3.2",
+          "title": "Supporting Utilities",
+          "description": "The healthcare entity shall protect equipment and medical devices from disruptions caused by failures in supporting utilities.",
+          "tier": "Transitional"
+        },
+        {
+          "id": "PE 3.3",
+          "title": "Maintenance of Equipment",
+          "description": "The healthcare entity shall maintain supporting equipment.",
+          "tier": "Advanced"
+        },
+        {
+          "id": "PE 3.4",
+          "title": "Cabling Security",
+          "description": "Power, telecommunication and cables carrying data shall be secured and protected.",
+          "tier": "Basic"
+        },
+        {
+          "id": "PE 3.5",
+          "title": "Security of Equipment Off Site",
+          "description": "The healthcare entity shall identify and apply security measures to protect equipment off-site.",
+          "tier": "Advanced"
+        },
+        {
+          "id": "PE 3.6",
+          "title": "Unattended User Equipment",
+          "description": "The healthcare entity shall ensure that unattended equipment, medical devices and information processing systems are protected.",
+          "tier": "Basic"
+        },
+        {
+          "id": "PE 3.7",
+          "title": "Clear Desk & Clear Screen Policy",
+          "description": "The healthcare entity shall define and enforce a clear desk and clear screen policy.",
+          "tier": "Basic"
+        }
+      ]
+    },
+    {
+      "id": "AC",
+      "name": "Domain AC - Access Control",
+      "controls": [
+        {
+          "id": "AC 1.1",
+          "title": "Access Control Policy",
+          "description": "The healthcare entity shall develop, enforce and maintain an access control policy.",
+          "tier": "Basic"
+        },
+        {
+          "id": "AC 2.1",
+          "title": "User Registration and De-Registration",
+          "description": "The healthcare entity shall implement a formal user registration and de-registration process.",
+          "tier": "Basic"
+        },
+        {
+          "id": "AC 2.2",
+          "title": "Privilege Management",
+          "description": "The healthcare entity shall restrict and control allocation of privileges, based on principles of need to know.",
+          "tier": "Advanced"
+        },
+        {
+          "id": "AC 2.3",
+          "title": "Use and Management of Security Credential",
+          "description": "The healthcare entity shall establish process for secure allocation, use and management of security credentials.",
+          "tier": "Basic"
+        },
+        {
+          "id": "AC 3.1",
+          "title": "Access Control for Portable and Medical Devices",
+          "description": "The healthcare entity shall protect confidential and secret information on portable or removable media, mobile or portable devices, and medical equipment or devices.",
+          "tier": "Transitional"
+        },
+        {
+          "id": "AC 3.2",
+          "title": "Access Control for Assets and Equipment in Teleworking Sites",
+          "description": "The healthcare entity shall control access to equipment, devices, system and facilities at teleworking sites.",
+          "tier": "Transitional"
+        },
+        {
+          "id": "AC 4.1",
+          "title": "Review of User Access Rights",
+          "description": "The healthcare entity shall review access and privileges granted to its user.",
+          "tier": "Basic"
+        },
+        {
+          "id": "AC 5.1",
+          "title": "Access to Network and Network Services",
+          "description": "Access to the entity's network and network services shall be controlled.",
+          "tier": "Basic"
+        },
+        {
+          "id": "AC 5.2",
+          "title": "Remote User Authentication",
+          "description": "The healthcare entity shall use appropriate authentication methods to control access of remote users.",
+          "tier": "Basic"
+        },
+        {
+          "id": "AC 5.3",
+          "title": "Equipment Identification in Network",
+          "description": "The healthcare entity shall identify all equipment and devices connected to its network.",
+          "tier": "Basic"
+        },
+        {
+          "id": "AC 5.4",
+          "title": "Remote Diagnostic and Configuration Protection",
+          "description": "The healthcare entity shall control access for the purpose of diagnostic and configuration.",
+          "tier": "Advanced"
+        },
+        {
+          "id": "AC 5.5",
+          "title": "Network Connection Control",
+          "description": "User access to shared and isolated networks shall be restricted.",
+          "tier": "Basic"
+        },
+        {
+          "id": "AC 5.6",
+          "title": "Network Routing Control",
+          "description": "The healthcare entity shall define and implement network routing controls.",
+          "tier": "Transitional"
+        },
+        {
+          "id": "AC 5.7",
+          "title": "Wireless Access",
+          "description": "The healthcare entity shall ensure wireless access within the entity is secured.",
+          "tier": "Transitional"
+        },
+        {
+          "id": "AC 6.1",
+          "title": "Secure Log-On Procedures",
+          "description": "The healthcare entity shall establish and enforce secure log-on and log-off procedures.",
+          "tier": "Basic"
+        },
+        {
+          "id": "AC 6.2",
+          "title": "User Identification and Authentication",
+          "description": "The healthcare entity shall create unique identifier (user ID) for each users.",
+          "tier": "Basic"
+        },
+        {
+          "id": "AC 6.3",
+          "title": "Use of System Utilities",
+          "description": "The healthcare entity shall restrict and control the use of utility programs and tools.",
+          "tier": "Advanced"
+        },
+        {
+          "id": "AC 7.1",
+          "title": "Information Access Restriction",
+          "description": "The healthcare entity shall restrict access to information and application system functions.",
+          "tier": "Basic"
+        },
+        {
+          "id": "AC 7.2",
+          "title": "Sensitive System Isolation",
+          "description": "The healthcare entity shall isolate sensitive systems in a dedicated environment.",
+          "tier": "Transitional"
+        },
+        {
+          "id": "AC 7.3",
+          "title": "Publicly Accessible Content",
+          "description": "The healthcare entity shall implement controls and shall not expose non-public information to the general public.",
+          "tier": "Transitional"
+        }
+      ]
+    },
+    {
+      "id": "OM",
+      "name": "Domain OM - Operations Management",
+      "controls": [
+        {
+          "id": "OM 1.1",
+          "title": "Operations Management Policy",
+          "description": "The healthcare entity shall develop, enforce and maintain an operations management policy.",
+          "tier": "Basic"
+        },
+        {
+          "id": "OM 2.1",
+          "title": "Baseline Configuration",
+          "description": "The healthcare entity shall develop and enforce baseline and recommended configuration settings.",
+          "tier": "Transitional"
+        },
+        {
+          "id": "OM 2.2",
+          "title": "Documented Operating Procedure",
+          "description": "The healthcare entity shall document operating procedures.",
+          "tier": "Transitional"
+        },
+        {
+          "id": "OM 2.3",
+          "title": "Change Management",
+          "description": "The healthcare entity shall control changes to information systems and applications.",
+          "tier": "Basic"
+        },
+        {
+          "id": "OM 2.4",
+          "title": "Transition of Information Systems and Applications",
+          "description": "The healthcare entity shall establish a process that controls transition of information systems and applications.",
+          "tier": "Transitional"
+        },
+        {
+          "id": "OM 2.5",
+          "title": "Segregation of Duties",
+          "description": "The healthcare entity shall identify and segregate roles of conflicting interests.",
+          "tier": "Transitional"
+        },
+        {
+          "id": "OM 2.6",
+          "title": "Separation of Test, Development and Operational Environment",
+          "description": "The healthcare entity shall identify and separate development, test, staging and operational environments.",
+          "tier": "Transitional"
+        },
+        {
+          "id": "OM 3.1",
+          "title": "Capacity Management",
+          "description": "The healthcare entity shall identify and document current and future capacity requirements.",
+          "tier": "Advanced"
+        },
+        {
+          "id": "OM 3.2",
+          "title": "System Acceptance and Testing",
+          "description": "The healthcare entity shall establish acceptance criteria for new information systems and applications.",
+          "tier": "Transitional"
+        },
+        {
+          "id": "OM 4.1",
+          "title": "Controls Against Malware",
+          "description": "The healthcare entity shall protect its information assets from malware.",
+          "tier": "Basic"
+        },
+        {
+          "id": "OM 4.2",
+          "title": "Gateway Level Protection for Malware",
+          "description": "The healthcare entity shall deploy gateway level protection mechanisms.",
+          "tier": "Advanced"
+        },
+        {
+          "id": "OM 5.1",
+          "title": "Backup Management",
+          "description": "The healthcare entity shall maintain backup copies of essential information and software.",
+          "tier": "Basic"
+        },
+        {
+          "id": "OM 5.2",
+          "title": "Archival Requirements",
+          "description": "The healthcare entity shall establish data archival requirements.",
+          "tier": "Advanced"
+        },
+        {
+          "id": "OM 6.1",
+          "title": "Monitoring Procedures",
+          "description": "The healthcare entity shall establish and enforce monitoring procedures.",
+          "tier": "Basic"
+        },
+        {
+          "id": "OM 6.2",
+          "title": "Audit Logging",
+          "description": "The healthcare entity shall enable audit logs recording administrator, operator and user activities.",
+          "tier": "Basic"
+        },
+        {
+          "id": "OM 6.3",
+          "title": "Preservation of Log Information",
+          "description": "The healthcare entity shall preserve logs in a centralized log management system.",
+          "tier": "Advanced"
+        },
+        {
+          "id": "OM 6.4",
+          "title": "Clock Synchronization",
+          "description": "The healthcare entity shall synchronize clock of all information systems with an agreed time source.",
+          "tier": "Basic"
+        },
+        {
+          "id": "OM 6.5",
+          "title": "Patch Management",
+          "description": "The healthcare entity shall define and establish formal procedure for updates and patching.",
+          "tier": "Basic"
+        },
+        {
+          "id": "OM 6.6",
+          "title": "Information Leakage",
+          "description": "The healthcare entity shall monitor information processing systems to prevent opportunities for information leakage.",
+          "tier": "Transitional"
+        },
+        {
+          "id": "OM 7.1",
+          "title": "Technical Vulnerability Assessment",
+          "description": "The healthcare entity shall conduct periodic independent assessment.",
+          "tier": "Basic"
+        },
+        {
+          "id": "OM 7.2",
+          "title": "Security of Assessment Data",
+          "description": "The healthcare entity shall ensure that assessment data is not available with third parties beyond the time of engagement.",
+          "tier": "Basic"
+        }
+      ]
+    },
+    {
+      "id": "CM",
+      "name": "Domain CM - Communications",
+      "controls": [
+        {
+          "id": "CM 1.1",
+          "title": "Communication Policy",
+          "description": "The healthcare entity shall develop, enforce and maintain a communications policy.",
+          "tier": "Basic"
+        },
+        {
+          "id": "CM 2.1",
+          "title": "Information Exchange Procedures",
+          "description": "The healthcare entity shall develop, enforce and maintain formal procedures on information exchange.",
+          "tier": "Transitional"
+        },
+        {
+          "id": "CM 2.2",
+          "title": "Security of Information During Transit",
+          "description": "The healthcare entity shall ensure that critical and private information is protected while in transit.",
+          "tier": "Basic"
+        },
+        {
+          "id": "CM 2.3",
+          "title": "Secure Practices for Information Sharing",
+          "description": "The healthcare entity shall develop secure practices and capabilities while sharing information.",
+          "tier": "Basic"
+        },
+        {
+          "id": "CM 2.4",
+          "title": "Agreements on Information Transfer",
+          "description": "The healthcare entity shall establish agreements between the entity and external parties for the exchange of information and software.",
+          "tier": "Basic"
+        },
+        {
+          "id": "CM 2.5",
+          "title": "External Party Awareness of Security Requirements",
+          "description": "The healthcare entity shall ensure that external parties are aware of the security requirements.",
+          "tier": "Transitional"
+        },
+        {
+          "id": "CM 2.6",
+          "title": "Physical Media in Transit",
+          "description": "The healthcare entity shall protect physical media containing information during transit.",
+          "tier": "Transitional"
+        },
+        {
+          "id": "CM 2.7",
+          "title": "Electronic Messaging",
+          "description": "The healthcare entity shall protect information involved in electronic messaging.",
+          "tier": "Transitional"
+        },
+        {
+          "id": "CM 2.8",
+          "title": "Business Information System",
+          "description": "The healthcare entity shall develop, enforce and maintain procedures to secure information transferred across business information systems.",
+          "tier": "Advanced"
+        },
+        {
+          "id": "CM 3.1",
+          "title": "Security of Electronic Commerce Services",
+          "description": "The healthcare entity shall protect electronic commerce service and information.",
+          "tier": "Transitional"
+        },
+        {
+          "id": "CM 3.2",
+          "title": "Online Transaction",
+          "description": "The healthcare entity shall protect information involved in online transactions.",
+          "tier": "Transitional"
+        },
+        {
+          "id": "CM 3.3",
+          "title": "Publicly Available Information",
+          "description": "The healthcare entity shall protect information available through the publicly accessible system.",
+          "tier": "Advanced"
+        },
+        {
+          "id": "CM 4.1",
+          "title": "Connectivity to Information Sharing Platforms",
+          "description": "The healthcare entity shall ensure that connectivity to information sharing platforms is secure and controlled.",
+          "tier": "Advanced"
+        },
+        {
+          "id": "CM 4.2",
+          "title": "Restriction on Cloud Environment",
+          "description": "The healthcare entity shall not use cloud services or infrastructure to store, process or share health information.",
+          "tier": "Basic"
+        },
+        {
+          "id": "CM 4.3",
+          "title": "Security While Connecting to Information Sharing Platform",
+          "description": "Access to health information exchange platforms within the UAE shall be strictly controlled.",
+          "tier": "Basic"
+        },
+        {
+          "id": "CM 5.1",
+          "title": "Network Controls",
+          "description": "All networks and supporting infrastructures shall be adequately managed, controlled and protected.",
+          "tier": "Basic"
+        },
+        {
+          "id": "CM 5.2",
+          "title": "Security Requirements in Network Services",
+          "description": "The healthcare entity shall identify and enforce security requirements as part of relevant network services agreements.",
+          "tier": "Transitional"
+        },
+        {
+          "id": "CM 5.3",
+          "title": "Segregation in Networks",
+          "description": "The healthcare entity shall segregate physical, logical and wireless networks.",
+          "tier": "Basic"
+        },
+        {
+          "id": "CM 5.4",
+          "title": "Security of Wireless Networks",
+          "description": "The healthcare entity shall ensure that all wireless networks are adequately protected.",
+          "tier": "Basic"
+        }
+      ]
+    },
+    {
+      "id": "HI",
+      "name": "Domain HI - Health Information and Security",
+      "controls": [
+        {
+          "id": "HI 1.1",
+          "title": "Health Information Protection Policy",
+          "description": "The healthcare entity shall develop, enforce and maintain a health information protection policy.",
+          "tier": "Basic"
+        },
+        {
+          "id": "HI 2.1",
+          "title": "Security of Healthcare Information",
+          "description": "The healthcare entity shall ensure that healthcare information under its custody is suitably protected.",
+          "tier": "Basic"
+        }
+      ]
+    },
+    {
+      "id": "TP",
+      "name": "Domain TP - Third Party Security",
+      "controls": [
+        {
+          "id": "TP 1.1",
+          "title": "Third Party Security Policy",
+          "description": "The healthcare entity shall develop, enforce and maintain a third party security policy.",
+          "tier": "Basic"
+        },
+        {
+          "id": "TP 2.1",
+          "title": "Third-Party Service Delivery",
+          "description": "The healthcare entity shall identify and enforce security requirements, service levels and management requirements as part of relevant third party services agreements.",
+          "tier": "Basic"
+        },
+        {
+          "id": "TP 2.2",
+          "title": "Monitoring and Review of Third-Party Services",
+          "description": "The healthcare entity shall monitor and review services provided and reports and records submitted by third parties.",
+          "tier": "Transitional"
+        },
+        {
+          "id": "TP 2.3",
+          "title": "Managing Changes to Third Party Services",
+          "description": "The healthcare entity shall manage changes to the provisions of third party services through a formal management process.",
+          "tier": "Transitional"
+        }
+      ]
+    },
+    {
+      "id": "SA",
+      "name": "Domain SA - Information Systems Acquisition, Development, and Maintenance",
+      "controls": [
+        {
+          "id": "SA 1.1",
+          "title": "Information Systems Acquisition, Development and Maintenance Policy",
+          "description": "The healthcare entity shall develop, enforce and maintain an information systems acquisition, development and maintenance policy.",
+          "tier": "Basic"
+        },
+        {
+          "id": "SA 2.1",
+          "title": "Security Requirements Analysis and Specification",
+          "description": "The healthcare entity shall analyse, identify, develop and implement information security requirements for new information systems and applications.",
+          "tier": "Transitional"
+        },
+        {
+          "id": "SA 2.2",
+          "title": "Developer Training",
+          "description": "The healthcare entity shall ensure developers are provided suitable training prior to their involvement in development activities.",
+          "tier": "Transitional"
+        },
+        {
+          "id": "SA 3.1",
+          "title": "Input Data Validation",
+          "description": "The healthcare entity shall validate data input to applications.",
+          "tier": "Transitional"
+        },
+        {
+          "id": "SA 3.2",
+          "title": "Control of Internal Processing",
+          "description": "The healthcare entity shall incorporate validation checks into applications.",
+          "tier": "Transitional"
+        },
+        {
+          "id": "SA 3.3",
+          "title": "Message Integrity",
+          "description": "The healthcare entity shall ensure the authenticity and integrity of messages in applications.",
+          "tier": "Transitional"
+        },
+        {
+          "id": "SA 3.4",
+          "title": "Output Data Validation",
+          "description": "The healthcare entity shall validate data output from applications.",
+          "tier": "Transitional"
+        },
+        {
+          "id": "SA 3.5",
+          "title": "Off-line Processing Capabilities",
+          "description": "Distributed and mobile applications shall be designed with the ability to tolerate communication failure.",
+          "tier": "Transitional"
+        },
+        {
+          "id": "SA 4.1",
+          "title": "Key Management",
+          "description": "The healthcare entity shall establish key management to support the entity's use of cryptographic techniques.",
+          "tier": "Transitional"
+        },
+        {
+          "id": "SA 5.1",
+          "title": "Control of Operational Software",
+          "description": "The healthcare entity shall control the installation of software on operational systems.",
+          "tier": "Advanced"
+        },
+        {
+          "id": "SA 5.2",
+          "title": "Protection of System Test Data",
+          "description": "The healthcare entity shall protect system test data.",
+          "tier": "Transitional"
+        },
+        {
+          "id": "SA 5.3",
+          "title": "Access Control to Program Source Code",
+          "description": "The healthcare entity shall restrict access to program source code.",
+          "tier": "Transitional"
+        },
+        {
+          "id": "SA 6.1",
+          "title": "Outsourced Software Development",
+          "description": "The healthcare entity shall supervise and have control over outsourced software development.",
+          "tier": "Transitional"
+        },
+        {
+          "id": "SA 7.1",
+          "title": "Supply Chain Protection Strategy",
+          "description": "The healthcare entity shall develop a comprehensive information security strategy against supply chain threats.",
+          "tier": "Advanced"
+        },
+        {
+          "id": "SA 7.2",
+          "title": "Supplier Reviews",
+          "description": "The healthcare entity shall conduct supplier review prior to entering into contractual agreement.",
+          "tier": "Advanced"
+        },
+        {
+          "id": "SA 7.3",
+          "title": "Limitation of Harm",
+          "description": "The healthcare entity shall identify and limit harm from potential adversaries targeting the supply chain.",
+          "tier": "Advanced"
+        },
+        {
+          "id": "SA 7.4",
+          "title": "Supply Chain Operation Security",
+          "description": "The healthcare entity shall employ security controls to protect supply chain operations.",
+          "tier": "Advanced"
+        },
+        {
+          "id": "SA 7.5",
+          "title": "Reliable Delivery of Items and Services",
+          "description": "The healthcare entity shall ensure a reliable delivery of information systems, medical devices or system/devices components.",
+          "tier": "Advanced"
+        },
+        {
+          "id": "SA 7.6",
+          "title": "Process to Address Weakness or Deficiency",
+          "description": "The healthcare entity shall establish processes to address weakness or deficiencies in supply chain elements.",
+          "tier": "Transitional"
+        },
+        {
+          "id": "SA 7.7",
+          "title": "Supply of Critical Information System Component",
+          "description": "The healthcare entity shall ensure adequate supplies of critical information systems, medical devices and components.",
+          "tier": "Advanced"
+        }
+      ]
+    },
+    {
+      "id": "IM",
+      "name": "Domain IM - Information Security Incident Management",
+      "controls": [
+        {
+          "id": "IM 1.1",
+          "title": "Information Security Incident Management Policy",
+          "description": "The healthcare entity shall develop, enforce and maintain an information security incident management policy.",
+          "tier": "Basic"
+        },
+        {
+          "id": "IM 2.1",
+          "title": "Incident Response Process",
+          "description": "The healthcare entity shall establish process(es) to guide information security and cyber security incident response activities.",
+          "tier": "Transitional"
+        },
+        {
+          "id": "IM 2.2",
+          "title": "Computer Security Incident Response Team",
+          "description": "The healthcare entity shall establish a Computer Security Incident Response Team (CSIRT).",
+          "tier": "Advanced"
+        },
+        {
+          "id": "IM 2.3",
+          "title": "Incident Classification",
+          "description": "The healthcare entity shall assess and classify information security incidents.",
+          "tier": "Transitional"
+        },
+        {
+          "id": "IM 2.4",
+          "title": "Incident Response Testing",
+          "description": "The healthcare entity shall test its Computer Security incident response capabilities.",
+          "tier": "Transitional"
+        },
+        {
+          "id": "IM 2.5",
+          "title": "Incident Records",
+          "description": "The healthcare entity shall document and preserve records on all information security incidents.",
+          "tier": "Transitional"
+        },
+        {
+          "id": "IM 2.6",
+          "title": "Learning from Information Security Incident",
+          "description": "The healthcare entity shall institutionalize the learning from information security incidents.",
+          "tier": "Advanced"
+        },
+        {
+          "id": "IM 3.1",
+          "title": "Situational Awareness",
+          "description": "The healthcare entity shall develop a situational awareness culture.",
+          "tier": "Advanced"
+        },
+        {
+          "id": "IM 3.2",
+          "title": "Reporting Information Security Events",
+          "description": "The healthcare entity shall report information security events through appropriate management channels.",
+          "tier": "Advanced"
+        },
+        {
+          "id": "IM 3.3",
+          "title": "Reporting Security Weakness",
+          "description": "The healthcare entity shall report observed or suspected information security weaknesses.",
+          "tier": "Advanced"
+        }
+      ]
+    },
+    {
+      "id": "SC",
+      "name": "Domain SC - Information Systems Continuity Management",
+      "controls": [
+        {
+          "id": "SC 1.1",
+          "title": "Information Systems Continuity Management Policy",
+          "description": "The healthcare entity shall develop, enforce and maintain an information system continuity planning policy.",
+          "tier": "Transitional"
+        },
+        {
+          "id": "SC 2.1",
+          "title": "Developing Information System and Application Continuity Plans",
+          "description": "The healthcare entity shall develop information systems and application continuity plans.",
+          "tier": "Advanced"
+        },
+        {
+          "id": "SC 2.2",
+          "title": "Implementing Information System and Application Continuity Plans",
+          "description": "The healthcare entity shall implement the established information system and application continuity plans.",
+          "tier": "Advanced"
+        },
+        {
+          "id": "SC 2.3",
+          "title": "Testing, Maintaining and Reassessing Plans",
+          "description": "The healthcare entity shall test, reassess and maintain its information systems and application continuity plans.",
+          "tier": "Advanced"
+        }
+      ]
+    }
+  ]
+}

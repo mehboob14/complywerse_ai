@@ -1,0 +1,1919 @@
+{
+  "id": "gdpr",
+  "name": "GDPR — Data Protection Impact Assessment",
+  "version": "EU 2016/679",
+  "official_sources": [
+    {
+      "title": "GDPR Article 35",
+      "url": "https://gdpr-info.eu/art-35-gdpr/"
+    },
+    {
+      "title": "ICO Sample DPIA Template",
+      "url": "https://ico.org.uk/media2/migrated/2553993/dpia-template.docx"
+    },
+    {
+      "title": "WP29/EDPB Guidelines on DPIAs (WP248)",
+      "url": "https://ec.europa.eu/newsroom/article29/items/611236"
+    },
+    {
+      "title": "CNIL PIA Tool",
+      "url": "https://www.cnil.fr/en/open-source-pia-software-helps-carry-out-data-protection-impact-assessment"
+    }
+  ],
+  "assessment_shapes": [
+    "dpia"
+  ],
+  "methodology": "Article 35 + ICO 7-step DPIA template. WP248 9 high-risk criteria gate whether a DPIA is required.",
+  "scoping_inputs": [
+    {
+      "id": "processing_purposes",
+      "type": "list",
+      "label": "Processing purposes"
+    },
+    {
+      "id": "data_categories",
+      "type": "multi_select",
+      "options": [
+        "Personal",
+        "Special Category",
+        "Children",
+        "Criminal Offences"
+      ],
+      "label": "Data categories"
+    },
+    {
+      "id": "wp248_criteria",
+      "type": "multi_select",
+      "options": [
+        "Evaluation/Scoring",
+        "Automated Decision",
+        "Systematic Monitoring",
+        "Sensitive Data",
+        "Large Scale",
+        "Combined Datasets",
+        "Vulnerable Subjects",
+        "Innovative Tech",
+        "Prevents Right Exercise"
+      ],
+      "label": "WP248 high-risk criteria triggered"
+    }
+  ],
+  "risk_model": {
+    "factors": [
+      "likelihood",
+      "severity"
+    ],
+    "scales": {
+      "likelihood": [
+        {
+          "value": 1,
+          "label": "Low"
+        },
+        {
+          "value": 2,
+          "label": "Medium"
+        },
+        {
+          "value": 3,
+          "label": "High"
+        }
+      ],
+      "severity": [
+        {
+          "value": 1,
+          "label": "Low"
+        },
+        {
+          "value": 2,
+          "label": "Medium"
+        },
+        {
+          "value": 3,
+          "label": "High"
+        }
+      ]
+    },
+    "matrix": "3x3",
+    "acceptance_threshold": "Low"
+  },
+  "domains": [
+    {
+      "id": "STEP_1",
+      "name": "Identify the need for a DPIA",
+      "controls": [
+        {
+          "id": "STEP_1.1",
+          "title": "Does the processing involve any of the 9 WP248 high-risk criteria? (evaluation/scoring; automated decision with legal effect; systematic monitoring; sensitive/special category data; data processed on a large scale; matched/combined datasets; data of vulnerable subjects; innovative use of new technology; processing that prevents data subjects from exercising a right or using a service)",
+          "question_block": {
+            "type": "dpia",
+            "questions": [
+              {
+                "field": "processing_description",
+                "type": "text",
+                "prompt": "Describe the processing operation."
+              },
+              {
+                "field": "necessity_proportionality",
+                "type": "text",
+                "prompt": "Explain necessity and proportionality."
+              },
+              {
+                "field": "risk_to_rights",
+                "type": "text",
+                "prompt": "Describe the risk to data subjects' rights and freedoms."
+              },
+              {
+                "field": "likelihood",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Likelihood of harm?"
+              },
+              {
+                "field": "severity",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Severity of harm?"
+              },
+              {
+                "field": "overall_risk",
+                "type": "computed",
+                "formula": "matrix(likelihood, severity)"
+              },
+              {
+                "field": "mitigation",
+                "type": "text",
+                "prompt": "Mitigation measures?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Residual risk after mitigation?"
+              },
+              {
+                "field": "ico_consultation",
+                "type": "boolean",
+                "prompt": "Does residual risk require prior consultation with the supervisory authority?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner / signed off by?"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "STEP_2",
+      "name": "Describe the processing",
+      "controls": [
+        {
+          "id": "STEP_2.1",
+          "title": "Nature of the processing",
+          "question_block": {
+            "type": "dpia",
+            "questions": [
+              {
+                "field": "processing_description",
+                "type": "text",
+                "prompt": "Describe the processing operation."
+              },
+              {
+                "field": "necessity_proportionality",
+                "type": "text",
+                "prompt": "Explain necessity and proportionality."
+              },
+              {
+                "field": "risk_to_rights",
+                "type": "text",
+                "prompt": "Describe the risk to data subjects' rights and freedoms."
+              },
+              {
+                "field": "likelihood",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Likelihood of harm?"
+              },
+              {
+                "field": "severity",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Severity of harm?"
+              },
+              {
+                "field": "overall_risk",
+                "type": "computed",
+                "formula": "matrix(likelihood, severity)"
+              },
+              {
+                "field": "mitigation",
+                "type": "text",
+                "prompt": "Mitigation measures?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Residual risk after mitigation?"
+              },
+              {
+                "field": "ico_consultation",
+                "type": "boolean",
+                "prompt": "Does residual risk require prior consultation with the supervisory authority?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner / signed off by?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "STEP_2.2",
+          "title": "Scope: types and volume of data, retention",
+          "question_block": {
+            "type": "dpia",
+            "questions": [
+              {
+                "field": "processing_description",
+                "type": "text",
+                "prompt": "Describe the processing operation."
+              },
+              {
+                "field": "necessity_proportionality",
+                "type": "text",
+                "prompt": "Explain necessity and proportionality."
+              },
+              {
+                "field": "risk_to_rights",
+                "type": "text",
+                "prompt": "Describe the risk to data subjects' rights and freedoms."
+              },
+              {
+                "field": "likelihood",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Likelihood of harm?"
+              },
+              {
+                "field": "severity",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Severity of harm?"
+              },
+              {
+                "field": "overall_risk",
+                "type": "computed",
+                "formula": "matrix(likelihood, severity)"
+              },
+              {
+                "field": "mitigation",
+                "type": "text",
+                "prompt": "Mitigation measures?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Residual risk after mitigation?"
+              },
+              {
+                "field": "ico_consultation",
+                "type": "boolean",
+                "prompt": "Does residual risk require prior consultation with the supervisory authority?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner / signed off by?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "STEP_2.3",
+          "title": "Context: relationship with subjects, expectations, prior concerns",
+          "question_block": {
+            "type": "dpia",
+            "questions": [
+              {
+                "field": "processing_description",
+                "type": "text",
+                "prompt": "Describe the processing operation."
+              },
+              {
+                "field": "necessity_proportionality",
+                "type": "text",
+                "prompt": "Explain necessity and proportionality."
+              },
+              {
+                "field": "risk_to_rights",
+                "type": "text",
+                "prompt": "Describe the risk to data subjects' rights and freedoms."
+              },
+              {
+                "field": "likelihood",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Likelihood of harm?"
+              },
+              {
+                "field": "severity",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Severity of harm?"
+              },
+              {
+                "field": "overall_risk",
+                "type": "computed",
+                "formula": "matrix(likelihood, severity)"
+              },
+              {
+                "field": "mitigation",
+                "type": "text",
+                "prompt": "Mitigation measures?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Residual risk after mitigation?"
+              },
+              {
+                "field": "ico_consultation",
+                "type": "boolean",
+                "prompt": "Does residual risk require prior consultation with the supervisory authority?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner / signed off by?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "STEP_2.4",
+          "title": "Purposes: intended outcomes, benefits",
+          "question_block": {
+            "type": "dpia",
+            "questions": [
+              {
+                "field": "processing_description",
+                "type": "text",
+                "prompt": "Describe the processing operation."
+              },
+              {
+                "field": "necessity_proportionality",
+                "type": "text",
+                "prompt": "Explain necessity and proportionality."
+              },
+              {
+                "field": "risk_to_rights",
+                "type": "text",
+                "prompt": "Describe the risk to data subjects' rights and freedoms."
+              },
+              {
+                "field": "likelihood",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Likelihood of harm?"
+              },
+              {
+                "field": "severity",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Severity of harm?"
+              },
+              {
+                "field": "overall_risk",
+                "type": "computed",
+                "formula": "matrix(likelihood, severity)"
+              },
+              {
+                "field": "mitigation",
+                "type": "text",
+                "prompt": "Mitigation measures?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Residual risk after mitigation?"
+              },
+              {
+                "field": "ico_consultation",
+                "type": "boolean",
+                "prompt": "Does residual risk require prior consultation with the supervisory authority?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner / signed off by?"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "STEP_3",
+      "name": "Consider consultation",
+      "controls": [
+        {
+          "id": "STEP_3.1",
+          "title": "Consultation with data subjects or their representatives",
+          "question_block": {
+            "type": "dpia",
+            "questions": [
+              {
+                "field": "processing_description",
+                "type": "text",
+                "prompt": "Describe the processing operation."
+              },
+              {
+                "field": "necessity_proportionality",
+                "type": "text",
+                "prompt": "Explain necessity and proportionality."
+              },
+              {
+                "field": "risk_to_rights",
+                "type": "text",
+                "prompt": "Describe the risk to data subjects' rights and freedoms."
+              },
+              {
+                "field": "likelihood",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Likelihood of harm?"
+              },
+              {
+                "field": "severity",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Severity of harm?"
+              },
+              {
+                "field": "overall_risk",
+                "type": "computed",
+                "formula": "matrix(likelihood, severity)"
+              },
+              {
+                "field": "mitigation",
+                "type": "text",
+                "prompt": "Mitigation measures?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Residual risk after mitigation?"
+              },
+              {
+                "field": "ico_consultation",
+                "type": "boolean",
+                "prompt": "Does residual risk require prior consultation with the supervisory authority?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner / signed off by?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "STEP_3.2",
+          "title": "DPO advice",
+          "question_block": {
+            "type": "dpia",
+            "questions": [
+              {
+                "field": "processing_description",
+                "type": "text",
+                "prompt": "Describe the processing operation."
+              },
+              {
+                "field": "necessity_proportionality",
+                "type": "text",
+                "prompt": "Explain necessity and proportionality."
+              },
+              {
+                "field": "risk_to_rights",
+                "type": "text",
+                "prompt": "Describe the risk to data subjects' rights and freedoms."
+              },
+              {
+                "field": "likelihood",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Likelihood of harm?"
+              },
+              {
+                "field": "severity",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Severity of harm?"
+              },
+              {
+                "field": "overall_risk",
+                "type": "computed",
+                "formula": "matrix(likelihood, severity)"
+              },
+              {
+                "field": "mitigation",
+                "type": "text",
+                "prompt": "Mitigation measures?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Residual risk after mitigation?"
+              },
+              {
+                "field": "ico_consultation",
+                "type": "boolean",
+                "prompt": "Does residual risk require prior consultation with the supervisory authority?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner / signed off by?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "STEP_3.3",
+          "title": "Other internal/external experts",
+          "question_block": {
+            "type": "dpia",
+            "questions": [
+              {
+                "field": "processing_description",
+                "type": "text",
+                "prompt": "Describe the processing operation."
+              },
+              {
+                "field": "necessity_proportionality",
+                "type": "text",
+                "prompt": "Explain necessity and proportionality."
+              },
+              {
+                "field": "risk_to_rights",
+                "type": "text",
+                "prompt": "Describe the risk to data subjects' rights and freedoms."
+              },
+              {
+                "field": "likelihood",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Likelihood of harm?"
+              },
+              {
+                "field": "severity",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Severity of harm?"
+              },
+              {
+                "field": "overall_risk",
+                "type": "computed",
+                "formula": "matrix(likelihood, severity)"
+              },
+              {
+                "field": "mitigation",
+                "type": "text",
+                "prompt": "Mitigation measures?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Residual risk after mitigation?"
+              },
+              {
+                "field": "ico_consultation",
+                "type": "boolean",
+                "prompt": "Does residual risk require prior consultation with the supervisory authority?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner / signed off by?"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "STEP_4",
+      "name": "Assess necessity and proportionality",
+      "controls": [
+        {
+          "id": "STEP_4.1",
+          "title": "Lawful basis under Art. 6 (and Art. 9 if special category)",
+          "question_block": {
+            "type": "dpia",
+            "questions": [
+              {
+                "field": "processing_description",
+                "type": "text",
+                "prompt": "Describe the processing operation."
+              },
+              {
+                "field": "necessity_proportionality",
+                "type": "text",
+                "prompt": "Explain necessity and proportionality."
+              },
+              {
+                "field": "risk_to_rights",
+                "type": "text",
+                "prompt": "Describe the risk to data subjects' rights and freedoms."
+              },
+              {
+                "field": "likelihood",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Likelihood of harm?"
+              },
+              {
+                "field": "severity",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Severity of harm?"
+              },
+              {
+                "field": "overall_risk",
+                "type": "computed",
+                "formula": "matrix(likelihood, severity)"
+              },
+              {
+                "field": "mitigation",
+                "type": "text",
+                "prompt": "Mitigation measures?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Residual risk after mitigation?"
+              },
+              {
+                "field": "ico_consultation",
+                "type": "boolean",
+                "prompt": "Does residual risk require prior consultation with the supervisory authority?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner / signed off by?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "STEP_4.2",
+          "title": "How processing achieves the purpose",
+          "question_block": {
+            "type": "dpia",
+            "questions": [
+              {
+                "field": "processing_description",
+                "type": "text",
+                "prompt": "Describe the processing operation."
+              },
+              {
+                "field": "necessity_proportionality",
+                "type": "text",
+                "prompt": "Explain necessity and proportionality."
+              },
+              {
+                "field": "risk_to_rights",
+                "type": "text",
+                "prompt": "Describe the risk to data subjects' rights and freedoms."
+              },
+              {
+                "field": "likelihood",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Likelihood of harm?"
+              },
+              {
+                "field": "severity",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Severity of harm?"
+              },
+              {
+                "field": "overall_risk",
+                "type": "computed",
+                "formula": "matrix(likelihood, severity)"
+              },
+              {
+                "field": "mitigation",
+                "type": "text",
+                "prompt": "Mitigation measures?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Residual risk after mitigation?"
+              },
+              {
+                "field": "ico_consultation",
+                "type": "boolean",
+                "prompt": "Does residual risk require prior consultation with the supervisory authority?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner / signed off by?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "STEP_4.3",
+          "title": "Less intrusive alternatives considered",
+          "question_block": {
+            "type": "dpia",
+            "questions": [
+              {
+                "field": "processing_description",
+                "type": "text",
+                "prompt": "Describe the processing operation."
+              },
+              {
+                "field": "necessity_proportionality",
+                "type": "text",
+                "prompt": "Explain necessity and proportionality."
+              },
+              {
+                "field": "risk_to_rights",
+                "type": "text",
+                "prompt": "Describe the risk to data subjects' rights and freedoms."
+              },
+              {
+                "field": "likelihood",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Likelihood of harm?"
+              },
+              {
+                "field": "severity",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Severity of harm?"
+              },
+              {
+                "field": "overall_risk",
+                "type": "computed",
+                "formula": "matrix(likelihood, severity)"
+              },
+              {
+                "field": "mitigation",
+                "type": "text",
+                "prompt": "Mitigation measures?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Residual risk after mitigation?"
+              },
+              {
+                "field": "ico_consultation",
+                "type": "boolean",
+                "prompt": "Does residual risk require prior consultation with the supervisory authority?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner / signed off by?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "STEP_4.4",
+          "title": "International transfers safeguards",
+          "question_block": {
+            "type": "dpia",
+            "questions": [
+              {
+                "field": "processing_description",
+                "type": "text",
+                "prompt": "Describe the processing operation."
+              },
+              {
+                "field": "necessity_proportionality",
+                "type": "text",
+                "prompt": "Explain necessity and proportionality."
+              },
+              {
+                "field": "risk_to_rights",
+                "type": "text",
+                "prompt": "Describe the risk to data subjects' rights and freedoms."
+              },
+              {
+                "field": "likelihood",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Likelihood of harm?"
+              },
+              {
+                "field": "severity",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Severity of harm?"
+              },
+              {
+                "field": "overall_risk",
+                "type": "computed",
+                "formula": "matrix(likelihood, severity)"
+              },
+              {
+                "field": "mitigation",
+                "type": "text",
+                "prompt": "Mitigation measures?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Residual risk after mitigation?"
+              },
+              {
+                "field": "ico_consultation",
+                "type": "boolean",
+                "prompt": "Does residual risk require prior consultation with the supervisory authority?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner / signed off by?"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "STEP_5",
+      "name": "Identify and assess risks to individuals",
+      "controls": [
+        {
+          "id": "STEP_5.1",
+          "title": "List potential risks to rights and freedoms",
+          "question_block": {
+            "type": "dpia",
+            "questions": [
+              {
+                "field": "processing_description",
+                "type": "text",
+                "prompt": "Describe the processing operation."
+              },
+              {
+                "field": "necessity_proportionality",
+                "type": "text",
+                "prompt": "Explain necessity and proportionality."
+              },
+              {
+                "field": "risk_to_rights",
+                "type": "text",
+                "prompt": "Describe the risk to data subjects' rights and freedoms."
+              },
+              {
+                "field": "likelihood",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Likelihood of harm?"
+              },
+              {
+                "field": "severity",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Severity of harm?"
+              },
+              {
+                "field": "overall_risk",
+                "type": "computed",
+                "formula": "matrix(likelihood, severity)"
+              },
+              {
+                "field": "mitigation",
+                "type": "text",
+                "prompt": "Mitigation measures?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Residual risk after mitigation?"
+              },
+              {
+                "field": "ico_consultation",
+                "type": "boolean",
+                "prompt": "Does residual risk require prior consultation with the supervisory authority?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner / signed off by?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "STEP_5.2",
+          "title": "Likelihood (Low/Medium/High)",
+          "question_block": {
+            "type": "dpia",
+            "questions": [
+              {
+                "field": "processing_description",
+                "type": "text",
+                "prompt": "Describe the processing operation."
+              },
+              {
+                "field": "necessity_proportionality",
+                "type": "text",
+                "prompt": "Explain necessity and proportionality."
+              },
+              {
+                "field": "risk_to_rights",
+                "type": "text",
+                "prompt": "Describe the risk to data subjects' rights and freedoms."
+              },
+              {
+                "field": "likelihood",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Likelihood of harm?"
+              },
+              {
+                "field": "severity",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Severity of harm?"
+              },
+              {
+                "field": "overall_risk",
+                "type": "computed",
+                "formula": "matrix(likelihood, severity)"
+              },
+              {
+                "field": "mitigation",
+                "type": "text",
+                "prompt": "Mitigation measures?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Residual risk after mitigation?"
+              },
+              {
+                "field": "ico_consultation",
+                "type": "boolean",
+                "prompt": "Does residual risk require prior consultation with the supervisory authority?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner / signed off by?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "STEP_5.3",
+          "title": "Severity (Low/Medium/High)",
+          "question_block": {
+            "type": "dpia",
+            "questions": [
+              {
+                "field": "processing_description",
+                "type": "text",
+                "prompt": "Describe the processing operation."
+              },
+              {
+                "field": "necessity_proportionality",
+                "type": "text",
+                "prompt": "Explain necessity and proportionality."
+              },
+              {
+                "field": "risk_to_rights",
+                "type": "text",
+                "prompt": "Describe the risk to data subjects' rights and freedoms."
+              },
+              {
+                "field": "likelihood",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Likelihood of harm?"
+              },
+              {
+                "field": "severity",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Severity of harm?"
+              },
+              {
+                "field": "overall_risk",
+                "type": "computed",
+                "formula": "matrix(likelihood, severity)"
+              },
+              {
+                "field": "mitigation",
+                "type": "text",
+                "prompt": "Mitigation measures?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Residual risk after mitigation?"
+              },
+              {
+                "field": "ico_consultation",
+                "type": "boolean",
+                "prompt": "Does residual risk require prior consultation with the supervisory authority?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner / signed off by?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "STEP_5.4",
+          "title": "Overall risk",
+          "question_block": {
+            "type": "dpia",
+            "questions": [
+              {
+                "field": "processing_description",
+                "type": "text",
+                "prompt": "Describe the processing operation."
+              },
+              {
+                "field": "necessity_proportionality",
+                "type": "text",
+                "prompt": "Explain necessity and proportionality."
+              },
+              {
+                "field": "risk_to_rights",
+                "type": "text",
+                "prompt": "Describe the risk to data subjects' rights and freedoms."
+              },
+              {
+                "field": "likelihood",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Likelihood of harm?"
+              },
+              {
+                "field": "severity",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Severity of harm?"
+              },
+              {
+                "field": "overall_risk",
+                "type": "computed",
+                "formula": "matrix(likelihood, severity)"
+              },
+              {
+                "field": "mitigation",
+                "type": "text",
+                "prompt": "Mitigation measures?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Residual risk after mitigation?"
+              },
+              {
+                "field": "ico_consultation",
+                "type": "boolean",
+                "prompt": "Does residual risk require prior consultation with the supervisory authority?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner / signed off by?"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "STEP_6",
+      "name": "Identify measures to reduce risk",
+      "controls": [
+        {
+          "id": "STEP_6.1",
+          "title": "Measure / mitigation per risk",
+          "question_block": {
+            "type": "dpia",
+            "questions": [
+              {
+                "field": "processing_description",
+                "type": "text",
+                "prompt": "Describe the processing operation."
+              },
+              {
+                "field": "necessity_proportionality",
+                "type": "text",
+                "prompt": "Explain necessity and proportionality."
+              },
+              {
+                "field": "risk_to_rights",
+                "type": "text",
+                "prompt": "Describe the risk to data subjects' rights and freedoms."
+              },
+              {
+                "field": "likelihood",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Likelihood of harm?"
+              },
+              {
+                "field": "severity",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Severity of harm?"
+              },
+              {
+                "field": "overall_risk",
+                "type": "computed",
+                "formula": "matrix(likelihood, severity)"
+              },
+              {
+                "field": "mitigation",
+                "type": "text",
+                "prompt": "Mitigation measures?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Residual risk after mitigation?"
+              },
+              {
+                "field": "ico_consultation",
+                "type": "boolean",
+                "prompt": "Does residual risk require prior consultation with the supervisory authority?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner / signed off by?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "STEP_6.2",
+          "title": "Effect on risk (eliminated/reduced/accepted)",
+          "question_block": {
+            "type": "dpia",
+            "questions": [
+              {
+                "field": "processing_description",
+                "type": "text",
+                "prompt": "Describe the processing operation."
+              },
+              {
+                "field": "necessity_proportionality",
+                "type": "text",
+                "prompt": "Explain necessity and proportionality."
+              },
+              {
+                "field": "risk_to_rights",
+                "type": "text",
+                "prompt": "Describe the risk to data subjects' rights and freedoms."
+              },
+              {
+                "field": "likelihood",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Likelihood of harm?"
+              },
+              {
+                "field": "severity",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Severity of harm?"
+              },
+              {
+                "field": "overall_risk",
+                "type": "computed",
+                "formula": "matrix(likelihood, severity)"
+              },
+              {
+                "field": "mitigation",
+                "type": "text",
+                "prompt": "Mitigation measures?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Residual risk after mitigation?"
+              },
+              {
+                "field": "ico_consultation",
+                "type": "boolean",
+                "prompt": "Does residual risk require prior consultation with the supervisory authority?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner / signed off by?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "STEP_6.3",
+          "title": "Residual risk",
+          "question_block": {
+            "type": "dpia",
+            "questions": [
+              {
+                "field": "processing_description",
+                "type": "text",
+                "prompt": "Describe the processing operation."
+              },
+              {
+                "field": "necessity_proportionality",
+                "type": "text",
+                "prompt": "Explain necessity and proportionality."
+              },
+              {
+                "field": "risk_to_rights",
+                "type": "text",
+                "prompt": "Describe the risk to data subjects' rights and freedoms."
+              },
+              {
+                "field": "likelihood",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Likelihood of harm?"
+              },
+              {
+                "field": "severity",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Severity of harm?"
+              },
+              {
+                "field": "overall_risk",
+                "type": "computed",
+                "formula": "matrix(likelihood, severity)"
+              },
+              {
+                "field": "mitigation",
+                "type": "text",
+                "prompt": "Mitigation measures?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Residual risk after mitigation?"
+              },
+              {
+                "field": "ico_consultation",
+                "type": "boolean",
+                "prompt": "Does residual risk require prior consultation with the supervisory authority?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner / signed off by?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "STEP_6.4",
+          "title": "Approval to proceed",
+          "question_block": {
+            "type": "dpia",
+            "questions": [
+              {
+                "field": "processing_description",
+                "type": "text",
+                "prompt": "Describe the processing operation."
+              },
+              {
+                "field": "necessity_proportionality",
+                "type": "text",
+                "prompt": "Explain necessity and proportionality."
+              },
+              {
+                "field": "risk_to_rights",
+                "type": "text",
+                "prompt": "Describe the risk to data subjects' rights and freedoms."
+              },
+              {
+                "field": "likelihood",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Likelihood of harm?"
+              },
+              {
+                "field": "severity",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Severity of harm?"
+              },
+              {
+                "field": "overall_risk",
+                "type": "computed",
+                "formula": "matrix(likelihood, severity)"
+              },
+              {
+                "field": "mitigation",
+                "type": "text",
+                "prompt": "Mitigation measures?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Residual risk after mitigation?"
+              },
+              {
+                "field": "ico_consultation",
+                "type": "boolean",
+                "prompt": "Does residual risk require prior consultation with the supervisory authority?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner / signed off by?"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "STEP_7",
+      "name": "Sign off and record outcomes",
+      "controls": [
+        {
+          "id": "STEP_7.1",
+          "title": "DPO advice recorded",
+          "question_block": {
+            "type": "dpia",
+            "questions": [
+              {
+                "field": "processing_description",
+                "type": "text",
+                "prompt": "Describe the processing operation."
+              },
+              {
+                "field": "necessity_proportionality",
+                "type": "text",
+                "prompt": "Explain necessity and proportionality."
+              },
+              {
+                "field": "risk_to_rights",
+                "type": "text",
+                "prompt": "Describe the risk to data subjects' rights and freedoms."
+              },
+              {
+                "field": "likelihood",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Likelihood of harm?"
+              },
+              {
+                "field": "severity",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Severity of harm?"
+              },
+              {
+                "field": "overall_risk",
+                "type": "computed",
+                "formula": "matrix(likelihood, severity)"
+              },
+              {
+                "field": "mitigation",
+                "type": "text",
+                "prompt": "Mitigation measures?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Residual risk after mitigation?"
+              },
+              {
+                "field": "ico_consultation",
+                "type": "boolean",
+                "prompt": "Does residual risk require prior consultation with the supervisory authority?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner / signed off by?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "STEP_7.2",
+          "title": "Final residual risks accepted by",
+          "question_block": {
+            "type": "dpia",
+            "questions": [
+              {
+                "field": "processing_description",
+                "type": "text",
+                "prompt": "Describe the processing operation."
+              },
+              {
+                "field": "necessity_proportionality",
+                "type": "text",
+                "prompt": "Explain necessity and proportionality."
+              },
+              {
+                "field": "risk_to_rights",
+                "type": "text",
+                "prompt": "Describe the risk to data subjects' rights and freedoms."
+              },
+              {
+                "field": "likelihood",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Likelihood of harm?"
+              },
+              {
+                "field": "severity",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Severity of harm?"
+              },
+              {
+                "field": "overall_risk",
+                "type": "computed",
+                "formula": "matrix(likelihood, severity)"
+              },
+              {
+                "field": "mitigation",
+                "type": "text",
+                "prompt": "Mitigation measures?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Residual risk after mitigation?"
+              },
+              {
+                "field": "ico_consultation",
+                "type": "boolean",
+                "prompt": "Does residual risk require prior consultation with the supervisory authority?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner / signed off by?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "STEP_7.3",
+          "title": "Consult ICO required (if any high residual risks remain)?",
+          "question_block": {
+            "type": "dpia",
+            "questions": [
+              {
+                "field": "processing_description",
+                "type": "text",
+                "prompt": "Describe the processing operation."
+              },
+              {
+                "field": "necessity_proportionality",
+                "type": "text",
+                "prompt": "Explain necessity and proportionality."
+              },
+              {
+                "field": "risk_to_rights",
+                "type": "text",
+                "prompt": "Describe the risk to data subjects' rights and freedoms."
+              },
+              {
+                "field": "likelihood",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Likelihood of harm?"
+              },
+              {
+                "field": "severity",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Severity of harm?"
+              },
+              {
+                "field": "overall_risk",
+                "type": "computed",
+                "formula": "matrix(likelihood, severity)"
+              },
+              {
+                "field": "mitigation",
+                "type": "text",
+                "prompt": "Mitigation measures?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Residual risk after mitigation?"
+              },
+              {
+                "field": "ico_consultation",
+                "type": "boolean",
+                "prompt": "Does residual risk require prior consultation with the supervisory authority?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner / signed off by?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "STEP_7.4",
+          "title": "Date for review",
+          "question_block": {
+            "type": "dpia",
+            "questions": [
+              {
+                "field": "processing_description",
+                "type": "text",
+                "prompt": "Describe the processing operation."
+              },
+              {
+                "field": "necessity_proportionality",
+                "type": "text",
+                "prompt": "Explain necessity and proportionality."
+              },
+              {
+                "field": "risk_to_rights",
+                "type": "text",
+                "prompt": "Describe the risk to data subjects' rights and freedoms."
+              },
+              {
+                "field": "likelihood",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Likelihood of harm?"
+              },
+              {
+                "field": "severity",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Severity of harm?"
+              },
+              {
+                "field": "overall_risk",
+                "type": "computed",
+                "formula": "matrix(likelihood, severity)"
+              },
+              {
+                "field": "mitigation",
+                "type": "text",
+                "prompt": "Mitigation measures?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "select",
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "prompt": "Residual risk after mitigation?"
+              },
+              {
+                "field": "ico_consultation",
+                "type": "boolean",
+                "prompt": "Does residual risk require prior consultation with the supervisory authority?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner / signed off by?"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

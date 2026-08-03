@@ -1,0 +1,600 @@
+Please resend the status of each work‑in‑progress activity before end of day Friday.
+For each item, include:
+
+• Whether it is open or closed
+• If it is open, explain why it was not closed
+• Outline the steps required to close it, along with an ETA for completion
+
+Asif - pls track this
+
+
+
+Multi-Tenancy done
+user management, role management, permissions on modules sub modules(partially done) rest all done.
+integration with main grc codebase done
+1. users persisting across tenants bug needs to be fix done.
+2. policy statmemens parsing, category should be the heading particular statement coming under. pending.
+3. assignement option needs to add under policy statements pending.
+4. assignment to relevant cosidian/users, with option to upload evidence. can change status pending.
+5. assigner can review nd can reject or approve the evidence, and shall update system wide afterward pending.
+6. Dropdown need to add to multiple frameworks from the system done.
+7. should automatically persever the generated policy draft done
+8. users dropdown needs to add while adding members in committees module. done
+9. charters -1. first need to fix. and should show file contents(structure) as is on platform itself. user don't need to download. done.
+10. actions module - can upload any file, can parse. can add manuall actions items, name, desctions, can assign pending
+11. approval need to be implement. new policy draft, statements parsed approval, committees  approval, action item assignment nd approval pending
+12. regulatory fields just need to test, changes
+13. following input fields needs to be add while creating new user profile: department, group, devision, desgination.done
+14. under risk register... file based grouping needs to add. wheather its pci dss, internal risk register etc. done
+15. can link associated assest to any risk. pending
+16. assign business unit under compagion not working done
+17. sub category dropdown shall be displayed while editing internal controls which added from statements. both category and sub category should be ai driven done
+18. assignment needs to be add for koi's pending
+19. mappings needs to be stored of incidencts with risks pending
+20. risk-control-incident-if still something happen then it means control is not effective pending
+21. review under risk management is't working properly pending
+22. sorting needs to be implement controls module under Compliance. done
+23. evidence linking from compliance section controls. done
+24. actual counts be display under frameworks compliance module. no demo data etc.done
+25. generate evidence recommendations is't working. getting 500 server error.  done
+26. view overview should also be display under framework compliance overview page.  done
+27. phses generation prompt - will be finilaized by sir shahanwaz. done
+Sub Module Roles not working. done for risk management and vulnerarbility management.
+2.	When registering a new user, it shows the previous tenant’s information as well.
+3.	Audit Logging should be for all activities based in the system by the user pending.
+4.	Policy document when parsing is not working correctly pending
+5.	The policy statements should be under each respective category pending
+6.	In Statements Module once policy is parsed, it should be assigned to relevant custodian pending
+7.	Policy to Framework mapping. – Replit.  done
+8.	In draft AI policy, drop down option for all frameworks should be available with multiple selection so it covers all requirements to create a new policy se done
+9.	IN Committees, charter document document should be uploaded and parsed showing the content of the document in a structed way. done.
+
+
+yesterday:
+
+1. risk assessment nav bar needs to be removed
+2. risk assessment module - My Assessments.
+3. control library ai auto grouping failing again.
+4. ai analysis under compliance module is't working.
+5. link to requirement under evidence is't working again.
+6. code versioing
+
+2/19/26
+------------------ all below are pending.
+
+1. under compliance in statements filter needs to be add on documents
+2. ai draft policy statements - should come under compliance statements
+3. some gpt generated different risks needs to be upload financial, operational etc.
+4. owner field need to add while creating mitigation action.
+5. rcsa module was't opening
+6. sama controls was't coming under compliance evidence requirements.
+7. ai reasoning was missing at http://localhost:3000/evidence-requirements.
+8. graphical view -
+9. reasoning behind auto - at http://localhost:3000/control-library/3.
+10. add another field with the name of custodian while adding new asset.
+11. retest under vulnerability mngement needs to hide.
+12. Host name, nd ip address field needs to be add while creating assest.
+
+update ui of entire audit management module use white background and solid black texts.. make sure to cover all pags, sub pages, popups, etc under audit management.
+
+2/23/2026.
+1. exception module needs to be add.
+2. risk assessment needs to be develop now.
+3. acknowledgment module from goverance.
+
+ -- risk based nd normal audit.
+
+
+
+2/24/2026
+1. ai should generate the justification, risk assessment things based on selected policy and inputted title
+2. sequence of sub modules under audit management.
+3. create plan was't working
+4. create finding is't working
+5. reports should be generate automatically based on findidngs and should be downloadable.
+6. rcsa module  -- advanced analytics
+7. ui needs to be at http://localhost:3000/control-library/gaps.
+8. coverage matrix was't showing at http://localhost:3000/control-library/coverage.
+
+
+2/25/2026
+1. allow option to add attachment while creating findings at http://localhost:3000/audit/findings
+2. applicability ui under framework compliance needs to be fix.
+
+
+---
+
+
+
+Following things needs to be done today and by tomorrow:
+
+1. Governance - Committee - AI functionality needs to be there to generate detailed charters per committee as per single framework selection or multiple framework selection with option to save / edit with log to see who changed what in what charter.
+
+a)
+2. In Policies - Policy to framework mapping - Missing in your development. Single or multiple framework selection against a single policy.
+3. There were screen in your app whose UI / UX was not working.
+4. Governance - Regulatory feeds - Search for free regulatory feeds and ingest them in the app. Then ask Claude to give your sample policies against those feeds where the AI shows you the impact of changes as per the regulatory feeds impact on policy.
+5. Governance / Risk module dashboards updated. Please implement the new dashboards.
+6. In Risk Assessments, create functionality to upload risk assessments - ill share sample risk assessments with data.
+7. Risk Register upload functionality and Risk Register template functionality.
+8. RCSA - Upload template functionality to be made. You already have multiple RCSA templates with you.
+9. Internal Controls - Manual file upload option with AI functionality. Sample attached.
+10. AI functionality to be added when adding a manual KRI - key risk indicator.
+11. Similarly for incidents.
+12. In Frameworks, run AI analysis on all frameworks. Remove manual framework upload option as we will treat this as a customized option. Also in PCI-DSS Framework, I've added a CDE Scope which is auto linked to IT assets. If you mark any asset as CDE, it automatically appears here.
+13. Compliance - Assessments - when uploading an assessment, the AI functionality needs to be added of what this assessment is about and how it will help the organization from risk and compliance prespective.
+13.1 AI producing graphs of each assessment to show what has been done and what is remaining in terms of compliance, evidence upload, reviewed not reviewed. You can seek help from Claude / Chatgpt.
+14. Compliance - Control Library - 1 or 2 features were not working today in your app in today's demo. Please fix it.
+15. in IT Assets, I've added the option to mark an asset as CDE. These CDE assets falls in the risk assessment under PCI-DSS framework.
+16. Audit Management Dashboard - Updated.
+17. Providing you data sets. (excel files - needs to be ingested on demo user account only or create manual upload option. )
+18. Audit plans - Regulatory changes through feeds - AI will determine how it will impact audit plans.
+19. Audit - Findings - Whenever a user uploads audit findings or creates a finding, the AI should suggest the details based on the audit finding.
+20. Audit findings needs to be grouped by engagements.
+21. test scripts Audit module needs to be AI based based on the Audit engagements.
+
+
+
+28/2/2026
+
+1. add option to add manuall actions items, can upload file, ai functionality to reword, summary.  can assign.
+2. risk assessment upload button gone.
+3. at following url http://localhost:3000/risks/rcsa/assessments/9. ai assistant button was missing.
+4. add ai assist option while adding new control to auto fill .
+5. coverage matrix logic need to refined.
+6. in skill matrix instead of user id add users names dropdown.
+7. capacity upload feature to be add : http://localhost:3000/audit/capacity
+
+
+
+
+UBL POINTS : 
+
+@204758455472295 
+here's the re-order:
+1. Replit Connectors code needs to be done locally on your PC in your code base. 
+2. Nexpose installation and setup with ComplyVerse
+3. Nessus Installation and setup and connectivity with CompliVerse.
+4. Reupload updated repository to Replit and Claude.  
+5. Complete modificatiosn as listed by UBL team during demo - as listed by you in your message. 
+6. Migration of ComplyVerse Final to CLOUD with DATA
+7. Local LLM research - Considering quality and compute. 
+8. Package Audit Management system and remove from ComplyVerse. 
+9. Connect AI agents - Developed by @141764119797832 and ensure connectivity including website.
+10.Complete OAUTH mechanisms with AZURE AD, Google, Local Active Directory,
+
+6. option to do risk assessment of any available frameworks
+7. individual risk wise assignment to users 
+8. Assests can be link against vulnerabilities
+9. 
+
+
+4/13/2026. - UBL
+
+
+4/6/26 
+
+change vendor name under assets : vendor : Vendor
+nessus
+
+2. hide assessment button under assets. 
+3. the controls being mentioning by ai while generationg risk assessments questions are wrong.. 
+4. add evidence recommendation option at http://localhost:3000/compliance/assessments/3
+
+1. under each vulnerability fetched should show linked asset automatically.
+2. edit assets isn't working for fetched assets needs to be fix.
+3. under vulnerability in place of effected host it should show linked assets.
+4. instead of assets IP ADDRESS it should show assets name.
+5. whenever a vulnerability status is in remediated , system should automatically run scan.. via api and confirm wheather that particular assest -  vulnerability is detected or not. and incase  - not detected -  it should mark automatically vuln closed. if again detected then it should go into open status along with email notification to user who changed staus. system should attach automatically related info as evidence.
+
+4/7/2026
+1. fix ui at http://localhost:3000/tasks/1
+2. dropdown was missing while creating tasks. 
+3. 
+
+
+
+
+http://localhost:3000/erm/risk-assessments
+
+option to do risk assessment of any available frameworks. add an button with the name of risk assessment framework once user click and move user to antoher page where user can select any framework from framework dropdown which includes only frameworks exists in the system and once user select any ai should generate 20 questionaire based on that framwork to do its risk assessment of that particular framework and for each questionaire user can upload evidences, can assign it to any other user user dropdown will be there. can change staus of any question. and even can add manually new question too. and keep save risk assessments for all user will do. 
+
+
+
+4/13/2026. 
+1. nist assessment -- needs to to upload into system. 
+2. whenever a vulnerability status is in remediated , system should automatically run scan.. via api and confirm wheather that particular assest -  vulnerability is detected or not. and incase  - not detected -  it should mark automatically vuln closed. if again detected then it should go into open status along with email notification to user who changed staus. system should attach automatically related info as evidence.
+3. recommended evidence upload option at http://localhost:3000/is-projects/1. should be linked to evidence module. 
+4. while creating exception add ai assist button. 
+5. ai policy/procedure.. should be specific, mature and detailed.
+
+
+------------------------------------------------------------------------------------------------
+CYWIFT Demo 
+they do risk engineegin, by bringing, soc, vuln, asset into platform.. 
+1. bulid control library tailered to your organization.. same goes for evidences where single will be using for mulitpe frameowrks,
+2. guard rails.. no confendendial info will go outsite only context. 
+3. continuous controls monitoring
+4. scan rerun etc monitoring .. automation things.  refreshes everyday.. fetch.. 
+5. can do asset grouping.. by selecting any asset .. reporting nd all. 
+6. they do integration if requirements comes up.. the mentioned 50+ tools 
+
+7. automatic gap identification, assessment, issues 
+issues center withint the platform.. 
+
+ticking.. automatic ticking closeing, issues, nd all. 
+
+-----------------------------------------------------------------------------------------------
+
+fix the ui at includings buttons, dropdowns, etc it should follow system wide ui colour pallet, borders etc are missing fix them. at : http://localhost:3000/erm/risk-assessments/framework
+
+2. also option to specify questions you want to generate or default which is 20. 
+3. and enhance the prompting for questions. questions should be specific to that selected frameworks with proper contenxt ai should research and bring questions that matter improve prompting. 
+
+4. should show assigned to dropdown only tenant users. no all global. 
+
+5. and when i logged in via that assieged user should should show assigned questions in seperate tab at
+
+ : http://localhost:3000/erm/risk-assessments/framework
+
+
+
+while creating policy draft we only use that particular framework/clauses/requirements as contexts .. but what if we try to generalize the document which is being created so that it can be serverd for multiple frameworks or as general document.. e.g access management policy covering that particular frameworks requirements and also using ai general capabilty for - general access management policy that way it will be more detailed, nd mature what do you say ?
+
+
+
+------------------------------
+
+
+4/15/2026
+exception delete
+create mitigation action
+regulatory source was missing  - while ai suggesting internal control fields. 
+
+
+
+
+---
+
+
+
+Edit KRI - was't updating input fields values upon changing risk. 
+
+
+
+
+need to apply these too .
+
+explore the platform to understand where needed then apply need to make sure standard.. if anything changes later should be one time.. global things na. fonts, spacing, icons, opacity, texts etc 
+
+always always make sure to not break anythign existing at all. 
+
+
+
+---------------------------------------------------------------------
+
+
+
+2. progress bar should update auto once i chose done etc na. at : https://demo.compliverse.ai/is-projects/1
+3. user shall be able to download document wheather drafted or uploaded under goverance module.
+
+4. browse option to upload documents for documents section at : https://demo.compliverse.ai/is-projects/1
+
+5. while adding task fix the popup - hide Source Entity ID, instead of risk id shows risk dropdown, instead of control id show controls internal controls dropdown, instead of vulnerability id show vulnaribilties dropdown best ui ux here. and hide finding id. entirely . and for assigned owner and reviewer should show tenant users dropdown to select and the user select then those ttask should come under my tasks owner can see and comment and review can can comment. 
+6. rename IS Projects to Projects. on the sidebar. 
+
+
+added qdrant api key in in env now need to extend my complychat to use this db for vector embedings for any documents uploads in the system, wheather in goverance, uploaded, or created or drafted from ai. bot shall be able to asnwer it. anything about it same goes for all frameworks exists in compliance create embedings of those frameworks one time for all clauses, their recommended evidences etc i mean al textual data available in the sytem system shall be able to answer any query.. about any clause, framework, any policy what policy says ? can compare with by uploading any document too. 
+
+
+
+
+
+8. comply chat chat  shall be able to answer from documents, whether drafted or uploaded. - vectors emb.. db..
+
+
+
+2. Compliance assesment graphs needs to be add.. and for nist 
+
+
+33. assessor name for fraemworks assessment .. dropdown.  done
+
+34. automatic refresh.. deon 
+
+35. for each questions under framework assessment same add risk values.. - manually an accept risk.. then can move to risk register. done
+
+
+36.. vendor risk needs to improve confusing.. can see categories wise questions without loading... can see linked questions for any vendor..  can see questions for any category assessment.. 
+
+37. reviews under ERM fix it.. can risk asses can upload evidence. - pending
+
+38. iso evidence requirements saying policy should show record instead. - pending
+
+39. sorting in internal controls. done
+
+40. search needs to be fix here : http://localhost:3000/controls.. keep refreshing on each character type. done
+
+41. controls to evidences .. evidences back to controls exact those controls ..  done
+
+42. assesments items can upload evidences too. for NIST.. done
+
+43. gap analsysi hide framework serveries , framework coverage... and instead show cards as graphs. add  tiles. - done.
+
+44. sla config was't working can't save.. can't save - done
+
+45. can't link risk to assets. - done
+
+46. hide risk assessments from asset module.. instead show industry practices CIA benchmark.  done
+
+47. CIS benchmark implementation research.
+
+48. projects - add team may add member users dropdown needs to be add. done
+
+49. under assests.. security compliance plugin.. upload excel instead of ai assessment.  done
+
+50. objective was missing for NCS controls  - pending
+51. audit master - fields should be editable.  e.g Responsible Party
+
+
+
+versinging.
+
+
+-- for documents - policy- guidelines etc parent child relationship needs to be added. 
+
+adminstration module "Audit Logs" the view button is't working fix it under "Details". 
+
+
+# Terminal 2 — Celery worker for HEAVY tasks (parse-policy, gap-analysis, framework parse)
+cd C:\Users\Admin\Documents\GRC-Tenant\backend
+& "C:\Users\Admin\AppData\Local\Programs\Python\Python311\python.exe" -m celery -A grc.celery_app worker --queues=parsing --pool=solo --loglevel=info --hostname=parsing-worker@%h
+
+# Terminal 3 — Celery worker for SHORT tasks (everything else)
+cd C:\Users\Admin\Documents\GRC-Tenant\backend
+& "C:\Users\Admin\AppData\Local\Programs\Python\Python311\python.exe" -m celery -A grc.celery_app worker --queues=default --pool=solo --loglevel=info --hostname=default-worker@%h
+
+
+# In a NEW terminal — leave the default-worker running
+cd C:\Users\Admin\Documents\GRC-Tenant\backend
+& "C:\Users\Admin\AppData\Local\Programs\Python\Python311\python.exe" -m celery -A grc.celery_app worker --queues=parsing --pool=solo --loglevel=info --hostname=parsing-worker@%h
+
+
+Create service file:
+
+sudo nano /etc/systemd/system/celery-parsing.service
+
+Paste this:
+
+Description=Celery Parsing Worker
+After=network.target redis-server.service postgresql.service
+
+[Service]
+Type=simple
+User=mehboob
+Group=mehboob
+WorkingDirectory=/home/mehboob/grc-final/complywerse_ai/backend
+
+Environment="PATH=/home/mehboob/grc-final/complywerse_ai/backend/venv/bin"
+
+ExecStart=/home/mehboob/grc-final/complywerse_ai/backend/venv/bin/python -m celery -A grc.celery_app worker --queues=parsing --pool=solo --loglevel=info --hostname=parsing-worker@%%h
+
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+
+Important:
+Notice %%h not %h because systemd escapes %.
+
+5/1/2026. 
+
+can do mitigation of any vendor, vulnerability, risk, policy, etc in risk module .. 
+
+in statements assingement option still missing. 
+
+- cvv score should be ai driven.. should also cross check for any newly commng vuln from nessus or etc.. 
+
+3. assest assess risk score _ how?? .. then when i link any compensating control etc after resolving etc it should update risk too.  pre score + post score .. 
+
+4. total assest score postore.. prescore + after controls score .. asset score +  cumulating score. 
+5. breakdown of resolved + un resolved over time.. for vulnerabilities overview. 
+prompt: security assessment .. need to do detailed vulnerability assessment too for entire codebase. log each single finding into a file. 
+
+
+
+UBL Points - 5/1/2026 
+
+1. need to confirm we can host wherever ubl wants and share clear options for cloud and on-prem -- okay.. 
+2. need to explain ai setup properly like we are using gpt and claude apis, and if they want on-prem then they will need nvidia gpus.. yes 
+3. if ubl provides their own apis then we have to integrate those.. yes can do 
+4. we need to arrange pen testing and share the report with ubl .. will do
+6. need to confirm encryption part with backend team and explain clearly how data is encrypted .. 
+7. they want option for customer managed keys so we should support that if possible
+8. we need to show nexpose integration working properly both ways via api .. integration completed.. rescan feature needs to be add. 
+9. we need to fix department assignment issue in vulnerability module.. need to create demo department.. 
+10. we need to improve how vulnerabilities are mapped with assets via api or ip.. ai should map vuln.. based on ip nd asset.
+11. we have to clearly document full vulnerability flow like scan, fetch, map, assign, rescan and close.. 
+14. they want siem integration so we need to support that using open apis ( will do later ) for q radar etc. splunk.. wazzau.. 
+15. we need to enable clean csv export for sbp or audit requirements
+16. we have to align asset integration with tools like bmc and import all required fields
+17. we should support customization like showing installed software in assets
+18. they want single source of truth so we need to consolidate all it inventory
+19. they want better dashboards so we need to create dashboards based on risk and vulnerability score
+20. we should focus dashboards on high risk items so remediation is prioritized
+21. we need to implement email integration properly
+22. they suggested integrations via frontend so we should move towards that
+23.  need include program management option
+24. they want trend analysis like 60 90 days and quarterly so we need to ensure that works properly
+25. . support historical data so they can view quarter end reports
+26. they want detailed dashboards.. support daily weekly monthly quarterly views
+27. we need to ensure reports show things like fixed vs new vulnerabilities and task progress
+
+
+
+5/4/2026. 
+
+Landing page - Hassan - 
+1.Integration with Microsoft Active Directory, Azure Entra ID, Google WorkSpace
+2. SEIM Integration (Splunk, IMB QRADAR, WAZZU) 
+3. NCA Template features needs to be add a seperate top header tab.. showing all nca documents.. user can view, can do gap anaylysis any document, use it as is new document, can do exception stuff too. 
+
+4. sonar code integration
+5.NDMO - Sadya company --- NCA --- Regulatry
+
+6. artifacts create feature against any faramework/standard. 
+7. upload evidence + assign button gone from frameworks page. 
+8. needs to integRATE https://osv.dev/list INTO  our platform 
+9. https://github.com/google/grr .. need look into how can be used in incident reponse thing under erm. 
+10. https://defectdojo.com/ -- 
+11. https://www.open-scap.org/security-policies/
+
+
+
+[6:41 PM, 5/5/2026] Shahnawaz khan: 1. Google Workspace Integration
+2. Artifacts auto genration for every framework in term of complete documents needed for certification +++ NCA documents, EXCLE Sheet and Templates. 
+3. WAZU and SPLUNK Integration
+4. Standardize of Database Schema
+4. CIS benchmarks integration and Scanning of IT assets as per CIS benchmarks. (Hassan)
+5. Dashboards as per UBL. 
+6. Program management and portfolio management additions in project management
+RISK Based : portfolio Management, Program Management and Project Management as per complete PMBOK guideliens.
+7. E-PMO including Risk based with complete as per PMBOK
+
+
+
+
+framework defined artifact template should followed while creating any artifat. 
+
+
+
+
+1. https://liztek1.compliverse.ai/control-library -- logic.. some frameoworks were missing while grouping 
+1. artifacts section needs to moved to under requirements. 
+2. review can view evidence from : http://gosht.localhost:3000/frameworks/3
+3. can mark any framework requirement applicable - not applicable .. hide the not applicable ones. but should show under applicability panel. 
+3. in meeting commiittees meeting- functionality to upload the documents such as agenda items, doc file@s, excel files, etc
+4. Policy Gaps must be automatically addressed in the specific clauses against which the gap has been identified with human in loop approval
+5. Any critical exceptions based on framework compliance - The AI should automatically highlight this as a red flag and only allow or disallow.. critical - For example in pci dss Network segmentation. 
+
+
+6. If the user uploads all policies (documents) in the system, while generating the AI policies against any framework, the system should be able to identify which policies already exists should only recommend the missing ones. 
+7. Report center needs to be build with ability to download all reports (pdf, excel, word).
+8. we should focus dashboards on high risk items so remediation is prioritized
+
+
+1. Integration of Meetings transcrptions / Teams, Firefly.ai / zoom /etc
+2. If the user uploads all policies (documents) in the system, while generating the AI policies against any framework, the system should be able to identify which policies already exists
+
+NCA Frameworks needs to be uploaded into the system along with sadya and ndmo
+
+
+
+
+download options was missing for aritifact being reated on live data . 
+http://gosht.localhost:3000/compliance/assessments/3 -- parsing needs to be fix here .
+
+
+
+1. navigation needs to be fix here ; http://localhost:3000/erm/risk-assessments/list done
+
+2. frameworks - compliance artifacts creation is't working.different types as per required evidence also needs to be fix.  done
+
+3. marking framework requirement not applicable also not working : "OPTIONS /grc/governance/applicability/ HTTP/1.1" 400 Bad Request done
+
+4. http://localhost:3000/frameworks/1
+
+artifacts missing for "Framework Abu Dhabi Healthcare Information and Cyber Security Standard" is not mapped to a catalog.
+ done
+
+5. nca parsing under compliance assessment needs to fix.  done
+
+-------
+
+6. upload charter option before creating any ai charter
+
+7. Agenda
+
+No agenda items yet   -- upload option to be add. ai parsing.. then actions, items, tasks etc .. 
+
+voting feature -- members can vote, platform shall display how many memners agreed, disagreed,partial,, each agenda item. comments. 
+
+8. nca this shouldn't be in controls "1-1-P-1
+
+In addition to the ECC control 1-4-1, the Authorizing Official shall also identify, document, and approve:"
+
+also grouping of controls needs to check.
+
+9. servicenow.. bmc.. splunk... wazuu..qradar IBM.. core impact..Metasploit... 
+10.. firefly, ms teams.. zoom... office 365. 
+
+11. auto transcribe..
+
+12. https://demo.endpointcentralplus.com/  CREDENTIALS BASED SCANNING -- AGENT based approach.
+
+13. under documents when ssystem runs ai should show documents bypassed documents.. based on the documents that have been uploaded in the platform.
+
+14. under compliacne all frameworks .. for each requirement .. add clickable  option to mark wheather any requirement part of scope or not. 
+
+15. auditor portal should be a seperate module -- with other modules linking. e.g documents, risks, assest,vuln, evidences, control, vendor risk, exceptions. 
+
+
+16. doh-policy-on-the-adhie - add it to compliance frameworks. title should be policy ".. " 
+
+17. evidence itself shuold be viewable in frameworks requirements, and across the platform. 
+and when i come back from evidence detailed page it should take me back to same requirement etc where exactly i clicked from now on overview page. 
+
+18. any other frameworks we can bring to the platform. HI-trust, other iso related specially the newly published ai one.  african banks frameworks, oman & qatar, 
+
+
+ssh mehboob@68.183.198.54
+cd ~/staging_app/complywerse_ai
+git pull
+
+# Rebuild backend image (beat service shares it)
+docker compose -p grc-stg --env-file .env.staging -f docker-compose.staging.yml build backend
+
+# Re-create backend so the migration runs at startup (schema_migrations walks
+# every tenant DB and adds the 9 new columns idempotently).
+docker compose -p grc-stg --env-file .env.staging -f docker-compose.staging.yml up -d backend
+
+# Bring up the new beat container alongside the existing celery-parsing worker.
+docker compose -p grc-stg --env-file .env.staging -f docker-compose.staging.yml up -d celery-parsing celery-beat
+
+# Re-create the frontend so the new badges/columns ship.
+docker compose -p grc-stg --env-file .env.staging -f docker-compose.staging.yml build frontend
+docker compose -p grc-stg --env-file .env.staging -f docker-compose.staging.yml up -d frontend
+
+# Sanity
+docker compose -p grc-stg -f docker-compose.staging.yml ps
+# Expect 6 containers: postgres, redis, backend, celery-parsing, celery-beat (new), frontend
+
+
+
+EPSS is run by FIRST.org. It uses ML over real-world exploit telemetry to estimate, for each CVE, "how likely is this to be exploited in the next 30 days?" (a number from 0 to 1). This matters because CVSS tells you how bad a vuln is theoretically if exploited — but a CVSS-10 that nobody's actually exploiting is less urgent than a CVSS-7 that's getting hammered. Real example: a researcher's proof-of-concept might have CVSS 9.0, but if there's no public exploit and EPSS says 0.001, you have time. A boring-looking CVSS 6.5 with EPSS 0.85 means attackers are already using it — fix it now.
+
+
+now how they will be linked to our grc ? tools that are already there ? organization using already integration what they provided us what we can do ?
+
+
+
+
+
+prompt "Operational context on assets. Today an asset has criticality: critical as a text label. That's not enough. We'll add:
+
+internet_facing (true/false) — a critical asset behind 4 firewalls is different from a critical asset on the public internet
+data_classification (public / internal / confidential / restricted) — does this server handle PII? credit cards? state secrets?
+business_function — customer-facing app vs internal HR tool
+lifecycle_state — active / maintenance / decommissioned (with auto-close of vulns when an asset is retired)
+primary_owner / secondary_owner — proper ownership chain so escalation works
+
+These feed back into composite priority. A Log4Shell-vulnerable server that is internet-facing AND handles credit card data should rank above one that's internal and handles employee parking records, even if both have criticality: critical."
+
+
+then need to introduce :  Microsoft PSIRT (patch intelligence). NVD tells you what the vuln is. PSIRT tells you what to do about it. Specifically for Microsoft CVEs, MSRC publishes patch information: "CVE-2024-X is fixed by KB5034441, here's the link." Phase 6 fetches that and shows it on the vuln detail page. Your remediation team gets a one-click link to the actual patch instead of having to research it.
+
+also need to figure out how can this be done ?" Cloud asset discovery (AWS / Azure / GCP). Today, manual+scanner is how assets enter the system. But your real inventory lives in cloud APIs. Phase 7 builds adapters that pull from:
+
+AWS Inspector (vulns + EC2/ECR inventory + the software identifiers it detected)
+Azure Defender for Cloud (same thing on the Azure side)
+GCP Security Command Center (same on GCP)"
