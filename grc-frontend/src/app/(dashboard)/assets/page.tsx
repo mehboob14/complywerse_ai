@@ -850,6 +850,22 @@ export function AssetModal({
     </div>
   );
 
+  // Type-aware field visibility. Each asset kind shows only the fields it
+  // actually carries: a server has hardware + a CIS-scannable OS but no SaaS
+  // vendor; a SaaS app / third-party vendor has no vCPU, no IP, no OS. All of
+  // these map to columns the form already submits, so this is presentation
+  // only — no backend or schema change.
+  const at = formData.asset_type;
+  const show = {
+    ip: at === 'infrastructure' || at === 'data' || at === 'cloud' || at === 'application',
+    hardware: at === 'infrastructure',
+    os: at === 'infrastructure' || at === 'data',
+    vendor: at === 'application' || at === 'data' || at === 'cloud' || at === 'third_party',
+    location: at === 'infrastructure' || at === 'data',
+    network: at === 'infrastructure' || at === 'data',
+    internet: at !== 'third_party',
+  };
+
   return (
     <>
       <div className="fixed inset-y-0 right-0 z-50 flex w-[780px] flex-col bg-white shadow-2xl border-l border-slate-200">
@@ -939,20 +955,24 @@ export function AssetModal({
                   ))}
                 </select>
               </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-0.5">IP Address</label>
-                <input
-                  type="text"
-                  value={formData.ip_address}
-                  onChange={(e) => setFormData({ ...formData, ip_address: e.target.value })}
-                  className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
-                  placeholder="e.g., 10.0.10.15"
-                />
-              </div>
+              {show.ip && (
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-0.5">IP Address</label>
+                  <input
+                    type="text"
+                    value={formData.ip_address}
+                    onChange={(e) => setFormData({ ...formData, ip_address: e.target.value })}
+                    className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                    placeholder="e.g., 10.0.10.15"
+                  />
+                </div>
+              )}
             </div>
 
-            {/* Hardware — optional; also auto-populated by agent heartbeat or
-                agentless (WinRM/SSH) scan. Kept editable for manual entry. */}
+            {/* Hardware — infrastructure only (servers/network/hardware). Also
+                auto-populated by agent heartbeat or agentless (WinRM/SSH) scan.
+                Kept editable for manual entry. */}
+            {show.hardware && (
             <div className="mb-3">
               <label className="block text-xs font-medium text-slate-600 mb-1">Hardware <span className="text-slate-400">(optional — auto-filled by scan)</span></label>
               <div className="grid grid-cols-3 gap-x-4 gap-y-3">
@@ -964,13 +984,16 @@ export function AssetModal({
                 <input type="number" min="0" value={formData.storage_gb} onChange={(e) => setFormData({ ...formData, storage_gb: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="Disk (GB)" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
               </div>
             </div>
+            )}
 
             {/* OS / Product picker — drives benchmark matching. Without
                 this, manually-added assets land with os_normalized=NULL and
                 the Host-Applications panel shows 'no benchmark' + no
                 checkbox / scan buttons. The dropdown pulls every supported
                 OS / product from the OS Knowledge Registry; scannable ones
-                (have CIS plugins seeded) appear first. */}
+                (have CIS plugins seeded) appear first. Shown only for the kinds
+                we actually scan (infrastructure + data). */}
+            {show.os && (
             <div className="mb-3">
               <label className="block text-xs font-medium text-slate-600 mb-0.5">
                 OS / Product <span className="font-normal text-slate-400">— drives CIS benchmark matching</span>
@@ -1016,6 +1039,7 @@ export function AssetModal({
                 </p>
               )}
             </div>
+            )}
 
             {/* Sub-components */}
             {subComponentSuggestions.length > 0 && (
@@ -1074,8 +1098,11 @@ export function AssetModal({
             </div>
 
             <div className="border-t border-slate-200 pt-3 mt-1">
-              {/* Row: Vendor + Location */}
+              {/* Row: Vendor + Location — vendor for SaaS/cloud/data/third-party;
+                  location for on-prem infrastructure/data. */}
+              {(show.vendor || show.location) && (
               <div className="grid grid-cols-2 gap-x-4 gap-y-3 mb-3">
+                {show.vendor && (
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-0.5">Vendor</label>
                   <ComboBoxInput
@@ -1086,6 +1113,8 @@ export function AssetModal({
                     ariaLabel="Vendor"
                   />
                 </div>
+                )}
+                {show.location && (
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-0.5">Location</label>
                   <ComboBoxInput
@@ -1096,7 +1125,9 @@ export function AssetModal({
                     ariaLabel="Location"
                   />
                 </div>
+                )}
               </div>
+              )}
 
               {/* Row: Asset Value (criticality is now derived — see below) */}
               <div className="grid grid-cols-2 gap-x-4 gap-y-3 mb-3">
@@ -1114,6 +1145,7 @@ export function AssetModal({
                     />
                   </div>
                 </div>
+                {show.network && (
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-0.5">Network Segment</label>
                   <ComboBoxInput
@@ -1124,6 +1156,7 @@ export function AssetModal({
                     ariaLabel="Network segment"
                   />
                 </div>
+                )}
               </div>
 
               {/* Row: PCI DSS + Status(edit) */}
@@ -1216,6 +1249,7 @@ export function AssetModal({
                     ariaLabel="Data classification"
                   />
                 </div>
+                {show.internet && (
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">Internet-Facing</label>
                   <label className="flex items-center gap-2 cursor-pointer">
@@ -1235,6 +1269,7 @@ export function AssetModal({
                     <span className="text-xs text-slate-700">{formData.internet_facing ? 'Exposed to the public internet' : 'Internal only'}</span>
                   </label>
                 </div>
+                )}
               </div>
 
               {/* Business function — structured catalogue, drives criticality
