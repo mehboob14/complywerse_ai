@@ -1,0 +1,716 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Walk the product — Cybersecurity Assurance</title>
+<style>
+  :root{
+    --bg:#fbfcfc;--panel:#fff;--ink:#12201f;--ink2:#3d5250;--ink3:#6d817f;
+    --line:#e2e9e8;--line2:#eef3f2;--accent:#0f8f78;--soft:#e6f5f1;--aink:#0a6d5c;
+    --crit:#b3261e;--high:#c2410c;--med:#a16207;--low:#0f766e;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;--sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  :root[data-theme="dark"]{
+    --bg:#0d1413;--panel:#131c1b;--ink:#e8efee;--ink2:#b3c2c0;--ink3:#829895;
+    --line:#243230;--line2:#1b2624;--accent:#3ddfc2;--soft:#12312b;--aink:#6de8d4;
+    --crit:#ff8a80;--high:#ffab70;--med:#e8c168;--low:#5ecfba;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.62}
+  .shell{display:grid;grid-template-columns:262px minmax(0,1fr)}
+  @media(max-width:900px){.shell{grid-template-columns:1fr}}
+  .nav{border-right:1px solid var(--line);background:var(--panel);position:sticky;top:0;height:100vh;overflow-y:auto;padding:22px 16px 60px}
+  @media(max-width:900px){.nav{position:static;height:auto;border-right:0;border-bottom:1px solid var(--line)}}
+  .brand{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--aink);font-weight:700}
+  .bsub{font-size:17px;font-weight:650;line-height:1.28;margin:6px 0 6px}
+  .mirror{font-size:11px;color:var(--ink3);margin-bottom:18px;font-style:italic}
+  .grp{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink3);font-weight:700;margin:18px 0 5px;padding-left:9px}
+  .nav a{display:block;padding:5px 9px;margin:1px 0;border-radius:6px;color:var(--ink2);text-decoration:none;font-size:13.6px;cursor:pointer;border-left:2px solid transparent}
+  .nav a:hover{background:var(--line2);color:var(--ink)}
+  .nav a.on{background:var(--soft);color:var(--aink);font-weight:600;border-left-color:var(--accent)}
+  .nav a.tab{padding-left:24px;font-size:13px}
+  .nav a.dim{opacity:.5}
+  .main{padding:46px 44px 120px;max-width:960px}
+  @media(max-width:640px){.main{padding:26px 16px 70px}}
+  section{display:none}section.on{display:block}
+  .crumb{font-size:12px;color:var(--ink3);margin-bottom:10px;font-family:var(--mono)}
+  h1{font-size:31px;line-height:1.16;font-weight:660;margin:0 0 12px;letter-spacing:-.02em}
+  h2{font-size:20px;font-weight:640;margin:40px 0 12px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+  h3{font-size:16px;font-weight:640;margin:26px 0 8px}
+  p{margin:0 0 14px;max-width:68ch}
+  .lede{font-size:17.5px;color:var(--ink2);max-width:64ch;margin-bottom:24px}
+  ul{max-width:66ch;padding-left:22px;margin:0 0 14px}li{margin-bottom:6px}
+  code{font-family:var(--mono);font-size:.87em;background:var(--line2);padding:1.5px 5px;border-radius:4px;color:var(--aink)}
+  .fig{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:16px;margin:0 0 8px;overflow-x:auto}
+  .cap{font-size:13px;color:var(--ink3);margin:0 0 22px;max-width:64ch}
+  .keys{margin:0 0 22px}
+  .key{display:flex;gap:12px;padding:11px 0;border-bottom:1px solid var(--line2)}
+  .key:last-child{border-bottom:0}
+  .kn{flex:0 0 26px;height:26px;border-radius:50%;background:var(--accent);color:#fff;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:1px}
+  .kb{flex:1;min-width:0}
+  .kt{font-weight:650;font-size:14.6px;margin-bottom:2px}
+  .kd{font-size:14px;color:var(--ink2);max-width:62ch}
+  .kd .from{display:block;margin-top:4px;font-size:12.6px;color:var(--ink3)}
+  .kd .from b{color:var(--aink);font-weight:650}
+  .note{border-left:3px solid var(--accent);background:var(--soft);padding:13px 17px;border-radius:0 8px 8px 0;margin:0 0 18px;font-size:14.6px}
+  .note.warn{border-left-color:var(--med);background:color-mix(in srgb,var(--med) 9%,transparent)}
+  .note.bad{border-left-color:var(--crit);background:color-mix(in srgb,var(--crit) 9%,transparent)}
+  .note p:last-child{margin:0}
+  .note .l{display:block;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;font-weight:700;margin-bottom:5px}
+  .biz{border:1px dashed var(--line);border-radius:9px;padding:14px 17px;margin:0 0 18px;background:var(--panel)}
+  .biz .l{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;font-weight:700;color:var(--ink3);display:block;margin-bottom:5px}
+  .tog{position:fixed;top:14px;right:16px;z-index:20;background:var(--panel);border:1px solid var(--line);color:var(--ink2);border-radius:7px;padding:6px 11px;font-size:12.5px;cursor:pointer;font-family:inherit}
+  .tog:focus-visible,.nav a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .wrap{overflow-x:auto;margin:0 0 18px;border:1px solid var(--line);border-radius:9px}
+  table{border-collapse:collapse;width:100%;font-size:14px;min-width:460px}
+  th{text-align:left;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);font-weight:700;padding:9px 12px;background:var(--line2);border-bottom:1px solid var(--line)}
+  td{padding:9px 12px;border-bottom:1px solid var(--line2);vertical-align:top}
+  tr:last-child td{border-bottom:0}
+  svg text{font-family:var(--sans)}
+  .foot{color:var(--ink3);font-size:13.4px;margin-top:44px;padding-top:18px;border-top:1px solid var(--line)}
+  .foot a{color:var(--aink)}
+</style>
+</head>
+<body>
+<button class="tog" id="tt">Theme</button>
+<div class="shell">
+
+<nav class="nav">
+  <div class="brand">Compliverse</div>
+  <div class="bsub">Walk the product</div>
+  <div class="mirror">This sidebar mirrors the app's own</div>
+
+  <div class="grp">Cybersecurity Assurance</div>
+  <a data-go="p-assets" class="on">IT Assets</a>
+  <a data-go="p-asset-detail" class="tab">↳ Overview</a>
+  <a data-go="t-risk" class="tab">↳ Risk &amp; Controls</a>
+  <a data-go="t-vulns" class="tab">↳ Vulnerabilities</a>
+  <a data-go="t-soft" class="tab">↳ Software</a>
+  <a data-go="t-rel" class="tab">↳ Relationships</a>
+  <a data-go="t-life" class="tab">↳ Lifecycle</a>
+  <a data-go="t-comp" class="tab">↳ Compliance</a>
+  <a data-go="t-traj" class="tab">↳ Trajectory</a>
+  <a data-go="t-crit" class="tab">↳ Criticality</a>
+  <a data-go="t-rec" class="tab">↳ Attachments · Notes · History</a>
+  <a data-go="p-rp">Risk Posture</a>
+  <a data-go="p-rp-asset" class="tab">↳ Asset posture</a>
+  <a data-go="p-vulns">Vulnerabilities</a>
+  <a data-go="p-vuln-detail" class="tab">↳ Finding detail</a>
+  <a data-go="f-analysis" class="tab">↳ Analysis</a>
+  <a data-go="f-remed" class="tab">↳ Remediation</a>
+  <a data-go="f-exploit" class="tab">↳ Exploit Test</a>
+  <a data-go="f-hist" class="tab">↳ History &amp; Notes</a>
+
+  <div class="grp">Also in this module</div>
+  <a data-go="p-more">Discovery · Criticality</a>
+
+  <div class="grp">Reference</div>
+  <a data-go="p-index">Full field guide →</a>
+</nav>
+
+<main class="main">
+
+<!-- ══════ IT ASSETS ══════ -->
+<section id="p-assets" class="on">
+  <div class="crumb">Sidebar → Cybersecurity Assurance → IT Assets</div>
+  <h1>IT Assets</h1>
+  <p class="lede">The register of everything you own. Every score in the module ultimately hangs off a row in this list.</p>
+
+  <div class="fig">
+    <svg viewBox="0 0 840 300" width="100%" height="300" role="img" aria-label="Annotated asset register list">
+      <rect x="10" y="10" width="820" height="46" rx="8" fill="var(--line2)"/>
+      <text x="28" y="32" font-size="14" font-weight="700" fill="currentColor">IT Asset Inventory</text>
+      <text x="28" y="48" font-size="11.5" fill="currentColor" opacity=".6">15 assets</text>
+      <rect x="700" y="22" width="112" height="24" rx="6" fill="var(--accent)" opacity=".9"/>
+      <text x="756" y="38" font-size="12" font-weight="650" text-anchor="middle" fill="#fff">+ Add asset</text>
+
+      <rect x="10" y="66" width="820" height="30" rx="5" fill="var(--line2)" opacity=".7"/>
+      <g font-size="11" font-weight="700" fill="currentColor" opacity=".55" letter-spacing=".7">
+        <text x="30" y="86">NAME</text><text x="290" y="86">TYPE</text><text x="400" y="86">CRITICALITY</text>
+        <text x="540" y="86">OWNER</text><text x="670" y="86">RISK</text><text x="750" y="86">FINDINGS</text>
+      </g>
+
+      <g font-size="12.5" fill="currentColor">
+        <rect x="10" y="100" width="820" height="42" fill="var(--panel)"/>
+        <text x="30" y="126" font-weight="600">nw-vpn01</text><text x="290" y="126" opacity=".7">infrastructure</text>
+        <rect x="400" y="112" width="58" height="20" rx="10" fill="var(--crit)" opacity=".16"/><text x="429" y="126" font-size="11.5" text-anchor="middle" fill="var(--crit)" font-weight="650">critical</text>
+        <text x="540" y="126" opacity=".7">L. Wei</text><text x="670" y="126" font-weight="700" fill="var(--crit)">86</text><text x="762" y="126" opacity=".8">4</text>
+
+        <rect x="10" y="144" width="820" height="42" fill="var(--panel)"/>
+        <line x1="10" y1="144" x2="830" y2="144" stroke="var(--line)"/>
+        <text x="30" y="170" font-weight="600">[DEMO] Asset 06</text><text x="290" y="170" opacity=".7">server</text>
+        <rect x="400" y="156" width="48" height="20" rx="10" fill="var(--high)" opacity=".16"/><text x="424" y="170" font-size="11.5" text-anchor="middle" fill="var(--high)" font-weight="650">high</text>
+        <text x="540" y="170" opacity=".7">Unassigned</text><text x="670" y="170" font-weight="700" fill="var(--med)">41</text><text x="762" y="170" opacity=".8">1</text>
+
+        <rect x="10" y="188" width="820" height="42" fill="var(--panel)"/>
+        <line x1="10" y1="188" x2="830" y2="188" stroke="var(--line)"/>
+        <text x="30" y="214" font-weight="600">Windows MSRPC @ 127.0.0.1</text><text x="290" y="214" opacity=".7">application</text>
+        <rect x="400" y="200" width="62" height="20" rx="10" fill="var(--med)" opacity=".16"/><text x="431" y="214" font-size="11.5" text-anchor="middle" fill="var(--med)" font-weight="650">medium</text>
+        <text x="540" y="214" opacity=".7">Unassigned</text><text x="670" y="214" font-weight="700" fill="var(--med)">35</text><text x="762" y="214" opacity=".8">1</text>
+      </g>
+      <line x1="10" y1="232" x2="830" y2="232" stroke="var(--line)"/>
+
+      <!-- callouts -->
+      <g>
+        <circle cx="150" cy="121" r="13" fill="var(--accent)"/><text x="150" y="126" font-size="13" font-weight="700" text-anchor="middle" fill="#fff">1</text>
+        <circle cx="429" cy="255" r="13" fill="var(--accent)"/><text x="429" y="260" font-size="13" font-weight="700" text-anchor="middle" fill="#fff">2</text>
+        <line x1="429" y1="242" x2="429" y2="180" stroke="var(--accent)" stroke-width="1.4" stroke-dasharray="3 3"/>
+        <circle cx="680" cy="255" r="13" fill="var(--accent)"/><text x="680" y="260" font-size="13" font-weight="700" text-anchor="middle" fill="#fff">3</text>
+        <line x1="680" y1="242" x2="676" y2="180" stroke="var(--accent)" stroke-width="1.4" stroke-dasharray="3 3"/>
+        <circle cx="768" cy="255" r="13" fill="var(--accent)"/><text x="768" y="260" font-size="13" font-weight="700" text-anchor="middle" fill="#fff">4</text>
+        <line x1="768" y1="242" x2="764" y2="180" stroke="var(--accent)" stroke-width="1.4" stroke-dasharray="3 3"/>
+      </g>
+    </svg>
+  </div>
+  <p class="cap">The register. Click any row to open its detail page.</p>
+
+  <div class="keys">
+    <div class="key"><div class="kn">1</div><div class="kb"><div class="kt">Asset name</div><div class="kd">Identity. An "@ address" suffix means this asset was <em>promoted from detected software</em> — an application running on a host, given its own record.<span class="from">From: <b>manual entry</b>, CSV import, agent discovery, or software promotion</span></div></div></div>
+    <div class="key"><div class="kn">2</div><div class="kb"><div class="kt">Criticality</div><div class="kd">The most consequential field in the module. It feeds vulnerability priority (10% of it), the CIA dimension of posture, and one of the six remediation triggers.<span class="from">From: <b>derived from C/I/A ratings</b>, or a formal criticality assessment</span></div></div></div>
+    <div class="key"><div class="kn">3</div><div class="kb"><div class="kt">Risk score</div><div class="kd">The composite posture score, 0–100, higher is worse. Identical to the number on the Risk Posture page — one asset, one risk number.<span class="from">From: <b>the risk posture engine</b>, five weighted dimensions</span></div></div></div>
+    <div class="key"><div class="kn">4</div><div class="kb"><div class="kt">Findings</div><div class="kd">Count of <em>open</em> vulnerabilities. Remediated, verified, closed, resolved and accepted findings are excluded — closing one drops this number.<span class="from">From: <b>linked vulnerabilities</b>, filtered by status</span></div></div></div>
+  </div>
+
+  <div class="biz">
+    <span class="l">Why this page comes first</span>
+    <p>You cannot rank risk on things you have not listed. Every other screen in this module is a view <em>through</em> an asset — a vulnerability with no asset is an abstract fact about software, not a risk to your business.</p>
+  </div>
+</section>
+
+<!-- ══════ ASSET DETAIL ══════ -->
+<section id="p-asset-detail">
+  <div class="crumb">IT Assets → [DEMO] Asset 06</div>
+  <h1>Asset detail</h1>
+  <p class="lede">Twelve tabs, grouped into five questions. Everything known about one machine.</p>
+
+  <div class="fig">
+    <svg viewBox="0 0 840 330" width="100%" height="330" role="img" aria-label="Annotated asset detail page with tab bar">
+      <rect x="10" y="10" width="820" height="52" rx="8" fill="var(--panel)" stroke="var(--line)"/>
+      <text x="30" y="34" font-size="15" font-weight="700" fill="currentColor">[DEMO] Asset 06</text>
+      <text x="30" y="52" font-size="11.5" font-family="var(--mono)" fill="currentColor" opacity=".6">server · high criticality · not internet-facing</text>
+
+      <!-- tab bar -->
+      <rect x="10" y="72" width="820" height="34" rx="6" fill="var(--line2)"/>
+      <g font-size="11.5" fill="currentColor">
+        <rect x="16" y="77" width="68" height="24" rx="5" fill="var(--panel)" stroke="var(--accent)"/><text x="50" y="93" text-anchor="middle" font-weight="650" fill="var(--aink)">Overview</text>
+        <a data-go="t-risk" style="cursor:pointer"><text x="118" y="93" opacity=".72" style="text-decoration:underline;text-underline-offset:3px">Risk &amp; Controls</text></a>
+        <a data-go="t-vulns" style="cursor:pointer"><text x="222" y="93" opacity=".72" style="text-decoration:underline;text-underline-offset:3px">Vulnerabilities</text></a>
+        <a data-go="t-soft" style="cursor:pointer"><text x="318" y="93" opacity=".72" style="text-decoration:underline;text-underline-offset:3px">Software</text></a>
+        <a data-go="t-rel" style="cursor:pointer"><text x="386" y="93" opacity=".72" style="text-decoration:underline;text-underline-offset:3px">Relationships</text></a>
+        <a data-go="t-life" style="cursor:pointer"><text x="482" y="93" opacity=".72" style="text-decoration:underline;text-underline-offset:3px">Lifecycle</text></a>
+        <a data-go="t-comp" style="cursor:pointer"><text x="546" y="93" opacity=".72" style="text-decoration:underline;text-underline-offset:3px">Compliance</text></a>
+        <a data-go="t-traj" style="cursor:pointer"><text x="626" y="93" opacity=".72" style="text-decoration:underline;text-underline-offset:3px">Trajectory</text></a>
+        <a data-go="t-crit" style="cursor:pointer"><text x="700" y="93" opacity=".72" style="text-decoration:underline;text-underline-offset:3px">Criticality</text></a>
+        <a data-go="t-rec" style="cursor:pointer"><text x="774" y="93" opacity=".72" style="text-decoration:underline;text-underline-offset:3px">Notes</text></a>
+      </g>
+
+      <!-- stat strip -->
+      <rect x="10" y="118" width="820" height="72" rx="8" fill="var(--panel)" stroke="var(--line)"/>
+      <g fill="currentColor">
+        <text x="42" y="142" font-size="10" font-weight="700" opacity=".55" letter-spacing=".8">RISK SCORE</text>
+        <text x="42" y="172" font-size="24" font-weight="700" fill="var(--med)">41</text>
+        <line x1="174" y1="128" x2="174" y2="180" stroke="var(--line)"/>
+        <text x="204" y="142" font-size="10" font-weight="700" opacity=".55" letter-spacing=".8">OPEN FINDINGS</text>
+        <text x="204" y="172" font-size="24" font-weight="700">1</text>
+        <line x1="338" y1="128" x2="338" y2="180" stroke="var(--line)"/>
+        <text x="368" y="142" font-size="10" font-weight="700" opacity=".55" letter-spacing=".8">BLAST RADIUS</text>
+        <text x="368" y="172" font-size="24" font-weight="700">0</text>
+        <line x1="502" y1="128" x2="502" y2="180" stroke="var(--line)"/>
+        <text x="532" y="142" font-size="10" font-weight="700" opacity=".55" letter-spacing=".8">CONTROL COVERAGE</text>
+        <text x="532" y="172" font-size="24" font-weight="700">0%</text>
+        <line x1="676" y1="128" x2="676" y2="180" stroke="var(--line)"/>
+        <text x="706" y="142" font-size="10" font-weight="700" opacity=".55" letter-spacing=".8">REFRESH DUE</text>
+        <text x="706" y="172" font-size="24" font-weight="700" opacity=".45">—</text>
+      </g>
+
+      <!-- group brackets under tabs -->
+      <g stroke="var(--accent)" stroke-width="1.3" fill="none" opacity=".7">
+        <path d="M16,212 L16,222 L300,222 L300,212"/>
+        <path d="M318,212 L318,222 L466,222 L466,212"/>
+        <path d="M482,212 L482,222 L610,222 L610,212"/>
+        <path d="M626,212 L626,222 L686,222 L686,212"/>
+        <path d="M700,212 L700,222 L820,222 L820,212"/>
+      </g>
+      <g font-size="11" fill="var(--aink)" font-weight="650" text-anchor="middle">
+        <text x="158" y="240">what is wrong with it</text>
+        <text x="392" y="240">how it connects</text>
+        <text x="546" y="240">how it's protected</text>
+        <text x="656" y="240">the chain</text>
+        <text x="760" y="240">the record</text>
+      </g>
+
+      <g>
+        <circle cx="50" cy="272" r="13" fill="var(--accent)"/><text x="50" y="277" font-size="13" font-weight="700" text-anchor="middle" fill="#fff">1</text>
+        <line x1="50" y1="259" x2="50" y2="108" stroke="var(--accent)" stroke-width="1.3" stroke-dasharray="3 3"/>
+        <circle cx="368" cy="272" r="13" fill="var(--accent)"/><text x="368" y="277" font-size="13" font-weight="700" text-anchor="middle" fill="#fff">2</text>
+        <line x1="368" y1="259" x2="368" y2="190" stroke="var(--accent)" stroke-width="1.3" stroke-dasharray="3 3"/>
+        <circle cx="532" cy="272" r="13" fill="var(--accent)"/><text x="532" y="277" font-size="13" font-weight="700" text-anchor="middle" fill="#fff">3</text>
+        <line x1="532" y1="259" x2="532" y2="190" stroke="var(--accent)" stroke-width="1.3" stroke-dasharray="3 3"/>
+      </g>
+      <text x="20" y="312" font-size="12" fill="currentColor" opacity=".6">Tabs group into five questions — that grouping is the page's structure, not decoration.</text>
+    </svg>
+  </div>
+  <p class="cap">Overview tab shown. The five bracketed groups are how the twelve tabs are meant to be read.</p>
+
+  <div class="keys">
+    <div class="key"><div class="kn">1</div><div class="kb"><div class="kt">Overview tab — identity and the five headline numbers</div><div class="kd">Ownership, network, hardware, procurement. It also absorbed the old Discovery and Assignments tabs, whose fields already lived here.<span class="from">From: <b>the asset record</b> plus the posture engine for the score</span></div></div></div>
+    <div class="key"><div class="kn">2</div><div class="kb"><div class="kt">Blast radius = 0</div><div class="kd"><strong>Unmapped, not contained.</strong> No relationship has been declared and nothing shares its address. Declare dependencies on the Relationships tab and this fills in.<span class="from">From: <b>declared relationships</b> + assets sharing a routable IP (loopback excluded)</span></div></div></div>
+    <div class="key"><div class="kn">3</div><div class="kb"><div class="kt">Control coverage = 0%</div><div class="kd">Zero of a target of twelve controls linked. This same percentage appears on Risk &amp; Controls and drives 15% of the posture score — one formula, three places.<span class="from">From: <b>control links ÷ 12</b></span></div></div></div>
+  </div>
+
+  <div class="note warn">
+    <span class="l">Reading empty numbers correctly</span>
+    <p>Blast radius 0 and coverage 0% both mean <em>nobody has recorded this yet</em>. They are not evidence of isolation or of a control gap being closed. Absence of data and a good result look identical if you only read the number.</p>
+  </div>
+</section>
+
+<!-- ══════ RISK POSTURE ══════ -->
+<section id="p-rp">
+  <div class="crumb">Sidebar → Cybersecurity Assurance → Risk Posture</div>
+  <h1>Risk Posture</h1>
+  <p class="lede">The portfolio view: one score per asset, ranked, with a band distribution.</p>
+
+  <div class="fig">
+    <svg viewBox="0 0 840 260" width="100%" height="260" role="img" aria-label="Risk posture dashboard with gauge and band distribution">
+      <circle cx="110" cy="110" r="58" fill="none" stroke="var(--line2)" stroke-width="14"/>
+      <circle cx="110" cy="110" r="58" fill="none" stroke="var(--med)" stroke-width="14"
+              stroke-dasharray="120 245" stroke-linecap="round" transform="rotate(-90 110 110)"/>
+      <text x="110" y="106" font-size="30" font-weight="700" text-anchor="middle" fill="var(--med)">33</text>
+      <text x="110" y="126" font-size="11" text-anchor="middle" fill="currentColor" opacity=".6">avg risk /100</text>
+      <text x="110" y="190" font-size="12" text-anchor="middle" fill="currentColor" opacity=".7">15 of 15 assets scored</text>
+
+      <g font-size="12.5" fill="currentColor">
+        <rect x="220" y="46" width="140" height="62" rx="8" fill="var(--low)" opacity=".14"/>
+        <text x="290" y="76" font-size="24" font-weight="700" text-anchor="middle" fill="var(--low)">5</text>
+        <text x="290" y="95" font-size="11.5" text-anchor="middle" fill="var(--low)" font-weight="650">CONTAINED</text>
+
+        <rect x="372" y="46" width="140" height="62" rx="8" fill="var(--med)" opacity=".16"/>
+        <text x="442" y="76" font-size="24" font-weight="700" text-anchor="middle" fill="var(--med)">8</text>
+        <text x="442" y="95" font-size="11.5" text-anchor="middle" fill="var(--med)" font-weight="650">WATCH</text>
+
+        <rect x="524" y="46" width="140" height="62" rx="8" fill="var(--high)" opacity=".16"/>
+        <text x="594" y="76" font-size="24" font-weight="700" text-anchor="middle" fill="var(--high)">2</text>
+        <text x="594" y="95" font-size="11.5" text-anchor="middle" fill="var(--high)" font-weight="650">ELEVATED</text>
+
+        <rect x="676" y="46" width="140" height="62" rx="8" fill="var(--crit)" opacity=".14"/>
+        <text x="746" y="76" font-size="24" font-weight="700" text-anchor="middle" fill="var(--crit)">0</text>
+        <text x="746" y="95" font-size="11.5" text-anchor="middle" fill="var(--crit)" font-weight="650">SEVERE</text>
+      </g>
+
+      <rect x="220" y="126" width="596" height="1" fill="var(--line)"/>
+      <text x="220" y="150" font-size="12.5" fill="currentColor" opacity=".72">Highest risk: <tspan font-weight="700">nw-vpn01</tspan> — 86/100</text>
+
+      <circle cx="110" cy="222" r="13" fill="var(--accent)"/><text x="110" y="227" font-size="13" font-weight="700" text-anchor="middle" fill="#fff">1</text>
+      <line x1="110" y1="209" x2="110" y2="176" stroke="var(--accent)" stroke-width="1.3" stroke-dasharray="3 3"/>
+      <circle cx="442" cy="222" r="13" fill="var(--accent)"/><text x="442" y="227" font-size="13" font-weight="700" text-anchor="middle" fill="#fff">2</text>
+      <line x1="442" y1="209" x2="442" y2="112" stroke="var(--accent)" stroke-width="1.3" stroke-dasharray="3 3"/>
+    </svg>
+  </div>
+  <p class="cap">Clicking a band filters the list below it.</p>
+
+  <div class="keys">
+    <div class="key"><div class="kn">1</div><div class="kb"><div class="kt">Portfolio average</div><div class="kd">Mean score across scored assets. Reads <strong>—</strong>, not 0, when nothing has been scored — because "we measured nothing" and "everything is perfect" must not look the same.<span class="from">From: <b>the posture engine</b>, averaged</span></div></div></div>
+    <div class="key"><div class="kn">2</div><div class="kb"><div class="kt">Bands</div><div class="kd">contained 0–25 · watch 25–50 · elevated 50–75 · severe 75–100. Deliberately different words from asset <em>criticality</em> (low/medium/high/critical), so "a high asset with high risk" can't happen.<span class="from">From: <b>score thresholds</b></span></div></div></div>
+  </div>
+</section>
+
+<!-- ══════ RP ASSET ══════ -->
+<section id="p-rp-asset">
+  <div class="crumb">Risk Posture → Windows MSRPC @ 127.0.0.1</div>
+  <h1>Asset posture detail</h1>
+  <p class="lede">The score, broken into its five dimensions — and the confidence behind it.</p>
+
+  <div class="fig">
+    <svg viewBox="0 0 840 250" width="100%" height="250" role="img" aria-label="Score breakdown bar with excluded dimensions">
+      <text x="20" y="30" font-size="13.5" font-weight="700" fill="currentColor">Score breakdown</text>
+      <rect x="20" y="44" width="796" height="26" rx="5" fill="var(--line2)"/>
+      <rect x="20" y="44" width="418" height="26" rx="5" fill="var(--high)" opacity=".85"/>
+      <text x="229" y="62" font-size="12.5" font-weight="700" text-anchor="middle" fill="#fff">18.3</text>
+      <rect x="440" y="44" width="380" height="26" fill="#a78bfa" opacity=".85"/>
+      <text x="630" y="62" font-size="12.5" font-weight="700" text-anchor="middle" fill="#fff">16.7</text>
+
+      <g font-size="11.5" fill="currentColor">
+        <text x="20" y="96" opacity=".38">■ CIS gap (25% muted) → 0 pts · no data, excluded</text>
+        <text x="20" y="118" fill="var(--high)" font-weight="650">■ Vulnerabilities (67%) → 18.3 pts</text>
+        <text x="20" y="140" fill="#8b5cf6" font-weight="650">■ CIA value (33%) → 16.7 pts</text>
+        <text x="20" y="162" opacity=".38">■ Control gap (15% muted) → 0 pts · no data, excluded</text>
+        <text x="20" y="184" opacity=".38">■ Linked risks (15% muted) → 0 pts · no data, excluded</text>
+      </g>
+
+      <rect x="470" y="86" width="346" height="104" rx="8" fill="var(--med)" opacity=".1"/>
+      <text x="490" y="110" font-size="12" font-weight="700" fill="var(--med)">Data quality 45%</text>
+      <text x="490" y="132" font-size="12" fill="currentColor" opacity=".75">Two of five dimensions have evidence.</text>
+      <text x="490" y="150" font-size="12" fill="currentColor" opacity=".75">The other three are excluded, and the two</text>
+      <text x="490" y="168" font-size="12" fill="currentColor" opacity=".75">that remain carry 100% between them.</text>
+
+      <circle cx="36" cy="220" r="13" fill="var(--accent)"/><text x="36" y="225" font-size="13" font-weight="700" text-anchor="middle" fill="#fff">1</text>
+      <line x1="36" y1="207" x2="36" y2="126" stroke="var(--accent)" stroke-width="1.3" stroke-dasharray="3 3"/>
+      <circle cx="200" cy="220" r="13" fill="var(--accent)"/><text x="200" y="225" font-size="13" font-weight="700" text-anchor="middle" fill="#fff">2</text>
+      <line x1="200" y1="207" x2="200" y2="168" stroke="var(--accent)" stroke-width="1.3" stroke-dasharray="3 3"/>
+      <circle cx="640" cy="220" r="13" fill="var(--accent)"/><text x="640" y="225" font-size="13" font-weight="700" text-anchor="middle" fill="#fff">3</text>
+      <line x1="640" y1="207" x2="640" y2="192" stroke="var(--accent)" stroke-width="1.3" stroke-dasharray="3 3"/>
+    </svg>
+  </div>
+  <p class="cap">The same asset shown earlier — 34.9/100, with three dimensions excluded.</p>
+
+  <div class="keys">
+    <div class="key"><div class="kn">1</div><div class="kb"><div class="kt">The percentage is the <em>effective</em> share</div><div class="kd">Vulnerabilities is weighted 30% by default — but with three dimensions excluded it carries <strong>67%</strong> of this asset's score. Showing the raw 30% beside 18.3 pts made the legend look like broken arithmetic.<span class="from">From: <b>weight ÷ sum of known weights</b></span></div></div></div>
+    <div class="key"><div class="kn">2</div><div class="kb"><div class="kt">"no data, excluded"</div><div class="kd">Zero points here means <strong>unknown</strong>, not "no gap". Without that label, "Control gap → 0 pts" reads as good news when it means nothing has been measured.<span class="from">From: <b>the known flag</b> on each dimension</span></div></div></div>
+    <div class="key"><div class="kn">3</div><div class="kb"><div class="kt">Data quality</div><div class="kd">The share of scoring weight actually backed by evidence. <strong>Read it with the score, never alone.</strong> A low score at 45% quality is a much weaker claim than the same score at 95%.<span class="from">From: <b>sum of known weights</b></span></div></div></div>
+  </div>
+
+  <div class="note bad">
+    <span class="l">The single most common misreading</span>
+    <p>A new asset with nothing recorded shows a low score and a reassuring green band, because it is judged on one or two dimensions. <strong>That is "we don't know", not "it's fine."</strong></p>
+  </div>
+</section>
+
+<!-- ══════ VULNS ══════ -->
+<section id="p-vulns">
+  <div class="crumb">Sidebar → Cybersecurity Assurance → Vulnerabilities</div>
+  <h1>Vulnerabilities</h1>
+  <p class="lede">Every finding across the estate, ranked. This is the work queue.</p>
+
+  <div class="wrap"><table>
+    <thead><tr><th>Column</th><th>Means</th><th>Comes from</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Severity</strong></td><td>How bad the flaw is <em>in general</em></td><td>CVSS, from NVD</td></tr>
+      <tr><td><strong>Priority</strong></td><td>How urgent it is <em>for you</em>, 0–100</td><td>Our 7-signal engine</td></tr>
+      <tr><td><strong>Status</strong></td><td>open → in progress → remediated → verified</td><td>Your workflow</td></tr>
+      <tr><td><strong>Due date</strong></td><td>Deadline by severity</td><td>Your SLA policy</td></tr>
+      <tr><td><strong>KEV / exploit chips</strong></td><td>Threat flags at a glance</td><td>CISA, GitHub</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="note warn">
+    <span class="l">Sort by priority, not severity</span>
+    <p>A CVSS 9.8 with no published exploit, on an internal box, behind a patch you already applied, is not your most urgent problem. Severity describes the flaw; priority describes your exposure to it.</p>
+  </div>
+
+  <div class="biz">
+    <span class="l">What "EPSS" means when you see it here</span>
+    <p>EPSS ships <strong>two</strong> numbers from FIRST: the <em>probability</em> of exploitation in the next 30 days (0.5% means 0.5%), and the <em>percentile</em> (37th means it ranks above 37% of all CVEs). They are not interchangeable — reading a percentile as a probability overstates risk by roughly seventy times.</p>
+  </div>
+</section>
+
+<!-- ══════ VULN DETAIL ══════ -->
+<section id="p-vuln-detail">
+  <div class="crumb">Vulnerabilities → VULN-37 · CVE-2024-2005</div>
+  <h1>Finding detail</h1>
+  <p class="lede">Five tabs, each answering one question. In order: what is it, what do we do, could it be used, what happened, what did people say.</p>
+
+  <div class="fig">
+    <svg viewBox="0 0 840 210" width="100%" height="210" role="img" aria-label="Vulnerability detail tabs and their questions">
+      <rect x="10" y="14" width="820" height="36" rx="6" fill="var(--line2)"/>
+      <g font-size="12.5" fill="currentColor">
+        <rect x="18" y="20" width="74" height="24" rx="5" fill="var(--panel)" stroke="var(--accent)"/><text x="55" y="36" text-anchor="middle" font-weight="650" fill="var(--aink)">Analysis</text>
+        <a data-go="f-remed" style="cursor:pointer"><text x="132" y="36" opacity=".72" style="text-decoration:underline;text-underline-offset:3px">Remediation</text></a>
+        <a data-go="f-exploit" style="cursor:pointer"><text x="238" y="36" opacity=".72" style="text-decoration:underline;text-underline-offset:3px">Exploit Test</text></a>
+        <a data-go="f-hist" style="cursor:pointer"><text x="342" y="36" opacity=".72" style="text-decoration:underline;text-underline-offset:3px">History</text></a>
+        <a data-go="f-hist" style="cursor:pointer"><text x="416" y="36" opacity=".72" style="text-decoration:underline;text-underline-offset:3px">Notes</text></a>
+      </g>
+      <g font-size="11.5" fill="var(--aink)" font-weight="600">
+        <text x="55" y="76" text-anchor="middle">how bad?</text>
+        <text x="168" y="76" text-anchor="middle">what do we do?</text>
+        <text x="272" y="76" text-anchor="middle">could it be used?</text>
+        <text x="362" y="76" text-anchor="middle">what happened?</text>
+        <text x="432" y="76" text-anchor="middle">who said what?</text>
+      </g>
+
+      <rect x="10" y="98" width="400" height="96" rx="8" fill="var(--panel)" stroke="var(--line)"/>
+      <text x="30" y="122" font-size="11" font-weight="700" opacity=".55" letter-spacing=".8" fill="currentColor">RISK SCORE</text>
+      <text x="30" y="158" font-size="30" font-weight="700" fill="var(--med)">41</text>
+      <text x="76" y="158" font-size="13" fill="currentColor" opacity=".55">/ 100</text>
+      <text x="30" y="180" font-size="11.5" fill="currentColor" opacity=".6">CVSS 7.1 · EPSS 0.5% · not in KEV · 256 exploits</text>
+
+      <rect x="424" y="98" width="406" height="96" rx="8" fill="var(--crit)" opacity=".08"/>
+      <text x="444" y="122" font-size="11" font-weight="700" fill="var(--crit)" letter-spacing=".8">WHY THIS NEEDS ACTION NOW</text>
+      <text x="444" y="146" font-size="12.5" fill="currentColor" opacity=".8">• Public exploit code is published</text>
+      <text x="444" y="168" font-size="12.5" fill="currentColor" opacity=".8">• 1 day past its due date</text>
+
+      <circle cx="446" cy="80" r="12" fill="var(--accent)"/><text x="446" y="85" font-size="12.5" font-weight="700" text-anchor="middle" fill="#fff">1</text>
+    </svg>
+  </div>
+
+  <div class="keys">
+    <div class="key"><div class="kn">1</div><div class="kb"><div class="kt">Red flags — what actually starts the work</div><div class="kd">The score <em>ranks</em> the queue. These flags decide it needs action <em>today</em>. Six exist: CISA KEV, any public exploit, EPSS ≥ 10%, past due date, internet-facing asset, business-critical asset. <strong>An empty list is a real answer</strong> — the finding waits for the normal patch cycle.<span class="from">From: <b>raw facts checked individually</b>, never the blended score</span></div></div></div>
+  </div>
+
+  <div class="wrap"><table>
+    <thead><tr><th>Tab</th><th>What it holds</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Analysis</strong></td><td>The score with its 7-signal breakdown, threat narrative, and the controls this finding breaks. Diagnoses; never proposes fixes.</td></tr>
+      <tr><td><strong>Remediation</strong></td><td>Three groups: the fix (plan + lifecycle + patch availability) · who owns it · if we're not fixing it yet (mitigations + exception).</td></tr>
+      <tr><td><strong>Exploit Test</strong></td><td>Can it be reached (MITRE kill chain + evidence) · how far would it spread · prove it (retest log). Nothing is executed.</td></tr>
+      <tr><td><strong>History</strong></td><td>Every state change with actor and timestamp. The tab an auditor opens first.</td></tr>
+      <tr><td><strong>Notes</strong></td><td>Human reasoning that must outlive a status field.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ══════ MORE ══════ -->
+<section id="p-more">
+  <div class="crumb">Sidebar → Cybersecurity Assurance</div>
+  <h1>The rest of the module</h1>
+  <p class="lede">Same pattern, briefer treatment.</p>
+
+  <h3>Asset Discovery</h3>
+  <p>Where assets arrive from before anyone curates them. Agent and scan results land here and are promoted into the register. Carries <code>last_seen_at</code>, which is how you tell a live estate from a stale one.</p>
+
+  <h3>Criticality Assessments</h3>
+  <p>The formal, reviewed version of "how much does this matter" — ISCA rates the system, IACA rates the data it holds. Each produces a score, a band and an approval status.</p>
+  <div class="note warn">
+    <span class="l">Known gap</span>
+    <p>The formal assessment and the criticality derived from C/I/A ratings do not reconcile. The scoring engine uses the derived value. Where they disagree, nothing currently flags it.</p>
+  </div>
+
+  <div class="foot">
+    This walkthrough follows the product's own navigation. For field-by-field depth — every scoring weight, every data source, the full glossary — see the <a href="/guide">full field guide</a>.
+  </div>
+</section>
+
+<!-- ══════ INDEX ══════ -->
+<section id="p-index">
+  <div class="crumb">Reference</div>
+  <h1>Full field guide</h1>
+  <p class="lede">This walkthrough is the guided tour. The field guide is the reference.</p>
+  <p>It covers every tab in depth, the complete scoring model with worked examples, the exploit and weaponised logic, all data sources, a glossary, and an honest list of limitations.</p>
+  <p style="font-size:17px"><a href="/guide" style="color:var(--aink);font-weight:650">Open the full field guide →</a></p>
+  <div class="foot">Both documents ship with the product. <code>/guide</code> to read, <code>/guide/walkthrough.html</code> to present.</div>
+</section>
+
+<section id="t-risk">
+  <div class="crumb">IT Assets &#8594; Asset 06 &#8594; Risk &amp; Controls</div>
+  <h1>Risk &amp; Controls</h1>
+  <p class="lede">The asset&#8217;s risk score broken into its parts, the controls covering it, and the risks linked to it.</p>
+  <h2>What is on this tab</h2>
+  <div class="wrap"><table><thead><tr><th>Block</th><th>Shows</th><th>Comes from</th></tr></thead><tbody>
+  <tr><td><strong>Residual risk</strong></td><td>Composite score + a bar per dimension</td><td>The posture engine &#8212; same endpoint as the Risk Posture page</td></tr>
+  <tr><td><strong>CIA card</strong></td><td>Confidentiality / Integrity / Availability, each 1&#8211;5</td><td>Set by a human, or derived from criticality</td></tr>
+  <tr><td><strong>CIS card</strong></td><td>Benchmark pass-rate summary</td><td>Compliance scan runs</td></tr>
+  <tr><td><strong>Linked controls</strong></td><td>Which controls cover this asset, and coverage %</td><td>Control links &#247; target of 12</td></tr>
+  <tr><td><strong>Mapping recommendations</strong></td><td>Controls the system suggests linking</td><td>Asset profile signals &#8212; OS, vendor, business function</td></tr>
+  <tr><td><strong>Linked risks</strong></td><td>Risk-register entries naming this asset</td><td>Risk-asset links</td></tr>
+  </tbody></table></div>
+  <h3>CIA &#8212; what it means</h3>
+  <p>These describe <strong>what happens if this asset is compromised</strong>, not how likely that is. 1 = public / harmless / can be down indefinitely. 5 = regulated / legally harmful / downtime stops the business.</p>
+  <div class="note"><span class="l">Set vs assumed</span><p>If nobody sets them, values are derived from criticality and the dimension is marked <strong>not known</strong> &#8212; excluded from the score rather than counted as evidence. That lowers data quality, which is the honest outcome.</p></div>
+  <h3>Coverage, and why 12</h3>
+  <p>Coverage is <code>linked controls &#247; 12</code>. There is no universal right number &#8212; twelve is a house convention that makes assets comparable. What matters is that every screen uses the same one: an asset reading 8% here must read 8% on Overview and inside the score.</p>
+  <div class="biz"><span class="l">Why suggestions stay suggestions</span><p>Mapping controls by hand across a large estate is the most-skipped task in GRC. Recommendations turn authoring into reviewing. They are not applied automatically because a control mapping is an assertion you may have to defend to an auditor &#8212; a human accepts it.</p></div>
+</section>
+
+<section id="t-vulns">
+  <div class="crumb">IT Assets &#8594; Asset 06 &#8594; Vulnerabilities</div>
+  <h1>Vulnerabilities (on this asset)</h1>
+  <p class="lede">Every finding linked to this machine, with anything needing attention surfaced on top.</p>
+  <h2>Alerts strip</h2>
+  <p>Derived live from the findings below plus the asset&#8217;s own state &#8212; nothing is stored.</p>
+  <div class="wrap"><table><thead><tr><th>Alert</th><th>Fires when</th></tr></thead><tbody>
+  <tr><td>KEV</td><td>A linked finding is on CISA&#8217;s actively-exploited list</td></tr>
+  <tr><td>SLA breach</td><td>A finding is past its due date</td></tr>
+  <tr><td>Exposure</td><td>Asset is internet-facing and has open findings</td></tr>
+  <tr><td>Acceptance expired</td><td>A risk acceptance passed its review date</td></tr>
+  <tr><td>Acceptance undated</td><td>Risk accepted with no review date &#8212; accepted forever</td></tr>
+  <tr><td>Stale</td><td>Not seen by discovery for 30+ days</td></tr>
+  </tbody></table></div>
+  <div class="biz"><span class="l">Why &#8220;accepted forever&#8221; is named</span><p>Nobody consciously decides to accept a risk permanently &#8212; it is what you get when the review-date field is left blank. Six months later it is invisible and unreviewed. Naming it is the difference between a decision and an oversight.</p></div>
+  <h2>The findings list</h2>
+  <p>Severity, priority, status, due date. The <strong>Open Findings</strong> figure on Overview counts only open statuses &#8212; closing a finding drops it.</p>
+  <div class="note warn"><span class="l">This tab absorbed the old Alerts tab</span><p>Alerts were built entirely from the same vulnerability join this list uses, plus one staleness check. It was a severity ranking of this list, not a second dataset &#8212; so it now sits on top of the list it ranks.</p></div>
+</section>
+
+<section id="t-soft">
+  <div class="crumb">IT Assets &#8594; Asset 06 &#8594; Software</div>
+  <h1>Software</h1>
+  <p class="lede">What is installed, and which of it can be matched to CVEs.</p>
+  <h3>Installed software</h3><p>Package inventory from discovery &#8212; name, version, publisher. Descriptive on its own.</p>
+  <h3>Software identifiers (CPE / PURL)</h3>
+  <p>A <strong>CPE</strong> is the standard machine-readable product name (<code>cpe:2.3:a:apache:log4j:2.14.1</code>). It is how NVD describes what a CVE affects. Without one, software cannot be automatically matched to vulnerabilities.</p>
+  <div class="biz"><span class="l">Business translation</span><p>&#8220;We have Log4j 2.14.1&#8221; and &#8220;we are affected by Log4Shell&#8221; are only connected if something speaks both languages. CPE is that language. An estate with no identifiers can only find vulnerabilities by scanning &#8212; never by matching a published advisory against what it already knows.</p></div>
+  <h3>Promote to asset</h3>
+  <p>Turns a detected application into its own asset record, a child of the host. Do it when the application deserves its own owner, criticality and control mappings (a database engine). Leave it as software when it does not (a PDF reader).</p>
+</section>
+
+<section id="t-rel">
+  <div class="crumb">IT Assets &#8594; Asset 06 &#8594; Relationships</div>
+  <h1>Relationships</h1>
+  <p class="lede">Declared dependencies between assets &#8212; your CMDB graph.</p>
+  <div class="wrap"><table><thead><tr><th>Type</th><th>Meaning</th></tr></thead><tbody>
+  <tr><td><code>depends_on</code></td><td>This asset needs the other to function</td></tr>
+  <tr><td><code>hosts</code> / <code>runs_on</code></td><td>Physical or virtual containment</td></tr>
+  <tr><td><code>connects_to</code></td><td>Network reachability</td></tr>
+  <tr><td><code>backs_up</code> / <code>replicates_to</code></td><td>Data flows to the other asset</td></tr>
+  <tr><td><code>member_of</code></td><td>Part of a cluster or group</td></tr>
+  </tbody></table></div>
+  <p>Relationships drive <strong>blast radius</strong> &#8212; what an attacker reaches next &#8212; and change the Lateral Movement stage of the exploit assessment.</p>
+  <div class="note warn"><span class="l">Empty means unmapped, not safe</span><p>No declared relationships shows an empty blast radius. That is an absence of data, not evidence of isolation. Loopback addresses (127.0.0.1) are deliberately excluded from co-location grouping &#8212; every locally-discovered asset carries them, so grouping on them merges unrelated machines.</p></div>
+</section>
+
+<section id="t-life">
+  <div class="crumb">IT Assets &#8594; Asset 06 &#8594; Lifecycle</div>
+  <h1>Lifecycle</h1>
+  <p class="lede">Where the asset sits in its life, and when it stops being supported.</p>
+  <p>Requested &#8594; procured &#8594; deployed &#8594; active &#8594; maintenance &#8594; retired &#8594; disposed, plus warranty and end-of-life dates.</p>
+  <div class="biz"><span class="l">Why security cares about a procurement field</span><p>An asset past end-of-life stops receiving vendor patches. At that point &#8220;apply the vendor patch&#8221; is no longer an available remediation, and every finding on it becomes a compensating-control or replacement decision.</p></div>
+  <div class="note warn"><span class="l">Known gap</span><p>State changes update the asset in place. There is no transition table, so there is no record of who changed a lifecycle state or when.</p></div>
+</section>
+
+<section id="t-comp">
+  <div class="crumb">IT Assets &#8594; Asset 06 &#8594; Compliance</div>
+  <h1>Compliance &#8212; CIS benchmark</h1>
+  <p class="lede">Hardening checks. A vulnerability is a defect someone else shipped; a benchmark failure is a configuration you chose.</p>
+  <p>CIS publishes hardening baselines per platform &#8212; hundreds of checks like &#8220;password minimum length &#8805; 14&#8221;. Each passes, fails, errors, or was never run.</p>
+  <pre>pass rate        = passed &#247; total applicable rules
+scanned gap      = failed &#247; (passed + failed)
+coverage penalty = never-scanned &#247; total
+CIS gap          = 0.8 &#215; scanned gap + 0.2 &#215; coverage penalty</pre>
+  <p>Two things are measured at once on purpose: <strong>how much failed</strong>, and <strong>how much was never checked</strong>. Ten rules passed out of ten scanned, with 200 never run, is not a hardened asset.</p>
+  <div class="wrap"><table><thead><tr><th>Situation</th><th>Result</th></tr></thead><tbody>
+  <tr><td>No applicable rules, or none ever run</td><td><strong>Not known</strong> &#8212; excluded from the score</td></tr>
+  <tr><td>Runs exist but every one errored</td><td><strong>Gap 1.0 (worst)</strong> &#8212; a broken scan is maximum uncertainty, not a clean bill of health</td></tr>
+  <tr><td>Mixed pass / fail</td><td>Formula above</td></tr>
+  </tbody></table></div>
+  <h3>Co-located blending</h3>
+  <p>Assets sharing a real host address blend &#8212; 60% the host&#8217;s own score, 40% a criticality-weighted average of its applications. A hardened host running an unpatched database is not a hardened environment. Borrowed scores are labelled as borrowed.</p>
+  <p>This tab also holds scan-run history, which absorbed the old Activity tab &#8212; that called the same endpoint with a smaller limit.</p>
+</section>
+
+<section id="t-traj">
+  <div class="crumb">IT Assets &#8594; Asset 06 &#8594; Trajectory</div>
+  <h1>Trajectory</h1>
+  <p class="lede">Asset &#8594; vulnerability &#8594; business risk, drawn as a chain.</p>
+  <p>The same records as the Vulnerabilities and Risk &amp; Controls tabs, presented as a graph rather than a list. Click a node to trace its sub-chain.</p>
+  <div class="biz"><span class="l">Who this is for</span><p>Explaining a path to a non-technical audience. &#8220;This server has a flaw, that flaw threatens customer data, that is risk R-014 on the register&#8221; is a sentence a board understands; a table of CVEs is not.</p></div>
+  <div class="note warn"><span class="l">Honest note</span><p>This is a fifth view of data already shown elsewhere. It earns its place if it is used in review meetings &#8212; otherwise it is duplication.</p></div>
+</section>
+
+<section id="t-crit">
+  <div class="crumb">IT Assets &#8594; Asset 06 &#8594; Criticality</div>
+  <h1>Criticality Assessments</h1>
+  <p class="lede">The formal, reviewed version of how much this asset matters.</p>
+  <ul><li><strong>ISCA</strong> &#8212; Information System Criticality Assessment. Rates the system as a whole.</li>
+  <li><strong>IACA</strong> &#8212; Information Asset Criticality Assessment. Rates the data it holds.</li></ul>
+  <p>Each produces a score, a band and a status (draft, submitted, approved). Approved assessments are what an auditor asks to see.</p>
+  <div class="biz"><span class="l">Why a workflow exists alongside a simple field</span><p>The CIA sliders let an engineer record a working judgement in ten seconds. A regulator wants something else: a documented assessment with a named approver and a date. Both are legitimate; they serve different audiences.</p></div>
+  <div class="note warn"><span class="l">Known gap</span><p>The formal assessment and the criticality derived from CIA do not reconcile. The scoring engine uses the derived value. Where they disagree, nothing flags it.</p></div>
+</section>
+
+<section id="t-rec">
+  <div class="crumb">IT Assets &#8594; Asset 06 &#8594; Attachments &#183; Notes &#183; History</div>
+  <h1>The record</h1>
+  <p class="lede">Evidence, human context, and the audit trail.</p>
+  <h3>Attachments</h3><p>Evidence documents &#8212; architecture diagrams, approvals, scan reports. In an audit, an assertion without an artefact behind it is just a claim.</p>
+  <h3>Notes</h3><p>Free-text, attributed, timestamped. For context that does not fit a field: &#8220;scheduled for decommission Q3, do not remediate&#8221;.</p>
+  <h3>History</h3><p>Who changed which field, when. Populated from the moment journalling was enabled; assets edited before then show nothing.</p>
+  <div class="biz"><span class="l">Notes and History are deliberately separate</span><p>History is what the <em>system</em> observed. Notes are what a <em>person</em> chose to record. Merging them loses the distinction between fact and reasoning.</p></div>
+</section>
+
+<section id="f-analysis">
+  <div class="crumb">Vulnerabilities &#8594; VULN-37 &#8594; Analysis</div>
+  <h1>Analysis</h1>
+  <p class="lede">What is this, how bad is it, and where did every number come from? This tab diagnoses. It never proposes fixes.</p>
+  <div class="wrap"><table><thead><tr><th>Field</th><th>Source</th><th>Meaning</th></tr></thead><tbody>
+  <tr><td>CVSS</td><td>NVD</td><td>Technical severity 0&#8211;10. Not ours.</td></tr>
+  <tr><td>EPSS</td><td>FIRST</td><td><strong>Probability</strong> of exploitation in 30 days. 0.5% means 0.5%.</td></tr>
+  <tr><td>EPSS percentile</td><td>FIRST</td><td>Where it ranks. A <em>different number</em> &#8212; 37th percentile is not a 37% chance.</td></tr>
+  <tr><td>CISA KEV</td><td>CISA</td><td>Confirmed exploited in the wild.</td></tr>
+  <tr><td>Attack vector</td><td>CVSS vector string</td><td>Network / adjacent / local / physical. Unknown if no vector stored.</td></tr>
+  <tr><td>Exploit maturity</td><td>Derived</td><td>Weaponised / proof-of-concept / unproven.</td></tr>
+  <tr><td>Patch available</td><td>Vendor PSIRT</td><td>Whether a fix exists to apply.</td></tr>
+  <tr><td>Asset criticality</td><td>Linked asset</td><td>Scored against the <em>worst</em> affected asset.</td></tr>
+  <tr><td>Internet exposed</td><td>Linked asset</td><td>Reachable from outside.</td></tr>
+  </tbody></table></div>
+  <h3>The score breakdown</h3>
+  <p>Seven signals, each showing the points contributed and the evidence behind it. CVSS is only 20% &#8212; 60% of the weight sits on exploitability and context, because two findings with identical CVSS can differ enormously in real risk.</p>
+  <div class="note"><span class="l">Unknown is shown as unknown</span><p>With no CVSS vector stored, attack vector reads <em>unknown</em> and the breakdown says the value was assumed. It does not render a confident tick for data that does not exist.</p></div>
+  <h3>Linked controls</h3>
+  <p>Which of your controls this finding undermines &#8212; auto-mapped from its CWE (weakness type) or linked by hand. The bridge between &#8220;a server is unpatched&#8221; and &#8220;control A.12.6.1 is not effective&#8221;.</p>
+</section>
+
+<section id="f-remed">
+  <div class="crumb">Vulnerabilities &#8594; VULN-37 &#8594; Remediation</div>
+  <h1>Remediation</h1>
+  <p class="lede">What are we doing about it? Three groups, because there are only three possible answers.</p>
+  <h2>Group 1 &#8212; The fix</h2>
+  <p><strong>Why this needs action now:</strong> the red flags that justified acting, each naming its evidence. If none fire, the panel says so and the finding waits for the normal patch cycle.</p>
+  <p><strong>The plan:</strong> title, fix type, a copyable artefact of the actual steps, and a rationale &#8212; generated from the CVE, asset type, OS family and exposure. A draft shows immediately without being saved; adopting it is the moment of intent, because a saved plan carries an approval trail.</p>
+  <div class="wrap"><table><thead><tr><th>Stage</th><th>Records</th><th>Gate</th></tr></thead><tbody>
+  <tr><td>Recommended</td><td>Plan text + why it was warranted</td><td>&#8212;</td></tr>
+  <tr><td>Approved</td><td>Who authorised it, change window</td><td><strong>Requires an owner</strong></td></tr>
+  <tr><td>Applied</td><td>Execution log of the steps</td><td>Auto-apply refused on critical assets</td></tr>
+  <tr><td>Verified</td><td>Attestation with evidence</td><td><strong>Requires evidence text</strong></td></tr>
+  </tbody></table></div>
+  <div class="note bad"><span class="l">Two claims this deliberately does not make</span>
+  <p><strong>&#8220;Applied&#8221; does not patch anything.</strong> Execution runs through a simulated executor that records steps without touching a host.</p>
+  <p><strong>&#8220;Verified&#8221; does not re-scan.</strong> It records that a named person attested the fix is in place, and what they offered as grounds. Evidence is mandatory &#8212; a confirmation with nothing behind it looks like proof in an audit export.</p></div>
+  <h2>Group 2 &#8212; Who owns it</h2>
+  <p>Department assignment with its own SLA override and escalation path. Distinct from the individual assignee in the sidebar: one routes to a person, one to a queue. Either satisfies the approval gate.</p>
+  <h2>Group 3 &#8212; If we are not fixing it yet</h2>
+  <p><strong>Mitigations</strong> are tracked tasks with owner, priority, status and target date &#8212; the work that reduces exposure <em>without</em> removing the flaw. <strong>Suggest compensating controls</strong> proposes candidates; it is forbidden from proposing the patch or asserting patch availability. <strong>Exception workflow</strong> is the formal &#8220;we are deliberately not fixing this&#8221;, with a review date that makes it expire.</p>
+  <div class="biz"><span class="l">Remediate vs mitigate vs accept</span><p><strong>Remediation</strong> &#8212; the flaw is gone. <strong>Mitigation</strong> &#8212; still there, you put a guard on it. <strong>Acceptance</strong> &#8212; still there, and you have decided to live with it, on the record, with a date. Only three answers, which is why the tab has three groups.</p></div>
+</section>
+
+<section id="f-exploit">
+  <div class="crumb">Vulnerabilities &#8594; VULN-37 &#8594; Exploit Test</div>
+  <h1>Exploit Test</h1>
+  <p class="lede">Could this actually be reached and used &#8212; and how far would it spread?</p>
+  <div class="note bad"><span class="l">Nothing is executed</span><p>This reads stored evidence only. No scanner, exploit or payload runs against any host. Every verdict is a derivation from data already held.</p></div>
+  <h2>Group 1 &#8212; Can it be reached?</h2>
+  <p>The <strong>MITRE ATT&amp;CK kill chain</strong>: six stages, each marked <em>reached</em>, <em>possible</em> or <em>blocked</em>. Clicking a stage explains why it is in that state and what would stop it.</p>
+  <div class="wrap"><table><thead><tr><th>Stage</th><th>Technique</th><th>Question</th></tr></thead><tbody>
+  <tr><td>Reconnaissance</td><td>T1595</td><td>Can an attacker find this asset?</td></tr>
+  <tr><td>Initial access</td><td>T1190</td><td>Can they get in through this flaw?</td></tr>
+  <tr><td>Execution</td><td>T1203</td><td>Can they run code?</td></tr>
+  <tr><td>Privilege escalation</td><td>T1068</td><td>Can they become admin?</td></tr>
+  <tr><td>Lateral movement</td><td>T1210</td><td>Can they reach other assets?</td></tr>
+  <tr><td>Impact</td><td>T1005</td><td>What can they take or break?</td></tr>
+  </tbody></table></div>
+  <p>The <strong>evidence table</strong> gives one row per fact: what we know, and what would block it. Five checks &#8212; internet-facing, network attack vector, known-exploited, patch unapplied, segmentation.</p>
+  <div class="note warn"><span class="l">These blockers are heuristics</span><p>They are derived from the same evidence, inverted. They are <strong>not</strong> linked to your ISO or NIST control library, so a &#8220;blocked&#8221; step is not yet usable as control evidence.</p></div>
+  <h2>Group 2 &#8212; How far would it spread?</h2>
+  <p><strong>Blast radius</strong>: assets reachable next, each labelled by how we know &#8212; a declared relationship (a stated fact) or a shared address (our inference). <strong>Vulnerability chain</strong>: prerequisite findings that must also exist, and findings that depend on this one.</p>
+  <div class="biz"><span class="l">Why prerequisites change urgency</span><p>A privilege-escalation flaw is far more urgent when a remote-code-execution flaw lets an attacker reach that server in the first place. Fixing the RCE makes the escalation academic. Chains let you fix one thing and close several.</p></div>
+  <h2>Group 3 &#8212; Prove it</h2>
+  <p>The retest log: date, tester, result (pass / fail / partial), findings, evidence. Everything above is derivation; <strong>this is the only part that is proof.</strong> Until a retest exists, remediation is claimed but not demonstrated.</p>
+</section>
+
+<section id="f-hist">
+  <div class="crumb">Vulnerabilities &#8594; VULN-37 &#8594; History &amp; Notes</div>
+  <h1>History &amp; Notes</h1>
+  <p class="lede">What happened, and what people said about it.</p>
+  <h3>History</h3>
+  <p>Every status change, assignment, plan adoption, approval, application and attestation &#8212; with actor and timestamp.</p>
+  <div class="biz"><span class="l">Why this is the tab an auditor opens first</span><p>An auditor rarely disputes that you fixed something. They ask <em>who decided</em>, <em>when</em>, and <em>on what basis</em>. A product that changes state without recording those three things cannot answer, however good its workflow looks.</p></div>
+  <h3>Notes</h3>
+  <p>Free-text, attributed, timestamped. For reasoning that must outlive a status field: why an exception was granted, what the vendor said, why this is a false positive.</p>
+</section>
+
+</main>
+</div>
+<script>
+  var links=document.querySelectorAll('.nav a[data-go]'),secs=document.querySelectorAll('main section');
+  function go(id){
+    secs.forEach(function(s){s.classList.toggle('on',s.id===id)});
+    links.forEach(function(a){a.classList.toggle('on',a.dataset.go===id)});
+    window.scrollTo(0,0);
+  }
+  links.forEach(function(a){a.addEventListener('click',function(e){e.preventDefault();go(a.dataset.go)})});
+  // The tab labels drawn inside the wireframes are real links too — the doc
+  // mirrors the product, so anything that looks like a tab has to behave like
+  // one. Delegated because SVG <a> does not expose dataset the same way.
+  document.addEventListener('click', function(e){
+    var t = e.target.closest ? e.target.closest('[data-go]') : null;
+    if (t && !t.classList.contains('on') && t.parentNode && t.parentNode.closest('main')) {
+      e.preventDefault(); go(t.getAttribute('data-go'));
+    }
+  });
+  var root=document.documentElement;
+  if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)root.setAttribute('data-theme','dark');
+  document.getElementById('tt').addEventListener('click',function(){
+    root.setAttribute('data-theme',root.getAttribute('data-theme')==='dark'?'light':'dark');
+  });
+</script>
+</body>
+</html>

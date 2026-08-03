@@ -1,0 +1,1484 @@
+{
+ "framework_key": "soc2",
+ "display_name": "SOC 2",
+ "name_patterns": [
+  "soc2"
+ ],
+ "registers": [
+  {
+   "type": "soc2__soc_2_readiness_checklist_template",
+   "label": "Readiness Checklist",
+   "description": "SOC 2 — Readiness Checklist (from the template).",
+   "columns": [
+    {
+     "key": "criteria",
+     "label": "Criteria",
+     "type": "text",
+     "picker": "framework_controls"
+    },
+    {
+     "key": "control_objective",
+     "label": "Control objective",
+     "type": "textarea"
+    },
+    {
+     "key": "status",
+     "label": "Status",
+     "type": "text"
+    },
+    {
+     "key": "owner",
+     "label": "Owner",
+     "type": "text",
+     "picker": "users"
+    },
+    {
+     "key": "evidence_required",
+     "label": "Evidence required",
+     "type": "text",
+     "picker": "evidence"
+    },
+    {
+     "key": "evidence_collected",
+     "label": "Evidence collected?",
+     "type": "text",
+     "picker": "evidence"
+    },
+    {
+     "key": "notes_gap",
+     "label": "Notes / gap",
+     "type": "textarea"
+    }
+   ],
+   "seed": [
+    {
+     "data": {
+      "criteria": "CC1.1",
+      "control_objective": "Demonstrates commitment to integrity and ethical values",
+      "status": "",
+      "owner": "",
+      "evidence_required": "",
+      "evidence_collected": "",
+      "notes_gap": ""
+     }
+    },
+    {
+     "data": {
+      "criteria": "CC1.2",
+      "control_objective": "Board oversight of internal control",
+      "status": "",
+      "owner": "",
+      "evidence_required": "",
+      "evidence_collected": "",
+      "notes_gap": ""
+     }
+    },
+    {
+     "data": {
+      "criteria": "CC1.4",
+      "control_objective": "Commitment to competence (hiring, training)",
+      "status": "",
+      "owner": "",
+      "evidence_required": "",
+      "evidence_collected": "",
+      "notes_gap": ""
+     }
+    },
+    {
+     "data": {
+      "criteria": "CC2.1",
+      "control_objective": "Quality information to support internal control",
+      "status": "",
+      "owner": "",
+      "evidence_required": "",
+      "evidence_collected": "",
+      "notes_gap": ""
+     }
+    },
+    {
+     "data": {
+      "criteria": "CC2.2",
+      "control_objective": "Internal communication of security responsibilities",
+      "status": "",
+      "owner": "",
+      "evidence_required": "",
+      "evidence_collected": "",
+      "notes_gap": ""
+     }
+    },
+    {
+     "data": {
+      "criteria": "CC3.2",
+      "control_objective": "Identifies and assesses risk (risk assessment)",
+      "status": "",
+      "owner": "",
+      "evidence_required": "",
+      "evidence_collected": "",
+      "notes_gap": ""
+     }
+    },
+    {
+     "data": {
+      "criteria": "CC4.1",
+      "control_objective": "Monitoring of controls (evaluations)",
+      "status": "",
+      "owner": "",
+      "evidence_required": "",
+      "evidence_collected": "",
+      "notes_gap": ""
+     }
+    },
+    {
+     "data": {
+      "criteria": "CC5.2",
+      "control_objective": "Selects and develops control activities (technology)",
+      "status": "",
+      "owner": "",
+      "evidence_required": "",
+      "evidence_collected": "",
+      "notes_gap": ""
+     }
+    },
+    {
+     "data": {
+      "criteria": "CC6.1",
+      "control_objective": "Logical access security (least privilege)",
+      "status": "",
+      "owner": "",
+      "evidence_required": "",
+      "evidence_collected": "",
+      "notes_gap": ""
+     }
+    },
+    {
+     "data": {
+      "criteria": "CC6.2",
+      "control_objective": "Registration & authorisation of new users",
+      "status": "",
+      "owner": "",
+      "evidence_required": "",
+      "evidence_collected": "",
+      "notes_gap": ""
+     }
+    },
+    {
+     "data": {
+      "criteria": "CC6.3",
+      "control_objective": "Removal of access (deprovisioning)",
+      "status": "",
+      "owner": "",
+      "evidence_required": "",
+      "evidence_collected": "",
+      "notes_gap": ""
+     }
+    },
+    {
+     "data": {
+      "criteria": "CC6.6",
+      "control_objective": "Boundary protection against external threats",
+      "status": "",
+      "owner": "",
+      "evidence_required": "",
+      "evidence_collected": "",
+      "notes_gap": ""
+     }
+    },
+    {
+     "data": {
+      "criteria": "CC6.7",
+      "control_objective": "Restricts transmission/movement of data",
+      "status": "",
+      "owner": "",
+      "evidence_required": "",
+      "evidence_collected": "",
+      "notes_gap": ""
+     }
+    },
+    {
+     "data": {
+      "criteria": "CC6.8",
+      "control_objective": "Prevents/detects unauthorised software",
+      "status": "",
+      "owner": "",
+      "evidence_required": "",
+      "evidence_collected": "",
+      "notes_gap": ""
+     }
+    },
+    {
+     "data": {
+      "criteria": "CC7.1",
+      "control_objective": "Detects and monitors for vulnerabilities",
+      "status": "",
+      "owner": "",
+      "evidence_required": "",
+      "evidence_collected": "",
+      "notes_gap": ""
+     }
+    },
+    {
+     "data": {
+      "criteria": "CC7.2",
+      "control_objective": "Monitors for anomalies/security events",
+      "status": "",
+      "owner": "",
+      "evidence_required": "",
+      "evidence_collected": "",
+      "notes_gap": ""
+     }
+    },
+    {
+     "data": {
+      "criteria": "CC7.3",
+      "control_objective": "Evaluates security events (incident response)",
+      "status": "",
+      "owner": "",
+      "evidence_required": "",
+      "evidence_collected": "",
+      "notes_gap": ""
+     }
+    },
+    {
+     "data": {
+      "criteria": "CC7.4",
+      "control_objective": "Responds to identified security incidents",
+      "status": "",
+      "owner": "",
+      "evidence_required": "",
+      "evidence_collected": "",
+      "notes_gap": ""
+     }
+    },
+    {
+     "data": {
+      "criteria": "CC8.1",
+      "control_objective": "Change management over infrastructure & software",
+      "status": "",
+      "owner": "",
+      "evidence_required": "",
+      "evidence_collected": "",
+      "notes_gap": ""
+     }
+    },
+    {
+     "data": {
+      "criteria": "CC9.1",
+      "control_objective": "Risk mitigation activities (business disruption)",
+      "status": "",
+      "owner": "",
+      "evidence_required": "",
+      "evidence_collected": "",
+      "notes_gap": ""
+     }
+    },
+    {
+     "data": {
+      "criteria": "CC9.2",
+      "control_objective": "Vendor and business-partner risk management",
+      "status": "",
+      "owner": "",
+      "evidence_required": "",
+      "evidence_collected": "",
+      "notes_gap": ""
+     }
+    },
+    {
+     "data": {
+      "criteria": "A1.2",
+      "control_objective": "Availability: backups, recovery, capacity (optional)",
+      "status": "",
+      "owner": "",
+      "evidence_required": "",
+      "evidence_collected": "",
+      "notes_gap": ""
+     }
+    },
+    {
+     "data": {
+      "criteria": "C1.1",
+      "control_objective": "Confidentiality: identifies & protects confidential info (optional)",
+      "status": "",
+      "owner": "",
+      "evidence_required": "",
+      "evidence_collected": "",
+      "notes_gap": ""
+     }
+    },
+    {
+     "data": {
+      "criteria": "P1.1",
+      "control_objective": "Privacy: notice and consent (optional)",
+      "status": "",
+      "owner": "",
+      "evidence_required": "",
+      "evidence_collected": "",
+      "notes_gap": ""
+     }
+    }
+   ],
+   "formSections": [
+    {
+     "title": "Item",
+     "keys": [
+      "criteria",
+      "control_objective"
+     ]
+    },
+    {
+     "title": "Assessment",
+     "keys": [
+      "status",
+      "evidence_required",
+      "evidence_collected",
+      "notes_gap"
+     ]
+    },
+    {
+     "title": "Ownership & dates",
+     "keys": [
+      "owner"
+     ]
+    }
+   ]
+  },
+  {
+   "type": "soc2__soc2_control_matrix_template",
+   "label": "Control Matrix",
+   "description": "SOC 2 — Control Matrix (from the template).",
+   "columns": [
+    {
+     "key": "control_id",
+     "label": "Control ID",
+     "type": "auto"
+    },
+    {
+     "key": "control_description",
+     "label": "Control description",
+     "type": "textarea"
+    },
+    {
+     "key": "criteria_cc_category",
+     "label": "Criteria",
+     "type": "text",
+     "picker": "framework_controls"
+    },
+    {
+     "key": "control_owner",
+     "label": "Control owner",
+     "type": "text",
+     "picker": "users"
+    },
+    {
+     "key": "frequency",
+     "label": "Frequency",
+     "type": "select",
+     "options": [
+      {
+       "value": "Per change",
+       "label": "Per change",
+       "tone": "slate"
+      },
+      {
+       "value": "Quarterly",
+       "label": "Quarterly",
+       "tone": "slate"
+      },
+      {
+       "value": "Continuous",
+       "label": "Continuous",
+       "tone": "slate"
+      }
+     ]
+    },
+    {
+     "key": "evidence",
+     "label": "Evidence",
+     "type": "text",
+     "picker": "evidence"
+    },
+    {
+     "key": "status",
+     "label": "Status",
+     "type": "select",
+     "options": [
+      {
+       "value": "Implemented",
+       "label": "Implemented",
+       "tone": "emerald"
+      },
+      {
+       "value": "Partial",
+       "label": "Partial",
+       "tone": "amber"
+      }
+     ]
+    },
+    {
+     "key": "notes",
+     "label": "Notes",
+     "type": "textarea"
+    }
+   ],
+   "seed": [
+    {
+     "data": {
+      "control_id": "AC-01",
+      "control_description": "Access is granted via documented approval and least privilege",
+      "criteria_cc_category": "CC6",
+      "control_owner": "IT",
+      "frequency": "Per change",
+      "evidence": "Ticket, access logs",
+      "status": "Implemented",
+      "notes": ""
+     }
+    },
+    {
+     "data": {
+      "control_id": "AC-02",
+      "control_description": "User access is reviewed quarterly",
+      "criteria_cc_category": "CC6",
+      "control_owner": "IT",
+      "frequency": "Quarterly",
+      "evidence": "Access review records",
+      "status": "Implemented",
+      "notes": ""
+     }
+    },
+    {
+     "data": {
+      "control_id": "CM-01",
+      "control_description": "Changes are peer-reviewed, tested and approved before release",
+      "criteria_cc_category": "CC8",
+      "control_owner": "Engineering",
+      "frequency": "Per change",
+      "evidence": "PR, CI logs",
+      "status": "Implemented",
+      "notes": ""
+     }
+    },
+    {
+     "data": {
+      "control_id": "MON-01",
+      "control_description": "Security events are logged and monitored",
+      "criteria_cc_category": "CC7",
+      "control_owner": "SecOps",
+      "frequency": "Continuous",
+      "evidence": "SIEM config",
+      "status": "Partial",
+      "notes": ""
+     }
+    }
+   ],
+   "formSections": [
+    {
+     "title": "Item",
+     "keys": [
+      "control_id",
+      "control_description"
+     ]
+    },
+    {
+     "title": "Assessment",
+     "keys": [
+      "criteria_cc_category",
+      "frequency",
+      "evidence",
+      "status",
+      "notes"
+     ]
+    },
+    {
+     "title": "Ownership & dates",
+     "keys": [
+      "control_owner"
+     ]
+    }
+   ]
+  },
+  {
+   "type": "soc2__soc2_evidence_request_tracker_template",
+   "label": "Evidence Request Tracker",
+   "description": "SOC 2 — Evidence Request Tracker (from the template).",
+   "columns": [
+    {
+     "key": "ref",
+     "label": "Ref",
+     "type": "auto"
+    },
+    {
+     "key": "evidence_request_pbc",
+     "label": "Evidence / request (PBC)",
+     "type": "text",
+     "picker": "evidence"
+    },
+    {
+     "key": "related_control",
+     "label": "Related control",
+     "type": "text",
+     "picker": "framework_controls"
+    },
+    {
+     "key": "owner",
+     "label": "Owner",
+     "type": "text",
+     "picker": "users"
+    },
+    {
+     "key": "requested",
+     "label": "Requested",
+     "type": "datetime"
+    },
+    {
+     "key": "due",
+     "label": "Due",
+     "type": "date"
+    },
+    {
+     "key": "received",
+     "label": "Received?",
+     "type": "select",
+     "options": [
+      {
+       "value": "Yes",
+       "label": "Yes",
+       "tone": "emerald"
+      },
+      {
+       "value": "No",
+       "label": "No",
+       "tone": "rose"
+      }
+     ]
+    },
+    {
+     "key": "reviewed",
+     "label": "Reviewed?",
+     "type": "select",
+     "options": [
+      {
+       "value": "Yes",
+       "label": "Yes",
+       "tone": "emerald"
+      },
+      {
+       "value": "No",
+       "label": "No",
+       "tone": "rose"
+      }
+     ]
+    },
+    {
+     "key": "notes",
+     "label": "Notes",
+     "type": "textarea"
+    }
+   ],
+   "seed": [
+    {
+     "data": {
+      "ref": "1",
+      "evidence_request_pbc": "Access review for Q2",
+      "related_control": "AC-02",
+      "owner": "IT",
+      "requested": "2026-06-01 00:00:00",
+      "due": "2026-06-10 00:00:00",
+      "received": "No",
+      "reviewed": "No",
+      "notes": ""
+     }
+    },
+    {
+     "data": {
+      "ref": "2",
+      "evidence_request_pbc": "Change tickets sample",
+      "related_control": "CM-01",
+      "owner": "Engineering",
+      "requested": "2026-06-01 00:00:00",
+      "due": "2026-06-10 00:00:00",
+      "received": "No",
+      "reviewed": "No",
+      "notes": ""
+     }
+    }
+   ],
+   "formSections": [
+    {
+     "title": "Item",
+     "keys": [
+      "ref",
+      "evidence_request_pbc"
+     ]
+    },
+    {
+     "title": "Assessment",
+     "keys": [
+      "related_control",
+      "requested",
+      "received",
+      "reviewed",
+      "notes"
+     ]
+    },
+    {
+     "title": "Ownership & dates",
+     "keys": [
+      "owner",
+      "due"
+     ]
+    }
+   ]
+  },
+  {
+   "type": "soc2__soc2_readiness_roadmap_template",
+   "label": "Readiness Roadmap",
+   "description": "SOC 2 — Readiness Roadmap (from the template).",
+   "columns": [
+    {
+     "key": "ref",
+     "label": "Ref",
+     "type": "auto"
+    },
+    {
+     "key": "workstream",
+     "label": "Workstream",
+     "type": "text"
+    },
+    {
+     "key": "action",
+     "label": "Action",
+     "type": "textarea"
+    },
+    {
+     "key": "criteria",
+     "label": "Criteria",
+     "type": "text",
+     "picker": "framework_controls"
+    },
+    {
+     "key": "priority",
+     "label": "Priority",
+     "type": "select",
+     "options": [
+      {
+       "value": "High",
+       "label": "High",
+       "tone": "rose"
+      },
+      {
+       "value": "IT",
+       "label": "IT",
+       "tone": "slate"
+      },
+      {
+       "value": "SecOps",
+       "label": "SecOps",
+       "tone": "slate"
+      }
+     ]
+    },
+    {
+     "key": "owner",
+     "label": "Owner",
+     "type": "text",
+     "picker": "users"
+    },
+    {
+     "key": "target_date",
+     "label": "Target date",
+     "type": "date"
+    },
+    {
+     "key": "status",
+     "label": "Status",
+     "type": "select",
+     "options": [
+      {
+       "value": "Not started",
+       "label": "Not started",
+       "tone": "slate"
+      }
+     ]
+    }
+   ],
+   "seed": [
+    {
+     "data": {
+      "ref": "1",
+      "workstream": "Policies",
+      "action": "Adopt and approve the SOC 2 policy set",
+      "criteria": "CC1-CC5",
+      "priority": "High",
+      "owner": "CISO",
+      "target_date": "2026-09-01",
+      "status": "Not started"
+     }
+    },
+    {
+     "data": {
+      "ref": "2",
+      "workstream": "Access",
+      "action": "Implement quarterly access reviews and MFA",
+      "criteria": "CC6",
+      "priority": "IT",
+      "owner": "High",
+      "target_date": "2026-09-01",
+      "status": "Not started"
+     }
+    },
+    {
+     "data": {
+      "ref": "3",
+      "workstream": "Monitoring",
+      "action": "Stand up logging, monitoring and incident response",
+      "criteria": "CC7",
+      "priority": "SecOps",
+      "owner": "High",
+      "target_date": "2026-10-01",
+      "status": "Not started"
+     }
+    }
+   ],
+   "formSections": [
+    {
+     "title": "Item",
+     "keys": [
+      "ref",
+      "workstream"
+     ]
+    },
+    {
+     "title": "Assessment",
+     "keys": [
+      "action",
+      "criteria",
+      "priority",
+      "status"
+     ]
+    },
+    {
+     "title": "Ownership & dates",
+     "keys": [
+      "owner",
+      "target_date"
+     ]
+    }
+   ]
+  },
+  {
+   "type": "soc2__soc2_risk_assessment_template",
+   "label": "Risk Assessment",
+   "description": "SOC 2 — Risk Assessment (from the template).",
+   "columns": [
+    {
+     "key": "ref",
+     "label": "Ref",
+     "type": "auto"
+    },
+    {
+     "key": "risk",
+     "label": "Risk",
+     "type": "text"
+    },
+    {
+     "key": "category",
+     "label": "Category",
+     "type": "select",
+     "options": [
+      {
+       "value": "Security",
+       "label": "Security",
+       "tone": "slate"
+      },
+      {
+       "value": "Availability",
+       "label": "Availability",
+       "tone": "slate"
+      }
+     ]
+    },
+    {
+     "key": "likelihood",
+     "label": "Likelihood",
+     "type": "select",
+     "options": [
+      {
+       "value": "Medium",
+       "label": "Medium",
+       "tone": "amber"
+      }
+     ]
+    },
+    {
+     "key": "impact",
+     "label": "Impact",
+     "type": "select",
+     "options": [
+      {
+       "value": "High",
+       "label": "High",
+       "tone": "rose"
+      }
+     ]
+    },
+    {
+     "key": "inherent_risk",
+     "label": "Inherent risk",
+     "type": "text"
+    },
+    {
+     "key": "treatment",
+     "label": "Treatment",
+     "type": "textarea"
+    },
+    {
+     "key": "residual_risk",
+     "label": "Residual risk",
+     "type": "text"
+    },
+    {
+     "key": "owner",
+     "label": "Owner",
+     "type": "text",
+     "picker": "users"
+    },
+    {
+     "key": "status",
+     "label": "Status",
+     "type": "select",
+     "options": [
+      {
+       "value": "Open",
+       "label": "Open",
+       "tone": "rose"
+      }
+     ]
+    }
+   ],
+   "seed": [
+    {
+     "data": {
+      "ref": "1",
+      "risk": "Unauthorised access to customer data",
+      "category": "Security",
+      "likelihood": "Medium",
+      "impact": "High",
+      "inherent_risk": "High",
+      "treatment": "MFA, least privilege, monitoring",
+      "residual_risk": "Low",
+      "owner": "CISO",
+      "status": "Open"
+     }
+    },
+    {
+     "data": {
+      "ref": "2",
+      "risk": "Service outage from a single point of failure",
+      "category": "Availability",
+      "likelihood": "Medium",
+      "impact": "High",
+      "inherent_risk": "High",
+      "treatment": "Redundancy, backups, DR plan",
+      "residual_risk": "Medium",
+      "owner": "IT",
+      "status": "Open"
+     }
+    }
+   ],
+   "formSections": [
+    {
+     "title": "Item",
+     "keys": [
+      "ref",
+      "risk"
+     ]
+    },
+    {
+     "title": "Assessment",
+     "keys": [
+      "category",
+      "likelihood",
+      "impact",
+      "inherent_risk",
+      "treatment",
+      "residual_risk",
+      "status"
+     ]
+    },
+    {
+     "title": "Ownership & dates",
+     "keys": [
+      "owner"
+     ]
+    }
+   ]
+  },
+  {
+   "type": "soc2__soc2_trust_services_criteria_gap_assessment_temp",
+   "label": "Trust Services Criteria Gap Assessment",
+   "description": "SOC 2 — Trust Services Criteria Gap Assessment (from the template).",
+   "columns": [
+    {
+     "key": "criteria_area",
+     "label": "Criteria area",
+     "type": "text",
+     "picker": "framework_controls"
+    },
+    {
+     "key": "ref",
+     "label": "Ref",
+     "type": "auto"
+    },
+    {
+     "key": "outcome_to_verify",
+     "label": "Outcome to verify",
+     "type": "textarea"
+    },
+    {
+     "key": "status",
+     "label": "Status",
+     "type": "text"
+    },
+    {
+     "key": "evidence_notes",
+     "label": "Evidence / notes",
+     "type": "text",
+     "picker": "evidence"
+    },
+    {
+     "key": "owner",
+     "label": "Owner",
+     "type": "text",
+     "picker": "users"
+    }
+   ],
+   "seed": [
+    {
+     "data": {
+      "criteria_area": "CC1 Control Environment",
+      "ref": "CC1",
+      "outcome_to_verify": "Integrity, ethics, board oversight, organisational structure, accountability and competence are established",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "criteria_area": "CC2 Communication & Information",
+      "ref": "CC2",
+      "outcome_to_verify": "Relevant information is generated and communicated internally and externally, including security commitments",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "criteria_area": "CC3 Risk Assessment",
+      "ref": "CC3",
+      "outcome_to_verify": "Objectives are set and risks to them identified, assessed and managed, including fraud and change",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "criteria_area": "CC4 Monitoring Activities",
+      "ref": "CC4",
+      "outcome_to_verify": "Controls are monitored through ongoing and separate evaluations, and deficiencies are addressed",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "criteria_area": "CC5 Control Activities",
+      "ref": "CC5",
+      "outcome_to_verify": "Control activities, including over technology, are selected and deployed to mitigate risk",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "criteria_area": "CC6 Logical & Physical Access",
+      "ref": "CC6",
+      "outcome_to_verify": "Logical and physical access is restricted, provisioned, reviewed and removed; data is protected",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "criteria_area": "CC7 System Operations",
+      "ref": "CC7",
+      "outcome_to_verify": "Vulnerabilities are detected and monitored, and security incidents are responded to and resolved",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "criteria_area": "CC8 Change Management",
+      "ref": "CC8",
+      "outcome_to_verify": "Changes to infrastructure, data, software and procedures are authorised, designed, tested and approved",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "criteria_area": "CC9 Risk Mitigation",
+      "ref": "CC9",
+      "outcome_to_verify": "Risk-mitigation activities, including for vendors and business disruptions, are in place",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "criteria_area": "Availability (A)",
+      "ref": "A1",
+      "outcome_to_verify": "Capacity, environmental protections, backup and recovery support the availability commitments",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "criteria_area": "Confidentiality (C)",
+      "ref": "C1",
+      "outcome_to_verify": "Confidential information is identified, protected and disposed of per commitments",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "criteria_area": "Processing Integrity (PI)",
+      "ref": "PI1",
+      "outcome_to_verify": "Processing is complete, valid, accurate, timely and authorised (where in scope)",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "criteria_area": "Privacy (P)",
+      "ref": "P1",
+      "outcome_to_verify": "Personal information is collected, used, retained, disclosed and disposed of per the privacy notice (where in scope)",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    }
+   ],
+   "formSections": [
+    {
+     "title": "Item",
+     "keys": [
+      "criteria_area",
+      "ref"
+     ]
+    },
+    {
+     "title": "Assessment",
+     "keys": [
+      "outcome_to_verify",
+      "status",
+      "evidence_notes"
+     ]
+    },
+    {
+     "title": "Ownership & dates",
+     "keys": [
+      "owner"
+     ]
+    }
+   ]
+  }
+ ],
+ "documents": [
+  {
+   "type": "soc2__soc2_incident_response_policy_template_1",
+   "label": "Incident Response Policy",
+   "control_ref": null,
+   "sections": [
+    {
+     "heading": "1. Purpose",
+     "body": "This policy sets out how the organisation responds to security incidents affecting the in-scope services, so incidents are detected, contained, resolved and learned from, supporting the SOC 2 system operations criteria."
+    },
+    {
+     "heading": "2. Scope",
+     "body": "All security incidents affecting the systems and data supporting the in-scope services."
+    },
+    {
+     "heading": "3. Incident Process",
+     "body": "A documented process governs the lifecycle of an incident:\n- It covers detection, reporting, triage, containment, eradication, recovery and closure.\n- Roles and severity levels are defined so the response is coordinated and proportionate.\n- Evidence is preserved to support investigation and any notification."
+    },
+    {
+     "heading": "4. Communication",
+     "body": "Communication during an incident is defined in advance:\n- Internal escalation paths and decision authority are set.\n- Customer and regulator notification is made where service commitments or law require, on the required timeline.\n- [FILL IN: your customer-notification commitments and timelines.]"
+    },
+    {
+     "heading": "5. Post-Incident",
+     "body": "After a significant incident, a review captures the root cause and lessons learned, and the resulting improvements are tracked to completion."
+    },
+    {
+     "heading": "6. Testing",
+     "body": "The incident response process is exercised periodically (for example a tabletop) so it works when a real incident occurs."
+    },
+    {
+     "heading": "7. Disclaimer",
+     "body": "This template is an independently created resource to help you work toward compliance. It is not affiliated with, endorsed by, or certified by the AICPA or any standards body, does not reproduce the text of any standard or the Trust Services Criteria, and is not a substitute for professional or legal advice. Obtain the official criteria and a qualified assessor for an actual SOC 2 engagement."
+    },
+    {
+     "heading": "8. Roles & Responsibilities",
+     "body": "",
+     "table": {
+      "columns": [
+       "Role",
+       "Responsibilities"
+      ],
+      "rows": [
+       [
+        "Incident lead",
+        "Runs incident response."
+       ],
+       [
+        "CISO / Security Lead",
+        "Owns the policy, approves exceptions, monitors compliance and reports to leadership."
+       ],
+       [
+        "IT / Operations",
+        "Implements and maintains the technical controls described in this document."
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "9. Testing & Maintenance",
+     "body": "This plan is reviewed at least annually and after every activation or major change. Exercises (tabletop or full) are scheduled to validate the plan and results are recorded as improvement actions."
+    }
+   ]
+  },
+  {
+   "type": "soc2__soc2_information_security_program_policy_templat",
+   "label": "Information Security Program Policy",
+   "control_ref": null,
+   "sections": [
+    {
+     "heading": "1. Purpose",
+     "body": "This policy establishes the information security programme that underpins the organisation's SOC 2 controls, covering governance, risk, control activities, communication and monitoring, in line with the SOC 2 common criteria."
+    },
+    {
+     "heading": "2. Scope",
+     "body": "The organisation's information systems, data and the people and processes that support the in-scope services."
+    },
+    {
+     "heading": "3. Governance and Control Environment",
+     "body": "Leadership establishes the environment in which controls operate:\n- Leadership sets the tone for security and demonstrates a commitment to integrity and competence.\n- Roles and responsibilities for security are defined, and people are held accountable for them.\n- The organisational structure and reporting lines for security are clear."
+    },
+    {
+     "heading": "4. Risk Assessment",
+     "body": "Risks to the service commitments are identified, assessed and treated through a documented risk assessment (see the SOC 2 risk assessment), which is revisited as the business and threats change."
+    },
+    {
+     "heading": "5. Control Activities",
+     "body": "Controls are selected and operated to address the assessed risks:\n- Control activities, including over technology, are designed to mitigate risks to the commitments.\n- They are recorded in the control matrix and mapped to the applicable criteria.\n- Changes to systems and controls are managed so the control environment is not eroded."
+    },
+    {
+     "heading": "6. Communication and Monitoring",
+     "body": "The programme is communicated and kept effective:\n- Security commitments and responsibilities are communicated internally and to customers.\n- Controls are monitored, and deficiencies are tracked to resolution.\n- [FILL IN: how often the programme and controls are reviewed.]"
+    },
+    {
+     "heading": "7. Disclaimer",
+     "body": "This template is an independently created resource to help you work toward compliance. It is not affiliated with, endorsed by, or certified by the AICPA or any standards body, does not reproduce the text of any standard or the Trust Services Criteria, and is not a substitute for professional or legal advice. Obtain the official criteria and a qualified assessor for an actual SOC 2 engagement."
+    },
+    {
+     "heading": "8. Roles & Responsibilities",
+     "body": "",
+     "table": {
+      "columns": [
+       "Role",
+       "Responsibilities"
+      ],
+      "rows": [
+       [
+        "CISO",
+        "Owns the security programme."
+       ],
+       [
+        "IT / Operations",
+        "Implements and maintains the technical controls described in this document."
+       ],
+       [
+        "Managers",
+        "Ensure their teams understand and follow the policy."
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "9. Compliance & Enforcement",
+     "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+    },
+    {
+     "heading": "10. Exceptions",
+     "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+    },
+    {
+     "heading": "11. Review",
+     "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+    }
+   ]
+  },
+  {
+   "type": "soc2__soc2_logging_and_monitoring_policy_template_1",
+   "label": "Logging And Monitoring Policy",
+   "control_ref": null,
+   "sections": [
+    {
+     "heading": "1. Purpose",
+     "body": "This policy ensures security-relevant events are logged and monitored so the organisation can detect, investigate and respond to anomalies and incidents, supporting the SOC 2 system operations criteria."
+    },
+    {
+     "heading": "2. Scope",
+     "body": "The systems, applications and infrastructure supporting the in-scope services."
+    },
+    {
+     "heading": "3. Logging",
+     "body": "Security-relevant activity is captured and preserved:\n- Authentication, access, configuration changes and administrative actions are logged.\n- Logs are protected against tampering and unauthorised access.\n- Clocks are synchronised and logs are retained for a defined period."
+    },
+    {
+     "heading": "4. Monitoring and Detection",
+     "body": "The environment is actively watched:\n- Logs and systems are monitored for anomalies and indicators of compromise.\n- Alerting is configured on defined conditions, and alerts are triaged.\n- [FILL IN: name your logging and monitoring tools.]"
+    },
+    {
+     "heading": "5. Vulnerability Monitoring",
+     "body": "Vulnerabilities are identified through scanning and other means, risk-ranked, and tracked to remediation within defined timeframes."
+    },
+    {
+     "heading": "6. Response",
+     "body": "Detected events are triaged and escalated to the incident response process where warranted, so detection leads to action."
+    },
+    {
+     "heading": "7. Disclaimer",
+     "body": "This template is an independently created resource to help you work toward compliance. It is not affiliated with, endorsed by, or certified by the AICPA or any standards body, does not reproduce the text of any standard or the Trust Services Criteria, and is not a substitute for professional or legal advice. Obtain the official criteria and a qualified assessor for an actual SOC 2 engagement."
+    },
+    {
+     "heading": "8. Roles & Responsibilities",
+     "body": "",
+     "table": {
+      "columns": [
+       "Role",
+       "Responsibilities"
+      ],
+      "rows": [
+       [
+        "SecOps",
+        "Runs logging and monitoring."
+       ],
+       [
+        "CISO / Security Lead",
+        "Owns the policy, approves exceptions, monitors compliance and reports to leadership."
+       ],
+       [
+        "IT / Operations",
+        "Implements and maintains the technical controls described in this document."
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "9. Compliance & Enforcement",
+     "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+    },
+    {
+     "heading": "10. Exceptions",
+     "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+    },
+    {
+     "heading": "11. Review",
+     "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+    }
+   ]
+  },
+  {
+   "type": "soc2__soc2_logical_access_control_policy_template_1",
+   "label": "Logical Access Control Policy",
+   "control_ref": null,
+   "sections": [
+    {
+     "heading": "1. Purpose",
+     "body": "This policy governs logical access to the organisation's systems and data, supporting the SOC 2 logical and physical access criteria, so access is restricted to authorised users and managed across its lifecycle."
+    },
+    {
+     "heading": "2. Scope",
+     "body": "All systems, applications and data supporting the in-scope services, and all user and service accounts."
+    },
+    {
+     "heading": "3. Access Provisioning",
+     "body": "Access is granted in a controlled, accountable way:\n- Access is granted only on documented approval, on the principle of least privilege.\n- Each account is unique and attributable to an individual; shared accounts are avoided.\n- Service accounts are inventoried and owned."
+    },
+    {
+     "heading": "4. Authentication",
+     "body": "Accounts are protected by strong authentication:\n- Strong authentication is enforced, with multi-factor authentication for remote and privileged access.\n- Credential standards (length, rotation where justified, secure storage) are applied."
+    },
+    {
+     "heading": "5. Access Reviews",
+     "body": "Standing access is kept correct:\n- User access is reviewed at a defined frequency, and privileged access more often.\n- Access is removed promptly on role change or termination.\n- [FILL IN: your access-review cadence and joiner/mover/leaver process.]"
+    },
+    {
+     "heading": "6. Privileged and Data Access",
+     "body": "Higher-risk access and data are given extra protection: privileged access is restricted and monitored, and data is protected in transit and at rest according to its classification."
+    },
+    {
+     "heading": "7. Disclaimer",
+     "body": "This template is an independently created resource to help you work toward compliance. It is not affiliated with, endorsed by, or certified by the AICPA or any standards body, does not reproduce the text of any standard or the Trust Services Criteria, and is not a substitute for professional or legal advice. Obtain the official criteria and a qualified assessor for an actual SOC 2 engagement."
+    },
+    {
+     "heading": "8. Roles & Responsibilities",
+     "body": "",
+     "table": {
+      "columns": [
+       "Role",
+       "Responsibilities"
+      ],
+      "rows": [
+       [
+        "IT",
+        "Provisions and reviews access."
+       ],
+       [
+        "CISO / Security Lead",
+        "Owns the policy, approves exceptions, monitors compliance and reports to leadership."
+       ],
+       [
+        "Managers",
+        "Ensure their teams understand and follow the policy."
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "9. Compliance & Enforcement",
+     "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+    },
+    {
+     "heading": "10. Exceptions",
+     "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+    },
+    {
+     "heading": "11. Review",
+     "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+    }
+   ]
+  },
+  {
+   "type": "soc2__soc2_system_description_template_1",
+   "label": "System Description",
+   "control_ref": null,
+   "sections": [
+    {
+     "heading": "1. Purpose",
+     "body": "This system description sets out the boundaries of the system covered by a SOC 2 report, the service commitments and system requirements, and the controls in place. It is a required part of a SOC 2 report and the reference an assessor works from."
+    },
+    {
+     "heading": "2. Scope",
+     "body": "The infrastructure, software, people, procedures and data that deliver the in-scope services."
+    },
+    {
+     "heading": "3. System Overview",
+     "body": "The system is described so a reader understands what is covered:",
+     "table": {
+      "columns": [
+       "Element",
+       "Detail"
+      ],
+      "rows": [
+       [
+        "Services provided",
+        "[FILL IN: the services in scope of the SOC 2 report]"
+       ],
+       [
+        "System boundaries",
+        "[FILL IN: the infrastructure, software, people, data and processes in scope]"
+       ],
+       [
+        "Trust services categories",
+        "[FILL IN: Security, and any of Availability, Confidentiality, Processing Integrity, Privacy]"
+       ],
+       [
+        "Principal service commitments",
+        "[FILL IN: the commitments you make to customers]"
+       ],
+       [
+        "System requirements",
+        "[FILL IN: the requirements to meet those commitments]"
+       ],
+       [
+        "Subservice organisations",
+        "[FILL IN: cloud/hosting and other subservice providers, and carve-out vs inclusive method]"
+       ],
+       [
+        "Complementary user-entity controls",
+        "[FILL IN: controls customers are expected to operate]"
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "4. Controls",
+     "body": "The controls that meet the applicable trust services criteria are described and recorded in the control matrix, with the evidence that demonstrates them."
+    },
+    {
+     "heading": "5. How the Description Is Used",
+     "body": "The description is written for the reader of the report (a customer or their auditor), in enough detail that they understand the boundary, the commitments and the controls without seeing the environment. It is kept consistent with the control matrix and is updated when the services, boundary or commitments change, so that the description used for the report period matches what was actually in place.\n[FILL IN: the period this description covers.]"
+    },
+    {
+     "heading": "6. Disclaimer",
+     "body": "This template is an independently created resource to help you work toward compliance. It is not affiliated with, endorsed by, or certified by the AICPA or any standards body, does not reproduce the text of any standard or the Trust Services Criteria, and is not a substitute for professional or legal advice. Obtain the official criteria and a qualified assessor for an actual SOC 2 engagement."
+    },
+    {
+     "heading": "7. Roles & Responsibilities",
+     "body": "",
+     "table": {
+      "columns": [
+       "Role",
+       "Responsibilities"
+      ],
+      "rows": [
+       [
+        "Compliance owner",
+        "Owns the system description and the report."
+       ],
+       [
+        "CISO / Security Lead",
+        "Owns the policy, approves exceptions, monitors compliance and reports to leadership."
+       ],
+       [
+        "IT / Operations",
+        "Implements and maintains the technical controls described in this document."
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "8. Testing & Maintenance",
+     "body": "This plan is reviewed at least annually and after every activation or major change. Exercises (tabletop or full) are scheduled to validate the plan and results are recorded as improvement actions."
+    }
+   ]
+  }
+ ]
+}

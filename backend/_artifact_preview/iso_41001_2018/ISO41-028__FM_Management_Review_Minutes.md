@@ -1,0 +1,48 @@
+<!-- iso_41001_2018 / ISO41-028 | type=Record/Log | mode=table | model=gpt-5.5 | 9416 chars -->
+
+## FM Management Review Minutes (DOCX template)
+
+_Editable template — add your own rows. The example row(s) below are placeholders to replace._
+
+| Review_ID | Meeting_Date | Meeting_Type | Chair_Top_Management_Representative | Attendees_and_Roles | Scope_of_Review | Review_Period_Covered | Previous_Review_Action_Status | Changes_in_Internal_and_External_Issues | Changes_in_Interested_Party_Needs_and_Requirements | FMS_Objectives_Performance | FM_Process_Performance_and_Service_Conformity | Monitoring_and_Measurement_Results | Internal_Audit_Results | Nonconformities_and_Corrective_Actions | Customer_User_Satisfaction_and_Feedback | Provider_Supplier_Performance | Risks_and_Opportunities_Status | Adequacy_of_Resources | Opportunities_for_Continual_Improvement | Management_Review_Decisions | Actions_Arising | Action_Owner | Action_Due_Date | Action_Status | Required_Changes_to_FMS | Required_Resource_Changes | Approval_Name_and_Role | Approval_Date | Record_Location |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [EXAMPLE: FMS-MR-2026-01] | [EXAMPLE: 2026-03-31] | [EXAMPLE: Quarterly] | [EXAMPLE: Jane Smith - Chief Operating Officer] | [EXAMPLE: Jane Smith - COO; Ahmed Khan - Head of Facilities; Maria Lopez - HSE Manager; Priya Shah - Procurement Lead] | [EXAMPLE: Corporate HQ, regional offices, hard FM, soft FM, reception, cleaning, security, maintenance and utilities management] | [EXAMPLE: 2026-01-01 to 2026-03-31] | [EXAMPLE: 6 prior actions reviewed; 4 completed and effective; 1 in progress; 1 overdue linked to supplier performance dashboard implementation] | [EXAMPLE: New hybrid working policy introduced; increased energy tariff; lease renewal planned for regional office] | [EXAMPLE: Occupants requested improved meeting room availability data; client requires monthly sustainability reporting from Q2] | [EXAMPLE: OBJ-FM-01 response time target 95%, actual 93%, Amber; OBJ-FM-02 planned maintenance completion target 98%, actual 99%, Green] | [EXAMPLE: Planned maintenance and cleaning services conformed to requirements; security incident response met SLA; meeting room availability below target] | [EXAMPLE: Helpdesk closure rate 94%; statutory inspection completion 100%; energy use intensity increased 4% against prior quarter] | [EXAMPLE: IA-FMS-2026-01 completed 2026-03-10; 0 major findings, 2 minor findings, 3 observations] | [EXAMPLE: 5 nonconformities open; 3 corrective actions closed; repeat issue identified for contractor permit documentation] | [EXAMPLE: User satisfaction survey score 4.1/5; recurring feedback on room booking reliability and HVAC comfort] | [EXAMPLE: Cleaning contractor Green; maintenance contractor Amber due to late reports; security contractor Green] | [EXAMPLE: Top risks unchanged; new Amber risk added for supplier capacity during office refurbishment; opportunity identified for smart occupancy analytics] | [EXAMPLE: Resources adequate for current operations; additional CAFM administrator support required for data quality improvement] | [EXAMPLE: Automate monthly KPI dashboard; improve contractor onboarding checklist; trial sensor-based meeting room utilisation reporting] | [EXAMPLE: Approved revised FM KPI dashboard; approved escalation of overdue supplier reporting issue; agreed to update FM objectives for Q2] | [EXAMPLE: Implement supplier performance dashboard and report monthly to FM leadership] | [EXAMPLE: Priya Shah - Procurement Lead] | [EXAMPLE: 2026-04-30] | [EXAMPLE: Not Started] | [EXAMPLE: Update FMS performance monitoring procedure and supplier review process] | [EXAMPLE: Approve 0.5 FTE temporary CAFM data support for three months] | [EXAMPLE: Jane Smith - Chief Operating Officer] | [EXAMPLE: 2026-04-05] | [EXAMPLE: SharePoint/FMS/Management Review/FMS-MR-2026-01] |
+
+### Column Guidance
+
+| Column | What to enter |
+|---|---|
+| Review_ID | Enter a unique identifier for the management review record, e.g. FMS-MR-YYYY-NN. |
+| Meeting_Date | Enter the date the management review meeting was held in YYYY-MM-DD format. |
+| Meeting_Type | Enter the type of review using one of: Scheduled, Extraordinary, Annual, Quarterly, Post-Incident, Other. |
+| Chair_Top_Management_Representative | Enter the name and role of the top management representative who chaired or formally led the review. |
+| Attendees_and_Roles | List all attendees and their roles, including top management, FM leadership, process owners, and invited specialists; use 'Name - Role' format separated by semicolons. |
+| Scope_of_Review | State the FMS scope reviewed, including sites, services, functions, contracts, or organisational boundaries covered. |
+| Review_Period_Covered | Enter the period reviewed using YYYY-MM-DD to YYYY-MM-DD format. |
+| Previous_Review_Action_Status | Summarise the status of actions from the previous management review, including overdue items and effectiveness of completed actions; reference action IDs where applicable. |
+| Changes_in_Internal_and_External_Issues | Record significant internal or external changes affecting the FMS, such as organisational changes, legal/regulatory changes, market conditions, technology, assets, operating model, or strategic priorities. |
+| Changes_in_Interested_Party_Needs_and_Requirements | Record changes in needs, expectations, or requirements of relevant interested parties such as customers, users, regulators, employees, landlords, service providers, or community stakeholders. |
+| FMS_Objectives_Performance | Record performance against approved FM objectives, including objective reference, target, actual result, variance, and RAG status using Green/Amber/Red. |
+| FM_Process_Performance_and_Service_Conformity | Summarise whether key FM processes and services met planned requirements, SLAs, specifications, statutory obligations, and operational controls. |
+| Monitoring_and_Measurement_Results | Record key results from monitoring, measurement, analysis, and evaluation activities, including KPIs, inspections, compliance checks, asset performance, energy or space metrics where applicable. |
+| Internal_Audit_Results | Summarise relevant FMS audit outcomes, including audit dates, audit references, major/minor findings, observations, and positive findings. |
+| Nonconformities_and_Corrective_Actions | Record FMS nonconformities, incidents, complaints, audit findings, corrective action trends, closure status, and effectiveness results. |
+| Customer_User_Satisfaction_and_Feedback | Summarise satisfaction data and feedback from customers, users, occupants, or client representatives, including survey results, complaints, compliments, or service desk trends. |
+| Provider_Supplier_Performance | Summarise performance of outsourced FM providers, contractors, suppliers, and partners against contract, SLA, compliance, safety, quality, and delivery expectations. |
+| Risks_and_Opportunities_Status | Summarise current FM risks and opportunities, changes in risk ratings, effectiveness of controls, emerging risks, and any escalations required. |
+| Adequacy_of_Resources | Record management's assessment of whether people, budget, infrastructure, technology, information, competence, and supplier resources are adequate for the FMS. |
+| Opportunities_for_Continual_Improvement | Record identified improvement opportunities relating to FMS effectiveness, service delivery, user experience, costs, sustainability, safety, compliance, or process efficiency. |
+| Management_Review_Decisions | Record decisions made by top management during the review, including approvals, rejections, priorities, strategic direction, or escalation decisions. |
+| Actions_Arising | Record each agreed action clearly, starting with a verb, and include enough detail for completion to be objectively verified. |
+| Action_Owner | Enter the role or named individual accountable for completing the action; use 'Name - Role' format. |
+| Action_Due_Date | Enter the agreed completion date for the action in YYYY-MM-DD format. |
+| Action_Status | Enter the current action status using one of: Not Started, In Progress, Completed, Overdue, Deferred, Cancelled. |
+| Required_Changes_to_FMS | Record any approved changes needed to the FMS, such as policy, objectives, processes, procedures, controls, scope, governance, documented information, or service delivery model. |
+| Required_Resource_Changes | Record any approved resource decisions or needs, such as additional budget, headcount, competence, tools, systems, assets, contractors, or training. |
+| Approval_Name_and_Role | Enter the name and role of the person approving the minutes, normally the chair or authorised top management representative. |
+| Approval_Date | Enter the date the minutes were approved in YYYY-MM-DD format. |
+| Record_Location | Enter the controlled repository path, document management link, or record system reference where the approved minutes and supporting evidence are stored. |
+
+### Maintenance
+
+The Head of Facilities or FMS Manager owns this template and updates it after each scheduled or extraordinary management review, at least annually. Inputs are drawn from the CAFM/helpdesk system, KPI dashboards, audit programme, corrective action log, risk register, supplier performance reviews, customer/user feedback records, and controlled FMS document repository.

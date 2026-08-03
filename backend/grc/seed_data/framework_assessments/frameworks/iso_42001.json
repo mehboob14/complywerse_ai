@@ -1,0 +1,508 @@
+{
+  "id": "iso_42001",
+  "name": "ISO/IEC 42001:2023 AI Management System",
+  "version": "First edition 2023-12",
+  "official_sources": [
+    {
+      "title": "ISO/IEC 42001:2023 - Information technology - Artificial intelligence - Management system",
+      "url": "https://www.iso.org/standard/81230.html"
+    },
+    {
+      "title": "Methodology: ISO/IEC 23894:2023 - AI - Guidance on risk management",
+      "url": "https://www.iso.org/standard/77304.html"
+    },
+    {
+      "title": "Methodology: ISO 31000:2018 - Risk management - Guidelines",
+      "url": "https://www.iso.org/iso-31000-risk-management.html"
+    },
+    {
+      "title": "NIST AI Risk Management Framework (AI RMF 1.0)",
+      "url": "https://www.nist.gov/itl/ai-risk-management-framework"
+    }
+  ],
+  "assessment_shapes": [
+    "attestation",
+    "asset_threat_vulnerability"
+  ],
+  "methodology": "ISO/IEC 42001 requires an AI Management System (AIMS) following the harmonised high-level structure: Context (Clause 4), Leadership (5), Planning (6), Support (7), Operation (8), Performance Evaluation (9), Improvement (10). Annex A specifies 38 normative controls across nine objectives (A.2 AI Policy through A.10 Third Parties). Risk assessment follows ISO/IEC 23894 / ISO 31000: identify AI-specific risk sources, evaluate AI system impacts on individuals / groups / societies via AI system impact assessment, then treat through Annex A controls. Each control is attested against the organisation's AIMS scope (provider / producer / customer / partner / subject), implementation status, evidence, and a residual risk acceptance per the AI policy.",
+  "scoping_inputs": [
+    {
+      "id": "ai_roles",
+      "type": "multi_select",
+      "options": [
+        "AI provider",
+        "AI producer / developer",
+        "AI customer",
+        "AI user",
+        "AI partner / integrator",
+        "AI subject"
+      ],
+      "label": "Organization's AI role(s) within scope"
+    },
+    {
+      "id": "ai_systems",
+      "type": "list",
+      "label": "AI systems / models in scope of the AIMS"
+    },
+    {
+      "id": "data_sources",
+      "type": "list",
+      "label": "Training, validation and inference data sources"
+    },
+    {
+      "id": "ai_use_cases",
+      "type": "list",
+      "label": "Intended AI use cases and deployment contexts"
+    },
+    {
+      "id": "regulatory_context",
+      "type": "multi_select",
+      "options": [
+        "EU AI Act",
+        "GDPR",
+        "NIS2",
+        "Sector-specific (finance / health / etc.)",
+        "None"
+      ],
+      "label": "Applicable AI regulations"
+    },
+    {
+      "id": "integration_with",
+      "type": "multi_select",
+      "options": [
+        "ISO/IEC 27001 ISMS",
+        "ISO/IEC 27701 PIMS",
+        "ISO 9001 QMS",
+        "Standalone"
+      ],
+      "label": "Integration with other management systems"
+    }
+  ],
+  "risk_model": {
+    "factors": [
+      "ai_system",
+      "risk_source",
+      "ai_impact_individuals",
+      "ai_impact_groups",
+      "ai_impact_societies",
+      "likelihood",
+      "impact_c",
+      "impact_i",
+      "impact_a",
+      "impact_fairness",
+      "impact_safety"
+    ],
+    "scales": {
+      "likelihood": [
+        { "value": 1, "label": "Rare",           "definition": "May occur only in exceptional AI lifecycle conditions (<5%)." },
+        { "value": 2, "label": "Unlikely",       "definition": "Could occur but not expected during normal AI operation (5-25%)." },
+        { "value": 3, "label": "Possible",       "definition": "Might occur given the AI use case profile (25-50%)." },
+        { "value": 4, "label": "Likely",         "definition": "Will probably occur during normal AI lifecycle (50-75%)." },
+        { "value": 5, "label": "Almost Certain", "definition": "Expected to occur given the AI use case (>75%)." }
+      ],
+      "impact": [
+        { "value": 1, "label": "Insignificant", "definition": "Negligible effect on individuals, groups, societies or organisational objectives." },
+        { "value": 2, "label": "Minor",         "definition": "Limited adverse effect; recoverable; affects a small number of subjects." },
+        { "value": 3, "label": "Moderate",      "definition": "Notable adverse effect; remediable; multiple subjects or one critical AI system." },
+        { "value": 4, "label": "Major",         "definition": "Serious adverse effect on rights / freedoms / safety; large affected group; regulatory escalation likely." },
+        { "value": 5, "label": "Severe",        "definition": "Widespread harm to fundamental rights, safety or society; AI system must be withdrawn or fundamentally re-engineered." }
+      ],
+      "maturity": [
+        { "value": 0, "label": "Non-existent" },
+        { "value": 1, "label": "Initial / Ad-hoc" },
+        { "value": 2, "label": "Repeatable but Informal" },
+        { "value": 3, "label": "Defined Process" },
+        { "value": 4, "label": "Managed and Measurable" },
+        { "value": 5, "label": "Optimised" }
+      ],
+      "implementation_status": [
+        { "value": "NI", "label": "Not Implemented" },
+        { "value": "PI", "label": "Partially Implemented" },
+        { "value": "LI", "label": "Largely Implemented" },
+        { "value": "FI", "label": "Fully Implemented" },
+        { "value": "NA", "label": "Not Applicable (justify in SoA)" }
+      ]
+    },
+    "matrix": "5x5",
+    "calculation": "likelihood * max(impact_c, impact_i, impact_a, impact_fairness, impact_safety)",
+    "acceptance_threshold": 6,
+    "thresholds": {
+      "low":      [1, 4],
+      "medium":   [5, 9],
+      "high":     [10, 16],
+      "critical": [17, 25]
+    }
+  },
+  "domains": [
+    {
+      "id": "A2_AI_POLICY",
+      "name": "A.2 — Policies related to AI",
+      "controls": [
+        {
+          "id": "A.2.2",
+          "title": "AI policy",
+          "description": "Document, communicate and review an AI policy reflecting the organisation's strategic intent, AI principles, and commitment to responsible AI.",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              { "field": "implementation_status", "type": "select", "scale": "implementation_status", "prompt": "Implementation status of the AI policy?" },
+              { "field": "policy_owner", "type": "text", "prompt": "Who owns the AI policy (e.g. Chief AI Officer, CISO)?" },
+              { "field": "evidence", "type": "text", "prompt": "Evidence (policy document version, last review date, approval minutes)." },
+              { "field": "alignment", "type": "text", "prompt": "How does the policy align with the organisation's wider risk and compliance frameworks?" },
+              { "field": "remediation_plan", "type": "text", "prompt": "Remediation plan if gaps exist." },
+              { "field": "target_date", "type": "date", "prompt": "Target implementation / review date." }
+            ]
+          }
+        },
+        {
+          "id": "A.2.3",
+          "title": "Alignment with other organisational policies",
+          "description": "Ensure the AI policy aligns with relevant policies (information security, privacy, quality, ethics).",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              { "field": "implementation_status", "type": "select", "scale": "implementation_status", "prompt": "Status of cross-policy alignment?" },
+              { "field": "aligned_policies", "type": "text", "prompt": "Which existing policies (ISMS, PIMS, ethics, HR) reference or are referenced by the AI policy?" },
+              { "field": "evidence", "type": "text", "prompt": "Evidence of cross-references / version control." },
+              { "field": "remediation_plan", "type": "text", "prompt": "Remediation plan if alignment gaps exist." },
+              { "field": "owner", "type": "text", "prompt": "Owner." },
+              { "field": "target_date", "type": "date", "prompt": "Target date." }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "A3_INTERNAL_ORG",
+      "name": "A.3 — Internal organization",
+      "controls": [
+        {
+          "id": "A.3.2",
+          "title": "AI roles and responsibilities",
+          "description": "Define, document and assign AI-related roles and responsibilities across the AI system lifecycle.",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              { "field": "implementation_status", "type": "select", "scale": "implementation_status", "prompt": "Implementation status?" },
+              { "field": "roles_documented", "type": "text", "prompt": "Which AI roles are documented (AI owner, AI risk officer, model owner, data steward)?" },
+              { "field": "raci_evidence", "type": "text", "prompt": "RACI matrix or equivalent evidence." },
+              { "field": "gaps", "type": "text", "prompt": "Roles not yet assigned / gaps." },
+              { "field": "owner", "type": "text", "prompt": "Owner." },
+              { "field": "target_date", "type": "date", "prompt": "Target date." }
+            ]
+          }
+        },
+        {
+          "id": "A.3.3",
+          "title": "Reporting of concerns",
+          "description": "Establish a process for reporting AI-related concerns (whistleblowing, harm reporting, ethical concerns).",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              { "field": "implementation_status", "type": "select", "scale": "implementation_status", "prompt": "Status of the reporting channel?" },
+              { "field": "channel_description", "type": "text", "prompt": "How can internal and external parties report AI concerns?" },
+              { "field": "evidence", "type": "text", "prompt": "Evidence: policy, reporting URL / hotline, recent reports handled." },
+              { "field": "non_retaliation", "type": "boolean", "prompt": "Is non-retaliation documented?" },
+              { "field": "owner", "type": "text", "prompt": "Owner." },
+              { "field": "target_date", "type": "date", "prompt": "Target date." }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "A4_RESOURCES",
+      "name": "A.4 — Resources for AI systems",
+      "controls": [
+        {
+          "id": "A.4.2",
+          "title": "Resource documentation",
+          "description": "Identify and document the resources (data, tooling, computing, human) required across the AI system lifecycle.",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              { "field": "implementation_status", "type": "select", "scale": "implementation_status", "prompt": "Implementation status?" },
+              { "field": "data_resources", "type": "text", "prompt": "Training / validation / inference data sources and provenance documented?" },
+              { "field": "system_resources", "type": "text", "prompt": "Compute, tooling and platforms documented?" },
+              { "field": "human_resources", "type": "text", "prompt": "Roles, competencies and human oversight capacity documented?" },
+              { "field": "evidence", "type": "text", "prompt": "Evidence (inventories, model cards, datasheets)." },
+              { "field": "owner", "type": "text", "prompt": "Owner." },
+              { "field": "target_date", "type": "date", "prompt": "Target date." }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "A5_IMPACT_ASSESSMENT",
+      "name": "A.5 — AI system impact assessment",
+      "controls": [
+        {
+          "id": "A.5.2",
+          "title": "AI system impact assessment process",
+          "description": "Establish a process to assess the potential impact of AI systems on individuals, groups of individuals and societies, throughout the AI system lifecycle.",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              { "field": "ai_system", "type": "text", "prompt": "Which AI system is being assessed?" },
+              { "field": "intended_use", "type": "text", "prompt": "Intended use and deployment context." },
+              { "field": "affected_subjects", "type": "text", "prompt": "Who could be affected (individuals / vulnerable groups / society / environment)?" },
+              { "field": "ai_impact_individuals", "type": "scale", "scale": "impact", "prompt": "Impact on individuals (rights, freedoms, dignity)?" },
+              { "field": "ai_impact_groups", "type": "scale", "scale": "impact", "prompt": "Impact on groups (fairness, non-discrimination)?" },
+              { "field": "ai_impact_societies", "type": "scale", "scale": "impact", "prompt": "Impact on societies (democratic processes, environment, public safety)?" },
+              { "field": "impact_fairness", "type": "scale", "scale": "impact", "prompt": "Fairness / bias impact (1-5)?" },
+              { "field": "impact_safety", "type": "scale", "scale": "impact", "prompt": "Safety impact (1-5)?" },
+              { "field": "likelihood", "type": "scale", "scale": "likelihood", "prompt": "Likelihood of materialisation?" },
+              { "field": "existing_controls", "type": "text", "prompt": "Existing safeguards (bias testing, human review, model cards)." },
+              { "field": "treatment", "type": "select", "options": ["modify", "retain", "avoid", "share"], "prompt": "Risk treatment." },
+              { "field": "residual_acceptance", "type": "text", "prompt": "Justification for residual risk acceptance." },
+              { "field": "owner", "type": "text", "prompt": "Risk owner." },
+              { "field": "target_date", "type": "date", "prompt": "Target date." }
+            ]
+          }
+        },
+        {
+          "id": "A.5.3",
+          "title": "Documentation of AI system impact assessments",
+          "description": "Document the results of AI system impact assessments and retain them for the lifetime of the AI system.",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              { "field": "implementation_status", "type": "select", "scale": "implementation_status", "prompt": "Status of impact assessment documentation?" },
+              { "field": "assessments_completed", "type": "text", "prompt": "Number of AI systems with completed impact assessments." },
+              { "field": "retention_policy", "type": "text", "prompt": "Retention policy for impact assessment records." },
+              { "field": "evidence", "type": "text", "prompt": "Evidence (impact assessment register, sample reports)." },
+              { "field": "owner", "type": "text", "prompt": "Owner." },
+              { "field": "target_date", "type": "date", "prompt": "Target date." }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "A6_LIFECYCLE",
+      "name": "A.6 — AI system lifecycle",
+      "controls": [
+        {
+          "id": "A.6.1.2",
+          "title": "Responsible AI system design and development objectives",
+          "description": "Set objectives for the responsible design and development of AI systems addressing fairness, transparency, accountability, safety, security and privacy.",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              { "field": "implementation_status", "type": "select", "scale": "implementation_status", "prompt": "Implementation status?" },
+              { "field": "objectives", "type": "text", "prompt": "Which responsible-AI objectives are formally set (e.g. fairness threshold, explainability target)?" },
+              { "field": "measurement", "type": "text", "prompt": "How are objectives measured during design and development?" },
+              { "field": "evidence", "type": "text", "prompt": "Evidence (design brief, model cards, bias-test reports)." },
+              { "field": "gaps", "type": "text", "prompt": "Gaps identified." },
+              { "field": "owner", "type": "text", "prompt": "Owner." },
+              { "field": "target_date", "type": "date", "prompt": "Target date." }
+            ]
+          }
+        },
+        {
+          "id": "A.6.2.2",
+          "title": "Verification and validation of AI systems",
+          "description": "Verify and validate AI systems against documented requirements throughout the lifecycle.",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              { "field": "implementation_status", "type": "select", "scale": "implementation_status", "prompt": "Implementation status?" },
+              { "field": "v_v_methods", "type": "text", "prompt": "Methods used (test datasets, adversarial testing, red-teaming, drift monitoring)." },
+              { "field": "frequency", "type": "text", "prompt": "Frequency of verification / validation." },
+              { "field": "evidence", "type": "text", "prompt": "Evidence (test reports, sign-offs)." },
+              { "field": "owner", "type": "text", "prompt": "Owner." },
+              { "field": "target_date", "type": "date", "prompt": "Target date." }
+            ]
+          }
+        },
+        {
+          "id": "A.6.2.3",
+          "title": "Deployment of AI systems",
+          "description": "Document and apply controlled deployment of AI systems, including go/no-go criteria and post-deployment monitoring.",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              { "field": "implementation_status", "type": "select", "scale": "implementation_status", "prompt": "Implementation status?" },
+              { "field": "deployment_criteria", "type": "text", "prompt": "Go/no-go criteria documented?" },
+              { "field": "rollback_plan", "type": "text", "prompt": "Rollback procedure documented?" },
+              { "field": "monitoring", "type": "text", "prompt": "Production monitoring (drift, performance, harm reporting)?" },
+              { "field": "evidence", "type": "text", "prompt": "Evidence." },
+              { "field": "owner", "type": "text", "prompt": "Owner." },
+              { "field": "target_date", "type": "date", "prompt": "Target date." }
+            ]
+          }
+        },
+        {
+          "id": "A.6.2.6",
+          "title": "AI system event logging",
+          "description": "Define, capture and retain AI system events sufficient for accountability, incident investigation and audit.",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              { "field": "implementation_status", "type": "select", "scale": "implementation_status", "prompt": "Logging implementation status?" },
+              { "field": "events_logged", "type": "text", "prompt": "Which events are logged (inputs, outputs, retraining, drift, human overrides)?" },
+              { "field": "retention", "type": "text", "prompt": "Retention period and storage protection." },
+              { "field": "evidence", "type": "text", "prompt": "Sample log entry / dashboard." },
+              { "field": "owner", "type": "text", "prompt": "Owner." },
+              { "field": "target_date", "type": "date", "prompt": "Target date." }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "A7_DATA",
+      "name": "A.7 — Data for AI systems",
+      "controls": [
+        {
+          "id": "A.7.2",
+          "title": "Data for development and enhancement of AI systems",
+          "description": "Document data sources, acquisition methods, quality criteria and provenance for data used in AI development and operation.",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              { "field": "implementation_status", "type": "select", "scale": "implementation_status", "prompt": "Implementation status?" },
+              { "field": "data_inventory", "type": "text", "prompt": "Is there a data inventory with provenance?" },
+              { "field": "quality_criteria", "type": "text", "prompt": "Data-quality criteria (accuracy, completeness, representativeness)." },
+              { "field": "consent_lawful_basis", "type": "text", "prompt": "Lawful basis / consent records for personal data." },
+              { "field": "evidence", "type": "text", "prompt": "Datasheets / data cards / sample records." },
+              { "field": "owner", "type": "text", "prompt": "Data steward." },
+              { "field": "target_date", "type": "date", "prompt": "Target date." }
+            ]
+          }
+        },
+        {
+          "id": "A.7.5",
+          "title": "Data quality for AI systems",
+          "description": "Establish and apply data-quality requirements appropriate to the AI system's intended use.",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              { "field": "implementation_status", "type": "select", "scale": "implementation_status", "prompt": "Implementation status?" },
+              { "field": "quality_checks", "type": "text", "prompt": "Quality checks (drift detection, anomaly detection, representativeness tests)." },
+              { "field": "metrics", "type": "text", "prompt": "Quantitative quality metrics tracked." },
+              { "field": "evidence", "type": "text", "prompt": "Evidence." },
+              { "field": "owner", "type": "text", "prompt": "Owner." },
+              { "field": "target_date", "type": "date", "prompt": "Target date." }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "A8_INFO_INTERESTED_PARTIES",
+      "name": "A.8 — Information for interested parties of AI systems",
+      "controls": [
+        {
+          "id": "A.8.2",
+          "title": "System documentation and information for users",
+          "description": "Provide users with documentation enabling responsible use of the AI system (intended use, limitations, instructions, accuracy estimates).",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              { "field": "implementation_status", "type": "select", "scale": "implementation_status", "prompt": "Implementation status?" },
+              { "field": "user_docs", "type": "text", "prompt": "What user-facing documentation exists (system card, user guide, intended-use statement)?" },
+              { "field": "limitations_disclosed", "type": "boolean", "prompt": "Are model limitations explicitly disclosed to users?" },
+              { "field": "evidence", "type": "text", "prompt": "Evidence." },
+              { "field": "owner", "type": "text", "prompt": "Owner." },
+              { "field": "target_date", "type": "date", "prompt": "Target date." }
+            ]
+          }
+        },
+        {
+          "id": "A.8.4",
+          "title": "Communication of incidents",
+          "description": "Establish a process to communicate AI-related incidents to relevant interested parties (users, regulators, the public where required).",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              { "field": "implementation_status", "type": "select", "scale": "implementation_status", "prompt": "Status of incident communication process?" },
+              { "field": "trigger_criteria", "type": "text", "prompt": "Criteria triggering external communication." },
+              { "field": "stakeholders", "type": "text", "prompt": "Notified stakeholders (users, regulators, partners)." },
+              { "field": "evidence", "type": "text", "prompt": "Evidence." },
+              { "field": "owner", "type": "text", "prompt": "Owner." },
+              { "field": "target_date", "type": "date", "prompt": "Target date." }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "A9_USE",
+      "name": "A.9 — Use of AI systems",
+      "controls": [
+        {
+          "id": "A.9.2",
+          "title": "Processes for responsible use of AI systems",
+          "description": "Define processes for the responsible use of AI systems, including intended-use boundaries and human oversight expectations.",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              { "field": "implementation_status", "type": "select", "scale": "implementation_status", "prompt": "Implementation status?" },
+              { "field": "intended_use_boundaries", "type": "text", "prompt": "How are intended-use boundaries communicated and enforced?" },
+              { "field": "human_oversight", "type": "text", "prompt": "Human oversight mechanism (human-in-the-loop, human-on-the-loop, human review thresholds)." },
+              { "field": "training", "type": "text", "prompt": "User training and competence requirements." },
+              { "field": "evidence", "type": "text", "prompt": "Evidence." },
+              { "field": "owner", "type": "text", "prompt": "Owner." },
+              { "field": "target_date", "type": "date", "prompt": "Target date." }
+            ]
+          }
+        },
+        {
+          "id": "A.9.3",
+          "title": "Objectives for responsible use of AI systems",
+          "description": "Set and monitor objectives that ensure AI systems are used in line with their intended purpose.",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              { "field": "implementation_status", "type": "select", "scale": "implementation_status", "prompt": "Implementation status?" },
+              { "field": "objectives", "type": "text", "prompt": "Objectives for responsible use (e.g. ban-list of prohibited uses, monitoring thresholds)." },
+              { "field": "monitoring", "type": "text", "prompt": "How is adherence to intended use monitored?" },
+              { "field": "evidence", "type": "text", "prompt": "Evidence." },
+              { "field": "owner", "type": "text", "prompt": "Owner." },
+              { "field": "target_date", "type": "date", "prompt": "Target date." }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "A10_THIRD_PARTIES",
+      "name": "A.10 — Third-party and customer relationships",
+      "controls": [
+        {
+          "id": "A.10.2",
+          "title": "Allocating responsibilities with third parties",
+          "description": "Document and allocate responsibilities between the organisation and third parties involved in the AI system lifecycle (data providers, model providers, integrators, customers).",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              { "field": "implementation_status", "type": "select", "scale": "implementation_status", "prompt": "Implementation status?" },
+              { "field": "third_parties", "type": "text", "prompt": "Which third parties are in scope (data providers, model providers, hosting, integrators)?" },
+              { "field": "contract_terms", "type": "text", "prompt": "Contractual allocation of AI responsibilities, liability and audit rights." },
+              { "field": "evidence", "type": "text", "prompt": "Evidence (RACI, vendor register, sample contracts)." },
+              { "field": "owner", "type": "text", "prompt": "Owner." },
+              { "field": "target_date", "type": "date", "prompt": "Target date." }
+            ]
+          }
+        },
+        {
+          "id": "A.10.4",
+          "title": "Customers",
+          "description": "Document how customer requirements concerning AI systems are identified and addressed.",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              { "field": "implementation_status", "type": "select", "scale": "implementation_status", "prompt": "Implementation status?" },
+              { "field": "customer_requirements", "type": "text", "prompt": "Process for capturing AI-specific customer requirements (transparency, bias, safety)." },
+              { "field": "evidence", "type": "text", "prompt": "Evidence." },
+              { "field": "owner", "type": "text", "prompt": "Owner." },
+              { "field": "target_date", "type": "date", "prompt": "Target date." }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
