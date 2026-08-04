@@ -1,0 +1,2930 @@
+{
+  "id": "dora",
+  "name": "Digital Operational Resilience Act (DORA)",
+  "version": "Reg (EU) 2022/2554",
+  "official_sources": [
+    {
+      "title": "Regulation (EU) 2022/2554",
+      "url": "https://eur-lex.europa.eu/eli/reg/2022/2554/oj"
+    },
+    {
+      "title": "ESA Joint Committee — RTS and ITS",
+      "url": "https://www.esma.europa.eu/policy-activities/digital-finance-and-innovation/digital-operational-resilience-act-dora"
+    },
+    {
+      "title": "ENISA DORA Resources",
+      "url": "https://www.enisa.europa.eu/topics/regulatory-frameworks/dora"
+    }
+  ],
+  "assessment_shapes": [
+    "asset_threat_vulnerability",
+    "operational_resilience"
+  ],
+  "methodology": "Five pillars. Article 6 mandates documented ICT risk management framework with three lines of defence. Article 8 requires identification and classification of ICT-supported business functions and information assets.",
+  "scoping_inputs": [
+    {
+      "id": "entity_type",
+      "type": "select",
+      "options": [
+        "Credit Institution",
+        "Investment Firm",
+        "Insurance/Reinsurance",
+        "Payment Institution",
+        "EMI",
+        "Crypto-Asset Service Provider",
+        "CCP",
+        "CSD",
+        "Trading Venue",
+        "Trade Repository",
+        "Microenterprise",
+        "Other"
+      ],
+      "label": "Financial entity type"
+    },
+    {
+      "id": "is_significant",
+      "type": "boolean",
+      "label": "Subject to TLPT (significant entity)?"
+    },
+    {
+      "id": "critical_functions",
+      "type": "list",
+      "label": "Critical or important functions"
+    },
+    {
+      "id": "ict_third_parties",
+      "type": "list",
+      "label": "ICT third-party providers"
+    }
+  ],
+  "risk_model": {
+    "factors": [
+      "asset",
+      "threat",
+      "vulnerability",
+      "likelihood",
+      "impact_c",
+      "impact_i",
+      "impact_a"
+    ],
+    "scales": {
+      "likelihood": [
+        {
+          "value": 1,
+          "label": "Rare",
+          "definition": "May occur only in exceptional circumstances (<5% per year)."
+        },
+        {
+          "value": 2,
+          "label": "Unlikely",
+          "definition": "Could occur but not expected (5-25% per year)."
+        },
+        {
+          "value": 3,
+          "label": "Possible",
+          "definition": "Might occur at some time (25-50% per year)."
+        },
+        {
+          "value": 4,
+          "label": "Likely",
+          "definition": "Will probably occur in most circumstances (50-75% per year)."
+        },
+        {
+          "value": 5,
+          "label": "Almost Certain",
+          "definition": "Expected to occur in most circumstances (>75% per year)."
+        }
+      ],
+      "impact": [
+        {
+          "value": 1,
+          "label": "Insignificant",
+          "definition": "Negligible operational, financial, regulatory or reputational impact."
+        },
+        {
+          "value": 2,
+          "label": "Minor",
+          "definition": "Limited impact contained within a single team or system; recoverable in <1 day."
+        },
+        {
+          "value": 3,
+          "label": "Moderate",
+          "definition": "Notable impact on a business unit; recoverable in 1-7 days; minor regulatory attention."
+        },
+        {
+          "value": 4,
+          "label": "Major",
+          "definition": "Significant impact across multiple business units; >1 week to recover; regulatory action probable."
+        },
+        {
+          "value": 5,
+          "label": "Severe",
+          "definition": "Existential or systemic impact; loss of license, major fines, sustained customer loss."
+        }
+      ],
+      "maturity": [
+        {
+          "value": 0,
+          "label": "Non-Existent",
+          "definition": "No process or control in place."
+        },
+        {
+          "value": 1,
+          "label": "Initial / Ad Hoc",
+          "definition": "Process exists but is informal and inconsistent."
+        },
+        {
+          "value": 2,
+          "label": "Repeatable",
+          "definition": "Process is documented and repeated, but not standardized across the organization."
+        },
+        {
+          "value": 3,
+          "label": "Defined",
+          "definition": "Process is documented, standardized, and integrated across the organization."
+        },
+        {
+          "value": 4,
+          "label": "Managed",
+          "definition": "Process is measured, monitored with KPIs, and controlled."
+        },
+        {
+          "value": 5,
+          "label": "Optimized",
+          "definition": "Process is continuously improved through monitoring, metrics, and lessons learned."
+        }
+      ],
+      "implementation_status": [
+        {
+          "value": "NI",
+          "label": "Not Implemented"
+        },
+        {
+          "value": "PI",
+          "label": "Partially Implemented"
+        },
+        {
+          "value": "LI",
+          "label": "Largely Implemented"
+        },
+        {
+          "value": "FI",
+          "label": "Fully Implemented"
+        }
+      ]
+    },
+    "matrix": "5x5",
+    "calculation": "max(impact_c, impact_i, impact_a) * likelihood",
+    "acceptance_threshold": 6,
+    "thresholds": {
+      "low": [
+        1,
+        4
+      ],
+      "medium": [
+        5,
+        9
+      ],
+      "high": [
+        10,
+        16
+      ],
+      "critical": [
+        17,
+        25
+      ]
+    }
+  },
+  "domains": [
+    {
+      "id": "PILLAR_1",
+      "name": "ICT Risk Management (Articles 5-16)",
+      "controls": [
+        {
+          "id": "DORA.5",
+          "title": "Governance and organization",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "ict_business_function",
+                "type": "text",
+                "prompt": "ICT-supported business function affected?"
+              },
+              {
+                "field": "criticality",
+                "type": "select",
+                "options": [
+                  "Critical or Important Function",
+                  "Non-Critical"
+                ],
+                "prompt": "Criticality classification?"
+              },
+              {
+                "field": "rto",
+                "type": "text",
+                "prompt": "Recovery Time Objective (RTO)?"
+              },
+              {
+                "field": "rpo",
+                "type": "text",
+                "prompt": "Recovery Point Objective (RPO)?"
+              },
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DORA.6",
+          "title": "ICT risk management framework",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "ict_business_function",
+                "type": "text",
+                "prompt": "ICT-supported business function affected?"
+              },
+              {
+                "field": "criticality",
+                "type": "select",
+                "options": [
+                  "Critical or Important Function",
+                  "Non-Critical"
+                ],
+                "prompt": "Criticality classification?"
+              },
+              {
+                "field": "rto",
+                "type": "text",
+                "prompt": "Recovery Time Objective (RTO)?"
+              },
+              {
+                "field": "rpo",
+                "type": "text",
+                "prompt": "Recovery Point Objective (RPO)?"
+              },
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DORA.7",
+          "title": "ICT systems, protocols and tools",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "ict_business_function",
+                "type": "text",
+                "prompt": "ICT-supported business function affected?"
+              },
+              {
+                "field": "criticality",
+                "type": "select",
+                "options": [
+                  "Critical or Important Function",
+                  "Non-Critical"
+                ],
+                "prompt": "Criticality classification?"
+              },
+              {
+                "field": "rto",
+                "type": "text",
+                "prompt": "Recovery Time Objective (RTO)?"
+              },
+              {
+                "field": "rpo",
+                "type": "text",
+                "prompt": "Recovery Point Objective (RPO)?"
+              },
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DORA.8",
+          "title": "Identification of ICT risks, business functions, information assets",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "ict_business_function",
+                "type": "text",
+                "prompt": "ICT-supported business function affected?"
+              },
+              {
+                "field": "criticality",
+                "type": "select",
+                "options": [
+                  "Critical or Important Function",
+                  "Non-Critical"
+                ],
+                "prompt": "Criticality classification?"
+              },
+              {
+                "field": "rto",
+                "type": "text",
+                "prompt": "Recovery Time Objective (RTO)?"
+              },
+              {
+                "field": "rpo",
+                "type": "text",
+                "prompt": "Recovery Point Objective (RPO)?"
+              },
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DORA.9",
+          "title": "Protection and prevention",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "ict_business_function",
+                "type": "text",
+                "prompt": "ICT-supported business function affected?"
+              },
+              {
+                "field": "criticality",
+                "type": "select",
+                "options": [
+                  "Critical or Important Function",
+                  "Non-Critical"
+                ],
+                "prompt": "Criticality classification?"
+              },
+              {
+                "field": "rto",
+                "type": "text",
+                "prompt": "Recovery Time Objective (RTO)?"
+              },
+              {
+                "field": "rpo",
+                "type": "text",
+                "prompt": "Recovery Point Objective (RPO)?"
+              },
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DORA.10",
+          "title": "Detection of ICT-related incidents",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "ict_business_function",
+                "type": "text",
+                "prompt": "ICT-supported business function affected?"
+              },
+              {
+                "field": "criticality",
+                "type": "select",
+                "options": [
+                  "Critical or Important Function",
+                  "Non-Critical"
+                ],
+                "prompt": "Criticality classification?"
+              },
+              {
+                "field": "rto",
+                "type": "text",
+                "prompt": "Recovery Time Objective (RTO)?"
+              },
+              {
+                "field": "rpo",
+                "type": "text",
+                "prompt": "Recovery Point Objective (RPO)?"
+              },
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DORA.11",
+          "title": "Response and recovery — ICT business continuity policy",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "ict_business_function",
+                "type": "text",
+                "prompt": "ICT-supported business function affected?"
+              },
+              {
+                "field": "criticality",
+                "type": "select",
+                "options": [
+                  "Critical or Important Function",
+                  "Non-Critical"
+                ],
+                "prompt": "Criticality classification?"
+              },
+              {
+                "field": "rto",
+                "type": "text",
+                "prompt": "Recovery Time Objective (RTO)?"
+              },
+              {
+                "field": "rpo",
+                "type": "text",
+                "prompt": "Recovery Point Objective (RPO)?"
+              },
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DORA.12",
+          "title": "Backup policies, restoration procedures",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "ict_business_function",
+                "type": "text",
+                "prompt": "ICT-supported business function affected?"
+              },
+              {
+                "field": "criticality",
+                "type": "select",
+                "options": [
+                  "Critical or Important Function",
+                  "Non-Critical"
+                ],
+                "prompt": "Criticality classification?"
+              },
+              {
+                "field": "rto",
+                "type": "text",
+                "prompt": "Recovery Time Objective (RTO)?"
+              },
+              {
+                "field": "rpo",
+                "type": "text",
+                "prompt": "Recovery Point Objective (RPO)?"
+              },
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DORA.13",
+          "title": "Learning and evolving",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "ict_business_function",
+                "type": "text",
+                "prompt": "ICT-supported business function affected?"
+              },
+              {
+                "field": "criticality",
+                "type": "select",
+                "options": [
+                  "Critical or Important Function",
+                  "Non-Critical"
+                ],
+                "prompt": "Criticality classification?"
+              },
+              {
+                "field": "rto",
+                "type": "text",
+                "prompt": "Recovery Time Objective (RTO)?"
+              },
+              {
+                "field": "rpo",
+                "type": "text",
+                "prompt": "Recovery Point Objective (RPO)?"
+              },
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DORA.14",
+          "title": "Communication strategy and crisis management",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "ict_business_function",
+                "type": "text",
+                "prompt": "ICT-supported business function affected?"
+              },
+              {
+                "field": "criticality",
+                "type": "select",
+                "options": [
+                  "Critical or Important Function",
+                  "Non-Critical"
+                ],
+                "prompt": "Criticality classification?"
+              },
+              {
+                "field": "rto",
+                "type": "text",
+                "prompt": "Recovery Time Objective (RTO)?"
+              },
+              {
+                "field": "rpo",
+                "type": "text",
+                "prompt": "Recovery Point Objective (RPO)?"
+              },
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "PILLAR_2",
+      "name": "ICT-Related Incident Management (Articles 17-23)",
+      "controls": [
+        {
+          "id": "DORA.17",
+          "title": "ICT-related incident management process",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "ict_business_function",
+                "type": "text",
+                "prompt": "ICT-supported business function affected?"
+              },
+              {
+                "field": "criticality",
+                "type": "select",
+                "options": [
+                  "Critical or Important Function",
+                  "Non-Critical"
+                ],
+                "prompt": "Criticality classification?"
+              },
+              {
+                "field": "rto",
+                "type": "text",
+                "prompt": "Recovery Time Objective (RTO)?"
+              },
+              {
+                "field": "rpo",
+                "type": "text",
+                "prompt": "Recovery Point Objective (RPO)?"
+              },
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DORA.18",
+          "title": "Classification of incidents and cyber threats",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "ict_business_function",
+                "type": "text",
+                "prompt": "ICT-supported business function affected?"
+              },
+              {
+                "field": "criticality",
+                "type": "select",
+                "options": [
+                  "Critical or Important Function",
+                  "Non-Critical"
+                ],
+                "prompt": "Criticality classification?"
+              },
+              {
+                "field": "rto",
+                "type": "text",
+                "prompt": "Recovery Time Objective (RTO)?"
+              },
+              {
+                "field": "rpo",
+                "type": "text",
+                "prompt": "Recovery Point Objective (RPO)?"
+              },
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DORA.19",
+          "title": "Reporting of major incidents (initial within 24h, intermediate, final ≤1 month)",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "ict_business_function",
+                "type": "text",
+                "prompt": "ICT-supported business function affected?"
+              },
+              {
+                "field": "criticality",
+                "type": "select",
+                "options": [
+                  "Critical or Important Function",
+                  "Non-Critical"
+                ],
+                "prompt": "Criticality classification?"
+              },
+              {
+                "field": "rto",
+                "type": "text",
+                "prompt": "Recovery Time Objective (RTO)?"
+              },
+              {
+                "field": "rpo",
+                "type": "text",
+                "prompt": "Recovery Point Objective (RPO)?"
+              },
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DORA.20",
+          "title": "Harmonisation of reporting templates",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "ict_business_function",
+                "type": "text",
+                "prompt": "ICT-supported business function affected?"
+              },
+              {
+                "field": "criticality",
+                "type": "select",
+                "options": [
+                  "Critical or Important Function",
+                  "Non-Critical"
+                ],
+                "prompt": "Criticality classification?"
+              },
+              {
+                "field": "rto",
+                "type": "text",
+                "prompt": "Recovery Time Objective (RTO)?"
+              },
+              {
+                "field": "rpo",
+                "type": "text",
+                "prompt": "Recovery Point Objective (RPO)?"
+              },
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DORA.23",
+          "title": "Operational or security payment-related incidents",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "ict_business_function",
+                "type": "text",
+                "prompt": "ICT-supported business function affected?"
+              },
+              {
+                "field": "criticality",
+                "type": "select",
+                "options": [
+                  "Critical or Important Function",
+                  "Non-Critical"
+                ],
+                "prompt": "Criticality classification?"
+              },
+              {
+                "field": "rto",
+                "type": "text",
+                "prompt": "Recovery Time Objective (RTO)?"
+              },
+              {
+                "field": "rpo",
+                "type": "text",
+                "prompt": "Recovery Point Objective (RPO)?"
+              },
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "PILLAR_3",
+      "name": "Digital Operational Resilience Testing (Articles 24-27)",
+      "controls": [
+        {
+          "id": "DORA.24",
+          "title": "Testing programme — vulnerability assessments, penetration tests, scenario-based tests",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "ict_business_function",
+                "type": "text",
+                "prompt": "ICT-supported business function affected?"
+              },
+              {
+                "field": "criticality",
+                "type": "select",
+                "options": [
+                  "Critical or Important Function",
+                  "Non-Critical"
+                ],
+                "prompt": "Criticality classification?"
+              },
+              {
+                "field": "rto",
+                "type": "text",
+                "prompt": "Recovery Time Objective (RTO)?"
+              },
+              {
+                "field": "rpo",
+                "type": "text",
+                "prompt": "Recovery Point Objective (RPO)?"
+              },
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DORA.25",
+          "title": "Testing of ICT tools and systems",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "ict_business_function",
+                "type": "text",
+                "prompt": "ICT-supported business function affected?"
+              },
+              {
+                "field": "criticality",
+                "type": "select",
+                "options": [
+                  "Critical or Important Function",
+                  "Non-Critical"
+                ],
+                "prompt": "Criticality classification?"
+              },
+              {
+                "field": "rto",
+                "type": "text",
+                "prompt": "Recovery Time Objective (RTO)?"
+              },
+              {
+                "field": "rpo",
+                "type": "text",
+                "prompt": "Recovery Point Objective (RPO)?"
+              },
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DORA.26",
+          "title": "Threat-Led Penetration Testing (TLPT) for significant entities — TIBER-EU methodology",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "ict_business_function",
+                "type": "text",
+                "prompt": "ICT-supported business function affected?"
+              },
+              {
+                "field": "criticality",
+                "type": "select",
+                "options": [
+                  "Critical or Important Function",
+                  "Non-Critical"
+                ],
+                "prompt": "Criticality classification?"
+              },
+              {
+                "field": "rto",
+                "type": "text",
+                "prompt": "Recovery Time Objective (RTO)?"
+              },
+              {
+                "field": "rpo",
+                "type": "text",
+                "prompt": "Recovery Point Objective (RPO)?"
+              },
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DORA.27",
+          "title": "Requirements for testers",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "ict_business_function",
+                "type": "text",
+                "prompt": "ICT-supported business function affected?"
+              },
+              {
+                "field": "criticality",
+                "type": "select",
+                "options": [
+                  "Critical or Important Function",
+                  "Non-Critical"
+                ],
+                "prompt": "Criticality classification?"
+              },
+              {
+                "field": "rto",
+                "type": "text",
+                "prompt": "Recovery Time Objective (RTO)?"
+              },
+              {
+                "field": "rpo",
+                "type": "text",
+                "prompt": "Recovery Point Objective (RPO)?"
+              },
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "PILLAR_4",
+      "name": "ICT Third-Party Risk Management (Articles 28-44)",
+      "controls": [
+        {
+          "id": "DORA.28",
+          "title": "General principles for third-party risk",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "ict_business_function",
+                "type": "text",
+                "prompt": "ICT-supported business function affected?"
+              },
+              {
+                "field": "criticality",
+                "type": "select",
+                "options": [
+                  "Critical or Important Function",
+                  "Non-Critical"
+                ],
+                "prompt": "Criticality classification?"
+              },
+              {
+                "field": "rto",
+                "type": "text",
+                "prompt": "Recovery Time Objective (RTO)?"
+              },
+              {
+                "field": "rpo",
+                "type": "text",
+                "prompt": "Recovery Point Objective (RPO)?"
+              },
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DORA.29",
+          "title": "Preliminary assessment of ICT concentration risk",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "ict_business_function",
+                "type": "text",
+                "prompt": "ICT-supported business function affected?"
+              },
+              {
+                "field": "criticality",
+                "type": "select",
+                "options": [
+                  "Critical or Important Function",
+                  "Non-Critical"
+                ],
+                "prompt": "Criticality classification?"
+              },
+              {
+                "field": "rto",
+                "type": "text",
+                "prompt": "Recovery Time Objective (RTO)?"
+              },
+              {
+                "field": "rpo",
+                "type": "text",
+                "prompt": "Recovery Point Objective (RPO)?"
+              },
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DORA.30",
+          "title": "Key contractual provisions (audit rights, exit, sub-outsourcing, etc.)",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "ict_business_function",
+                "type": "text",
+                "prompt": "ICT-supported business function affected?"
+              },
+              {
+                "field": "criticality",
+                "type": "select",
+                "options": [
+                  "Critical or Important Function",
+                  "Non-Critical"
+                ],
+                "prompt": "Criticality classification?"
+              },
+              {
+                "field": "rto",
+                "type": "text",
+                "prompt": "Recovery Time Objective (RTO)?"
+              },
+              {
+                "field": "rpo",
+                "type": "text",
+                "prompt": "Recovery Point Objective (RPO)?"
+              },
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DORA.31",
+          "title": "Designation of critical ICT third-party providers (CTPPs)",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "ict_business_function",
+                "type": "text",
+                "prompt": "ICT-supported business function affected?"
+              },
+              {
+                "field": "criticality",
+                "type": "select",
+                "options": [
+                  "Critical or Important Function",
+                  "Non-Critical"
+                ],
+                "prompt": "Criticality classification?"
+              },
+              {
+                "field": "rto",
+                "type": "text",
+                "prompt": "Recovery Time Objective (RTO)?"
+              },
+              {
+                "field": "rpo",
+                "type": "text",
+                "prompt": "Recovery Point Objective (RPO)?"
+              },
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DORA.40",
+          "title": "Register of information on contractual arrangements",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "ict_business_function",
+                "type": "text",
+                "prompt": "ICT-supported business function affected?"
+              },
+              {
+                "field": "criticality",
+                "type": "select",
+                "options": [
+                  "Critical or Important Function",
+                  "Non-Critical"
+                ],
+                "prompt": "Criticality classification?"
+              },
+              {
+                "field": "rto",
+                "type": "text",
+                "prompt": "Recovery Time Objective (RTO)?"
+              },
+              {
+                "field": "rpo",
+                "type": "text",
+                "prompt": "Recovery Point Objective (RPO)?"
+              },
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "PILLAR_5",
+      "name": "Information Sharing (Article 45)",
+      "controls": [
+        {
+          "id": "DORA.45",
+          "title": "Information-sharing arrangements on cyber threat intelligence",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "ict_business_function",
+                "type": "text",
+                "prompt": "ICT-supported business function affected?"
+              },
+              {
+                "field": "criticality",
+                "type": "select",
+                "options": [
+                  "Critical or Important Function",
+                  "Non-Critical"
+                ],
+                "prompt": "Criticality classification?"
+              },
+              {
+                "field": "rto",
+                "type": "text",
+                "prompt": "Recovery Time Objective (RTO)?"
+              },
+              {
+                "field": "rpo",
+                "type": "text",
+                "prompt": "Recovery Point Objective (RPO)?"
+              },
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

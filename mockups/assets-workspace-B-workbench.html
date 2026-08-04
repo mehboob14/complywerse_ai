@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Assets Workspace — Workbench view</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--primary-50:#e8fcf8;--primary-100:#cef8f0;--primary-400:#3ddfc2;--primary-500:#1ed4b0;--primary-600:#1ed4b0;--primary-700:#17b898;--on-base:#0a0a0a;--emerald-50:#ecfdf5;--emerald-500:#10b981;--emerald-600:#059669;--emerald-700:#047857;--amber-50:#fffbeb;--amber-500:#f59e0b;--amber-700:#b45309;--orange-50:#fff7ed;--orange-500:#f97316;--orange-700:#c2410c;--rose-50:#fff1f2;--rose-500:#f43f5e;--rose-600:#e11d48;--rose-700:#be123c;--slate-50:#f8fafc;--slate-100:#f1f5f9;--slate-200:#e2e8f0;--slate-300:#cbd5e1;--slate-400:#94a3b8;--slate-500:#64748b;--slate-600:#475569;--slate-700:#334155;--slate-800:#1e293b;--slate-900:#0f172a;--shadow-card:0 1px 3px rgba(0,0,0,.06),0 1px 2px -1px rgba(0,0,0,.06)}
+*{box-sizing:border-box}body{margin:0;background:var(--slate-50);color:var(--slate-800);font-family:'Poppins',system-ui,sans-serif;font-size:14px;-webkit-font-smoothing:antialiased}
+.mono{font-family:'JetBrains Mono',monospace}.wrap{max-width:1300px;margin:0 auto;padding:18px}
+.head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:14px}
+h1{font-size:20px;font-weight:600;color:var(--slate-900);margin:0}.sub{color:var(--slate-500);font-size:13px;margin-top:2px}
+.btn{display:inline-flex;align-items:center;gap:7px;border-radius:8px;font-weight:500;font-size:13px;padding:7px 12px;border:1px solid transparent;cursor:pointer}
+.btn-primary{background:var(--primary-600);color:var(--on-base)}.btn-secondary{background:#fff;border-color:var(--slate-200);color:var(--slate-700)}
+.toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.search{position:relative;flex:1;min-width:200px}
+.search input{width:100%;border:1px solid var(--slate-300);border-radius:8px;padding:8px 10px 8px 32px;font-size:14px;font-family:inherit}
+.search input:focus{outline:none;border-color:var(--primary-500);box-shadow:0 0 0 3px rgba(30,212,176,.15)}
+.search svg{position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--slate-400)}
+.selectish{flex:none;border:1px solid var(--slate-300);background:#fff;border-radius:8px;padding:8px 11px;font-size:13px;color:var(--slate-600)}
+.switch{display:inline-flex;align-items:center;border-radius:8px;border:1px solid var(--slate-200);background:var(--slate-100);padding:2px}
+.switch button{border:0;background:transparent;border-radius:6px;padding:6px 12px;font-size:13px;font-weight:500;color:var(--slate-500);cursor:pointer}
+.switch button.active{background:#fff;color:var(--primary-700);box-shadow:0 1px 2px rgba(0,0,0,.06)}
+.card{background:#fff;border:1px solid var(--slate-200);border-radius:12px;box-shadow:var(--shadow-card)}
+.split{display:grid;grid-template-columns:1fr;gap:16px}@media(min-width:960px){.split{grid-template-columns:5fr 7fr;align-items:start}}
+/* master list */
+.mlist{overflow:hidden}
+.mrow{display:flex;align-items:center;gap:11px;width:100%;border:0;background:transparent;text-align:left;border-bottom:1px solid var(--slate-100);padding:11px 13px;cursor:pointer;font-family:inherit}
+.mrow:last-child{border-bottom:0}.mrow:hover{background:var(--slate-50)}.mrow.sel{background:var(--primary-50)}
+.ltile{width:38px;height:38px;border-radius:9px;background:var(--slate-100);color:var(--slate-500);font-weight:700;display:flex;align-items:center;justify-content:center;flex:none}
+.mrow.sel .ltile{background:var(--primary-100);color:var(--primary-700)}
+.mrow .mid{flex:1;min-width:0}.mrow .mid .t{font-weight:600;color:var(--slate-900);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mrow .mid .m{font-size:11px;color:var(--slate-400);display:block}
+.pill{display:inline-flex;align-items:center;gap:4px;border-radius:9999px;padding:2px 9px;font-size:11px;font-weight:600;white-space:nowrap}
+.p-crit{background:var(--rose-50);color:var(--rose-700)}.p-high{background:var(--orange-50);color:var(--orange-700)}.p-med{background:var(--amber-50);color:var(--amber-700)}.p-emerald{background:var(--emerald-50);color:var(--emerald-700)}.p-slate{background:var(--slate-100);color:var(--slate-600)}.p-primary{background:var(--primary-50);color:var(--primary-700)}
+.cde{background:var(--rose-50);color:var(--rose-700);border-radius:5px;padding:1px 5px;font-size:9px;font-weight:700}
+/* detail preview */
+.detail{position:sticky;top:14px}
+.dhead{display:flex;align-items:flex-start;gap:12px;border-bottom:1px solid var(--slate-200);padding:14px 16px}
+.dtile{width:42px;height:42px;border-radius:10px;background:var(--primary-50);color:var(--primary-700);display:flex;align-items:center;justify-content:center;flex:none}
+.dhead h3{margin:0;font-size:15px;font-weight:600;color:var(--slate-900)}
+.dhead .dm{font-size:12px;color:var(--slate-500);margin-top:2px}
+.dbody{padding:16px}
+.tiles{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.tile{border:1px solid var(--slate-200);border-radius:10px;padding:10px}
+.tile .tl{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--slate-400)}
+.tile .tv{font-size:18px;font-weight:700;color:var(--slate-900);margin-top:3px}
+.tile .ts{font-size:10px;color:var(--slate-400);margin-top:1px}
+.ciabars{display:flex;gap:4px;margin-top:5px}.seg{width:12px;height:16px;border-radius:2px;background:var(--slate-200)}
+.bar{height:6px;border-radius:9999px;background:var(--slate-100);overflow:hidden;margin-top:6px}.fill{height:100%;border-radius:9999px}
+.sect{margin-top:16px}.sect .h{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--slate-400);margin-bottom:8px}
+.orow{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--slate-100);font-size:13px}.orow:last-child{border-bottom:0}.orow .k{color:var(--slate-500)}.orow .v{font-weight:500;color:var(--slate-800)}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px}@media(min-width:1100px){.stats{grid-template-columns:repeat(6,1fr)}}
+.stat{border:1px solid var(--slate-200);border-radius:10px;padding:8px;text-align:center}.stat .n{font-size:16px;font-weight:700;color:var(--slate-900)}.stat .l{font-size:10px;color:var(--slate-500)}
+.dfoot{display:flex;align-items:center;gap:8px;border-top:1px solid var(--slate-200);padding:12px 16px;flex-wrap:wrap}
+.link{margin-left:auto;color:var(--primary-700);font-weight:600;font-size:13px;text-decoration:none}
+.av{width:22px;height:22px;border-radius:9999px;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:600}
+.legend{margin-top:20px;color:var(--slate-400);font-size:12px;border-top:1px solid var(--slate-200);padding-top:12px}
+svg.i{width:15px;height:15px;stroke-width:1.75}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head">
+    <div><h1>Asset Inventory</h1><div class="sub">IT asset register · CIA, criticality, ownership &amp; scan coverage</div></div>
+    <div style="display:flex;gap:8px"><a class="btn btn-secondary">Import</a><a class="btn btn-primary">+ Add Asset</a></div>
+  </div>
+  <div class="toolbar">
+    <div class="search"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><input placeholder="Search assets…"/></div>
+    <span class="selectish">Type ▾</span><span class="selectish">Criticality ▾</span><span class="selectish">Status ▾</span>
+    <div class="switch"><button>▤ Register</button><button class="active">◫ Workbench</button></div>
+  </div>
+
+  <div class="split">
+    <!-- master list -->
+    <div class="card mlist">
+      <button class="mrow sel"><span class="ltile">P</span><span class="mid"><span class="t">PCI-DB-primary <span class="cde">CDE</span></span><span class="m">Data · S. Raza</span></span><span class="pill p-crit">Critical</span></button>
+      <button class="mrow"><span class="ltile">A</span><span class="mid"><span class="t">core-banking-app-01 <span class="cde">CDE</span></span><span class="m">Application · A. Khan</span></span><span class="pill p-crit">Critical</span></button>
+      <button class="mrow"><span class="ltile">V</span><span class="mid"><span class="t">vpn-gateway-02</span><span class="m">Infrastructure · M. Bilal</span></span><span class="pill p-high">High</span></button>
+      <button class="mrow"><span class="ltile">V</span><span class="mid"><span class="t">vendor-payroll-svc</span><span class="m">Third-party · S. Raza</span></span><span class="pill p-high">High</span></button>
+      <button class="mrow"><span class="ltile">H</span><span class="mid"><span class="t">hr-portal-legacy</span><span class="m">Application · A. Khan</span></span><span class="pill p-med">Medium</span></button>
+      <button class="mrow"><span class="ltile">A</span><span class="mid"><span class="t">aws-s3-archive</span><span class="m">Cloud · F. Iqbal</span></span><span class="pill p-med">Medium</span></button>
+    </div>
+
+    <!-- detail preview -->
+    <div class="card detail">
+      <div class="dhead">
+        <div class="dtile"><svg class="i" style="width:20px;height:20px" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 7V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2M4 7h16M4 7v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7"/></svg></div>
+        <div style="flex:1">
+          <h3>PCI-DB-primary <span class="cde">CDE</span></h3>
+          <div class="dm">Cardholder data store · production · internet-facing: no</div>
+          <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap"><span class="pill p-crit">Critical</span><span class="pill p-emerald">Active</span><span class="pill p-slate">Data</span></div>
+        </div>
+      </div>
+      <div class="dbody">
+        <div class="tiles">
+          <div class="tile"><div class="tl">CIA</div><div class="ciabars"><span class="seg" style="background:var(--rose-500)"></span><span class="seg" style="background:var(--rose-500)"></span><span class="seg" style="background:var(--rose-500)"></span><span class="seg" style="background:var(--rose-500)"></span><span class="seg" style="background:var(--rose-500)"></span></div><div class="ts">5 / 5 / 5</div></div>
+          <div class="tile"><div class="tl">Criticality</div><div class="tv" style="color:var(--rose-600)">92</div><div class="ts">ISO 27005 score</div></div>
+          <div class="tile"><div class="tl">Coverage</div><div class="tv">78%</div><div class="bar"><div class="fill" style="width:78%;background:var(--primary-500)"></div></div></div>
+          <div class="tile"><div class="tl">CIS score</div><div class="tv" style="color:var(--amber-700)">64</div><div class="ts">weakest link</div></div>
+          <div class="tile"><div class="tl">Risk score</div><div class="tv" style="color:var(--orange-700)">7.4</div><div class="ts">last assessed 4d</div></div>
+          <div class="tile"><div class="tl">Last seen</div><div class="tv" style="font-size:14px">1h ago</div><div class="ts">agent online</div></div>
+        </div>
+
+        <div class="sect">
+          <div class="h">Ownership</div>
+          <div class="orow"><span class="k">Primary owner</span><span class="v"><span class="av" style="background:#dbeafe;color:#1d4ed8">SR</span> S. Raza</span></div>
+          <div class="orow"><span class="k">Owning team</span><span class="v">Payments Platform</span></div>
+          <div class="orow"><span class="k">Business owner</span><span class="v">Head of Payments</span></div>
+          <div class="orow"><span class="k">Data classification</span><span class="v">Restricted · PCI</span></div>
+        </div>
+
+        <div class="sect">
+          <div class="h">Related records</div>
+          <div class="stats">
+            <div class="stat"><div class="n" style="color:var(--rose-600)">6</div><div class="l">Vulns</div></div>
+            <div class="stat"><div class="n">3</div><div class="l">Risks</div></div>
+            <div class="stat"><div class="n">12</div><div class="l">Controls</div></div>
+            <div class="stat"><div class="n">8</div><div class="l">Evidence</div></div>
+            <div class="stat"><div class="n">2</div><div class="l">Assess.</div></div>
+            <div class="stat"><div class="n">4</div><div class="l">Peers</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="dfoot">
+        <button class="btn btn-secondary">Assess Risk</button>
+        <button class="btn btn-secondary">Scan now</button>
+        <a class="link">Open full record →</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="legend"><b>Assets Workspace · Workbench view</b> — the Evidence master-detail: scan the asset list (left), the sticky preview (right) swaps in place with no page hop — CIA, criticality, coverage, CIS, risk, owner chain &amp; a cross-module count grid, then <b>Open full record →</b> to the D1 detail page. Same shell/toolbar/filters as Register; toggle top-right. Throwaway mockup.</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,730 @@
+{
+  "framework_key": "sox",
+  "display_name": "SOX ITGC",
+  "name_patterns": [
+    "sox",
+    "sarbanes",
+    "itgc"
+  ],
+  "registers": [
+    {
+      "type": "sox__sox_itgc_evidence_testing_tracker_template_1",
+      "label": "Itgc Evidence Testing Tracker",
+      "description": "SOX ITGC — Itgc Evidence Testing Tracker (from the template).",
+      "columns": [
+        {
+          "key": "ref",
+          "label": "Ref",
+          "type": "auto"
+        },
+        {
+          "key": "control",
+          "label": "Control",
+          "type": "textarea",
+          "picker": "framework_controls"
+        },
+        {
+          "key": "test_procedure",
+          "label": "Test procedure",
+          "type": "textarea"
+        },
+        {
+          "key": "sample_size",
+          "label": "Sample size",
+          "type": "text"
+        },
+        {
+          "key": "tester",
+          "label": "Tester",
+          "type": "text"
+        },
+        {
+          "key": "date_tested",
+          "label": "Date tested",
+          "type": "date"
+        },
+        {
+          "key": "result",
+          "label": "Result",
+          "type": "select",
+          "options": [
+            {
+              "value": "Pass",
+              "label": "Pass",
+              "tone": "emerald"
+            }
+          ]
+        },
+        {
+          "key": "exceptions",
+          "label": "Exceptions",
+          "type": "text"
+        }
+      ],
+      "seed": [
+        {
+          "data": {
+            "ref": "1",
+            "control": "Quarterly access review",
+            "test_procedure": "Inspect review evidence for the period",
+            "sample_size": "All 4 quarters",
+            "tester": "Internal audit",
+            "date_tested": "",
+            "result": "Pass",
+            "exceptions": ""
+          }
+        },
+        {
+          "data": {
+            "ref": "2",
+            "control": "Change approval",
+            "test_procedure": "Sample changes and inspect approvals",
+            "sample_size": "25 changes",
+            "tester": "Internal audit",
+            "date_tested": "",
+            "result": "Pass",
+            "exceptions": ""
+          }
+        }
+      ],
+      "formSections": [
+        {
+          "title": "Item",
+          "keys": [
+            "ref",
+            "control"
+          ]
+        },
+        {
+          "title": "Assessment",
+          "keys": [
+            "test_procedure",
+            "sample_size",
+            "tester",
+            "result",
+            "exceptions"
+          ]
+        },
+        {
+          "title": "Ownership & dates",
+          "keys": [
+            "date_tested"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "sox__sox_itgc_matrix_template_1",
+      "label": "Itgc Matrix",
+      "description": "SOX ITGC — Itgc Matrix (from the template).",
+      "columns": [
+        {
+          "key": "ref",
+          "label": "Ref",
+          "type": "auto"
+        },
+        {
+          "key": "itgc_domain",
+          "label": "ITGC domain",
+          "type": "text"
+        },
+        {
+          "key": "control",
+          "label": "Control",
+          "type": "textarea",
+          "picker": "framework_controls"
+        },
+        {
+          "key": "frequency",
+          "label": "Frequency",
+          "type": "select",
+          "options": [
+            {
+              "value": "Quarterly",
+              "label": "Quarterly",
+              "tone": "slate"
+            },
+            {
+              "value": "Per change",
+              "label": "Per change",
+              "tone": "slate"
+            },
+            {
+              "value": "Daily",
+              "label": "Daily",
+              "tone": "slate"
+            }
+          ]
+        },
+        {
+          "key": "owner",
+          "label": "Owner",
+          "type": "text",
+          "picker": "users"
+        },
+        {
+          "key": "evidence",
+          "label": "Evidence",
+          "type": "text",
+          "picker": "evidence"
+        },
+        {
+          "key": "design_effective",
+          "label": "Design effective?",
+          "type": "select",
+          "options": [
+            {
+              "value": "Yes",
+              "label": "Yes",
+              "tone": "emerald"
+            },
+            {
+              "value": "No",
+              "label": "No",
+              "tone": "rose"
+            }
+          ]
+        },
+        {
+          "key": "operating_effective",
+          "label": "Operating effective?",
+          "type": "select",
+          "options": [
+            {
+              "value": "Yes",
+              "label": "Yes",
+              "tone": "emerald"
+            },
+            {
+              "value": "No",
+              "label": "No",
+              "tone": "rose"
+            }
+          ]
+        }
+      ],
+      "seed": [
+        {
+          "data": {
+            "ref": "1",
+            "itgc_domain": "Access to Programs and Data",
+            "control": "User access is approved and reviewed quarterly",
+            "frequency": "Quarterly",
+            "owner": "IT",
+            "evidence": "Access review records",
+            "design_effective": "Yes",
+            "operating_effective": "Yes"
+          }
+        },
+        {
+          "data": {
+            "ref": "2",
+            "itgc_domain": "Program Changes",
+            "control": "Changes are tested and approved before release",
+            "frequency": "Per change",
+            "owner": "Eng",
+            "evidence": "Change tickets",
+            "design_effective": "Yes",
+            "operating_effective": "Yes"
+          }
+        },
+        {
+          "data": {
+            "ref": "3",
+            "itgc_domain": "Computer Operations",
+            "control": "Batch jobs and backups are monitored",
+            "frequency": "Daily",
+            "owner": "IT Ops",
+            "evidence": "Job logs",
+            "design_effective": "Yes",
+            "operating_effective": "Yes"
+          }
+        }
+      ],
+      "formSections": [
+        {
+          "title": "Item",
+          "keys": [
+            "ref",
+            "itgc_domain"
+          ]
+        },
+        {
+          "title": "Assessment",
+          "keys": [
+            "control",
+            "frequency",
+            "evidence",
+            "design_effective",
+            "operating_effective"
+          ]
+        },
+        {
+          "title": "Ownership & dates",
+          "keys": [
+            "owner"
+          ]
+        }
+      ]
+    }
+  ],
+  "documents": [
+    {
+      "type": "sox__sox_itgc_access_policy_template_2",
+      "label": "Itgc Access Policy",
+      "control_ref": null,
+      "sections": [
+        {
+          "heading": "1. Purpose",
+          "body": "This policy governs access to financially significant programs and data, the access ITGC domain for SOX, so only authorised individuals can access financial systems and data, at the right level."
+        },
+        {
+          "heading": "2. Scope",
+          "body": "User, privileged and generic access to financial reporting applications, databases and infrastructure."
+        },
+        {
+          "heading": "3. Provisioning and Authorisation",
+          "body": "Access to financial systems is granted only through a controlled path:\n- Access is requested through a documented process.\n- It is approved by the system or data owner before it is granted.\n- It is provisioned on least privilege according to the user's role."
+        },
+        {
+          "heading": "4. Periodic Access Reviews",
+          "body": "User and privileged access is recertified at a defined cadence; access that is no longer appropriate is removed, and the review is evidenced.\n[FILL IN: your recertification cadence, e.g. quarterly for privileged access.]"
+        },
+        {
+          "heading": "5. Privileged and Generic Accounts",
+          "body": "Privileged, administrative and generic or shared accounts are minimised, justified, restricted and monitored, and their activity is logged."
+        },
+        {
+          "heading": "6. Authentication and Termination",
+          "body": "Every user has a unique ID, strong authentication (including MFA for remote and privileged access) is enforced, and access is removed promptly on termination or role change."
+        },
+        {
+          "heading": "7. Evidence and Testing",
+          "body": "Each control produces durable evidence (tickets, approvals, logs, review records) that it operated throughout the reporting period. Controls are tested for both design and operating effectiveness, usually by sampling, and any deficiency is assessed (control deficiency, significant deficiency or material weakness) and remediated.\n[FILL IN: where the evidence is retained and who tests it (internal audit / external auditor).]"
+        },
+        {
+          "heading": "8. Roles & Responsibilities",
+          "body": "",
+          "table": {
+            "columns": [
+              "Role",
+              "Responsibilities"
+            ],
+            "rows": [
+              [
+                "IT",
+                "Owns access controls."
+              ],
+              [
+                "CISO / Security Lead",
+                "Owns the policy, approves exceptions, monitors compliance and reports to leadership."
+              ],
+              [
+                "Managers",
+                "Ensure their teams understand and follow the policy."
+              ]
+            ]
+          }
+        },
+        {
+          "heading": "9. Compliance & Enforcement",
+          "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+        },
+        {
+          "heading": "10. Exceptions",
+          "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+        },
+        {
+          "heading": "11. Review",
+          "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+        }
+      ]
+    },
+    {
+      "type": "sox__sox_itgc_backup_recovery_policy_template_2",
+      "label": "Itgc Backup Recovery Policy",
+      "control_ref": null,
+      "sections": [
+        {
+          "heading": "1. Purpose",
+          "body": "This policy ensures financially significant data is backed up and recoverable, supporting the computer operations ITGC domain for SOX."
+        },
+        {
+          "heading": "2. Scope",
+          "body": "Backups of financial reporting applications, databases and the data they hold."
+        },
+        {
+          "heading": "3. Backup",
+          "body": "Financial data can be recovered after loss or corruption:\n- Backups are performed on a defined schedule and scope covering financial applications, databases and data.\n- Backups are protected against unauthorised access and alteration.\n- Backups are retained for the required period.\n- [FILL IN: your backup schedule, scope and retention.]"
+        },
+        {
+          "heading": "4. Protection and Offsite Copies",
+          "body": "Backups are protected (for example encrypted and, where feasible, immutable or held offsite) so they survive a failure or incident affecting the primary systems."
+        },
+        {
+          "heading": "5. Recovery Testing",
+          "body": "Restoration is tested periodically so the organisation has assurance that financial data can be recovered when needed, and the test is evidenced."
+        },
+        {
+          "heading": "6. Evidence and Testing",
+          "body": "Each control produces durable evidence (tickets, approvals, logs, review records) that it operated throughout the reporting period. Controls are tested for both design and operating effectiveness, usually by sampling, and any deficiency is assessed (control deficiency, significant deficiency or material weakness) and remediated.\n[FILL IN: where the evidence is retained and who tests it (internal audit / external auditor).]"
+        },
+        {
+          "heading": "7. Roles & Responsibilities",
+          "body": "",
+          "table": {
+            "columns": [
+              "Role",
+              "Responsibilities"
+            ],
+            "rows": [
+              [
+                "IT operations",
+                "Owns backup and recovery."
+              ],
+              [
+                "IT / Operations",
+                "Implements and maintains the technical controls described in this document."
+              ]
+            ]
+          }
+        },
+        {
+          "heading": "8. Compliance & Enforcement",
+          "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+        },
+        {
+          "heading": "9. Exceptions",
+          "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+        },
+        {
+          "heading": "10. Review",
+          "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+        }
+      ]
+    },
+    {
+      "type": "sox__sox_itgc_change_management_policy_template_2",
+      "label": "Itgc Change Management Policy",
+      "control_ref": null,
+      "sections": [
+        {
+          "heading": "1. Purpose",
+          "body": "This policy governs changes to financially significant systems, the program-changes ITGC domain for SOX, so changes are authorised, tested and migrated without compromising the integrity of financial data."
+        },
+        {
+          "heading": "2. Scope",
+          "body": "Changes to financial reporting applications, databases, interfaces and supporting infrastructure."
+        },
+        {
+          "heading": "3. Request and Assessment",
+          "body": "Every change starts in a controlled way:\n- Each change is requested and recorded in the change system.\n- It is assessed for its impact on financial reporting and on the related controls before work begins."
+        },
+        {
+          "heading": "4. Testing and Approval",
+          "body": "Changes are proven before they reach production:\n- Changes are tested, including user acceptance testing for application changes.\n- They are approved by an appropriate authority before migration to production.\n- [FILL IN: your testing and approval gates.]"
+        },
+        {
+          "heading": "5. Segregation of Migration",
+          "body": "Developers cannot migrate their own changes to production; migration is performed by a separate function or controlled mechanism, keeping development and production segregated."
+        },
+        {
+          "heading": "6. Emergency Changes",
+          "body": "Emergency changes follow an expedited path that is still documented, justified and retrospectively reviewed and approved."
+        },
+        {
+          "heading": "7. Evidence and Testing",
+          "body": "Each control produces durable evidence (tickets, approvals, logs, review records) that it operated throughout the reporting period. Controls are tested for both design and operating effectiveness, usually by sampling, and any deficiency is assessed (control deficiency, significant deficiency or material weakness) and remediated.\n[FILL IN: where the evidence is retained and who tests it (internal audit / external auditor).]"
+        },
+        {
+          "heading": "8. Roles & Responsibilities",
+          "body": "",
+          "table": {
+            "columns": [
+              "Role",
+              "Responsibilities"
+            ],
+            "rows": [
+              [
+                "Engineering / IT",
+                "Owns change management."
+              ],
+              [
+                "CISO / Security Lead",
+                "Owns the policy, approves exceptions, monitors compliance and reports to leadership."
+              ]
+            ]
+          }
+        },
+        {
+          "heading": "9. Compliance & Enforcement",
+          "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+        },
+        {
+          "heading": "10. Exceptions",
+          "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+        },
+        {
+          "heading": "11. Review",
+          "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+        }
+      ]
+    },
+    {
+      "type": "sox__sox_itgc_computer_operations_policy_template_2",
+      "label": "Itgc Computer Operations Policy",
+      "control_ref": null,
+      "sections": [
+        {
+          "heading": "1. Purpose",
+          "body": "This policy governs computer operations for financially significant systems, the operations ITGC domain for SOX, so scheduled processing and interfaces run completely and accurately."
+        },
+        {
+          "heading": "2. Scope",
+          "body": "Batch processing, job scheduling, interfaces, monitoring and incident handling for financial systems."
+        },
+        {
+          "heading": "3. Job Scheduling and Monitoring",
+          "body": "Scheduled processing runs completely and accurately:\n- Batch jobs and interfaces are scheduled, run and monitored against the expected schedule.\n- Failures and exceptions are detected, investigated and resolved or re-run under control.\n- Changes to the job schedule itself are authorised.\n- [FILL IN: your scheduling and monitoring tooling.]"
+        },
+        {
+          "heading": "4. Incident and Problem Management",
+          "body": "Operational issues are managed so they do not undermine reporting:\n- Operational incidents affecting financial systems are logged, prioritised and resolved.\n- Recurring problems are root-caused and addressed, not just repeatedly patched."
+        },
+        {
+          "heading": "5. Backups",
+          "body": "Financially significant data is backed up and recoverable; backup and restoration are governed by the ITGC Backup and Recovery Policy."
+        },
+        {
+          "heading": "6. Evidence and Testing",
+          "body": "Each control produces durable evidence (tickets, approvals, logs, review records) that it operated throughout the reporting period. Controls are tested for both design and operating effectiveness, usually by sampling, and any deficiency is assessed (control deficiency, significant deficiency or material weakness) and remediated.\n[FILL IN: where the evidence is retained and who tests it (internal audit / external auditor).]"
+        },
+        {
+          "heading": "7. Roles & Responsibilities",
+          "body": "",
+          "table": {
+            "columns": [
+              "Role",
+              "Responsibilities"
+            ],
+            "rows": [
+              [
+                "IT operations",
+                "Owns operations controls."
+              ],
+              [
+                "IT / Operations",
+                "Implements and maintains the technical controls described in this document."
+              ]
+            ]
+          }
+        },
+        {
+          "heading": "8. Compliance & Enforcement",
+          "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+        },
+        {
+          "heading": "9. Exceptions",
+          "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+        },
+        {
+          "heading": "10. Review",
+          "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+        }
+      ]
+    },
+    {
+      "type": "sox__sox_itgc_policy_template_1",
+      "label": "Itgc Policy",
+      "control_ref": null,
+      "sections": [
+        {
+          "heading": "1. Purpose",
+          "body": "This policy establishes the IT general controls (ITGCs) that support the reliability of the organisation's financial reporting systems and therefore its internal control over financial reporting (ICFR), in line with Sarbanes-Oxley. ITGCs underpin the application controls that the financial statements rely on, so weak ITGCs can undermine an otherwise strong control environment."
+        },
+        {
+          "heading": "2. Scope",
+          "body": "The IT systems, applications, databases and infrastructure that support financially significant processes."
+        },
+        {
+          "heading": "3. The Four ITGC Domains",
+          "body": "The organisation maintains controls across the four ITGC domains:\n- Access to programs and data: only authorised users have appropriate, least-privilege access, with segregation of duties.\n- Program changes: changes to financial systems are tested, approved and migrated under control.\n- Program development: new systems and major implementations are developed and converted under control.\n- Computer operations: jobs, interfaces, backups and incidents are managed so processing is complete and accurate."
+        },
+        {
+          "heading": "4. Control Ownership and Scope",
+          "body": "Each control has a named owner and is recorded in the ITGC matrix, scoped to the systems in the SOX boundary determined with the finance and audit functions.\n[FILL IN: reference your ITGC matrix and the in-scope financial systems.]"
+        },
+        {
+          "heading": "5. Evidence and Testing",
+          "body": "Each control produces durable evidence (tickets, approvals, logs, review records) that it operated throughout the reporting period. Controls are tested for both design and operating effectiveness, usually by sampling, and any deficiency is assessed (control deficiency, significant deficiency or material weakness) and remediated.\n[FILL IN: where the evidence is retained and who tests it (internal audit / external auditor).]"
+        },
+        {
+          "heading": "6. Roles & Responsibilities",
+          "body": "",
+          "table": {
+            "columns": [
+              "Role",
+              "Responsibilities"
+            ],
+            "rows": [
+              [
+                "IT control owner",
+                "Owns the ITGC programme."
+              ],
+              [
+                "CISO / Security Lead",
+                "Owns the policy, approves exceptions, monitors compliance and reports to leadership."
+              ],
+              [
+                "Managers",
+                "Ensure their teams understand and follow the policy."
+              ]
+            ]
+          }
+        },
+        {
+          "heading": "7. Compliance & Enforcement",
+          "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+        },
+        {
+          "heading": "8. Exceptions",
+          "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+        },
+        {
+          "heading": "9. Review",
+          "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+        }
+      ]
+    },
+    {
+      "type": "sox__sox_itgc_program_development_policy_template_2",
+      "label": "Itgc Program Development Policy",
+      "control_ref": null,
+      "sections": [
+        {
+          "heading": "1. Purpose",
+          "body": "This policy governs the development and implementation of financially significant systems, the program-development ITGC domain for SOX, so new systems and major changes go live with their data and controls intact."
+        },
+        {
+          "heading": "2. Scope",
+          "body": "New financial systems and major implementations or upgrades affecting financial reporting."
+        },
+        {
+          "heading": "3. Development Lifecycle",
+          "body": "New systems and major changes go live in a controlled way:\n- Implementations follow a documented lifecycle with defined requirements at the outset.\n- Testing (including user acceptance) is completed and evidenced before go-live.\n- Approvals are obtained at each stage gate.\n- [FILL IN: your development and implementation lifecycle.]"
+        },
+        {
+          "heading": "4. Data Conversion",
+          "body": "Data migrated or converted into a new system is validated for completeness and accuracy, reconciled to the source, and the validation is evidenced, so financial data is not lost or corrupted in the move."
+        },
+        {
+          "heading": "5. Go-Live Acceptance and Segregation",
+          "body": "Go-live requires formal acceptance sign-off, and development is segregated from production and from the ability to approve and deploy."
+        },
+        {
+          "heading": "6. Evidence and Testing",
+          "body": "Each control produces durable evidence (tickets, approvals, logs, review records) that it operated throughout the reporting period. Controls are tested for both design and operating effectiveness, usually by sampling, and any deficiency is assessed (control deficiency, significant deficiency or material weakness) and remediated.\n[FILL IN: where the evidence is retained and who tests it (internal audit / external auditor).]"
+        },
+        {
+          "heading": "7. Roles & Responsibilities",
+          "body": "",
+          "table": {
+            "columns": [
+              "Role",
+              "Responsibilities"
+            ],
+            "rows": [
+              [
+                "Engineering / project",
+                "Owns program development."
+              ],
+              [
+                "CISO / Security Lead",
+                "Owns the policy, approves exceptions, monitors compliance and reports to leadership."
+              ]
+            ]
+          }
+        },
+        {
+          "heading": "8. Compliance & Enforcement",
+          "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+        },
+        {
+          "heading": "9. Exceptions",
+          "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+        },
+        {
+          "heading": "10. Review",
+          "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+        }
+      ]
+    },
+    {
+      "type": "sox__sox_segregation_of_duties_policy_template_2",
+      "label": "Segregation Of Duties Policy",
+      "control_ref": null,
+      "sections": [
+        {
+          "heading": "1. Purpose",
+          "body": "This policy ensures duties are segregated so that no individual can both perpetrate and conceal an error or fraud in financially significant systems, supporting the SOX access and change controls."
+        },
+        {
+          "heading": "2. Scope",
+          "body": "Roles, responsibilities and access within financial reporting systems."
+        },
+        {
+          "heading": "3. Segregation of Incompatible Duties",
+          "body": "Incompatible duties are separated so no one person controls a whole transaction. Examples that are kept apart:\n- Creating and approving transactions.\n- Custody of assets and record-keeping for them.\n- Developing changes and deploying them to production.\n- A segregation-of-duties ruleset defines the conflicts that must not coexist.\n- [FILL IN: reference your segregation-of-duties ruleset or conflict matrix.]"
+        },
+        {
+          "heading": "4. Conflict Identification and Monitoring",
+          "body": "Access is reviewed against the ruleset to identify conflicts when access is granted and periodically thereafter, and conflicts are remediated."
+        },
+        {
+          "heading": "5. Compensating Controls",
+          "body": "Where segregation is genuinely not feasible (for example in a small team), documented compensating controls, such as independent review of the activity, are put in place and monitored."
+        },
+        {
+          "heading": "6. Evidence and Testing",
+          "body": "Each control produces durable evidence (tickets, approvals, logs, review records) that it operated throughout the reporting period. Controls are tested for both design and operating effectiveness, usually by sampling, and any deficiency is assessed (control deficiency, significant deficiency or material weakness) and remediated.\n[FILL IN: where the evidence is retained and who tests it (internal audit / external auditor).]"
+        },
+        {
+          "heading": "7. Roles & Responsibilities",
+          "body": "",
+          "table": {
+            "columns": [
+              "Role",
+              "Responsibilities"
+            ],
+            "rows": [
+              [
+                "Control owner",
+                "Owns segregation of duties."
+              ],
+              [
+                "CISO / Security Lead",
+                "Owns the policy, approves exceptions, monitors compliance and reports to leadership."
+              ],
+              [
+                "Managers",
+                "Ensure their teams understand and follow the policy."
+              ]
+            ]
+          }
+        },
+        {
+          "heading": "8. Compliance & Enforcement",
+          "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+        },
+        {
+          "heading": "9. Exceptions",
+          "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+        },
+        {
+          "heading": "10. Review",
+          "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+        }
+      ]
+    }
+  ]
+}

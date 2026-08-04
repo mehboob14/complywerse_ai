@@ -1,0 +1,5 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <text x="1" y="24" font-family="Segoe UI, system-ui, sans-serif" font-size="26" font-weight="600" fill="#0f172a">C</text>
+  <rect x="22" y="13" width="4" height="13" rx="2" fill="#0f172a"/>
+  <circle cx="24" cy="7" r="3.5" fill="#14b8a6"/>
+</svg>

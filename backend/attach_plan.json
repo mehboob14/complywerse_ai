@@ -1,0 +1,145 @@
+[
+{
+"pid": 683,
+"fw": 8,
+"fw_name": "HIPAA Security & Privacy Rule",
+"title": "Risk Management",
+"gid": 1322,
+"nc_id": 4168,
+"nc_name": "Risk Management",
+"score": 1.0,
+"how": "exact"
+},
+{
+"pid": 3307,
+"fw": 27,
+"fw_name": "SOC 2 Type II",
+"title": "Encryption Key Management",
+"gid": 1323,
+"nc_id": 4240,
+"nc_name": "Encryption and Key Management",
+"score": 1.0,
+"how": "jaccard"
+},
+{
+"pid": 189,
+"fw": 2,
+"fw_name": "ARAMCO Cybersecurity Compliance Certification",
+"title": "Network Security",
+"gid": 1326,
+"nc_id": 4270,
+"nc_name": "Network Security",
+"score": 1.0,
+"how": "exact"
+},
+{
+"pid": 724,
+"fw": 8,
+"fw_name": "HIPAA Security & Privacy Rule",
+"title": "Unique User Identification",
+"gid": 1327,
+"nc_id": 4149,
+"nc_name": "Unique User Identification",
+"score": 1.0,
+"how": "exact"
+},
+{
+"pid": 3213,
+"fw": 26,
+"fw_name": "Sri Lanka Baseline Security Standard (BSS)",
+"title": "Cabling Security",
+"gid": 1328,
+"nc_id": 4083,
+"nc_name": "Cabling Security",
+"score": 1.0,
+"how": "exact"
+},
+{
+"pid": 1000,
+"fw": 11,
+"fw_name": "ISO/IEC 27001:2022",
+"title": "Cabling Security",
+"gid": 1328,
+"nc_id": 4083,
+"nc_name": "Cabling Security",
+"score": 1.0,
+"how": "exact"
+},
+{
+"pid": 1675,
+"fw": 16,
+"fw_name": "NIST SP 800-53 Rev 5",
+"title": "Physical Access Control",
+"gid": 1328,
+"nc_id": 4256,
+"nc_name": "Physical Access Management",
+"score": 1.0,
+"how": "jaccard"
+},
+{
+"pid": 907,
+"fw": 10,
+"fw_name": "ISO 22301:2019 Business Continuity Management System",
+"title": "Business Continuity Management System",
+"gid": 1331,
+"nc_id": 4104,
+"nc_name": "Business Continuity Management",
+"score": 1.0,
+"how": "jaccard"
+},
+{
+"pid": 909,
+"fw": 10,
+"fw_name": "ISO 22301:2019 Business Continuity Management System",
+"title": "Business Continuity Policy",
+"gid": 1331,
+"nc_id": 4104,
+"nc_name": "Business Continuity Management",
+"score": 1.0,
+"how": "jaccard"
+},
+{
+"pid": 1119,
+"fw": 13,
+"fw_name": "MAS Technology Risk Management Guidelines",
+"title": "Information Asset Inventory",
+"gid": 1333,
+"nc_id": 4112,
+"nc_name": "Asset Inventory Management",
+"score": 1.0,
+"how": "jaccard"
+},
+{
+"pid": 86,
+"fw": 1,
+"fw_name": "Abu Dhabi Healthcare Information and Cyber Security Standard",
+"title": "Change Management",
+"gid": 1336,
+"nc_id": 4199,
+"nc_name": "Change Management",
+"score": 1.0,
+"how": "exact"
+},
+{
+"pid": 1439,
+"fw": 14,
+"fw_name": "KSA National Data Management and Personal Data Protection Standards",
+"title": "Change Management",
+"gid": 1336,
+"nc_id": 4199,
+"nc_name": "Change Management",
+"score": 1.0,
+"how": "exact"
+},
+{
+"pid": 1021,
+"fw": 11,
+"fw_name": "ISO/IEC 27001:2022",
+"title": "Installation of Software on Operational Systems",
+"gid": 1336,
+"nc_id": 4159,
+"nc_name": "Control Installation of Operational Software",
+"score": 1.0,
+"how": "jaccard"
+}
+]
