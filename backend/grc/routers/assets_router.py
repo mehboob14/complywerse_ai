@@ -438,6 +438,67 @@ def bulk_update_assets(
     return {"updated": len(assets), "fields": sorted(clean.keys())}
 
 
+def _purge_asset_references(db: Session, asset: "ITAsset") -> None:
+    """Detach/purge every row that references an asset and revert its discovery
+    footprint, so the asset deletes cleanly and leaves NO orphan behind — no
+    observation stuck at 'merged'/'created' pointing at a gone asset, no stale
+    agentless connection. Used by BOTH single and bulk delete so they behave
+    identically. Caller commits.
+    """
+    from sqlalchemy import text as _sql
+    aid = asset.id
+    # Revert discovery observations FIRST (while resolved_asset_id still points at
+    # this asset) so both 'merged' and 'created' rows return to 'unclaimed' — the
+    # device is simply back on the network needing a login. Doing this before any
+    # blind FK-null is what stops the orphaned "ghost in inventory" row.
+    db.execute(_sql(
+        "UPDATE grc_discovery_observations "
+        "SET resolution='unclaimed', resolved_asset_id=NULL, "
+        "    resolution_note='asset deleted — found on the network, needs a login' "
+        "WHERE resolved_asset_id = :aid OR "
+        "      (resolution IN ('created','merged') AND resolved_asset_id IS NULL AND "
+        "       (host_name = :h OR ip_address = :ip))"),
+        {"aid": aid, "h": asset.host_name, "ip": asset.ip_address})
+    # DETACH — evidence rows that outlive the asset: null their reference.
+    for table, col in (
+        ("grc_compliance_plugin_runs", "asset_id"),
+        ("grc_info_system_criticality_items", "linked_asset_id"),
+        ("grc_infra_asset_criticality_items", "linked_asset_id"),
+    ):
+        db.execute(_sql(f"UPDATE {table} SET {col} = NULL WHERE {col} = :aid"), {"aid": aid})
+    # PURGE — pure association rows that cannot exist without the asset.
+    for table, col in (
+        ("grc_vulnerability_asset_links", "asset_id"),
+        ("grc_asset_control_links", "asset_id"),
+        ("grc_asset_framework_control_links", "asset_id"),
+        ("grc_asset_internal_control_links", "asset_id"),
+        ("grc_asset_evidence_links", "asset_id"),
+        ("grc_asset_risk_assessments", "asset_id"),
+        ("grc_asset_external_identities", "asset_id"),
+        ("grc_asset_security_compliance_selections", "asset_id"),
+        ("grc_asset_alert_states", "asset_id"),
+        ("grc_risk_asset_links", "asset_id"),
+        ("grc_document_asset_links", "asset_id"),
+        ("grc_incident_asset_links", "asset_id"),
+        ("grc_issue_asset_links", "asset_id"),
+        ("grc_software_identifiers", "asset_id"),
+        ("grc_compliance_agents", "asset_id"),
+        ("grc_asset_relationships", "source_asset_id"),
+        ("grc_asset_relationships", "target_asset_id"),
+    ):
+        db.execute(_sql(f"DELETE FROM {table} WHERE {col} = :aid"), {"aid": aid})
+    # Deactivate agentless connections pinned to this host.
+    _host = (asset.host_name or asset.ip_address or "").strip()
+    if _host:
+        db.execute(_sql(
+            "UPDATE grc_integration_connections SET is_active=false, status='disconnected' "
+            "WHERE console_url = :h AND integration_type IN "
+            "('windows_winrm','linux_ssh','netdev_ssh')"), {"h": _host})
+    # Self-references from other assets.
+    db.execute(_sql("UPDATE grc_it_assets SET parent_asset_id = NULL WHERE parent_asset_id = :aid"), {"aid": aid})
+    db.execute(_sql("UPDATE grc_it_assets SET replacement_asset_id = NULL WHERE replacement_asset_id = :aid"), {"aid": aid})
+
+
 @router.post("/bulk-delete")
 def bulk_delete_assets(
     payload: _BulkDeletePayload,
@@ -457,6 +518,7 @@ def bulk_delete_assets(
         .all()
     )
     for asset in assets:
+        _purge_asset_references(db, asset)   # same cleanup as single delete — no orphans
         db.delete(asset)
     db.commit()
     return {"deleted": len(assets)}
@@ -1469,71 +1531,10 @@ def delete_asset(
     #             Its asset reference is nulled so history survives.
     #   DELETE  — the row is a pure association that cannot exist without the
     #             asset (asset↔control link, asset↔vulnerability link).
-    from sqlalchemy import text as _sql
-
-    detach = [
-        ("grc_compliance_plugin_runs", "asset_id"),        # scan evidence
-        ("grc_discovery_observations", "resolved_asset_id"),  # sweep evidence
-        ("grc_info_system_criticality_items", "linked_asset_id"),
-        ("grc_infra_asset_criticality_items", "linked_asset_id"),
-    ]
-    purge = [
-        ("grc_vulnerability_asset_links", "asset_id"),
-        ("grc_asset_control_links", "asset_id"),
-        ("grc_asset_framework_control_links", "asset_id"),
-        ("grc_asset_internal_control_links", "asset_id"),
-        ("grc_asset_evidence_links", "asset_id"),
-        ("grc_asset_risk_assessments", "asset_id"),
-        ("grc_asset_external_identities", "asset_id"),
-        ("grc_asset_security_compliance_selections", "asset_id"),
-        ("grc_asset_alert_states", "asset_id"),
-        ("grc_risk_asset_links", "asset_id"),
-        ("grc_document_asset_links", "asset_id"),
-        ("grc_incident_asset_links", "asset_id"),
-        ("grc_issue_asset_links", "asset_id"),
-        ("grc_software_identifiers", "asset_id"),
-        ("grc_compliance_agents", "asset_id"),
-        ("grc_asset_relationships", "source_asset_id"),
-        ("grc_asset_relationships", "target_asset_id"),
-    ]
-    # Discovery-state cleanup. An asset promoted from discovery leaves behind a
-    # DiscoveryObservation (resolution='created') and an agentless
-    # IntegrationConnection keyed to its host. If we only null the observation's
-    # FK, the row keeps resolution='created' and the connection stays active —
-    # so the Connect queue shows the (now-deleted) device as "In inventory" with
-    # a Disconnect button that targets a gone asset and does nothing. Revert the
-    # observation to 'unclaimed' so the device becomes connectable again, and
-    # deactivate the host's agentless connection.
-    _host = (asset.host_name or asset.ip_address or "").strip()
+    # Detach/purge every reference and revert the discovery footprint via the
+    # shared helper (identical to what bulk delete uses), then delete the row.
     try:
-        for table, col in detach:
-            db.execute(_sql(f"UPDATE {table} SET {col} = NULL WHERE {col} = :aid"), {"aid": asset_id})
-        for table, col in purge:
-            db.execute(_sql(f"DELETE FROM {table} WHERE {col} = :aid"), {"aid": asset_id})
-        # Observation(s) that resolved to this asset → back to unclaimed.
-        db.execute(_sql(
-            "UPDATE grc_discovery_observations "
-            "SET resolution='unclaimed', resolved_asset_id=NULL, "
-            "    resolution_note='asset deleted — found on the network, needs a login' "
-            "WHERE resolved_asset_id = :aid OR "
-            "      (resolution='created' AND resolved_asset_id IS NULL AND "
-            "       (host_name = :h OR ip_address = :ip))"),
-            {"aid": asset_id, "h": asset.host_name, "ip": asset.ip_address})
-        # Deactivate agentless connections pinned to this host (they can't scan a
-        # deleted asset; a fresh connect re-creates one).
-        if _host:
-            db.execute(_sql(
-                "UPDATE grc_integration_connections SET is_active=false, status='disconnected' "
-                "WHERE console_url = :h AND integration_type IN "
-                "('windows_winrm','linux_ssh','netdev_ssh')"), {"h": _host})
-        # Self-references: promoted applications point at this host as parent,
-        # and other assets may name it as their replacement. Detach rather than
-        # cascade — deleting a laptop must not silently delete the PostgreSQL
-        # asset someone promoted from it, along with its own scan history.
-        db.execute(_sql("UPDATE grc_it_assets SET parent_asset_id = NULL WHERE parent_asset_id = :aid"),
-                   {"aid": asset_id})
-        db.execute(_sql("UPDATE grc_it_assets SET replacement_asset_id = NULL WHERE replacement_asset_id = :aid"),
-                   {"aid": asset_id})
+        _purge_asset_references(db, asset)
         db.delete(asset)
         db.commit()
     except Exception as exc:  # noqa: BLE001
@@ -1976,7 +1977,48 @@ def get_asset_detail(
         warranty_expiry=_g("warranty_expiry"),
         eol_date=_g("eol_date"),
         environment=_g("environment"),
+        # Typed-asset component block — the deep collector's CPU/GPU/DIMM/firmware/
+        # etc. sections + the kind that selects the detail card. These were never
+        # added to this response, so the Hardware CPU/GPU rows and the Deep
+        # Inventory card had NOTHING to render even after a fully successful
+        # collect. This was the real reason the page looked "still old".
+        platform_kind=_g("platform_kind"),
+        platform_properties=_g("platform_properties"),
     )
+
+
+@router.post("/{asset_id}/probe-inventory")
+def probe_asset_inventory(
+    asset_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Re-run the agentless collector on an EXISTING asset using its SAVED
+    credential — a re-scan that refreshes OS / hardware / software / deep
+    inventory without re-entering a login. No-op with a clear message when no
+    saved credential covers the host."""
+    user_tenants = get_user_tenants(current_user, db)
+    asset = db.query(ITAsset).filter(
+        ITAsset.id == asset_id, ITAsset.tenant_id.in_(user_tenants),
+    ).first()
+    if not asset:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
+    if not asset.ip_address:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Asset has no IP address to probe")
+    from grc.modules.asset_discovery.services.deep_collect import select_credential, collect_host
+    fam = (asset.os_family or "").lower()
+    transport = "linux" if fam.startswith(("linux", "ubuntu", "debian", "rhel", "centos", "fedora")) else "windows"
+    prof = select_credential(db, asset.tenant_id, asset.ip_address, transport)
+    if prof is None:
+        return {"collected": False, "error": "No saved login covers this host — connect it once first."}
+    try:
+        info = collect_host(db, asset, prof, transport)
+        db.commit()
+        return {"collected": True, "asset_id": asset.id, "os_family": asset.os_family,
+                "software": info.get("software")}
+    except Exception as exc:  # noqa: BLE001
+        db.rollback()
+        return {"collected": False, "error": str(exc)[:300]}
 
 
 @router.get("/{asset_id}/trajectory")

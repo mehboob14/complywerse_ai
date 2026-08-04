@@ -11,6 +11,7 @@
  * no blue-as-brand. Severity reuses the shared charter-fixed SeverityBadge.
  */
 
+import { Users } from 'lucide-react';
 import { SeverityBadge, type SeverityLevel } from '@/components/ui';
 
 // ─── Title cleanup ───────────────────────────────────────────────────────────
@@ -44,6 +45,9 @@ export interface Vulnerability {
   cve_id?: string;
   cwe_id?: string;
   cvss_score?: number;
+  cvss_vector?: string;
+  nvd_cvss_vector?: string;
+  patch_references?: string[] | null;
   affected_component?: string;
   affected_host?: string;
   plugin_family?: string;
@@ -404,6 +408,118 @@ export function ThreatChips({ vuln }: { vuln: Pick<Vulnerability, 'kev_flag' | '
     <span className="inline-flex items-center gap-1">
       {vuln.kev_flag && <KevChip />}
       <EpssChip percentile={vuln.epss_percentile} score={vuln.epss_score} />
+    </span>
+  );
+}
+
+// ─── Analyst columns (CVE · CWE · CVSS · EPSS · Vector · Exploit · Patch · KEV · Assets) ──
+// Compact, list-density cells. Each reads a field the row already carries, so the
+// register can show the full triage picture without opening a finding.
+
+/** CVE id — the primary external identifier. */
+export function CveCell({ cve }: { cve?: string }) {
+  if (!cve) return <span className="text-xs text-slate-400">—</span>;
+  return <span className="font-mono text-xs text-slate-700" title={cve}>{cve}</span>;
+}
+
+/** CWE weakness class. */
+export function CweCell({ cwe }: { cwe?: string }) {
+  if (!cwe) return <span className="text-xs text-slate-400">—</span>;
+  return <span className="font-mono text-xs text-slate-600" title={cwe}>{cwe}</span>;
+}
+
+/** CVSS base score, coloured by band. Its own column now that Severity is a badge. */
+const cvssTone = (s?: number) =>
+  typeof s !== 'number' ? 'text-slate-400'
+    : s >= 9 ? 'text-rose-600' : s >= 7 ? 'text-orange-600' : s >= 4 ? 'text-amber-600' : 'text-emerald-600';
+export function CvssCell({ score }: { score?: number }) {
+  if (typeof score !== 'number') return <span className="text-xs text-slate-400">—</span>;
+  return (
+    <span className={`font-mono text-xs font-semibold tabular-nums ${cvssTone(score)}`} title="CVSS base score">
+      {score.toFixed(1)}
+    </span>
+  );
+}
+
+/** EPSS — the PROBABILITY of exploitation in 30 days (not the percentile). Bold once
+ *  it crosses the 10% signal threshold. Percentile kept in the tooltip. */
+export function EpssCell({ score, percentile }: { score?: number; percentile?: number }) {
+  if (typeof score !== 'number' && typeof percentile !== 'number') {
+    return <span className="text-xs text-slate-400">—</span>;
+  }
+  const high = typeof score === 'number' && score >= 0.1;
+  const title = `EPSS probability of exploitation in the next 30 days${
+    typeof percentile === 'number' ? ` · ${(percentile * 100).toFixed(0)}th percentile` : ''}`;
+  return (
+    <span className={`font-mono text-xs tabular-nums ${high ? 'font-semibold text-amber-700' : 'text-slate-600'}`} title={title}>
+      {typeof score === 'number' ? `${(score * 100).toFixed(1)}%` : `p${((percentile as number) * 100).toFixed(0)}`}
+    </span>
+  );
+}
+
+/** CVSS attack vector (AV) — the reachability axis a triager scans by. */
+const AV_WORD: Record<string, string> = { N: 'Network', A: 'Adjacent', L: 'Local', P: 'Physical' };
+export function parseAttackVector(vector?: string | null): string | null {
+  if (!vector) return null;
+  const m = /AV:([NALP])/i.exec(vector);
+  return m ? m[1].toUpperCase() : null;
+}
+export function VectorCell({ vector }: { vector?: string | null }) {
+  const av = parseAttackVector(vector);
+  if (!av) return <span className="text-xs text-slate-400">—</span>;
+  const remote = av === 'N' || av === 'A';
+  return (
+    <span
+      className={`inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-medium ${remote ? 'bg-rose-50 text-rose-700' : 'bg-slate-100 text-slate-600'}`}
+      title={`CVSS attack vector: ${AV_WORD[av]}`}
+    >
+      {AV_WORD[av]}
+    </span>
+  );
+}
+
+/** True when the row has any public exploit (GitHub PoC or Exploit-DB). Same rule the
+ *  Exploit Test tab uses, so the column can't disagree with the finding. */
+export function hasPublicExploit(v: Pick<Vulnerability, 'public_exploit_count' | 'exploitdb_count'>): boolean {
+  return ((v.public_exploit_count ?? 0) > 0) || ((v.exploitdb_count ?? 0) > 0);
+}
+export function ExploitCell({ vuln }: { vuln: Pick<Vulnerability, 'public_exploit_count' | 'exploitdb_count'> }) {
+  if (!hasPublicExploit(vuln)) return <span className="text-xs text-slate-400">None</span>;
+  const n = (vuln.public_exploit_count ?? 0) + (vuln.exploitdb_count ?? 0);
+  return (
+    <span className="inline-flex items-center rounded-full bg-rose-50 px-1.5 py-0.5 text-[10px] font-bold text-rose-700"
+      title={`${n} public exploit reference(s) known`}>
+      Exploit
+    </span>
+  );
+}
+
+/** Patch availability from the row's patch references. */
+export function patchAvailable(v: Pick<Vulnerability, 'patch_references'>): boolean {
+  return Array.isArray(v.patch_references) && v.patch_references.length > 0;
+}
+export function PatchCell({ vuln }: { vuln: Pick<Vulnerability, 'patch_references'> }) {
+  if (!patchAvailable(vuln)) return <span className="text-xs text-slate-400">None</span>;
+  return (
+    <span className="inline-flex items-center rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700"
+      title={`${vuln.patch_references!.length} patch reference(s)`}>
+      Available
+    </span>
+  );
+}
+
+/** KEV flag cell — the chip when listed, a muted dash otherwise. */
+export function KevCell({ kev }: { kev?: boolean }) {
+  return kev ? <KevChip /> : <span className="text-xs text-slate-400">—</span>;
+}
+
+/** Count of linked assets (the blast surface of the finding). */
+export function AssetsCell({ vuln }: { vuln: Pick<Vulnerability, 'linked_assets'> }) {
+  const n = vuln.linked_assets?.length ?? 0;
+  return (
+    <span className={`inline-flex items-center gap-1 text-xs tabular-nums ${n > 0 ? 'text-slate-700' : 'text-slate-400'}`}
+      title={n > 0 ? (vuln.linked_assets || []).join(', ') : 'No linked assets'}>
+      <Users className="h-3.5 w-3.5" strokeWidth={1.75} /> {n}
     </span>
   );
 }

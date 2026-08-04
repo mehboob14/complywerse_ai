@@ -258,6 +258,13 @@ def resolve_credentials_for_connection(connection: IntegrationConnection) -> Dic
             out["k8s_token"] = decrypt_secret(extra.get("k8s_token") or "")
             out["k8s_ca_cert"] = extra.get("k8s_ca_cert")
         return out
+    if integration_type == "digitalocean_api":
+        # Account-level DigitalOcean discovery uses a single read-only API token.
+        # Stored either in credentials_extra_json.do_api_token or, via the generic
+        # wizard path, in connection.password — accept both.
+        return {
+            "do_api_token": decrypt_secret(extra.get("do_api_token") or connection.password),
+        }
 
     return {}
 

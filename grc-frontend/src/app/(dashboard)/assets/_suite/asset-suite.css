@@ -4,7 +4,9 @@
  * the GRC app (slate/teal) is untouched. Token values map 1:1 from
  * design_handoff_asset_management/design-tokens.json.
  */
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+/* Public Sans is the UI face of the AssetOverview design handoff; IBM Plex Mono
+   carries its technical values. Both loaded here alongside the suite's own faces. */
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=Public+Sans:wght@400;500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 
 .asset-suite {
   /* background */
@@ -127,3 +129,50 @@
 @keyframes asFadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes asRingIn { from { stroke-dashoffset: 327; } }
 .asset-suite .as-fadeup { animation: asFadeUp 0.45s ease both; }
+
+/* ─── Discovery pages: align every tab to the Connect-screen design handoff ───
+ * Remaps the warm tokens onto the exact green/teal palette + Sora typography +
+ * 18px cards used by the Connect screen. Scoped to the 2-class selector so ONLY
+ * the discovery page is affected — the rest of the asset suite is untouched. */
+.asset-suite.discovery-suite {
+  --as-card: #ffffff;
+  --as-subtle: #faf9f5;
+  --as-subtle2: #f7f6f1;
+  --as-track: #ece9e0;
+  --as-border: #e4e2d9;
+  --as-divider: #ece9e0;
+  --as-row: #f0eee6;
+  --as-input: #d8d6cc;
+  --as-ink: #12352c;
+  --as-primary: #12352c;
+  --as-secondary: #3b423d;
+  --as-muted: #67766f;
+  --as-faint: #8a9089;
+  --as-placeholder: #9aa19a;
+  --as-green: #0d5c48;
+  --as-green-hover: #0a4f3d;
+  --as-accent: #12b886;
+  --as-accent-hover: #10a377;
+  --as-accent-ink: #ffffff;
+  --as-green-bg: #e6f3ec;
+  --as-green-selected: #eef6f1;
+  --as-green-outline: #bfd9cf;
+  --as-good: #0d5c48;
+  --as-good-bg: #e6f3ec;
+  --as-warn-text: #a06a12;
+  --as-warn-bg: #fbf1dc;
+  --as-blue: #2b5c9b;
+  --as-slate: #5f6f69;
+  --as-r-card: 18px;
+}
+.asset-suite.discovery-suite,
+.asset-suite.discovery-suite .as-btn,
+.asset-suite.discovery-suite .as-seg button,
+.asset-suite.discovery-suite input,
+.asset-suite.discovery-suite select,
+.asset-suite.discovery-suite h1,
+.asset-suite.discovery-suite h2,
+.asset-suite.discovery-suite table thead th {
+  font-family: 'Sora', 'IBM Plex Sans', system-ui, sans-serif;
+}
+.asset-suite.discovery-suite .as-mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; }

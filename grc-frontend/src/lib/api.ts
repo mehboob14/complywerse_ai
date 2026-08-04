@@ -857,6 +857,7 @@ export const discoveryApi = {
   createCampaign: (data: {
     name: string; description?: string; method?: string;
     is_active?: boolean; schedule_seconds?: number | null;
+    snmp_communities?: string | null;
     scopes?: { kind: string; value: string; exclude?: boolean; note?: string }[];
   }) => apiClient.post('/discovery/campaigns', data),
   updateCampaign: (id: number, data: Record<string, unknown>) =>
@@ -877,6 +878,11 @@ export const discoveryApi = {
   // becomes an asset if the login works.
   connectDevice: (observationId: number, data: { username: string; password: string; domain?: string; transport?: string }) =>
     apiClient.post(`/discovery/devices/${observationId}/connect`, data),
+  // Discovery→kind bridge: connect a discovered device AS the service detected on
+  // it (postgres | mysql | mssql | oracle | k8s | ldap | cisco) with that kind's
+  // own credential, promoting it to a TYPED asset with its component inventory.
+  connectService: (observationId: number, data: { kind: string; username?: string; password: string; port?: number; database?: string }) =>
+    apiClient.post(`/discovery/devices/${observationId}/connect-service`, data),
   // Re-collect a device that is already in inventory (keyed by asset id).
   reconnectAsset: (assetId: number, data: { username: string; password: string; domain?: string; transport?: string }) =>
     apiClient.post(`/discovery/assets/${assetId}/reconnect`, data),
@@ -889,6 +895,16 @@ export const discoveryApi = {
     apiClient.post('/discovery/connect-all-discovered', undefined, {
       params: { ...(kind ? { kind } : {}), ...(runId != null ? { run_id: runId } : {}) },
     }),
+  // Run the ticked saved login(s) against the specific devices ticked.
+  // Empty/null credentialIds = backend auto-picks the best match per device.
+  connectSelected: (observationIds: number[], credentialIds?: number[] | null) =>
+    apiClient.post('/discovery/connect-selected',
+      { observation_ids: observationIds, credential_ids: credentialIds ?? null }),
+  // Read a DHCP server's real lease table (via a saved credential) and fold the
+  // hostnames + vendor-class onto discovered devices. A real SSH/WinRM read of
+  // the router — never invents a name.
+  dhcpEnrich: (data: { credential_id: number; dhcp_ip: string; source_type: 'mikrotik' | 'dnsmasq' | 'isc' | 'windows'; run_id?: number }) =>
+    apiClient.post('/discovery/dhcp/enrich', data),
   inbox: (statusFilter: 'open' | 'review' | 'pending' | 'all' = 'open') =>
     apiClient.get('/discovery/inbox', { params: { status_filter: statusFilter } }),
   resolve: (obsId: number, action: 'adopt' | 'merge' | 'ignore', targetAssetId?: number) =>

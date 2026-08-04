@@ -3,6 +3,7 @@ import os
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from grc.models import (
@@ -17,7 +18,7 @@ from grc.models import (
 )
 from ..adapters.base_adapter import BaseAdapter, ConnectionTestResult
 from ..adapters.adapter_factory import build_adapter, get_transformer
-from grc.services.cpe_matcher import auto_link_enabled
+from grc.services.cpe_matcher import connection_auto_link_enabled
 
 logger = logging.getLogger(__name__)
 DEBUG_PAYLOADS = os.environ.get("INTEGRATIONS_DEBUG_PAYLOADS", "true").lower() == "true"
@@ -254,6 +255,69 @@ class SyncService:
         }
 
     @staticmethod
+    def _host_variants(*names: Optional[str]) -> set:
+        """Normalised name forms for host matching: lower-cased, whitespace- and
+        trailing-dot-stripped, plus the short label (the part before the first dot).
+
+        So a scanner FQDN ``WEB01.corp.local`` yields ``{web01.corp.local, web01}`` and
+        matches an inventory asset stored as either the FQDN or the short ``web01`` —
+        the case that exact matching silently missed.
+        """
+        out: set = set()
+        for n in names:
+            if not n:
+                continue
+            v = str(n).strip().lower().rstrip(".")
+            if not v:
+                continue
+            out.add(v)
+            short = v.split(".", 1)[0]
+            if short:
+                out.add(short)
+        return out
+
+    @staticmethod
+    def _find_existing_asset(
+        db: Session,
+        tenant_id: int,
+        *,
+        host_name: Optional[str],
+        ip_address: Optional[str],
+        name: Optional[str],
+    ) -> Optional[ITAsset]:
+        """Match a scanned host to an existing ITAsset — name-first, IP last.
+
+        Order is deliberate and DHCP-safe: a hostname / FQDN is a stable identity, an
+        IP is not (it can be re-leased to a different host between scans), so IP is only
+        a last resort. Matching is case-insensitive and compares the scanned name (and
+        its short label) against BOTH the asset's ``host_name`` and ``fqdn`` columns, so
+        discovery-registered assets and scanner findings converge on ONE asset instead
+        of drifting apart on ``WEB01`` vs ``web01.corp.local``.
+
+        Never fuzzy beyond the short-label equivalence above, and never creates an
+        asset — a miss returns None and the caller leaves the finding unlinked.
+        """
+        variants = SyncService._host_variants(host_name, name)
+        if variants:
+            existing = db.query(ITAsset).filter(
+                ITAsset.tenant_id == tenant_id,
+                or_(
+                    func.lower(ITAsset.host_name).in_(variants),
+                    func.lower(ITAsset.fqdn).in_(variants),
+                ),
+            ).first()
+            if existing:
+                return existing
+        if ip_address:
+            existing = db.query(ITAsset).filter(
+                ITAsset.tenant_id == tenant_id,
+                ITAsset.ip_address == ip_address,
+            ).first()
+            if existing:
+                return existing
+        return None
+
+    @staticmethod
     def _sync_assets(
         db: Session,
         adapter: BaseAdapter,
@@ -276,25 +340,12 @@ class SyncService:
                 ext_id = transformed.get("external_asset_id") or ""
                 mapped_asset = SyncService._map_asset_fields(transformed)
 
-                existing = None
                 host_name = mapped_asset.get("host_name")
                 ip_address = mapped_asset.get("ip_address")
                 name = mapped_asset.get("name")
-                if host_name:
-                    existing = db.query(ITAsset).filter(
-                        ITAsset.tenant_id == tenant_id,
-                        ITAsset.host_name == host_name,
-                    ).first()
-                if not existing and ip_address:
-                    existing = db.query(ITAsset).filter(
-                        ITAsset.tenant_id == tenant_id,
-                        ITAsset.ip_address == ip_address,
-                    ).first()
-                if not existing and name:
-                    existing = db.query(ITAsset).filter(
-                        ITAsset.tenant_id == tenant_id,
-                        ITAsset.name == name,
-                    ).first()
+                existing = SyncService._find_existing_asset(
+                    db, tenant_id, host_name=host_name, ip_address=ip_address, name=name,
+                )
 
                 # Phase 5.5 — Tag every sync with where + when we last saw this
                 # asset. Used by the UI stale filter and by future analytics.
@@ -383,6 +434,9 @@ class SyncService:
         transformer = get_transformer(connection.integration_type)
         integration_type = (connection.integration_type or "nexpose").lower()
         is_nessus = integration_type in ("nessus", "tenable")
+        # Resolve the auto-link switch ONCE for the whole run (per-connection, default
+        # ON) so every finding in this sync is linked consistently.
+        link_assets = connection_auto_link_enabled(connection)
         logger.info(f"Syncing vulnerabilities for connection {connection.id} (type={integration_type})")
 
         if synced_assets is None:
@@ -513,13 +567,13 @@ class SyncService:
                         Vulnerability.tenant_id == tenant_id,
                         Vulnerability.vuln_id == gen_vuln_id,
                     ).first()
-                    # Auto-link the finding to its scanned host — but ONLY when
-                    # auto-linking is enabled (default OFF: findings link to assets
-                    # manually). Even matched, an unmatched host still gets its
-                    # vulnerability rows; they stay unlinked rather than inventing
-                    # something to attach them to. Enrichment below runs regardless.
+                    # Auto-link the finding to its scanned host — ON by default for a
+                    # scanner feed (per-connection `link_assets`; toggle in the connect
+                    # wizard). An UNMATCHED host still gets its vulnerability rows; they
+                    # stay unlinked rather than inventing an asset to attach them to.
+                    # Enrichment below runs regardless of linking.
                     if db_vuln and asset is not None:
-                        if auto_link_enabled():
+                        if link_assets:
                             existing_link = db.query(VulnerabilityAssetLink).filter(
                                 VulnerabilityAssetLink.vulnerability_id == db_vuln.id,
                                 VulnerabilityAssetLink.asset_id == asset.id,

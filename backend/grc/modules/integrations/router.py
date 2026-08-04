@@ -32,6 +32,9 @@ class ConnectionCreate(BaseModel):
     username: Optional[str] = Field(default=None, max_length=255)
     password: Optional[str] = Field(default=None, max_length=500)
     sync_schedule: str = Field(default="0 */4 * * *", max_length=50)
+    # Auto-link scanner findings to matching inventory assets. Stored in
+    # provider_config; None here means "use the default" (ON for a scanner feed).
+    auto_link_assets: Optional[bool] = None
 
 
 class ConnectionUpdate(BaseModel):
@@ -44,6 +47,7 @@ class ConnectionUpdate(BaseModel):
     password: Optional[str] = None
     sync_schedule: Optional[str] = None
     is_active: Optional[bool] = None
+    auto_link_assets: Optional[bool] = None
 
 
 class ExceptionRequestCreate(BaseModel):
@@ -73,6 +77,8 @@ def _connection_to_dict(c: IntegrationConnection) -> dict:
         "has_password": bool(c.password),
         "sync_schedule": c.sync_schedule,
         "is_active": c.is_active,
+        # Auto-link scanner findings to matching assets — default ON when unset.
+        "auto_link_assets": (c.provider_config or {}).get("auto_link_assets", True),
         "status": c.status,
         "last_sync_at": c.last_sync_at.isoformat() if c.last_sync_at else None,
         "last_sync_status": c.last_sync_status,
@@ -134,6 +140,8 @@ def create_connection(
         sync_schedule=body.sync_schedule,
         created_by_user_id=user_id,
     )
+    if body.auto_link_assets is not None:
+        connection.provider_config = {"auto_link_assets": bool(body.auto_link_assets)}
     db.add(connection)
     db.commit()
     db.refresh(connection)
@@ -179,12 +187,24 @@ def update_connection(
     if not connection:
         raise HTTPException(status_code=404, detail="Connection not found")
 
+    payload = body.dict(exclude_unset=True)
+    # auto_link_assets is not a column — it lives in provider_config. Pull it out of
+    # the generic setattr loop (which would raise on a non-attribute) and merge it in.
+    auto_link = payload.pop("auto_link_assets", None)
+
     changes = {}
-    for field_name, val in body.dict(exclude_unset=True).items():
+    for field_name, val in payload.items():
         old_val = getattr(connection, field_name)
         if old_val != val:
             changes[field_name] = {"old": str(old_val), "new": str(val)}
             setattr(connection, field_name, val)
+
+    if auto_link is not None:
+        cfg = dict(connection.provider_config or {})
+        if cfg.get("auto_link_assets") != bool(auto_link):
+            changes["auto_link_assets"] = {"old": str(cfg.get("auto_link_assets")), "new": str(bool(auto_link))}
+            cfg["auto_link_assets"] = bool(auto_link)
+            connection.provider_config = cfg  # reassign so SQLAlchemy flags the JSON dirty
 
     connection.updated_at = datetime.utcnow()
     db.commit()
