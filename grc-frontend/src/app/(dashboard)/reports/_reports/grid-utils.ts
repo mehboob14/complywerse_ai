@@ -1,0 +1,270 @@
+// Shared value/format/filter/sort helpers for the report grid + exporters.
+
+import type { ColumnDef, ColumnFilter, FilterRule, FilterRules, Row, SortSpec } from './types';
+import { OPERATORS } from './types';
+
+/** A condition only counts once it has a column, an operator, and (for value
+ *  operators) a non-blank value — so the builder's seeded empty row is ignored
+ *  instead of reading as an active "contains ''" that matches everything. */
+export function isActiveCondition(c: FilterRule): boolean {
+  if (!c.col || !c.op) return false;
+  // Predicate-only operators need no value to be active.
+  if (c.op === 'empty' || c.op === 'notempty' || c.op === 'linked' || c.op === 'notlinked') return true;
+  return c.value != null && String(c.value).trim() !== '';
+}
+
+/** Parse a yyyy-mm-dd filter value as LOCAL midnight (not UTC). Mixing a
+ *  UTC-parsed date-only value with local-parsed row timestamps is what caused
+ *  the negative-UTC off-by-one. Returns [y, m0, d] or null. */
+function localYMD(value: string): [number, number, number] | null {
+  const [y, mo, d] = String(value).slice(0, 10).split('-').map(Number);
+  if (!y || !mo || !d) return null;
+  return [y, mo - 1, d];
+}
+
+export function fmtDate(v: unknown): string {
+  if (!v) return '';
+  const d = new Date(String(v));
+  if (Number.isNaN(d.getTime())) return String(v);
+  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+export function rawValue(col: ColumnDef, row: Row): unknown {
+  return col.accessor ? col.accessor(row) : row[col.key];
+}
+
+/** Numeric value of a cell, or null when the cell is genuinely empty.
+ *  Guards the `Number(null) === 0` / `Number('') === 0` trap: both are *finite*,
+ *  so a naive Number()+isFinite filter counts blanks as zeros — which drags
+ *  averages down and inflates the divisor. Blanks must be excluded, not zeroed. */
+export function numericValue(col: ColumnDef, row: Row): number | null {
+  const raw = rawValue(col, row);
+  if (raw === null || raw === undefined) return null;
+  if (typeof raw === 'string' && raw.trim() === '') return null;  // whitespace-only is empty, not 0
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
+
+export function displayText(col: ColumnDef, row: Row): string {
+  const raw = rawValue(col, row);
+  if (col.format) return col.format(raw, row);
+  if (col.type === 'date') return fmtDate(raw);
+  if (raw == null) return '';
+  return String(raw);
+}
+
+export function rowMatchesSearch(cols: ColumnDef[], row: Row, q: string): boolean {
+  if (!q) return true;
+  const s = q.toLowerCase();
+  return cols.some((c) => displayText(c, row).toLowerCase().includes(s));
+}
+
+/** Compute an absolute [from,to] window for a relative preset (evaluated now). */
+export function relRange(rel: string): { from?: Date; to?: Date } {
+  const now = new Date();
+  const startOfDay = (d: Date) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
+  const today = startOfDay(now);
+  const daysAgo = (n: number) => startOfDay(new Date(Date.now() - n * 86400000));
+  switch (rel) {
+    case 'today': return { from: today, to: now };
+    case 'last7': return { from: daysAgo(7), to: now };
+    case 'last30': return { from: daysAgo(30), to: now };
+    case 'last90': return { from: daysAgo(90), to: now };
+    case 'thismonth': return { from: new Date(now.getFullYear(), now.getMonth(), 1), to: now };
+    case 'thisquarter': return { from: new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1), to: now };
+    case 'thisyear': return { from: new Date(now.getFullYear(), 0, 1), to: now };
+    case 'next30': return { from: now, to: new Date(Date.now() + 30 * 86400000) };
+    case 'overdue': return { to: today };
+    default: return {};
+  }
+}
+
+export function rowMatchesFilters(cols: ColumnDef[], row: Row, filters: Record<string, ColumnFilter>): boolean {
+  for (const c of cols) {
+    const f = filters[c.key];
+    if (!f) continue;
+    const raw = rawValue(c, row);
+    const text = displayText(c, row);
+    if (f.values && f.values.length && !f.values.includes(text)) return false;
+    if (f.text && !text.toLowerCase().includes(f.text.toLowerCase())) return false;
+    if (c.type === 'date' && (f.from || f.to || f.rel)) {
+      const d = raw ? new Date(String(raw)) : null;
+      if (!d || Number.isNaN(d.getTime())) return false;
+      // Parse manual from/to as LOCAL day boundaries so the compare matches the
+      // (local) row timestamps — see localYMD.
+      const fromYMD = f.from ? localYMD(f.from) : null;
+      const toYMD = f.to ? localYMD(f.to) : null;
+      let from: Date | undefined = fromYMD ? new Date(fromYMD[0], fromYMD[1], fromYMD[2]) : undefined;
+      let to: Date | undefined = toYMD ? new Date(toYMD[0], toYMD[1], toYMD[2], 23, 59, 59, 999) : undefined;
+      if (f.rel) { const r = relRange(f.rel); if (r.from) from = r.from; if (r.to) to = r.to; }
+      if (from && d < from) return false;
+      if (to && d > to) return false;
+    }
+  }
+  return true;
+}
+
+/** Normalize badge/text enums so "In Progress" matches raw "in_progress"
+ *  (mirrors backend `_norm_literal`). */
+export function normKey(s: string): string {
+  return String(s ?? '').trim().toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ');
+}
+
+/** Evaluate one advanced-filter condition against a row. */
+function evalCond(col: ColumnDef, row: Row, op: string, value: string): boolean {
+  // Linkage presence: the column's accessor yields the count of linked records
+  // (enrichment sets it to 0 when a real join edge exists but nothing is linked).
+  if (op === 'linked' || op === 'notlinked') {
+    const raw = rawValue(col, row);
+    const n = raw == null ? 0 : Number(raw);
+    const has = Number.isFinite(n) && n > 0;
+    return op === 'linked' ? has : !has;
+  }
+  const text = displayText(col, row);
+  const textLower = text.toLowerCase();
+  const v = (value || '').toLowerCase();
+  // Badge / enum: compare normalized keys so titleCase display matches raw enum.
+  const badgeEq = () => {
+    const raw = rawValue(col, row);
+    const rawN = normKey(String(raw ?? ''));
+    const dispN = normKey(text);
+    const valN = normKey(value || '');
+    return rawN === valN || dispN === valN;
+  };
+  // Numeric comparisons use numericValue so a blank/whitespace cell is *empty*,
+  // not 0 — otherwise `< 5`, `= 0`, `≥ 0` all wrongly match un-scored rows.
+  if (col.type === 'number' && op !== 'empty' && op !== 'notempty') {
+    const nv = numericValue(col, row);
+    const tv = Number(value);
+    if (nv === null || !Number.isFinite(tv)) return false;   // blank never matches a numeric predicate
+    switch (op) {
+      case 'eq': return nv === tv;
+      case 'neq': return nv !== tv;
+      case 'gt': return nv > tv;
+      case 'lt': return nv < tv;
+      case 'gte': return nv >= tv;
+      case 'lte': return nv <= tv;
+      default: return false;
+    }
+  }
+  switch (op) {
+    case 'contains':
+      return col.type === 'badge'
+        ? normKey(text).includes(normKey(value || '')) || normKey(String(rawValue(col, row) ?? '')).includes(normKey(value || ''))
+        : textLower.includes(v);
+    case 'notcontains':
+      return col.type === 'badge'
+        ? !(normKey(text).includes(normKey(value || '')) || normKey(String(rawValue(col, row) ?? '')).includes(normKey(value || '')))
+        : !textLower.includes(v);
+    case 'eq': return col.type === 'badge' ? badgeEq() : textLower === v;
+    case 'neq': return col.type === 'badge' ? !badgeEq() : textLower !== v;
+    case 'starts': return textLower.startsWith(v);
+    case 'empty': return !text && (rawValue(col, row) == null || String(rawValue(col, row)).trim() === '');
+    case 'notempty': return !!text || (rawValue(col, row) != null && String(rawValue(col, row)).trim() !== '');
+    case 'before': case 'after': case 'on': {
+      // Date-only compare (local YMD) — aligns with server day-bucket `_parse_dt`.
+      const raw = rawValue(col, row);
+      const d = raw ? new Date(String(raw)) : null;
+      if (!d || Number.isNaN(d.getTime()) || !value) return false;
+      const ymd = localYMD(value);
+      if (!ymd) return false;
+      const [y, mo, dd] = ymd;
+      const rowY = d.getFullYear();
+      const rowM = d.getMonth();
+      const rowD = d.getDate();
+      if (op === 'on') return rowY === y && rowM === mo && rowD === dd;
+      if (op === 'before') return new Date(rowY, rowM, rowD) < new Date(y, mo, dd);
+      return new Date(rowY, rowM, rowD) >= new Date(y, mo, dd + 1); // after = strictly after the day
+    }
+    default: return false; // unknown operator → non-match (never silently match-all)
+  }
+}
+
+/** Apply the advanced AND/OR builder to a row. */
+export function rowMatchesRules(cols: ColumnDef[], row: Row, rules: FilterRules): boolean {
+  const active = rules.conditions.filter(isActiveCondition);
+  if (!active.length) return true;
+  const results = active.map((c) => {
+    const col = cols.find((x) => x.key === c.col);
+    // Missing column → non-match (never silently match-all).
+    return col ? evalCond(col, row, c.op, c.value) : false;
+  });
+  return rules.logic === 'AND' ? results.every(Boolean) : results.some(Boolean);
+}
+
+/** Plain-English summary of the active filters — so an exported report states
+ *  which slice produced its numbers instead of presenting them unqualified. */
+export function describeRules(cols: ColumnDef[], rules: FilterRules): string {
+  const active = rules.conditions.filter(isActiveCondition);
+  if (!active.length) return 'None';
+  return active.map((c) => {
+    const col = cols.find((x) => x.key === c.col);
+    const ops = OPERATORS[col?.type || 'text'] || OPERATORS.text;
+    const opLabel = ops.find((o) => o.key === c.op)?.label ?? c.op;
+    const noValueOps = ['empty', 'notempty', 'linked', 'notlinked'];
+    const needsValue = !noValueOps.includes(c.op);
+    return `${col?.label ?? c.col} ${opLabel}${needsValue && c.value ? ` “${c.value}”` : ''}`;
+  }).join(rules.logic === 'AND' ? ' and ' : ' or ');
+}
+
+/** Group rows by a column's display value (sorted by group label). */
+export function groupRows(col: ColumnDef, rows: Row[]): { key: string; rows: Row[] }[] {
+  const map = new Map<string, Row[]>();
+  for (const r of rows) { const k = displayText(col, r) || '—'; (map.get(k) ?? map.set(k, []).get(k)!).push(r); }
+  return Array.from(map.entries()).map(([key, rs]) => ({ key, rows: rs })).sort((a, b) => a.key.localeCompare(b.key));
+}
+
+/** Aggregate a numeric column over a set of rows (sum or avg). */
+export function aggregate(col: ColumnDef, rows: Row[]): string {
+  const nums = rows.map((r) => numericValue(col, r)).filter((n): n is number => n !== null);
+  if (!nums.length) return '';
+  const sum = nums.reduce((a, b) => a + b, 0);
+  return col.agg === 'avg' ? (sum / nums.length).toFixed(1) : String(sum);
+}
+
+export function compareRows(cols: ColumnDef[], a: Row, b: Row, sorts: SortSpec[]): number {
+  for (const s of sorts) {
+    const col = cols.find((c) => c.key === s.key);
+    if (!col) continue;
+    let cmp = 0;
+    if (col.type === 'number') {
+      // Blanks sort to the end (asc) instead of being coerced to 0 and
+      // interleaving with real zeros/negatives.
+      const av = numericValue(col, a); const bv = numericValue(col, b);
+      if (av === null && bv === null) cmp = 0;
+      else if (av === null) cmp = 1;
+      else if (bv === null) cmp = -1;
+      else cmp = av - bv;
+    } else if (col.type === 'date') {
+      const av = rawValue(col, a); const bv = rawValue(col, b);
+      const ad = av ? new Date(String(av)).getTime() : 0;
+      const bd = bv ? new Date(String(bv)).getTime() : 0;
+      cmp = (ad || 0) - (bd || 0);
+    } else {
+      cmp = displayText(col, a).localeCompare(displayText(col, b));
+    }
+    if (cmp !== 0) return s.dir === 'asc' ? cmp : -cmp;
+  }
+  return 0;
+}
+
+/** Distinct display values for a column — powers multi-select filters. */
+export function distinctValues(col: ColumnDef, rows: Row[]): string[] {
+  const set = new Set<string>();
+  for (const r of rows) { const t = displayText(col, r); if (t) set.add(t); }
+  return Array.from(set).sort((a, b) => a.localeCompare(b));
+}
+
+/** Normalize list API payloads to Row[]. Many endpoints return `{ items }` (or
+ *  rows/results/data/vendors) instead of a bare array — casting alone does not
+ *  make `.filter` safe. */
+export function asRows(data: unknown): Row[] {
+  if (Array.isArray(data)) return data as Row[];
+  if (data && typeof data === 'object') {
+    const o = data as Record<string, unknown>;
+    for (const k of ['items', 'rows', 'results', 'data', 'vendors'] as const) {
+      if (Array.isArray(o[k])) return o[k] as Row[];
+    }
+  }
+  return [];
+}
