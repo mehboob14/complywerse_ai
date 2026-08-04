@@ -1,0 +1,2662 @@
+{
+  "metadata": {
+    "name": "SBP Internet Banking Framework",
+    "description": "The State Bank of Pakistan Regulations for the Security of Internet Banking, issued by the Payment Systems Department, provides a mandatory security framework for all banks in Pakistan offering internet banking services.",
+    "version": "2023",
+    "source_organization": "State Bank of Pakistan (SBP) - Payment Systems Department",
+    "effective_date": "2023-01-01",
+    "classification": "compliance",
+    "framework_type": "regulatory",
+    "classification_confidence": 0.95,
+    "classification_reasoning": "The SBP Regulations for the Security of Internet Banking is a mandatory regulatory framework issued by the State Bank of Pakistan for all banks in Pakistan offering internet banking services. Compliance is monitored through SBP supervision and reporting requirements.",
+    "framework_purpose": "To help banks in Pakistan develop a formal Internet Banking Security Framework containing administrative, technical and physical safeguards based on best international practices, protecting against financial and reputational risks arising from IT security breaches.",
+    "framework_scope": "All banks in Pakistan providing financial and/or non-financial transactions through internet, irrespective of software tool used by the bank and access devices used by its customers.",
+    "framework_objectives": [
+      "Ensure security and integrity of data and systems so that customers' information has not been modified and systems are free from unauthorized access",
+      "Ensure confidentiality of customers' data in storage, during processing and in transit",
+      "Ensure reliability and availability of Internet Banking systems to provide prompt access to registered users and maintain operational effectiveness",
+      "Ensure accountability by designing SOPs, policies and controls to ensure traceability of all transactions",
+      "Adopt a proactive approach to detect unauthorized access and identify potential fraudulent transactions"
+    ],
+    "target_audience": "Board of Directors, Senior Management, IT Security Teams, Digital Banking Teams, Fraud Prevention Teams, and Compliance Officers of all SBP-regulated banks offering internet banking",
+    "certification_body": null,
+    "certification_validity_period": null,
+    "certification_levels": null,
+    "certification_lifecycle": null,
+    "required_artifacts": [
+      "Internet Banking Security Framework document (BOD approved)",
+      "Security Risk Assessment document (reviewed by BOD, at least annually)",
+      "Security Controls Implementation documentation",
+      "Security Controls Monitoring mechanism (formally approved)",
+      "Customer Awareness Program",
+      "Quarterly Security Breach Reports to Payment Systems Department (Annexure-I)"
+    ],
+    "regulatory_authority": "State Bank of Pakistan (SBP) - Payment Systems Department",
+    "compliance_deadline": null,
+    "penalty_for_non_compliance": "Non-compliance may result in regulatory penalties, restrictions on internet banking services, and enforcement actions as per SBP regulations.",
+    "adoption_approach": "Risk-based implementation with mandatory compliance for all banks providing internet banking services in Pakistan.",
+    "hierarchy_structure": {
+      "levels": [
+        "Section",
+        "Sub-Section",
+        "Sub-Sub-Section",
+        "Lettered Requirement",
+        "Numbered Sub-Requirement"
+      ],
+      "numbering_pattern": "N / N.N / N.N.N / N.N.N(letter) / N.N.N(letter)(numeral)"
+    },
+    "document_structure": {
+      "sections": [
+        "Preface",
+        "Definitions",
+        "1. Scope of the Regulations",
+        "2. Internet Banking Security Framework",
+        "2.1. Security Risk Assessment",
+        "2.2. Security Controls Implementation",
+        "2.2.1. Authentication Controls",
+        "2.2.2. Security Controls for In-house Functions",
+        "2.2.3. Security Controls Implementation for Outsourced Functions",
+        "2.3. Security Controls Monitoring",
+        "3. Customer Awareness",
+        "4. Reporting Requirements",
+        "5. Regulatory Requirements",
+        "Annexure-I: Details of Established Security Breaches in IB"
+      ],
+      "control_patterns": {
+        "primary_pattern": "N",
+        "secondary_patterns": [
+          "N.N",
+          "N.N.N",
+          "N.N.N(letter)",
+          "N.N.N(letter)(numeral)"
+        ],
+        "examples": [
+          "1",
+          "2",
+          "2.1",
+          "2.1(a)",
+          "2.2.1(b)",
+          "2.2.3(d)(i)"
+        ]
+      },
+      "requirement_indicators": {
+        "mandatory_keywords": [
+          "shall",
+          "must",
+          "required"
+        ],
+        "advisory_keywords": [
+          "should",
+          "may",
+          "encouraged"
+        ]
+      },
+      "total_expected_controls": 67
+    },
+    "exported_at": "2026-01-28T14:00:00.000000",
+    "source_framework_id": null,
+    "total_controls": 67
+  },
+  "controls": [
+    {
+      "control_id": "2",
+      "original_reference": "2",
+      "title": "Internet Banking Security Framework",
+      "description": "Bank shall develop, implement and regularly review an Internet Banking Security Framework based on defined security objectives. The framework must be approved by BODs, clearly define roles and responsibilities, and include Security Risk Assessment, Security Controls Implementation and Security Controls Monitoring.",
+      "full_text": "Bank shall develop, implement and regularly review Internet Banking Security Framework based on the following key security objectives: a) Security and integrity of data and systems, to ensure that customers' information has not been modified and systems are free from unauthorized access; b) Confidentiality of customers' data in storage, during processing and in transit; c) Reliability and availability of Internet Banking systems to provide prompt access to systems for registered users and maintaining operational effectiveness; d) Accountability by designing SOPs, policies and controls to ensure traceability of all transactions; e) Proactive approach to detect unauthorized access and identification of potential fraudulent transactions. While developing the Internet Banking Security Framework the bank should take into account the complexity of systems, applications and products/services offered while at the same time ensuring the ease of usage and customers' convenience. Further the framework should clearly define the roles and responsibilities of Board of Directors (BODs), senior management and employees with regard to its approval, development and implementation. This Framework and any reviews thereafter should be duly approved by the BODs. The Internet Banking Security Framework shall include the following components: Security Risk Assessment, Implementation of Security Controls and Monitoring of Security Controls.",
+      "domain": "Governance",
+      "category": "IB Security Framework — Governance",
+      "section_number": "2",
+      "parent_section": null,
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "BoD-Approved Internet Banking Security Framework",
+          "description": "Comprehensive Internet Banking Security Framework document approved by the Board of Directors covering the five security objectives and the three mandated components (Risk Assessment, Controls Implementation, Controls Monitoring).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "BoD Approval Minutes — IB Security Framework",
+          "description": "Board of Directors meeting minutes recording approval of the IB Security Framework and any subsequent reviews/updates.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "IB Framework Review Log",
+          "description": "Version-controlled log of periodic IB Security Framework reviews with reviewer, dates, changes and BoD approval references.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "IB Framework Roles and Responsibilities Matrix",
+          "description": "Documented RACI matrix defining roles and responsibilities of BoDs, senior management and employees for approval, development and implementation of the IB Security Framework.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Component Coverage Map (RA / Controls / Monitoring)",
+          "description": "Cross-reference map demonstrating that the framework covers Security Risk Assessment, Security Controls Implementation and Security Controls Monitoring as required components.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Complexity & Usability Considerations Note",
+          "description": "Documentation showing how complexity of systems, applications and products/services as well as customer convenience were considered in framework design.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "2(a)",
+      "original_reference": "2(a)",
+      "title": "Security Objective: Security and Integrity of Data and Systems",
+      "description": "The Internet Banking Security Framework shall ensure security and integrity of data and systems, ensuring that customers' information has not been modified and systems are free from unauthorized access.",
+      "full_text": "Security and integrity of data and systems, to ensure that customers' information has not been modified and systems are free from unauthorized access.",
+      "domain": "Security",
+      "category": "Framework Security Objectives — Integrity",
+      "section_number": "2(a)",
+      "parent_section": "2",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Data Integrity Controls Standard",
+          "description": "Approved standard documenting integrity controls applied to customer information across IB databases, application services and message queues (hashing, checksums, signed messages).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "File Integrity Monitoring (FIM) Configuration",
+          "description": "Configuration export of FIM tooling (e.g., Tripwire, OSSEC, Defender for Cloud FIM) on IB application and database servers.",
+          "filetype": "JSON"
+        },
+        {
+          "name": "FIM and Integrity Alert Logs",
+          "description": "Sample period of FIM/integrity alert logs with triage outcomes confirming detection of unauthorised modifications.",
+          "filetype": "LOG"
+        },
+        {
+          "name": "Database Tamper-Proofing Evidence",
+          "description": "Configuration evidence of database audit logging, row-level integrity hashes or write-once journaling for IB transaction records.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Unauthorised Access Prevention Configuration",
+          "description": "IAM, network ACL and WAF configuration export demonstrating systems are protected from unauthorised access at multiple tiers.",
+          "filetype": "JSON"
+        }
+      ]
+    },
+    {
+      "control_id": "2(b)",
+      "original_reference": "2(b)",
+      "title": "Security Objective: Confidentiality of Customers' Data",
+      "description": "The Internet Banking Security Framework shall ensure confidentiality of customers' data in storage, during processing and in transit.",
+      "full_text": "Confidentiality of customers' data in storage, during processing and in transit.",
+      "domain": "Data",
+      "category": "Framework Security Objectives — Confidentiality",
+      "section_number": "2(b)",
+      "parent_section": "2",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Encryption-at-Rest Configuration",
+          "description": "Configuration export showing encryption-at-rest enabled for IB databases, file stores, backups and snapshots using approved KMS/HSM keys.",
+          "filetype": "JSON"
+        },
+        {
+          "name": "Encryption-in-Transit Configuration",
+          "description": "TLS 1.2+/1.3 configuration evidence and SSL Labs scan results for all IB endpoints (customer-facing, server-to-server, API gateways).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "In-Processing Data Protection Evidence",
+          "description": "Evidence of confidentiality controls applied during processing — memory scrubbing, secure enclaves where used, masked logs, and tokenisation in application tier.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Data Classification Register",
+          "description": "Register classifying customer data elements (CNIC, account number, OTP, balance, PIN) with confidentiality controls assigned to each.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Data Loss Prevention (DLP) Policy & Rule Set",
+          "description": "DLP policy and active rules covering IB data flows (email, endpoint, network) protecting confidentiality.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "2(c)",
+      "original_reference": "2(c)",
+      "title": "Security Objective: Reliability and Availability of Internet Banking Systems",
+      "description": "The Internet Banking Security Framework shall ensure reliability and availability of Internet Banking systems to provide prompt access to systems for registered users and maintain operational effectiveness.",
+      "full_text": "Reliability and availability of Internet Banking systems to provide prompt access to systems for registered users and maintaining operational effectiveness.",
+      "domain": "BCP",
+      "category": "Framework Security Objectives — Availability",
+      "section_number": "2(c)",
+      "parent_section": "2",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "IB Availability SLA Document",
+          "description": "Documented availability target/SLA for the IB platform (e.g., 99.9%) with measurement methodology and exclusions.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Uptime Monitoring Dashboard Export",
+          "description": "Dashboard export from APM/uptime monitoring (e.g., Dynatrace, AppDynamics, New Relic, Pingdom) showing IB platform availability for the review period.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Operational Effectiveness Reports",
+          "description": "Periodic operational effectiveness reports covering IB transaction success rates, response times and error rates.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "HA / Redundancy Architecture Diagram",
+          "description": "Architecture diagram showing High Availability and redundancy design for the IB platform across active-active or active-passive sites.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Capacity Management Reports",
+          "description": "Periodic capacity management reports demonstrating headroom against forecasted IB load.",
+          "filetype": "XLSX"
+        }
+      ]
+    },
+    {
+      "control_id": "2(d)",
+      "original_reference": "2(d)",
+      "title": "Security Objective: Accountability and Traceability",
+      "description": "The Internet Banking Security Framework shall ensure accountability by designing SOPs, policies and controls to ensure traceability of all transactions.",
+      "full_text": "Accountability by designing SOPs, policies and controls to ensure traceability of all transactions.",
+      "domain": "Governance",
+      "category": "Framework Security Objectives — Accountability",
+      "section_number": "2(d)",
+      "parent_section": "2",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Transaction Traceability SOP",
+          "description": "Standard Operating Procedure for end-to-end traceability of every IB transaction from origin (customer device/IP) to settlement, including correlation IDs.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Audit Trail Policy",
+          "description": "Approved audit trail policy specifying events captured, fields recorded, retention period and tamper-evident storage for IB transactions.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Sample IB Transaction Audit Trail",
+          "description": "Sample (redacted) end-to-end audit trail for a single IB transaction demonstrating traceability across web tier, app tier, DB and core banking.",
+          "filetype": "LOG"
+        },
+        {
+          "name": "Non-Repudiation Controls Documentation",
+          "description": "Documentation of non-repudiation controls (digital signatures on transactions, signed OTP verifications) supporting accountability.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "2(e)",
+      "original_reference": "2(e)",
+      "title": "Security Objective: Proactive Fraud Detection",
+      "description": "The Internet Banking Security Framework shall adopt a proactive approach to detect unauthorized access and identify potential fraudulent transactions.",
+      "full_text": "Proactive approach to detect unauthorized access and identification of potential fraudulent transactions.",
+      "domain": "Fraud",
+      "category": "Framework Security Objectives — Fraud Detection",
+      "section_number": "2(e)",
+      "parent_section": "2",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Fraud Risk Management Framework",
+          "description": "Approved fraud risk management framework specific to Internet Banking covering detection, prevention and response.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Fraud Detection Tooling Inventory",
+          "description": "Inventory of fraud detection tools deployed (e.g., SAS Fraud Manager, FICO Falcon, NetGuardians, in-house rules engine) with scope and coverage.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Fraud Detection Rule Configuration",
+          "description": "Active fraud detection / transaction monitoring rule set with thresholds, scoring and triggers.",
+          "filetype": "JSON"
+        },
+        {
+          "name": "Sample Fraud / Unauthorised-Access Alerts",
+          "description": "Sample alerts generated by fraud monitoring and unauthorised-access detection with triage and disposition records.",
+          "filetype": "LOG"
+        },
+        {
+          "name": "Fraud Case Investigation Records",
+          "description": "Sample fraud case investigation records demonstrating proactive identification, escalation and customer protection.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "2.1",
+      "original_reference": "2.1",
+      "title": "Security Risk Assessment",
+      "description": "The bank shall conduct and document a formal Security Risk Assessment for Internet Banking to identify, estimate and prioritize risks. BODs shall review the risk assessment and any subsequent reviews. The assessment shall be reviewed at least annually and immediately after a major security breach, significant infrastructure change, or introduction of a new product or service.",
+      "full_text": "The bank shall conduct and document a formal Security Risk Assessment for Internet Banking with a view of identifying, estimating and prioritizing risks to which its operations are exposed due to Internet Banking. The BODs should review the risk assessment document and any reviews conducted thereafter. The Security Risk Assessment should be reviewed at least once a year; however, in case of a major security breach, significant changes to the infrastructure and introduction of a new product or service, an immediate review of risk assessment should be carried out. Further, in case of a major security breach, risk assessment review should include a detailed analysis of the factors that cause such security breaches.",
+      "domain": "Risk",
+      "category": "IB Security Risk Assessment",
+      "section_number": "2.1",
+      "parent_section": "2",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Formal IB Security Risk Assessment Document",
+          "description": "Comprehensive Security Risk Assessment for Internet Banking identifying, estimating and prioritising risks to bank operations.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "BoD Review Minutes — Risk Assessment",
+          "description": "Board of Directors meeting minutes recording review of the IB Security Risk Assessment and any subsequent updates.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Annual Review Schedule and Records",
+          "description": "Schedule and historical records evidencing at-least-annual review cycle of the Risk Assessment.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Ad-Hoc Review Trigger Log",
+          "description": "Log of ad-hoc Risk Assessment reviews triggered by major security breaches, significant infrastructure changes or new product/service launches.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Post-Breach Root Cause Analysis Report",
+          "description": "Sample root cause analysis report (where applicable) demonstrating that post-breach risk assessment review included detailed analysis of factors causing the breach.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "IB Risk Register",
+          "description": "Risk register listing all identified IB risks with probability, impact, residual rating and treatment plan.",
+          "filetype": "XLSX"
+        }
+      ]
+    },
+    {
+      "control_id": "2.1(a)",
+      "original_reference": "2.1(a)",
+      "title": "Business and Technology Environment Description",
+      "description": "The Security Risk Assessment shall include a current and detailed description of the bank's business and technology environment and existing security measures, including identification of location, systems and methods for maintaining customers' information.",
+      "full_text": "A current and detailed description of bank's business and technology environment and existing security measures in place including identification of location, systems and methods for maintaining customers' information.",
+      "domain": "Risk",
+      "category": "Risk Assessment — Environment Profiling",
+      "section_number": "2.1(a)",
+      "parent_section": "2.1",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Business and Technology Environment Description",
+          "description": "Documented description of the bank's IB business and technology environment (channels, products, customer segments, transaction volumes, geography).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "IB Architecture Diagram",
+          "description": "Current-state IB architecture diagram covering customer-facing tiers, application servers, integration layers, core banking interfaces and data stores.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Existing Security Measures Inventory",
+          "description": "Inventory of existing security measures (firewalls, WAF, IDS/IPS, MFA, DLP, EDR, SIEM) deployed in support of IB.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Customer Information Location & Methods Register",
+          "description": "Register identifying physical and logical locations, systems and methods for maintaining customer information (primary, replicas, backups, archives).",
+          "filetype": "XLSX"
+        }
+      ]
+    },
+    {
+      "control_id": "2.1(b)",
+      "original_reference": "2.1(b)",
+      "title": "Identification of Information and Information Systems to be Protected",
+      "description": "The Security Risk Assessment shall include identification of information and the information systems to be protected.",
+      "full_text": "An identification of information and the information systems to be protected.",
+      "domain": "Risk",
+      "category": "Risk Assessment — Asset Identification",
+      "section_number": "2.1(b)",
+      "parent_section": "2.1",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Information Asset Inventory",
+          "description": "Inventory of all information assets in scope of Internet Banking with owner, custodian, classification and protection requirements.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Information Systems Inventory (CMDB Extract)",
+          "description": "CMDB extract listing every information system supporting IB (servers, databases, middleware, network devices, security appliances).",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Asset-to-Service Mapping",
+          "description": "Mapping of each IB service/product to its underlying information assets and systems.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "2.1(c)",
+      "original_reference": "2.1(c)",
+      "title": "Classification and Ranking of Sensitive Systems and Data",
+      "description": "The Security Risk Assessment shall include classification and ranking (high, medium, low) of sensitive systems, payment data and applications in order of importance based on assessment of threats and vulnerabilities.",
+      "full_text": "Classification and ranking (high, medium, low) of the sensitive systems, payment data and applications in order of their importance and based on the assessment of threats and vulnerabilities.",
+      "domain": "Risk",
+      "category": "Risk Assessment — Classification",
+      "section_number": "2.1(c)",
+      "parent_section": "2.1",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Information Classification Policy",
+          "description": "Approved classification policy defining High / Medium / Low criteria for sensitive systems, payment data and applications.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Classification Ranking Register",
+          "description": "Register classifying each sensitive system, payment data set and application as High / Medium / Low with threat/vulnerability rationale.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Classification Methodology Document",
+          "description": "Methodology used to derive classifications including importance criteria, threat factors and vulnerability factors.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Periodic Classification Review Records",
+          "description": "Records of periodic review and re-classification by data/system owners.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "2.1(d)",
+      "original_reference": "2.1(d)",
+      "title": "Assessment of Threats and Vulnerabilities",
+      "description": "The Security Risk Assessment shall include assessment of potential threats and vulnerabilities to the security and integrity of customers' information, payments data, IT systems and applications.",
+      "full_text": "Assessment of potential threats and vulnerabilities to security and integrity of customers' information, payments data, IT systems and applications.",
+      "domain": "Risk",
+      "category": "Risk Assessment — Threats & Vulnerabilities",
+      "section_number": "2.1(d)",
+      "parent_section": "2.1",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "IB Threat Assessment Report",
+          "description": "Threat assessment report covering customer information, payments data, IT systems and applications — including threat actors, attack vectors and likelihood.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Vulnerability Assessment Report",
+          "description": "Latest vulnerability assessment report (Qualys / Tenable / Nessus / Rapid7) covering IB infrastructure and applications.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Threat Intelligence Feed Subscriptions",
+          "description": "Evidence of threat intelligence feed subscriptions (commercial / FS-ISAC / CERT-PK) feeding the threat assessment.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Threat-to-Asset Mapping Matrix",
+          "description": "Matrix mapping each identified threat/vulnerability to affected assets (customer information, payments data, IT systems, applications).",
+          "filetype": "XLSX"
+        }
+      ]
+    },
+    {
+      "control_id": "2.1(e)",
+      "original_reference": "2.1(e)",
+      "title": "Assessment of Identity Theft and Identity Fraud Risks",
+      "description": "The Security Risk Assessment shall include assessment of risks related to identity theft and identity fraud.",
+      "full_text": "Assessment of risks related to identity theft and identity fraud.",
+      "domain": "Fraud",
+      "category": "Risk Assessment — Identity Theft & Fraud",
+      "section_number": "2.1(e)",
+      "parent_section": "2.1",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Identity Theft Risk Assessment",
+          "description": "Documented assessment of identity theft risks specific to IB (account takeover, SIM swap, phishing, social engineering, credential stuffing).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Identity Fraud Risk Assessment",
+          "description": "Documented assessment of identity fraud risks (synthetic identity, mule accounts, document forgery in onboarding).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Identity Fraud Loss Statistics",
+          "description": "Periodic identity fraud loss statistics with trends, categories and lessons learned.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Identity Fraud Treatment Plan",
+          "description": "Treatment plan listing controls implemented or planned to mitigate identity theft / fraud risks (KYC enhancements, device binding, behavioural biometrics).",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "2.1(f)",
+      "original_reference": "2.1(f)",
+      "title": "Evaluation of Existing Security Controls Effectiveness",
+      "description": "The Security Risk Assessment shall include an evaluation of existing Security Controls' effectiveness against each identified threat and vulnerability.",
+      "full_text": "An evaluation of existing Security Controls' effectiveness against each threat and vulnerability.",
+      "domain": "Risk",
+      "category": "Risk Assessment — Control Effectiveness",
+      "section_number": "2.1(f)",
+      "parent_section": "2.1",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Control Effectiveness Evaluation Matrix",
+          "description": "Matrix evaluating effectiveness of each existing Security Control against each identified threat and vulnerability with rating (Effective / Partially / Ineffective).",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Control Testing Results",
+          "description": "Results of control testing exercises (purple team, breach-and-attack simulation, MITRE ATT&CK alignment tests) supporting effectiveness ratings.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Residual Risk Register",
+          "description": "Residual risk register showing residual risk after applying existing controls with treatment decisions.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Control Gap Analysis Report",
+          "description": "Gap analysis report identifying control deficiencies and recommended enhancements.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "2.1(g)",
+      "original_reference": "2.1(g)",
+      "title": "Service Providers Security and Contractual Responsibilities",
+      "description": "The Security Risk Assessment shall address the security and contractual responsibilities of Service Providers (SPs), including customers who have access to the bank's systems and data.",
+      "full_text": "The security and contractual responsibilities of Service Providers (SPs), including customers who have access to the bank's systems and data.",
+      "domain": "Vendor",
+      "category": "Risk Assessment — Service Provider Responsibilities",
+      "section_number": "2.1(g)",
+      "parent_section": "2.1",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Service Provider Inventory (IB Scope)",
+          "description": "Inventory of all Service Providers supporting IB with services, criticality and access scope.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "SP Security & Contractual Responsibility Matrix",
+          "description": "Matrix documenting security and contractual responsibilities of each Service Provider including customers with system/data access.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Executed SP Contracts with Security Clauses",
+          "description": "Sample executed Service Provider contracts highlighting security obligations and clauses.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Customer System-Access Inventory",
+          "description": "Inventory of customer entities (e.g., corporate customers) with access to bank systems/data with access rationale and controls.",
+          "filetype": "XLSX"
+        }
+      ]
+    },
+    {
+      "control_id": "2.1(h)",
+      "original_reference": "2.1(h)",
+      "title": "Outsourcing Risk Assessment",
+      "description": "Risks including Compliance, Concentration, Operational, Country and Legal should be assessed by the banks before entering and while managing Internet Banking outsourcing arrangements with Service Providers.",
+      "full_text": "Risks like Compliance, Concentration, Operational, Country and Legal should be assessed by the banks before entering and while managing Internet Banking outsourcing arrangements with the SPs.",
+      "domain": "Vendor",
+      "category": "Risk Assessment — Outsourcing Risks",
+      "section_number": "2.1(h)",
+      "parent_section": "2.1",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Pre-Engagement Outsourcing Risk Assessment",
+          "description": "Pre-engagement risk assessment for each Service Provider covering Compliance, Concentration, Operational, Country and Legal risks.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Ongoing Outsourcing Risk Reviews",
+          "description": "Periodic ongoing risk review reports for active outsourcing arrangements.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Concentration Risk Analysis",
+          "description": "Concentration risk analysis identifying SP dependency hotspots in IB and mitigation actions.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Country Risk Assessment for Offshore SPs",
+          "description": "Country risk assessment for any offshore Service Providers covering political, legal and regulatory dimensions.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Outsourcing Risk Register",
+          "description": "Outsourcing risk register tracking all risk types per SP with treatment status.",
+          "filetype": "XLSX"
+        }
+      ]
+    },
+    {
+      "control_id": "2.1(i)",
+      "original_reference": "2.1(i)",
+      "title": "Legal Environment Risk Assessment",
+      "description": "The Security Risk Assessment shall address risks related to the legal environment and the bank's responsibilities under Section 32, Section 41, Section 43, Section 70 and other relevant provisions of the Payment Systems and Electronic Fund Transfers Act 2007.",
+      "full_text": "Risk Assessment related to legal environment and bank's responsibilities under Section 32 (Availability of Documentation and Proof), section 41 (Burden of Proof), Section 43 (Liability of banks/Authorized Parties), section 70 (Secrecy and Privacy) and other relevant provisions of the Payment Systems and Electronic Fund Transfers Act 2007.",
+      "domain": "Compliance",
+      "category": "Risk Assessment — Legal Environment",
+      "section_number": "2.1(i)",
+      "parent_section": "2.1",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Legal Environment Risk Assessment Report",
+          "description": "Risk assessment report explicitly referencing the Payment Systems and Electronic Fund Transfers Act 2007 and bank responsibilities thereunder.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Section 32 Compliance Assessment (Documentation & Proof)",
+          "description": "Assessment of bank's compliance with Section 32 (Availability of Documentation and Proof) — retention, retrieval and admissibility of IB transaction records.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Section 41 Compliance Assessment (Burden of Proof)",
+          "description": "Assessment of bank's compliance with Section 41 (Burden of Proof) — record-keeping practices that support discharge of burden of proof in disputes.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Section 43 Compliance Assessment (Liability)",
+          "description": "Assessment of bank's compliance with Section 43 (Liability of banks/Authorized Parties) — liability allocation, customer indemnity processes and dispute handling.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Section 70 Compliance Assessment (Secrecy & Privacy)",
+          "description": "Assessment of bank's compliance with Section 70 (Secrecy and Privacy) — confidentiality of customer information and lawful disclosure procedures.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Legal Function Sign-off",
+          "description": "Legal function sign-off on the legal-environment risk assessment confirming completeness of statutory coverage.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "2.2",
+      "original_reference": "2.2",
+      "title": "Security Controls Implementation",
+      "description": "The bank shall ensure appropriate security arrangements and security controls to protect IT assets are in place, developed based on the Security Risk Assessment and commensurate with risk levels. The bank shall define minimum baseline Security Controls covering Access Controls, Network Access Controls, Operating System Access Controls, Application Access and Remote Access Controls.",
+      "full_text": "The bank shall ensure that appropriate security arrangements and security controls to protect IT assets (such as systems, applications, networks, data, and information and communication systems) are in place. Bank shall develop a set of controls based on the Security Risk Assessment document, commensurate with the risk levels to meet the control objectives. Bank shall define its set of minimum baseline Security Controls that include Access Controls (Access Rights Management, Electronic Authentication etc), Network Access Controls, Operating System Access Controls, Application Access and Remote Access Controls.",
+      "domain": "Security",
+      "category": "Security Controls — Baseline",
+      "section_number": "2.2",
+      "parent_section": "2",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Minimum Baseline Security Controls Standard",
+          "description": "Approved minimum baseline security controls standard for IB covering Access, Network, Operating System, Application and Remote Access controls.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Risk-to-Control Mapping",
+          "description": "Mapping demonstrating that controls in the baseline are derived from Security Risk Assessment findings and are commensurate with risk levels.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Access Rights Management Procedure",
+          "description": "Procedure governing user access lifecycle (joiners, movers, leavers) for IB systems.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Electronic Authentication Standard",
+          "description": "Standard governing electronic authentication mechanisms used for staff and customer access to IB systems.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Network Access Control Configuration",
+          "description": "Configuration export of NACs (802.1X / NAC appliance / cloud network policies) protecting IB infrastructure.",
+          "filetype": "JSON"
+        },
+        {
+          "name": "Operating System Access Control Configuration",
+          "description": "OS access control configuration (sudoers, GPO, RBAC) for IB servers.",
+          "filetype": "JSON"
+        },
+        {
+          "name": "Application Access Control Configuration",
+          "description": "Application-level access control configuration (RBAC, ABAC) for the IB application stack.",
+          "filetype": "JSON"
+        },
+        {
+          "name": "Remote Access Control Configuration",
+          "description": "Remote access controls (VPN, ZTNA, jump-host, PAM) configuration evidence for privileged access to IB.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "2.2.1",
+      "original_reference": "2.2.1",
+      "title": "Authentication Controls",
+      "description": "Minimum authentication controls to be implemented by banks for Internet Banking customers, covering registration/enrollment, two-factor authentication, layered security for high-value transactions, account lockout and session controls, and periodic authentication risk assessment.",
+      "full_text": "Minimum Security Controls to be implemented by banks should include the following aspects under Authentication Controls.",
+      "domain": "Access",
+      "category": "Authentication — Customer",
+      "section_number": "2.2.1",
+      "parent_section": "2.2",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Customer Authentication Policy",
+          "description": "Approved authentication policy for IB customers covering enrollment, 2FA, layered security, account lockout, session timeout and re-authentication.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Authentication Architecture Document",
+          "description": "Documented architecture of customer authentication for IB including identity provider, MFA broker and risk-based authentication engine.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Authentication Controls Implementation Matrix",
+          "description": "Matrix listing each authentication control (a–e) with implementation status, owner and last review date.",
+          "filetype": "XLSX"
+        }
+      ]
+    },
+    {
+      "control_id": "2.2.1(a)",
+      "original_reference": "2.2.1(a)",
+      "title": "Customer Registration and Enrollment",
+      "description": "Registration/enrollment for Internet Banking customers should be done prior to offering Internet Banking products and services after due verification through appropriate means.",
+      "full_text": "Registration/enrollment for Internet Banking customers should be done prior to offering Internet Banking products and services after due verification through appropriate means.",
+      "domain": "Access",
+      "category": "Authentication — Enrollment",
+      "section_number": "2.2.1(a)",
+      "parent_section": "2.2.1",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "IB Customer Enrollment Procedure",
+          "description": "Documented procedure for IB customer registration/enrollment specifying verification steps performed prior to granting access.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Identity Verification Workflow Evidence",
+          "description": "Workflow/screenshots showing identity verification (CNIC, biometric/NADRA verisys, OTP, branch confirmation) executed during enrollment.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Enrollment Audit Log Sample",
+          "description": "Sample audit log of customer enrollments showing verification method, timestamp, agent and outcome.",
+          "filetype": "LOG"
+        },
+        {
+          "name": "Pre-Activation Hold Evidence",
+          "description": "Evidence that IB products/services are activated only after successful verification (system configuration showing pre-activation hold logic).",
+          "filetype": "PNG"
+        }
+      ]
+    },
+    {
+      "control_id": "2.2.1(b)",
+      "original_reference": "2.2.1(b)",
+      "title": "Two Factor Authentication (2FA)",
+      "description": "In order to authenticate customers who use Internet Banking products and services the bank shall implement at least Two Factor Authentication (2FA) such as Passwords (1st factor) and One time tokens, Dongles etc (2nd factor).",
+      "full_text": "In order to authenticate customers who use Internet Banking products and services the bank shall implement at least Two Factor Authentication (2FA) such as Passwords (1 factor) and One time tokens, Dongles etc (2nd factor).",
+      "domain": "Access",
+      "category": "Authentication — Two-Factor",
+      "section_number": "2.2.1(b)",
+      "parent_section": "2.2.1",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "2FA Policy",
+          "description": "Approved policy mandating Two-Factor Authentication for all IB customer logins and transaction approvals.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "2FA Configuration Export",
+          "description": "Configuration export from IAM/MFA solution showing enforced 2FA on the customer-facing IB application.",
+          "filetype": "JSON"
+        },
+        {
+          "name": "2FA Method Inventory",
+          "description": "Inventory of approved 2nd-factor methods (SMS OTP, soft token, hard token/dongle, push authentication, biometric) with risk ratings.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Login & Transaction 2FA Workflow Screenshots",
+          "description": "Screenshots of IB customer login and transaction-approval flows demonstrating 2FA prompts.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "2FA Coverage Audit",
+          "description": "Audit/report confirming 100% of customer authentication paths require 2FA with no bypass routes.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "2.2.1(c)",
+      "original_reference": "2.2.1(c)",
+      "title": "Layered Security for High Value Transactions",
+      "description": "Bank shall implement additional layered security programs for high value transactions processed through Internet Banking.",
+      "full_text": "Bank shall implement additional layered security programs for high value transactions processed through Internet Banking.",
+      "domain": "Access",
+      "category": "Authentication — Layered Security",
+      "section_number": "2.2.1(c)",
+      "parent_section": "2.2.1",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "High-Value Transaction Threshold Policy",
+          "description": "Approved policy defining high-value transaction thresholds and the additional layered security required.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Layered Security Configuration",
+          "description": "Configuration of layered security controls applied to high-value transactions (step-up authentication, transaction signing, beneficiary cooling-off, callback verification).",
+          "filetype": "JSON"
+        },
+        {
+          "name": "Risk-Based Authentication Rule Set",
+          "description": "Rule set in the risk-based authentication engine triggering step-up for high-value or anomalous transactions.",
+          "filetype": "JSON"
+        },
+        {
+          "name": "High-Value Transaction Sample Walkthrough",
+          "description": "Walkthrough screenshots of a high-value IB transaction demonstrating activation of additional security layers.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Layered Security Effectiveness Report",
+          "description": "Report showing effectiveness of layered security programs (false positives, blocked fraudulent attempts, customer impact).",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "2.2.1(d)",
+      "original_reference": "2.2.1(d)",
+      "title": "Account Lockout, Session Timeout and Re-authentication Controls",
+      "description": "Authentication controls should take into account failed log-in attempts, frequency of password changes, session timeouts and re-authentication of customers based on predefined criteria.",
+      "full_text": "Authentication controls should also take into account failed log-in attempts, frequency of password changes, session time outs and re-authentication of customers based on predefined criteria.",
+      "domain": "Access",
+      "category": "Authentication — Lockout & Session",
+      "section_number": "2.2.1(d)",
+      "parent_section": "2.2.1",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Account Lockout Policy & Configuration",
+          "description": "Approved policy and IB application configuration enforcing account lockout on consecutive failed login attempts.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Password Change Frequency Configuration",
+          "description": "Configuration evidence of mandatory password change frequency and password history.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Session Timeout Configuration",
+          "description": "Configuration export showing IB session timeout settings (idle and absolute) for customer sessions.",
+          "filetype": "JSON"
+        },
+        {
+          "name": "Re-Authentication Criteria Document",
+          "description": "Documented predefined criteria for re-authenticating customers (sensitive actions, time elapsed, device change, network change).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Lockout/Session Event Logs",
+          "description": "Sample logs showing lockout events, session expiries and re-authentication challenges enforced.",
+          "filetype": "LOG"
+        }
+      ]
+    },
+    {
+      "control_id": "2.2.1(e)",
+      "original_reference": "2.2.1(e)",
+      "title": "Periodic Risk Assessment of Authentication Controls",
+      "description": "Bank shall conduct periodic risk assessment of authentication controls to identify threats and vulnerabilities based on changes in applications' functionality, changes in internal and external environment, changes in customers' preferences and actual security breaches.",
+      "full_text": "Bank shall conduct periodic risk assessment of authentication controls to identify threats and vulnerabilities based on changes in applications' functionality, threats due to changes in internal and external environment, changes in customers' preferences and actual security breaches.",
+      "domain": "Risk",
+      "category": "Authentication — Periodic Risk Assessment",
+      "section_number": "2.2.1(e)",
+      "parent_section": "2.2.1",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Authentication Risk Assessment Report",
+          "description": "Periodic risk assessment report focused on authentication controls with threats, vulnerabilities and treatment plans.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Functionality-Change Trigger Records",
+          "description": "Records evidencing authentication risk reviews triggered by IB application functionality changes.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Environment-Change Trigger Records",
+          "description": "Records evidencing authentication risk reviews triggered by changes in internal/external environment (new threats, regulatory changes).",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Customer Preference Change Reviews",
+          "description": "Records of authentication reviews driven by changes in customer preferences (new device types, biometrics adoption, channel shift).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Post-Breach Authentication Review",
+          "description": "Sample post-incident authentication risk review reports following actual security breaches.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "2.2.2",
+      "original_reference": "2.2.2",
+      "title": "Security Controls for In-house Functions",
+      "description": "Security controls applicable to bank employees who are users of Internet Banking related systems, covering access rights management, OS controls, remote access, physical access, network security, firewalls, IDS/IPS, identity theft prevention, encryption, traceability and training.",
+      "full_text": "The following controls shall apply on bank employees who are users of Internet Banking related systems.",
+      "domain": "Security",
+      "category": "In-House Controls — Overview",
+      "section_number": "2.2.2",
+      "parent_section": "2.2",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "In-House Security Controls Policy",
+          "description": "Consolidated policy covering all in-house security controls applicable to bank employees who use IB-related systems (sub-controls a–k).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "In-House Controls Coverage Matrix",
+          "description": "Matrix mapping each sub-control (2.2.2(a)–(k)) to implemented controls, owners and review status.",
+          "filetype": "XLSX"
+        }
+      ]
+    },
+    {
+      "control_id": "2.2.2(a)",
+      "original_reference": "2.2.2(a)",
+      "title": "Access Rights Management",
+      "description": "Users' access rights should be appropriate and commensurate with their job functions, periodically reviewed per risk ranking from the Security Risk Assessment, and changes applied only after due authorization, ensuring proper implementation of Least Privilege Principle.",
+      "full_text": "Access Rights Management: Users' access rights should be appropriate and commensurate with their job functions and should be periodically reviewed keeping in view the risk ranking of the systems, data and applications as outlined in Security Risk Assessment document. Changes in Access Rights should be based on personal or systems change and should only be applied after due authorization while ensuring proper implementation of 'Least Privilege Principle'.",
+      "domain": "Access",
+      "category": "Access Rights Management",
+      "section_number": "2.2.2(a)",
+      "parent_section": "2.2.2",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Least Privilege Access Policy",
+          "description": "Approved access rights policy implementing the Least Privilege Principle for IB-related systems.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Role-Based Access Matrix",
+          "description": "RBAC matrix mapping job functions to access rights on IB systems with approver designations.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Periodic Access Review Reports",
+          "description": "Periodic user access review reports (quarterly/half-yearly) prioritised by risk ranking from the Security Risk Assessment.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Access Change Authorization Records",
+          "description": "Sample access change authorisation records (joiner/mover/leaver, change tickets) with approver sign-off.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Risk-Ranked Review Schedule",
+          "description": "Schedule showing review cadence for high/medium/low risk systems aligned with Risk Assessment classifications.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "SoD Conflict Analysis",
+          "description": "Segregation-of-Duties conflict analysis report for IB-related access rights with mitigation actions.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "2.2.2(b)",
+      "original_reference": "2.2.2(b)",
+      "title": "Operating Systems Controls",
+      "description": "Necessary Operating Systems' controls should be implemented to ensure access is physically and logically secured, with privileged access restricted, regularly monitored and periodically audited.",
+      "full_text": "Operating Systems Controls: Necessary Operating Systems' controls should be implemented to ensure that access is physically and logically secured by ensuring that privileged access is restricted, regularly monitored and periodically audited.",
+      "domain": "Security",
+      "category": "Operating System Controls",
+      "section_number": "2.2.2(b)",
+      "parent_section": "2.2.2",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "OS Hardening Standard",
+          "description": "Documented OS hardening standard (CIS Benchmarks aligned) for IB servers covering Windows, Linux/Unix.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "OS Hardening Compliance Report",
+          "description": "Configuration compliance report from hardening tool (CIS-CAT, Defender for Cloud, Qualys Policy Compliance) for IB OS instances.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Privileged Access Management Configuration",
+          "description": "PAM tool configuration (CyberArk, BeyondTrust, Delinea) for privileged OS accounts on IB systems with vaulting and session recording.",
+          "filetype": "JSON"
+        },
+        {
+          "name": "Privileged Session Recording Sample",
+          "description": "Sample privileged session recordings from PAM tool for IB OS administration activities.",
+          "filetype": "LOG"
+        },
+        {
+          "name": "Periodic Privileged Access Audit Report",
+          "description": "Periodic audit report on privileged access to IB OS systems with findings and closures.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Physical OS Access Controls Evidence",
+          "description": "Evidence of physical access controls protecting OS consoles in data centres (rack locks, cabinet biometrics).",
+          "filetype": "PNG"
+        }
+      ]
+    },
+    {
+      "control_id": "2.2.2(c)",
+      "original_reference": "2.2.2(c)",
+      "title": "Remote Access",
+      "description": "Remote access to high risk IT assets shall only be granted after management's written approval, shall be subject to regular audits, and shall be based on strong authentication and encryption to secure communications.",
+      "full_text": "Remote Access: Remote access to high risk IT assets shall only be granted after management's approval in writing and should be subject to regular audits. Remote access shall also be based on strong authentication and encryption to secure communications.",
+      "domain": "Access",
+      "category": "Remote Access",
+      "section_number": "2.2.2(c)",
+      "parent_section": "2.2.2",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Remote Access Policy",
+          "description": "Approved remote access policy specifying written-approval requirement, strong authentication and encryption obligations for high-risk IT assets.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Remote Access Approval Records",
+          "description": "Sample written management approvals (signed forms / ticketed approvals) for remote access to high-risk IB IT assets.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Remote Access Audit Reports",
+          "description": "Regular audit reports on remote access to high-risk IT assets (frequency, users, sessions, anomalies).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Strong Authentication Configuration (Remote)",
+          "description": "Configuration evidence of MFA enforced for remote access (VPN, ZTNA, jump host).",
+          "filetype": "JSON"
+        },
+        {
+          "name": "Remote Access Encryption Evidence",
+          "description": "Configuration evidence of encrypted remote access protocols (TLS 1.2+/1.3, IPSec, SSH ciphers) with prohibited weak protocols disabled.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Remote Access Session Logs",
+          "description": "Sample logs from VPN/ZTNA/PAM showing remote access sessions to high-risk IB assets.",
+          "filetype": "LOG"
+        }
+      ]
+    },
+    {
+      "control_id": "2.2.2(d)",
+      "original_reference": "2.2.2(d)",
+      "title": "Physical Access",
+      "description": "Banks shall ensure that physical access to different systems, segments and data sites is restricted, regularly monitored and duly logged.",
+      "full_text": "Physical Access: Banks shall ensure that physical access to different systems, segments and data sites is restricted, regularly monitored and duly logged.",
+      "domain": "Physical",
+      "category": "Physical Access",
+      "section_number": "2.2.2(d)",
+      "parent_section": "2.2.2",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Physical Access Control Policy",
+          "description": "Approved physical access control policy covering data centres, server rooms and segments hosting IB systems.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Authorised Access List",
+          "description": "List of personnel authorised for physical access to data sites with role, justification and review date.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Physical Access Logs",
+          "description": "Physical access logs (badge swipes, biometric reader logs) for data centre and server-room entries.",
+          "filetype": "LOG"
+        },
+        {
+          "name": "CCTV Coverage Evidence",
+          "description": "Evidence of CCTV coverage and retention for data centre / server-room areas hosting IB infrastructure.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Physical Access Monitoring Reports",
+          "description": "Periodic monitoring reports of physical access events with anomaly investigation.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Visitor Management Records",
+          "description": "Visitor management records for data sites including escort, purpose and time.",
+          "filetype": "XLSX"
+        }
+      ]
+    },
+    {
+      "control_id": "2.2.2(e)",
+      "original_reference": "2.2.2(e)",
+      "title": "IT Network Security",
+      "description": "IT networks shall be secured through the use of multiple layers of controls.",
+      "full_text": "IT Network Security: IT networks shall be secured through the use of multiple layers of controls.",
+      "domain": "Security",
+      "category": "Network Security — Defense in Depth",
+      "section_number": "2.2.2(e)",
+      "parent_section": "2.2.2",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Network Security Architecture",
+          "description": "Defense-in-depth network security architecture document covering perimeter, DMZ, internal segmentation, micro-segmentation and east-west controls for IB.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Network Topology Diagram",
+          "description": "Current-state network topology diagram showing multiple security control layers protecting IB.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Network Control Inventory",
+          "description": "Inventory of network controls (firewall, IDS/IPS, WAF, NAC, NDR, DDoS, secure DNS, proxy) with ownership and coverage.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Network Segmentation Evidence",
+          "description": "Configuration evidence of network segmentation between zones (Internet, DMZ, App, DB, Mgmt) restricting lateral movement.",
+          "filetype": "JSON"
+        },
+        {
+          "name": "Network Security Validation Report",
+          "description": "Periodic validation report (segmentation test, attack simulation) confirming layered controls function as designed.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "2.2.2(f)",
+      "original_reference": "2.2.2(f)",
+      "title": "Firewalls",
+      "description": "Firewalls shall be deployed between different security domains to control network traffic. Firewall selection and deployment policy should be devised according to the characteristics of the network including traffic volume and risk classification of IT assets.",
+      "full_text": "Firewalls: Firewalls shall be deployed between different security domains to control network traffic. Firewalls selection and deployment policy should be devised according to the characteristics of network (i.e. traffic volume, and risk classification of IT assets).",
+      "domain": "Security",
+      "category": "Network Security — Firewalls",
+      "section_number": "2.2.2(f)",
+      "parent_section": "2.2.2",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Firewall Selection & Deployment Policy",
+          "description": "Approved firewall selection and deployment policy referencing network traffic volume and IT asset risk classification.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Firewall Deployment Architecture",
+          "description": "Architecture diagram showing firewalls deployed between every pair of distinct security domains (Internet/DMZ/App/DB/Mgmt).",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Firewall Configuration / Rule Base Export",
+          "description": "Firewall rule base export (sanitized) for IB-protecting firewalls with rule justifications.",
+          "filetype": "JSON"
+        },
+        {
+          "name": "Firewall Rule Review Records",
+          "description": "Periodic firewall rule review records identifying redundant, shadowed or overly-permissive rules.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Firewall Capacity & Performance Reports",
+          "description": "Capacity and performance reports demonstrating firewall sizing matches traffic volume.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "2.2.2(g)",
+      "original_reference": "2.2.2(g)",
+      "title": "IDS/IPS Deployment",
+      "description": "Network Intrusion Detection Systems (IDS) and Intrusion Prevention Systems (IPS) should be deployed between different security domains as per their risk classification.",
+      "full_text": "IDS/IPS: Network Intrusion Detection Systems (IDS) and Intrusion Prevention Systems (IPS) should be deployed between different security domains as per their risk classification.",
+      "domain": "Security",
+      "category": "Network Security — IDS/IPS",
+      "section_number": "2.2.2(g)",
+      "parent_section": "2.2.2",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "IDS/IPS Deployment Architecture",
+          "description": "Architecture diagram showing IDS/IPS sensors deployed at boundaries between security domains aligned to risk classifications.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "IDS/IPS Configuration Export",
+          "description": "Configuration export of IDS/IPS sensors with active signature sets, detection mode (IDS vs IPS) and tuning.",
+          "filetype": "JSON"
+        },
+        {
+          "name": "IDS/IPS Signature Update Logs",
+          "description": "Signature update logs evidencing currency of detection capabilities.",
+          "filetype": "LOG"
+        },
+        {
+          "name": "Sample IDS/IPS Alerts",
+          "description": "Sample IDS/IPS alerts with triage and disposition records.",
+          "filetype": "LOG"
+        },
+        {
+          "name": "IDS/IPS Coverage Validation",
+          "description": "Validation report confirming all required security-domain boundaries have appropriate IDS/IPS coverage.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "2.2.2(h)",
+      "original_reference": "2.2.2(h)",
+      "title": "Identity Theft Prevention Program",
+      "description": "Bank shall develop and implement a proactive Identity Theft Prevention Program which includes procedures for identification of information to be protected, threats due to thefts and frauds, and methods for responding appropriately to identified threats.",
+      "full_text": "Identity Theft Prevention: Bank shall develop and implement a proactive Identity Theft Prevention Program which includes procedures for identification of information to be protected, and threats due to thefts and frauds as well as methods for responding appropriately to identified threats.",
+      "domain": "Fraud",
+      "category": "Identity Theft Prevention",
+      "section_number": "2.2.2(h)",
+      "parent_section": "2.2.2",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Identity Theft Prevention Program",
+          "description": "Approved Identity Theft Prevention Program document covering identification of protected information, theft/fraud threats and response methods.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Protected Information Identification Procedure",
+          "description": "Procedure for identifying information to be protected from identity theft (CNIC, account numbers, OTPs, biometric templates, security questions).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Identity Theft Threat Catalogue",
+          "description": "Catalogue of identity theft and fraud threats considered (account takeover, SIM swap, credential stuffing, phishing, smishing, vishing, deepfake voice).",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Identity Theft Response Playbook",
+          "description": "Response playbook detailing methods for responding to identified identity theft threats (account block, customer notification, law enforcement liaison).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Identity Theft Detection Configuration",
+          "description": "Configuration of detection rules (UEBA, fraud monitoring) supporting proactive identification of identity theft attempts.",
+          "filetype": "JSON"
+        },
+        {
+          "name": "Identity Theft Case Statistics",
+          "description": "Periodic statistics of identified identity theft cases, response times and outcomes.",
+          "filetype": "XLSX"
+        }
+      ]
+    },
+    {
+      "control_id": "2.2.2(i)",
+      "original_reference": "2.2.2(i)",
+      "title": "Encryption",
+      "description": "Access, storage and data communication shall be encrypted using reliable encryption methods to strengthen the security of communications and sensitive payment data.",
+      "full_text": "Encryption: Access, storage and data communication shall be encrypted using reliable encryption methods to strengthen the security of communications and sensitive payment data.",
+      "domain": "Data",
+      "category": "Cryptography — Encryption",
+      "section_number": "2.2.2(i)",
+      "parent_section": "2.2.2",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Cryptographic Standard",
+          "description": "Approved cryptographic standard listing reliable algorithms (AES-256, RSA-2048+, ECDSA, TLS 1.2+/1.3) and prohibiting obsolete ones (DES, 3DES, RC4, MD5, SHA-1).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Access Encryption Evidence",
+          "description": "Configuration evidence that all access channels (admin and customer) use encrypted protocols.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Storage Encryption Configuration",
+          "description": "Configuration export showing encryption-at-rest enabled on databases, file stores, backups and removable media for IB.",
+          "filetype": "JSON"
+        },
+        {
+          "name": "Data-in-Transit Encryption Configuration",
+          "description": "Configuration of TLS for all IB data-in-transit (customer-facing, server-to-server, integration APIs) with cipher suite hardening.",
+          "filetype": "JSON"
+        },
+        {
+          "name": "Sensitive Payment Data Encryption Evidence",
+          "description": "Specific evidence of encryption applied to sensitive payment data (PAN, OTP, account numbers) including tokenisation where applicable.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Key Management Procedure",
+          "description": "Key management procedure covering generation, distribution, storage, rotation and destruction of cryptographic keys.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "2.2.2(j)",
+      "original_reference": "2.2.2(j)",
+      "title": "Traceability",
+      "description": "Bank shall maintain the traceability of transactions executed to discharge their obligations under the relevant sections of the Payment Systems and Electronic Fund Transfers Act 2007.",
+      "full_text": "Traceability: Bank shall maintain the traceability of transactions executed to discharge their obligations under the relevant sections of Payment Systems and Electronic Fund Transfers Act 2007.",
+      "domain": "Compliance",
+      "category": "Traceability — PS-EFT Act 2007",
+      "section_number": "2.2.2(j)",
+      "parent_section": "2.2.2",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Transaction Traceability Standard",
+          "description": "Standard specifying mandatory fields, retention and tamper-evident storage to discharge PS-EFT Act 2007 obligations.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "End-to-End Transaction Audit Trail",
+          "description": "Sample end-to-end transaction audit trail demonstrating traceability across customer device, IB application, core banking and settlement systems.",
+          "filetype": "LOG"
+        },
+        {
+          "name": "PS-EFT Act 2007 Obligation Mapping",
+          "description": "Mapping of relevant PS-EFT Act 2007 sections to bank's traceability controls and audit trail capabilities.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Audit Trail Retention Configuration",
+          "description": "Configuration evidence of audit trail retention period meeting PS-EFT Act 2007 requirements (and section 2.3(g) ten-year retention).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Tamper-Evident Storage Evidence",
+          "description": "Evidence of tamper-evident storage (WORM/immutable storage, hash-chained logs) for IB transaction audit trails.",
+          "filetype": "JSON"
+        }
+      ]
+    },
+    {
+      "control_id": "2.2.2(k)",
+      "original_reference": "2.2.2(k)",
+      "title": "Employee Training",
+      "description": "Relevant bank employees shall have appropriate knowledge and background to perform their tasks. Regular trainings should be arranged to keep employees aware of security risks, security controls and monitoring mechanisms. Employees should be regularly updated about changes in internal policies and procedures to ensure operational effectiveness.",
+      "full_text": "Training: Relevant employees of the bank shall have appropriate knowledge and background to perform their tasks. Regular trainings should be arranged to keep employees aware of the security risks, security controls and security control monitoring mechanisms. Employees should be regularly updated about the changes in internal policies and procedures to ensure operational effectiveness.",
+      "domain": "HR",
+      "category": "Training & Awareness",
+      "section_number": "2.2.2(k)",
+      "parent_section": "2.2.2",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Training Plan & Curriculum",
+          "description": "Approved security training plan and curriculum for employees handling IB systems covering security risks, controls and monitoring mechanisms.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Role-Based Training Matrix",
+          "description": "Matrix mapping IB-related job roles to mandatory training modules and refresher cadence.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Training Completion Records",
+          "description": "LMS records evidencing training completion by relevant employees within required timeframes.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Knowledge & Background Verification",
+          "description": "Records of verifying appropriate knowledge and background of employees through assessments or pre-hire screening.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Policy Update Communications",
+          "description": "Communications/notifications to employees regarding changes in internal policies and procedures with acknowledgement records.",
+          "filetype": "EML"
+        },
+        {
+          "name": "Training Effectiveness Assessment",
+          "description": "Post-training assessments and phishing-simulation results demonstrating training effectiveness.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "2.2.3",
+      "original_reference": "2.2.3",
+      "title": "Security Controls Implementation for Outsourced Functions",
+      "description": "Service Providers of outsourced Internet Banking functions are contractually bound to implement these regulations. Outsourcing does not relieve the bank of its compliance responsibility. Banks shall ensure all controls in section 2.2.2 plus the additional outsourcing-specific controls are followed.",
+      "full_text": "Service Providers of outsourced functions relating to Internet Banking are contractually bounded to implement these regulations. However, outsourcing does not relieve the bank from its responsibility of complying with these regulations. Further bank shall ensure that in addition to security controls mentioned in section 2.2.2, the following security controls for outsourced functions are also followed.",
+      "domain": "Vendor",
+      "category": "Outsourced Function Controls — Overview",
+      "section_number": "2.2.3",
+      "parent_section": "2.2",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Service Provider Master Contract Repository",
+          "description": "Repository of executed Service Provider contracts containing clauses contractually binding SPs to implement SBP Internet Banking regulations.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Compliance Flow-Down Clause Sample",
+          "description": "Sample SP contract clause flowing down all SBP IB regulation requirements (sections 2.2.2 and 2.2.3) to the Service Provider.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Bank Compliance Accountability Memo",
+          "description": "Internal memo or policy clarifying that outsourcing does not relieve the bank of its compliance responsibility under these regulations.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "SP Compliance Monitoring Register",
+          "description": "Register tracking each Service Provider's compliance with SBP regulations including 2.2.2 controls and 2.2.3 sub-requirements.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "SP Attestation Records",
+          "description": "Periodic attestations from Service Providers confirming continued compliance with SBP IB regulations.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "2.2.3(a)",
+      "original_reference": "2.2.3(a)",
+      "title": "Non-Disclosure and Right to Audit in Service Provider Contracts",
+      "description": "Contracts with Service Providers should include Non-Disclosure provisions to ensure confidentiality and security of bank and customers' information, and shall grant the bank as well as SBP the right to audit Service Providers' security controls.",
+      "full_text": "Contracts with Service Providers should be equipped with provision relating to Non Disclosure to ensure the confidentiality and security of bank and customers' information and to bank's as well as SBP's right to audit Service Providers' security controls as per the requirements set forth in these regulations.",
+      "domain": "Vendor",
+      "category": "SP Contracts — NDA & Audit Rights",
+      "section_number": "2.2.3(a)",
+      "parent_section": "2.2.3",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Non-Disclosure Provisions in SP Contracts",
+          "description": "Sample executed SP contracts highlighting NDA provisions covering bank and customer information.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Bank's Right-to-Audit Clause",
+          "description": "Sample executed SP contracts containing the bank's contractual right to audit the SP's security controls.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "SBP Right-to-Audit Clause",
+          "description": "Sample executed SP contracts containing SBP's right to audit the SP's security controls.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Right-to-Audit Exercise Records",
+          "description": "Records of audit rights exercised on Service Providers (engagement letters, audit reports, findings).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Legal Vetting Sign-off",
+          "description": "Legal function sign-off confirming all SP contracts contain compliant NDA and audit rights provisions.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "2.2.3(b)",
+      "original_reference": "2.2.3(b)",
+      "title": "Customer Information Protection by Service Providers",
+      "description": "Appropriate measures to avoid any loss, theft or leakage of customers' information shall be developed and implemented by the Service Providers.",
+      "full_text": "Appropriate measures to avoid any loss, theft or leakage of customers' information are developed and implemented by the Service Providers.",
+      "domain": "Vendor",
+      "category": "SP Customer Information Protection",
+      "section_number": "2.2.3(b)",
+      "parent_section": "2.2.3",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "SP Customer Information Protection Policy",
+          "description": "Service Provider policies and procedures preventing loss, theft or leakage of customer information (DLP, encryption, access control).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "SP Security Control Self-Assessment",
+          "description": "Service Provider self-assessment / questionnaire responses on customer information protection controls.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "SP Independent Assurance Reports",
+          "description": "SP-provided independent assurance reports (SOC 2 Type II / ISO 27001 / equivalent) covering customer information protection.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Bank Verification Records",
+          "description": "Records of bank's verification (audits, walk-throughs, control testing) that SPs have implemented appropriate measures.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "SP Incident History",
+          "description": "Register of any SP incidents involving customer information loss, theft or leakage with corrective actions.",
+          "filetype": "XLSX"
+        }
+      ]
+    },
+    {
+      "control_id": "2.2.3(c)",
+      "original_reference": "2.2.3(c)",
+      "title": "Controlled and Monitored Service Provider Access to Customer Information",
+      "description": "Service Providers' access to customer information shall be request-based, strictly monitored, logged and periodically audited. Customer information shall not be transferred to unauthorized storage or access medium.",
+      "full_text": "Service Providers' access to customer information is based on the request from the bank or the concerned customer and should be strictly monitored, logged and periodically audited. Further, customer information shall not be transferred to unauthorized storage or access medium.",
+      "domain": "Vendor",
+      "category": "SP Access Control & Monitoring",
+      "section_number": "2.2.3(c)",
+      "parent_section": "2.2.3",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Request-Based Access Procedure",
+          "description": "Documented procedure mandating request-based (bank or customer-initiated) access for Service Providers to customer information.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "SP Access Request Records",
+          "description": "Sample records of SP access requests with bank/customer originator, justification, approver and validity period.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "SP Access Monitoring Configuration",
+          "description": "Configuration of monitoring controls (PAM, JIT access, session recording) applied to SP access to customer information.",
+          "filetype": "JSON"
+        },
+        {
+          "name": "SP Access Logs",
+          "description": "Sample SP access logs showing user, action, data accessed and timestamps.",
+          "filetype": "LOG"
+        },
+        {
+          "name": "Periodic SP Access Audit Reports",
+          "description": "Periodic audit reports on SP access to customer information with anomaly investigation.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Unauthorised Storage/Medium Prevention Controls",
+          "description": "DLP, USB blocking, egress filtering and policy controls preventing transfer of customer information to unauthorised storage or media.",
+          "filetype": "JSON"
+        }
+      ]
+    },
+    {
+      "control_id": "2.2.3(d)",
+      "original_reference": "2.2.3(d)",
+      "title": "Service Provider Disaster Recovery Requirements",
+      "description": "Service Providers shall have a Disaster Recovery plan aligned with bank's business requirements, different types of DR Sites (Cold/Warm/Hot/Satellite), and IT assets life cycle management documentation.",
+      "full_text": "Service Providers shall also have: i. A Disaster Recovery (DR) plan and its alignment with bank's business requirements. ii. Different types of Disaster Recovery (DR) Sites: Cold / Warm / Hot / Satellite. iii. Documentation related to IT assets life cycle management.",
+      "domain": "BCP",
+      "category": "SP Disaster Recovery — Overview",
+      "section_number": "2.2.3(d)",
+      "parent_section": "2.2.3",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "SP Disaster Recovery Plan",
+          "description": "Service Provider's Disaster Recovery plan covering scope, RTO/RPO, recovery teams and procedures.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "DR Plan Alignment Memo",
+          "description": "Memo or matrix demonstrating alignment of SP DR plan with bank's business requirements (RTO/RPO).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "SP DR Site Inventory",
+          "description": "Inventory of SP DR sites by type (Cold/Warm/Hot/Satellite) with capacity, location and activation procedures.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "SP IT Assets Lifecycle Documentation",
+          "description": "SP-provided documentation covering IT asset acquisition, deployment, maintenance, refresh and disposal lifecycle.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "2.2.3(d)(i)",
+      "original_reference": "2.2.3(d)(i)",
+      "title": "Service Provider Disaster Recovery Plan",
+      "description": "Service Providers shall have a Disaster Recovery (DR) plan aligned with the bank's business requirements.",
+      "full_text": "A Disaster Recovery (DR) plan and its alignment with bank's business requirements.",
+      "domain": "BCP",
+      "category": "SP Disaster Recovery — Plan",
+      "section_number": "2.2.3(d)(i)",
+      "parent_section": "2.2.3(d)",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "SP Disaster Recovery Plan Document",
+          "description": "Approved Disaster Recovery Plan from the Service Provider covering IB-supporting services.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "DR Plan Alignment Evidence",
+          "description": "Side-by-side comparison evidencing alignment of SP DR objectives (RTO/RPO) with the bank's documented business requirements.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "DR Test Reports from SP",
+          "description": "Periodic DR test reports from the SP with results, gaps and corrective actions.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Joint DR Walkthrough Records",
+          "description": "Records of joint DR walkthroughs or table-top exercises between bank and SP.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "2.2.3(d)(ii)",
+      "original_reference": "2.2.3(d)(ii)",
+      "title": "Service Provider Disaster Recovery Sites",
+      "description": "Service Providers shall have different types of Disaster Recovery (DR) Sites: Cold / Warm / Hot / Satellite.",
+      "full_text": "Different types of Disaster Recovery (DR) Sites: Cold / Warm / Hot / Satellite.",
+      "domain": "BCP",
+      "category": "SP Disaster Recovery — Sites",
+      "section_number": "2.2.3(d)(ii)",
+      "parent_section": "2.2.3(d)",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "DR Site Type Documentation",
+          "description": "SP documentation describing the type and configuration of each DR site (Cold / Warm / Hot / Satellite).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "DR Site Operational Evidence",
+          "description": "Operational evidence (site visit reports, photographs, infrastructure inventory) of each DR site.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Site Activation Procedures",
+          "description": "SP procedures for activating each DR site type with timelines.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "DR Site Geographic Risk Map",
+          "description": "Geographic risk map showing DR site separation against single-event risks (earthquake, flood, power grid).",
+          "filetype": "PNG"
+        }
+      ]
+    },
+    {
+      "control_id": "2.2.3(d)(iii)",
+      "original_reference": "2.2.3(d)(iii)",
+      "title": "Service Provider IT Assets Life Cycle Management",
+      "description": "Service Providers shall have documentation related to IT assets life cycle management.",
+      "full_text": "Documentation related to IT assets life cycle management.",
+      "domain": "Vendor",
+      "category": "SP IT Asset Lifecycle Management",
+      "section_number": "2.2.3(d)(iii)",
+      "parent_section": "2.2.3(d)",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "SP IT Asset Lifecycle Policy",
+          "description": "Service Provider policy governing IT asset lifecycle (acquisition, deployment, operation, refresh, disposal).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "SP IT Asset Inventory",
+          "description": "SP IT asset inventory/CMDB extract for assets supporting the bank's IB services.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Asset Lifecycle Procedures",
+          "description": "Procedures for each lifecycle stage including secure disposal/sanitisation.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Lifecycle Audit Records",
+          "description": "Records of bank/SP audits validating lifecycle adherence including disposal certificates.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "2.3",
+      "original_reference": "2.3",
+      "title": "Security Controls Monitoring",
+      "description": "Bank shall develop and implement a formally approved mechanism for monitoring of Security Controls, including an analysis of the effectiveness of existing or proposed monitoring methods.",
+      "full_text": "Bank shall develop and implement a formally approved mechanism for the monitoring of Security Controls. An analysis of the effectiveness of existing or proposed Security Controls Monitoring methods shall be part of this monitoring mechanism.",
+      "domain": "Security",
+      "category": "Security Controls Monitoring — Mechanism",
+      "section_number": "2.3",
+      "parent_section": "2",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Security Controls Monitoring Mechanism (Formally Approved)",
+          "description": "Formally approved Security Controls Monitoring mechanism document covering scope, methods, roles and reporting.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Approval Records",
+          "description": "Approval records (senior management / BoD / IT Steering Committee) for the Security Controls Monitoring mechanism.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Monitoring Method Effectiveness Analysis",
+          "description": "Analysis report on the effectiveness of existing or proposed Security Controls Monitoring methods.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Monitoring Coverage Map",
+          "description": "Map showing coverage of monitoring methods against each baseline security control area.",
+          "filetype": "XLSX"
+        }
+      ]
+    },
+    {
+      "control_id": "2.3(a)",
+      "original_reference": "2.3(a)",
+      "title": "Network Activity Monitoring",
+      "description": "The monitoring mechanism shall cover monitoring of bank's network activity by collecting and analyzing host and network data related to security events, such as privileged access to sensitive operating systems, configuration changes, and access to critical applications.",
+      "full_text": "Monitoring of bank's network activity by collecting and analyzing the host and network data related to security events. Examples of security events include privileged access to sensitive operating systems, configuration changes, and access to critical applications etc.",
+      "domain": "Security",
+      "category": "Monitoring — Network Activity",
+      "section_number": "2.3(a)",
+      "parent_section": "2.3",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "SIEM Architecture Document",
+          "description": "SIEM/log analytics architecture covering host and network data sources for IB.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "SIEM Log Source Inventory",
+          "description": "Inventory of integrated log sources (host, network, security appliances, applications) feeding the SIEM.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Privileged Access Monitoring Logs",
+          "description": "Sample logs of privileged access to sensitive operating systems collected by SIEM/PAM.",
+          "filetype": "LOG"
+        },
+        {
+          "name": "Configuration Change Monitoring Logs",
+          "description": "Sample logs of configuration changes detected and forwarded to SIEM.",
+          "filetype": "LOG"
+        },
+        {
+          "name": "Critical Application Access Logs",
+          "description": "Sample access logs from critical IB applications ingested by SIEM.",
+          "filetype": "LOG"
+        },
+        {
+          "name": "Correlation Rule Set Export",
+          "description": "Active SIEM correlation rules covering security events specified in 2.3(a).",
+          "filetype": "YAML"
+        }
+      ]
+    },
+    {
+      "control_id": "2.3(b)",
+      "original_reference": "2.3(b)",
+      "title": "IDS/IPS Monitoring and Security Breach Response",
+      "description": "Methods for proactive monitoring of IDS/IPS and for responding to security breaches shall be detailed in the monitoring mechanism. A rapid response team shall be nominated and made responsible to respond immediately in case of a security breach.",
+      "full_text": "Methods for proactive monitoring of IDS/IPS and for responding to security breaches should be listed in detail in the monitoring mechanism. A rapid response team should be nominated and made responsible to respond immediately in case of a security breach.",
+      "domain": "Incident",
+      "category": "Monitoring — IDS/IPS & Breach Response",
+      "section_number": "2.3(b)",
+      "parent_section": "2.3",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "IDS/IPS Monitoring Procedure",
+          "description": "Detailed procedure for proactive IDS/IPS monitoring including monitoring frequency, alert tuning and escalation.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Security Breach Response Procedure",
+          "description": "Detailed security breach response procedure with detection, containment, eradication, recovery and lessons-learned phases.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Rapid Response Team Charter",
+          "description": "Charter of the nominated rapid response team with mission, authorities and immediate-response responsibilities.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Rapid Response Team Roster",
+          "description": "Roster of rapid response team members (primary, alternates) with on-call rotation and contact details.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Sample Breach Response Records",
+          "description": "Sample records of breach response activations demonstrating immediate response by the rapid response team.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "IDS/IPS Alert Triage Logs",
+          "description": "Sample IDS/IPS alert triage and disposition logs.",
+          "filetype": "LOG"
+        }
+      ]
+    },
+    {
+      "control_id": "2.3(c)",
+      "original_reference": "2.3(c)",
+      "title": "Authentication Controls Monitoring and Reporting",
+      "description": "The monitoring and reporting mechanism for Authentication Controls shall be formally documented and approved by senior management and implemented accordingly.",
+      "full_text": "Monitoring and reporting mechanism of Authentication Controls should be formally documented and approved by the senior management and implemented accordingly.",
+      "domain": "Access",
+      "category": "Monitoring — Authentication Controls",
+      "section_number": "2.3(c)",
+      "parent_section": "2.3",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Authentication Monitoring & Reporting Procedure",
+          "description": "Formally documented Authentication Controls monitoring and reporting procedure.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Senior Management Approval",
+          "description": "Senior management approval evidence for the Authentication monitoring & reporting mechanism.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Authentication Monitoring Dashboards",
+          "description": "Operational dashboards monitoring authentication events (login success/failure, MFA failures, lockouts, anomalies).",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Authentication Monitoring Reports",
+          "description": "Periodic authentication monitoring reports issued under the approved mechanism.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Authentication Anomaly Alert Logs",
+          "description": "Sample authentication anomaly alert logs and triage records.",
+          "filetype": "LOG"
+        }
+      ]
+    },
+    {
+      "control_id": "2.3(d)",
+      "original_reference": "2.3(d)",
+      "title": "System Restoration Procedures",
+      "description": "Procedures and time required for restoration of bank's systems shall be part of the Security Controls Monitoring process.",
+      "full_text": "Procedures and time required for restoration of bank's systems should be part of Security Controls Monitoring process.",
+      "domain": "BCP",
+      "category": "Monitoring — System Restoration",
+      "section_number": "2.3(d)",
+      "parent_section": "2.3",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "System Restoration Procedures",
+          "description": "Documented restoration procedures for IB systems with detailed step-by-step recovery actions.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Restoration RTO Register",
+          "description": "Register of agreed restoration times (RTOs) per IB system with last-tested values.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Restoration Test Reports",
+          "description": "Periodic restoration test reports demonstrating that defined timeframes are achievable.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Backup & Restore Logs",
+          "description": "Sample backup and restore job logs with completion status and durations.",
+          "filetype": "LOG"
+        }
+      ]
+    },
+    {
+      "control_id": "2.3(e)",
+      "original_reference": "2.3(e)",
+      "title": "Security Testing",
+      "description": "The monitoring mechanism shall include use of self-assessments, penetration testing, and independent security audits commensurate with the systems' complexity and risk exposures.",
+      "full_text": "Use of self-assessments, penetration testing, and independent security audits commensurate with the systems' complexity and risk exposures.",
+      "domain": "Audit",
+      "category": "Monitoring — Security Testing",
+      "section_number": "2.3(e)",
+      "parent_section": "2.3",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Annual Security Testing Plan",
+          "description": "Annual security testing plan listing self-assessments, penetration tests and independent audits with scope and timing.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Self-Assessment Reports",
+          "description": "Latest self-assessment reports for IB systems with control coverage.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Penetration Test Report",
+          "description": "Latest penetration test reports for IB systems and applications with findings and remediation status.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Independent Security Audit Report",
+          "description": "Latest independent security audit report covering IB systems.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Testing Scope Justification",
+          "description": "Justification document showing how testing scope and frequency are commensurate with system complexity and risk.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Finding Remediation Tracker",
+          "description": "Tracker of findings from all testing activities with severity, owner and closure status.",
+          "filetype": "XLSX"
+        }
+      ]
+    },
+    {
+      "control_id": "2.3(f)",
+      "original_reference": "2.3(f)",
+      "title": "Policy Violation and Unauthorized Configuration Change Identification",
+      "description": "The monitoring mechanism shall include identification and listing of bank's policy violations, unauthorized configuration changes and other conditions which can potentially increase the risk of security breaches.",
+      "full_text": "Identification and listing of bank's policy violations, unauthorized configuration changes and other conditions which can potentially increase the risk of security breaches.",
+      "domain": "Security",
+      "category": "Monitoring — Policy & Config Drift",
+      "section_number": "2.3(f)",
+      "parent_section": "2.3",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Policy Violation Register",
+          "description": "Register of identified policy violations affecting IB systems with severity and remediation.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Unauthorised Configuration Change Register",
+          "description": "Register listing unauthorised configuration changes detected on IB systems with rollback or formal approval evidence.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Configuration Drift Alert Configuration",
+          "description": "Configuration of drift detection tooling (AWS Config, Azure Policy, Tenable.cs, Chef Compliance) flagging unauthorised changes.",
+          "filetype": "JSON"
+        },
+        {
+          "name": "Drift Alert Sample Logs",
+          "description": "Sample alert logs of detected configuration drift events.",
+          "filetype": "LOG"
+        },
+        {
+          "name": "Risk-Increasing Conditions Log",
+          "description": "Log of other conditions identified as potentially increasing security breach risk with mitigation actions.",
+          "filetype": "XLSX"
+        }
+      ]
+    },
+    {
+      "control_id": "2.3(g)",
+      "original_reference": "2.3(g)",
+      "title": "Log and Audit Trail Monitoring and Retention",
+      "description": "Procedures shall ensure monitoring of logs and audit trails on a regular and predefined periodic basis. Internet Banking security logs and audit trails shall be retained for a period of ten years.",
+      "full_text": "Procedures to ensure the monitoring of logs and audit trails on regular and predefined periodic basis should be developed. The security logs and audit trials for IB should be retained for a period of ten years.",
+      "domain": "Security",
+      "category": "Monitoring — Log Review & Retention",
+      "section_number": "2.3(g)",
+      "parent_section": "2.3",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Log Review & Monitoring Procedure",
+          "description": "Procedure for monitoring logs and audit trails on regular and predefined periodic basis with assigned reviewers.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Log Retention Policy (10-Year)",
+          "description": "Approved log retention policy specifying ten-year retention for IB security logs and audit trails.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Log Retention Configuration Evidence",
+          "description": "Storage configuration evidence (immutable storage, archive tier, lifecycle policy) implementing 10-year retention.",
+          "filetype": "JSON"
+        },
+        {
+          "name": "Sample Log Review Records",
+          "description": "Sample log review records demonstrating periodic monitoring (daily/weekly/monthly as applicable).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Retention Compliance Report",
+          "description": "Compliance report verifying age of oldest retained IB security logs meets 10-year requirement.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Tamper-Evident Log Storage Evidence",
+          "description": "Evidence of tamper-evident / WORM log storage protecting integrity over the 10-year retention period.",
+          "filetype": "PNG"
+        }
+      ]
+    },
+    {
+      "control_id": "3",
+      "original_reference": "3",
+      "title": "Customer Awareness",
+      "description": "A formal customer awareness program regarding Internet Banking threats and safeguards to minimize frauds and Identity Theft risks should be developed and implemented by the banks.",
+      "full_text": "A formal customer awareness program regarding Internet Banking threats and safeguards to minimize frauds and Identity Theft risks should be developed and implemented by the banks.",
+      "domain": "Customer",
+      "category": "Customer Awareness Program",
+      "section_number": "3",
+      "parent_section": null,
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Formal Customer Awareness Program",
+          "description": "Documented and approved Customer Awareness Program covering IB threats and safeguards to minimise fraud and identity theft.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Awareness Channel Inventory",
+          "description": "Inventory of channels used for customer awareness (website, email, SMS, in-app banners, branch posters, social media).",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Awareness Content Library",
+          "description": "Library of customer-facing content covering threats (phishing, smishing, vishing, malware, fake apps) and safeguards.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Program Implementation Evidence",
+          "description": "Evidence of program implementation — campaign launches, dispatch reports, view/click statistics.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "3(a)",
+      "original_reference": "3(a)",
+      "title": "Explanation of Liabilities, Roles and Responsibilities",
+      "description": "The customer awareness program shall include an explanation of liabilities, roles and responsibilities of the bank as well as its customers for using Internet Banking products and services offered by the bank.",
+      "full_text": "An explanation of liabilities, roles and responsibilities of bank as well as its customers for using Internet Banking products and services offered by the bank.",
+      "domain": "Customer",
+      "category": "Awareness — Liabilities & Responsibilities",
+      "section_number": "3(a)",
+      "parent_section": "3",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Liabilities & Responsibilities Disclosure Document",
+          "description": "Customer-facing document explaining liabilities, roles and responsibilities of both bank and customer in using IB products and services.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Website / App Disclosure Screenshots",
+          "description": "Screenshots of bank website and IB application sections where liabilities and responsibilities are disclosed.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Terms & Conditions Acknowledgement",
+          "description": "Records of customer acknowledgement of T&Cs containing the liabilities and responsibilities clauses.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "3(b)",
+      "original_reference": "3(b)",
+      "title": "Disclosure Compliance - Section 30 of Payment Systems Act",
+      "description": "The customer awareness program shall ensure compliance with Disclosure requirements under Section 30 (Terms and Conditions of Transfers) of the Payment Systems and Electronic Fund Transfer Act 2007.",
+      "full_text": "Compliance of Disclosure requirements under Section 30 (Terms and Conditions of Transfers) of Payment Systems and Electronic Fund Transfer Act 2007.",
+      "domain": "Compliance",
+      "category": "Awareness — Section 30 Disclosure",
+      "section_number": "3(b)",
+      "parent_section": "3",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Section 30 Disclosure Document",
+          "description": "Customer disclosure document compliant with Section 30 (Terms and Conditions of Transfers) of PS-EFT Act 2007.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Section 30 Compliance Mapping",
+          "description": "Mapping of each Section 30 disclosure requirement to the corresponding clause in the bank's customer disclosures.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Legal Function Sign-off — Section 30",
+          "description": "Legal function sign-off confirming completeness of Section 30 disclosures.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Customer Disclosure Acceptance Records",
+          "description": "Records of customer acceptance of disclosures (electronic acknowledgement, signed acknowledgement).",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "3(c)",
+      "original_reference": "3(c)",
+      "title": "Help Desk Contact Details",
+      "description": "The customer awareness program shall include contact details of the help desk that customers might need in case of any issues including loss of security credentials, frauds and identity theft.",
+      "full_text": "Contact details of help desk that customer might need in case of any issues including loss of security credentials or frauds and identity theft.",
+      "domain": "Customer",
+      "category": "Awareness — Help Desk Contact",
+      "section_number": "3(c)",
+      "parent_section": "3",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Help Desk Contact Disclosure",
+          "description": "Published help desk contact details (24x7 hotline, email, in-app chat) addressing lost credentials, fraud and identity theft.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Website / App Help Desk Visibility",
+          "description": "Screenshots showing help desk contact details on bank website, mobile app and IB portal.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Help Desk Operations SOP",
+          "description": "SOP for help desk handling of lost-credential, fraud and identity-theft cases.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Help Desk Call Logs Sample",
+          "description": "Sample help desk logs demonstrating handling of relevant case types.",
+          "filetype": "LOG"
+        }
+      ]
+    },
+    {
+      "control_id": "3(d)",
+      "original_reference": "3(d)",
+      "title": "Re-authentication Procedure",
+      "description": "The customer awareness program shall include the procedure for re-authentication of customers' Internet Banking.",
+      "full_text": "Procedure for re-authentication of customers Internet Banking.",
+      "domain": "Customer",
+      "category": "Awareness — Re-authentication",
+      "section_number": "3(d)",
+      "parent_section": "3",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Customer Re-Authentication Procedure",
+          "description": "Customer-facing re-authentication procedure (steps to re-authenticate after lockout, lost credentials, suspicious activity).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "In-App Re-Authentication Guide",
+          "description": "Screenshots / FAQ from the IB app guiding customers through re-authentication.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Awareness Communication Sample",
+          "description": "Sample emails/SMS/notifications informing customers about the re-authentication procedure.",
+          "filetype": "EML"
+        }
+      ]
+    },
+    {
+      "control_id": "3(e)",
+      "original_reference": "3(e)",
+      "title": "Complaint Handling and Dispute Resolution",
+      "description": "The customer awareness program shall include the complaint handling process including dispute resolution mechanism related to Internet Banking.",
+      "full_text": "Complaint handling process including dispute resolution mechanism related to Internet Banking.",
+      "domain": "Customer",
+      "category": "Awareness — Complaints & Dispute Resolution",
+      "section_number": "3(e)",
+      "parent_section": "3",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Complaint Handling Process",
+          "description": "Documented complaint handling process specific to Internet Banking including channels, SLAs and escalation.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Dispute Resolution Mechanism",
+          "description": "Documented dispute resolution mechanism for IB transactions referencing internal escalation, SBP Banking Mohtasib and PS-EFT Act provisions.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Customer-Facing Disclosure",
+          "description": "Customer-facing disclosure of complaint and dispute resolution mechanism (website, IB app, account opening pack).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Complaints Register",
+          "description": "Periodic complaints register demonstrating operationalisation of the process with resolution timelines.",
+          "filetype": "XLSX"
+        }
+      ]
+    },
+    {
+      "control_id": "3(f)",
+      "original_reference": "3(f)",
+      "title": "Annual Customer Guidelines",
+      "description": "The customer awareness program shall include regular issuance of guidelines to customers on a yearly basis for mitigating the risks associated with Internet Banking.",
+      "full_text": "Regular issuance of guidelines to customers on yearly basis for mitigating the risks associated with Internet Banking.",
+      "domain": "Customer",
+      "category": "Awareness — Annual Guidelines",
+      "section_number": "3(f)",
+      "parent_section": "3",
+      "is_mandatory": false,
+      "priority": "medium",
+      "evidence_requirements": [
+        {
+          "name": "Annual Customer Guideline Document",
+          "description": "Latest annual customer guideline document covering IB risk mitigation tips.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Annual Issuance Calendar",
+          "description": "Calendar of annual issuance dates and channels for customer guidelines (last 3 years).",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Distribution Records",
+          "description": "Distribution records (email campaign reports, SMS dispatch reports, website publication dates).",
+          "filetype": "EML"
+        },
+        {
+          "name": "Customer Reach Metrics",
+          "description": "Metrics showing customer reach and engagement (open rates, click-through, view counts).",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "3(g)",
+      "original_reference": "3(g)",
+      "title": "Management Review of Customer Awareness Programs",
+      "description": "The customer awareness program shall be regularly reviewed and evaluated by the management.",
+      "full_text": "Regular review and evaluation of the customer awareness programs by the management.",
+      "domain": "Governance",
+      "category": "Awareness — Management Review",
+      "section_number": "3(g)",
+      "parent_section": "3",
+      "is_mandatory": false,
+      "priority": "medium",
+      "evidence_requirements": [
+        {
+          "name": "Management Review Minutes",
+          "description": "Minutes of management review meetings evaluating the Customer Awareness Program.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Program Effectiveness Report",
+          "description": "Effectiveness report covering reach metrics, customer feedback, fraud trend impact and improvement actions.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Action Item Tracker",
+          "description": "Tracker of action items from management reviews with status and closure evidence.",
+          "filetype": "XLSX"
+        }
+      ]
+    },
+    {
+      "control_id": "4",
+      "original_reference": "4",
+      "title": "Reporting Requirements",
+      "description": "All established security breaches shall be reported to the Payment Systems Department, State Bank of Pakistan. Incident and analysis reports shall be furnished quarterly to PSD as per Annexure-I, including detailed impact on the institution's business, systems, applications and customers.",
+      "full_text": "All established security breaches should be reported to Payment Systems Department, State Bank of Pakistan. The incident and analysis reports of security breaches should be furnished on quarterly basis to PSD as per Annexure-I. Impact of security breach on institution's business, systems, applications and customers should also be submitted in detail.",
+      "domain": "Compliance",
+      "category": "Regulatory Reporting — SBP PSD",
+      "section_number": "4",
+      "parent_section": null,
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Security Breach Reporting Procedure",
+          "description": "Documented procedure for identifying established security breaches and reporting them to SBP Payment Systems Department.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Quarterly Submission Records (Annexure-I)",
+          "description": "Copies of quarterly Annexure-I security breach reports submitted to SBP PSD with submission acknowledgments.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Breach Impact Analysis Reports",
+          "description": "Detailed impact analysis reports covering effects on the institution's business, systems, applications and customers.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Established-Breach Identification Criteria",
+          "description": "Documented criteria distinguishing 'established' breaches from suspected/unconfirmed events for reporting purposes.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Submission Tracker",
+          "description": "Tracker of all quarterly Annexure-I submissions with quarter-end date, submission date, submitter and acknowledgment reference.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "SBP Acknowledgment Correspondence",
+          "description": "Email/letter acknowledgments from SBP PSD confirming receipt of quarterly submissions.",
+          "filetype": "EML"
+        }
+      ]
+    },
+    {
+      "control_id": "5",
+      "original_reference": "5",
+      "title": "Regulatory Requirements",
+      "description": "These regulations are subject to all relevant SBP laws, rules and regulations including Guidelines on Outsourcing Arrangements, Guidelines on Information Technology Security, Guidelines on Information Systems Audits and System Switchover Planning, and Guidelines on Business Continuity Planning.",
+      "full_text": "These regulations are subject to all relevant laws, rules and regulations issued by SBP from time-to-time including but not limited to the following: a) Guidelines on the Outsourcing Arrangements (BPRD Circular No 9 dated July 13, 2007); b) Guidelines on the Information Technology Security (BSD Circular No 15 dated September 29, 2004); c) Information Systems: Guidelines on Audits and System Switchover Planning (BSD Circular No 8 dated December 12, 2005); d) Compliance of 'Guidelines on Business Continuity Planning' (BSD Circular No 13 dated September 04, 2004).",
+      "domain": "Compliance",
+      "category": "Regulatory Compliance — Overview",
+      "section_number": "5",
+      "parent_section": null,
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "SBP Regulatory Compliance Register",
+          "description": "Compliance register tracking adherence to all relevant SBP laws, rules and regulations including the four explicit circulars under section 5(a)–(d).",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Compliance Function Annual Attestation",
+          "description": "Annual attestation from Compliance / Internal Audit confirming compliance with all relevant SBP regulations applicable to IB.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Regulatory Inventory",
+          "description": "Inventory of all SBP circulars, prudential regulations and directives applicable to IB with effective dates and last-review dates.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Regulatory Change Management Log",
+          "description": "Log of regulatory changes received from SBP and the bank's impact assessment, action plan and closure evidence.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "5(a)",
+      "original_reference": "5(a)",
+      "title": "Compliance with Outsourcing Arrangements Guidelines",
+      "description": "These regulations are subject to the Guidelines on the Outsourcing Arrangements (BPRD Circular No 9 dated July 13, 2007).",
+      "full_text": "Guidelines on the Outsourcing Arrangements (BPRD Circular No 9 dated July 13, 2007).",
+      "domain": "Compliance",
+      "category": "Regulatory Compliance — Outsourcing",
+      "section_number": "5(a)",
+      "parent_section": "5",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "BPRD Circular No 9 Compliance Document",
+          "description": "Compliance documentation against BPRD Circular No 9 (July 13, 2007) — Guidelines on Outsourcing Arrangements.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Outsourcing Policy & Framework",
+          "description": "Bank's Outsourcing Policy and Framework aligned with BPRD Circular No 9.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Outsourcing Compliance Mapping",
+          "description": "Mapping of BPRD Circular No 9 requirements to bank controls and evidence.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "BoD Outsourcing Approvals",
+          "description": "Records of BoD approvals for material outsourcing arrangements as required by the circular.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "5(b)",
+      "original_reference": "5(b)",
+      "title": "Compliance with IT Security Guidelines",
+      "description": "These regulations are subject to the Guidelines on the Information Technology Security (BSD Circular No 15 dated September 29, 2004).",
+      "full_text": "Guidelines on the Information Technology Security (BSD Circular No 15 dated September 29, 2004).",
+      "domain": "Compliance",
+      "category": "Regulatory Compliance — IT Security",
+      "section_number": "5(b)",
+      "parent_section": "5",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "BSD Circular No 15 Compliance Document",
+          "description": "Compliance documentation against BSD Circular No 15 (September 29, 2004) — Guidelines on Information Technology Security.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "IT Security Policy",
+          "description": "Bank's IT Security Policy aligned with BSD Circular No 15.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "IT Security Compliance Mapping",
+          "description": "Mapping of BSD Circular No 15 requirements to bank IT security controls and evidence.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "IT Security Self-Assessment / Audit",
+          "description": "Latest self-assessment or audit confirming compliance with BSD Circular No 15.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "5(c)",
+      "original_reference": "5(c)",
+      "title": "Compliance with IS Audits and System Switchover Planning Guidelines",
+      "description": "These regulations are subject to the Information Systems Guidelines on Audits and System Switchover Planning (BSD Circular No 8 dated December 12, 2005).",
+      "full_text": "Information Systems: Guidelines on Audits and System Switchover Planning (BSD Circular No 8 dated December 12, 2005).",
+      "domain": "Compliance",
+      "category": "Regulatory Compliance — IS Audits & Switchover",
+      "section_number": "5(c)",
+      "parent_section": "5",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "BSD Circular No 8 Compliance Document",
+          "description": "Compliance documentation against BSD Circular No 8 (December 12, 2005) — IS Audits and System Switchover Planning.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "IS Audit Plan & Reports",
+          "description": "Information Systems audit plan and latest reports executed in accordance with BSD Circular No 8.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "System Switchover Plan",
+          "description": "Documented system switchover plan covering IB systems with tested procedures.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Switchover Test Reports",
+          "description": "Periodic switchover test reports demonstrating operational readiness.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "5(d)",
+      "original_reference": "5(d)",
+      "title": "Compliance with Business Continuity Planning Guidelines",
+      "description": "These regulations are subject to the Guidelines on Business Continuity Planning (BSD Circular No 13 dated September 04, 2004).",
+      "full_text": "Compliance of 'Guidelines on Business Continuity Planning' (BSD Circular No 13 dated September 04, 2004).",
+      "domain": "Compliance",
+      "category": "Regulatory Compliance — BCP",
+      "section_number": "5(d)",
+      "parent_section": "5",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "BSD Circular No 13 Compliance Document",
+          "description": "Compliance documentation against BSD Circular No 13 (September 04, 2004) — Guidelines on Business Continuity Planning.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Business Continuity Plan",
+          "description": "Bank's Business Continuity Plan aligned with BSD Circular No 13 covering IB services.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "BCP Test Reports",
+          "description": "Periodic BCP test reports including IB-specific scenarios with results and corrective actions.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "BIA for IB Services",
+          "description": "Business Impact Analysis covering IB services with RTO/RPO/MTPD definitions.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "BoD-Approved BCP",
+          "description": "BoD approval evidence for the Business Continuity Plan as required by BSD Circular No 13.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "ANNEX-I",
+      "original_reference": "Annexure-I",
+      "title": "Details of Established Security Breaches in IB (Quarterly Report Template)",
+      "description": "Prescribed quarterly reporting format for banks to report established Internet Banking security breaches to the Payment Systems Department, SBP. Includes bank identification, submission details and structured breach information fields.",
+      "full_text": "Annexure-I: Details of Established Security Breaches in IB. Name of the bank, For the Quarter Ending, Submitted By (Name), Designation and Seal, Contact No. Table columns: Sr., Source of security breach discovery, Nature of security breach, Reasons for the occurrence of security breach (e.g. Breach of controls, Procedures were not followed, weaknesses in implemented security controls etc.), Impact of security breach (e.g. on banks business, systems, customers etc), Action(s) taken to rectify the Security Breaches, Remarks (further details, if any).",
+      "domain": "Compliance",
+      "category": "Regulatory Reporting — Annexure-I Template",
+      "section_number": "Annexure-I",
+      "parent_section": "4",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Annexure-I Submission Template",
+          "description": "Bank's standard Annexure-I template containing all prescribed header fields (bank name, quarter ending, submitter name, designation, seal, contact) and table columns.",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "Submitted Annexure-I Reports",
+          "description": "Quarterly Annexure-I reports submitted to SBP PSD covering the last four quarters.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "SBP Submission Acknowledgments",
+          "description": "SBP acknowledgments confirming receipt of each quarterly Annexure-I report.",
+          "filetype": "EML"
+        },
+        {
+          "name": "Internal Approval Workflow Records",
+          "description": "Internal review and approval workflow records for each Annexure-I submission (Compliance, CISO, Operations).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Breach Source/Nature/Reasons Mapping",
+          "description": "Mapping documentation explaining how breach data is captured against the prescribed columns: source of discovery, nature, reasons (controls breach / procedures not followed / control weaknesses), impact on business/systems/customers, rectification actions, remarks.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Submission Tracker",
+          "description": "Tracker of all Annexure-I submissions with quarter, submission date, number of breaches reported and acknowledgment reference.",
+          "filetype": "XLSX"
+        }
+      ]
+    }
+  ]
+}

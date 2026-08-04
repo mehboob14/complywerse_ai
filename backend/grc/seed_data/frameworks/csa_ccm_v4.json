@@ -1,0 +1,3658 @@
+{
+  "metadata": {
+    "name": "CSA Cloud Controls Matrix (CCM) v4.0",
+    "description": "The Cloud Controls Matrix (CCM) is a cybersecurity control framework for cloud computing, 197 control objectives across 17 domains. Synthetic paraphrase for pipeline testing — not the official CSA text.",
+    "version": "4.0",
+    "source_organization": "Cloud Security Alliance (CSA)",
+    "effective_date": "2021-01-21",
+    "classification": "compliance",
+    "framework_type": "regulatory",
+    "classification_confidence": 0.98,
+    "framework_purpose": "Provide a controls framework across 17 cloud security domains.",
+    "framework_scope": "Cloud service providers and customers across IaaS, PaaS and SaaS.",
+    "target_audience": "Cloud security architects, CISOs, auditors, GRC teams",
+    "required_artifacts": [
+      "Cloud Security Governance Charter",
+      "Cloud Risk Management Program",
+      "Shared Responsibility Matrix (SSRM)",
+      "Identity & Access Management Policy",
+      "Privileged Access Register",
+      "MFA / Strong Authentication Configuration",
+      "Data Classification & Inventory",
+      "Encryption & Key Management Standard",
+      "Key Inventory & Rotation Records",
+      "Data Protection Impact Assessment",
+      "Network Architecture & Segmentation Diagram",
+      "Secure Baseline / Hardening Standards",
+      "Change Management Records",
+      "Logging & Monitoring Standard",
+      "Vulnerability Scan & Remediation Reports",
+      "Penetration Test Report",
+      "Cloud Incident Response Plan",
+      "Business Continuity & DR Plan",
+      "Backup & Restore Test Records",
+      "Third-Party / CSP Assessment Records"
+    ],
+    "hierarchy_structure": {
+      "levels": [
+        "Domain",
+        "Control"
+      ],
+      "numbering_pattern": "AAA-NN"
+    },
+    "document_structure": {
+      "sections": [
+        "A&A: Audit & Assurance",
+        "AIS: Application & Interface Security",
+        "BCR: Business Continuity Management & Operational Resilience",
+        "CCC: Change Control & Configuration Management",
+        "CEK: Cryptography, Encryption & Key Management",
+        "DCS: Datacenter Security",
+        "DSP: Data Security & Privacy Lifecycle Management",
+        "GRC: Governance, Risk Management & Compliance",
+        "HRS: Human Resources",
+        "IAM: Identity & Access Management",
+        "IPY: Interoperability & Portability",
+        "IVS: Infrastructure & Virtualization Security",
+        "LOG: Logging & Monitoring",
+        "SEF: Security Incident Management, E-Discovery & Cloud Forensics",
+        "STA: Supply Chain Management, Transparency & Accountability",
+        "TVM: Threat & Vulnerability Management",
+        "UEM: Universal Endpoint Management"
+      ]
+    },
+    "total_controls": 197,
+    "domains": [
+      "Audit & Assurance",
+      "Application & Interface Security",
+      "Business Continuity Management & Operational Resilience",
+      "Change Control & Configuration Management",
+      "Cryptography, Encryption & Key Management",
+      "Datacenter Security",
+      "Data Security & Privacy Lifecycle Management",
+      "Governance, Risk Management & Compliance",
+      "Human Resources",
+      "Identity & Access Management",
+      "Interoperability & Portability",
+      "Infrastructure & Virtualization Security",
+      "Logging & Monitoring",
+      "Security Incident Management, E-Discovery & Cloud Forensics",
+      "Supply Chain Management, Transparency & Accountability",
+      "Threat & Vulnerability Management",
+      "Universal Endpoint Management"
+    ]
+  },
+  "controls": [
+    {
+      "control_id": "A&A-01",
+      "original_reference": "A&A-01",
+      "title": "Audit and Assurance Policy and Procedures",
+      "description": "Establish and maintain audit and assurance policies and procedures, reviewed at least annually.",
+      "full_text": "Establish and maintain audit and assurance policies and procedures, reviewed at least annually.",
+      "domain": "Audit & Assurance",
+      "category": "Audit & Assurance",
+      "section_number": "A&A-01",
+      "parent_section": "A&A",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Audit and Assurance Policy and Procedures — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'audit and assurance policy and procedures' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "A&A-02",
+      "original_reference": "A&A-02",
+      "title": "Independent Assessments",
+      "description": "Perform independent audits and assessments of the cloud environment at planned intervals.",
+      "full_text": "Perform independent audits and assessments of the cloud environment at planned intervals.",
+      "domain": "Audit & Assurance",
+      "category": "Audit & Assurance",
+      "section_number": "A&A-02",
+      "parent_section": "A&A",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Independent Assessments — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'independent assessments' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "A&A-03",
+      "original_reference": "A&A-03",
+      "title": "Risk-Based Planning Assessment",
+      "description": "Plan audits using a risk-based approach that prioritises higher-risk cloud services and controls.",
+      "full_text": "Plan audits using a risk-based approach that prioritises higher-risk cloud services and controls.",
+      "domain": "Audit & Assurance",
+      "category": "Audit & Assurance",
+      "section_number": "A&A-03",
+      "parent_section": "A&A",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Risk-Based Planning Assessment — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'risk-based planning assessment' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "A&A-04",
+      "original_reference": "A&A-04",
+      "title": "Requirements Compliance",
+      "description": "Verify compliance with applicable legal, regulatory, statutory and contractual requirements.",
+      "full_text": "Verify compliance with applicable legal, regulatory, statutory and contractual requirements.",
+      "domain": "Audit & Assurance",
+      "category": "Audit & Assurance",
+      "section_number": "A&A-04",
+      "parent_section": "A&A",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Requirements Compliance — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'requirements compliance' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "A&A-05",
+      "original_reference": "A&A-05",
+      "title": "Audit Management Process",
+      "description": "Define a process to plan, conduct, report and follow up audit engagements.",
+      "full_text": "Define a process to plan, conduct, report and follow up audit engagements.",
+      "domain": "Audit & Assurance",
+      "category": "Audit & Assurance",
+      "section_number": "A&A-05",
+      "parent_section": "A&A",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Audit Management Process — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'audit management process' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "A&A-06",
+      "original_reference": "A&A-06",
+      "title": "Remediation of Audit Findings",
+      "description": "Track and remediate audit findings and nonconformities to closure with defined timelines.",
+      "full_text": "Track and remediate audit findings and nonconformities to closure with defined timelines.",
+      "domain": "Audit & Assurance",
+      "category": "Audit & Assurance",
+      "section_number": "A&A-06",
+      "parent_section": "A&A",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Remediation of Audit Findings — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'remediation of audit findings' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "AIS-01",
+      "original_reference": "AIS-01",
+      "title": "Application and Interface Security Policy and Procedures",
+      "description": "Establish and maintain policies and procedures for securing applications and their interfaces (APIs).",
+      "full_text": "Establish and maintain policies and procedures for securing applications and their interfaces (APIs).",
+      "domain": "Application & Interface Security",
+      "category": "Application & Interface Security",
+      "section_number": "AIS-01",
+      "parent_section": "AIS",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Application and Interface Security Policy and Procedures — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'application and interface security policy and procedures' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "AIS-02",
+      "original_reference": "AIS-02",
+      "title": "Application Security Baseline Requirements",
+      "description": "Define security baseline requirements that all applications and APIs must meet before release.",
+      "full_text": "Define security baseline requirements that all applications and APIs must meet before release.",
+      "domain": "Application & Interface Security",
+      "category": "Application & Interface Security",
+      "section_number": "AIS-02",
+      "parent_section": "AIS",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Application Security Baseline Requirements — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'application security baseline requirements' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "AIS-03",
+      "original_reference": "AIS-03",
+      "title": "Application Security Metrics",
+      "description": "Define and track metrics that measure application and interface security effectiveness.",
+      "full_text": "Define and track metrics that measure application and interface security effectiveness.",
+      "domain": "Application & Interface Security",
+      "category": "Application & Interface Security",
+      "section_number": "AIS-03",
+      "parent_section": "AIS",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Application Security Metrics — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'application security metrics' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "AIS-04",
+      "original_reference": "AIS-04",
+      "title": "Secure Application Design and Development",
+      "description": "Integrate security into application design and development following a secure SDLC.",
+      "full_text": "Integrate security into application design and development following a secure SDLC.",
+      "domain": "Application & Interface Security",
+      "category": "Application & Interface Security",
+      "section_number": "AIS-04",
+      "parent_section": "AIS",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Secure Application Design and Development — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'secure application design and development' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "AIS-05",
+      "original_reference": "AIS-05",
+      "title": "Automated Application Security Testing",
+      "description": "Perform automated security testing (SAST/DAST) of applications during development.",
+      "full_text": "Perform automated security testing (SAST/DAST) of applications during development.",
+      "domain": "Application & Interface Security",
+      "category": "Application & Interface Security",
+      "section_number": "AIS-05",
+      "parent_section": "AIS",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Automated Application Security Testing — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'automated application security testing' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "AIS-06",
+      "original_reference": "AIS-06",
+      "title": "Automated Secure Application Deployment",
+      "description": "Automate secure, repeatable application deployment with security checks in the pipeline.",
+      "full_text": "Automate secure, repeatable application deployment with security checks in the pipeline.",
+      "domain": "Application & Interface Security",
+      "category": "Application & Interface Security",
+      "section_number": "AIS-06",
+      "parent_section": "AIS",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Automated Secure Application Deployment — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'automated secure application deployment' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "AIS-07",
+      "original_reference": "AIS-07",
+      "title": "Application Vulnerability Remediation",
+      "description": "Identify and remediate application and API vulnerabilities within defined timeframes.",
+      "full_text": "Identify and remediate application and API vulnerabilities within defined timeframes.",
+      "domain": "Application & Interface Security",
+      "category": "Application & Interface Security",
+      "section_number": "AIS-07",
+      "parent_section": "AIS",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Application Vulnerability Remediation — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'application vulnerability remediation' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "BCR-01",
+      "original_reference": "BCR-01",
+      "title": "Business Continuity Management Policy and Procedures",
+      "description": "Establish and maintain business continuity and operational resilience policies and procedures.",
+      "full_text": "Establish and maintain business continuity and operational resilience policies and procedures.",
+      "domain": "Business Continuity Management & Operational Resilience",
+      "category": "Business Continuity Management & Operational Resilience",
+      "section_number": "BCR-01",
+      "parent_section": "BCR",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Business Continuity Management Policy and Procedures — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'business continuity management policy and procedures' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "BCR-02",
+      "original_reference": "BCR-02",
+      "title": "Risk Assessment and Impact Analysis",
+      "description": "Conduct business impact analysis and risk assessment for critical cloud services.",
+      "full_text": "Conduct business impact analysis and risk assessment for critical cloud services.",
+      "domain": "Business Continuity Management & Operational Resilience",
+      "category": "Business Continuity Management & Operational Resilience",
+      "section_number": "BCR-02",
+      "parent_section": "BCR",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Risk Assessment and Impact Analysis — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'risk assessment and impact analysis' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "BCR-03",
+      "original_reference": "BCR-03",
+      "title": "Business Continuity Strategy",
+      "description": "Define continuity strategies and recovery options to meet recovery objectives.",
+      "full_text": "Define continuity strategies and recovery options to meet recovery objectives.",
+      "domain": "Business Continuity Management & Operational Resilience",
+      "category": "Business Continuity Management & Operational Resilience",
+      "section_number": "BCR-03",
+      "parent_section": "BCR",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Business Continuity Strategy — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'business continuity strategy' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "BCR-04",
+      "original_reference": "BCR-04",
+      "title": "Business Continuity Planning",
+      "description": "Develop and document business continuity and recovery plans for critical services.",
+      "full_text": "Develop and document business continuity and recovery plans for critical services.",
+      "domain": "Business Continuity Management & Operational Resilience",
+      "category": "Business Continuity Management & Operational Resilience",
+      "section_number": "BCR-04",
+      "parent_section": "BCR",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Business Continuity Planning — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'business continuity planning' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "BCR-05",
+      "original_reference": "BCR-05",
+      "title": "Documentation",
+      "description": "Maintain up-to-date continuity documentation accessible to authorised personnel.",
+      "full_text": "Maintain up-to-date continuity documentation accessible to authorised personnel.",
+      "domain": "Business Continuity Management & Operational Resilience",
+      "category": "Business Continuity Management & Operational Resilience",
+      "section_number": "BCR-05",
+      "parent_section": "BCR",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Documentation — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'documentation' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "BCR-06",
+      "original_reference": "BCR-06",
+      "title": "Business Continuity Exercises",
+      "description": "Test and exercise continuity plans at planned intervals and capture improvements.",
+      "full_text": "Test and exercise continuity plans at planned intervals and capture improvements.",
+      "domain": "Business Continuity Management & Operational Resilience",
+      "category": "Business Continuity Management & Operational Resilience",
+      "section_number": "BCR-06",
+      "parent_section": "BCR",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Business Continuity Exercises — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'business continuity exercises' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "BCR-07",
+      "original_reference": "BCR-07",
+      "title": "Communication",
+      "description": "Define communication procedures with stakeholders during a disruption.",
+      "full_text": "Define communication procedures with stakeholders during a disruption.",
+      "domain": "Business Continuity Management & Operational Resilience",
+      "category": "Business Continuity Management & Operational Resilience",
+      "section_number": "BCR-07",
+      "parent_section": "BCR",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Communication — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'communication' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "BCR-08",
+      "original_reference": "BCR-08",
+      "title": "Backup",
+      "description": "Perform, protect and periodically test backups of critical data and systems.",
+      "full_text": "Perform, protect and periodically test backups of critical data and systems.",
+      "domain": "Business Continuity Management & Operational Resilience",
+      "category": "Business Continuity Management & Operational Resilience",
+      "section_number": "BCR-08",
+      "parent_section": "BCR",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Backup — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'backup' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "BCR-09",
+      "original_reference": "BCR-09",
+      "title": "Disaster Response Plan",
+      "description": "Establish a disaster response plan to react to and recover from major failures.",
+      "full_text": "Establish a disaster response plan to react to and recover from major failures.",
+      "domain": "Business Continuity Management & Operational Resilience",
+      "category": "Business Continuity Management & Operational Resilience",
+      "section_number": "BCR-09",
+      "parent_section": "BCR",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Disaster Response Plan — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'disaster response plan' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "BCR-10",
+      "original_reference": "BCR-10",
+      "title": "Response Plan Exercise",
+      "description": "Exercise the disaster response plan and validate its effectiveness.",
+      "full_text": "Exercise the disaster response plan and validate its effectiveness.",
+      "domain": "Business Continuity Management & Operational Resilience",
+      "category": "Business Continuity Management & Operational Resilience",
+      "section_number": "BCR-10",
+      "parent_section": "BCR",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Response Plan Exercise — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'response plan exercise' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "BCR-11",
+      "original_reference": "BCR-11",
+      "title": "Equipment Redundancy",
+      "description": "Provide redundancy for critical equipment and infrastructure to maintain availability.",
+      "full_text": "Provide redundancy for critical equipment and infrastructure to maintain availability.",
+      "domain": "Business Continuity Management & Operational Resilience",
+      "category": "Business Continuity Management & Operational Resilience",
+      "section_number": "BCR-11",
+      "parent_section": "BCR",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Equipment Redundancy — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'equipment redundancy' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "CCC-01",
+      "original_reference": "CCC-01",
+      "title": "Change Management Policy and Procedures",
+      "description": "Establish and maintain change control and configuration management policies and procedures.",
+      "full_text": "Establish and maintain change control and configuration management policies and procedures.",
+      "domain": "Change Control & Configuration Management",
+      "category": "Change Control & Configuration Management",
+      "section_number": "CCC-01",
+      "parent_section": "CCC",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Change Management Policy and Procedures — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'change management policy and procedures' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "CCC-02",
+      "original_reference": "CCC-02",
+      "title": "Quality Testing",
+      "description": "Test changes for quality and security before deployment to production.",
+      "full_text": "Test changes for quality and security before deployment to production.",
+      "domain": "Change Control & Configuration Management",
+      "category": "Change Control & Configuration Management",
+      "section_number": "CCC-02",
+      "parent_section": "CCC",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Quality Testing — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'quality testing' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "CCC-03",
+      "original_reference": "CCC-03",
+      "title": "Change Management Technology",
+      "description": "Use tooling to manage, approve and track changes throughout their lifecycle.",
+      "full_text": "Use tooling to manage, approve and track changes throughout their lifecycle.",
+      "domain": "Change Control & Configuration Management",
+      "category": "Change Control & Configuration Management",
+      "section_number": "CCC-03",
+      "parent_section": "CCC",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Change Management Technology — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'change management technology' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "CCC-04",
+      "original_reference": "CCC-04",
+      "title": "Unauthorized Change Protection",
+      "description": "Restrict and detect unauthorised changes to systems and configurations.",
+      "full_text": "Restrict and detect unauthorised changes to systems and configurations.",
+      "domain": "Change Control & Configuration Management",
+      "category": "Change Control & Configuration Management",
+      "section_number": "CCC-04",
+      "parent_section": "CCC",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Unauthorized Change Protection — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'unauthorized change protection' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "CCC-05",
+      "original_reference": "CCC-05",
+      "title": "Change Agreements",
+      "description": "Agree change windows, roles and responsibilities with affected stakeholders.",
+      "full_text": "Agree change windows, roles and responsibilities with affected stakeholders.",
+      "domain": "Change Control & Configuration Management",
+      "category": "Change Control & Configuration Management",
+      "section_number": "CCC-05",
+      "parent_section": "CCC",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Change Agreements — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'change agreements' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "CCC-06",
+      "original_reference": "CCC-06",
+      "title": "Change Management Baseline",
+      "description": "Define and maintain approved configuration baselines for systems.",
+      "full_text": "Define and maintain approved configuration baselines for systems.",
+      "domain": "Change Control & Configuration Management",
+      "category": "Change Control & Configuration Management",
+      "section_number": "CCC-06",
+      "parent_section": "CCC",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Change Management Baseline — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'change management baseline' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "CCC-07",
+      "original_reference": "CCC-07",
+      "title": "Detection of Baseline Deviation",
+      "description": "Detect and respond to deviations from approved configuration baselines.",
+      "full_text": "Detect and respond to deviations from approved configuration baselines.",
+      "domain": "Change Control & Configuration Management",
+      "category": "Change Control & Configuration Management",
+      "section_number": "CCC-07",
+      "parent_section": "CCC",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Detection of Baseline Deviation — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'detection of baseline deviation' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "CCC-08",
+      "original_reference": "CCC-08",
+      "title": "Exception Management",
+      "description": "Manage and approve exceptions to change and configuration standards.",
+      "full_text": "Manage and approve exceptions to change and configuration standards.",
+      "domain": "Change Control & Configuration Management",
+      "category": "Change Control & Configuration Management",
+      "section_number": "CCC-08",
+      "parent_section": "CCC",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Exception Management — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'exception management' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "CCC-09",
+      "original_reference": "CCC-09",
+      "title": "Change Restoration",
+      "description": "Define rollback procedures to restore prior state after failed changes.",
+      "full_text": "Define rollback procedures to restore prior state after failed changes.",
+      "domain": "Change Control & Configuration Management",
+      "category": "Change Control & Configuration Management",
+      "section_number": "CCC-09",
+      "parent_section": "CCC",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Change Restoration — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'change restoration' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "CEK-01",
+      "original_reference": "CEK-01",
+      "title": "Encryption and Key Management Policy and Procedures",
+      "description": "Establish and maintain cryptography, encryption and key management policies and procedures.",
+      "full_text": "Establish and maintain cryptography, encryption and key management policies and procedures.",
+      "domain": "Cryptography, Encryption & Key Management",
+      "category": "Cryptography, Encryption & Key Management",
+      "section_number": "CEK-01",
+      "parent_section": "CEK",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Encryption and Key Management Policy and Procedures — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'encryption and key management policy and procedures' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "CEK-02",
+      "original_reference": "CEK-02",
+      "title": "CEK Roles and Responsibilities",
+      "description": "Define roles and responsibilities for cryptography and key management.",
+      "full_text": "Define roles and responsibilities for cryptography and key management.",
+      "domain": "Cryptography, Encryption & Key Management",
+      "category": "Cryptography, Encryption & Key Management",
+      "section_number": "CEK-02",
+      "parent_section": "CEK",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "CEK Roles and Responsibilities — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'cek roles and responsibilities' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "CEK-03",
+      "original_reference": "CEK-03",
+      "title": "Data Encryption",
+      "description": "Encrypt sensitive data at rest and in transit using approved cryptography.",
+      "full_text": "Encrypt sensitive data at rest and in transit using approved cryptography.",
+      "domain": "Cryptography, Encryption & Key Management",
+      "category": "Cryptography, Encryption & Key Management",
+      "section_number": "CEK-03",
+      "parent_section": "CEK",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Data Encryption — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'data encryption' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "CEK-04",
+      "original_reference": "CEK-04",
+      "title": "Encryption Algorithm",
+      "description": "Use only approved, strong encryption algorithms and protocols.",
+      "full_text": "Use only approved, strong encryption algorithms and protocols.",
+      "domain": "Cryptography, Encryption & Key Management",
+      "category": "Cryptography, Encryption & Key Management",
+      "section_number": "CEK-04",
+      "parent_section": "CEK",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Encryption Algorithm — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'encryption algorithm' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "CEK-05",
+      "original_reference": "CEK-05",
+      "title": "Encryption Change",
+      "description": "Manage changes to cryptographic implementations in a controlled way.",
+      "full_text": "Manage changes to cryptographic implementations in a controlled way.",
+      "domain": "Cryptography, Encryption & Key Management",
+      "category": "Cryptography, Encryption & Key Management",
+      "section_number": "CEK-05",
+      "parent_section": "CEK",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Encryption Change — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'encryption change' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "CEK-06",
+      "original_reference": "CEK-06",
+      "title": "Encryption Change Cost Benefit Analysis",
+      "description": "Evaluate cost and benefit before making cryptographic changes.",
+      "full_text": "Evaluate cost and benefit before making cryptographic changes.",
+      "domain": "Cryptography, Encryption & Key Management",
+      "category": "Cryptography, Encryption & Key Management",
+      "section_number": "CEK-06",
+      "parent_section": "CEK",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Encryption Change Cost Benefit Analysis — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'encryption change cost benefit analysis' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "CEK-07",
+      "original_reference": "CEK-07",
+      "title": "Encryption Risk Management",
+      "description": "Assess and treat risks related to cryptography and encryption.",
+      "full_text": "Assess and treat risks related to cryptography and encryption.",
+      "domain": "Cryptography, Encryption & Key Management",
+      "category": "Cryptography, Encryption & Key Management",
+      "section_number": "CEK-07",
+      "parent_section": "CEK",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Encryption Risk Management — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'encryption risk management' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "CEK-08",
+      "original_reference": "CEK-08",
+      "title": "CSC Key Management Capability",
+      "description": "Provide customers the capability to manage their own encryption keys where applicable.",
+      "full_text": "Provide customers the capability to manage their own encryption keys where applicable.",
+      "domain": "Cryptography, Encryption & Key Management",
+      "category": "Cryptography, Encryption & Key Management",
+      "section_number": "CEK-08",
+      "parent_section": "CEK",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "CSC Key Management Capability — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'csc key management capability' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "CEK-09",
+      "original_reference": "CEK-09",
+      "title": "Encryption and Key Management Audit",
+      "description": "Audit cryptographic and key management processes at planned intervals.",
+      "full_text": "Audit cryptographic and key management processes at planned intervals.",
+      "domain": "Cryptography, Encryption & Key Management",
+      "category": "Cryptography, Encryption & Key Management",
+      "section_number": "CEK-09",
+      "parent_section": "CEK",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Encryption and Key Management Audit — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'encryption and key management audit' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "CEK-10",
+      "original_reference": "CEK-10",
+      "title": "Key Generation",
+      "description": "Generate cryptographic keys securely using approved methods.",
+      "full_text": "Generate cryptographic keys securely using approved methods.",
+      "domain": "Cryptography, Encryption & Key Management",
+      "category": "Cryptography, Encryption & Key Management",
+      "section_number": "CEK-10",
+      "parent_section": "CEK",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Key Generation — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'key generation' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "CEK-11",
+      "original_reference": "CEK-11",
+      "title": "Key Purpose",
+      "description": "Restrict each cryptographic key to a single defined purpose.",
+      "full_text": "Restrict each cryptographic key to a single defined purpose.",
+      "domain": "Cryptography, Encryption & Key Management",
+      "category": "Cryptography, Encryption & Key Management",
+      "section_number": "CEK-11",
+      "parent_section": "CEK",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Key Purpose — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'key purpose' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "CEK-12",
+      "original_reference": "CEK-12",
+      "title": "Key Rotation",
+      "description": "Rotate cryptographic keys at defined intervals and upon compromise.",
+      "full_text": "Rotate cryptographic keys at defined intervals and upon compromise.",
+      "domain": "Cryptography, Encryption & Key Management",
+      "category": "Cryptography, Encryption & Key Management",
+      "section_number": "CEK-12",
+      "parent_section": "CEK",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Key Rotation — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'key rotation' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "CEK-13",
+      "original_reference": "CEK-13",
+      "title": "Key Revocation",
+      "description": "Revoke cryptographic keys that are no longer trusted or required.",
+      "full_text": "Revoke cryptographic keys that are no longer trusted or required.",
+      "domain": "Cryptography, Encryption & Key Management",
+      "category": "Cryptography, Encryption & Key Management",
+      "section_number": "CEK-13",
+      "parent_section": "CEK",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Key Revocation — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'key revocation' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "CEK-14",
+      "original_reference": "CEK-14",
+      "title": "Key Destruction",
+      "description": "Securely destroy cryptographic keys at end of life.",
+      "full_text": "Securely destroy cryptographic keys at end of life.",
+      "domain": "Cryptography, Encryption & Key Management",
+      "category": "Cryptography, Encryption & Key Management",
+      "section_number": "CEK-14",
+      "parent_section": "CEK",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Key Destruction — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'key destruction' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "CEK-15",
+      "original_reference": "CEK-15",
+      "title": "Key Activation",
+      "description": "Control activation of cryptographic keys before use.",
+      "full_text": "Control activation of cryptographic keys before use.",
+      "domain": "Cryptography, Encryption & Key Management",
+      "category": "Cryptography, Encryption & Key Management",
+      "section_number": "CEK-15",
+      "parent_section": "CEK",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Key Activation — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'key activation' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "CEK-16",
+      "original_reference": "CEK-16",
+      "title": "Key Suspension",
+      "description": "Suspend cryptographic keys when temporarily not to be used.",
+      "full_text": "Suspend cryptographic keys when temporarily not to be used.",
+      "domain": "Cryptography, Encryption & Key Management",
+      "category": "Cryptography, Encryption & Key Management",
+      "section_number": "CEK-16",
+      "parent_section": "CEK",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Key Suspension — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'key suspension' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "CEK-17",
+      "original_reference": "CEK-17",
+      "title": "Key Deactivation",
+      "description": "Deactivate cryptographic keys at the end of their crypto-period.",
+      "full_text": "Deactivate cryptographic keys at the end of their crypto-period.",
+      "domain": "Cryptography, Encryption & Key Management",
+      "category": "Cryptography, Encryption & Key Management",
+      "section_number": "CEK-17",
+      "parent_section": "CEK",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Key Deactivation — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'key deactivation' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "CEK-18",
+      "original_reference": "CEK-18",
+      "title": "Key Archival",
+      "description": "Securely archive cryptographic keys where retention is required.",
+      "full_text": "Securely archive cryptographic keys where retention is required.",
+      "domain": "Cryptography, Encryption & Key Management",
+      "category": "Cryptography, Encryption & Key Management",
+      "section_number": "CEK-18",
+      "parent_section": "CEK",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Key Archival — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'key archival' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "CEK-19",
+      "original_reference": "CEK-19",
+      "title": "Key Compromise",
+      "description": "Define procedures to respond to suspected cryptographic key compromise.",
+      "full_text": "Define procedures to respond to suspected cryptographic key compromise.",
+      "domain": "Cryptography, Encryption & Key Management",
+      "category": "Cryptography, Encryption & Key Management",
+      "section_number": "CEK-19",
+      "parent_section": "CEK",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Key Compromise — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'key compromise' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "CEK-20",
+      "original_reference": "CEK-20",
+      "title": "Key Recovery",
+      "description": "Provide secure recovery of cryptographic keys where authorised.",
+      "full_text": "Provide secure recovery of cryptographic keys where authorised.",
+      "domain": "Cryptography, Encryption & Key Management",
+      "category": "Cryptography, Encryption & Key Management",
+      "section_number": "CEK-20",
+      "parent_section": "CEK",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Key Recovery — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'key recovery' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "CEK-21",
+      "original_reference": "CEK-21",
+      "title": "Key Inventory Management",
+      "description": "Maintain an inventory of cryptographic keys and their lifecycle state.",
+      "full_text": "Maintain an inventory of cryptographic keys and their lifecycle state.",
+      "domain": "Cryptography, Encryption & Key Management",
+      "category": "Cryptography, Encryption & Key Management",
+      "section_number": "CEK-21",
+      "parent_section": "CEK",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Key Inventory Management — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'key inventory management' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "DCS-01",
+      "original_reference": "DCS-01",
+      "title": "Off-Site Equipment Disposal Policy and Procedures",
+      "description": "Establish policies for secure disposal of off-site equipment and media.",
+      "full_text": "Establish policies for secure disposal of off-site equipment and media.",
+      "domain": "Datacenter Security",
+      "category": "Datacenter Security",
+      "section_number": "DCS-01",
+      "parent_section": "DCS",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Off-Site Equipment Disposal Policy and Procedures — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'off-site equipment disposal policy and procedures' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "DCS-02",
+      "original_reference": "DCS-02",
+      "title": "Off-Site Transfer Authorization Policy and Procedures",
+      "description": "Authorise and control the transfer of equipment and media off-site.",
+      "full_text": "Authorise and control the transfer of equipment and media off-site.",
+      "domain": "Datacenter Security",
+      "category": "Datacenter Security",
+      "section_number": "DCS-02",
+      "parent_section": "DCS",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Off-Site Transfer Authorization Policy and Procedures — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'off-site transfer authorization policy and procedures' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "DCS-03",
+      "original_reference": "DCS-03",
+      "title": "Secure Area Policy and Procedures",
+      "description": "Define policies for establishing and protecting physically secure areas.",
+      "full_text": "Define policies for establishing and protecting physically secure areas.",
+      "domain": "Datacenter Security",
+      "category": "Datacenter Security",
+      "section_number": "DCS-03",
+      "parent_section": "DCS",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Secure Area Policy and Procedures — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'secure area policy and procedures' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "DCS-04",
+      "original_reference": "DCS-04",
+      "title": "Secure Media Transportation Policy and Procedures",
+      "description": "Protect media in transit against unauthorised access, misuse or corruption.",
+      "full_text": "Protect media in transit against unauthorised access, misuse or corruption.",
+      "domain": "Datacenter Security",
+      "category": "Datacenter Security",
+      "section_number": "DCS-04",
+      "parent_section": "DCS",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Secure Media Transportation Policy and Procedures — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'secure media transportation policy and procedures' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "DCS-05",
+      "original_reference": "DCS-05",
+      "title": "Assets Classification",
+      "description": "Classify physical and information assets by sensitivity and criticality.",
+      "full_text": "Classify physical and information assets by sensitivity and criticality.",
+      "domain": "Datacenter Security",
+      "category": "Datacenter Security",
+      "section_number": "DCS-05",
+      "parent_section": "DCS",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Assets Classification — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'assets classification' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "DCS-06",
+      "original_reference": "DCS-06",
+      "title": "Assets Cataloguing and Tracking",
+      "description": "Catalogue and track physical assets throughout their lifecycle.",
+      "full_text": "Catalogue and track physical assets throughout their lifecycle.",
+      "domain": "Datacenter Security",
+      "category": "Datacenter Security",
+      "section_number": "DCS-06",
+      "parent_section": "DCS",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Assets Cataloguing and Tracking — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'assets cataloguing and tracking' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "DCS-07",
+      "original_reference": "DCS-07",
+      "title": "Controlled Access Points",
+      "description": "Restrict facility access through controlled physical access points.",
+      "full_text": "Restrict facility access through controlled physical access points.",
+      "domain": "Datacenter Security",
+      "category": "Datacenter Security",
+      "section_number": "DCS-07",
+      "parent_section": "DCS",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Controlled Access Points — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'controlled access points' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "DCS-08",
+      "original_reference": "DCS-08",
+      "title": "Equipment Identification",
+      "description": "Uniquely identify equipment for access control and asset management.",
+      "full_text": "Uniquely identify equipment for access control and asset management.",
+      "domain": "Datacenter Security",
+      "category": "Datacenter Security",
+      "section_number": "DCS-08",
+      "parent_section": "DCS",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Equipment Identification — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'equipment identification' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "DCS-09",
+      "original_reference": "DCS-09",
+      "title": "Secure Area Authorization",
+      "description": "Authorise personnel access to secure areas based on need.",
+      "full_text": "Authorise personnel access to secure areas based on need.",
+      "domain": "Datacenter Security",
+      "category": "Datacenter Security",
+      "section_number": "DCS-09",
+      "parent_section": "DCS",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Secure Area Authorization — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'secure area authorization' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "DCS-10",
+      "original_reference": "DCS-10",
+      "title": "Surveillance System",
+      "description": "Deploy physical surveillance systems (e.g. CCTV) to monitor secure areas.",
+      "full_text": "Deploy physical surveillance systems (e.g. CCTV) to monitor secure areas.",
+      "domain": "Datacenter Security",
+      "category": "Datacenter Security",
+      "section_number": "DCS-10",
+      "parent_section": "DCS",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Surveillance System — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'surveillance system' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "DCS-11",
+      "original_reference": "DCS-11",
+      "title": "Unauthorized Access Response Training",
+      "description": "Train personnel to detect and respond to unauthorised physical access.",
+      "full_text": "Train personnel to detect and respond to unauthorised physical access.",
+      "domain": "Datacenter Security",
+      "category": "Datacenter Security",
+      "section_number": "DCS-11",
+      "parent_section": "DCS",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Unauthorized Access Response Training — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'unauthorized access response training' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "DCS-12",
+      "original_reference": "DCS-12",
+      "title": "Cabling Security",
+      "description": "Protect power and telecommunications cabling from interception or damage.",
+      "full_text": "Protect power and telecommunications cabling from interception or damage.",
+      "domain": "Datacenter Security",
+      "category": "Datacenter Security",
+      "section_number": "DCS-12",
+      "parent_section": "DCS",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Cabling Security — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'cabling security' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "DCS-13",
+      "original_reference": "DCS-13",
+      "title": "Environmental Systems",
+      "description": "Maintain environmental controls (HVAC, fire suppression) in datacenters.",
+      "full_text": "Maintain environmental controls (HVAC, fire suppression) in datacenters.",
+      "domain": "Datacenter Security",
+      "category": "Datacenter Security",
+      "section_number": "DCS-13",
+      "parent_section": "DCS",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Environmental Systems — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'environmental systems' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "DCS-14",
+      "original_reference": "DCS-14",
+      "title": "Secure Utilities",
+      "description": "Protect supporting utilities (power, cooling, water) from disruption.",
+      "full_text": "Protect supporting utilities (power, cooling, water) from disruption.",
+      "domain": "Datacenter Security",
+      "category": "Datacenter Security",
+      "section_number": "DCS-14",
+      "parent_section": "DCS",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Secure Utilities — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'secure utilities' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "DCS-15",
+      "original_reference": "DCS-15",
+      "title": "Equipment Location",
+      "description": "Site equipment to reduce environmental and unauthorised-access risks.",
+      "full_text": "Site equipment to reduce environmental and unauthorised-access risks.",
+      "domain": "Datacenter Security",
+      "category": "Datacenter Security",
+      "section_number": "DCS-15",
+      "parent_section": "DCS",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Equipment Location — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'equipment location' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "DSP-01",
+      "original_reference": "DSP-01",
+      "title": "Security and Privacy Policy and Procedures",
+      "description": "Establish and maintain data security and privacy lifecycle policies and procedures.",
+      "full_text": "Establish and maintain data security and privacy lifecycle policies and procedures.",
+      "domain": "Data Security & Privacy Lifecycle Management",
+      "category": "Data Security & Privacy Lifecycle Management",
+      "section_number": "DSP-01",
+      "parent_section": "DSP",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Security and Privacy Policy and Procedures — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'security and privacy policy and procedures' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "DSP-02",
+      "original_reference": "DSP-02",
+      "title": "Secure Disposal",
+      "description": "Securely dispose of data and media when no longer required.",
+      "full_text": "Securely dispose of data and media when no longer required.",
+      "domain": "Data Security & Privacy Lifecycle Management",
+      "category": "Data Security & Privacy Lifecycle Management",
+      "section_number": "DSP-02",
+      "parent_section": "DSP",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Secure Disposal — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'secure disposal' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "DSP-03",
+      "original_reference": "DSP-03",
+      "title": "Data Inventory",
+      "description": "Maintain an inventory of data holdings across the cloud environment.",
+      "full_text": "Maintain an inventory of data holdings across the cloud environment.",
+      "domain": "Data Security & Privacy Lifecycle Management",
+      "category": "Data Security & Privacy Lifecycle Management",
+      "section_number": "DSP-03",
+      "parent_section": "DSP",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Data Inventory — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'data inventory' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "DSP-04",
+      "original_reference": "DSP-04",
+      "title": "Data Classification",
+      "description": "Classify data by sensitivity to apply appropriate protection.",
+      "full_text": "Classify data by sensitivity to apply appropriate protection.",
+      "domain": "Data Security & Privacy Lifecycle Management",
+      "category": "Data Security & Privacy Lifecycle Management",
+      "section_number": "DSP-04",
+      "parent_section": "DSP",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Data Classification — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'data classification' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "DSP-05",
+      "original_reference": "DSP-05",
+      "title": "Data Flow Documentation",
+      "description": "Document how data flows across systems, services and jurisdictions.",
+      "full_text": "Document how data flows across systems, services and jurisdictions.",
+      "domain": "Data Security & Privacy Lifecycle Management",
+      "category": "Data Security & Privacy Lifecycle Management",
+      "section_number": "DSP-05",
+      "parent_section": "DSP",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Data Flow Documentation — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'data flow documentation' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "DSP-06",
+      "original_reference": "DSP-06",
+      "title": "Data Ownership and Stewardship",
+      "description": "Assign ownership and stewardship responsibilities for data.",
+      "full_text": "Assign ownership and stewardship responsibilities for data.",
+      "domain": "Data Security & Privacy Lifecycle Management",
+      "category": "Data Security & Privacy Lifecycle Management",
+      "section_number": "DSP-06",
+      "parent_section": "DSP",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Data Ownership and Stewardship — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'data ownership and stewardship' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "DSP-07",
+      "original_reference": "DSP-07",
+      "title": "Data Protection by Design and Default",
+      "description": "Embed data protection into system design and default settings.",
+      "full_text": "Embed data protection into system design and default settings.",
+      "domain": "Data Security & Privacy Lifecycle Management",
+      "category": "Data Security & Privacy Lifecycle Management",
+      "section_number": "DSP-07",
+      "parent_section": "DSP",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Data Protection by Design and Default — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'data protection by design and default' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "DSP-08",
+      "original_reference": "DSP-08",
+      "title": "Data Privacy by Design and Default",
+      "description": "Embed privacy into processing by design and by default.",
+      "full_text": "Embed privacy into processing by design and by default.",
+      "domain": "Data Security & Privacy Lifecycle Management",
+      "category": "Data Security & Privacy Lifecycle Management",
+      "section_number": "DSP-08",
+      "parent_section": "DSP",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Data Privacy by Design and Default — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'data privacy by design and default' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "DSP-09",
+      "original_reference": "DSP-09",
+      "title": "Data Protection Impact Assessment",
+      "description": "Conduct DPIAs for high-risk personal data processing.",
+      "full_text": "Conduct DPIAs for high-risk personal data processing.",
+      "domain": "Data Security & Privacy Lifecycle Management",
+      "category": "Data Security & Privacy Lifecycle Management",
+      "section_number": "DSP-09",
+      "parent_section": "DSP",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Data Protection Impact Assessment — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'data protection impact assessment' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "DSP-10",
+      "original_reference": "DSP-10",
+      "title": "Sensitive Data Protection",
+      "description": "Apply enhanced controls to protect sensitive and special-category data.",
+      "full_text": "Apply enhanced controls to protect sensitive and special-category data.",
+      "domain": "Data Security & Privacy Lifecycle Management",
+      "category": "Data Security & Privacy Lifecycle Management",
+      "section_number": "DSP-10",
+      "parent_section": "DSP",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Sensitive Data Protection — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'sensitive data protection' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "DSP-11",
+      "original_reference": "DSP-11",
+      "title": "Disclosure of Data Sub-Processors",
+      "description": "Disclose sub-processors that process personal data.",
+      "full_text": "Disclose sub-processors that process personal data.",
+      "domain": "Data Security & Privacy Lifecycle Management",
+      "category": "Data Security & Privacy Lifecycle Management",
+      "section_number": "DSP-11",
+      "parent_section": "DSP",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Disclosure of Data Sub-Processors — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'disclosure of data sub-processors' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "DSP-12",
+      "original_reference": "DSP-12",
+      "title": "Limitation of Purpose in Personal Data Processing",
+      "description": "Process personal data only for specified, legitimate purposes.",
+      "full_text": "Process personal data only for specified, legitimate purposes.",
+      "domain": "Data Security & Privacy Lifecycle Management",
+      "category": "Data Security & Privacy Lifecycle Management",
+      "section_number": "DSP-12",
+      "parent_section": "DSP",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Limitation of Purpose in Personal Data Processing — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'limitation of purpose in personal data processing' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "DSP-13",
+      "original_reference": "DSP-13",
+      "title": "Personal Data Sub-Processing",
+      "description": "Govern sub-processing of personal data through contracts and controls.",
+      "full_text": "Govern sub-processing of personal data through contracts and controls.",
+      "domain": "Data Security & Privacy Lifecycle Management",
+      "category": "Data Security & Privacy Lifecycle Management",
+      "section_number": "DSP-13",
+      "parent_section": "DSP",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Personal Data Sub-Processing — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'personal data sub-processing' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "DSP-14",
+      "original_reference": "DSP-14",
+      "title": "Disclosure Notification",
+      "description": "Notify data subjects and authorities of disclosures as required.",
+      "full_text": "Notify data subjects and authorities of disclosures as required.",
+      "domain": "Data Security & Privacy Lifecycle Management",
+      "category": "Data Security & Privacy Lifecycle Management",
+      "section_number": "DSP-14",
+      "parent_section": "DSP",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Disclosure Notification — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'disclosure notification' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "DSP-15",
+      "original_reference": "DSP-15",
+      "title": "Data Location",
+      "description": "Track and control the geographic location of stored data.",
+      "full_text": "Track and control the geographic location of stored data.",
+      "domain": "Data Security & Privacy Lifecycle Management",
+      "category": "Data Security & Privacy Lifecycle Management",
+      "section_number": "DSP-15",
+      "parent_section": "DSP",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Data Location — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'data location' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "DSP-16",
+      "original_reference": "DSP-16",
+      "title": "Data Retention and Deletion",
+      "description": "Retain data only as long as necessary and delete when no longer needed.",
+      "full_text": "Retain data only as long as necessary and delete when no longer needed.",
+      "domain": "Data Security & Privacy Lifecycle Management",
+      "category": "Data Security & Privacy Lifecycle Management",
+      "section_number": "DSP-16",
+      "parent_section": "DSP",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Data Retention and Deletion — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'data retention and deletion' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "DSP-17",
+      "original_reference": "DSP-17",
+      "title": "Sensitive Data Transfer",
+      "description": "Protect sensitive data during cross-border and external transfers.",
+      "full_text": "Protect sensitive data during cross-border and external transfers.",
+      "domain": "Data Security & Privacy Lifecycle Management",
+      "category": "Data Security & Privacy Lifecycle Management",
+      "section_number": "DSP-17",
+      "parent_section": "DSP",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Sensitive Data Transfer — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'sensitive data transfer' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "DSP-18",
+      "original_reference": "DSP-18",
+      "title": "Personal Data Access, Reversal, Rectification and Deletion",
+      "description": "Enable data subjects to access, correct and delete their personal data.",
+      "full_text": "Enable data subjects to access, correct and delete their personal data.",
+      "domain": "Data Security & Privacy Lifecycle Management",
+      "category": "Data Security & Privacy Lifecycle Management",
+      "section_number": "DSP-18",
+      "parent_section": "DSP",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Personal Data Access, Reversal, Rectification and Deletion — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'personal data access, reversal, rectification and deletion' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "DSP-19",
+      "original_reference": "DSP-19",
+      "title": "Data Portability",
+      "description": "Provide personal data in a portable, machine-readable format on request.",
+      "full_text": "Provide personal data in a portable, machine-readable format on request.",
+      "domain": "Data Security & Privacy Lifecycle Management",
+      "category": "Data Security & Privacy Lifecycle Management",
+      "section_number": "DSP-19",
+      "parent_section": "DSP",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Data Portability — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'data portability' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "GRC-01",
+      "original_reference": "GRC-01",
+      "title": "Governance Program Policy and Procedures",
+      "description": "Establish and maintain an information security governance program with policies and procedures.",
+      "full_text": "Establish and maintain an information security governance program with policies and procedures.",
+      "domain": "Governance, Risk Management & Compliance",
+      "category": "Governance, Risk Management & Compliance",
+      "section_number": "GRC-01",
+      "parent_section": "GRC",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Governance Program Policy and Procedures — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'governance program policy and procedures' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "GRC-02",
+      "original_reference": "GRC-02",
+      "title": "Risk Management Program",
+      "description": "Establish an enterprise risk management program covering cloud risks.",
+      "full_text": "Establish an enterprise risk management program covering cloud risks.",
+      "domain": "Governance, Risk Management & Compliance",
+      "category": "Governance, Risk Management & Compliance",
+      "section_number": "GRC-02",
+      "parent_section": "GRC",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Risk Management Program — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'risk management program' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "GRC-03",
+      "original_reference": "GRC-03",
+      "title": "Organizational Policy Reviews",
+      "description": "Review organizational security policies at planned intervals.",
+      "full_text": "Review organizational security policies at planned intervals.",
+      "domain": "Governance, Risk Management & Compliance",
+      "category": "Governance, Risk Management & Compliance",
+      "section_number": "GRC-03",
+      "parent_section": "GRC",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Organizational Policy Reviews — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'organizational policy reviews' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "GRC-04",
+      "original_reference": "GRC-04",
+      "title": "Policy Exception Process",
+      "description": "Define a formal process to request and approve policy exceptions.",
+      "full_text": "Define a formal process to request and approve policy exceptions.",
+      "domain": "Governance, Risk Management & Compliance",
+      "category": "Governance, Risk Management & Compliance",
+      "section_number": "GRC-04",
+      "parent_section": "GRC",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Policy Exception Process — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'policy exception process' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "GRC-05",
+      "original_reference": "GRC-05",
+      "title": "Information Security Program",
+      "description": "Establish, implement and maintain an information security program.",
+      "full_text": "Establish, implement and maintain an information security program.",
+      "domain": "Governance, Risk Management & Compliance",
+      "category": "Governance, Risk Management & Compliance",
+      "section_number": "GRC-05",
+      "parent_section": "GRC",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Information Security Program — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'information security program' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "GRC-06",
+      "original_reference": "GRC-06",
+      "title": "Governance Responsibility Model",
+      "description": "Define governance roles, responsibilities and accountability.",
+      "full_text": "Define governance roles, responsibilities and accountability.",
+      "domain": "Governance, Risk Management & Compliance",
+      "category": "Governance, Risk Management & Compliance",
+      "section_number": "GRC-06",
+      "parent_section": "GRC",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Governance Responsibility Model — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'governance responsibility model' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "GRC-07",
+      "original_reference": "GRC-07",
+      "title": "Information System Regulatory Mapping",
+      "description": "Map information systems to applicable regulatory requirements.",
+      "full_text": "Map information systems to applicable regulatory requirements.",
+      "domain": "Governance, Risk Management & Compliance",
+      "category": "Governance, Risk Management & Compliance",
+      "section_number": "GRC-07",
+      "parent_section": "GRC",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Information System Regulatory Mapping — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'information system regulatory mapping' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "GRC-08",
+      "original_reference": "GRC-08",
+      "title": "Special Interest Groups",
+      "description": "Maintain contact with special interest groups and security forums.",
+      "full_text": "Maintain contact with special interest groups and security forums.",
+      "domain": "Governance, Risk Management & Compliance",
+      "category": "Governance, Risk Management & Compliance",
+      "section_number": "GRC-08",
+      "parent_section": "GRC",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Special Interest Groups — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'special interest groups' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "HRS-01",
+      "original_reference": "HRS-01",
+      "title": "Background Screening Policy and Procedures",
+      "description": "Perform background verification of personnel commensurate with role sensitivity.",
+      "full_text": "Perform background verification of personnel commensurate with role sensitivity.",
+      "domain": "Human Resources",
+      "category": "Human Resources",
+      "section_number": "HRS-01",
+      "parent_section": "HRS",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Background Screening Policy and Procedures — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'background screening policy and procedures' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "HRS-02",
+      "original_reference": "HRS-02",
+      "title": "Acceptable Use of Technology Policy and Procedures",
+      "description": "Establish an acceptable use policy for organizational technology and data.",
+      "full_text": "Establish an acceptable use policy for organizational technology and data.",
+      "domain": "Human Resources",
+      "category": "Human Resources",
+      "section_number": "HRS-02",
+      "parent_section": "HRS",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Acceptable Use of Technology Policy and Procedures — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'acceptable use of technology policy and procedures' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "HRS-03",
+      "original_reference": "HRS-03",
+      "title": "Clean Desk Policy and Procedures",
+      "description": "Enforce clean desk and clear screen practices to protect information.",
+      "full_text": "Enforce clean desk and clear screen practices to protect information.",
+      "domain": "Human Resources",
+      "category": "Human Resources",
+      "section_number": "HRS-03",
+      "parent_section": "HRS",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Clean Desk Policy and Procedures — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'clean desk policy and procedures' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "HRS-04",
+      "original_reference": "HRS-04",
+      "title": "Remote and Home Working Policy and Procedures",
+      "description": "Define security requirements for remote and home working.",
+      "full_text": "Define security requirements for remote and home working.",
+      "domain": "Human Resources",
+      "category": "Human Resources",
+      "section_number": "HRS-04",
+      "parent_section": "HRS",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Remote and Home Working Policy and Procedures — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'remote and home working policy and procedures' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "HRS-05",
+      "original_reference": "HRS-05",
+      "title": "Asset Returns",
+      "description": "Ensure assets are returned upon termination or role change.",
+      "full_text": "Ensure assets are returned upon termination or role change.",
+      "domain": "Human Resources",
+      "category": "Human Resources",
+      "section_number": "HRS-05",
+      "parent_section": "HRS",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Asset Returns — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'asset returns' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "HRS-06",
+      "original_reference": "HRS-06",
+      "title": "Employment Termination",
+      "description": "Manage security responsibilities and access removal upon termination.",
+      "full_text": "Manage security responsibilities and access removal upon termination.",
+      "domain": "Human Resources",
+      "category": "Human Resources",
+      "section_number": "HRS-06",
+      "parent_section": "HRS",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Employment Termination — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'employment termination' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "HRS-07",
+      "original_reference": "HRS-07",
+      "title": "Employment Agreement Process",
+      "description": "Include security responsibilities in the employment agreement process.",
+      "full_text": "Include security responsibilities in the employment agreement process.",
+      "domain": "Human Resources",
+      "category": "Human Resources",
+      "section_number": "HRS-07",
+      "parent_section": "HRS",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Employment Agreement Process — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'employment agreement process' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "HRS-08",
+      "original_reference": "HRS-08",
+      "title": "Employment Agreement Content",
+      "description": "Define security and confidentiality obligations in employment agreements.",
+      "full_text": "Define security and confidentiality obligations in employment agreements.",
+      "domain": "Human Resources",
+      "category": "Human Resources",
+      "section_number": "HRS-08",
+      "parent_section": "HRS",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Employment Agreement Content — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'employment agreement content' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "HRS-09",
+      "original_reference": "HRS-09",
+      "title": "Personnel Roles and Responsibilities",
+      "description": "Define and communicate security roles and responsibilities for personnel.",
+      "full_text": "Define and communicate security roles and responsibilities for personnel.",
+      "domain": "Human Resources",
+      "category": "Human Resources",
+      "section_number": "HRS-09",
+      "parent_section": "HRS",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Personnel Roles and Responsibilities — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'personnel roles and responsibilities' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "HRS-10",
+      "original_reference": "HRS-10",
+      "title": "Non-Disclosure Agreements",
+      "description": "Require non-disclosure agreements for access to confidential information.",
+      "full_text": "Require non-disclosure agreements for access to confidential information.",
+      "domain": "Human Resources",
+      "category": "Human Resources",
+      "section_number": "HRS-10",
+      "parent_section": "HRS",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Non-Disclosure Agreements — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'non-disclosure agreements' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "HRS-11",
+      "original_reference": "HRS-11",
+      "title": "Security Awareness Training",
+      "description": "Deliver periodic security awareness training to all personnel.",
+      "full_text": "Deliver periodic security awareness training to all personnel.",
+      "domain": "Human Resources",
+      "category": "Human Resources",
+      "section_number": "HRS-11",
+      "parent_section": "HRS",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Security Awareness Training — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'security awareness training' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "HRS-12",
+      "original_reference": "HRS-12",
+      "title": "Personal and Sensitive Data Awareness and Training",
+      "description": "Train personnel on handling personal and sensitive data.",
+      "full_text": "Train personnel on handling personal and sensitive data.",
+      "domain": "Human Resources",
+      "category": "Human Resources",
+      "section_number": "HRS-12",
+      "parent_section": "HRS",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Personal and Sensitive Data Awareness and Training — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'personal and sensitive data awareness and training' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "HRS-13",
+      "original_reference": "HRS-13",
+      "title": "Compliance User Responsibility",
+      "description": "Communicate user responsibilities for compliance with security policies.",
+      "full_text": "Communicate user responsibilities for compliance with security policies.",
+      "domain": "Human Resources",
+      "category": "Human Resources",
+      "section_number": "HRS-13",
+      "parent_section": "HRS",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Compliance User Responsibility — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'compliance user responsibility' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "IAM-01",
+      "original_reference": "IAM-01",
+      "title": "Identity and Access Management Policy and Procedures",
+      "description": "Establish and maintain identity and access management policies based on least privilege.",
+      "full_text": "Establish and maintain identity and access management policies based on least privilege.",
+      "domain": "Identity & Access Management",
+      "category": "Identity & Access Management",
+      "section_number": "IAM-01",
+      "parent_section": "IAM",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Identity and Access Management Policy and Procedures — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'identity and access management policy and procedures' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "IAM-02",
+      "original_reference": "IAM-02",
+      "title": "Strong Password Policy and Procedures",
+      "description": "Enforce strong password and credential policies.",
+      "full_text": "Enforce strong password and credential policies.",
+      "domain": "Identity & Access Management",
+      "category": "Identity & Access Management",
+      "section_number": "IAM-02",
+      "parent_section": "IAM",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Strong Password Policy and Procedures — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'strong password policy and procedures' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "IAM-03",
+      "original_reference": "IAM-03",
+      "title": "Identity Inventory",
+      "description": "Maintain an inventory of identities across the cloud environment.",
+      "full_text": "Maintain an inventory of identities across the cloud environment.",
+      "domain": "Identity & Access Management",
+      "category": "Identity & Access Management",
+      "section_number": "IAM-03",
+      "parent_section": "IAM",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Identity Inventory — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'identity inventory' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "IAM-04",
+      "original_reference": "IAM-04",
+      "title": "Separation of Duties",
+      "description": "Enforce separation of duties to reduce fraud and error.",
+      "full_text": "Enforce separation of duties to reduce fraud and error.",
+      "domain": "Identity & Access Management",
+      "category": "Identity & Access Management",
+      "section_number": "IAM-04",
+      "parent_section": "IAM",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Separation of Duties — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'separation of duties' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "IAM-05",
+      "original_reference": "IAM-05",
+      "title": "Least Privilege",
+      "description": "Grant access based on the principle of least privilege.",
+      "full_text": "Grant access based on the principle of least privilege.",
+      "domain": "Identity & Access Management",
+      "category": "Identity & Access Management",
+      "section_number": "IAM-05",
+      "parent_section": "IAM",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Least Privilege — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'least privilege' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "IAM-06",
+      "original_reference": "IAM-06",
+      "title": "User Access Provisioning",
+      "description": "Provision user access through a formal, approved process.",
+      "full_text": "Provision user access through a formal, approved process.",
+      "domain": "Identity & Access Management",
+      "category": "Identity & Access Management",
+      "section_number": "IAM-06",
+      "parent_section": "IAM",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "User Access Provisioning — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'user access provisioning' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "IAM-07",
+      "original_reference": "IAM-07",
+      "title": "User Access Changes and Revocation",
+      "description": "Change and revoke user access promptly on role change or termination.",
+      "full_text": "Change and revoke user access promptly on role change or termination.",
+      "domain": "Identity & Access Management",
+      "category": "Identity & Access Management",
+      "section_number": "IAM-07",
+      "parent_section": "IAM",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "User Access Changes and Revocation — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'user access changes and revocation' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "IAM-08",
+      "original_reference": "IAM-08",
+      "title": "User Access Review",
+      "description": "Review user access rights at planned intervals.",
+      "full_text": "Review user access rights at planned intervals.",
+      "domain": "Identity & Access Management",
+      "category": "Identity & Access Management",
+      "section_number": "IAM-08",
+      "parent_section": "IAM",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "User Access Review — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'user access review' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "IAM-09",
+      "original_reference": "IAM-09",
+      "title": "Segregation of Privileged Access Roles",
+      "description": "Segregate privileged access roles to limit concentration of rights.",
+      "full_text": "Segregate privileged access roles to limit concentration of rights.",
+      "domain": "Identity & Access Management",
+      "category": "Identity & Access Management",
+      "section_number": "IAM-09",
+      "parent_section": "IAM",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Segregation of Privileged Access Roles — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'segregation of privileged access roles' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "IAM-10",
+      "original_reference": "IAM-10",
+      "title": "Management of Privileged Access Roles",
+      "description": "Restrict, approve and monitor the use of privileged access.",
+      "full_text": "Restrict, approve and monitor the use of privileged access.",
+      "domain": "Identity & Access Management",
+      "category": "Identity & Access Management",
+      "section_number": "IAM-10",
+      "parent_section": "IAM",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Management of Privileged Access Roles — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'management of privileged access roles' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "IAM-11",
+      "original_reference": "IAM-11",
+      "title": "CSCs Approval for Agreed Privileged Access Roles",
+      "description": "Obtain customer approval for agreed privileged access roles.",
+      "full_text": "Obtain customer approval for agreed privileged access roles.",
+      "domain": "Identity & Access Management",
+      "category": "Identity & Access Management",
+      "section_number": "IAM-11",
+      "parent_section": "IAM",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "CSCs Approval for Agreed Privileged Access Roles — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'cscs approval for agreed privileged access roles' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "IAM-12",
+      "original_reference": "IAM-12",
+      "title": "Safeguard Logs Integrity",
+      "description": "Protect the integrity of access and identity logs.",
+      "full_text": "Protect the integrity of access and identity logs.",
+      "domain": "Identity & Access Management",
+      "category": "Identity & Access Management",
+      "section_number": "IAM-12",
+      "parent_section": "IAM",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Safeguard Logs Integrity — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'safeguard logs integrity' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "IAM-13",
+      "original_reference": "IAM-13",
+      "title": "Uniquely Identifiable Users",
+      "description": "Assign unique identifiers to users before granting access.",
+      "full_text": "Assign unique identifiers to users before granting access.",
+      "domain": "Identity & Access Management",
+      "category": "Identity & Access Management",
+      "section_number": "IAM-13",
+      "parent_section": "IAM",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Uniquely Identifiable Users — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'uniquely identifiable users' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "IAM-14",
+      "original_reference": "IAM-14",
+      "title": "Strong Authentication",
+      "description": "Enforce multi-factor / strong authentication for sensitive access.",
+      "full_text": "Enforce multi-factor / strong authentication for sensitive access.",
+      "domain": "Identity & Access Management",
+      "category": "Identity & Access Management",
+      "section_number": "IAM-14",
+      "parent_section": "IAM",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Strong Authentication — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'strong authentication' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "IAM-15",
+      "original_reference": "IAM-15",
+      "title": "Passwords Management",
+      "description": "Securely manage, store and reset authentication secrets.",
+      "full_text": "Securely manage, store and reset authentication secrets.",
+      "domain": "Identity & Access Management",
+      "category": "Identity & Access Management",
+      "section_number": "IAM-15",
+      "parent_section": "IAM",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Passwords Management — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'passwords management' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "IAM-16",
+      "original_reference": "IAM-16",
+      "title": "Authorization Mechanisms",
+      "description": "Implement authorization mechanisms to enforce access decisions.",
+      "full_text": "Implement authorization mechanisms to enforce access decisions.",
+      "domain": "Identity & Access Management",
+      "category": "Identity & Access Management",
+      "section_number": "IAM-16",
+      "parent_section": "IAM",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Authorization Mechanisms — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'authorization mechanisms' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "IPY-01",
+      "original_reference": "IPY-01",
+      "title": "Interoperability and Portability Policy and Procedures",
+      "description": "Establish policies for interoperability and portability of data and services.",
+      "full_text": "Establish policies for interoperability and portability of data and services.",
+      "domain": "Interoperability & Portability",
+      "category": "Interoperability & Portability",
+      "section_number": "IPY-01",
+      "parent_section": "IPY",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Interoperability and Portability Policy and Procedures — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'interoperability and portability policy and procedures' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "IPY-02",
+      "original_reference": "IPY-02",
+      "title": "Application Interface Availability",
+      "description": "Provide documented, available application interfaces for interoperability.",
+      "full_text": "Provide documented, available application interfaces for interoperability.",
+      "domain": "Interoperability & Portability",
+      "category": "Interoperability & Portability",
+      "section_number": "IPY-02",
+      "parent_section": "IPY",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Application Interface Availability — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'application interface availability' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "IPY-03",
+      "original_reference": "IPY-03",
+      "title": "Secure Interoperability and Portability Management",
+      "description": "Securely manage interoperability and portability of workloads and data.",
+      "full_text": "Securely manage interoperability and portability of workloads and data.",
+      "domain": "Interoperability & Portability",
+      "category": "Interoperability & Portability",
+      "section_number": "IPY-03",
+      "parent_section": "IPY",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Secure Interoperability and Portability Management — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'secure interoperability and portability management' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "IPY-04",
+      "original_reference": "IPY-04",
+      "title": "Data Portability Contractual Obligations",
+      "description": "Define contractual obligations for data portability and exit.",
+      "full_text": "Define contractual obligations for data portability and exit.",
+      "domain": "Interoperability & Portability",
+      "category": "Interoperability & Portability",
+      "section_number": "IPY-04",
+      "parent_section": "IPY",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Data Portability Contractual Obligations — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'data portability contractual obligations' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "IVS-01",
+      "original_reference": "IVS-01",
+      "title": "Infrastructure and Virtualization Security Policy and Procedures",
+      "description": "Establish policies for securing infrastructure and virtualization.",
+      "full_text": "Establish policies for securing infrastructure and virtualization.",
+      "domain": "Infrastructure & Virtualization Security",
+      "category": "Infrastructure & Virtualization Security",
+      "section_number": "IVS-01",
+      "parent_section": "IVS",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Infrastructure and Virtualization Security Policy and Procedures — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'infrastructure and virtualization security policy and procedures' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "IVS-02",
+      "original_reference": "IVS-02",
+      "title": "Capacity and Resource Planning",
+      "description": "Monitor and plan capacity and resources to maintain availability.",
+      "full_text": "Monitor and plan capacity and resources to maintain availability.",
+      "domain": "Infrastructure & Virtualization Security",
+      "category": "Infrastructure & Virtualization Security",
+      "section_number": "IVS-02",
+      "parent_section": "IVS",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Capacity and Resource Planning — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'capacity and resource planning' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "IVS-03",
+      "original_reference": "IVS-03",
+      "title": "Network Security",
+      "description": "Secure networks and network devices against unauthorised access.",
+      "full_text": "Secure networks and network devices against unauthorised access.",
+      "domain": "Infrastructure & Virtualization Security",
+      "category": "Infrastructure & Virtualization Security",
+      "section_number": "IVS-03",
+      "parent_section": "IVS",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Network Security — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'network security' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "IVS-04",
+      "original_reference": "IVS-04",
+      "title": "OS Hardening and Base Controls",
+      "description": "Harden operating systems using secure baseline configurations.",
+      "full_text": "Harden operating systems using secure baseline configurations.",
+      "domain": "Infrastructure & Virtualization Security",
+      "category": "Infrastructure & Virtualization Security",
+      "section_number": "IVS-04",
+      "parent_section": "IVS",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "OS Hardening and Base Controls — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'os hardening and base controls' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "IVS-05",
+      "original_reference": "IVS-05",
+      "title": "Production and Non-Production Environments",
+      "description": "Separate production and non-production environments.",
+      "full_text": "Separate production and non-production environments.",
+      "domain": "Infrastructure & Virtualization Security",
+      "category": "Infrastructure & Virtualization Security",
+      "section_number": "IVS-05",
+      "parent_section": "IVS",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Production and Non-Production Environments — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'production and non-production environments' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "IVS-06",
+      "original_reference": "IVS-06",
+      "title": "Segmentation and Segregation",
+      "description": "Segment and segregate networks and workloads to limit lateral movement.",
+      "full_text": "Segment and segregate networks and workloads to limit lateral movement.",
+      "domain": "Infrastructure & Virtualization Security",
+      "category": "Infrastructure & Virtualization Security",
+      "section_number": "IVS-06",
+      "parent_section": "IVS",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Segmentation and Segregation — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'segmentation and segregation' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "IVS-07",
+      "original_reference": "IVS-07",
+      "title": "Migration to Cloud Environments",
+      "description": "Securely plan and control migration of workloads to the cloud.",
+      "full_text": "Securely plan and control migration of workloads to the cloud.",
+      "domain": "Infrastructure & Virtualization Security",
+      "category": "Infrastructure & Virtualization Security",
+      "section_number": "IVS-07",
+      "parent_section": "IVS",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Migration to Cloud Environments — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'migration to cloud environments' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "IVS-08",
+      "original_reference": "IVS-08",
+      "title": "Network Architecture Documentation",
+      "description": "Document network architecture including zones and trust boundaries.",
+      "full_text": "Document network architecture including zones and trust boundaries.",
+      "domain": "Infrastructure & Virtualization Security",
+      "category": "Infrastructure & Virtualization Security",
+      "section_number": "IVS-08",
+      "parent_section": "IVS",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Network Architecture Documentation — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'network architecture documentation' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "IVS-09",
+      "original_reference": "IVS-09",
+      "title": "Network Defense",
+      "description": "Deploy mechanisms to detect and block malicious network traffic.",
+      "full_text": "Deploy mechanisms to detect and block malicious network traffic.",
+      "domain": "Infrastructure & Virtualization Security",
+      "category": "Infrastructure & Virtualization Security",
+      "section_number": "IVS-09",
+      "parent_section": "IVS",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Network Defense — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'network defense' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "LOG-01",
+      "original_reference": "LOG-01",
+      "title": "Logging and Monitoring Policy and Procedures",
+      "description": "Establish logging and monitoring policies defining what is logged and reviewed.",
+      "full_text": "Establish logging and monitoring policies defining what is logged and reviewed.",
+      "domain": "Logging & Monitoring",
+      "category": "Logging & Monitoring",
+      "section_number": "LOG-01",
+      "parent_section": "LOG",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Logging and Monitoring Policy and Procedures — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'logging and monitoring policy and procedures' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "LOG-02",
+      "original_reference": "LOG-02",
+      "title": "Audit Logs Protection",
+      "description": "Protect audit logs from tampering and unauthorised access.",
+      "full_text": "Protect audit logs from tampering and unauthorised access.",
+      "domain": "Logging & Monitoring",
+      "category": "Logging & Monitoring",
+      "section_number": "LOG-02",
+      "parent_section": "LOG",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Audit Logs Protection — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'audit logs protection' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "LOG-03",
+      "original_reference": "LOG-03",
+      "title": "Security Monitoring and Alerting",
+      "description": "Continuously monitor for security events and generate alerts.",
+      "full_text": "Continuously monitor for security events and generate alerts.",
+      "domain": "Logging & Monitoring",
+      "category": "Logging & Monitoring",
+      "section_number": "LOG-03",
+      "parent_section": "LOG",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Security Monitoring and Alerting — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'security monitoring and alerting' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "LOG-04",
+      "original_reference": "LOG-04",
+      "title": "Audit Logs Access and Accountability",
+      "description": "Restrict and account for access to audit logs.",
+      "full_text": "Restrict and account for access to audit logs.",
+      "domain": "Logging & Monitoring",
+      "category": "Logging & Monitoring",
+      "section_number": "LOG-04",
+      "parent_section": "LOG",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Audit Logs Access and Accountability — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'audit logs access and accountability' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "LOG-05",
+      "original_reference": "LOG-05",
+      "title": "Audit Logs Monitoring and Response",
+      "description": "Review audit logs and respond to detected anomalies.",
+      "full_text": "Review audit logs and respond to detected anomalies.",
+      "domain": "Logging & Monitoring",
+      "category": "Logging & Monitoring",
+      "section_number": "LOG-05",
+      "parent_section": "LOG",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Audit Logs Monitoring and Response — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'audit logs monitoring and response' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "LOG-06",
+      "original_reference": "LOG-06",
+      "title": "Clock Synchronization",
+      "description": "Synchronise system clocks to an authoritative time source.",
+      "full_text": "Synchronise system clocks to an authoritative time source.",
+      "domain": "Logging & Monitoring",
+      "category": "Logging & Monitoring",
+      "section_number": "LOG-06",
+      "parent_section": "LOG",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Clock Synchronization — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'clock synchronization' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "LOG-07",
+      "original_reference": "LOG-07",
+      "title": "Logging Scope",
+      "description": "Define the scope of events and systems to be logged.",
+      "full_text": "Define the scope of events and systems to be logged.",
+      "domain": "Logging & Monitoring",
+      "category": "Logging & Monitoring",
+      "section_number": "LOG-07",
+      "parent_section": "LOG",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Logging Scope — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'logging scope' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "LOG-08",
+      "original_reference": "LOG-08",
+      "title": "Log Records",
+      "description": "Ensure log records capture sufficient detail for investigation.",
+      "full_text": "Ensure log records capture sufficient detail for investigation.",
+      "domain": "Logging & Monitoring",
+      "category": "Logging & Monitoring",
+      "section_number": "LOG-08",
+      "parent_section": "LOG",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Log Records — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'log records' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "LOG-09",
+      "original_reference": "LOG-09",
+      "title": "Log Protection",
+      "description": "Protect the confidentiality and integrity of log data.",
+      "full_text": "Protect the confidentiality and integrity of log data.",
+      "domain": "Logging & Monitoring",
+      "category": "Logging & Monitoring",
+      "section_number": "LOG-09",
+      "parent_section": "LOG",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Log Protection — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'log protection' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "LOG-10",
+      "original_reference": "LOG-10",
+      "title": "Encryption Monitoring and Reporting",
+      "description": "Monitor and report on cryptographic operations and failures.",
+      "full_text": "Monitor and report on cryptographic operations and failures.",
+      "domain": "Logging & Monitoring",
+      "category": "Logging & Monitoring",
+      "section_number": "LOG-10",
+      "parent_section": "LOG",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Encryption Monitoring and Reporting — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'encryption monitoring and reporting' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "LOG-11",
+      "original_reference": "LOG-11",
+      "title": "Transaction/Activity Logging",
+      "description": "Log transactions and user activity for accountability.",
+      "full_text": "Log transactions and user activity for accountability.",
+      "domain": "Logging & Monitoring",
+      "category": "Logging & Monitoring",
+      "section_number": "LOG-11",
+      "parent_section": "LOG",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Transaction/Activity Logging — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'transaction/activity logging' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "LOG-12",
+      "original_reference": "LOG-12",
+      "title": "Access Control Logs",
+      "description": "Log access control decisions and authentication events.",
+      "full_text": "Log access control decisions and authentication events.",
+      "domain": "Logging & Monitoring",
+      "category": "Logging & Monitoring",
+      "section_number": "LOG-12",
+      "parent_section": "LOG",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Access Control Logs — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'access control logs' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "LOG-13",
+      "original_reference": "LOG-13",
+      "title": "Failures and Anomalies Reporting",
+      "description": "Detect and report failures and anomalies in a timely manner.",
+      "full_text": "Detect and report failures and anomalies in a timely manner.",
+      "domain": "Logging & Monitoring",
+      "category": "Logging & Monitoring",
+      "section_number": "LOG-13",
+      "parent_section": "LOG",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Failures and Anomalies Reporting — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'failures and anomalies reporting' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "SEF-01",
+      "original_reference": "SEF-01",
+      "title": "Security Incident Management Policy and Procedures",
+      "description": "Establish security incident management policies and procedures.",
+      "full_text": "Establish security incident management policies and procedures.",
+      "domain": "Security Incident Management, E-Discovery & Cloud Forensics",
+      "category": "Security Incident Management, E-Discovery & Cloud Forensics",
+      "section_number": "SEF-01",
+      "parent_section": "SEF",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Security Incident Management Policy and Procedures — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'security incident management policy and procedures' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "SEF-02",
+      "original_reference": "SEF-02",
+      "title": "Service Management Policy and Procedures",
+      "description": "Establish service management policies supporting incident handling.",
+      "full_text": "Establish service management policies supporting incident handling.",
+      "domain": "Security Incident Management, E-Discovery & Cloud Forensics",
+      "category": "Security Incident Management, E-Discovery & Cloud Forensics",
+      "section_number": "SEF-02",
+      "parent_section": "SEF",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Service Management Policy and Procedures — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'service management policy and procedures' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "SEF-03",
+      "original_reference": "SEF-03",
+      "title": "Incident Response Plans",
+      "description": "Develop incident response plans with roles, procedures and communication.",
+      "full_text": "Develop incident response plans with roles, procedures and communication.",
+      "domain": "Security Incident Management, E-Discovery & Cloud Forensics",
+      "category": "Security Incident Management, E-Discovery & Cloud Forensics",
+      "section_number": "SEF-03",
+      "parent_section": "SEF",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Incident Response Plans — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'incident response plans' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "SEF-04",
+      "original_reference": "SEF-04",
+      "title": "Incident Response Testing",
+      "description": "Test incident response plans at planned intervals.",
+      "full_text": "Test incident response plans at planned intervals.",
+      "domain": "Security Incident Management, E-Discovery & Cloud Forensics",
+      "category": "Security Incident Management, E-Discovery & Cloud Forensics",
+      "section_number": "SEF-04",
+      "parent_section": "SEF",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Incident Response Testing — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'incident response testing' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "SEF-05",
+      "original_reference": "SEF-05",
+      "title": "Incident Response Metrics",
+      "description": "Define and track incident response metrics.",
+      "full_text": "Define and track incident response metrics.",
+      "domain": "Security Incident Management, E-Discovery & Cloud Forensics",
+      "category": "Security Incident Management, E-Discovery & Cloud Forensics",
+      "section_number": "SEF-05",
+      "parent_section": "SEF",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Incident Response Metrics — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'incident response metrics' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "SEF-06",
+      "original_reference": "SEF-06",
+      "title": "Event Triage Processes",
+      "description": "Triage and prioritise security events for response.",
+      "full_text": "Triage and prioritise security events for response.",
+      "domain": "Security Incident Management, E-Discovery & Cloud Forensics",
+      "category": "Security Incident Management, E-Discovery & Cloud Forensics",
+      "section_number": "SEF-06",
+      "parent_section": "SEF",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Event Triage Processes — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'event triage processes' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "SEF-07",
+      "original_reference": "SEF-07",
+      "title": "Security Breach Notification",
+      "description": "Notify affected parties and authorities of security breaches as required.",
+      "full_text": "Notify affected parties and authorities of security breaches as required.",
+      "domain": "Security Incident Management, E-Discovery & Cloud Forensics",
+      "category": "Security Incident Management, E-Discovery & Cloud Forensics",
+      "section_number": "SEF-07",
+      "parent_section": "SEF",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Security Breach Notification — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'security breach notification' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "SEF-08",
+      "original_reference": "SEF-08",
+      "title": "Points of Contact Maintenance",
+      "description": "Maintain points of contact for incident coordination and forensics.",
+      "full_text": "Maintain points of contact for incident coordination and forensics.",
+      "domain": "Security Incident Management, E-Discovery & Cloud Forensics",
+      "category": "Security Incident Management, E-Discovery & Cloud Forensics",
+      "section_number": "SEF-08",
+      "parent_section": "SEF",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Points of Contact Maintenance — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'points of contact maintenance' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "STA-01",
+      "original_reference": "STA-01",
+      "title": "SSRM Policy and Procedures",
+      "description": "Establish shared security responsibility model (SSRM) policies and procedures.",
+      "full_text": "Establish shared security responsibility model (SSRM) policies and procedures.",
+      "domain": "Supply Chain Management, Transparency & Accountability",
+      "category": "Supply Chain Management, Transparency & Accountability",
+      "section_number": "STA-01",
+      "parent_section": "STA",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "SSRM Policy and Procedures — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'ssrm policy and procedures' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "STA-02",
+      "original_reference": "STA-02",
+      "title": "SSRM Supply Chain",
+      "description": "Apply the SSRM across the cloud supply chain.",
+      "full_text": "Apply the SSRM across the cloud supply chain.",
+      "domain": "Supply Chain Management, Transparency & Accountability",
+      "category": "Supply Chain Management, Transparency & Accountability",
+      "section_number": "STA-02",
+      "parent_section": "STA",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "SSRM Supply Chain — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'ssrm supply chain' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "STA-03",
+      "original_reference": "STA-03",
+      "title": "SSRM Guidance",
+      "description": "Provide guidance on shared responsibilities to customers and suppliers.",
+      "full_text": "Provide guidance on shared responsibilities to customers and suppliers.",
+      "domain": "Supply Chain Management, Transparency & Accountability",
+      "category": "Supply Chain Management, Transparency & Accountability",
+      "section_number": "STA-03",
+      "parent_section": "STA",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "SSRM Guidance — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'ssrm guidance' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "STA-04",
+      "original_reference": "STA-04",
+      "title": "SSRM Control Ownership",
+      "description": "Document ownership of controls across CSP and customer.",
+      "full_text": "Document ownership of controls across CSP and customer.",
+      "domain": "Supply Chain Management, Transparency & Accountability",
+      "category": "Supply Chain Management, Transparency & Accountability",
+      "section_number": "STA-04",
+      "parent_section": "STA",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "SSRM Control Ownership — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'ssrm control ownership' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "STA-05",
+      "original_reference": "STA-05",
+      "title": "SSRM Documentation Review",
+      "description": "Review shared responsibility documentation periodically.",
+      "full_text": "Review shared responsibility documentation periodically.",
+      "domain": "Supply Chain Management, Transparency & Accountability",
+      "category": "Supply Chain Management, Transparency & Accountability",
+      "section_number": "STA-05",
+      "parent_section": "STA",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "SSRM Documentation Review — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'ssrm documentation review' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "STA-06",
+      "original_reference": "STA-06",
+      "title": "SSRM Control Implementation",
+      "description": "Implement controls per the shared responsibility model.",
+      "full_text": "Implement controls per the shared responsibility model.",
+      "domain": "Supply Chain Management, Transparency & Accountability",
+      "category": "Supply Chain Management, Transparency & Accountability",
+      "section_number": "STA-06",
+      "parent_section": "STA",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "SSRM Control Implementation — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'ssrm control implementation' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "STA-07",
+      "original_reference": "STA-07",
+      "title": "Supply Chain Inventory",
+      "description": "Maintain an inventory of supply chain relationships and dependencies.",
+      "full_text": "Maintain an inventory of supply chain relationships and dependencies.",
+      "domain": "Supply Chain Management, Transparency & Accountability",
+      "category": "Supply Chain Management, Transparency & Accountability",
+      "section_number": "STA-07",
+      "parent_section": "STA",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Supply Chain Inventory — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'supply chain inventory' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "STA-08",
+      "original_reference": "STA-08",
+      "title": "Supply Chain Risk Management",
+      "description": "Assess and manage security risks across the supply chain.",
+      "full_text": "Assess and manage security risks across the supply chain.",
+      "domain": "Supply Chain Management, Transparency & Accountability",
+      "category": "Supply Chain Management, Transparency & Accountability",
+      "section_number": "STA-08",
+      "parent_section": "STA",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Supply Chain Risk Management — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'supply chain risk management' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "STA-09",
+      "original_reference": "STA-09",
+      "title": "Primary Service and Contractual Agreement",
+      "description": "Define security requirements in primary service and contractual agreements.",
+      "full_text": "Define security requirements in primary service and contractual agreements.",
+      "domain": "Supply Chain Management, Transparency & Accountability",
+      "category": "Supply Chain Management, Transparency & Accountability",
+      "section_number": "STA-09",
+      "parent_section": "STA",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Primary Service and Contractual Agreement — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'primary service and contractual agreement' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "STA-10",
+      "original_reference": "STA-10",
+      "title": "Supply Chain Agreement Review",
+      "description": "Review supply chain agreements for security and compliance.",
+      "full_text": "Review supply chain agreements for security and compliance.",
+      "domain": "Supply Chain Management, Transparency & Accountability",
+      "category": "Supply Chain Management, Transparency & Accountability",
+      "section_number": "STA-10",
+      "parent_section": "STA",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Supply Chain Agreement Review — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'supply chain agreement review' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "STA-11",
+      "original_reference": "STA-11",
+      "title": "Internal Compliance Testing",
+      "description": "Test internal compliance with supply chain security requirements.",
+      "full_text": "Test internal compliance with supply chain security requirements.",
+      "domain": "Supply Chain Management, Transparency & Accountability",
+      "category": "Supply Chain Management, Transparency & Accountability",
+      "section_number": "STA-11",
+      "parent_section": "STA",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Internal Compliance Testing — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'internal compliance testing' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "STA-12",
+      "original_reference": "STA-12",
+      "title": "Supply Chain Service Agreement Compliance",
+      "description": "Monitor supplier compliance with service agreements.",
+      "full_text": "Monitor supplier compliance with service agreements.",
+      "domain": "Supply Chain Management, Transparency & Accountability",
+      "category": "Supply Chain Management, Transparency & Accountability",
+      "section_number": "STA-12",
+      "parent_section": "STA",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Supply Chain Service Agreement Compliance — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'supply chain service agreement compliance' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "STA-13",
+      "original_reference": "STA-13",
+      "title": "Supply Chain Governance Review",
+      "description": "Review supply chain governance at planned intervals.",
+      "full_text": "Review supply chain governance at planned intervals.",
+      "domain": "Supply Chain Management, Transparency & Accountability",
+      "category": "Supply Chain Management, Transparency & Accountability",
+      "section_number": "STA-13",
+      "parent_section": "STA",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Supply Chain Governance Review — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'supply chain governance review' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "STA-14",
+      "original_reference": "STA-14",
+      "title": "Supply Chain Data Security Assessment",
+      "description": "Assess data security practices of supply chain partners.",
+      "full_text": "Assess data security practices of supply chain partners.",
+      "domain": "Supply Chain Management, Transparency & Accountability",
+      "category": "Supply Chain Management, Transparency & Accountability",
+      "section_number": "STA-14",
+      "parent_section": "STA",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Supply Chain Data Security Assessment — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'supply chain data security assessment' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "TVM-01",
+      "original_reference": "TVM-01",
+      "title": "Threat and Vulnerability Management Policy and Procedures",
+      "description": "Establish threat and vulnerability management policies and procedures.",
+      "full_text": "Establish threat and vulnerability management policies and procedures.",
+      "domain": "Threat & Vulnerability Management",
+      "category": "Threat & Vulnerability Management",
+      "section_number": "TVM-01",
+      "parent_section": "TVM",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Threat and Vulnerability Management Policy and Procedures — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'threat and vulnerability management policy and procedures' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "TVM-02",
+      "original_reference": "TVM-02",
+      "title": "Malware Protection Policy and Procedures",
+      "description": "Deploy and maintain anti-malware protection across endpoints and servers.",
+      "full_text": "Deploy and maintain anti-malware protection across endpoints and servers.",
+      "domain": "Threat & Vulnerability Management",
+      "category": "Threat & Vulnerability Management",
+      "section_number": "TVM-02",
+      "parent_section": "TVM",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Malware Protection Policy and Procedures — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'malware protection policy and procedures' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "TVM-03",
+      "original_reference": "TVM-03",
+      "title": "Vulnerability Remediation Schedule",
+      "description": "Remediate vulnerabilities within defined, risk-based timeframes.",
+      "full_text": "Remediate vulnerabilities within defined, risk-based timeframes.",
+      "domain": "Threat & Vulnerability Management",
+      "category": "Threat & Vulnerability Management",
+      "section_number": "TVM-03",
+      "parent_section": "TVM",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Vulnerability Remediation Schedule — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'vulnerability remediation schedule' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "TVM-04",
+      "original_reference": "TVM-04",
+      "title": "Detection Updates",
+      "description": "Keep threat and vulnerability detection signatures current.",
+      "full_text": "Keep threat and vulnerability detection signatures current.",
+      "domain": "Threat & Vulnerability Management",
+      "category": "Threat & Vulnerability Management",
+      "section_number": "TVM-04",
+      "parent_section": "TVM",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Detection Updates — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'detection updates' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "TVM-05",
+      "original_reference": "TVM-05",
+      "title": "External Library Vulnerabilities",
+      "description": "Identify and remediate vulnerabilities in third-party and open-source libraries.",
+      "full_text": "Identify and remediate vulnerabilities in third-party and open-source libraries.",
+      "domain": "Threat & Vulnerability Management",
+      "category": "Threat & Vulnerability Management",
+      "section_number": "TVM-05",
+      "parent_section": "TVM",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "External Library Vulnerabilities — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'external library vulnerabilities' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "TVM-06",
+      "original_reference": "TVM-06",
+      "title": "Penetration Testing",
+      "description": "Conduct penetration testing of cloud services periodically.",
+      "full_text": "Conduct penetration testing of cloud services periodically.",
+      "domain": "Threat & Vulnerability Management",
+      "category": "Threat & Vulnerability Management",
+      "section_number": "TVM-06",
+      "parent_section": "TVM",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Penetration Testing — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'penetration testing' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "TVM-07",
+      "original_reference": "TVM-07",
+      "title": "Vulnerability Identification",
+      "description": "Identify vulnerabilities through regular scanning and assessment.",
+      "full_text": "Identify vulnerabilities through regular scanning and assessment.",
+      "domain": "Threat & Vulnerability Management",
+      "category": "Threat & Vulnerability Management",
+      "section_number": "TVM-07",
+      "parent_section": "TVM",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Vulnerability Identification — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'vulnerability identification' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "TVM-08",
+      "original_reference": "TVM-08",
+      "title": "Vulnerability Prioritization",
+      "description": "Prioritise vulnerabilities by risk for remediation.",
+      "full_text": "Prioritise vulnerabilities by risk for remediation.",
+      "domain": "Threat & Vulnerability Management",
+      "category": "Threat & Vulnerability Management",
+      "section_number": "TVM-08",
+      "parent_section": "TVM",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Vulnerability Prioritization — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'vulnerability prioritization' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "TVM-09",
+      "original_reference": "TVM-09",
+      "title": "Vulnerability Management Reporting",
+      "description": "Report on vulnerability status and remediation progress.",
+      "full_text": "Report on vulnerability status and remediation progress.",
+      "domain": "Threat & Vulnerability Management",
+      "category": "Threat & Vulnerability Management",
+      "section_number": "TVM-09",
+      "parent_section": "TVM",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Vulnerability Management Reporting — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'vulnerability management reporting' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "TVM-10",
+      "original_reference": "TVM-10",
+      "title": "Vulnerability Management Metrics",
+      "description": "Track metrics measuring vulnerability management effectiveness.",
+      "full_text": "Track metrics measuring vulnerability management effectiveness.",
+      "domain": "Threat & Vulnerability Management",
+      "category": "Threat & Vulnerability Management",
+      "section_number": "TVM-10",
+      "parent_section": "TVM",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Vulnerability Management Metrics — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'vulnerability management metrics' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "UEM-01",
+      "original_reference": "UEM-01",
+      "title": "Endpoint Devices Policy and Procedures",
+      "description": "Establish policies for managing and securing endpoint devices.",
+      "full_text": "Establish policies for managing and securing endpoint devices.",
+      "domain": "Universal Endpoint Management",
+      "category": "Universal Endpoint Management",
+      "section_number": "UEM-01",
+      "parent_section": "UEM",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Endpoint Devices Policy and Procedures — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'endpoint devices policy and procedures' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "UEM-02",
+      "original_reference": "UEM-02",
+      "title": "Application and Service Approval",
+      "description": "Approve applications and services allowed on endpoints.",
+      "full_text": "Approve applications and services allowed on endpoints.",
+      "domain": "Universal Endpoint Management",
+      "category": "Universal Endpoint Management",
+      "section_number": "UEM-02",
+      "parent_section": "UEM",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Application and Service Approval — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'application and service approval' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "UEM-03",
+      "original_reference": "UEM-03",
+      "title": "Compatibility",
+      "description": "Ensure endpoint configurations are compatible with security requirements.",
+      "full_text": "Ensure endpoint configurations are compatible with security requirements.",
+      "domain": "Universal Endpoint Management",
+      "category": "Universal Endpoint Management",
+      "section_number": "UEM-03",
+      "parent_section": "UEM",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Compatibility — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'compatibility' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "UEM-04",
+      "original_reference": "UEM-04",
+      "title": "Endpoint Inventory",
+      "description": "Maintain an inventory of managed endpoint devices.",
+      "full_text": "Maintain an inventory of managed endpoint devices.",
+      "domain": "Universal Endpoint Management",
+      "category": "Universal Endpoint Management",
+      "section_number": "UEM-04",
+      "parent_section": "UEM",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Endpoint Inventory — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'endpoint inventory' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "UEM-05",
+      "original_reference": "UEM-05",
+      "title": "Endpoint Management",
+      "description": "Centrally manage endpoint configuration and security posture.",
+      "full_text": "Centrally manage endpoint configuration and security posture.",
+      "domain": "Universal Endpoint Management",
+      "category": "Universal Endpoint Management",
+      "section_number": "UEM-05",
+      "parent_section": "UEM",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Endpoint Management — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'endpoint management' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "UEM-06",
+      "original_reference": "UEM-06",
+      "title": "Automatic Lock Screen",
+      "description": "Enforce automatic screen lock on endpoints.",
+      "full_text": "Enforce automatic screen lock on endpoints.",
+      "domain": "Universal Endpoint Management",
+      "category": "Universal Endpoint Management",
+      "section_number": "UEM-06",
+      "parent_section": "UEM",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Automatic Lock Screen — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'automatic lock screen' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "UEM-07",
+      "original_reference": "UEM-07",
+      "title": "Operating Systems",
+      "description": "Manage and patch endpoint operating systems.",
+      "full_text": "Manage and patch endpoint operating systems.",
+      "domain": "Universal Endpoint Management",
+      "category": "Universal Endpoint Management",
+      "section_number": "UEM-07",
+      "parent_section": "UEM",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Operating Systems — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'operating systems' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "UEM-08",
+      "original_reference": "UEM-08",
+      "title": "Storage Encryption",
+      "description": "Encrypt storage on endpoint devices.",
+      "full_text": "Encrypt storage on endpoint devices.",
+      "domain": "Universal Endpoint Management",
+      "category": "Universal Endpoint Management",
+      "section_number": "UEM-08",
+      "parent_section": "UEM",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Storage Encryption — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'storage encryption' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "UEM-09",
+      "original_reference": "UEM-09",
+      "title": "Anti-Malware Detection and Prevention",
+      "description": "Deploy anti-malware detection and prevention on endpoints.",
+      "full_text": "Deploy anti-malware detection and prevention on endpoints.",
+      "domain": "Universal Endpoint Management",
+      "category": "Universal Endpoint Management",
+      "section_number": "UEM-09",
+      "parent_section": "UEM",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Anti-Malware Detection and Prevention — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'anti-malware detection and prevention' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "UEM-10",
+      "original_reference": "UEM-10",
+      "title": "Software Firewall",
+      "description": "Enable host-based software firewalls on endpoints.",
+      "full_text": "Enable host-based software firewalls on endpoints.",
+      "domain": "Universal Endpoint Management",
+      "category": "Universal Endpoint Management",
+      "section_number": "UEM-10",
+      "parent_section": "UEM",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Software Firewall — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'software firewall' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "UEM-11",
+      "original_reference": "UEM-11",
+      "title": "Data Loss Prevention",
+      "description": "Apply data loss prevention controls on endpoints.",
+      "full_text": "Apply data loss prevention controls on endpoints.",
+      "domain": "Universal Endpoint Management",
+      "category": "Universal Endpoint Management",
+      "section_number": "UEM-11",
+      "parent_section": "UEM",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Data Loss Prevention — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'data loss prevention' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "UEM-12",
+      "original_reference": "UEM-12",
+      "title": "Remote Locate",
+      "description": "Enable remote location of lost or stolen endpoints.",
+      "full_text": "Enable remote location of lost or stolen endpoints.",
+      "domain": "Universal Endpoint Management",
+      "category": "Universal Endpoint Management",
+      "section_number": "UEM-12",
+      "parent_section": "UEM",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Remote Locate — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'remote locate' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "UEM-13",
+      "original_reference": "UEM-13",
+      "title": "Remote Wipe",
+      "description": "Enable remote wipe of lost, stolen or decommissioned endpoints.",
+      "full_text": "Enable remote wipe of lost, stolen or decommissioned endpoints.",
+      "domain": "Universal Endpoint Management",
+      "category": "Universal Endpoint Management",
+      "section_number": "UEM-13",
+      "parent_section": "UEM",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Remote Wipe — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'remote wipe' is implemented in the cloud environment"
+      ]
+    },
+    {
+      "control_id": "UEM-14",
+      "original_reference": "UEM-14",
+      "title": "Third-Party Endpoint Security Posture",
+      "description": "Assess the security posture of third-party endpoints.",
+      "full_text": "Assess the security posture of third-party endpoints.",
+      "domain": "Universal Endpoint Management",
+      "category": "Universal Endpoint Management",
+      "section_number": "UEM-14",
+      "parent_section": "UEM",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Third-Party Endpoint Security Posture — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'third-party endpoint security posture' is implemented in the cloud environment"
+      ]
+    }
+  ],
+  "artifacts": [
+    {
+      "artifact_id": "CCM-001",
+      "stage": "Stage 1: Governance",
+      "name": "Cloud Security Governance Charter",
+      "type": "Policy",
+      "control_ref": "GRC-01",
+      "mandatory": true,
+      "description": "Cloud security program governance, roles and oversight.",
+      "format": "DOCX",
+      "owner": "CISO"
+    },
+    {
+      "artifact_id": "CCM-002",
+      "stage": "Stage 1: Governance",
+      "name": "Cloud Risk Management Program",
+      "type": "Plan",
+      "control_ref": "GRC-02",
+      "mandatory": true,
+      "description": "Risk methodology, register and treatment for cloud services.",
+      "format": "DOCX",
+      "owner": "Risk Manager"
+    },
+    {
+      "artifact_id": "CCM-003",
+      "stage": "Stage 1: Governance",
+      "name": "Shared Responsibility Matrix (SSRM)",
+      "type": "Matrix",
+      "control_ref": "STA-04",
+      "mandatory": true,
+      "description": "CSP vs CSC control ownership across the stack.",
+      "format": "XLSX",
+      "owner": "Cloud Architect"
+    },
+    {
+      "artifact_id": "CCM-004",
+      "stage": "Stage 2: Identity",
+      "name": "Identity & Access Management Policy",
+      "type": "Policy",
+      "control_ref": "IAM-01",
+      "mandatory": true,
+      "description": "IAM policy incl. least privilege and SoD.",
+      "format": "DOCX",
+      "owner": "IAM Lead"
+    },
+    {
+      "artifact_id": "CCM-005",
+      "stage": "Stage 2: Identity",
+      "name": "Privileged Access Register",
+      "type": "Register",
+      "control_ref": "IAM-10",
+      "mandatory": true,
+      "description": "Inventory and approvals of privileged roles.",
+      "format": "XLSX",
+      "owner": "IAM Lead"
+    },
+    {
+      "artifact_id": "CCM-006",
+      "stage": "Stage 2: Identity",
+      "name": "MFA / Strong Authentication Configuration",
+      "type": "Configuration",
+      "control_ref": "IAM-14",
+      "mandatory": true,
+      "description": "Evidence of enforced strong authentication.",
+      "format": "PDF",
+      "owner": "IAM Lead"
+    },
+    {
+      "artifact_id": "CCM-007",
+      "stage": "Stage 3: Data",
+      "name": "Data Classification & Inventory",
+      "type": "Register",
+      "control_ref": "DSP-03",
+      "mandatory": true,
+      "description": "Data inventory with classification and ownership.",
+      "format": "XLSX",
+      "owner": "Data Owner"
+    },
+    {
+      "artifact_id": "CCM-008",
+      "stage": "Stage 3: Data",
+      "name": "Encryption & Key Management Standard",
+      "type": "Policy",
+      "control_ref": "CEK-01",
+      "mandatory": true,
+      "description": "Approved algorithms and key lifecycle.",
+      "format": "DOCX",
+      "owner": "Security Eng"
+    },
+    {
+      "artifact_id": "CCM-009",
+      "stage": "Stage 3: Data",
+      "name": "Key Inventory & Rotation Records",
+      "type": "Register",
+      "control_ref": "CEK-21",
+      "mandatory": true,
+      "description": "Key inventory with rotation/revocation evidence.",
+      "format": "XLSX",
+      "owner": "Security Eng"
+    },
+    {
+      "artifact_id": "CCM-010",
+      "stage": "Stage 3: Data",
+      "name": "Data Protection Impact Assessment",
+      "type": "Report",
+      "control_ref": "DSP-09",
+      "mandatory": false,
+      "description": "DPIA for high-risk processing.",
+      "format": "DOCX",
+      "owner": "Privacy Officer"
+    },
+    {
+      "artifact_id": "CCM-011",
+      "stage": "Stage 4: Infrastructure",
+      "name": "Network Architecture & Segmentation Diagram",
+      "type": "Diagram",
+      "control_ref": "IVS-08",
+      "mandatory": true,
+      "description": "Documented network zones and segmentation.",
+      "format": "PDF",
+      "owner": "Cloud Architect"
+    },
+    {
+      "artifact_id": "CCM-012",
+      "stage": "Stage 4: Infrastructure",
+      "name": "Secure Baseline / Hardening Standards",
+      "type": "Policy",
+      "control_ref": "IVS-04",
+      "mandatory": true,
+      "description": "OS and service hardening baselines.",
+      "format": "DOCX",
+      "owner": "Platform Eng"
+    },
+    {
+      "artifact_id": "CCM-013",
+      "stage": "Stage 4: Infrastructure",
+      "name": "Change Management Records",
+      "type": "Record",
+      "control_ref": "CCC-01",
+      "mandatory": true,
+      "description": "Approved, tested and logged changes.",
+      "format": "XLSX",
+      "owner": "Change Manager"
+    },
+    {
+      "artifact_id": "CCM-014",
+      "stage": "Stage 5: Detect",
+      "name": "Logging & Monitoring Standard",
+      "type": "Policy",
+      "control_ref": "LOG-01",
+      "mandatory": true,
+      "description": "What is logged, retained and reviewed.",
+      "format": "DOCX",
+      "owner": "SecOps"
+    },
+    {
+      "artifact_id": "CCM-015",
+      "stage": "Stage 5: Detect",
+      "name": "Vulnerability Scan & Remediation Reports",
+      "type": "Report",
+      "control_ref": "TVM-07",
+      "mandatory": true,
+      "description": "Scan results with remediation SLAs.",
+      "format": "XLSX",
+      "owner": "SecOps"
+    },
+    {
+      "artifact_id": "CCM-016",
+      "stage": "Stage 5: Detect",
+      "name": "Penetration Test Report",
+      "type": "Report",
+      "control_ref": "TVM-06",
+      "mandatory": false,
+      "description": "Periodic penetration testing of cloud services.",
+      "format": "PDF",
+      "owner": "SecOps"
+    },
+    {
+      "artifact_id": "CCM-017",
+      "stage": "Stage 6: Respond",
+      "name": "Cloud Incident Response Plan",
+      "type": "Plan",
+      "control_ref": "SEF-03",
+      "mandatory": true,
+      "description": "Roles, playbooks and forensics for cloud incidents.",
+      "format": "DOCX",
+      "owner": "IR Lead"
+    },
+    {
+      "artifact_id": "CCM-018",
+      "stage": "Stage 6: Respond",
+      "name": "Business Continuity & DR Plan",
+      "type": "Plan",
+      "control_ref": "BCR-04",
+      "mandatory": true,
+      "description": "Continuity and disaster recovery for cloud services.",
+      "format": "DOCX",
+      "owner": "BC Manager"
+    },
+    {
+      "artifact_id": "CCM-019",
+      "stage": "Stage 6: Respond",
+      "name": "Backup & Restore Test Records",
+      "type": "Record",
+      "control_ref": "BCR-08",
+      "mandatory": true,
+      "description": "Backup schedule and restore test evidence.",
+      "format": "XLSX",
+      "owner": "IT Ops"
+    },
+    {
+      "artifact_id": "CCM-020",
+      "stage": "Stage 7: Supply Chain",
+      "name": "Third-Party / CSP Assessment Records",
+      "type": "Report",
+      "control_ref": "STA-08",
+      "mandatory": true,
+      "description": "Supplier and sub-processor risk assessments.",
+      "format": "XLSX",
+      "owner": "Vendor Manager"
+    }
+  ]
+}

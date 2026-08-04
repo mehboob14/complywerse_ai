@@ -1,0 +1,1069 @@
+{
+  "benchmark": "CIS_PostgreSQL_15_Benchmark_v1.2.0",
+  "authored_tag": "cis-pg15",
+  "verification": "shape-verified",
+  "deltas": [
+    "1.3 service unit -> postgresql-15.service",
+    "6.9 TLSv1.2+ floor (CIS: disable 1.0/1.1)",
+    "6.11 manual (CIS marks Manual)",
+    "4.10 absent from this CIS version"
+  ],
+  "note": "shape-verified against platform PostgreSQL 18 via grc_app \u2014 not a native PG15 instance",
+  "rules": {
+    "1.1": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "Confirm PostgreSQL packages were installed only from organization-approved repositories (dnf/apt repo list + package From-repo). Record evidence.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-pg15",
+        "_verification": "shape-verified"
+      }
+    },
+    "1.2": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "Confirm only required PostgreSQL packages are installed (no unused admin UIs / docs packages beyond policy). Record package inventory.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-pg15",
+        "_verification": "shape-verified"
+      }
+    },
+    "1.3": {
+      "runner_type": "linux_ssh",
+      "check_definition": {
+        "command": "systemctl is-enabled postgresql-15.service 2>/dev/null || systemctl is-enabled postgresql.service 2>/dev/null || systemctl is-enabled postgresql@15-main.service 2>/dev/null",
+        "expect": {
+          "kind": "stdout_contains",
+          "value": "enabled"
+        },
+        "pass_message": "PostgreSQL 15 systemd unit is enabled.",
+        "fail_message": "PostgreSQL 15 systemd unit is not enabled.",
+        "applicable_host_families": [
+          "linux",
+          "windows"
+        ],
+        "timeout_seconds": 20,
+        "_authored": "cis-pg15",
+        "_verification": "shape-verified",
+        "windows_winrm": {
+          "command": "$s = Get-Service -Name 'postgresql*' -ErrorAction SilentlyContinue | Select-Object -First 1; if (-not $s) { 'missing' } elseif ($s.StartType -eq 'Automatic') { 'enabled' } else { $s.StartType }",
+          "shell": "powershell",
+          "expect": {
+            "kind": "stdout_contains",
+            "value": "enabled"
+          },
+          "pass_message": "PostgreSQL Windows service StartType is Automatic.",
+          "fail_message": "PostgreSQL Windows service is missing or not Automatic.",
+          "applicable_host_families": [
+            "windows"
+          ],
+          "_authored": "cis-pg15",
+          "_verification": "shape-verified"
+        }
+      }
+    },
+    "1.4": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "Confirm the data cluster was initialized successfully (PGDATA exists, permissions private to the service account, initdb checksumming per policy).",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-pg15",
+        "_verification": "shape-verified"
+      }
+    },
+    "1.5": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "Compare SHOW server_version against current PostgreSQL security releases and confirm the instance is on a supported, patched minor release.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-pg15",
+        "_verification": "shape-verified"
+      }
+    },
+    "1.6": {
+      "runner_type": "linux_ssh",
+      "check_definition": {
+        "command": "sh -c 'grep -R \"PGPASSWORD\" /home/*/.bashrc /home/*/.profile /home/*/.bash_profile /root/.bashrc /root/.profile /root/.bash_profile /etc/environment 2>/dev/null | head -n 20; test $? -eq 1 -o $? -eq 0'",
+        "expect": {
+          "kind": "stdout_not_contains",
+          "value": "PGPASSWORD"
+        },
+        "pass_message": "PGPASSWORD is not set in user profiles.",
+        "fail_message": "PGPASSWORD appears in a user profile or /etc/environment.",
+        "applicable_host_families": [
+          "linux"
+        ],
+        "_authored": "cis-pg15",
+        "timeout_seconds": 20,
+        "_verification": "shape-verified"
+      }
+    },
+    "1.7": {
+      "runner_type": "linux_ssh",
+      "check_definition": {
+        "command": "sh -c 'grep -l PGPASSWORD /proc/*/environ 2>/dev/null | head -n 5 || true'",
+        "expect": {
+          "kind": "stdout_not_contains",
+          "value": "/proc/"
+        },
+        "pass_message": "No process environ currently exposes PGPASSWORD (readable /proc).",
+        "fail_message": "At least one process environ contains PGPASSWORD.",
+        "applicable_host_families": [
+          "linux"
+        ],
+        "_authored": "cis-pg15",
+        "timeout_seconds": 20,
+        "_verification": "shape-verified"
+      }
+    },
+    "2.1": {
+      "runner_type": "linux_ssh",
+      "check_definition": {
+        "command": "sh -c 'umask'",
+        "expect": {
+          "kind": "stdout_regex",
+          "value": "^0*0[0-7]7\\s*$"
+        },
+        "pass_message": "Current shell umask is 0077 or more restrictive.",
+        "fail_message": "Current shell umask is weaker than 0077.",
+        "applicable_host_families": [
+          "linux"
+        ],
+        "_authored": "cis-pg15",
+        "timeout_seconds": 20,
+        "_verification": "shape-verified"
+      }
+    },
+    "2.2": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "Confirm the PostgreSQL extension directory ownership/permissions match policy (typically root:root, mode 755). Use pg_config --sharedir/extension.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-pg15",
+        "_verification": "shape-verified",
+        "windows_winrm": {
+          "command": "$p = Get-ChildItem 'C:\\Program Files\\PostgreSQL' -ErrorAction SilentlyContinue | Sort-Object Name -Descending | Select-Object -First 1; if (-not $p) { 'no-install' } else { $ext = Join-Path $p.FullName 'share\\extension'; if (-not (Test-Path $ext)) { 'missing-ext' } else { (Get-Acl $ext).Access | Out-String } }",
+          "shell": "powershell",
+          "expect": {
+            "kind": "stdout_not_contains",
+            "value": "no-install"
+          },
+          "pass_message": "PostgreSQL extension directory is present (review ACL in evidence).",
+          "fail_message": "PostgreSQL install/extension directory not found for ACL review.",
+          "applicable_host_families": [
+            "windows"
+          ],
+          "_authored": "cis-pg15",
+          "_note": "ACL detail is in raw output for operator review; tighten expect once policy is fixed.",
+          "_verification": "shape-verified"
+        },
+        "applicable_host_families": [
+          "windows"
+        ]
+      }
+    },
+    "2.3": {
+      "runner_type": "linux_ssh",
+      "check_definition": {
+        "command": "sh -c 'find /home /root -name .psql_history 2>/dev/null | while read f; do ls -la \"$f\"; done'",
+        "expect": {
+          "kind": "stdout_not_regex",
+          "value": "(^|[\\n])-.*\\.psql_history"
+        },
+        "pass_message": "No regular .psql_history files found (only absences or /dev/null links).",
+        "fail_message": "A regular .psql_history file exists (should be absent or linked to /dev/null).",
+        "applicable_host_families": [
+          "linux"
+        ],
+        "_authored": "cis-pg15",
+        "timeout_seconds": 20,
+        "_verification": "shape-verified"
+      }
+    },
+    "2.4": {
+      "runner_type": "linux_ssh",
+      "check_definition": {
+        "command": "sh -c 'grep -R \"^[[:space:]]*password[[:space:]]*=\" ${PGSERVICEFILE:-} ${PGSYSCONFDIR:-/etc}/pg_service.conf /root/.pg_service.conf 2>/dev/null | head -n 10 || true'",
+        "expect": {
+          "kind": "stdout_not_contains",
+          "value": "password"
+        },
+        "pass_message": "No password= entries found in checked pg_service files.",
+        "fail_message": "A password= entry was found in a pg_service file.",
+        "applicable_host_families": [
+          "linux"
+        ],
+        "_authored": "cis-pg15",
+        "timeout_seconds": 20,
+        "_verification": "shape-verified"
+      }
+    },
+    "3.1.2": {
+      "runner_type": "postgres_sql",
+      "check_definition": {
+        "runner": "postgres_sql",
+        "sql": "SELECT setting FROM pg_settings WHERE name = 'log_destination'",
+        "expect": {
+          "kind": "first_value_regex",
+          "expected": "(stderr|csvlog|syslog|jsonlog|eventlog)"
+        },
+        "pass_message": "log_destination includes a recognized destination.",
+        "fail_message": "log_destination is empty or unrecognized.",
+        "_authored": "cis-pg15",
+        "timeout_seconds": 15,
+        "_verification": "shape-verified"
+      }
+    },
+    "3.1.3": {
+      "runner_type": "postgres_sql",
+      "check_definition": {
+        "runner": "postgres_sql",
+        "sql": "SELECT setting FROM pg_settings WHERE name = 'logging_collector'",
+        "expect": {
+          "kind": "first_value_equals",
+          "expected": "on"
+        },
+        "pass_message": "logging_collector is enabled.",
+        "fail_message": "logging_collector is OFF.",
+        "_authored": "cis-pg15",
+        "timeout_seconds": 15,
+        "_verification": "shape-verified"
+      }
+    },
+    "3.1.4": {
+      "runner_type": "postgres_sql",
+      "check_definition": {
+        "runner": "postgres_sql",
+        "sql": "SELECT current_setting('log_directory')",
+        "expect": {
+          "kind": "first_value_regex",
+          "expected": ".+"
+        },
+        "pass_message": "log_directory is set.",
+        "fail_message": "log_directory is empty.",
+        "_authored": "cis-pg15",
+        "timeout_seconds": 15,
+        "_verification": "shape-verified"
+      }
+    },
+    "3.1.5": {
+      "runner_type": "postgres_sql",
+      "check_definition": {
+        "runner": "postgres_sql",
+        "sql": "SELECT current_setting('log_filename')",
+        "expect": {
+          "kind": "first_value_regex",
+          "expected": ".+"
+        },
+        "pass_message": "log_filename pattern is set.",
+        "fail_message": "log_filename is empty.",
+        "_authored": "cis-pg15",
+        "timeout_seconds": 15,
+        "_verification": "shape-verified"
+      }
+    },
+    "3.1.6": {
+      "runner_type": "postgres_sql",
+      "check_definition": {
+        "runner": "postgres_sql",
+        "sql": "SELECT setting FROM pg_settings WHERE name = 'log_file_mode'",
+        "expect": {
+          "kind": "first_value_regex",
+          "expected": "^0?600$"
+        },
+        "pass_message": "log_file_mode is 0600 (owner-only).",
+        "fail_message": "log_file_mode is not 0600.",
+        "_authored": "cis-pg15",
+        "timeout_seconds": 15,
+        "_verification": "shape-verified"
+      }
+    },
+    "3.1.7": {
+      "runner_type": "postgres_sql",
+      "check_definition": {
+        "runner": "postgres_sql",
+        "sql": "SELECT setting FROM pg_settings WHERE name = 'log_truncate_on_rotation'",
+        "expect": {
+          "kind": "first_value_equals",
+          "expected": "on"
+        },
+        "pass_message": "log_truncate_on_rotation is enabled.",
+        "fail_message": "log_truncate_on_rotation is OFF.",
+        "_authored": "cis-pg15",
+        "timeout_seconds": 15,
+        "_verification": "shape-verified"
+      }
+    },
+    "3.1.8": {
+      "runner_type": "postgres_sql",
+      "check_definition": {
+        "runner": "postgres_sql",
+        "sql": "SELECT setting FROM pg_settings WHERE name = 'log_rotation_age'",
+        "expect": {
+          "kind": "first_value_regex",
+          "expected": "^(?!0\\s*$).+"
+        },
+        "pass_message": "log_rotation_age is non-zero.",
+        "fail_message": "log_rotation_age is 0 (rotation by age disabled).",
+        "_authored": "cis-pg15",
+        "timeout_seconds": 15,
+        "_verification": "shape-verified"
+      }
+    },
+    "3.1.9": {
+      "runner_type": "postgres_sql",
+      "check_definition": {
+        "runner": "postgres_sql",
+        "sql": "SELECT setting FROM pg_settings WHERE name = 'log_rotation_size'",
+        "expect": {
+          "kind": "first_value_regex",
+          "expected": "^(?!0\\s*$).+"
+        },
+        "pass_message": "log_rotation_size is non-zero.",
+        "fail_message": "log_rotation_size is 0 (rotation by size disabled).",
+        "_authored": "cis-pg15",
+        "timeout_seconds": 15,
+        "_verification": "shape-verified"
+      }
+    },
+    "3.1.10": {
+      "runner_type": "postgres_sql",
+      "check_definition": {
+        "runner": "postgres_sql",
+        "sql": "SELECT CASE WHEN current_setting('log_destination', true) NOT ILIKE '%syslog%' THEN 'ok' WHEN lower(COALESCE(current_setting('syslog_facility', true),'')) ~ '^local[0-7]$' THEN 'ok' ELSE 'bad' END",
+        "expect": {
+          "kind": "first_value_equals",
+          "expected": "ok"
+        },
+        "pass_message": "syslog_facility is appropriate (or syslog logging is unused).",
+        "fail_message": "syslog is enabled but syslog_facility is not LOCAL0\u2013LOCAL7.",
+        "_authored": "cis-pg15",
+        "timeout_seconds": 15,
+        "_verification": "shape-verified"
+      }
+    },
+    "3.1.11": {
+      "runner_type": "postgres_sql",
+      "check_definition": {
+        "runner": "postgres_sql",
+        "sql": "SELECT CASE WHEN current_setting('log_destination', true) NOT ILIKE '%syslog%' THEN 'ok' WHEN lower(current_setting('syslog_sequence_numbers', true)) = 'on' THEN 'ok' ELSE 'bad' END",
+        "expect": {
+          "kind": "first_value_equals",
+          "expected": "ok"
+        },
+        "pass_message": "syslog_sequence_numbers is on (or syslog unused).",
+        "fail_message": "syslog is enabled but syslog_sequence_numbers is off.",
+        "_authored": "cis-pg15",
+        "timeout_seconds": 15,
+        "_verification": "shape-verified"
+      }
+    },
+    "3.1.12": {
+      "runner_type": "postgres_sql",
+      "check_definition": {
+        "runner": "postgres_sql",
+        "sql": "SELECT CASE WHEN current_setting('log_destination', true) NOT ILIKE '%syslog%' THEN 'ok' WHEN lower(current_setting('syslog_split_messages', true)) = 'on' THEN 'ok' ELSE 'bad' END",
+        "expect": {
+          "kind": "first_value_equals",
+          "expected": "ok"
+        },
+        "pass_message": "syslog_split_messages is on (or syslog unused).",
+        "fail_message": "syslog is enabled but syslog_split_messages is off.",
+        "_authored": "cis-pg15",
+        "timeout_seconds": 15,
+        "_verification": "shape-verified"
+      }
+    },
+    "3.1.13": {
+      "runner_type": "postgres_sql",
+      "check_definition": {
+        "runner": "postgres_sql",
+        "sql": "SELECT CASE WHEN current_setting('log_destination', true) NOT ILIKE '%syslog%' THEN 'ok' WHEN length(COALESCE(current_setting('syslog_ident', true),'')) > 0 THEN 'ok' ELSE 'bad' END",
+        "expect": {
+          "kind": "first_value_equals",
+          "expected": "ok"
+        },
+        "pass_message": "syslog_ident is set (or syslog unused).",
+        "fail_message": "syslog is enabled but syslog_ident is empty.",
+        "_authored": "cis-pg15",
+        "timeout_seconds": 15,
+        "_verification": "shape-verified"
+      }
+    },
+    "3.1.14": {
+      "runner_type": "postgres_sql",
+      "check_definition": {
+        "runner": "postgres_sql",
+        "sql": "SELECT CASE WHEN lower(setting) IN ('warning','error','log','fatal','panic') THEN 'ok' ELSE 'bad' END FROM pg_settings WHERE name = 'log_min_messages'",
+        "expect": {
+          "kind": "first_value_equals",
+          "expected": "ok"
+        },
+        "pass_message": "log_min_messages is at least warning.",
+        "fail_message": "log_min_messages is below warning (too verbose / under-logging).",
+        "_authored": "cis-pg15",
+        "timeout_seconds": 15,
+        "_verification": "shape-verified"
+      }
+    },
+    "3.1.15": {
+      "runner_type": "postgres_sql",
+      "check_definition": {
+        "runner": "postgres_sql",
+        "sql": "SELECT CASE WHEN lower(setting) IN ('error','log','fatal','panic') THEN 'ok' ELSE 'bad' END FROM pg_settings WHERE name = 'log_min_error_statement'",
+        "expect": {
+          "kind": "first_value_equals",
+          "expected": "ok"
+        },
+        "pass_message": "log_min_error_statement is at least error.",
+        "fail_message": "log_min_error_statement is below error.",
+        "_authored": "cis-pg15",
+        "timeout_seconds": 15,
+        "_verification": "shape-verified"
+      }
+    },
+    "3.1.16": {
+      "runner_type": "postgres_sql",
+      "check_definition": {
+        "runner": "postgres_sql",
+        "sql": "SELECT setting FROM pg_settings WHERE name = 'debug_print_parse'",
+        "expect": {
+          "kind": "first_value_equals",
+          "expected": "off"
+        },
+        "pass_message": "debug_print_parse is disabled.",
+        "fail_message": "debug_print_parse is ON.",
+        "_authored": "cis-pg15",
+        "timeout_seconds": 15,
+        "_verification": "shape-verified"
+      }
+    },
+    "3.1.17": {
+      "runner_type": "postgres_sql",
+      "check_definition": {
+        "runner": "postgres_sql",
+        "sql": "SELECT setting FROM pg_settings WHERE name = 'debug_print_rewritten'",
+        "expect": {
+          "kind": "first_value_equals",
+          "expected": "off"
+        },
+        "pass_message": "debug_print_rewritten is disabled.",
+        "fail_message": "debug_print_rewritten is ON.",
+        "_authored": "cis-pg15",
+        "timeout_seconds": 15,
+        "_verification": "shape-verified"
+      }
+    },
+    "3.1.18": {
+      "runner_type": "postgres_sql",
+      "check_definition": {
+        "runner": "postgres_sql",
+        "sql": "SELECT setting FROM pg_settings WHERE name = 'debug_print_plan'",
+        "expect": {
+          "kind": "first_value_equals",
+          "expected": "off"
+        },
+        "pass_message": "debug_print_plan is disabled.",
+        "fail_message": "debug_print_plan is ON.",
+        "_authored": "cis-pg15",
+        "timeout_seconds": 15,
+        "_verification": "shape-verified"
+      }
+    },
+    "3.1.19": {
+      "runner_type": "postgres_sql",
+      "check_definition": {
+        "runner": "postgres_sql",
+        "sql": "SELECT setting FROM pg_settings WHERE name = 'debug_pretty_print'",
+        "expect": {
+          "kind": "first_value_equals",
+          "expected": "on"
+        },
+        "pass_message": "debug_pretty_print is enabled.",
+        "fail_message": "debug_pretty_print is OFF.",
+        "_authored": "cis-pg15",
+        "timeout_seconds": 15,
+        "_verification": "shape-verified"
+      }
+    },
+    "3.1.20": {
+      "runner_type": "postgres_sql",
+      "check_definition": {
+        "runner": "postgres_sql",
+        "sql": "SELECT CASE WHEN lower(COALESCE(NULLIF(setting,''),'off')) = 'on' THEN 'on' ELSE 'off' END FROM pg_settings WHERE name = 'log_connections'",
+        "expect": {
+          "kind": "first_value_equals",
+          "expected": "on"
+        },
+        "pass_message": "log_connections is enabled.",
+        "fail_message": "log_connections is OFF \u2014 connections are not audited.",
+        "_authored": "cis-pg15",
+        "timeout_seconds": 15,
+        "_verification": "shape-verified"
+      }
+    },
+    "3.1.21": {
+      "runner_type": "postgres_sql",
+      "check_definition": {
+        "runner": "postgres_sql",
+        "sql": "SELECT setting FROM pg_settings WHERE name = 'log_disconnections'",
+        "expect": {
+          "kind": "first_value_equals",
+          "expected": "on"
+        },
+        "pass_message": "log_disconnections is enabled.",
+        "fail_message": "log_disconnections is OFF.",
+        "_authored": "cis-pg15",
+        "timeout_seconds": 15,
+        "_verification": "shape-verified"
+      }
+    },
+    "3.1.22": {
+      "runner_type": "postgres_sql",
+      "check_definition": {
+        "runner": "postgres_sql",
+        "sql": "SELECT setting FROM pg_settings WHERE name = 'log_error_verbosity'",
+        "expect": {
+          "kind": "first_value_equals",
+          "expected": "verbose"
+        },
+        "pass_message": "log_error_verbosity is verbose.",
+        "fail_message": "log_error_verbosity is not verbose.",
+        "_authored": "cis-pg15",
+        "timeout_seconds": 15,
+        "_verification": "shape-verified"
+      }
+    },
+    "3.1.23": {
+      "runner_type": "postgres_sql",
+      "check_definition": {
+        "runner": "postgres_sql",
+        "sql": "SELECT setting FROM pg_settings WHERE name = 'log_hostname'",
+        "expect": {
+          "kind": "first_value_equals",
+          "expected": "on"
+        },
+        "pass_message": "log_hostname is enabled.",
+        "fail_message": "log_hostname is OFF.",
+        "_authored": "cis-pg15",
+        "timeout_seconds": 15,
+        "_verification": "shape-verified"
+      }
+    },
+    "3.1.24": {
+      "runner_type": "postgres_sql",
+      "check_definition": {
+        "runner": "postgres_sql",
+        "sql": "SELECT CASE WHEN setting LIKE '%m%' AND setting LIKE '%p%' AND setting LIKE '%u%' AND setting LIKE '%d%' AND setting LIKE '%a%' AND setting LIKE '%h%' THEN 'ok' ELSE 'bad' END FROM pg_settings WHERE name = 'log_line_prefix'",
+        "expect": {
+          "kind": "first_value_equals",
+          "expected": "ok"
+        },
+        "pass_message": "log_line_prefix includes required tokens (%m %p %u %d %a %h).",
+        "fail_message": "log_line_prefix is missing one or more required tokens.",
+        "_authored": "cis-pg15",
+        "timeout_seconds": 15,
+        "_verification": "shape-verified"
+      }
+    },
+    "3.1.25": {
+      "runner_type": "postgres_sql",
+      "check_definition": {
+        "runner": "postgres_sql",
+        "sql": "SELECT 1 FROM pg_settings WHERE name = 'log_statement' AND lower(setting) <> 'none'",
+        "expect": {
+          "kind": "row_count_nonzero"
+        },
+        "pass_message": "log_statement is not 'none'.",
+        "fail_message": "log_statement is 'none' \u2014 DDL/DML not audited.",
+        "_authored": "cis-pg15",
+        "timeout_seconds": 15,
+        "_verification": "shape-verified"
+      }
+    },
+    "3.1.26": {
+      "runner_type": "postgres_sql",
+      "check_definition": {
+        "runner": "postgres_sql",
+        "sql": "SELECT CASE WHEN upper(setting) IN ('GMT','UTC') OR setting ILIKE 'UTC%' OR setting ILIKE 'GMT%' THEN 'ok' ELSE 'bad' END FROM pg_settings WHERE name = 'log_timezone'",
+        "expect": {
+          "kind": "first_value_equals",
+          "expected": "ok"
+        },
+        "pass_message": "log_timezone is GMT/UTC.",
+        "fail_message": "log_timezone is not GMT/UTC.",
+        "_authored": "cis-pg15",
+        "timeout_seconds": 15,
+        "_verification": "shape-verified"
+      }
+    },
+    "3.2": {
+      "runner_type": "postgres_sql",
+      "check_definition": {
+        "runner": "postgres_sql",
+        "sql": "SELECT current_setting('shared_preload_libraries')",
+        "expect": {
+          "kind": "first_value_contains",
+          "expected": "pgaudit"
+        },
+        "pass_message": "pgAudit is loaded (shared_preload_libraries).",
+        "fail_message": "pgAudit is NOT loaded \u2014 no statement-level audit trail.",
+        "_authored": "cis-pg15",
+        "timeout_seconds": 15,
+        "_verification": "shape-verified"
+      }
+    },
+    "4.1": {
+      "runner_type": "linux_ssh",
+      "check_definition": {
+        "command": "sh -c 'grep \"^postgres:\" /etc/passwd | cut -d: -f7'",
+        "expect": {
+          "kind": "stdout_regex",
+          "value": "(nologin|false|sbin/nologin)"
+        },
+        "pass_message": "postgres OS account shell is non-interactive.",
+        "fail_message": "postgres OS account has an interactive login shell.",
+        "applicable_host_families": [
+          "linux"
+        ],
+        "_authored": "cis-pg15",
+        "timeout_seconds": 20,
+        "_verification": "shape-verified"
+      }
+    },
+    "4.2": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "Confirm only authorized OS admins can sudo -iu postgres (sudoers / group membership). Attest the approved admin list.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-pg15",
+        "_verification": "shape-verified"
+      }
+    },
+    "4.3": {
+      "runner_type": "postgres_sql",
+      "check_definition": {
+        "runner": "postgres_sql",
+        "sql": "SELECT rolname FROM pg_roles WHERE rolsuper AND rolcanlogin AND rolname !~ '^pg_' ORDER BY 1 OFFSET 1",
+        "expect": {
+          "kind": "row_count_zero"
+        },
+        "pass_message": "At most one login-capable superuser role (bootstrap owner).",
+        "fail_message": "Multiple login-capable superuser roles \u2014 revoke excess admin privileges.",
+        "_authored": "cis-pg15",
+        "timeout_seconds": 15,
+        "_verification": "shape-verified"
+      }
+    },
+    "4.4": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "Review pg_roles WHERE rolcanlogin and confirm inactive human/service accounts are NOLOGIN. Automated listing alone cannot know 'currently unused'.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-pg15",
+        "_verification": "shape-verified"
+      }
+    },
+    "4.5": {
+      "runner_type": "postgres_sql",
+      "check_definition": {
+        "runner": "postgres_sql",
+        "sql": "SELECT n.nspname || '.' || p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE p.prosecdef AND n.nspname NOT IN ('pg_catalog','information_schema') AND p.proname NOT LIKE 'pgaudit%'",
+        "expect": {
+          "kind": "row_count_zero"
+        },
+        "pass_message": "No non-catalog SECURITY DEFINER functions found.",
+        "fail_message": "SECURITY DEFINER functions exist outside system catalogs \u2014 review necessity.",
+        "_authored": "cis-pg15",
+        "timeout_seconds": 15,
+        "_verification": "shape-verified"
+      }
+    },
+    "4.6": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "Inventory table DML grants (pg_tables \u00d7 role grants) per database and confirm only authorized roles hold INSERT/UPDATE/DELETE.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-pg15",
+        "_verification": "shape-verified"
+      }
+    },
+    "4.7": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "Confirm every table that requires RLS has relrowsecurity enabled and policies applied (business-process decision; cannot auto-pass).",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-pg15",
+        "_verification": "shape-verified"
+      }
+    },
+    "4.8": {
+      "runner_type": "postgres_sql",
+      "check_definition": {
+        "runner": "postgres_sql",
+        "sql": "SELECT 1 FROM pg_extension WHERE extname = 'set_user'",
+        "expect": {
+          "kind": "row_count_nonzero"
+        },
+        "pass_message": "set_user extension is installed.",
+        "fail_message": "set_user extension is NOT installed.",
+        "_authored": "cis-pg15",
+        "timeout_seconds": 15,
+        "_verification": "shape-verified"
+      }
+    },
+    "4.9": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "Review superuser roles and confirm predefined roles (pg_monitor, pg_read_all_settings, \u2026) are used instead of blanket SUPERUSER where possible.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-pg15",
+        "_verification": "shape-verified"
+      }
+    },
+    "5.1": {
+      "runner_type": "linux_ssh",
+      "check_definition": {
+        "command": "sh -c 'ps -eww -o args= 2>/dev/null | grep -E \"psql|postgres://\" | grep -i password | grep -v grep | head -n 5 || true'",
+        "expect": {
+          "kind": "stdout_not_contains",
+          "value": "password"
+        },
+        "pass_message": "No live process args expose a password= / postgres URI password.",
+        "fail_message": "A process command line appears to embed a database password.",
+        "applicable_host_families": [
+          "linux"
+        ],
+        "_authored": "cis-pg15",
+        "timeout_seconds": 20,
+        "_verification": "shape-verified"
+      }
+    },
+    "5.2": {
+      "runner_type": "postgres_sql",
+      "check_definition": {
+        "runner": "postgres_sql",
+        "sql": "SELECT setting FROM pg_settings WHERE name = 'listen_addresses'",
+        "expect": {
+          "kind": "first_value_regex",
+          "expected": "^(?!\\*).+"
+        },
+        "pass_message": "listen_addresses is bound to specific host(s), not '*'.",
+        "fail_message": "listen_addresses is '*' \u2014 the DB accepts connections on every interface.",
+        "_authored": "cis-pg15",
+        "timeout_seconds": 15,
+        "_verification": "shape-verified"
+      }
+    },
+    "5.3": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "Attest local (UNIX socket) pg_hba rules: peer for postgres only as intended; other OS users cannot impersonate DB roles over the socket.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-pg15",
+        "_verification": "shape-verified"
+      }
+    },
+    "5.4": {
+      "runner_type": "postgres_sql",
+      "check_definition": {
+        "runner": "postgres_sql",
+        "sql": "SELECT type || ' ' || array_to_string(database, ',') || ' ' || array_to_string(user_name, ',') || ' ' || COALESCE(address,'') || ' ' || auth_method FROM pg_hba_file_rules WHERE type IN ('host','hostssl','hostnossl') AND auth_method IN ('trust','password')",
+        "expect": {
+          "kind": "row_count_zero"
+        },
+        "pass_message": "No host TCP rules use trust or plaintext password auth.",
+        "fail_message": "One or more host TCP pg_hba rules use trust or password (use scram-sha-256/cert/etc).",
+        "_authored": "cis-pg15",
+        "timeout_seconds": 15,
+        "_verification": "shape-verified"
+      }
+    },
+    "5.5": {
+      "runner_type": "postgres_sql",
+      "check_definition": {
+        "runner": "postgres_sql",
+        "sql": "SELECT rolname FROM pg_roles WHERE rolname NOT LIKE 'pg_%' AND rolcanlogin AND rolconnlimit = -1",
+        "expect": {
+          "kind": "row_count_zero"
+        },
+        "pass_message": "All login roles have a finite connection limit.",
+        "fail_message": "One or more login roles have rolconnlimit = -1 (unlimited).",
+        "_authored": "cis-pg15",
+        "timeout_seconds": 15,
+        "_verification": "shape-verified"
+      }
+    },
+    "5.6": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "Confirm password complexity (e.g. passwordcheck / policy) meets organization requirements \u2014 not fully expressible as a single cluster setting.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-pg15",
+        "_verification": "shape-verified"
+      }
+    },
+    "6.1": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "Document understood attack vectors and which runtime parameters are intentionally tunable by non-superusers vs locked down.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-pg15",
+        "_verification": "shape-verified"
+      }
+    },
+    "6.2": {
+      "runner_type": "postgres_sql",
+      "check_definition": {
+        "runner": "postgres_sql",
+        "sql": "SELECT name FROM pg_settings WHERE name IN ('debug_print_parse','debug_print_rewritten','debug_print_plan') AND lower(setting) = 'on'",
+        "expect": {
+          "kind": "row_count_zero"
+        },
+        "pass_message": "Backend debug_print_* parameters are off.",
+        "fail_message": "One or more backend debug_print_* parameters are on.",
+        "_authored": "cis-pg15",
+        "timeout_seconds": 15,
+        "_verification": "shape-verified"
+      }
+    },
+    "6.3": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "Review Postmaster-context parameters (listen_addresses, port, shared_buffers, shared_preload_libraries) against hardened baseline; attest.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-pg15",
+        "_verification": "shape-verified"
+      }
+    },
+    "6.4": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "Review SIGHUP-reloadable parameters against hardened baseline; attest.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-pg15",
+        "_verification": "shape-verified"
+      }
+    },
+    "6.5": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "Review Superuser-context parameters against hardened baseline; attest.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-pg15",
+        "_verification": "shape-verified"
+      }
+    },
+    "6.6": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "Review User-context parameters and ALTER ROLE/USER SETs for unsafe overrides; attest.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-pg15",
+        "_verification": "shape-verified"
+      }
+    },
+    "6.7": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "Confirm FIPS 140-2 OpenSSL cryptography is in use where policy requires it.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-pg15",
+        "_verification": "shape-verified"
+      }
+    },
+    "6.8": {
+      "runner_type": "postgres_sql",
+      "check_definition": {
+        "runner": "postgres_sql",
+        "sql": "SELECT setting FROM pg_settings WHERE name = 'ssl'",
+        "expect": {
+          "kind": "first_value_equals",
+          "expected": "on"
+        },
+        "pass_message": "ssl is enabled.",
+        "fail_message": "ssl is OFF.",
+        "_authored": "cis-pg15",
+        "timeout_seconds": 15,
+        "_verification": "shape-verified"
+      }
+    },
+    "6.9": {
+      "runner_type": "postgres_sql",
+      "check_definition": {
+        "runner": "postgres_sql",
+        "sql": "SELECT CASE WHEN COALESCE(current_setting('ssl_min_protocol_version'),'') = '' THEN 'ok' WHEN current_setting('ssl_min_protocol_version') !~* 'TLSv1(\\.0|\\.1)(,|$)' AND current_setting('ssl_min_protocol_version') !~* '(^|,)TLSv1(,|$)' THEN 'ok' ELSE 'bad' END",
+        "expect": {
+          "kind": "first_value_equals",
+          "expected": "ok"
+        },
+        "pass_message": "ssl_min_protocol_version excludes TLSv1.0/1.1 (or unset with modern default).",
+        "fail_message": "TLS 1.0/1.1 appears allowed by ssl_min_protocol_version.",
+        "_authored": "cis-pg15",
+        "timeout_seconds": 15,
+        "_verification": "shape-verified"
+      }
+    },
+    "6.10": {
+      "runner_type": "postgres_sql",
+      "check_definition": {
+        "runner": "postgres_sql",
+        "sql": "SELECT CASE WHEN COALESCE(current_setting('ssl_ciphers'),'') = '' THEN 'ok' WHEN current_setting('ssl_ciphers') ~* '(NULL|EXP|aNULL|ADH|RC4|DES|MD5)' THEN 'bad' ELSE 'ok' END",
+        "expect": {
+          "kind": "first_value_equals",
+          "expected": "ok"
+        },
+        "pass_message": "ssl_ciphers does not list known-weak suites.",
+        "fail_message": "ssl_ciphers includes weak suites (NULL/EXP/RC4/DES/MD5/\u2026).",
+        "_authored": "cis-pg15",
+        "timeout_seconds": 15,
+        "_verification": "shape-verified"
+      }
+    },
+    "6.11": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "Confirm pgcrypto is installed where required and configured per policy (extension present + key management practices).",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-pg15",
+        "_verification": "shape-verified"
+      }
+    },
+    "7.1": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "Confirm a replication-only role (REPLICATION, NOSUPERUSER) is used for streaming replication \u2014 not a superuser.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-pg15",
+        "_verification": "shape-verified"
+      }
+    },
+    "7.2": {
+      "runner_type": "postgres_sql",
+      "check_definition": {
+        "runner": "postgres_sql",
+        "sql": "SELECT setting FROM pg_settings WHERE name = 'log_replication_commands'",
+        "expect": {
+          "kind": "first_value_equals",
+          "expected": "on"
+        },
+        "pass_message": "log_replication_commands is enabled.",
+        "fail_message": "log_replication_commands is OFF.",
+        "_authored": "cis-pg15",
+        "timeout_seconds": 15,
+        "_verification": "shape-verified"
+      }
+    },
+    "7.3": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "Confirm base backups are configured, scheduled, and restore-tested.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-pg15",
+        "_verification": "shape-verified"
+      }
+    },
+    "7.4": {
+      "runner_type": "postgres_sql",
+      "check_definition": {
+        "runner": "postgres_sql",
+        "sql": "SELECT CASE WHEN lower(setting) IN ('on','always') THEN 'ok' ELSE 'bad' END FROM pg_settings WHERE name = 'archive_mode'",
+        "expect": {
+          "kind": "first_value_equals",
+          "expected": "ok"
+        },
+        "pass_message": "archive_mode is on/always.",
+        "fail_message": "archive_mode is off \u2014 WAL archiving not enabled.",
+        "_authored": "cis-pg15",
+        "timeout_seconds": 15,
+        "_verification": "shape-verified"
+      }
+    },
+    "7.5": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "Confirm streaming replication parameters (primary_conninfo, slots, sync commit) match the intended topology.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-pg15",
+        "_verification": "shape-verified"
+      }
+    },
+    "8.1": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "Confirm tablespace / log / archive directories live outside the data cluster directory as required by policy.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-pg15",
+        "_verification": "shape-verified"
+      }
+    },
+    "8.2": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "Confirm pgBackRest (or approved backup tool) is installed and configured.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-pg15",
+        "_verification": "shape-verified"
+      }
+    },
+    "8.3": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "Review miscellaneous configuration settings against the organization's hardened baseline and attest.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-pg15",
+        "_verification": "shape-verified"
+      }
+    }
+  }
+}

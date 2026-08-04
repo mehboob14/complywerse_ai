@@ -1,0 +1,1854 @@
+{
+  "benchmark_filter": "%PostgreSQL_18%",
+  "total": 72,
+  "counts": {
+    "any": 60,
+    "authored_sql": 12,
+    "manual": 0,
+    "other": 0,
+    "todo": 0,
+    "enabled": 70
+  },
+  "rules": [
+    {
+      "id": 16139,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__1.1",
+      "rule_id": "1.1",
+      "title": "Ensure packages are obtained from authorized repositories",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_reverted": "garbage-shell-check-on-sql-runner"
+      },
+      "audit_steps_text": "Identify and inspect configured repositories to ensure they are all valid and authorized\nsources of packages. The following is an example of a simple RHEL 9 install illustrating\nthe use of the dnf repolist all command.\n# whoami\nroot\n# dnf repolist all | grep -E 'enabled$'\nrhel-9-for-x86_64-appstream-rpms Red Hat Enterprise enabled\nrhel-9-for-x86_64-baseos-rpms Red Hat Enterprise enabled\n#\nInternal Only - General\nEnsure the list of configured repositories only includes organization-approved\nrepositories. If any unapproved repositories are listed, this is a fail.\nTo inspect what versions of PostgreSQL packages are currently installed, we can query\nusing the rpm commands. As illustrated below, no PostgreSQL packages are installed:\n# whoami\nroot\n# rpm -qa | grep postgres\n#\nIf packages were returned in the above, we can determine from which repo they came\nby combining dnf and rpm:\n# whoami\nroot\n# dnf info $(rpm -qa|grep postgres) | grep -E '^Name|^Version|^From'\nName : postgresql18\nVersion : 18.0\nFrom repo : pgdg18\nName : postgresql18-contrib\nVersion : 18.0\nFrom repo : pgdg18\nName : postgresql18-libs\nVersion : 18.0\nFrom repo : pgdg18\nName : postgresql18-server\nVersion : 18.0\nFrom repo : pgdg18\nIf the expected binary packages are not installed, are not the expected versions, or did\nnot come from an appropriate repo, this is a fail.",
+      "audit_excerpt": "",
+      "description_head": "Standard Linux distributions, although possessing the requisite packages, often do not\nhave PostgreSQL pre-installed. The installation process includes installing the binaries\nand the means to generate a data cluster. Package installation s"
+    },
+    {
+      "id": 16140,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__1.2",
+      "rule_id": "1.2",
+      "title": "Install only required packages",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_reverted": "garbage-shell-check-on-sql-runner"
+      },
+      "audit_steps_text": "On Debian, one can use the following command to see a complete list of the available\npackages.\napt search postgresql\nRHEL:\ndnf search postgresql",
+      "audit_excerpt": "",
+      "description_head": "Depending on the distribution, several other packages next to the mandatory\npostgresql might have been installed upon a system. Typical add-on packages are:\n\u2022 postgresql-doc: PostgreSQL documentation.\n\u2022 phppgadmin: PostgreSQL web-based admi"
+    },
+    {
+      "id": 16141,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__1.3",
+      "rule_id": "1.3",
+      "title": "Ensure systemd Service Files Are Enabled",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_auto_generated": true,
+        "_audit_excerpt": "Confirm the PostgreSQL service is enabled by executing the following:\n$ whoamiroot\n$ systemctl is-enabled postgresql-18.serviceenabledIf the intended PostgreSQL service is not registered as a dependency (or \"want\") of thedefault target (anything other than 'enabled' is returned), this is a failure.\n\n---REMEDIATION---Irrespective of package source, PostgreSQL services can be identified because itty",
+        "_note": "Parser could not synthesise an executable check; reviewer must hand-author."
+      },
+      "audit_steps_text": "Confirm the PostgreSQL service is enabled by executing the following:\n$ whoami\nroot\n$ systemctl is-enabled postgresql-18.service\nenabled\nIf the intended PostgreSQL service is not registered as a dependency (or \"want\") of the\ndefault target (anything other than 'enabled' is returned), this is a failure.",
+      "audit_excerpt": "Confirm the PostgreSQL service is enabled by executing the following:\n$ whoamiroot\n$ systemctl is-enabled postgresql-18.serviceenabledIf the intended PostgreSQL service is not registered as a dependency (or \"want\") of thedefault target (anything other than 'enabled' is returned), this is a failure.\n\n---REMEDIATION---Irrespective of package source, PostgreSQL services can be identified because itty",
+      "description_head": "Confirm, and correct if necessary, the PostgreSQL systemd service is enabled."
+    },
+    {
+      "id": 16142,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__1.4",
+      "rule_id": "1.4",
+      "title": "Ensure Data Cluster Initialized Successfully",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_auto_generated": true,
+        "_audit_excerpt": "Assuming you are installing the PostgreSQL binary package from the PGDG repository,\nthe standard method, as root, is to instantiate the cluster thusly:\n# whoamiroot\n# PGSETUP_INITDB_OPTIONS=\"-k\" /usr/pgsql-18/bin/postgresql-18-setup initdbInitializing database ... OKNote that we enabled checksumming in the above command by settingPGSETUP_INITDB_OPTIONS=\"-k\".A correctly installed data cluster posse",
+        "_note": "Parser could not synthesise an executable check; reviewer must hand-author."
+      },
+      "audit_steps_text": "Assuming you are installing the PostgreSQL binary package from the PGDG repository,\nthe standard method, as root, is to instantiate the cluster thusly:\n# whoami\nroot\n# PGSETUP_INITDB_OPTIONS=\"-k\" /usr/pgsql-18/bin/postgresql-18-setup initdb\nInitializing database ... OK\nNote that we enabled checksumming in the above command by setting\nPGSETUP_INITDB_OPTIONS=\"-k\".\nA correctly installed data cluster possesses directory permissions similar to the following\nexample. Otherwise, the service will fail to start:\n# whoami\nroot\n# ls -la ~postgres/18\ntotal 8\ndrwx------. 4 postgres postgres 51 Oct 3 14:01 .\ndrwx------. 3 postgres postgres 37 Oct 3 13:54 ..\ndrwx------. 2 postgres postgres 6 Oct 3 06:18 backups\ndrwx------. 20 postgres postgres 4096 Oct 3 14:01 data\n-rw-------. 1 postgres postgres 923 Oct 3 14:01 initdb.log\nYou can verify the PGDATA has sane permissions and attributes by running:\nInternal Only - General\n# whoami\npostgres\n# /usr/pgsql-18/bin/postgresql-18-check-db-dir ~postgres/18/data\n# echo $?\nAs long as the return code is zero(0), as shown, everything is fine.",
+      "audit_excerpt": "Assuming you are installing the PostgreSQL binary package from the PGDG repository,\nthe standard method, as root, is to instantiate the cluster thusly:\n# whoamiroot\n# PGSETUP_INITDB_OPTIONS=\"-k\" /usr/pgsql-18/bin/postgresql-18-setup initdbInitializing database ... OKNote that we enabled checksumming in the above command by settingPGSETUP_INITDB_OPTIONS=\"-k\".A correctly installed data cluster posse",
+      "description_head": "First-time installs of a given PostgreSQL major release require the instantiation of the\ndatabase cluster. A database cluster is a collection of databases that are managed by a\nsingle server instance."
+    },
+    {
+      "id": 16143,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__1.5",
+      "rule_id": "1.5",
+      "title": "Ensure the Latest Security Patches are Applied",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_auto_generated": true,
+        "_audit_excerpt": "Execute the following SQL statement as low-privileged user to identify the PostgreSQLserver version:SHOW server_version;\nNow compare the version returned with the security announcements shown on thePostgreSQL news page. For convenience, the latest PostgreSQL release versions arealways shown in a banner at the top of that page along with the release date.\n\n---REMEDIATION---Install the latest patche",
+        "_note": "Parser could not synthesise an executable check; reviewer must hand-author."
+      },
+      "audit_steps_text": "Execute the following SQL statement as low-privileged user to identify the PostgreSQL\nserver version:\nSHOW server_version;\nNow compare the version returned with the security announcements shown on the\nPostgreSQL news page. For convenience, the latest PostgreSQL release versions are\nalways shown in a banner at the top of that page along with the release date.",
+      "audit_excerpt": "Execute the following SQL statement as low-privileged user to identify the PostgreSQLserver version:SHOW server_version;\nNow compare the version returned with the security announcements shown on thePostgreSQL news page. For convenience, the latest PostgreSQL release versions arealways shown in a banner at the top of that page along with the release date.\n\n---REMEDIATION---Install the latest patche",
+      "description_head": "PostgreSQL updates are released to resolve bugs, and mitigate vulnerabilities quarterly\n(or sooner for drastic CVEs). It is recommended that PostgreSQL installations are kept\nup to date with the latest security updates. The PostgreSQL devel"
+    },
+    {
+      "id": 16144,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__1.6",
+      "rule_id": "1.6",
+      "title": "Verify That 'PGPASSWORD' is Not Set in Users' Profiles",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_auto_generated": true,
+        "_audit_excerpt": "To assess this recommendation check if PGPASSWORD is set in login scripts using thefollowing terminal command as privileged user:grep PGPASSWORD --no-messages /home/*/.{bashrc,profile,bash_profile}\ngrep PGPASSWORD --no-messages /root/.{bashrc,profile,bash_profile}\ngrep PGPASSWORD --no-messages /etc/environmentNote that the above only covers Bash as the login shell. If OS users are configured touse",
+        "_note": "Parser could not synthesise an executable check; reviewer must hand-author."
+      },
+      "audit_steps_text": "To assess this recommendation check if PGPASSWORD is set in login scripts using the\nfollowing terminal command as privileged user:\ngrep PGPASSWORD --no-messages /home/*/.{bashrc,profile,bash_profile}\ngrep PGPASSWORD --no-messages /root/.{bashrc,profile,bash_profile}\ngrep PGPASSWORD --no-messages /etc/environment\nNote that the above only covers Bash as the login shell. If OS users are configured to\nuse Zsh, Csh, or other login shells, the list of files would need adjusted appropriately.",
+      "audit_excerpt": "To assess this recommendation check if PGPASSWORD is set in login scripts using thefollowing terminal command as privileged user:grep PGPASSWORD --no-messages /home/*/.{bashrc,profile,bash_profile}\ngrep PGPASSWORD --no-messages /root/.{bashrc,profile,bash_profile}\ngrep PGPASSWORD --no-messages /etc/environmentNote that the above only covers Bash as the login shell. If OS users are configured touse",
+      "description_head": "PostgreSQL can read a default database password from an environment variable called\nPGPASSWORD."
+    },
+    {
+      "id": 16145,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__1.7",
+      "rule_id": "1.7",
+      "title": "Verify That the 'PGPASSWORD' Environment Variable is Not in Use (Automated)",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_auto_generated": true,
+        "_audit_excerpt": "To assess this recommendation, use the /proc filesystem and the following terminalcommand as privileged root user to determine if PGPASSWORD is currently set for anyprocess.sudo grep PGPASSWORD /proc/*/environThis may return one false-positive entry for the process which is executing the grepcommand.\n\n---REMEDIATION---Check which users and/or scripts are setting PGPASSWORD and change them to use a",
+        "_note": "Parser could not synthesise an executable check; reviewer must hand-author."
+      },
+      "audit_steps_text": "To assess this recommendation, use the /proc filesystem and the following terminal\ncommand as privileged root user to determine if PGPASSWORD is currently set for any\nprocess.\nsudo grep PGPASSWORD /proc/*/environ\nThis may return one false-positive entry for the process which is executing the grep\ncommand.",
+      "audit_excerpt": "To assess this recommendation, use the /proc filesystem and the following terminalcommand as privileged root user to determine if PGPASSWORD is currently set for anyprocess.sudo grep PGPASSWORD /proc/*/environThis may return one false-positive entry for the process which is executing the grepcommand.\n\n---REMEDIATION---Check which users and/or scripts are setting PGPASSWORD and change them to use a",
+      "description_head": "PostgreSQL can read a default database password from an environment variable called\nPGPASSWORD."
+    },
+    {
+      "id": 16146,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__2.1",
+      "rule_id": "2.1",
+      "title": "Ensure the file permissions mask is correct",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_auto_generated": true,
+        "_audit_excerpt": "To view the mask's current setting, execute the following commands:\n# whoamiroot\n# su - postgres\n# whoamipostgres\n# umaskThe umask must be 0077 or more restrictive for the postgres user, otherwise, this is afail.\n\n---REMEDIATION---Depending upon the postgres user's environment, the umask is typically set in theinitialization file .bash_profile, but may also be set in .profile or .bashrc. To setthe",
+        "_note": "Parser could not synthesise an executable check; reviewer must hand-author."
+      },
+      "audit_steps_text": "To view the mask's current setting, execute the following commands:\n# whoami\nroot\n# su - postgres\n# whoami\npostgres\n# umask\nThe umask must be 0077 or more restrictive for the postgres user, otherwise, this is a\nfail.",
+      "audit_excerpt": "To view the mask's current setting, execute the following commands:\n# whoamiroot\n# su - postgres\n# whoamipostgres\n# umaskThe umask must be 0077 or more restrictive for the postgres user, otherwise, this is afail.\n\n---REMEDIATION---Depending upon the postgres user's environment, the umask is typically set in theinitialization file .bash_profile, but may also be set in .profile or .bashrc. To setthe",
+      "description_head": "Files are always created using a default set of permissions. File permissions can be\nrestricted by applying a permissions mask called the umask. The postgres user\naccount should use a umask of 0077 to deny file access to all user accounts e"
+    },
+    {
+      "id": 16147,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__2.2",
+      "rule_id": "2.2",
+      "title": "Ensure extension directory has appropriate ownership and permissions (Automated)",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_auto_generated": true,
+        "_audit_excerpt": "Determine the PostgreSQL share directory:sudo /usr/pgsql-18/bin/pg_config --sharedir\n/usr/pgsql-18/shareThe extension directory, lives under that share directory:sudo export ext_dir=/usr/pgsql-18/share/extensionsudo ls -ld $ext_dirThis should return:drwxr-xr-x 1 root root 7826 Feb 9 14:27 /usr/pgsql-18/share/extensionAny differences in permissions (the first field) is a failure.\n\n---REMEDIATION---",
+        "_note": "Parser could not synthesise an executable check; reviewer must hand-author."
+      },
+      "audit_steps_text": "Determine the PostgreSQL share directory:\nsudo /usr/pgsql-18/bin/pg_config --sharedir\n/usr/pgsql-18/share\nThe extension directory, lives under that share directory:\nsudo export ext_dir=/usr/pgsql-18/share/extension\nsudo ls -ld $ext_dir\nThis should return:\ndrwxr-xr-x 1 root root 7826 Feb 9 14:27 /usr/pgsql-18/share/extension\nAny differences in permissions (the first field) is a failure.",
+      "audit_excerpt": "Determine the PostgreSQL share directory:sudo /usr/pgsql-18/bin/pg_config --sharedir\n/usr/pgsql-18/shareThe extension directory, lives under that share directory:sudo export ext_dir=/usr/pgsql-18/share/extensionsudo ls -ld $ext_dirThis should return:drwxr-xr-x 1 root root 7826 Feb 9 14:27 /usr/pgsql-18/share/extensionAny differences in permissions (the first field) is a failure.\n\n---REMEDIATION---",
+      "description_head": "The extension directory is the location of the PostgreSQL extensions. Extensions are\nstorage engines or user defined functions (UDFs)."
+    },
+    {
+      "id": 16148,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__2.3",
+      "rule_id": "2.3",
+      "title": "Disable PostgreSQL Command History",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_auto_generated": true,
+        "_audit_excerpt": "Execute the following command as privileged user to assess this recommendation:sudo find /home -name \".psql_history\" -exec ls -la {} \\;\nsudo find /root -name \".psql_history\" -exec ls -la {} \\;\nFor each file returned, determine whether that file is symbolically linked to /dev/null:lrwxrwxrwx 1 doug doug 9 Feb 26 18:18 /home/doug/.psql_history -> /dev/nulllrwxrwxrwx 1 jim jim 9 Feb 26 18:18 /home/ji",
+        "_note": "Parser could not synthesise an executable check; reviewer must hand-author."
+      },
+      "audit_steps_text": "Execute the following command as privileged user to assess this recommendation:\nsudo find /home -name \".psql_history\" -exec ls -la {} \\;\nsudo find /root -name \".psql_history\" -exec ls -la {} \\;\nFor each file returned, determine whether that file is symbolically linked to /dev/null:\nlrwxrwxrwx 1 doug doug 9 Feb 26 18:18 /home/doug/.psql_history -> /dev/null\nlrwxrwxrwx 1 jim jim 9 Feb 26 18:18 /home/jim/.psql_history\nIn the above, Jim's history file is a finding, while Doug's is not.",
+      "audit_excerpt": "Execute the following command as privileged user to assess this recommendation:sudo find /home -name \".psql_history\" -exec ls -la {} \\;\nsudo find /root -name \".psql_history\" -exec ls -la {} \\;\nFor each file returned, determine whether that file is symbolically linked to /dev/null:lrwxrwxrwx 1 doug doug 9 Feb 26 18:18 /home/doug/.psql_history -> /dev/nulllrwxrwxrwx 1 jim jim 9 Feb 26 18:18 /home/ji",
+      "description_head": "On Linux/UNIX, the PostgreSQL client logs most interactive statements to a history file.\nThe default PostgreSQL history file is named .psql_history in the user's home\ndirectory.\nThe PostgreSQL command history should be disabled."
+    },
+    {
+      "id": 16149,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__2.4",
+      "rule_id": "2.4",
+      "title": "Ensure Passwords are Not Stored in the service file",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_auto_generated": true,
+        "_audit_excerpt": "To assess this recommendation, perform the following steps:sudo find / -name .pg_service.conf -type f -exec cat {} \\; 2>/dev/null | greppasswordsudo grep password /root/.pg_service.confgrep password \"${PGSERVICEFILE}\"\ngrep password \"${PGSYSCONFDIR}/pg_service.conf\"\nIf any of the commands above returns a line password=..., this is a finding.\n\n---REMEDIATION---Delete every password entry in the file",
+        "_note": "Parser could not synthesise an executable check; reviewer must hand-author."
+      },
+      "audit_steps_text": "To assess this recommendation, perform the following steps:\nsudo find / -name .pg_service.conf -type f -exec cat {} \\; 2>/dev/null | grep\npassword\nsudo grep password /root/.pg_service.conf\ngrep password \"${PGSERVICEFILE}\"\ngrep password \"${PGSYSCONFDIR}/pg_service.conf\"\nIf any of the commands above returns a line password=..., this is a finding.",
+      "audit_excerpt": "To assess this recommendation, perform the following steps:sudo find / -name .pg_service.conf -type f -exec cat {} \\; 2>/dev/null | greppasswordsudo grep password /root/.pg_service.confgrep password \"${PGSERVICEFILE}\"\ngrep password \"${PGSYSCONFDIR}/pg_service.conf\"\nIf any of the commands above returns a line password=..., this is a finding.\n\n---REMEDIATION---Delete every password entry in the file",
+      "description_head": "One can set a password in a PostgreSQL connection service file. Verify the password\noption is not used in a connection service file."
+    },
+    {
+      "id": 16150,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__3.1.2",
+      "rule_id": "3.1.2",
+      "title": "Ensure the log destinations are set correctly",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_auto_generated": true,
+        "_audit_excerpt": "Execute the following SQL statement to view the currently active log destinations:postgres=# show log_destination;\nlog_destination\n-----------------stderr\n(1 row)\nThe log destinations should comply with your organization's policies on logging. If all theexpected log destinations are not set, this is a fail.\n\n---REMEDIATION---Execute the following SQL statements to remediate this setting (in this e",
+        "_note": "Parser could not synthesise an executable check; reviewer must hand-author."
+      },
+      "audit_steps_text": "Execute the following SQL statement to view the currently active log destinations:\npostgres=# show log_destination;\nlog_destination\n-----------------\nstderr\n(1 row)\nThe log destinations should comply with your organization's policies on logging. If all the\nexpected log destinations are not set, this is a fail.",
+      "audit_excerpt": "Execute the following SQL statement to view the currently active log destinations:postgres=# show log_destination;\nlog_destination\n-----------------stderr\n(1 row)\nThe log destinations should comply with your organization's policies on logging. If all theexpected log destinations are not set, this is a fail.\n\n---REMEDIATION---Execute the following SQL statements to remediate this setting (in this e",
+      "description_head": "PostgreSQL supports several methods for logging server messages, including stderr,\ncsvlog, syslog, and jsonlog. On Windows, eventlog is also supported. One or more\nof these destinations should be set for server log output."
+    },
+    {
+      "id": 16151,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__3.1.3",
+      "rule_id": "3.1.3",
+      "title": "Ensure the logging collector is enabled",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "approved",
+      "auto_generated_check": false,
+      "expect_kind": "first_value_equals",
+      "has_sql": true,
+      "authored_tag": "cis-pg18-config",
+      "classification": "authored_sql",
+      "check_definition": {
+        "runner": "postgres_sql",
+        "sql": "SELECT setting FROM pg_settings WHERE name = 'logging_collector'",
+        "expect": {
+          "kind": "first_value_equals",
+          "expected": "on"
+        },
+        "pass_message": "Logging collector is enabled.",
+        "fail_message": "Logging collector is OFF \u2014 server logs are not captured.",
+        "_authored": "cis-pg18-config",
+        "timeout_seconds": 15
+      },
+      "audit_steps_text": "Execute the following SQL statement and confirm that the logging_collector is\nenabled (on):\npostgres=# show logging_collector;\nlogging_collector\n-------------------\non\n(1 row)",
+      "audit_excerpt": "",
+      "description_head": "The logging collector is a background process that captures log messages sent to\nstderr and redirects them into log files. The logging_collector setting must be\nenabled in order for this process to run. It can only be set at the server star"
+    },
+    {
+      "id": 16152,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__3.1.4",
+      "rule_id": "3.1.4",
+      "title": "Ensure the log file destination directory is set correctly",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_auto_generated": true,
+        "_audit_excerpt": "Execute the following SQL statement to confirm that the expected logging directory isspecified:postgres=# show log_directory;\nlog_directory\n---------------log\n(1 row)\nNote: This shows a path relative to the cluster's data directory. An absolute path wouldstart with a / like the following: /var/log/pg_log\n\n---REMEDIATION---Execute the following SQL statement(s) to remediate this setting:postgres=# ",
+        "_note": "Parser could not synthesise an executable check; reviewer must hand-author."
+      },
+      "audit_steps_text": "Execute the following SQL statement to confirm that the expected logging directory is\nspecified:\npostgres=# show log_directory;\nlog_directory\n---------------\nlog\n(1 row)\nNote: This shows a path relative to the cluster's data directory. An absolute path would\nstart with a / like the following: /var/log/pg_log",
+      "audit_excerpt": "Execute the following SQL statement to confirm that the expected logging directory isspecified:postgres=# show log_directory;\nlog_directory\n---------------log\n(1 row)\nNote: This shows a path relative to the cluster's data directory. An absolute path wouldstart with a / like the following: /var/log/pg_log\n\n---REMEDIATION---Execute the following SQL statement(s) to remediate this setting:postgres=# ",
+      "description_head": "The log_directory setting specifies the destination directory for log files when\nlog_destination is stderr or csvlog. It can be specified as relative to the cluster\ndata directory ($PGDATA) or as an absolute path. log_directory should be se"
+    },
+    {
+      "id": 16153,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__3.1.5",
+      "rule_id": "3.1.5",
+      "title": "Ensure the filename pattern for log files is set correctly",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_auto_generated": true,
+        "_audit_excerpt": "Execute the following SQL statement to confirm that the desired pattern is set:postgres=# show log_filename;\nlog_filename\n-------------------postgresql-%a.log\n(1 row)\nNote: This example shows the use of the strftime %a escape. This creates seven logfiles, one for each day of the week (e.g. postgresql-Mon.log, postgresql-Tue.log,\net al)\n\n---REMEDIATION---Execute the following SQL statement(s) to re",
+        "_note": "Parser could not synthesise an executable check; reviewer must hand-author."
+      },
+      "audit_steps_text": "Execute the following SQL statement to confirm that the desired pattern is set:\npostgres=# show log_filename;\nlog_filename\n-------------------\npostgresql-%a.log\n(1 row)\nNote: This example shows the use of the strftime %a escape. This creates seven log\nfiles, one for each day of the week (e.g. postgresql-Mon.log, postgresql-Tue.log,\net al)",
+      "audit_excerpt": "Execute the following SQL statement to confirm that the desired pattern is set:postgres=# show log_filename;\nlog_filename\n-------------------postgresql-%a.log\n(1 row)\nNote: This example shows the use of the strftime %a escape. This creates seven logfiles, one for each day of the week (e.g. postgresql-Mon.log, postgresql-Tue.log,\net al)\n\n---REMEDIATION---Execute the following SQL statement(s) to re",
+      "description_head": "The log_filename setting specifies the filename pattern for log files. The value for\nlog_filename should match your organization's logging policy.\nThe value is treated as a strftime pattern, so %-escapes can be used to specify time-\nvarying"
+    },
+    {
+      "id": 16154,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__3.1.6",
+      "rule_id": "3.1.6",
+      "title": "Ensure the log file permissions are set correctly",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_auto_generated": true,
+        "_audit_excerpt": "Execute the following SQL statement to verify that the setting is consistent withorganizational logging policy:postgres=# show log_file_mode;\nlog_file_mode\n---------------\n(1 row)\n\n---REMEDIATION---Execute the following SQL statement(s) to remediate this setting (with the exampleassuming the desired value of 0600):postgres=# alter system set log_file_mode = '0600';\nALTER SYSTEMpostgres=# select pg",
+        "_note": "Parser could not synthesise an executable check; reviewer must hand-author."
+      },
+      "audit_steps_text": "Execute the following SQL statement to verify that the setting is consistent with\norganizational logging policy:\npostgres=# show log_file_mode;\nlog_file_mode\n---------------\n(1 row)",
+      "audit_excerpt": "Execute the following SQL statement to verify that the setting is consistent withorganizational logging policy:postgres=# show log_file_mode;\nlog_file_mode\n---------------\n(1 row)\n\n---REMEDIATION---Execute the following SQL statement(s) to remediate this setting (with the exampleassuming the desired value of 0600):postgres=# alter system set log_file_mode = '0600';\nALTER SYSTEMpostgres=# select pg",
+      "description_head": "The log_file_mode setting determines the file permissions for log files when\nlogging_collector is enabled. The parameter value is expected to be a numeric\nmode specification in the form accepted by the chmod and umask system calls. (To use\n"
+    },
+    {
+      "id": 16122,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__3.1.7",
+      "rule_id": "3.1.7",
+      "title": "Ensure 'log_truncate_on_rotation' is enabled",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "approved",
+      "auto_generated_check": false,
+      "expect_kind": "first_value_equals",
+      "has_sql": true,
+      "authored_tag": "cis-pg18-config",
+      "classification": "authored_sql",
+      "check_definition": {
+        "runner": "postgres_sql",
+        "sql": "SELECT setting FROM pg_settings WHERE name = 'log_truncate_on_rotation'",
+        "expect": {
+          "kind": "first_value_equals",
+          "expected": "on"
+        },
+        "pass_message": "log_truncate_on_rotation is enabled.",
+        "fail_message": "log_truncate_on_rotation is OFF.",
+        "_authored": "cis-pg18-config",
+        "timeout_seconds": 15
+      },
+      "audit_steps_text": "Execute the following SQL statement to verify how log_truncate_on_rotation is set:\nInternal Only - General\npostgres=# show log_truncate_on_rotation;\nlog_truncate_on_rotation\n--------------------------\non\n(1 row)\nIf it is not set to on, this is a fail (depending on your organization's logging policy).",
+      "audit_excerpt": "",
+      "description_head": "Enabling the log_truncate_on_rotation setting when logging_collector is\nenabled causes PostgreSQL to truncate (overwrite) existing log files with the same\nname during log rotation instead of appending to them. For example, using this settin"
+    },
+    {
+      "id": 16155,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__3.1.8",
+      "rule_id": "3.1.8",
+      "title": "Ensure the maximum log file lifetime is set correctly",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_auto_generated": true,
+        "_audit_excerpt": "Execute the following SQL statement to verify the log rotation age is set to anacceptable value:postgres=# show log_rotation_age;\nlog_rotation_age\n------------------1d\n\n---REMEDIATION---Execute the following SQL statement(s) to remediate this setting (in this example,\nsetting it to one hour):postgres=# alter system set log_rotation_age='1h';\nALTER SYSTEMpostgres=# select pg_reload_conf();\npg_reloa",
+        "_note": "Parser could not synthesise an executable check; reviewer must hand-author."
+      },
+      "audit_steps_text": "Execute the following SQL statement to verify the log rotation age is set to an\nacceptable value:\npostgres=# show log_rotation_age;\nlog_rotation_age\n------------------\n1d",
+      "audit_excerpt": "Execute the following SQL statement to verify the log rotation age is set to anacceptable value:postgres=# show log_rotation_age;\nlog_rotation_age\n------------------1d\n\n---REMEDIATION---Execute the following SQL statement(s) to remediate this setting (in this example,\nsetting it to one hour):postgres=# alter system set log_rotation_age='1h';\nALTER SYSTEMpostgres=# select pg_reload_conf();\npg_reloa",
+      "description_head": "When logging_collector is enabled, the log_rotation_age parameter determines\nthe maximum lifetime of an individual log file (depending on the value of\nlog_filename). After this many minutes have elapsed, a new log file will be created via\na"
+    },
+    {
+      "id": 16156,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__3.1.9",
+      "rule_id": "3.1.9",
+      "title": "Ensure the maximum log file size is set correctly",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_auto_generated": true,
+        "_audit_excerpt": "Execute the following SQL statement to verify that log_rotation_size is set incompliance with the organization's logging policy:postgres=# show log_rotation_size;\nlog_rotation_size\n-------------------\n(1 row)\n\n---REMEDIATION---Execute the following SQL statement(s) to remediate this setting (in this example,\nsetting it to 1GB):postgres=# alter system set log_rotation_size = '1GB';\nALTER SYSTEMpost",
+        "_note": "Parser could not synthesise an executable check; reviewer must hand-author."
+      },
+      "audit_steps_text": "Execute the following SQL statement to verify that log_rotation_size is set in\ncompliance with the organization's logging policy:\npostgres=# show log_rotation_size;\nlog_rotation_size\n-------------------\n(1 row)",
+      "audit_excerpt": "Execute the following SQL statement to verify that log_rotation_size is set incompliance with the organization's logging policy:postgres=# show log_rotation_size;\nlog_rotation_size\n-------------------\n(1 row)\n\n---REMEDIATION---Execute the following SQL statement(s) to remediate this setting (in this example,\nsetting it to 1GB):postgres=# alter system set log_rotation_size = '1GB';\nALTER SYSTEMpost",
+      "description_head": "The log_rotation_size setting determines the maximum size of an individual log file.\nOnce the maximum size is reached, automatic log file rotation will occur."
+    },
+    {
+      "id": 16157,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__3.1.10",
+      "rule_id": "3.1.10",
+      "title": "Ensure the correct syslog facility is selected",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_auto_generated": true,
+        "_audit_excerpt": "Execute the following SQL statement and verify that the correct facility is selected:postgres=# show syslog_facility;\nsyslog_facility\n-----------------local0\n(1 row)\n\n---REMEDIATION---Execute the following SQL statement(s) to remediate this setting (in this example,\nsetting it to the LOCAL1 facility):postgres=# alter system set syslog_facility = 'LOCAL1';\nALTER SYSTEMpostgres=# select pg_reload_co",
+        "_note": "Parser could not synthesise an executable check; reviewer must hand-author."
+      },
+      "audit_steps_text": "Execute the following SQL statement and verify that the correct facility is selected:\npostgres=# show syslog_facility;\nsyslog_facility\n-----------------\nlocal0\n(1 row)",
+      "audit_excerpt": "Execute the following SQL statement and verify that the correct facility is selected:postgres=# show syslog_facility;\nsyslog_facility\n-----------------local0\n(1 row)\n\n---REMEDIATION---Execute the following SQL statement(s) to remediate this setting (in this example,\nsetting it to the LOCAL1 facility):postgres=# alter system set syslog_facility = 'LOCAL1';\nALTER SYSTEMpostgres=# select pg_reload_co",
+      "description_head": "The syslog_facility setting specifies the syslog \"facility\" to be used when logging to\nsyslog is enabled. You can choose from any of the 'local' facilities:\n\u2022 LOCAL0\n\u2022 LOCAL1\n\u2022 LOCAL2\n\u2022 LOCAL3\n\u2022 LOCAL4\n\u2022 LOCAL5\n\u2022 LOCAL6\n\u2022 LOCAL7\nYour organi"
+    },
+    {
+      "id": 16158,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__3.1.11",
+      "rule_id": "3.1.11",
+      "title": "Ensure syslog messages are not suppressed",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_auto_generated": true,
+        "_audit_excerpt": "Execute the following SQL statement and confirm that the syslog_sequence_numbersis enabled (on):postgres=# show syslog_sequence_numbers;\nsyslog_sequence_numbers\n-------------------------on\n(1 row)\n\n---REMEDIATION---Execute the following SQL statement(s) to remediate this setting:postgres=# alter system set syslog_sequence_numbers = 'on';\nALTER SYSTEMpostgres=# select pg_reload_conf();\npg_reload_co",
+        "_note": "Parser could not synthesise an executable check; reviewer must hand-author."
+      },
+      "audit_steps_text": "Execute the following SQL statement and confirm that the syslog_sequence_numbers\nis enabled (on):\npostgres=# show syslog_sequence_numbers;\nsyslog_sequence_numbers\n-------------------------\non\n(1 row)",
+      "audit_excerpt": "Execute the following SQL statement and confirm that the syslog_sequence_numbersis enabled (on):postgres=# show syslog_sequence_numbers;\nsyslog_sequence_numbers\n-------------------------on\n(1 row)\n\n---REMEDIATION---Execute the following SQL statement(s) to remediate this setting:postgres=# alter system set syslog_sequence_numbers = 'on';\nALTER SYSTEMpostgres=# select pg_reload_conf();\npg_reload_co",
+      "description_head": "When logging to Syslog and syslog_sequence_numbers is on, then each message will\nbe prefixed by an increasing sequence number (such as [2])."
+    },
+    {
+      "id": 16159,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__3.1.12",
+      "rule_id": "3.1.12",
+      "title": "Ensure syslog messages are not lost due to size",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_auto_generated": true,
+        "_audit_excerpt": "Execute the following SQL statement to confirm that long log messages are split whenlogging to Syslog:postgres=# show syslog_split_messages;\nsyslog_split_messages\n-----------------------on\n(1 row)\n\n---REMEDIATION---Execute the following SQL statement(s) to remediate this setting:postgres=# alter system set syslog_split_messages = 'on';\nALTER SYSTEMpostgres=# select pg_reload_conf();\npg_reload_conf",
+        "_note": "Parser could not synthesise an executable check; reviewer must hand-author."
+      },
+      "audit_steps_text": "Execute the following SQL statement to confirm that long log messages are split when\nlogging to Syslog:\npostgres=# show syslog_split_messages;\nsyslog_split_messages\n-----------------------\non\n(1 row)",
+      "audit_excerpt": "Execute the following SQL statement to confirm that long log messages are split whenlogging to Syslog:postgres=# show syslog_split_messages;\nsyslog_split_messages\n-----------------------on\n(1 row)\n\n---REMEDIATION---Execute the following SQL statement(s) to remediate this setting:postgres=# alter system set syslog_split_messages = 'on';\nALTER SYSTEMpostgres=# select pg_reload_conf();\npg_reload_conf",
+      "description_head": "PostgreSQL log messages can exceed 1024 bytes, which is a typical size limit for\ntraditional Syslog implementations. When syslog_split_messages is off, PostgreSQL\nserver log messages are delivered to the Syslog service as is, and it is up t"
+    },
+    {
+      "id": 16160,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__3.1.13",
+      "rule_id": "3.1.13",
+      "title": "Ensure the program name for PostgreSQL syslog messages is correct (Automated)",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_auto_generated": true,
+        "_audit_excerpt": "Execute the following SQL statement to verify the program name is set correctly:postgres=# show syslog_ident;\nsyslog_ident\n--------------postgres\n(1 row)\n\n---REMEDIATION---Execute the following SQL statement(s) to remediate this setting (in this example,\nassuming a program name of proddb):postgres=# alter system set syslog_ident = 'proddb';\nALTER SYSTEMpostgres=# select pg_reload_conf();\npg_reload",
+        "_note": "Parser could not synthesise an executable check; reviewer must hand-author."
+      },
+      "audit_steps_text": "Execute the following SQL statement to verify the program name is set correctly:\npostgres=# show syslog_ident;\nsyslog_ident\n--------------\npostgres\n(1 row)",
+      "audit_excerpt": "Execute the following SQL statement to verify the program name is set correctly:postgres=# show syslog_ident;\nsyslog_ident\n--------------postgres\n(1 row)\n\n---REMEDIATION---Execute the following SQL statement(s) to remediate this setting (in this example,\nassuming a program name of proddb):postgres=# alter system set syslog_ident = 'proddb';\nALTER SYSTEMpostgres=# select pg_reload_conf();\npg_reload",
+      "description_head": "The syslog_ident setting specifies the program name used to identify PostgreSQL\nmessages in syslog logs. An example of a possible program name is postgres."
+    },
+    {
+      "id": 16161,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__3.1.14",
+      "rule_id": "3.1.14",
+      "title": "Ensure the correct messages are written to the server log",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_auto_generated": true,
+        "_audit_excerpt": "Execute the following SQL statement to confirm the setting is correct:postgres=# show log_min_messages;\nlog_min_messages\n------------------warning\n(1 row)\nIf logging is not configured to at least warning, this is a fail.Internal Only - General\n\n---REMEDIATION---Execute the following SQL statement(s) as superuser to remediate this setting (in thisexample, to set it to warning):postgres=# alter syst",
+        "_note": "Parser could not synthesise an executable check; reviewer must hand-author."
+      },
+      "audit_steps_text": "Execute the following SQL statement to confirm the setting is correct:\npostgres=# show log_min_messages;\nlog_min_messages\n------------------\nwarning\n(1 row)\nIf logging is not configured to at least warning, this is a fail.\nInternal Only - General",
+      "audit_excerpt": "Execute the following SQL statement to confirm the setting is correct:postgres=# show log_min_messages;\nlog_min_messages\n------------------warning\n(1 row)\nIf logging is not configured to at least warning, this is a fail.Internal Only - General\n\n---REMEDIATION---Execute the following SQL statement(s) as superuser to remediate this setting (in thisexample, to set it to warning):postgres=# alter syst",
+      "description_head": "The log_min_messages setting specifies the message levels that are written to the\nserver log. Each level includes all the levels that follow it. The lower the level (vertically,\nbelow), the fewer messages are logged.\nValid values are:\n\u2022 DEB"
+    },
+    {
+      "id": 16162,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__3.1.15",
+      "rule_id": "3.1.15",
+      "title": "Ensure the correct SQL statements generating errors are recorded (Automated)",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_auto_generated": true,
+        "_audit_excerpt": "Execute the following SQL statement to verify the setting is correct:postgres=# show log_min_error_statement;\nlog_min_error_statement\n-------------------------error\n(1 row)\nIf not configured to at least error, this is a fail.Internal Only - General\n\n---REMEDIATION---Execute the following SQL statement(s) as superuser to remediate this setting (in theexample, to error):postgres=# alter system set l",
+        "_note": "Parser could not synthesise an executable check; reviewer must hand-author."
+      },
+      "audit_steps_text": "Execute the following SQL statement to verify the setting is correct:\npostgres=# show log_min_error_statement;\nlog_min_error_statement\n-------------------------\nerror\n(1 row)\nIf not configured to at least error, this is a fail.\nInternal Only - General",
+      "audit_excerpt": "Execute the following SQL statement to verify the setting is correct:postgres=# show log_min_error_statement;\nlog_min_error_statement\n-------------------------error\n(1 row)\nIf not configured to at least error, this is a fail.Internal Only - General\n\n---REMEDIATION---Execute the following SQL statement(s) as superuser to remediate this setting (in theexample, to error):postgres=# alter system set l",
+      "description_head": "The log_min_error_statement setting causes all SQL statements generating errors\nat or above the specified severity level to be recorded in the server log. Each level\nincludes all the levels that follow it. The lower the level (vertically, b"
+    },
+    {
+      "id": 16163,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__3.1.16",
+      "rule_id": "3.1.16",
+      "title": "Ensure 'debug_print_parse' is disabled",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "approved",
+      "auto_generated_check": false,
+      "expect_kind": "first_value_equals",
+      "has_sql": true,
+      "authored_tag": "cis-pg18-config",
+      "classification": "authored_sql",
+      "check_definition": {
+        "runner": "postgres_sql",
+        "sql": "SELECT setting FROM pg_settings WHERE name = 'debug_print_parse'",
+        "expect": {
+          "kind": "first_value_equals",
+          "expected": "off"
+        },
+        "pass_message": "debug_print_parse is disabled.",
+        "fail_message": "debug_print_parse is ON (leaks internals to the log).",
+        "_authored": "cis-pg18-config",
+        "timeout_seconds": 15
+      },
+      "audit_steps_text": "Execute the following SQL statement to confirm the setting is correct:\npostgres=# show debug_print_parse;\ndebug_print_parse\n-------------------\noff\n(1 row)\nIf not configured to off, this is a fail.",
+      "audit_excerpt": "",
+      "description_head": "The debug_print_parse setting enables printing the resulting parse tree for each\nexecuted query. These messages are emitted at the LOG message level. Unless\ndirected otherwise by your organization's logging policy, it is recommended this se"
+    },
+    {
+      "id": 16164,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__3.1.17",
+      "rule_id": "3.1.17",
+      "title": "Ensure 'debug_print_rewritten' is disabled",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "approved",
+      "auto_generated_check": false,
+      "expect_kind": "first_value_equals",
+      "has_sql": true,
+      "authored_tag": "cis-pg18-config",
+      "classification": "authored_sql",
+      "check_definition": {
+        "runner": "postgres_sql",
+        "sql": "SELECT setting FROM pg_settings WHERE name = 'debug_print_rewritten'",
+        "expect": {
+          "kind": "first_value_equals",
+          "expected": "off"
+        },
+        "pass_message": "debug_print_rewritten is disabled.",
+        "fail_message": "debug_print_rewritten is ON.",
+        "_authored": "cis-pg18-config",
+        "timeout_seconds": 15
+      },
+      "audit_steps_text": "Execute the following SQL statement to confirm the setting is disabled:\npostgres=# show debug_print_rewritten;\ndebug_print_rewritten\n-----------------------\noff\n(1 row)\nIf not configured to off, this is a fail.",
+      "audit_excerpt": "",
+      "description_head": "The debug_print_rewritten setting enables printing the query rewriter output for\neach executed query. These messages are emitted at the LOG message level. Unless\ndirected otherwise by your organization's logging policy, it is recommended th"
+    },
+    {
+      "id": 16165,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__3.1.18",
+      "rule_id": "3.1.18",
+      "title": "Ensure 'debug_print_plan' is disabled",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "approved",
+      "auto_generated_check": false,
+      "expect_kind": "first_value_equals",
+      "has_sql": true,
+      "authored_tag": "cis-pg18-config",
+      "classification": "authored_sql",
+      "check_definition": {
+        "runner": "postgres_sql",
+        "sql": "SELECT setting FROM pg_settings WHERE name = 'debug_print_plan'",
+        "expect": {
+          "kind": "first_value_equals",
+          "expected": "off"
+        },
+        "pass_message": "debug_print_plan is disabled.",
+        "fail_message": "debug_print_plan is ON.",
+        "_authored": "cis-pg18-config",
+        "timeout_seconds": 15
+      },
+      "audit_steps_text": "Execute the following SQL statement to verify the setting is disabled:\npostgres=# show debug_print_plan;\ndebug_print_plan\n------------------\noff\n(1 row)\nIf not configured to off, this is a fail.",
+      "audit_excerpt": "",
+      "description_head": "The debug_print_plan setting enables printing the execution plan for each executed\nquery. These messages are emitted at the LOG message level. Unless directed\notherwise by your organization's logging policy, it is recommended this setting b"
+    },
+    {
+      "id": 16166,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__3.1.19",
+      "rule_id": "3.1.19",
+      "title": "Ensure 'debug_pretty_print' is enabled",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_auto_generated": true,
+        "_audit_excerpt": "Execute the following SQL statement to confirm the setting is enabled:postgres=# show debug_pretty_print;\ndebug_pretty_print\n--------------------on\n(1 row)\nIf not configured to on, this is a fail.\n\n---REMEDIATION---Execute the following SQL statement(s) to enable this setting:postgres=# alter system set debug_pretty_print = 'on';\nALTER SYSTEMpostgres=# select pg_reload_conf();\npg_reload_conf\n-----",
+        "_note": "Parser could not synthesise an executable check; reviewer must hand-author."
+      },
+      "audit_steps_text": "Execute the following SQL statement to confirm the setting is enabled:\npostgres=# show debug_pretty_print;\ndebug_pretty_print\n--------------------\non\n(1 row)\nIf not configured to on, this is a fail.",
+      "audit_excerpt": "Execute the following SQL statement to confirm the setting is enabled:postgres=# show debug_pretty_print;\ndebug_pretty_print\n--------------------on\n(1 row)\nIf not configured to on, this is a fail.\n\n---REMEDIATION---Execute the following SQL statement(s) to enable this setting:postgres=# alter system set debug_pretty_print = 'on';\nALTER SYSTEMpostgres=# select pg_reload_conf();\npg_reload_conf\n-----",
+      "description_head": "Enabling debug_pretty_print indents the messages produced by\ndebug_print_parse, debug_print_rewritten, or debug_print_plan making them\nsignificantly easier to read."
+    },
+    {
+      "id": 16167,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__3.1.20",
+      "rule_id": "3.1.20",
+      "title": "Ensure 'log_connections' is enabled",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "approved",
+      "auto_generated_check": false,
+      "expect_kind": "first_value_equals",
+      "has_sql": true,
+      "authored_tag": "cis-pg18-config",
+      "classification": "authored_sql",
+      "check_definition": {
+        "runner": "postgres_sql",
+        "sql": "SELECT setting FROM pg_settings WHERE name = 'log_connections'",
+        "expect": {
+          "kind": "first_value_equals",
+          "expected": "on"
+        },
+        "pass_message": "log_connections is enabled.",
+        "fail_message": "log_connections is OFF \u2014 connections are not audited.",
+        "_authored": "cis-pg18-config",
+        "timeout_seconds": 15
+      },
+      "audit_steps_text": "Execute the following SQL statement to verify the setting is enabled:\npostgres=# show log_connections;\nlog_connections\n-----------------\nall\n(1 row)\nIf not configured to all, this is a fail.",
+      "audit_excerpt": "",
+      "description_head": "Enabling the log_connections setting causes each attempted connection to the server\nto be logged, as well as successful completion of client authentication. This parameter\ncannot be changed after the session start."
+    },
+    {
+      "id": 16168,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__3.1.21",
+      "rule_id": "3.1.21",
+      "title": "Ensure 'log_disconnections' is enabled",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "approved",
+      "auto_generated_check": false,
+      "expect_kind": "first_value_equals",
+      "has_sql": true,
+      "authored_tag": "cis-pg18-config",
+      "classification": "authored_sql",
+      "check_definition": {
+        "runner": "postgres_sql",
+        "sql": "SELECT setting FROM pg_settings WHERE name = 'log_disconnections'",
+        "expect": {
+          "kind": "first_value_equals",
+          "expected": "on"
+        },
+        "pass_message": "log_disconnections is enabled.",
+        "fail_message": "log_disconnections is OFF.",
+        "_authored": "cis-pg18-config",
+        "timeout_seconds": 15
+      },
+      "audit_steps_text": "Execute the following SQL statement to verify the setting is enabled:\npostgres=# show log_disconnections;\nlog_disconnections\n--------------------\non\n(1 row)\nIf not configured to on, this is a fail.",
+      "audit_excerpt": "",
+      "description_head": "Enabling the log_disconnections setting logs the end of each session, including\nsession duration. This parameter cannot be changed after the session start."
+    },
+    {
+      "id": 16169,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__3.1.22",
+      "rule_id": "3.1.22",
+      "title": "Ensure 'log_error_verbosity' is set correctly",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_auto_generated": true,
+        "_audit_excerpt": "Execute the following SQL statement to verify the setting is correct:postgres=# show log_error_verbosity;\nlog_error_verbosity\n---------------------default\n(1 row)\nIf not configured to verbose, this is a fail.\n\n---REMEDIATION---Execute the following SQL statement(s) as superuser to remediate this setting (in thisexample, to verbose):postgres=# alter system set log_error_verbosity = 'verbose';\nALTER",
+        "_note": "Parser could not synthesise an executable check; reviewer must hand-author."
+      },
+      "audit_steps_text": "Execute the following SQL statement to verify the setting is correct:\npostgres=# show log_error_verbosity;\nlog_error_verbosity\n---------------------\ndefault\n(1 row)\nIf not configured to verbose, this is a fail.",
+      "audit_excerpt": "Execute the following SQL statement to verify the setting is correct:postgres=# show log_error_verbosity;\nlog_error_verbosity\n---------------------default\n(1 row)\nIf not configured to verbose, this is a fail.\n\n---REMEDIATION---Execute the following SQL statement(s) as superuser to remediate this setting (in thisexample, to verbose):postgres=# alter system set log_error_verbosity = 'verbose';\nALTER",
+      "description_head": "The log_error_verbosity setting specifies the verbosity (amount of detail) of logged\nmessages. Valid values are:\n\u2022 TERSE\n\u2022 DEFAULT\n\u2022 VERBOSE\nwith each containing the fields of the level above it as well as additional fields.\nTERSE excludes "
+    },
+    {
+      "id": 16170,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__3.1.23",
+      "rule_id": "3.1.23",
+      "title": "Ensure 'log_hostname' is set correctly",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "approved",
+      "auto_generated_check": false,
+      "expect_kind": "first_value_equals",
+      "has_sql": true,
+      "authored_tag": "cis-pg18-config",
+      "classification": "authored_sql",
+      "check_definition": {
+        "runner": "postgres_sql",
+        "sql": "SELECT setting FROM pg_settings WHERE name = 'log_hostname'",
+        "expect": {
+          "kind": "first_value_equals",
+          "expected": "on"
+        },
+        "pass_message": "log_hostname is enabled.",
+        "fail_message": "log_hostname is OFF.",
+        "_authored": "cis-pg18-config",
+        "timeout_seconds": 15
+      },
+      "audit_steps_text": "Execute the following SQL statement to verify the setting is correct:\npostgres=# show log_hostname;\nlog_hostname\n--------------\noff\n(1 row)\nIf not configured to off, this is a fail.",
+      "audit_excerpt": "",
+      "description_head": "Enabling the log_hostname setting causes the hostname of the connecting host to be\nlogged in addition to the host's IP address for connection log messages. Disabling the\nsetting causes only the connecting host's IP address to be logged, and"
+    },
+    {
+      "id": 16172,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__3.1.24",
+      "rule_id": "3.1.24",
+      "title": "Ensure 'log_line_prefix' is set correctly",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_auto_generated": true,
+        "_audit_excerpt": "Execute the following SQL statement to verify the setting is correct:postgres=# show log_line_prefix;\nlog_line_prefix\n-----------------\n< %m [%p] >\n(1 row)\nIf the prefix does not at a minimum include %m [%p]: [%l-1]\ndb=%d,user=%u,app=%a,client=%h (for non-Syslog logging), this is a fail. For Sysloglogging, the prefix should include user=%u,db=%d,app=%a,client=%h .\n\n---REMEDIATION---Execute the fol",
+        "_note": "Parser could not synthesise an executable check; reviewer must hand-author."
+      },
+      "audit_steps_text": "Execute the following SQL statement to verify the setting is correct:\npostgres=# show log_line_prefix;\nlog_line_prefix\n-----------------\n< %m [%p] >\n(1 row)\nIf the prefix does not at a minimum include %m [%p]: [%l-1]\ndb=%d,user=%u,app=%a,client=%h (for non-Syslog logging), this is a fail. For Syslog\nlogging, the prefix should include user=%u,db=%d,app=%a,client=%h .",
+      "audit_excerpt": "Execute the following SQL statement to verify the setting is correct:postgres=# show log_line_prefix;\nlog_line_prefix\n-----------------\n< %m [%p] >\n(1 row)\nIf the prefix does not at a minimum include %m [%p]: [%l-1]\ndb=%d,user=%u,app=%a,client=%h (for non-Syslog logging), this is a fail. For Sysloglogging, the prefix should include user=%u,db=%d,app=%a,client=%h .\n\n---REMEDIATION---Execute the fol",
+      "description_head": "The log_line_prefix setting specifies a printf-style string that is prefixed to each\nlog line. If blank, no prefix is used. You should configure this as recommended by the\npgBadger development team unless directed otherwise by your organiza"
+    },
+    {
+      "id": 16173,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__3.1.25",
+      "rule_id": "3.1.25",
+      "title": "Ensure 'log_statement' is set correctly",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_auto_generated": true,
+        "_audit_excerpt": "Execute the following SQL statement to verify the setting is correct:Internal Only - Generalpostgres=# show log_statement;\nlog_statement\n---------------none\n(1 row)\nIf log_statement is set to none then this is a fail.\n\n---REMEDIATION---Execute the following SQL statement(s) as superuser to remediate this setting:postgres=# alter system set log_statement='ddl';\nALTER SYSTEMpostgres=# select pg_relo",
+        "_note": "Parser could not synthesise an executable check; reviewer must hand-author."
+      },
+      "audit_steps_text": "Execute the following SQL statement to verify the setting is correct:\nInternal Only - General\npostgres=# show log_statement;\nlog_statement\n---------------\nnone\n(1 row)\nIf log_statement is set to none then this is a fail.",
+      "audit_excerpt": "Execute the following SQL statement to verify the setting is correct:Internal Only - Generalpostgres=# show log_statement;\nlog_statement\n---------------none\n(1 row)\nIf log_statement is set to none then this is a fail.\n\n---REMEDIATION---Execute the following SQL statement(s) as superuser to remediate this setting:postgres=# alter system set log_statement='ddl';\nALTER SYSTEMpostgres=# select pg_relo",
+      "description_head": "The log_statement setting specifies the types of SQL statements that are logged.\nValid values are:\n\u2022 none (off)\n\u2022 ddl\n\u2022 mod\n\u2022 all (all statements)\nIt is recommended this be set to ddl unless otherwise directed by your organization's\nlogging"
+    },
+    {
+      "id": 16174,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__3.1.26",
+      "rule_id": "3.1.26",
+      "title": "Ensure 'log_timezone' is set correctly",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_auto_generated": true,
+        "_audit_excerpt": "Execute the following SQL statement:postgres=# show log_timezone;\nlog_timezone\n--------------US/Eastern\n(1 row)\nIf log_timezone is not set to GMT, UTC, or as defined by your organization's loggingpolicy this is a fail.\n\n---REMEDIATION---Execute the following SQL statement(s) to remediate this setting:postgres=# alter system set log_timezone = 'GMT';\nALTER SYSTEMpostgres=# select pg_reload_conf();\n",
+        "_note": "Parser could not synthesise an executable check; reviewer must hand-author."
+      },
+      "audit_steps_text": "Execute the following SQL statement:\npostgres=# show log_timezone;\nlog_timezone\n--------------\nUS/Eastern\n(1 row)\nIf log_timezone is not set to GMT, UTC, or as defined by your organization's logging\npolicy this is a fail.",
+      "audit_excerpt": "Execute the following SQL statement:postgres=# show log_timezone;\nlog_timezone\n--------------US/Eastern\n(1 row)\nIf log_timezone is not set to GMT, UTC, or as defined by your organization's loggingpolicy this is a fail.\n\n---REMEDIATION---Execute the following SQL statement(s) to remediate this setting:postgres=# alter system set log_timezone = 'GMT';\nALTER SYSTEMpostgres=# select pg_reload_conf();\n",
+      "description_head": "The log_timezone setting specifies the time zone to use in timestamps within log\nmessages. This value is cluster-wide, so that all sessions will report timestamps\nconsistently. Unless directed otherwise by your organization's logging policy"
+    },
+    {
+      "id": 16175,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__3.2",
+      "rule_id": "3.2",
+      "title": "Ensure the PostgreSQL Audit Extension (pgAudit) is enabled",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "approved",
+      "auto_generated_check": false,
+      "expect_kind": "first_value_contains",
+      "has_sql": true,
+      "authored_tag": "cis-pg18-config",
+      "classification": "authored_sql",
+      "check_definition": {
+        "runner": "postgres_sql",
+        "sql": "SELECT setting FROM pg_settings WHERE name='shared_preload_libraries'",
+        "expect": {
+          "kind": "first_value_contains",
+          "expected": "pgaudit"
+        },
+        "pass_message": "pgAudit is loaded (shared_preload_libraries).",
+        "fail_message": "pgAudit is NOT loaded \u2014 no statement-level audit trail.",
+        "_authored": "cis-pg18-config",
+        "timeout_seconds": 15
+      },
+      "audit_steps_text": "First, as the database administrator (shown here as \"postgres\"), verify pgAudit is\nenabled by running the following commands:\npostgres=# show shared_preload_libraries;\nshared_preload_libraries\n--------------------------\npgaudit\n(1 row)\nIf the output does not contain \"pgaudit\", this is a fail.\nNext, verify that desired auditing components are enabled:\nInternal Only - General\npostgres=# show pgaudit.log;\nERROR: unrecognized configuration parameter \"pgaudit.log\"\nIf the output does not contain the desired auditing components, this is a fail.\nThe list below summarizes pgAudit.log components:\n\u2022 READ: SELECT and COPY when the source is a relation or a query.\n\u2022 WRITE: INSERT, UPDATE, DELETE, TRUNCATE, and COPY when the destination is a\nrelation.\n\u2022 FUNCTION: Function calls and DO blocks.\n\u2022 ROLE: Statements related to roles and privileges: GRANT, REVOKE,\nCREATE/ALTER/DROP ROLE.\n\u2022 DDL: All DDL that is not included in the ROLE class.\n\u2022 MISC: Miscellaneous commands, e.g. DISCARD, FETCH, CHECKPOINT, VACUUM.",
+      "audit_excerpt": "",
+      "description_head": "The PostgreSQL Audit Extension (pgAudit) provides detailed session and/or object\naudit logging via the standard PostgreSQL logging facility. The goal of pgAudit is to\nprovide PostgreSQL users with the capability to produce audit logs often "
+    },
+    {
+      "id": 16176,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__4.1",
+      "rule_id": "4.1",
+      "title": "Ensure Interactive Login is Disabled",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_auto_generated": true,
+        "_audit_excerpt": "Execute the following terminal command as low-privileged user to assess thisrecommendation:sudo grep postgres /etc/shadow | cut -d: -f1-2If this output is not postgres:!<something> then this is a failure.\n\n---REMEDIATION---Execute the following command:sudo passwd -l postgresInternal Only - General\n\n---DEFAULT_VALUE---\n",
+        "_note": "Parser could not synthesise an executable check; reviewer must hand-author."
+      },
+      "audit_steps_text": "Execute the following terminal command as low-privileged user to assess this\nrecommendation:\nsudo grep postgres /etc/shadow | cut -d: -f1-2\nIf this output is not postgres:!<something> then this is a failure.",
+      "audit_excerpt": "Execute the following terminal command as low-privileged user to assess thisrecommendation:sudo grep postgres /etc/shadow | cut -d: -f1-2If this output is not postgres:!<something> then this is a failure.\n\n---REMEDIATION---Execute the following command:sudo passwd -l postgresInternal Only - General\n\n---DEFAULT_VALUE---\n",
+      "description_head": "When created, the PostgreSQL user may have interactive access to the operating\nsystem, which means that the PostgreSQL user could login to the host as any other\nuser would."
+    },
+    {
+      "id": 16177,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__4.2",
+      "rule_id": "4.2",
+      "title": "Ensure sudo is configured correctly",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_auto_generated": true,
+        "_audit_excerpt": "Log in as an Operating System user authorized to escalate privileges and test the sudoinvocation by executing the following:\n# whoamiuser1\n# groupsuser1\n# sudo -iu postgres\n[sudo] password for user1:user1 is not in the sudoers file. This incident will be reported.As shown above, user1 has not been added to the /etc/sudoers file or made amember of any group listed in the /etc/sudoers file. Whereas:",
+        "_note": "Parser could not synthesise an executable check; reviewer must hand-author."
+      },
+      "audit_steps_text": "Log in as an Operating System user authorized to escalate privileges and test the sudo\ninvocation by executing the following:\n# whoami\nuser1\n# groups\nuser1\n# sudo -iu postgres\n[sudo] password for user1:\nuser1 is not in the sudoers file. This incident will be reported.\nAs shown above, user1 has not been added to the /etc/sudoers file or made a\nmember of any group listed in the /etc/sudoers file. Whereas:\n# whoami\nuser2\n# groups\nuser2 dba\n# sudo -iu postgres\n[sudo] password for user2:\n# whoami\npostgres\nThis shows that the user2 user is configured properly for sudo access by being a\nmember of the dba group.",
+      "audit_excerpt": "Log in as an Operating System user authorized to escalate privileges and test the sudoinvocation by executing the following:\n# whoamiuser1\n# groupsuser1\n# sudo -iu postgres\n[sudo] password for user1:user1 is not in the sudoers file. This incident will be reported.As shown above, user1 has not been added to the /etc/sudoers file or made amember of any group listed in the /etc/sudoers file. Whereas:",
+      "description_head": "It is common to have more than one authorized individual administering the PostgreSQL\nservice at the Operating System level. It is also quite common to permit login privileges\nto individuals on a PostgreSQL host who otherwise are not author"
+    },
+    {
+      "id": 16178,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__4.3",
+      "rule_id": "4.3",
+      "title": "Ensure excessive administrative privileges are revoked",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_auto_generated": true,
+        "_audit_excerpt": "First, inspect the privileges granted to the database superuser (identified here aspostgres) using the display command psql -c \"\\du postgres\" to establish abaseline for granted administrative privileges. Based on the output below, the postgressuperuser can create roles, create databases, manage replication, and bypass row-level security (RLS):\n# whoamipostgres\n# psql -c \"\\du+ postgres\"\nList of rol",
+        "_note": "Parser could not synthesise an executable check; reviewer must hand-author."
+      },
+      "audit_steps_text": "First, inspect the privileges granted to the database superuser (identified here as\npostgres) using the display command psql -c \"\\du postgres\" to establish a\nbaseline for granted administrative privileges. Based on the output below, the postgres\nsuperuser can create roles, create databases, manage replication, and bypass row-\nlevel security (RLS):\n# whoami\npostgres\n# psql -c \"\\du+ postgres\"\nList of roles\nRole name | Attributes | Description\n----------+-------------------------------------------------+-----------\nInternal Only - General\npostgres | Superuser, Create role, Create DB, Replication, |\n| Bypass RLS |\nNow, let's inspect the same information for a mock regular user called appuser using\nthe display command psql -c \"\\du+ appuser\". The output confirms that regular user\nappuser has the same elevated privileges as system administrator user postgres. This\nis a fail.\n# whoami\npostgres\n# psql -c \"\\du+ appuser\"\nList of roles\nRole name | Attributes | Description\n----------+-------------------------------------------------+-----------\nappuser | Superuser, Create role, Create DB, Replication, |\n| Bypass RLS |\nWhile this example demonstrated excessive administrative privileges granted to a single\nuser, a comprehensive audit should be conducted to inspect all database users for\nexcessive administrative privileges. This can be accomplished via either of the\ncommands below.\n# whoami\npostgres\n# psql -c \"\\du+ *\"\n# psql -c \"select * from pg_user order by usename\"\nNote: Using \\du+ * will show all the default PostgreSQL roles (e.g. pg_monitor) as\nwell as any 'normal' roles. This is expected, and should not be cause for alarm.",
+      "audit_excerpt": "First, inspect the privileges granted to the database superuser (identified here aspostgres) using the display command psql -c \"\\du postgres\" to establish abaseline for granted administrative privileges. Based on the output below, the postgressuperuser can create roles, create databases, manage replication, and bypass row-level security (RLS):\n# whoamipostgres\n# psql -c \"\\du+ postgres\"\nList of rol",
+      "description_head": "With respect to PostgreSQL administrative SQL commands, only superusers should\nhave elevated privileges. PostgreSQL regular, or application, users should not possess\nthe ability to create roles, create new databases, manage replication, or "
+    },
+    {
+      "id": 16179,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__4.4",
+      "rule_id": "4.4",
+      "title": "Lock Out Accounts if Not Currently in Use",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_auto_generated": true,
+        "_audit_excerpt": "Review the status of all database accounts:SELECT rolname FROM pg_catalog.pg_roles WHERE rolname !~ '^pg_' ANDrolcanlogin;\nInactive accounts should not be shown in the output.\n\n---REMEDIATION---To lock accounts, as a superuser, run:ALTER ROLE <account> NOLOGIN;\nTo unlock accounts, as a superuser, runLALTER ROLE <account> LOGIN;\n\n---DEFAULT_VALUE---Accounts created by CREATE ROLE are NOLOGIN by def",
+        "_note": "Parser could not synthesise an executable check; reviewer must hand-author."
+      },
+      "audit_steps_text": "Review the status of all database accounts:\nSELECT rolname FROM pg_catalog.pg_roles WHERE rolname !~ '^pg_' AND\nrolcanlogin;\nInactive accounts should not be shown in the output.",
+      "audit_excerpt": "Review the status of all database accounts:SELECT rolname FROM pg_catalog.pg_roles WHERE rolname !~ '^pg_' ANDrolcanlogin;\nInactive accounts should not be shown in the output.\n\n---REMEDIATION---To lock accounts, as a superuser, run:ALTER ROLE <account> NOLOGIN;\nTo unlock accounts, as a superuser, runLALTER ROLE <account> LOGIN;\n\n---DEFAULT_VALUE---Accounts created by CREATE ROLE are NOLOGIN by def",
+      "description_head": "If users with database accounts will not be using the database for some time, disabling\nthe account will reduce the risk of attacks or inappropriate account usage."
+    },
+    {
+      "id": 16180,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__4.5",
+      "rule_id": "4.5",
+      "title": "Ensure excessive function privileges are revoked",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_auto_generated": true,
+        "_audit_excerpt": "Functions in PostgreSQL can be created with the SECURITY DEFINER option. WhenSECURITY DEFINER functions are executed by a user, said function is run with theprivileges of the user who created it, not the user who is running it.To list all functions that have SECURITY DEFINER, run the following SQL:\n# whoamiroot\n# sudo -iu postgres\n# psql -c \"SELECT nspname, proname, proargtypes, prosecdef, rolname",
+        "_note": "Parser could not synthesise an executable check; reviewer must hand-author."
+      },
+      "audit_steps_text": "Functions in PostgreSQL can be created with the SECURITY DEFINER option. When\nSECURITY DEFINER functions are executed by a user, said function is run with the\nprivileges of the user who created it, not the user who is running it.\nTo list all functions that have SECURITY DEFINER, run the following SQL:\n# whoami\nroot\n# sudo -iu postgres\n# psql -c \"SELECT nspname, proname, proargtypes, prosecdef, rolname,\nproconfig FROM pg_proc p JOIN pg_namespace n ON p.pronamespace = n.oid JOIN\npg_authid a ON a.oid = p.proowner WHERE proname NOT LIKE 'pgaudit%' AND\n(prosecdef OR NOT proconfig IS NULL);\"\nIn the query results, a prosecdef value of 't' on a row indicates that that function uses\nprivilege elevation.\nIf elevation privileges are utilized which are not required or are expressly forbidden by\norganizational guidance, this is a fail.\nInternal Only - General",
+      "audit_excerpt": "Functions in PostgreSQL can be created with the SECURITY DEFINER option. WhenSECURITY DEFINER functions are executed by a user, said function is run with theprivileges of the user who created it, not the user who is running it.To list all functions that have SECURITY DEFINER, run the following SQL:\n# whoamiroot\n# sudo -iu postgres\n# psql -c \"SELECT nspname, proname, proargtypes, prosecdef, rolname",
+      "description_head": "In certain situations, to provide the required functionality, PostgreSQL needs to execute\ninternal logic (stored procedures, functions, triggers, etc.) and/or external code modules\nwith elevated privileges. However, if the privileges requir"
+    },
+    {
+      "id": 16138,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__4.6",
+      "rule_id": "4.6",
+      "title": "Ensure excessive DML privileges are revoked",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_auto_generated": true,
+        "_audit_excerpt": "To audit excessive DML privileges, take an inventory of all users defined in the clusterusing the \\du+ * SQL command, as well as all tables defined in the database using the\n\\dt *.* SQL command. Furthermore, the intersection matrix of tables and user grantscan be obtained by querying system catalogs pg_tables and pg_user. Note that inPostgreSQL, users can be defined cluster-wide across all databas",
+        "_note": "Parser could not synthesise an executable check; reviewer must hand-author."
+      },
+      "audit_steps_text": "To audit excessive DML privileges, take an inventory of all users defined in the cluster\nusing the \\du+ * SQL command, as well as all tables defined in the database using the\n\\dt *.* SQL command. Furthermore, the intersection matrix of tables and user grants\ncan be obtained by querying system catalogs pg_tables and pg_user. Note that in\nPostgreSQL, users can be defined cluster-wide across all databases or for a specific\ndatabase, while schemas and tables are specific to a particular database. Therefore,\nthe commands below should be executed for each defined database in the cluster. With\nthis information, inspect database table grants and determine if any are excessive for\ndefined database users.\npostgres=# -- display all users defined in the cluster\npostgres=# \\x\nExpanded display is on.\npostgres=# \\du+ *\nList of roles\n-[ RECORD 1 ]-----------------------------------------------------------\nRole name | pg_checkpoint\nAttributes | Cannot login\nDescription |\n-[ RECORD 2 ]-----------------------------------------------------------\nRole name | pg_create_subscription\nAttributes | Cannot login\nDescription |\n-[ RECORD 3 ]-----------------------------------------------------------\nRole name | pg_database_owner\nAttributes | Cannot login\nDescription |\n-[ RECORD 4 ]-----------------------------------------------------------\nRole name | pg_execute_server_program\nAttributes | Cannot login\nDescription |\n-[ RECORD 5 ]-----------------------------------------------------------\nRole name | pg_maintain\nInternal Only - General\nAttributes | Cannot login\nDescription |\n-[ RECORD 6 ]-----------------------------------------------------------\nRole name | pg_monitor\nAttributes | Cannot login\nDescription |\n-[ RECORD 7 ]-----------------------------------------------------------\nRole name | pg_read_all_data\nAttributes | Cannot login\nDescription |\n-[ RECORD 8 ]-----------------------------------------------------------\nRole name | pg_read_all_settings\nAttributes | Cannot login\nDescription |\n-[ R",
+      "audit_excerpt": "To audit excessive DML privileges, take an inventory of all users defined in the clusterusing the \\du+ * SQL command, as well as all tables defined in the database using the\n\\dt *.* SQL command. Furthermore, the intersection matrix of tables and user grantscan be obtained by querying system catalogs pg_tables and pg_user. Note that inPostgreSQL, users can be defined cluster-wide across all databas",
+      "description_head": "DML (insert, update, delete) operations at the table level should be restricted to only\nauthorized users. PostgreSQL manages table-level DML permissions via the GRANT\nstatement."
+    },
+    {
+      "id": 16182,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__4.7",
+      "rule_id": "4.7",
+      "title": "Ensure Row Level Security (RLS) is configured correctly",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_auto_generated": true,
+        "_audit_excerpt": "The first step for an organization is to determine which, if any, database tables requireRLS. This decision is a matter of business processes and is unique to eachorganization. To discover which, if any, database tables have RLS enabled, execute thefollowing query. If any table(s) should have RLS policies applied, but do not appear inthis query's results, then this is a fail.postgres=# SELECT oid,",
+        "_note": "Parser could not synthesise an executable check; reviewer must hand-author."
+      },
+      "audit_steps_text": "The first step for an organization is to determine which, if any, database tables require\nRLS. This decision is a matter of business processes and is unique to each\norganization. To discover which, if any, database tables have RLS enabled, execute the\nfollowing query. If any table(s) should have RLS policies applied, but do not appear in\nthis query's results, then this is a fail.\npostgres=# SELECT oid, relname, relrowsecurity FROM pg_class WHERE\nrelrowsecurity IS TRUE;\nFor the purpose of this illustration, we will demonstrate the standard example from the\nPostgreSQL documentation using the passwd table and policy example. As of\nPostgreSQL 9.5, the catalog table pg_class provides column relrowsecurity to\nquery and determine whether a relation has RLS enabled. Based on the results below\nwe can see RLS is not enabled. Assuming this table should be RLS enabled, this is a\nfail.\nInternal Only - General\npostgres=# CREATE TABLE passwd (\nuser_name text UNIQUE NOT NULL,\npwhash text,\nuid int PRIMARY KEY,\ngid int NOT NULL,\nreal_name text NOT NULL,\nhome_phone text,\nextra_info text,\nhome_dir text NOT NULL,\nshell text NOT NULL\n);\npostgres=# SELECT oid, relname, relrowsecurity FROM pg_class WHERE relname =\n'passwd';\noid | relname | relrowsecurity\n-------+---------+----------------",
+      "audit_excerpt": "The first step for an organization is to determine which, if any, database tables requireRLS. This decision is a matter of business processes and is unique to eachorganization. To discover which, if any, database tables have RLS enabled, execute thefollowing query. If any table(s) should have RLS policies applied, but do not appear inthis query's results, then this is a fail.postgres=# SELECT oid,",
+      "description_head": "In addition to the SQL-standard privilege system available through GRANT, tables can\nhave row security policies that restrict, on a per-user basis, which individual rows can be\nreturned by normal queries or inserted, updated, or deleted by "
+    },
+    {
+      "id": 16183,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__4.8",
+      "rule_id": "4.8",
+      "title": "Ensure the set_user extension is installed",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "approved",
+      "auto_generated_check": false,
+      "expect_kind": "row_count_nonzero",
+      "has_sql": true,
+      "authored_tag": "cis-pg18-config",
+      "classification": "authored_sql",
+      "check_definition": {
+        "runner": "postgres_sql",
+        "sql": "SELECT count(*) FROM pg_extension WHERE extname='set_user'",
+        "expect": {
+          "kind": "row_count_nonzero"
+        },
+        "pass_message": "set_user extension is installed.",
+        "fail_message": "set_user extension is NOT installed.",
+        "_authored": "cis-pg18-config"
+      },
+      "audit_steps_text": "Check if the extension is available by querying the pg_available_extensions table:\npostgres=# select * from pg_available_extensions where name = 'set_user';\nname | default_version | installed_version | comment\n------+-----------------+-------------------+---------\n(0 rows)\nIf the extension is not listed this is a fail.\nIdentify roles that are superusers and can still login:\npostgres=# SELECT rolname FROM pg_authid WHERE rolsuper and rolcanlogin;\nrolname\n---------\npostgres\n(1 rows)\nIdentify any unprivileged roles that can log in directly that are granted a superuser role\neven if it is multiple layers removed:\nNote: If you have not done so already, follow the procedures in the description to create\na roletree view.\n-- Verify there are no unexpected unprivileged roles that can login directly\nSELECT\nr.rolname,\nr.roloid,\nr.rolcanlogin,\nr.rolsuper,\nr.rolparents\nFROM roletree r\nInternal Only - General\nORDER BY 1;\n-- Verify there are no roles granted a superuser role even if it is multiple\nlayers\n-- removed\nSELECT\nro.rolname,\nro.roloid,\nro.rolcanlogin,\nro.rolsuper,\nro.rolparents\nFROM roletree ro\nWHERE (ro.rolcanlogin AND ro.rolsuper)\nOR\n(\nro.rolcanlogin AND EXISTS\n(\nSELECT TRUE FROM roletree ri\nWHERE ri.rolname = ANY (ro.rolparents)\nAND ri.rolsuper\n)\n);\nrolname | roloid | rolcanlogin | rolsuper | rolparents\n----------+--------+-------------+----------+------------\npostgres | 10 | t | t | {}\n(1 row)\nA lack of results is a pass.",
+      "audit_excerpt": "",
+      "description_head": "PostgreSQL access to the superuser database role must be controlled and audited to\nprevent unauthorized access.\nNote: Prior to performing this audit you must create a roletree view. Here are the\nprocedures to create this view:\npostgres=#\nDR"
+    },
+    {
+      "id": 16184,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__4.9",
+      "rule_id": "4.9",
+      "title": "Make use of predefined roles",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_auto_generated": true,
+        "_audit_excerpt": "Review the list of all database roles that have superuser access and determine if oneor more of the predefined roles would suffice for the needs of that role:\n# whoamipostgres\n# psqlpostgres=# select rolname from pg_roles where rolsuper is true;\nrolname\n----------postgresdoug\n(2 rows)\n\n---REMEDIATION---If you've determined that one or more of the predefined roles can be used, simply GRANTit:postgr",
+        "_note": "Parser could not synthesise an executable check; reviewer must hand-author."
+      },
+      "audit_steps_text": "Review the list of all database roles that have superuser access and determine if one\nor more of the predefined roles would suffice for the needs of that role:\n# whoami\npostgres\n# psql\npostgres=# select rolname from pg_roles where rolsuper is true;\nrolname\n----------\npostgres\ndoug\n(2 rows)",
+      "audit_excerpt": "Review the list of all database roles that have superuser access and determine if oneor more of the predefined roles would suffice for the needs of that role:\n# whoamipostgres\n# psqlpostgres=# select rolname from pg_roles where rolsuper is true;\nrolname\n----------postgresdoug\n(2 rows)\n\n---REMEDIATION---If you've determined that one or more of the predefined roles can be used, simply GRANTit:postgr",
+      "description_head": "PostgreSQL provides a set of predefined roles that provide access to certain commonly\nneeded privileged capabilities and information. Administrators can GRANT these roles\nto users and/or other roles in their environment, providing those use"
+    },
+    {
+      "id": 16185,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__4.10",
+      "rule_id": "4.10",
+      "title": "Ensure all accounts that can log in have passwords",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_auto_generated": true,
+        "_audit_excerpt": "To find all the database users that can login and do not have a password:postgres=# SELECT rolname FROM pg_authid WHERE rolpassword IS NULL ANDrolcanlogin;\nIf any accounts are returned that are not known to use SSL certificates, this is apotential fail.\n\n---REMEDIATION---Set a valid password for any database user identified above.postgres=# \\password user1This shows setting the password for user1.",
+        "_note": "Parser could not synthesise an executable check; reviewer must hand-author."
+      },
+      "audit_steps_text": "To find all the database users that can login and do not have a password:\npostgres=# SELECT rolname FROM pg_authid WHERE rolpassword IS NULL AND\nrolcanlogin;\nIf any accounts are returned that are not known to use SSL certificates, this is a\npotential fail.",
+      "audit_excerpt": "To find all the database users that can login and do not have a password:postgres=# SELECT rolname FROM pg_authid WHERE rolpassword IS NULL ANDrolcanlogin;\nIf any accounts are returned that are not known to use SSL certificates, this is apotential fail.\n\n---REMEDIATION---Set a valid password for any database user identified above.postgres=# \\password user1This shows setting the password for user1.",
+      "description_head": "If not using certificate-based authentication, all database accounts that have the ability\nto login should have a password set."
+    },
+    {
+      "id": 16186,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__5.1",
+      "rule_id": "5.1",
+      "title": "Do Not Specify Passwords in the Command Line",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_auto_generated": true,
+        "_audit_excerpt": "\u2022 Check the process or task list if the password is visible.sudo ps -few\n\u2022 Check the shell or command history if the password is visible.history\n\n---REMEDIATION---1. Use the --password or -W terminal parameter without directly specifying thepassword and then enter the password when prompted.Substitute <user> with your username, e.g., root:psql -u <user> --password2. Do not use a Connection URI wit",
+        "_note": "Parser could not synthesise an executable check; reviewer must hand-author."
+      },
+      "audit_steps_text": "\u2022 Check the process or task list if the password is visible.\nsudo ps -few\n\u2022 Check the shell or command history if the password is visible.\nhistory",
+      "audit_excerpt": "\u2022 Check the process or task list if the password is visible.sudo ps -few\n\u2022 Check the shell or command history if the password is visible.history\n\n---REMEDIATION---1. Use the --password or -W terminal parameter without directly specifying thepassword and then enter the password when prompted.Substitute <user> with your username, e.g., root:psql -u <user> --password2. Do not use a Connection URI wit",
+      "description_head": "When a command is executed on the command line, for example\n\u2022 psql postgresql://postgres:PASSWORD@host\nthe password may be visible in the user's shell/command history or in the process list,\nthus exposing the password to other entities on t"
+    },
+    {
+      "id": 16187,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__5.2",
+      "rule_id": "5.2",
+      "title": "Ensure PostgreSQL is Bound to an IP Address",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "approved",
+      "auto_generated_check": false,
+      "expect_kind": "first_value_regex",
+      "has_sql": true,
+      "authored_tag": "cis-pg18-config",
+      "classification": "authored_sql",
+      "check_definition": {
+        "runner": "postgres_sql",
+        "sql": "SELECT setting FROM pg_settings WHERE name = 'listen_addresses'",
+        "expect": {
+          "kind": "first_value_regex",
+          "expected": "^(?!\\*).+"
+        },
+        "pass_message": "listen_addresses is bound to specific host(s), not '*'.",
+        "fail_message": "listen_addresses is '*' \u2014 the DB accepts connections on every interface.",
+        "_authored": "cis-pg18-config",
+        "timeout_seconds": 15
+      },
+      "audit_steps_text": "Run the following statement:\nSHOW listen_addresses;\nIf * or 0.0.0.0 is returned, this is a failure.",
+      "audit_excerpt": "",
+      "description_head": "By default, listen_addresses is set to localhost which prevents any and all remote\nTCP connections to the PostgreSQL port.\nSome Docker images may set listen_addesses to *. * corresponds to all available IP\ninterfaces; thus, the PostgreSQL s"
+    },
+    {
+      "id": 16188,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__5.3",
+      "rule_id": "5.3",
+      "title": "Ensure login via \"local\" UNIX Domain Socket is configured correctly (Manual)",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_auto_generated": true,
+        "_audit_excerpt": "Newly created data clusters are empty of data and have only one user account, thesuperuser (postgres). By default, the data cluster superuser is named after the UNIXaccount. Login authentication is tested via UNIX DOMAIN SOCKETS by the UNIX useraccount postgres, the default account, and set_user has not yet been configured:\n# whoamipostgres\n# psql postgrespostgres=#\nLogin attempts by another UNIX ",
+        "_note": "Parser could not synthesise an executable check; reviewer must hand-author."
+      },
+      "audit_steps_text": "Newly created data clusters are empty of data and have only one user account, the\nsuperuser (postgres). By default, the data cluster superuser is named after the UNIX\naccount. Login authentication is tested via UNIX DOMAIN SOCKETS by the UNIX user\naccount postgres, the default account, and set_user has not yet been configured:\n# whoami\npostgres\n# psql postgres\npostgres=#\nLogin attempts by another UNIX user account as the superuser should be denied:\n# su - user1\n# whoami\nuser1\n# psql -U postgres -d postgres\npsql: FATAL: Peer authentication failed for user \"postgres\"\n# exit\nThis test demonstrates that not only is logging in as the superuser blocked, but so is\nlogging in as another user:\n# su - user2\n# whoami\nuser2\n# psql -U postgres -d postgres\npsql: FATAL: Peer authentication failed for user \"postgres\"\n# psql -U user1 -d postgres\npsql: FATAL: Peer authentication failed for user \"user1\"\n# psql -U user2 -d postgres\npostgres=>\nInternal Only - General",
+      "audit_excerpt": "Newly created data clusters are empty of data and have only one user account, thesuperuser (postgres). By default, the data cluster superuser is named after the UNIXaccount. Login authentication is tested via UNIX DOMAIN SOCKETS by the UNIX useraccount postgres, the default account, and set_user has not yet been configured:\n# whoamipostgres\n# psql postgrespostgres=#\nLogin attempts by another UNIX ",
+      "description_head": "A remote host login, via SSH, is arguably the most secure means of remotely accessing\nand administering the PostgreSQL server. Once connected to the PostgreSQL server,\nusing the psql client, via UNIX DOMAIN SOCKETS, while using the peer\naut"
+    },
+    {
+      "id": 16189,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__5.4",
+      "rule_id": "5.4",
+      "title": "Ensure login via \"host\" TCP/IP Socket is configured correctly",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_auto_generated": true,
+        "_audit_excerpt": "Newly created data clusters are empty of data and have only one user account, thesuperuser. By default, the data cluster superuser is named after the UNIX accountpostgres. Login authentication can be tested via TCP/IP SOCKETS by any UNIX useraccount from the local host.Internal Only - GeneralA password must be assigned to each login ROLE:postgres=# ALTER ROLE postgres WITH PASSWORD 'secret_passwor",
+        "_note": "Parser could not synthesise an executable check; reviewer must hand-author."
+      },
+      "audit_steps_text": "Newly created data clusters are empty of data and have only one user account, the\nsuperuser. By default, the data cluster superuser is named after the UNIX account\npostgres. Login authentication can be tested via TCP/IP SOCKETS by any UNIX user\naccount from the local host.\nInternal Only - General\nA password must be assigned to each login ROLE:\npostgres=# ALTER ROLE postgres WITH PASSWORD 'secret_password';\nALTER ROLE\nTest an unencrypted session:\n# psql 'host=localhost user=postgres sslmode=disable'\nPassword:\nTest an encrypted session:\n# psql 'host=localhost user=postgres sslmode=require'\nPassword:\nRemote logins repeat the previous invocations but, of course, from the remote host:\nTest unencrypted session:\n# psql 'host=server-name-or-IP user=postgres sslmode=disable'\nPassword:\nTest encrypted sessions:\n# psql 'host=server-name-or-IP user=postgres sslmode=require'\nPassword:",
+      "audit_excerpt": "Newly created data clusters are empty of data and have only one user account, thesuperuser. By default, the data cluster superuser is named after the UNIX accountpostgres. Login authentication can be tested via TCP/IP SOCKETS by any UNIX useraccount from the local host.Internal Only - GeneralA password must be assigned to each login ROLE:postgres=# ALTER ROLE postgres WITH PASSWORD 'secret_passwor",
+      "description_head": "A large number of authentication METHODs are available for hosts connecting using\nTCP/IP sockets, including:\n\u2022 trust\n\u2022 reject\n\u2022 md5\n\u2022 scram-sha-256\n\u2022 password\n\u2022 gss\n\u2022 sspi\n\u2022 ident\n\u2022 pam\n\u2022 ldap\n\u2022 radius\n\u2022 cert\n\u2022 oauth\nMETHODs trust, password"
+    },
+    {
+      "id": 16127,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__5.5",
+      "rule_id": "5.5",
+      "title": "Ensure per-account connection limits are used",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_auto_generated": true,
+        "_audit_excerpt": "To check the connection limits for all users, run the following:SELECT rolname, rolconnlimitFROM pg_rolesWHERE rolname NOT LIKE 'pg_%';\nAny user with a connection limit of -1 should be considered a failure.\n\n---REMEDIATION---Set a per-user connection limit by running:ALTER USER <dbuser> CONNECTION LIMIT <reasonable concurrent connectioncount>;\n\n---DEFAULT_VALUE---\n-1Internal Only - General",
+        "_note": "Parser could not synthesise an executable check; reviewer must hand-author."
+      },
+      "audit_steps_text": "To check the connection limits for all users, run the following:\nSELECT rolname, rolconnlimit\nFROM pg_roles\nWHERE rolname NOT LIKE 'pg_%';\nAny user with a connection limit of -1 should be considered a failure.",
+      "audit_excerpt": "To check the connection limits for all users, run the following:SELECT rolname, rolconnlimitFROM pg_rolesWHERE rolname NOT LIKE 'pg_%';\nAny user with a connection limit of -1 should be considered a failure.\n\n---REMEDIATION---Set a per-user connection limit by running:ALTER USER <dbuser> CONNECTION LIMIT <reasonable concurrent connectioncount>;\n\n---DEFAULT_VALUE---\n-1Internal Only - General",
+      "description_head": "Limiting concurrent connections to a PostgreSQL server can be used to reduce the risk\nof Denial of Service (DoS) attacks."
+    },
+    {
+      "id": 16191,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__5.6",
+      "rule_id": "5.6",
+      "title": "Ensure Password Complexity is configured",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_reverted": "garbage-shell-check-on-sql-runner"
+      },
+      "audit_steps_text": "Check parameter values of both shared_preload_libraries and\ndynamic_library_path\npostgres=# SHOW shared_preload_libraries;\nshared_preload_libraries\n--------------------------\nset_user,pgaudit\n(1 row)\npostgres=# SHOW dynamic_library_path;\ndynamic_library_path\n----------------------\n$libdir\n(1 row)\nIf $libdir/passwordcheck is not listed in shared_preload_libraries this is a failure\n(based on $libdir being returned for dynamic_library_path).",
+      "audit_excerpt": "",
+      "description_head": "Password complexity configuration is crucial to restrict unauthorized access to data. By\ndefault, PostgreSQL doesn't provide for password complexity. Moreover, many\ncompliance frameworks such as PCI DSS, and HIPPA require both password\ncomp"
+    },
+    {
+      "id": 16192,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__6.1",
+      "rule_id": "6.1",
+      "title": "Understanding attack vectors and runtime parameters",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_auto_generated": true,
+        "_audit_excerpt": "Review all configuration settings. Configure PostgreSQL logging to record allmodifications and changes to the RDBMS.\n\n---REMEDIATION---In the case of a changed parameter, the value is returned back to its default value. Inthe case of a successful exploit of an already set runtime parameter then an analysismust be carried out to determine the best approach in mitigating the risk to preventfuture ex",
+        "_note": "Parser could not synthesise an executable check; reviewer must hand-author."
+      },
+      "audit_steps_text": "Review all configuration settings. Configure PostgreSQL logging to record all\nmodifications and changes to the RDBMS.",
+      "audit_excerpt": "Review all configuration settings. Configure PostgreSQL logging to record allmodifications and changes to the RDBMS.\n\n---REMEDIATION---In the case of a changed parameter, the value is returned back to its default value. Inthe case of a successful exploit of an already set runtime parameter then an analysismust be carried out to determine the best approach in mitigating the risk to preventfuture ex",
+      "description_head": "Understanding the vulnerability of PostgreSQL runtime parameters by the particular\ndelivery method, or attack vector."
+    },
+    {
+      "id": 16193,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__6.2",
+      "rule_id": "6.2",
+      "title": "Ensure 'backend' runtime parameters are configured correctly",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_auto_generated": true,
+        "_audit_excerpt": "Issue the following command to verify the backend runtime parameters are configuredcorrectly:postgres=# SELECT name, setting FROM pg_settings WHERE context IN\n('backend','superuser-backend') ORDER BY 1;\nname | setting\n-----------------------+---------ignore_system_indexes | offjit_debugging_support | offjit_profiling_support | offlog_connections | alllog_disconnections | onpost_auth_delay | 0\n(6 r",
+        "_note": "Parser could not synthesise an executable check; reviewer must hand-author."
+      },
+      "audit_steps_text": "Issue the following command to verify the backend runtime parameters are configured\ncorrectly:\npostgres=# SELECT name, setting FROM pg_settings WHERE context IN\n('backend','superuser-backend') ORDER BY 1;\nname | setting\n-----------------------+---------\nignore_system_indexes | off\njit_debugging_support | off\njit_profiling_support | off\nlog_connections | all\nlog_disconnections | on\npost_auth_delay | 0\n(6 rows)\nNote: Effecting changes to these parameters can only be made at server start.\nTherefore, a successful exploit may not be detected until after a server restart, e.g.,\nduring a maintenance window.\nInternal Only - General",
+      "audit_excerpt": "Issue the following command to verify the backend runtime parameters are configuredcorrectly:postgres=# SELECT name, setting FROM pg_settings WHERE context IN\n('backend','superuser-backend') ORDER BY 1;\nname | setting\n-----------------------+---------ignore_system_indexes | offjit_debugging_support | offjit_profiling_support | offlog_connections | alllog_disconnections | onpost_auth_delay | 0\n(6 r",
+      "description_head": "In order to serve multiple clients efficiently, the PostgreSQL server launches a new\n\"backend\" process for each client. The runtime parameters in this benchmark section\nare controlled by the backend process. The server's performance, in the"
+    },
+    {
+      "id": 16194,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__6.3",
+      "rule_id": "6.3",
+      "title": "Ensure 'Postmaster' Runtime Parameters are Configured",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_auto_generated": true,
+        "_audit_excerpt": "The following parameters can only be set at server start by the owner of thePostgreSQL server process and cluster, typically the UNIX user account postgres.Therefore, all exploits require the successful compromise of either that UNIX account orthe postgres superuser account itself.postgres=# SELECT name, setting FROM pg_settings WHERE context = 'postmaster'\nORDER BY 1;\nname | setting\n-------------",
+        "_note": "Parser could not synthesise an executable check; reviewer must hand-author."
+      },
+      "audit_steps_text": "The following parameters can only be set at server start by the owner of the\nPostgreSQL server process and cluster, typically the UNIX user account postgres.\nTherefore, all exploits require the successful compromise of either that UNIX account or\nthe postgres superuser account itself.\npostgres=# SELECT name, setting FROM pg_settings WHERE context = 'postmaster'\nORDER BY 1;\nname | setting\n-------------------------------------+---------------------------------------\n---\narchive_mode | off\nautovacuum_freeze_max_age | 200000000\nautovacuum_multixact_freeze_max_age | 400000000\nautovacuum_worker_slots | 16\nbonjour | off\nbonjour_name |\ncluster_name |\ncommit_timestamp_buffers | 32\nconfig_file | /var/lib/pgsql/18/data/postgresql.conf\nInternal Only - General\ndata_directory | /var/lib/pgsql/18/data\ndata_sync_retry | off\ndebug_io_direct |\ndynamic_shared_memory_type | posix\nevent_source | PostgreSQL\nexternal_pid_file |\nhba_file | /var/lib/pgsql/18/data/pg_hba.conf\nhot_standby | on\nhuge_pages | try\nhuge_page_size | 0\nident_file | /var/lib/pgsql/18/data/pg_ident.conf\nignore_invalid_pages | off\nio_max_combine_limit | 16\nio_max_concurrency | 64\nio_method | worker\njit_provider | llvmjit\nlisten_addresses | localhost\nlogging_collector | on\nmax_active_replication_origins | 10\nmax_connections | 100\nmax_files_per_process | 1000\nmax_locks_per_transaction | 64\nmax_logical_replication_workers | 4\nmax_notify_queue_pages | 1048576\nmax_pred_locks_per_transaction | 64\nmax_prepared_transactions | 0\nmax_replication_slots | 10\nmax_wal_senders | 10\nmax_worker_processes | 8\nmin_dynamic_shared_memory | 0\nmultixact_member_buffers | 32\nmultixact_offset_buffers | 16\nnotify_buffers | 16\nport | 5432\nrecovery_target |\nrecovery_target_action | pause\nrecovery_target_inclusive | on\nrecovery_target_lsn |\nrecovery_target_name |\nrecovery_target_time |\nrecovery_target_timeline | latest\nrecovery_target_xid |\nreserved_connections | 0\nserializable_buffers | 32\nshared_buffers | 16384\nshared_memory_type | mmap\nshared_pr",
+      "audit_excerpt": "The following parameters can only be set at server start by the owner of thePostgreSQL server process and cluster, typically the UNIX user account postgres.Therefore, all exploits require the successful compromise of either that UNIX account orthe postgres superuser account itself.postgres=# SELECT name, setting FROM pg_settings WHERE context = 'postmaster'\nORDER BY 1;\nname | setting\n-------------",
+      "description_head": "PostgreSQL runtime parameters that are executed by the postmaster process."
+    },
+    {
+      "id": 16195,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__6.4",
+      "rule_id": "6.4",
+      "title": "Ensure 'SIGHUP' Runtime Parameters are Configured",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_auto_generated": true,
+        "_audit_excerpt": "The following parameters can be set at any time, without interrupting the server, by theowner of the postmaster server process and cluster (typically UNIX user accountpostgres).postgres=# SELECT name, setting FROM pg_settings WHERE context = 'sighup'\nORDER BY 1;\nname | setting\n---------------------------------------------+-------------------------------\n------------------allow_alter_system | onarc",
+        "_note": "Parser could not synthesise an executable check; reviewer must hand-author."
+      },
+      "audit_steps_text": "The following parameters can be set at any time, without interrupting the server, by the\nowner of the postmaster server process and cluster (typically UNIX user account\npostgres).\npostgres=# SELECT name, setting FROM pg_settings WHERE context = 'sighup'\nORDER BY 1;\nname | setting\n---------------------------------------------+-------------------------------\n------------------\nallow_alter_system | on\narchive_cleanup_command |\narchive_command | (disabled)\narchive_library |\narchive_timeout | 0\nInternal Only - General\nauthentication_timeout | 60\nautovacuum | on\nautovacuum_analyze_scale_factor | 0.1\nautovacuum_analyze_threshold | 50\nautovacuum_max_workers | 3\nautovacuum_naptime | 60\nautovacuum_vacuum_cost_delay | 2\nautovacuum_vacuum_cost_limit | -1\nautovacuum_vacuum_insert_scale_factor | 0.2\nautovacuum_vacuum_insert_threshold | 1000\nautovacuum_vacuum_max_threshold | 100000000\nautovacuum_vacuum_scale_factor | 0.2\nautovacuum_vacuum_threshold | 50\nautovacuum_work_mem | -1\nbgwriter_delay | 200\nbgwriter_flush_after | 64\nbgwriter_lru_maxpages | 100\nbgwriter_lru_multiplier | 2\ncheckpoint_completion_target | 0.9\ncheckpoint_flush_after | 32\ncheckpoint_timeout | 300\ncheckpoint_warning | 30\nfile_extend_method | posix_fallocate\nfsync | on\nfull_page_writes | on\ngss_accept_delegation | off\nhot_standby_feedback | off\nidle_replication_slot_timeout | 0\nio_workers | 3\nkrb_caseins_users | off\nkrb_server_keyfile |\nFILE:/etc/sysconfig/pgsql/krb5.keytab\nlog_autovacuum_min_duration | 600000\nlog_checkpoints | on\nlog_destination | csvlog\nlog_directory | /var/log/postgres\nlog_file_mode | 0600\nlog_filename | postgresql-%Y%m%d.log\nlog_hostname | off\nlog_line_prefix | %m [%p]: [%l-1]\ndb=%d,user=%u,app=%a,client=%h\nlog_recovery_conflict_waits | off\nlog_rotation_age | 1440\nlog_rotation_size | 1048576\nlog_startup_progress_interval | 10000\nlog_timezone | UTC\nlog_truncate_on_rotation | on\nmax_parallel_apply_workers_per_subscription | 2\nmax_pred_locks_per_page | 2\nmax_pred_locks_per_relation | -2\nmax_slot_",
+      "audit_excerpt": "The following parameters can be set at any time, without interrupting the server, by theowner of the postmaster server process and cluster (typically UNIX user accountpostgres).postgres=# SELECT name, setting FROM pg_settings WHERE context = 'sighup'\nORDER BY 1;\nname | setting\n---------------------------------------------+-------------------------------\n------------------allow_alter_system | onarc",
+      "description_head": "PostgreSQL runtime parameters that are executed by the SIGHUP signal."
+    },
+    {
+      "id": 16196,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__6.5",
+      "rule_id": "6.5",
+      "title": "Ensure 'Superuser' Runtime Parameters are Configured",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_auto_generated": true,
+        "_audit_excerpt": "The following parameters can only be set at server start by the owner of thePostgreSQL server process and cluster i.e. typically UNIX user account postgres.Therefore, all exploits require the successful compromise of either that UNIX account orthe postgres superuser account itself.postgres=# SELECT name, setting FROM pg_settings WHERE context = 'superuser'\nORDER BY 1;\nname | setting\n--------------",
+        "_note": "Parser could not synthesise an executable check; reviewer must hand-author."
+      },
+      "audit_steps_text": "The following parameters can only be set at server start by the owner of the\nPostgreSQL server process and cluster i.e. typically UNIX user account postgres.\nTherefore, all exploits require the successful compromise of either that UNIX account or\nthe postgres superuser account itself.\npostgres=# SELECT name, setting FROM pg_settings WHERE context = 'superuser'\nORDER BY 1;\nname | setting\n-----------------------------------+-------------\nallow_in_place_tablespaces | off\nallow_system_table_mods | off\nbacktrace_functions |\ncommit_delay | 0\ncompute_query_id | auto\ndeadlock_timeout | 1000\ndebug_discard_caches | 0\ndynamic_library_path | $libdir\nevent_triggers | on\nextension_control_path | $system\nInternal Only - General\nignore_checksum_failure | off\njit_dump_bitcode | off\nlc_messages | en_US.UTF-8\nlo_compat_privileges | off\nlog_duration | off\nlog_error_verbosity | verbose\nlog_executor_stats | off\nlog_lock_failures | off\nlog_lock_waits | off\nlog_min_duration_sample | -1\nlog_min_duration_statement | -1\nlog_min_error_statement | error\nlog_min_messages | warning\nlog_parameter_max_length | -1\nlog_parser_stats | off\nlog_planner_stats | off\nlog_replication_commands | off\nlog_statement | ddl\nlog_statement_sample_rate | 1\nlog_statement_stats | off\nlog_temp_files | -1\nlog_transaction_sample_rate | 0\nmax_stack_depth | 2048\npasswordcheck.min_password_length | 8\npgaudit.log | ddl,write\npgaudit.log_catalog | on\npgaudit.log_client | off\npgaudit.log_level | log\npgaudit.log_parameter | off\npgaudit.log_parameter_max_size | 0\npgaudit.log_relation | off\npgaudit.log_rows | off\npgaudit.log_statement | on\npgaudit.log_statement_once | off\npgaudit.role |\nsession_preload_libraries |\nsession_replication_role | origin\ntemp_file_limit | -1\ntrack_activities | on\ntrack_cost_delay_timing | off\ntrack_counts | on\ntrack_functions | none\ntrack_io_timing | off\ntrack_wal_io_timing | off\nupdate_process_title | on\nwal_compression | off\nwal_consistency_checking |\nwal_init_zero | on\nwal_recycle | on\nzero_damaged_p",
+      "audit_excerpt": "The following parameters can only be set at server start by the owner of thePostgreSQL server process and cluster i.e. typically UNIX user account postgres.Therefore, all exploits require the successful compromise of either that UNIX account orthe postgres superuser account itself.postgres=# SELECT name, setting FROM pg_settings WHERE context = 'superuser'\nORDER BY 1;\nname | setting\n--------------",
+      "description_head": "PostgreSQL runtime parameters that can only be executed by the server's superuser,\npostgres."
+    },
+    {
+      "id": 16197,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__6.6",
+      "rule_id": "6.6",
+      "title": "Ensure 'User' Runtime Parameters are Configured",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_auto_generated": true,
+        "_audit_excerpt": "The method used to analyze the state of ROLE runtime parameters and to determine ifthey have been compromised is to inspect all catalogs and list attributes for databaseentities such as ROLEs and databases:postgres=# SELECT name, setting FROM pg_settings WHERE context = 'user' ORDERBY 1;\nname | setting\n--------------------------------------+--------------------application_name | psqlarray_nulls | ",
+        "_note": "Parser could not synthesise an executable check; reviewer must hand-author."
+      },
+      "audit_steps_text": "The method used to analyze the state of ROLE runtime parameters and to determine if\nthey have been compromised is to inspect all catalogs and list attributes for database\nentities such as ROLEs and databases:\npostgres=# SELECT name, setting FROM pg_settings WHERE context = 'user' ORDER\nBY 1;\nname | setting\n--------------------------------------+--------------------\napplication_name | psql\narray_nulls | on\nbackend_flush_after | 0\nbackslash_quote | safe_encoding\nbytea_output | hex\ncheck_function_bodies | on\nclient_connection_check_interval | 0\nclient_encoding | UTF8\nclient_min_messages | notice\ncommit_siblings | 5\nconstraint_exclusion | partition\ncpu_index_tuple_cost | 0.005\ncpu_operator_cost | 0.0025\ncpu_tuple_cost | 0.01\ncreaterole_self_grant |\ncursor_tuple_fraction | 0.1\nDateStyle | ISO, MDY\ndebug_logical_replication_streaming | buffered\ndebug_parallel_query | off\nInternal Only - General\ndebug_pretty_print | on\ndebug_print_parse | off\ndebug_print_plan | off\ndebug_print_rewritten | off\ndefault_statistics_target | 100\ndefault_table_access_method | heap\ndefault_tablespace |\ndefault_text_search_config | pg_catalog.english\ndefault_toast_compression | pglz\ndefault_transaction_deferrable | off\ndefault_transaction_isolation | read committed\ndefault_transaction_read_only | off\neffective_cache_size | 524288\neffective_io_concurrency | 16\nenable_async_append | on\nenable_bitmapscan | on\nenable_distinct_reordering | on\nenable_gathermerge | on\nenable_group_by_reordering | on\nenable_hashagg | on\nenable_hashjoin | on\nenable_incremental_sort | on\nenable_indexonlyscan | on\nenable_indexscan | on\nenable_material | on\nenable_memoize | on\nenable_mergejoin | on\nenable_nestloop | on\nenable_parallel_append | on\nenable_parallel_hash | on\nenable_partition_pruning | on\nenable_partitionwise_aggregate | off\nenable_partitionwise_join | off\nenable_presorted_aggregate | on\nenable_self_join_elimination | on\nenable_seqscan | on\nenable_sort | on\nenable_tidscan | on\nescape_string_warning | on\nexit_on_e",
+      "audit_excerpt": "The method used to analyze the state of ROLE runtime parameters and to determine ifthey have been compromised is to inspect all catalogs and list attributes for databaseentities such as ROLEs and databases:postgres=# SELECT name, setting FROM pg_settings WHERE context = 'user' ORDERBY 1;\nname | setting\n--------------------------------------+--------------------application_name | psqlarray_nulls | ",
+      "description_head": "These PostgreSQL runtime parameters are managed at the user account (ROLE) level."
+    },
+    {
+      "id": 16198,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__6.7",
+      "rule_id": "6.7",
+      "title": "Ensure FIPS 140-2 OpenSSL Cryptography Is Used",
+      "runner_type": "postgres_sql",
+      "enabled": false,
+      "review_status": "pending_review",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_auto_generated": true,
+        "_audit_excerpt": "\n\n---REMEDIATION---\n\n\n---DEFAULT_VALUE---\n",
+        "_note": "Parser could not synthesise an executable check; reviewer must hand-author."
+      },
+      "audit_steps_text": "",
+      "audit_excerpt": "\n\n---REMEDIATION---\n\n\n---DEFAULT_VALUE---\n",
+      "description_head": "Install, configure, and use OpenSSL on a platform that has a NIST certified FIPS 140-2\ninstallation of OpenSSL. This provides PostgreSQL instances the ability to generate and\nvalidate cryptographic hashes to protect unclassified information"
+    },
+    {
+      "id": 16199,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__6.8",
+      "rule_id": "6.8",
+      "title": "Ensure TLS is enabled and configured correctly",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "approved",
+      "auto_generated_check": false,
+      "expect_kind": "first_value_equals",
+      "has_sql": true,
+      "authored_tag": "cis-pg18-config",
+      "classification": "authored_sql",
+      "check_definition": {
+        "runner": "postgres_sql",
+        "sql": "SELECT setting FROM pg_settings WHERE name = 'ssl'",
+        "expect": {
+          "kind": "first_value_equals",
+          "expected": "on"
+        },
+        "pass_message": "TLS/SSL is enabled.",
+        "fail_message": "SSL is OFF \u2014 database traffic (including credentials) is unencrypted.",
+        "_authored": "cis-pg18-config",
+        "timeout_seconds": 15
+      },
+      "audit_steps_text": "To determine whether TLS is enabled, simply query the parameter value while logged\ninto the database using either the SHOW ssl command or SELECT from system catalog\nview pg_settings as illustrated below. In both cases, ssl is off; this is a fail.\npostgres=# SHOW ssl;\nssl\n-----\noff\n(1 row)\npostgres=# SELECT name, setting, source FROM pg_settings WHERE name = 'ssl';\nname | setting | source\n-----+---------+--------------------\nssl | off | default\n(1 row)\nInternal Only - General",
+      "audit_excerpt": "",
+      "description_head": "TLS on a PostgreSQL server should be enabled and configured to encrypt TCP traffic to\nand from the server."
+    },
+    {
+      "id": 16201,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__6.9",
+      "rule_id": "6.9",
+      "title": "Ensure the TLSv1.0 and TLSv1.1 Protocols are Disabled",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_auto_generated": true,
+        "_audit_excerpt": "1. Execute the following commandSHOW ssl_min_protocol_version;\n2. Check the output to verify that the ssl_min_protocol_version directive is setto either TLSv1.2 or TLSv1.3 (preferred).\n\n---REMEDIATION---Adjust the ssl_min_protocol_version to at least TLSv1.2:ALTER SYSTEM SET ssl_min_protocol_version = 'TLSv1.2';\nor (preferred):ALTER SYSTEM SET ssl_min_protocol_version = 'TLSv1.3';\nIn either case, ",
+        "_note": "Parser could not synthesise an executable check; reviewer must hand-author."
+      },
+      "audit_steps_text": "1. Execute the following command\nSHOW ssl_min_protocol_version;\n2. Check the output to verify that the ssl_min_protocol_version directive is set\nto either TLSv1.2 or TLSv1.3 (preferred).",
+      "audit_excerpt": "1. Execute the following commandSHOW ssl_min_protocol_version;\n2. Check the output to verify that the ssl_min_protocol_version directive is setto either TLSv1.2 or TLSv1.3 (preferred).\n\n---REMEDIATION---Adjust the ssl_min_protocol_version to at least TLSv1.2:ALTER SYSTEM SET ssl_min_protocol_version = 'TLSv1.2';\nor (preferred):ALTER SYSTEM SET ssl_min_protocol_version = 'TLSv1.3';\nIn either case, ",
+      "description_head": "Transport Layer Security (TLS), and its predecessor Secure Sockets Layer (SSL) are\ncryptographic protocols which can be used to encrypt data sent between client and\nserver."
+    },
+    {
+      "id": 16202,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__6.10",
+      "rule_id": "6.10",
+      "title": "Ensure Weak SSL/TLS Ciphers Are Disabled",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_auto_generated": true,
+        "_audit_excerpt": "1. Execute the following commandpostgres=# SHOW ssl_ciphers;\npostgres=# SHOW ssl_tls13_ciphers;\n2. Check the output to verify that the ssl_ciphers and ssl_tls13_ciphersdirectives do NOT include values other than these:TLS_AES_256_GCM_SHA384TLS_AES_128_GCM_SHA256TLS_AES_128_CCM_SHA256\n\u2022 Note: If you leave ssl_tls13_ciphers empty, PostgreSQL falls back to thedefault cipher list provided by your unde",
+        "_note": "Parser could not synthesise an executable check; reviewer must hand-author."
+      },
+      "audit_steps_text": "1. Execute the following command\npostgres=# SHOW ssl_ciphers;\npostgres=# SHOW ssl_tls13_ciphers;\n2. Check the output to verify that the ssl_ciphers and ssl_tls13_ciphers\ndirectives do NOT include values other than these:\nTLS_AES_256_GCM_SHA384\nTLS_AES_128_GCM_SHA256\nTLS_AES_128_CCM_SHA256\n\u2022 Note: If you leave ssl_tls13_ciphers empty, PostgreSQL falls back to the\ndefault cipher list provided by your underlying OpenSSL library for TLS 1.3\nconnections.\n3. Ensure there are no existing connections using weaker ciphers:\npostgres=# SELECT * FROM pg_stat_ssl WHERE cipher NOT IN\n('TLS_AES_256_GCM_SHA384','TLS_AES_128_GCM_SHA256','TLS_AES_128_CCM_SHA\n256');",
+      "audit_excerpt": "1. Execute the following commandpostgres=# SHOW ssl_ciphers;\npostgres=# SHOW ssl_tls13_ciphers;\n2. Check the output to verify that the ssl_ciphers and ssl_tls13_ciphersdirectives do NOT include values other than these:TLS_AES_256_GCM_SHA384TLS_AES_128_GCM_SHA256TLS_AES_128_CCM_SHA256\n\u2022 Note: If you leave ssl_tls13_ciphers empty, PostgreSQL falls back to thedefault cipher list provided by your unde",
+      "description_head": "The PostgreSQL ssl_ciphers and ssl_tls13_ciphers directives specify which\nCipher Suites are allowed in the negotiation with the client. ssl_ciphers is used to\nspecify the list of allowed cipher suites for TLS 1.2 and earlier versions. While"
+    },
+    {
+      "id": 16203,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__6.11",
+      "rule_id": "6.11",
+      "title": "Ensure the pgcrypto extension is installed and configured correctly (Manual)",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_auto_generated": true,
+        "_audit_excerpt": "One possible way to encrypt data within PostgreSQL is to use the pgcrypto extension.To check if pgcrypto is installed on PostgreSQL, as a database administrator run thefollowing commands:postgres=# SELECT * FROM pg_available_extensions WHERE name='pgcrypto';\nname | default_version | installed_version | comment\n----------+-----------------+-------------------+-------------------------pgcrypto | 1.4",
+        "_note": "Parser could not synthesise an executable check; reviewer must hand-author."
+      },
+      "audit_steps_text": "One possible way to encrypt data within PostgreSQL is to use the pgcrypto extension.\nTo check if pgcrypto is installed on PostgreSQL, as a database administrator run the\nfollowing commands:\npostgres=# SELECT * FROM pg_available_extensions WHERE name='pgcrypto';\nname | default_version | installed_version | comment\n----------+-----------------+-------------------+-------------------------\npgcrypto | 1.4 | | cryptographic functions\n(1 row)\nIf data in the database requires encryption and pgcrypto is not available, this is a fail.\nIf disk or filesystem requires encryption, ask the system owner, DBA, and SA to\ndemonstrate the use of disk-level encryption. If this is required and is not found, this is a\nfail. If controls do not exist or are not enabled, this is also a fail.",
+      "audit_excerpt": "One possible way to encrypt data within PostgreSQL is to use the pgcrypto extension.To check if pgcrypto is installed on PostgreSQL, as a database administrator run thefollowing commands:postgres=# SELECT * FROM pg_available_extensions WHERE name='pgcrypto';\nname | default_version | installed_version | comment\n----------+-----------------+-------------------+-------------------------pgcrypto | 1.4",
+      "description_head": "PostgreSQL must implement cryptographic mechanisms to prevent unauthorized\ndisclosure or modification of organization-defined information at rest (to include, at a\nminimum, PII and classified information) on organization-defined information"
+    },
+    {
+      "id": 16204,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__7.1",
+      "rule_id": "7.1",
+      "title": "Ensure a replication-only user is created and used for streaming replication (Manual)",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_auto_generated": true,
+        "_audit_excerpt": "Check which users currently have the replication permission:postgres=# select rolname from pg_roles where rolreplication is true;\nrolname\n----------postgres\n(1 row)\nIn a default PostgreSQL cluster, only the postgres user will have this permission.\n\n---REMEDIATION---It will be necessary to create a new role for replication purposes:postgres=# create user replication_user REPLICATION encrypted passw",
+        "_note": "Parser could not synthesise an executable check; reviewer must hand-author."
+      },
+      "audit_steps_text": "Check which users currently have the replication permission:\npostgres=# select rolname from pg_roles where rolreplication is true;\nrolname\n----------\npostgres\n(1 row)\nIn a default PostgreSQL cluster, only the postgres user will have this permission.",
+      "audit_excerpt": "Check which users currently have the replication permission:postgres=# select rolname from pg_roles where rolreplication is true;\nrolname\n----------postgres\n(1 row)\nIn a default PostgreSQL cluster, only the postgres user will have this permission.\n\n---REMEDIATION---It will be necessary to create a new role for replication purposes:postgres=# create user replication_user REPLICATION encrypted passw",
+      "description_head": "Create a new user specifically for use by streaming replication instead of using the\nsuperuser account."
+    },
+    {
+      "id": 16206,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__7.2",
+      "rule_id": "7.2",
+      "title": "Ensure logging of replication commands is configured",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_auto_generated": true,
+        "_audit_excerpt": "Check the current value of log_replication_commands:postgres=# show log_replication_commands;\nlog_replication_commands\n--------------------------off\n(1 row)\n\n---REMEDIATION---To enable the logging of replication commands, execute the following:postgres=# ALTER SYSTEM SET log_replication_commands = 'on';\nALTER SYSTEMpostgres=# SELECT pg_reload_conf();\npg_reload_conf\n----------------t\n(1 row)\npostgr",
+        "_note": "Parser could not synthesise an executable check; reviewer must hand-author."
+      },
+      "audit_steps_text": "Check the current value of log_replication_commands:\npostgres=# show log_replication_commands;\nlog_replication_commands\n--------------------------\noff\n(1 row)",
+      "audit_excerpt": "Check the current value of log_replication_commands:postgres=# show log_replication_commands;\nlog_replication_commands\n--------------------------off\n(1 row)\n\n---REMEDIATION---To enable the logging of replication commands, execute the following:postgres=# ALTER SYSTEM SET log_replication_commands = 'on';\nALTER SYSTEMpostgres=# SELECT pg_reload_conf();\npg_reload_conf\n----------------t\n(1 row)\npostgr",
+      "description_head": "Enabling the log_replication_commands setting causes each attempted replication\nfrom the server to be logged."
+    },
+    {
+      "id": 16207,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__7.3",
+      "rule_id": "7.3",
+      "title": "Ensure base backups are configured and functional",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_auto_generated": true,
+        "_audit_excerpt": "Manually confirm that backups exist and are updated on a regular basis.\n\n---REMEDIATION---Executing base backups using pg_basebackup requires the following steps on thestandby server:\n$ whoamipostgres\n$ pg_basebackup --host=name_or_IP_of_master \\--port=5432 \\--username=replication_user \\--pgdata=~postgres/18/data \\--progress --verbose --write-recovery-conf --wal-method=stream\n\n---DEFAULT_VALUE---\n",
+        "_note": "Parser could not synthesise an executable check; reviewer must hand-author."
+      },
+      "audit_steps_text": "Manually confirm that backups exist and are updated on a regular basis.",
+      "audit_excerpt": "Manually confirm that backups exist and are updated on a regular basis.\n\n---REMEDIATION---Executing base backups using pg_basebackup requires the following steps on thestandby server:\n$ whoamipostgres\n$ pg_basebackup --host=name_or_IP_of_master \\--port=5432 \\--username=replication_user \\--pgdata=~postgres/18/data \\--progress --verbose --write-recovery-conf --wal-method=stream\n\n---DEFAULT_VALUE---\n",
+      "description_head": "A 'base backup' is a copy of the PRIMARY host's data cluster ($PGDATA) and is used to\ncreate STANDBY hosts and for Point In Time Recovery (PITR) mechanisms. Base\nbackups should be copied across networks in a secure manner using an encrypted"
+    },
+    {
+      "id": 16208,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__7.4",
+      "rule_id": "7.4",
+      "title": "Ensure WAL archiving is configured and functional",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_auto_generated": true,
+        "_audit_excerpt": "Review the following parameters:postgres=# SELECT name, settingFROM pg_settingsWHERE name in ('archive_mode','archive_command','archive_library')\nAND setting IS NOT NULLAND setting <> 'off'\nAND setting <> '(disabled)'\nAND setting <> '';\nname | setting\n------+---------\n(o rows)\nIf no rows are returned, as shown, this is a failure. If rows are returned, note thatarchive_mode must be 'on' and either ",
+        "_note": "Parser could not synthesise an executable check; reviewer must hand-author."
+      },
+      "audit_steps_text": "Review the following parameters:\npostgres=# SELECT name, setting\nFROM pg_settings\nWHERE name in ('archive_mode','archive_command','archive_library')\nAND setting IS NOT NULL\nAND setting <> 'off'\nAND setting <> '(disabled)'\nAND setting <> '';\nname | setting\n------+---------\n(o rows)\nIf no rows are returned, as shown, this is a failure. If rows are returned, note that\narchive_mode must be 'on' and either archive_command or archive_library must be\nset for WAL archiving to be fully enabled.\nTo verify that WAL archiving is functioning successfully, one can:\npostgres=# SELECT * FROM pg_stat_archiver; \\watch\nAnd ensure that archived_count, last_archived_wal, and last_archived_time\nare changing while failed_count, last_failed_wal, and last_failed_time are not\nchanging.",
+      "audit_excerpt": "Review the following parameters:postgres=# SELECT name, settingFROM pg_settingsWHERE name in ('archive_mode','archive_command','archive_library')\nAND setting IS NOT NULLAND setting <> 'off'\nAND setting <> '(disabled)'\nAND setting <> '';\nname | setting\n------+---------\n(o rows)\nIf no rows are returned, as shown, this is a failure. If rows are returned, note thatarchive_mode must be 'on' and either ",
+      "description_head": "Write Ahead Log (WAL) Archiving, or Log Shipping, is the process of sending\ntransaction log files from the PRIMARY host either to one or more STANDBY hosts or\nto be archived on a remote storage device for later use, e.g. PITR. There are sev"
+    },
+    {
+      "id": 16209,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__7.5",
+      "rule_id": "7.5",
+      "title": "Ensure streaming replication parameters are configured correctly (Manual)",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_auto_generated": true,
+        "_audit_excerpt": "Confirm a dedicated and non-superuser role with replication permission exists:postgres=> select rolname from pg_roles where rolreplication is true;\nrolname\n------------------postgresreplication_user\n(2 rows)\nOn the target/STANDBY host, execute a psql invocation similar to the following,\nconfirming that SSL communications are possible:\n$ whoamipostgres\n$ psql 'host=mySrcHost dbname=postgres user=re",
+        "_note": "Parser could not synthesise an executable check; reviewer must hand-author."
+      },
+      "audit_steps_text": "Confirm a dedicated and non-superuser role with replication permission exists:\npostgres=> select rolname from pg_roles where rolreplication is true;\nrolname\n------------------\npostgres\nreplication_user\n(2 rows)\nOn the target/STANDBY host, execute a psql invocation similar to the following,\nconfirming that SSL communications are possible:\n$ whoami\npostgres\n$ psql 'host=mySrcHost dbname=postgres user=replication_user\npassword=mypassword sslmode=require' -c 'select 1;'",
+      "audit_excerpt": "Confirm a dedicated and non-superuser role with replication permission exists:postgres=> select rolname from pg_roles where rolreplication is true;\nrolname\n------------------postgresreplication_user\n(2 rows)\nOn the target/STANDBY host, execute a psql invocation similar to the following,\nconfirming that SSL communications are possible:\n$ whoamipostgres\n$ psql 'host=mySrcHost dbname=postgres user=re",
+      "description_head": "Streaming replication from a PRIMARY host transmits DDL, DML, passwords, and other\npotentially sensitive activities and data. These connections should be protected with\nSecure Sockets Layer (SSL)."
+    },
+    {
+      "id": 16210,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__8.1",
+      "rule_id": "8.1",
+      "title": "Ensure PostgreSQL subdirectory locations are outside the data cluster (Manual)",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_auto_generated": true,
+        "_audit_excerpt": "Execute the following SQL statement to verify the configuration is correct. Alternatively,\ninspect the parameter settings in the postgresql.conf configuration file.postgres=# select name, setting from pg_settings where (name ~ '_directory$'\nor name ~ '_tablespace');\nname | setting\n----------------------------+-------------------------allow_in_place_tablespaces | offdata_directory | /var/lib/pgsql/",
+        "_note": "Parser could not synthesise an executable check; reviewer must hand-author."
+      },
+      "audit_steps_text": "Execute the following SQL statement to verify the configuration is correct. Alternatively,\ninspect the parameter settings in the postgresql.conf configuration file.\npostgres=# select name, setting from pg_settings where (name ~ '_directory$'\nor name ~ '_tablespace');\nname | setting\n----------------------------+-------------------------\nallow_in_place_tablespaces | off\ndata_directory | /var/lib/pgsql/18/data\ndefault_tablespace |\nlog_directory | log\ntemp_tablespaces |\n(5 rows)\nInspect the file and directory permissions for all returned values. Only superusers and\nauthorized users should have access control rights for these files and directories. If\npermissions are not highly restrictive, this is a fail.\nIf temp_tablespaces is undefined and temp_file_limit has not been set, this is a\nfail.",
+      "audit_excerpt": "Execute the following SQL statement to verify the configuration is correct. Alternatively,\ninspect the parameter settings in the postgresql.conf configuration file.postgres=# select name, setting from pg_settings where (name ~ '_directory$'\nor name ~ '_tablespace');\nname | setting\n----------------------------+-------------------------allow_in_place_tablespaces | offdata_directory | /var/lib/pgsql/",
+      "description_head": "The PostgreSQL cluster is organized to carry out specific tasks in subdirectories. For\nthe purposes of performance, reliability, and security some of these subdirectories\nshould be relocated outside the data cluster."
+    },
+    {
+      "id": 16211,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__8.2",
+      "rule_id": "8.2",
+      "title": "Ensure the backup and restore tool, 'pgBackRest', is installed and configured (Automated)",
+      "runner_type": "postgres_sql",
+      "enabled": false,
+      "review_status": "pending_review",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_auto_generated": true,
+        "_audit_excerpt": "\n\n---REMEDIATION---\n\n\n---DEFAULT_VALUE---\n",
+        "_note": "Parser could not synthesise an executable check; reviewer must hand-author."
+      },
+      "audit_steps_text": "",
+      "audit_excerpt": "\n\n---REMEDIATION---\n\n\n---DEFAULT_VALUE---\n",
+      "description_head": "pgBackRest aims to be a simple, reliable backup and restore system that can\nseamlessly scale up to the largest databases and workloads. Instead of relying on\ntraditional backup tools like tar and rsync, pgBackRest implements all backup feat"
+    },
+    {
+      "id": 16212,
+      "plugin_key": "CIS_PostgreSQL_18_Benchmark_v1.0.0__8.3",
+      "rule_id": "8.3",
+      "title": "Ensure miscellaneous configuration settings are correct",
+      "runner_type": "postgres_sql",
+      "enabled": true,
+      "review_status": "auto_approved",
+      "auto_generated_check": true,
+      "expect_kind": "any",
+      "has_sql": false,
+      "authored_tag": null,
+      "classification": "any",
+      "check_definition": {
+        "expect": {
+          "kind": "any"
+        },
+        "_auto_generated": true,
+        "_audit_excerpt": "Execute the following SQL statement to verify the configuration is correct. Alternatively,\ninspect the parameter settings in the postgresql.conf configuration file.postgres=# select name, setting from pg_settings where name in\n('external_pid_file',\n'unix_socket_directories','shared_preload_libraries','dynamic_library_path','\nlocal_preload_libraries','session_preload_libraries');\nname | setting\n---",
+        "_note": "Parser could not synthesise an executable check; reviewer must hand-author."
+      },
+      "audit_steps_text": "Execute the following SQL statement to verify the configuration is correct. Alternatively,\ninspect the parameter settings in the postgresql.conf configuration file.\npostgres=# select name, setting from pg_settings where name in\n('external_pid_file',\n'unix_socket_directories','shared_preload_libraries','dynamic_library_path','\nlocal_preload_libraries','session_preload_libraries');\nname | setting\n---------------------------+---------------------------\ndynamic_library_path | $libdir\nexternal_pid_file |\nlocal_preload_libraries |\nsession_preload_libraries |\nshared_preload_libraries | pgaudit, set_user, $libdir/passwordcheck\nunix_socket_directories | /var/run/postgresql, /tmp\n(6 rows)\nInspect the file and directory permissions for all returned values. Only superusers\nshould have access control rights for these files and directories. If permissions are not\nhighly restricted, this is a fail.",
+      "audit_excerpt": "Execute the following SQL statement to verify the configuration is correct. Alternatively,\ninspect the parameter settings in the postgresql.conf configuration file.postgres=# select name, setting from pg_settings where name in\n('external_pid_file',\n'unix_socket_directories','shared_preload_libraries','dynamic_library_path','\nlocal_preload_libraries','session_preload_libraries');\nname | setting\n---",
+      "description_head": "This recommendation covers non-regular, special files, and dynamic libraries.\nPostgreSQL permits local logins via the UNIX DOMAIN SOCKET and, for the most part,\nanyone with a legitimate Unix login account can make the attempt. Limiting Post"
+    }
+  ]
+}

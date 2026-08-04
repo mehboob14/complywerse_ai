@@ -1,0 +1,2950 @@
+{
+  "id": "sbp_cloud",
+  "name": "SBP Framework on Outsourcing to Cloud Service Providers",
+  "version": "BPRD Circular 01 of 2023",
+  "official_sources": [
+    {
+      "title": "BPRD Circular 01 of 2023",
+      "url": "https://www.sbp.org.pk/bprd/2023/C1.htm"
+    },
+    {
+      "title": "Framework Annex",
+      "url": "https://www.sbp.org.pk/bprd/2023/C1-Annix-A.pdf"
+    }
+  ],
+  "assessment_shapes": [
+    "asset_threat_vulnerability",
+    "attestation"
+  ],
+  "methodology": "Risk-based, applies per cloud workload. Material workloads to offshore CSPs require SBP approval. Periodic VA/PT/scenario testing at least annually.",
+  "scoping_inputs": [
+    {
+      "id": "re_type",
+      "type": "select",
+      "options": [
+        "Bank",
+        "Digital Bank",
+        "MFB",
+        "DFI",
+        "EMI",
+        "PSO",
+        "PSP"
+      ],
+      "label": "Regulated entity type"
+    },
+    {
+      "id": "workloads",
+      "type": "list",
+      "label": "Cloud workloads"
+    },
+    {
+      "id": "service_models",
+      "type": "multi_select",
+      "options": [
+        "IaaS",
+        "PaaS",
+        "SaaS"
+      ],
+      "label": "Service models"
+    },
+    {
+      "id": "deployment_models",
+      "type": "multi_select",
+      "options": [
+        "Public",
+        "Private",
+        "Community",
+        "Hybrid"
+      ],
+      "label": "Deployment models"
+    }
+  ],
+  "risk_model": {
+    "factors": [
+      "asset",
+      "threat",
+      "vulnerability",
+      "likelihood",
+      "impact_c",
+      "impact_i",
+      "impact_a"
+    ],
+    "scales": {
+      "likelihood": [
+        {
+          "value": 1,
+          "label": "Rare",
+          "definition": "May occur only in exceptional circumstances (<5% per year)."
+        },
+        {
+          "value": 2,
+          "label": "Unlikely",
+          "definition": "Could occur but not expected (5-25% per year)."
+        },
+        {
+          "value": 3,
+          "label": "Possible",
+          "definition": "Might occur at some time (25-50% per year)."
+        },
+        {
+          "value": 4,
+          "label": "Likely",
+          "definition": "Will probably occur in most circumstances (50-75% per year)."
+        },
+        {
+          "value": 5,
+          "label": "Almost Certain",
+          "definition": "Expected to occur in most circumstances (>75% per year)."
+        }
+      ],
+      "impact": [
+        {
+          "value": 1,
+          "label": "Insignificant",
+          "definition": "Negligible operational, financial, regulatory or reputational impact."
+        },
+        {
+          "value": 2,
+          "label": "Minor",
+          "definition": "Limited impact contained within a single team or system; recoverable in <1 day."
+        },
+        {
+          "value": 3,
+          "label": "Moderate",
+          "definition": "Notable impact on a business unit; recoverable in 1-7 days; minor regulatory attention."
+        },
+        {
+          "value": 4,
+          "label": "Major",
+          "definition": "Significant impact across multiple business units; >1 week to recover; regulatory action probable."
+        },
+        {
+          "value": 5,
+          "label": "Severe",
+          "definition": "Existential or systemic impact; loss of license, major fines, sustained customer loss."
+        }
+      ],
+      "maturity": [
+        {
+          "value": 0,
+          "label": "Non-Existent",
+          "definition": "No process or control in place."
+        },
+        {
+          "value": 1,
+          "label": "Initial / Ad Hoc",
+          "definition": "Process exists but is informal and inconsistent."
+        },
+        {
+          "value": 2,
+          "label": "Repeatable",
+          "definition": "Process is documented and repeated, but not standardized across the organization."
+        },
+        {
+          "value": 3,
+          "label": "Defined",
+          "definition": "Process is documented, standardized, and integrated across the organization."
+        },
+        {
+          "value": 4,
+          "label": "Managed",
+          "definition": "Process is measured, monitored with KPIs, and controlled."
+        },
+        {
+          "value": 5,
+          "label": "Optimized",
+          "definition": "Process is continuously improved through monitoring, metrics, and lessons learned."
+        }
+      ],
+      "implementation_status": [
+        {
+          "value": "NI",
+          "label": "Not Implemented"
+        },
+        {
+          "value": "PI",
+          "label": "Partially Implemented"
+        },
+        {
+          "value": "LI",
+          "label": "Largely Implemented"
+        },
+        {
+          "value": "FI",
+          "label": "Fully Implemented"
+        }
+      ]
+    },
+    "matrix": "5x5",
+    "calculation": "max(impact_c, impact_i, impact_a) * likelihood",
+    "acceptance_threshold": 6,
+    "thresholds": {
+      "low": [
+        1,
+        4
+      ],
+      "medium": [
+        5,
+        9
+      ],
+      "high": [
+        10,
+        16
+      ],
+      "critical": [
+        17,
+        25
+      ]
+    }
+  },
+  "domains": [
+    {
+      "id": "E",
+      "name": "Permissible Cloud Outsourcing Arrangements",
+      "controls": [
+        {
+          "id": "E.1",
+          "title": "Material vs Non-Material workload classification",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "E.2",
+          "title": "Onshore vs Offshore CSP rules",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "F",
+      "name": "Governance",
+      "controls": [
+        {
+          "id": "F.1",
+          "title": "Board IT Committee approval",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "F.2",
+          "title": "Cloud outsourcing policy",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "F.3",
+          "title": "Roles and responsibilities",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "G",
+      "name": "Due Diligence of CSP",
+      "controls": [
+        {
+          "id": "G.1",
+          "title": "CSP financial soundness",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "G.2",
+          "title": "CSP technical capability and certifications (SOC 1/2/3, ISO 27001)",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "G.3",
+          "title": "Material sub-contracting",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "G.4",
+          "title": "Reputation and references",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "H",
+      "name": "Oversight and Monitoring",
+      "controls": [
+        {
+          "id": "H.1",
+          "title": "Ongoing performance monitoring",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "H.2",
+          "title": "Periodic review",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "H.3",
+          "title": "Audit rights (SBP, RE, independent assessor)",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "I",
+      "name": "Contingency Planning",
+      "controls": [
+        {
+          "id": "I.1",
+          "title": "Contingency plan for CSP unavailability",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "I.2",
+          "title": "Exit strategy",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "I.3",
+          "title": "Data portability",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "J",
+      "name": "Contractual Provisions",
+      "controls": [
+        {
+          "id": "J.1",
+          "title": "SLA definitions",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "J.2",
+          "title": "Data confidentiality and segregation",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "J.3",
+          "title": "Data ownership and return on exit",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "J.4",
+          "title": "Liability and indemnity",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "K",
+      "name": "Data Security and Encryption",
+      "controls": [
+        {
+          "id": "K.1",
+          "title": "Encryption at rest",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "K.2",
+          "title": "Encryption in transit",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "K.3",
+          "title": "Data segregation in multi-tenant environments",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "K.4",
+          "title": "Data residency",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "L",
+      "name": "Identity and Access Management",
+      "controls": [
+        {
+          "id": "L.1",
+          "title": "User access lifecycle for cloud workloads",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "L.2",
+          "title": "Privileged access management",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "L.3",
+          "title": "MFA for cloud admin and management consoles",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "U",
+      "name": "Security Event Monitoring",
+      "controls": [
+        {
+          "id": "U.1",
+          "title": "SEM controls in cloud environment",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "U.2",
+          "title": "Log collection and retention",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "U.3",
+          "title": "Threat detection and response",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "V",
+      "name": "Other Requirements",
+      "controls": [
+        {
+          "id": "V.1",
+          "title": "Capacity utilization monitoring",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "V.2",
+          "title": "End-user training",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "V.3",
+          "title": "Periodic VA, PT, scenario-based testing (≥annual)",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
