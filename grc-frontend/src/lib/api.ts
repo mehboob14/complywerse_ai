@@ -686,8 +686,12 @@ export const assetsApi = {
   getDetail: (id: number) => apiClient.get(`/assets/${id}/detail`),
   // Enrich an existing asset IN PLACE with its typed service inventory (e.g. a
   // Postgres app → its databases/schemas/roles) — no re-discovery needed.
-  collectAssetService: (id: number, data: { kind: string; username?: string; password: string; host?: string; port?: number; database?: string }) =>
+  collectAssetService: (id: number, data: { kind?: string; username?: string; password?: string; host?: string; port?: number; database?: string; connection_id?: number }) =>
     apiClient.post(`/assets/${id}/collect-service`, data),
+  // Saved logins (encrypted IntegrationConnections) that can collect this asset's
+  // typed service — powers the "reuse a saved login" picker in the collect modal.
+  getServiceLogins: (id: number) =>
+    apiClient.get<{ kind: string | null; logins: Array<{ connection_id: number; label: string; host: string | null; port: number | null; username: string | null }> }>(`/assets/${id}/service-logins`),
   // Phase 5.3 — Lifecycle state transition. Backend enforces the FSM and
   // returns the new state + a count of auto-closed vulnerabilities.
   transitionLifecycle: (

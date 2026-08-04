@@ -18,7 +18,7 @@ from ..models import (
     ITAsset, AssetControlLink, AssetInternalControlLink, AssetRiskAssessment, AssetFrameworkControlLink,
     AssetEvidenceLink, NormalizedControl, FrameworkControl, Evidence, Risk, InternalControl,
     Vulnerability, VulnerabilityAssetLink, AssetSecurityComplianceSelection,
-    SoftwareIdentifier,
+    SoftwareIdentifier, AssetSavedView,
     # Trajectory-map endpoint pulls these in to traverse Asset → Vuln → Control → Risk
     VulnerabilityControlLink, ParsedFrameworkControl,
     RiskAssetLink, RiskControlLink, RiskFrameworkControlLink,
@@ -1229,6 +1229,144 @@ async def upload_assets_file(
         "total_errors": error_count,
         "message": f"Successfully imported {imported_count} assets" + (f" with {error_count} errors" if error_count > 0 else "")
     }
+
+
+class _CompositeWeightsIn(BaseModel):
+    low: float = 1.0
+    medium: float = 2.0
+    high: float = 3.0
+    critical: float = 4.0
+
+
+@router.get("/composite-weights")
+def get_composite_weights(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    tid = get_user_primary_tenant(current_user, db)
+    tenant = db.query(Tenant).filter(Tenant.id == tid).first()
+    settings = tenant.settings or {} if tenant else {}
+    is_custom = "composite_weights" in settings
+    weights = settings.get("composite_weights", _CRIT_WEIGHT)
+    return {"weights": weights, "is_custom": is_custom, "defaults": _CRIT_WEIGHT}
+
+
+@router.put("/composite-weights")
+def update_composite_weights(
+    body: _CompositeWeightsIn,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    tid = get_user_primary_tenant(current_user, db)
+    tenant = db.query(Tenant).filter(Tenant.id == tid).first()
+    if not tenant:
+        raise HTTPException(404, "Tenant not found")
+    weights = {"low": body.low, "medium": body.medium, "high": body.high, "critical": body.critical}
+    if any(v <= 0 for v in weights.values()):
+        raise HTTPException(400, "All weights must be positive numbers")
+    settings = dict(tenant.settings or {})
+    settings["composite_weights"] = weights
+    tenant.settings = settings
+    db.commit()
+    return {"weights": weights, "is_custom": True, "defaults": _CRIT_WEIGHT}
+
+
+@router.delete("/composite-weights")
+def reset_composite_weights(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    tid = get_user_primary_tenant(current_user, db)
+    tenant = db.query(Tenant).filter(Tenant.id == tid).first()
+    if not tenant:
+        raise HTTPException(404, "Tenant not found")
+    settings = dict(tenant.settings or {})
+    settings.pop("composite_weights", None)
+    tenant.settings = settings
+    db.commit()
+    return {"weights": _CRIT_WEIGHT, "is_custom": False, "defaults": _CRIT_WEIGHT}
+
+
+# ── Saved views (named filter+sort presets for the inventory list) ────────────
+# Model + table (grc_asset_saved_views) and the frontend calls shipped, but the
+# route was never wired — the list toolbar's "Saved views" was dead. These three
+# close it. Must stay ABOVE the /{asset_id} catch-all to remain reachable.
+
+class _SavedViewIn(BaseModel):
+    name: str
+    filters: dict = {}
+    sort: str | None = None
+
+
+def _saved_view_dict(v: "AssetSavedView") -> dict:
+    return {"id": v.id, "name": v.name, "filters": v.filters or {}, "sort": v.sort}
+
+
+@router.get("/saved-views")
+def list_saved_views(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    tid = get_user_primary_tenant(current_user, db)
+    rows = (
+        db.query(AssetSavedView)
+        .filter(AssetSavedView.tenant_id == tid)
+        .order_by(AssetSavedView.name.asc())
+        .all()
+    )
+    return [_saved_view_dict(v) for v in rows]
+
+
+@router.post("/saved-views")
+def create_saved_view(
+    body: _SavedViewIn,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    tid = get_user_primary_tenant(current_user, db)
+    name = (body.name or "").strip()
+    if not name:
+        raise HTTPException(400, "View name is required")
+    existing = (
+        db.query(AssetSavedView)
+        .filter(AssetSavedView.tenant_id == tid, AssetSavedView.name == name)
+        .first()
+    )
+    if existing:
+        existing.filters = body.filters or {}
+        existing.sort = body.sort
+        view = existing
+    else:
+        view = AssetSavedView(
+            tenant_id=tid,
+            user_id=getattr(current_user, "id", None),
+            name=name,
+            filters=body.filters or {},
+            sort=body.sort,
+        )
+        db.add(view)
+    db.commit()
+    db.refresh(view)
+    return _saved_view_dict(view)
+
+
+@router.delete("/saved-views/{view_id}")
+def delete_saved_view(
+    view_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    tid = get_user_primary_tenant(current_user, db)
+    view = (
+        db.query(AssetSavedView)
+        .filter(AssetSavedView.id == view_id, AssetSavedView.tenant_id == tid)
+        .first()
+    )
+    if not view:
+        raise HTTPException(404, "Saved view not found")
+    db.delete(view)
+    db.commit()
+    return {"success": True}
 
 
 @router.get("/{asset_id}", response_model=dict)
@@ -3887,62 +4025,6 @@ def _asset_own_compliance(db: Session, asset_id: int, tenant_id: int) -> Optiona
         return None
     passed = sum(1 for r in rows if r[0] == "passed")
     return round(100.0 * passed / len(rows), 1)
-
-
-class _CompositeWeightsIn(BaseModel):
-    low: float = 1.0
-    medium: float = 2.0
-    high: float = 3.0
-    critical: float = 4.0
-
-
-@router.get("/composite-weights")
-def get_composite_weights(
-    db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth),
-):
-    tid = get_user_primary_tenant(current_user, db)
-    tenant = db.query(Tenant).filter(Tenant.id == tid).first()
-    settings = tenant.settings or {} if tenant else {}
-    is_custom = "composite_weights" in settings
-    weights = settings.get("composite_weights", _CRIT_WEIGHT)
-    return {"weights": weights, "is_custom": is_custom, "defaults": _CRIT_WEIGHT}
-
-
-@router.put("/composite-weights")
-def update_composite_weights(
-    body: _CompositeWeightsIn,
-    db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth),
-):
-    tid = get_user_primary_tenant(current_user, db)
-    tenant = db.query(Tenant).filter(Tenant.id == tid).first()
-    if not tenant:
-        raise HTTPException(404, "Tenant not found")
-    weights = {"low": body.low, "medium": body.medium, "high": body.high, "critical": body.critical}
-    if any(v <= 0 for v in weights.values()):
-        raise HTTPException(400, "All weights must be positive numbers")
-    settings = dict(tenant.settings or {})
-    settings["composite_weights"] = weights
-    tenant.settings = settings
-    db.commit()
-    return {"weights": weights, "is_custom": True, "defaults": _CRIT_WEIGHT}
-
-
-@router.delete("/composite-weights")
-def reset_composite_weights(
-    db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth),
-):
-    tid = get_user_primary_tenant(current_user, db)
-    tenant = db.query(Tenant).filter(Tenant.id == tid).first()
-    if not tenant:
-        raise HTTPException(404, "Tenant not found")
-    settings = dict(tenant.settings or {})
-    settings.pop("composite_weights", None)
-    tenant.settings = settings
-    db.commit()
-    return {"weights": _CRIT_WEIGHT, "is_custom": False, "defaults": _CRIT_WEIGHT}
 
 
 @router.get("/{asset_id}/ip-peers")

@@ -740,7 +740,7 @@ export default function AssetDetailPage() {
       onClick: () => setActiveTab(s.id),
     })),
     actions: [
-      ...(dbAppKind ? [{ label: collectSvc.isPending ? 'Collecting…' : 'Collect database details', primary: true, onClick: () => collectSvc.mutate({}) }] : []),
+      ...(dbAppKind ? [{ label: collectSvc.isPending ? 'Collecting…' : 'Collect database details', primary: true, onClick: () => setCollectSvcOpen(true) }] : []),
       { label: 'Assess risk', primary: !dbAppKind, onClick: () => setActiveTab('criticality') },
       ...(canEdit ? [{ label: 'Edit', onClick: () => setShowEditModal(true) }] : []),
       ...(canEdit ? [{ label: 'Lifecycle', onClick: () => setShowLifecycleModal(true) }] : []),
@@ -1051,6 +1051,7 @@ export default function AssetDetailPage() {
       {collectSvcOpen && dbAppKind && (
         <CollectServiceModal
           kind={dbAppKind}
+          assetId={assetId}
           defaultHost={asset.ip_address || '127.0.0.1'}
           defaultPort={(asset.app_attributes_json as any)?.listen_port}
           pending={collectSvc.isPending}
@@ -1063,11 +1064,19 @@ export default function AssetDetailPage() {
   );
 }
 
-// Enrich a DB app in place — a one-time DB login that adds its databases /
-// schemas / roles to THIS asset (no re-discovery).
-function CollectServiceModal({ kind, defaultHost, defaultPort, pending, error, onClose, onRun }: any) {
+// Enrich a DB app in place — reuse a SAVED login (encrypted IntegrationConnection)
+// or add a new one. First time: enter + "Collect & save". After that: the saved
+// logins are listed to pick from (the login the operator already gave when they
+// connected the host / set up the software is reused, never re-typed).
+function CollectServiceModal({ kind, assetId, defaultHost, defaultPort, pending, error, onClose, onRun }: any) {
   const LABEL: Record<string, string> = { postgres: 'PostgreSQL', mysql: 'MySQL', mssql: 'SQL Server', oracle: 'Oracle' };
   const DEFPORT: Record<string, string> = { postgres: '5432', mysql: '3306', mssql: '1433', oracle: '1521' };
+  const { data: loginsRes, isLoading: loadingLogins } = useQuery({
+    queryKey: ['asset-service-logins', assetId],
+    queryFn: async () => (await assetsApi.getServiceLogins(assetId)).data,
+  });
+  const saved: Array<{ connection_id: number; label: string; username: string | null }> = loginsRes?.logins || [];
+  const [addNew, setAddNew] = useState(false);
   const [host, setHost] = useState(String(defaultHost || ''));
   const [port, setPort] = useState(String(defaultPort || DEFPORT[kind] || ''));
   const [user, setUser] = useState(kind === 'postgres' ? 'postgres' : '');
@@ -1075,31 +1084,71 @@ function CollectServiceModal({ kind, defaultHost, defaultPort, pending, error, o
   const [dbName, setDbName] = useState('');
   const lbl = 'block text-[11px] font-semibold text-slate-600 mb-1';
   const inp = 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-primary-500';
+  const showForm = addNew || (!loadingLogins && saved.length === 0);
   return (
     <div onClick={onClose} className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/45 p-4 backdrop-blur-sm">
       <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
         <div className="border-b border-slate-100 px-5 py-4">
           <div className="text-base font-bold text-slate-900">Collect {LABEL[kind] || kind} details</div>
-          <div className="mt-1 text-xs leading-snug text-slate-500">A one-time {LABEL[kind] || kind} login reads this database’s databases, schemas, roles and settings and attaches them to <b>this</b> asset — no re-discovery. The login is saved (encrypted) and reused.</div>
+          <div className="mt-1 text-xs leading-snug text-slate-500">A {LABEL[kind] || kind} login reads this database’s databases, schemas, roles and settings and attaches them to <b>this</b> asset — no re-discovery. Logins are saved (encrypted) and reused.</div>
         </div>
-        <div className="flex flex-col gap-3 px-5 py-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div><label className={lbl}>Host</label><input className={inp} value={host} onChange={(e) => setHost(e.target.value)} placeholder="127.0.0.1" /></div>
-            <div><label className={lbl}>Port</label><input className={inp} value={port} onChange={(e) => setPort(e.target.value)} placeholder={DEFPORT[kind]} /></div>
+
+        {/* Saved logins — pick one to reuse (no re-typing). */}
+        {saved.length > 0 && (
+          <div className="border-b border-slate-100 px-5 py-4">
+            <div className={lbl}>Saved logins</div>
+            <div className="flex flex-col gap-2">
+              {saved.map((s) => (
+                <button
+                  key={s.connection_id}
+                  disabled={pending}
+                  onClick={() => onRun({ connection_id: s.connection_id })}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-left hover:border-primary-400 hover:bg-primary-50 disabled:opacity-50"
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-medium text-slate-800">{s.username || 'login'}</span>
+                    <span className="block truncate text-[11px] text-slate-500">{s.label}</span>
+                  </span>
+                  <span className="shrink-0 rounded-full bg-primary-700 px-3 py-1 text-[11px] font-semibold text-white">{pending ? '…' : 'Use'}</span>
+                </button>
+              ))}
+            </div>
+            {!showForm && (
+              <button onClick={() => setAddNew(true)} className="mt-3 text-xs font-semibold text-primary-700 hover:underline">＋ Add a new login</button>
+            )}
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div><label className={lbl}>Username</label><input className={inp} value={user} onChange={(e) => setUser(e.target.value)} placeholder={kind === 'postgres' ? 'postgres' : 'user'} /></div>
-            <div><label className={lbl}>Password</label><input className={inp} type="password" value={pass} onChange={(e) => setPass(e.target.value)} /></div>
+        )}
+
+        {loadingLogins && <div className="px-5 py-4 text-xs text-slate-400">Checking saved logins…</div>}
+
+        {showForm && (
+          <div className="flex flex-col gap-3 px-5 py-4">
+            {saved.length > 0 && <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">New login</div>}
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className={lbl}>Host</label><input className={inp} value={host} onChange={(e) => setHost(e.target.value)} placeholder="127.0.0.1" /></div>
+              <div><label className={lbl}>Port</label><input className={inp} value={port} onChange={(e) => setPort(e.target.value)} placeholder={DEFPORT[kind]} /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className={lbl}>Username</label><input className={inp} value={user} onChange={(e) => setUser(e.target.value)} placeholder={kind === 'postgres' ? 'postgres' : 'user'} /></div>
+              <div><label className={lbl}>Password</label><input className={inp} type="password" value={pass} onChange={(e) => setPass(e.target.value)} /></div>
+            </div>
+            <div><label className={lbl}>Database (optional)</label><input className={inp} value={dbName} onChange={(e) => setDbName(e.target.value)} placeholder={kind === 'postgres' ? 'postgres' : 'default'} /></div>
           </div>
-          <div><label className={lbl}>Database (optional)</label><input className={inp} value={dbName} onChange={(e) => setDbName(e.target.value)} placeholder={kind === 'postgres' ? 'postgres' : 'default'} /></div>
-          {error && <div className="text-xs font-medium text-red-600">{error}</div>}
-        </div>
+        )}
+
+        {/* Error is rendered here (outside the form block) so a FAILED reuse of a
+            saved login — where the form is hidden — still surfaces the reason
+            instead of silently doing nothing. */}
+        {error && <div className="px-5 pb-2 text-xs font-medium text-red-600">{error}</div>}
+
         <div className="flex justify-end gap-2 border-t border-slate-100 px-5 py-3">
           <button onClick={onClose} className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-600">Cancel</button>
-          <button disabled={pending || !pass || !host} onClick={() => onRun({ kind, username: user || undefined, password: pass, host: host.trim(), port: port ? Number(port) : undefined, database: dbName || undefined })}
-            className="rounded-full bg-primary-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
-            {pending ? 'Connecting…' : 'Collect'}
-          </button>
+          {showForm && (
+            <button disabled={pending || !pass || !host} onClick={() => onRun({ kind, username: user || undefined, password: pass, host: host.trim(), port: port ? Number(port) : undefined, database: dbName || undefined })}
+              className="rounded-full bg-primary-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
+              {pending ? 'Connecting…' : 'Collect & save'}
+            </button>
+          )}
         </div>
       </div>
     </div>
