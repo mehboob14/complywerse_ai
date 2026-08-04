@@ -258,6 +258,43 @@ function buildMachineCards(asset: any, pp: any, kind: string, linux = false): an
   const idn = dataOf(pp.identity) || {};
   const pkg = dataOf(pp.packages) || dataOf(pp.pkg) || {};
 
+  // ── Application (a piece of software promoted to its own child asset) ──
+  // It has NO hardware/OS of its own — those belong to the host it runs on. Show
+  // its real facts (the app_attributes the profiler collected) + a "Runs On"
+  // pointer, instead of the wrong "OS: PostgreSQL 18" / blank-hardware host cards.
+  if (asset?.asset_type === 'application') {
+    const app = asset.app_attributes_json || {};
+    const running = /run|active|listen/i.test(String(app.service_state || ''));
+    return [
+      {
+        title: 'Application', note: 'Agentless scan',
+        fields: [
+          { label: 'Product', value: dash(asset.name) },
+          { label: 'Version', value: dash(asset.os_version) },
+          { label: 'Listen Port', value: dash(app.listen_port), mono: true },
+          { label: 'Service Name', value: dash(app.service_name), mono: true },
+          { label: 'Service State', value: dash(app.service_state), tone: app.service_state ? (running ? 'ok' : 'warn') : undefined },
+          { label: 'Service Account', value: dash(app.service_account) },
+          { label: 'Install Path', value: dash(app.install_path), mono: true },
+          { label: 'Benchmark Key', value: dash(asset.os_normalized), mono: true },
+        ],
+      },
+      {
+        title: 'Runs On', note: 'Parent host',
+        fields: [
+          { label: 'Host', value: dash(asset.host_name || (asset.parent_asset_id ? `Asset #${asset.parent_asset_id}` : '—')) },
+          { label: 'IP Address', value: dash(asset.ip_address), mono: true },
+          { label: 'Network Segment', value: dash(asset.network_segment), mono: true },
+          { label: 'Host OS', value: dash(asset.os_family) },
+          { label: 'Scan Source', value: dash(asset.last_seen_source) },
+          { label: 'Record Source', value: dash(asset.source_system || 'discovery') },
+          { label: 'First Seen', value: date(asset.first_seen_at || asset.created_at) },
+          { label: 'Last Seen', value: date(asset.last_seen_at) },
+        ],
+      },
+    ];
+  }
+
   const netPlatform = {
     title: 'Network & Platform', note: 'Agentless scan',
     fields: [
@@ -387,8 +424,14 @@ export function buildOverviewData(asset: any, o: OverviewOpts = {}): any {
   const date = (s: any) => (s ? String(s).slice(0, 10) : '—');
   const K = o.kpis || {};
 
+  const isApp = asset?.asset_type === 'application';
   const KIND_LABEL: Record<string, string> = { server: 'host', database: 'database', network: 'network device', cloud: 'cloud account', cluster: 'cluster', identity: 'directory' };
   const deep = buildDeep(pp, kind, isLinux(asset));
+  // A software-promoted app has no deep inventory of its own — nudge toward the
+  // richer path (connect it as a database with a DB login) instead of a blank card.
+  if (isApp && deep.groups.length === 0) {
+    deep.notes = { denied: [], absent: [] };
+  }
 
   return {
     legend: { machine: `${asset?.last_seen_source || 'agentless'} scan · ${date(asset?.last_seen_at)}` },
@@ -400,8 +443,11 @@ export function buildOverviewData(asset: any, o: OverviewOpts = {}): any {
         { label: asset?.status || 'active', tone: (asset?.status || 'active') === 'active' ? 'ok' : undefined },
       ],
       description: asset?.description || 'No description',
-      idline: [asset?.asset_type, KIND_LABEL[kind], asset?.os_version || asset?.os_family,
-        asset?.source_system === 'discovery' ? 'discovered on network' : null].filter(Boolean).join(' · '),
+      idline: isApp
+        ? ['application', asset?.os_version || asset?.name,
+          asset?.parent_asset_id ? `runs on ${asset?.host_name || `#${asset.parent_asset_id}`}` : null].filter(Boolean).join(' · ')
+        : [asset?.asset_type, KIND_LABEL[kind], asset?.os_version || asset?.os_family,
+          asset?.source_system === 'discovery' ? 'discovered on network' : null].filter(Boolean).join(' · '),
     },
     actions: o.actions || [],
     tabs: o.tabs || [],
