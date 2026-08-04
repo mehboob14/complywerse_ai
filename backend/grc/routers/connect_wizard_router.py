@@ -42,6 +42,31 @@ from grc.routers.auth_router import get_user_primary_tenant, require_auth, GRCUs
 
 router = APIRouter(prefix="/connect-wizard", tags=["Connect Wizard"])
 
+
+def _record_collect_failure(db, asset_id: int, integration_type: str, exc: Exception) -> None:
+    """Persist a VISIBLE collection_status on an asset whose deep/typed collect
+    hard-failed, so its detail card explains itself (auth / unreachable / driver
+    error) instead of rendering blank. This is the same "never fail silently"
+    guarantee the agentless Windows/Linux collector got — applied to all 12 kinds
+    at the one call site where the typed collectors run. Best-effort; never raises."""
+    try:
+        from grc.modules.asset_discovery.services.platform_collectors import (
+            section as _sec, classify_error as _ce, PLATFORM_KINDS,
+        )
+        a = db.get(ITAsset, asset_id)
+        if a is None:
+            return
+        if not a.platform_kind:
+            a.platform_kind = PLATFORM_KINDS.get(integration_type, "server")
+        props = dict(a.platform_properties or {})
+        props["collection_status"] = _sec(_ce(exc), None, note=f"{type(exc).__name__}: {exc}"[:300])
+        a.platform_properties = props
+        db.commit()
+    except Exception:  # noqa: BLE001 — surfacing a failure must never fail onboarding
+        db.rollback()
+        logger.info("connect-wizard: could not record collection_status for asset %s",
+                    asset_id, exc_info=True)
+
 SESSION_SECRET = os.environ.get("SESSION_SECRET", "dev-secret")
 TOKEN_TTL_SECONDS = 60 * 60  # 60 minutes — gives operators headroom for
                               # first-time WinRM/SSH setup on the target before
@@ -166,8 +191,8 @@ def issue_token(
     # path stores the supplied credentials in an IntegrationConnection and
     # the credentials.py picker dispatches by integration_type.
     _allowed_platforms = {
-        "windows", "linux", "aws", "digitalocean", "cisco", "oracle",
-        "mssql", "postgres", "mysql", "ad", "azure", "k8s",
+        "windows", "linux", "aws", "digitalocean", "digitalocean_api", "cisco",
+        "oracle", "mssql", "postgres", "mysql", "ad", "azure", "k8s",
     }
     if body.platform not in _allowed_platforms:
         raise HTTPException(
@@ -303,6 +328,7 @@ def _handshake_inner(body: "HandshakeIn", db: Session) -> dict:
         "linux": "linux_ssh",
         "aws": "aws_readonly",
         "digitalocean": "linux_ssh",
+        "digitalocean_api": "digitalocean_api",
         "cisco": "netdev_ssh",
         "oracle": "oracle_sql",
         "mssql": "mssql_sql",
@@ -322,7 +348,7 @@ def _handshake_inner(body: "HandshakeIn", db: Session) -> dict:
     # the wrong reason ("Cannot reach <host>:22" even when the operator typed 2222).
     if platform == "windows":
         console_port = 5986
-    elif platform == "aws" or platform == "azure":
+    elif platform in ("aws", "azure", "digitalocean_api"):
         console_port = 443
     elif platform == "mssql":
         console_port = body.db_port or 1433
@@ -745,6 +771,10 @@ def _handshake_inner(body: "HandshakeIn", db: Session) -> dict:
                 "k8s_token": encrypt_secret(body.k8s_token),
                 "k8s_ca_cert": body.k8s_ca_cert,
             }
+    elif platform == "digitalocean_api":
+        # Account-level DigitalOcean: a single read-only API token (typed into
+        # the wizard's password field) enumerates the whole account.
+        extra = {"do_api_token": encrypt_secret(body.agent_password or "")}
 
     if existing:
         conn = existing
@@ -948,17 +978,41 @@ def _handshake_inner(body: "HandshakeIn", db: Session) -> dict:
     # same list and can be picked when scheduling a campaign. DB / cloud-API
     # platforms (postgres/mysql/aws/azure/…) are not host logins and keep living
     # only on the IntegrationConnection.
-    _CRED_KIND = {"windows_winrm": "winrm", "linux_ssh": "ssh", "netdev_ssh": "ssh"}
+    # Unified saved-login: EVERY connect type is saved as a reusable credential
+    # (not just hosts), so a form-connect never has to be re-typed and all types
+    # show up in "Saved logins". Host/DB creds are host-scoped (/32); account-level
+    # platforms (cloud/k8s) are tenant-wide. Type-specific fields (DB name, cloud
+    # token, kubeconfig) are carried in `extra` (same blob as the connection).
+    _CRED_KIND = {
+        "windows_winrm": "winrm", "linux_ssh": "ssh", "netdev_ssh": "cisco",
+        "postgres_sql": "postgres", "mysql_sql": "mysql", "mssql_sql": "mssql",
+        "oracle_sql": "oracle", "aws_readonly": "aws", "azure_readonly": "azure",
+        "digitalocean_api": "digitalocean", "k8s_api": "k8s", "ldap_query": "ldap",
+    }
+    _HOST_SCOPED = {"winrm", "ssh", "cisco", "postgres", "mysql", "mssql", "oracle"}
     cred_kind = _CRED_KIND.get(integration_type)
     cred_profile = None
-    if cred_kind and body.service_account and body.agent_password:
+    # Save whenever we actually captured a secret — a host/DB password, or a
+    # cloud/k8s secret living in `extra`.
+    if cred_kind and (body.agent_password or extra):
         host_ip = (asset.ip_address if asset else None) or (
             body.hostname
             if body.hostname and body.hostname.replace(".", "").isdigit()
             else None
         )
-        cidrs = [f"{host_ip}/32"] if host_ip else None
-        cred_name = f"{label} — {cred_kind} login"
+        cidrs = [f"{host_ip}/32"] if (host_ip and cred_kind in _HOST_SCOPED) else None
+        cred_name = f"{label} — {cred_kind}"
+        _fields = dict(
+            kind=cred_kind,
+            integration_type=integration_type,
+            username=(body.service_account or ""),
+            secret_kind="password",
+            secret_encrypted=encrypt_secret(body.agent_password) if body.agent_password else None,
+            extra_json=extra,
+            port=console_port,
+            applies_to_cidrs=cidrs,
+            is_active=True,
+        )
         cred_profile = (
             db.query(CredentialProfile)
             .filter(
@@ -968,30 +1022,20 @@ def _handshake_inner(body: "HandshakeIn", db: Session) -> dict:
             .first()
         )
         if cred_profile:
-            # Re-onboarding the same host refreshes the stored secret rather than
-            # duplicating the login (name is unique per tenant).
-            cred_profile.kind = cred_kind
-            cred_profile.username = body.service_account
-            cred_profile.secret_encrypted = encrypt_secret(body.agent_password)
-            cred_profile.port = console_port
-            cred_profile.applies_to_cidrs = cidrs
-            cred_profile.is_active = True
+            # Re-onboarding the same target refreshes it rather than duplicating
+            # (name is unique per tenant).
+            for _k, _v in _fields.items():
+                setattr(cred_profile, _k, _v)
         else:
             cred_profile = CredentialProfile(
                 tenant_id=tenant_id,
                 name=cred_name,
-                kind=cred_kind,
-                username=body.service_account,
-                secret_kind="password",
-                secret_encrypted=encrypt_secret(body.agent_password),
-                port=console_port,
-                # The wizard already trusts the host on first contact (AutoAdd);
+                priority=100,
+                # Hosts are trusted on first contact by the wizard (AutoAdd);
                 # keep parity so a scheduled re-run doesn't fail host-key checks.
                 ssh_accept_unknown_hosts=(cred_kind == "ssh"),
-                applies_to_cidrs=cidrs,
-                priority=100,
-                is_active=True,
                 created_by_name="connect-wizard",
+                **_fields,
             )
             db.add(cred_profile)
 
@@ -1037,10 +1081,12 @@ def _handshake_inner(body: "HandshakeIn", db: Session) -> dict:
             db.commit()
             db.refresh(asset)
             deep_collected = True
-        except Exception:  # noqa: BLE001 — enrichment is best-effort
+        except Exception as exc:  # noqa: BLE001 — enrichment is best-effort
             db.rollback()
             logger.info("connect-wizard deep collect failed for %s",
                         body.hostname, exc_info=True)
+            if asset is not None:
+                _record_collect_failure(db, asset.id, integration_type, exc)
 
     # ── Platform inventory (typed non-OS assets) ──────────────────────────
     # Databases / network devices / cloud accounts / clusters have their own
@@ -1064,10 +1110,12 @@ def _handshake_inner(body: "HandshakeIn", db: Session) -> dict:
                     db.commit()
                     db.refresh(asset)
                     deep_collected = True
-        except Exception:  # noqa: BLE001 — best-effort, cred lives on the conn
+        except Exception as exc:  # noqa: BLE001 — best-effort, cred lives on the conn
             db.rollback()
             logger.info("connect-wizard platform collect failed for %s",
                         body.hostname, exc_info=True)
+            if asset is not None:
+                _record_collect_failure(db, asset.id, integration_type, exc)
 
     # Record the onboarding in scan history. Runs require a campaign (FK NOT
     # NULL), so ad-hoc wizard onboards are grouped under one synthetic per-tenant

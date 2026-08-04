@@ -237,6 +237,21 @@ def list_vulnerabilities(
         logging.getLogger(__name__).exception("exception expiry sweep failed")
         db.rollback()
 
+    # Same rationale as the sweep above (no Celery worker in this deployment):
+    # composite_priority (the register's Contextual score) is otherwise written only
+    # when a finding is individually opened / edited / enriched, so a register nobody
+    # has clicked through shows "not scored" for every row despite every input
+    # (CVSS/EPSS/KEV/…) already being present. Score the NULL rows once, in place, from
+    # stored fields only — no external calls. Bounded + best-effort; converges to a
+    # no-op after the first load.
+    try:
+        from ..enrichment.enrichment_service import backfill_composite_priorities
+        backfill_composite_priorities(db, user_tenants)
+    except Exception:  # noqa: BLE001 — never let the backfill break the register
+        import logging
+        logging.getLogger(__name__).exception("composite priority backfill failed")
+        db.rollback()
+
     query = db.query(Vulnerability).options(
         joinedload(Vulnerability.assignee),
         joinedload(Vulnerability.verifier),

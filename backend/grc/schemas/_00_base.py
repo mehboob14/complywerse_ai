@@ -893,6 +893,16 @@ class ITAssetBase(BaseModel):
     manufacturer: Optional[str] = None
     model: Optional[str] = None
     serial_number: Optional[str] = None
+    # CMDB details + procurement / cost. All optional; manually entered on
+    # the Add Asset form and also editable on the asset detail page. Accepted
+    # on create so the full record can be captured in one step.
+    department: Optional[str] = None
+    assigned_user: Optional[str] = None
+    environment: Optional[str] = None
+    purchase_cost: Optional[float] = None
+    purchase_date: Optional[datetime] = None
+    warranty_expiry: Optional[datetime] = None
+    eol_date: Optional[datetime] = None
 
 
 class ITAssetCreate(ITAssetBase):

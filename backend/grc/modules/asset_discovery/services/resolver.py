@@ -149,25 +149,113 @@ def _merge_into(db: Session, asset: ITAsset, obs: DiscoveryObservation) -> None:
     src = raw.get("source_system") or obs.source
     if ext and src:
         _record_external_identity(db, asset.tenant_id, asset.id, src, ext, raw.get("id_type"))
+    # Enrich with the protocol-aware classification — fill blanks only.
+    _apply_classification(asset, _classification(obs), fill_only=True)
+
+
+# ── Discovery classification -> inventory mapping ───────────────────────────
+# A protocol fingerprint (SNMP sysDescr / SSH banner / DNS) is evidence of a
+# DEVICE, so a confidently-identified router / printer / DNS box is inventory,
+# not a rumour — unlike a bare TCP host, which still needs a login to be real.
+_PLATFORM_KIND = {
+    "network_device": "network", "printer": "printer", "dns_server": "server",
+    "host": "server", "hypervisor": "server", "storage": "storage",
+    "camera": "camera", "voip": "voip", "ups": "ups",
+}
+_DEVICE_LABEL = {
+    "network_device": "network device", "printer": "printer",
+    "dns_server": "DNS server", "appliance": "appliance",
+    "hypervisor": "hypervisor", "storage": "storage", "camera": "camera",
+    "voip": "VoIP phone", "ups": "UPS",
+}
+
+
+def _classification(obs: DiscoveryObservation) -> Dict[str, Any]:
+    raw = _obj(obs)
+    return {
+        "device_type": raw.get("device_type"), "os_guess": raw.get("os_guess"),
+        "vendor": raw.get("vendor"), "product": raw.get("product"),
+        "confidence": raw.get("confidence"), "evidence": raw.get("evidence") or [],
+        "fingerprint": raw.get("fingerprint") or {},
+    }
+
+
+def _confidently_identified(cls: Dict[str, Any]) -> bool:
+    """True when the fingerprint identifies a NON-host device well enough to be
+    inventory on its own — an SNMP sysDescr naming a Cisco switch / HP printer,
+    or a DNS responder. Hosts (Windows/Linux) are deliberately excluded: a bare
+    sweep hit is a rumour until a login + deep-collect proves it. This is what
+    lets network gear you can't SSH into still enter inventory."""
+    dt = cls.get("device_type")
+    if dt in (None, "host", "unknown", "appliance"):
+        return False  # hosts wait for a login; unknowns aren't identified
+    conf = cls.get("confidence") or 0
+    ev = cls.get("evidence") or []
+    strong = any(e in ("snmp_sysdescr", "ssh_banner", "http_server") for e in ev)
+    return conf >= 0.7 and (strong or dt == "dns_server")
+
+
+def _display_name(obs: DiscoveryObservation, cls: Dict[str, Any]) -> str:
+    if obs.host_name:
+        return obs.host_name
+    if obs.fqdn:
+        return obs.fqdn
+    label = _DEVICE_LABEL.get(cls.get("device_type"))
+    if label:
+        vendor = cls.get("vendor")
+        return (f"{vendor + ' ' if vendor else ''}{label} ({obs.ip_address})").strip()
+    return obs.ip_address or "discovered-host"
+
+
+def _apply_classification(asset: ITAsset, cls: Dict[str, Any], *, fill_only: bool) -> None:
+    """Write the protocol-aware classification onto an asset. On create
+    (fill_only=False) sets everything; on merge (fill_only=True) fills blanks
+    only — never clobbers a curated value, matching the merge contract."""
+    dt = cls.get("device_type")
+    vendor = cls.get("vendor")
+    os_guess = cls.get("os_guess")
+
+    def _set(field: str, value: Any) -> None:
+        if value is None:
+            return
+        if fill_only and getattr(asset, field, None):
+            return
+        setattr(asset, field, value)
+
+    _set("vendor", vendor)
+    _set("manufacturer", vendor)
+    _set("os_family", os_guess if os_guess in ("windows", "linux") else None)
+    _set("asset_role", "host" if dt == "host" else None)
+    _set("description", cls.get("product"))
+    _set("platform_kind", _PLATFORM_KIND.get(dt))
+    # platform_properties: refresh the discovery block (it's evidence, not a
+    # curated field), preserving any other keys already there.
+    pp = dict(asset.platform_properties or {})
+    pp["discovery_classification"] = {
+        "device_type": dt, "vendor": vendor, "product": cls.get("product"),
+        "confidence": cls.get("confidence"), "evidence": cls.get("evidence"),
+    }
+    if cls.get("fingerprint"):
+        pp["fingerprint"] = cls["fingerprint"]
+    asset.platform_properties = pp
 
 
 def _create_from(db: Session, tenant_id: int, obs: DiscoveryObservation) -> ITAsset:
-    """Create a new asset from an observation, tagged as discovered."""
+    """Create a new asset from an observation, tagged as discovered, carrying the
+    protocol-aware classification so a network device / printer / DNS box keeps
+    its real identity instead of collapsing to bare 'infrastructure'."""
     raw = _obj(obs)
+    cls = _classification(obs)
     now = datetime.utcnow()
-    name = obs.host_name or obs.fqdn or obs.ip_address or "discovered-host"
     asset = ITAsset(
         tenant_id=tenant_id,
-        name=name,
+        name=_display_name(obs, cls),
         asset_type="infrastructure",
         host_name=obs.host_name,
         ip_address=obs.ip_address,
         fqdn=obs.fqdn,
         primary_mac=obs.mac_address,
-        # NOT "medium". A sweep cannot assess criticality, and a default here is
-        # indistinguishable downstream from a real rating — it fed the CIA
-        # auto-derivation and the register's valuation estimate. Unrated until
-        # a human rates it.
+        # A sweep cannot assess criticality — unrated until a human rates it.
         criticality=None,
         source_system="discovery",
         last_seen_source=obs.source or "discovery",
@@ -175,6 +263,7 @@ def _create_from(db: Session, tenant_id: int, obs: DiscoveryObservation) -> ITAs
         first_seen_at=now,
         discovery_state="discovered",
     )
+    _apply_classification(asset, cls, fill_only=False)
     db.add(asset)
     db.flush()  # assign id for the external-identity link + later same-run matches
     ext = raw.get("external_id")
@@ -248,16 +337,28 @@ def resolve_observation(db: Session, obs: DiscoveryObservation) -> Dict[str, Any
         )
         return {"action": "review", "candidates": candidate_ids, "tier": tier}
 
-    # No match, nothing ignored: this is a device we found but do not own yet.
-    # It stays in discovery as 'unclaimed'. It becomes inventory only once a
-    # credential authenticates and the deep collect succeeds (see
-    # promote_observation) — a sweep alone must never create an asset row,
-    # because an asset with no OS, no hardware and no software is not an asset,
-    # it is a rumour.
+    # No match, nothing ignored. Discovery NEVER writes inventory on its own — a
+    # swept device is evidence, not an asset. Everything unmatched lands in the
+    # Connect queue as 'unclaimed'; it earns an inventory row only when a human
+    # promotes it from Connect (save a credential, select the device, run the
+    # login → deep-collect), or by an explicit merge into an asset already
+    # tracked. Even a positively-identified non-host device (printer / switch /
+    # DNS) waits here rather than auto-creating an empty shell — this pipeline
+    # was rebuilt to stop producing those. The identification is preserved on the
+    # observation (raw + note) so Connect can show "what we think this is".
+    cls = _classification(obs)
+    dt = cls.get("device_type")
+    identified = bool(dt and dt not in ("host", "unknown", None)
+                      and (cls.get("confidence") or 0) >= 0.7)
     obs.resolution = "unclaimed"
     obs.resolved_asset_id = None
-    obs.resolution_note = "found on the network — needs a login before it enters inventory"
-    return {"action": "unclaimed"}
+    obs.resolution_note = (
+        f"identified as {dt} via {', '.join(cls.get('evidence') or [])} — "
+        f"promote from Connect to add to inventory"
+        if identified else
+        "found on the network — needs a login before it enters inventory"
+    )
+    return {"action": "unclaimed", "identified": identified}
 
 
 # ── Operator-driven resolution (the Inbox actions) ──────────────────────────
@@ -265,12 +366,18 @@ def resolve_observation(db: Session, obs: DiscoveryObservation) -> Dict[str, Any
 # explicit decisions a human makes from the inbox; the caller commits.
 
 def manual_adopt(db: Session, obs: DiscoveryObservation) -> ITAsset:
-    """Operator says 'this is a new asset' — create it regardless of what the
-    auto-resolver thought."""
+    """Operator explicitly adopts a device we cannot log into (printer / switch /
+    IoT) as an UNMANAGED, evidence-only asset — IP + MAC + vendor + fingerprint,
+    no authenticated deep-collect. Flagged unmanaged so the inventory clearly
+    distinguishes it from a fully-profiled, credentialed host."""
     asset = _create_from(db, obs.tenant_id, obs)
+    try:
+        asset.discovery_state = "unmanaged"
+    except Exception:  # column may not exist on older schemas — best-effort flag
+        pass
     obs.resolution = "created"
     obs.resolved_asset_id = asset.id
-    obs.resolution_note = f"operator adopted as new asset #{asset.id}"
+    obs.resolution_note = f"operator adopted as unmanaged (evidence-only) asset #{asset.id}"
     return asset
 
 

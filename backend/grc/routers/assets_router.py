@@ -18,7 +18,7 @@ from ..models import (
     ITAsset, AssetControlLink, AssetInternalControlLink, AssetRiskAssessment, AssetFrameworkControlLink,
     AssetEvidenceLink, NormalizedControl, FrameworkControl, Evidence, Risk, InternalControl,
     Vulnerability, VulnerabilityAssetLink, AssetSecurityComplianceSelection,
-    SoftwareIdentifier,
+    SoftwareIdentifier, AssetSavedView,
     # Trajectory-map endpoint pulls these in to traverse Asset → Vuln → Control → Risk
     VulnerabilityControlLink, ParsedFrameworkControl,
     RiskAssetLink, RiskControlLink, RiskFrameworkControlLink,
@@ -438,6 +438,67 @@ def bulk_update_assets(
     return {"updated": len(assets), "fields": sorted(clean.keys())}
 
 
+def _purge_asset_references(db: Session, asset: "ITAsset") -> None:
+    """Detach/purge every row that references an asset and revert its discovery
+    footprint, so the asset deletes cleanly and leaves NO orphan behind — no
+    observation stuck at 'merged'/'created' pointing at a gone asset, no stale
+    agentless connection. Used by BOTH single and bulk delete so they behave
+    identically. Caller commits.
+    """
+    from sqlalchemy import text as _sql
+    aid = asset.id
+    # Revert discovery observations FIRST (while resolved_asset_id still points at
+    # this asset) so both 'merged' and 'created' rows return to 'unclaimed' — the
+    # device is simply back on the network needing a login. Doing this before any
+    # blind FK-null is what stops the orphaned "ghost in inventory" row.
+    db.execute(_sql(
+        "UPDATE grc_discovery_observations "
+        "SET resolution='unclaimed', resolved_asset_id=NULL, "
+        "    resolution_note='asset deleted — found on the network, needs a login' "
+        "WHERE resolved_asset_id = :aid OR "
+        "      (resolution IN ('created','merged') AND resolved_asset_id IS NULL AND "
+        "       (host_name = :h OR ip_address = :ip))"),
+        {"aid": aid, "h": asset.host_name, "ip": asset.ip_address})
+    # DETACH — evidence rows that outlive the asset: null their reference.
+    for table, col in (
+        ("grc_compliance_plugin_runs", "asset_id"),
+        ("grc_info_system_criticality_items", "linked_asset_id"),
+        ("grc_infra_asset_criticality_items", "linked_asset_id"),
+    ):
+        db.execute(_sql(f"UPDATE {table} SET {col} = NULL WHERE {col} = :aid"), {"aid": aid})
+    # PURGE — pure association rows that cannot exist without the asset.
+    for table, col in (
+        ("grc_vulnerability_asset_links", "asset_id"),
+        ("grc_asset_control_links", "asset_id"),
+        ("grc_asset_framework_control_links", "asset_id"),
+        ("grc_asset_internal_control_links", "asset_id"),
+        ("grc_asset_evidence_links", "asset_id"),
+        ("grc_asset_risk_assessments", "asset_id"),
+        ("grc_asset_external_identities", "asset_id"),
+        ("grc_asset_security_compliance_selections", "asset_id"),
+        ("grc_asset_alert_states", "asset_id"),
+        ("grc_risk_asset_links", "asset_id"),
+        ("grc_document_asset_links", "asset_id"),
+        ("grc_incident_asset_links", "asset_id"),
+        ("grc_issue_asset_links", "asset_id"),
+        ("grc_software_identifiers", "asset_id"),
+        ("grc_compliance_agents", "asset_id"),
+        ("grc_asset_relationships", "source_asset_id"),
+        ("grc_asset_relationships", "target_asset_id"),
+    ):
+        db.execute(_sql(f"DELETE FROM {table} WHERE {col} = :aid"), {"aid": aid})
+    # Deactivate agentless connections pinned to this host.
+    _host = (asset.host_name or asset.ip_address or "").strip()
+    if _host:
+        db.execute(_sql(
+            "UPDATE grc_integration_connections SET is_active=false, status='disconnected' "
+            "WHERE console_url = :h AND integration_type IN "
+            "('windows_winrm','linux_ssh','netdev_ssh')"), {"h": _host})
+    # Self-references from other assets.
+    db.execute(_sql("UPDATE grc_it_assets SET parent_asset_id = NULL WHERE parent_asset_id = :aid"), {"aid": aid})
+    db.execute(_sql("UPDATE grc_it_assets SET replacement_asset_id = NULL WHERE replacement_asset_id = :aid"), {"aid": aid})
+
+
 @router.post("/bulk-delete")
 def bulk_delete_assets(
     payload: _BulkDeletePayload,
@@ -457,6 +518,7 @@ def bulk_delete_assets(
         .all()
     )
     for asset in assets:
+        _purge_asset_references(db, asset)   # same cleanup as single delete — no orphans
         db.delete(asset)
     db.commit()
     return {"deleted": len(assets)}
@@ -574,6 +636,22 @@ def create_asset(
         os_normalized=_os_normalized,
         os_build=_os_build,
         os_edition=_os_edition,
+        # Hardware — manual entry (previously dropped on create; only agent /
+        # agentless scans populated these).
+        cpu_cores=asset.cpu_cores,
+        memory_gb=asset.memory_gb,
+        storage_gb=asset.storage_gb,
+        manufacturer=asset.manufacturer,
+        model=asset.model,
+        serial_number=asset.serial_number,
+        # CMDB details + procurement / cost — manual entry.
+        department=asset.department,
+        assigned_user=asset.assigned_user,
+        environment=asset.environment,
+        purchase_cost=asset.purchase_cost,
+        purchase_date=asset.purchase_date,
+        warranty_expiry=asset.warranty_expiry,
+        eol_date=asset.eol_date,
     )
 
     # Auto-resolve owner_name from owner_id if not provided
@@ -1153,6 +1231,144 @@ async def upload_assets_file(
     }
 
 
+class _CompositeWeightsIn(BaseModel):
+    low: float = 1.0
+    medium: float = 2.0
+    high: float = 3.0
+    critical: float = 4.0
+
+
+@router.get("/composite-weights")
+def get_composite_weights(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    tid = get_user_primary_tenant(current_user, db)
+    tenant = db.query(Tenant).filter(Tenant.id == tid).first()
+    settings = tenant.settings or {} if tenant else {}
+    is_custom = "composite_weights" in settings
+    weights = settings.get("composite_weights", _CRIT_WEIGHT)
+    return {"weights": weights, "is_custom": is_custom, "defaults": _CRIT_WEIGHT}
+
+
+@router.put("/composite-weights")
+def update_composite_weights(
+    body: _CompositeWeightsIn,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    tid = get_user_primary_tenant(current_user, db)
+    tenant = db.query(Tenant).filter(Tenant.id == tid).first()
+    if not tenant:
+        raise HTTPException(404, "Tenant not found")
+    weights = {"low": body.low, "medium": body.medium, "high": body.high, "critical": body.critical}
+    if any(v <= 0 for v in weights.values()):
+        raise HTTPException(400, "All weights must be positive numbers")
+    settings = dict(tenant.settings or {})
+    settings["composite_weights"] = weights
+    tenant.settings = settings
+    db.commit()
+    return {"weights": weights, "is_custom": True, "defaults": _CRIT_WEIGHT}
+
+
+@router.delete("/composite-weights")
+def reset_composite_weights(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    tid = get_user_primary_tenant(current_user, db)
+    tenant = db.query(Tenant).filter(Tenant.id == tid).first()
+    if not tenant:
+        raise HTTPException(404, "Tenant not found")
+    settings = dict(tenant.settings or {})
+    settings.pop("composite_weights", None)
+    tenant.settings = settings
+    db.commit()
+    return {"weights": _CRIT_WEIGHT, "is_custom": False, "defaults": _CRIT_WEIGHT}
+
+
+# ── Saved views (named filter+sort presets for the inventory list) ────────────
+# Model + table (grc_asset_saved_views) and the frontend calls shipped, but the
+# route was never wired — the list toolbar's "Saved views" was dead. These three
+# close it. Must stay ABOVE the /{asset_id} catch-all to remain reachable.
+
+class _SavedViewIn(BaseModel):
+    name: str
+    filters: dict = {}
+    sort: str | None = None
+
+
+def _saved_view_dict(v: "AssetSavedView") -> dict:
+    return {"id": v.id, "name": v.name, "filters": v.filters or {}, "sort": v.sort}
+
+
+@router.get("/saved-views")
+def list_saved_views(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    tid = get_user_primary_tenant(current_user, db)
+    rows = (
+        db.query(AssetSavedView)
+        .filter(AssetSavedView.tenant_id == tid)
+        .order_by(AssetSavedView.name.asc())
+        .all()
+    )
+    return [_saved_view_dict(v) for v in rows]
+
+
+@router.post("/saved-views")
+def create_saved_view(
+    body: _SavedViewIn,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    tid = get_user_primary_tenant(current_user, db)
+    name = (body.name or "").strip()
+    if not name:
+        raise HTTPException(400, "View name is required")
+    existing = (
+        db.query(AssetSavedView)
+        .filter(AssetSavedView.tenant_id == tid, AssetSavedView.name == name)
+        .first()
+    )
+    if existing:
+        existing.filters = body.filters or {}
+        existing.sort = body.sort
+        view = existing
+    else:
+        view = AssetSavedView(
+            tenant_id=tid,
+            user_id=getattr(current_user, "id", None),
+            name=name,
+            filters=body.filters or {},
+            sort=body.sort,
+        )
+        db.add(view)
+    db.commit()
+    db.refresh(view)
+    return _saved_view_dict(view)
+
+
+@router.delete("/saved-views/{view_id}")
+def delete_saved_view(
+    view_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    tid = get_user_primary_tenant(current_user, db)
+    view = (
+        db.query(AssetSavedView)
+        .filter(AssetSavedView.id == view_id, AssetSavedView.tenant_id == tid)
+        .first()
+    )
+    if not view:
+        raise HTTPException(404, "Saved view not found")
+    db.delete(view)
+    db.commit()
+    return {"success": True}
+
+
 @router.get("/{asset_id}", response_model=dict)
 def get_asset(
     asset_id: int,
@@ -1453,71 +1669,10 @@ def delete_asset(
     #             Its asset reference is nulled so history survives.
     #   DELETE  — the row is a pure association that cannot exist without the
     #             asset (asset↔control link, asset↔vulnerability link).
-    from sqlalchemy import text as _sql
-
-    detach = [
-        ("grc_compliance_plugin_runs", "asset_id"),        # scan evidence
-        ("grc_discovery_observations", "resolved_asset_id"),  # sweep evidence
-        ("grc_info_system_criticality_items", "linked_asset_id"),
-        ("grc_infra_asset_criticality_items", "linked_asset_id"),
-    ]
-    purge = [
-        ("grc_vulnerability_asset_links", "asset_id"),
-        ("grc_asset_control_links", "asset_id"),
-        ("grc_asset_framework_control_links", "asset_id"),
-        ("grc_asset_internal_control_links", "asset_id"),
-        ("grc_asset_evidence_links", "asset_id"),
-        ("grc_asset_risk_assessments", "asset_id"),
-        ("grc_asset_external_identities", "asset_id"),
-        ("grc_asset_security_compliance_selections", "asset_id"),
-        ("grc_asset_alert_states", "asset_id"),
-        ("grc_risk_asset_links", "asset_id"),
-        ("grc_document_asset_links", "asset_id"),
-        ("grc_incident_asset_links", "asset_id"),
-        ("grc_issue_asset_links", "asset_id"),
-        ("grc_software_identifiers", "asset_id"),
-        ("grc_compliance_agents", "asset_id"),
-        ("grc_asset_relationships", "source_asset_id"),
-        ("grc_asset_relationships", "target_asset_id"),
-    ]
-    # Discovery-state cleanup. An asset promoted from discovery leaves behind a
-    # DiscoveryObservation (resolution='created') and an agentless
-    # IntegrationConnection keyed to its host. If we only null the observation's
-    # FK, the row keeps resolution='created' and the connection stays active —
-    # so the Connect queue shows the (now-deleted) device as "In inventory" with
-    # a Disconnect button that targets a gone asset and does nothing. Revert the
-    # observation to 'unclaimed' so the device becomes connectable again, and
-    # deactivate the host's agentless connection.
-    _host = (asset.host_name or asset.ip_address or "").strip()
+    # Detach/purge every reference and revert the discovery footprint via the
+    # shared helper (identical to what bulk delete uses), then delete the row.
     try:
-        for table, col in detach:
-            db.execute(_sql(f"UPDATE {table} SET {col} = NULL WHERE {col} = :aid"), {"aid": asset_id})
-        for table, col in purge:
-            db.execute(_sql(f"DELETE FROM {table} WHERE {col} = :aid"), {"aid": asset_id})
-        # Observation(s) that resolved to this asset → back to unclaimed.
-        db.execute(_sql(
-            "UPDATE grc_discovery_observations "
-            "SET resolution='unclaimed', resolved_asset_id=NULL, "
-            "    resolution_note='asset deleted — found on the network, needs a login' "
-            "WHERE resolved_asset_id = :aid OR "
-            "      (resolution='created' AND resolved_asset_id IS NULL AND "
-            "       (host_name = :h OR ip_address = :ip))"),
-            {"aid": asset_id, "h": asset.host_name, "ip": asset.ip_address})
-        # Deactivate agentless connections pinned to this host (they can't scan a
-        # deleted asset; a fresh connect re-creates one).
-        if _host:
-            db.execute(_sql(
-                "UPDATE grc_integration_connections SET is_active=false, status='disconnected' "
-                "WHERE console_url = :h AND integration_type IN "
-                "('windows_winrm','linux_ssh','netdev_ssh')"), {"h": _host})
-        # Self-references: promoted applications point at this host as parent,
-        # and other assets may name it as their replacement. Detach rather than
-        # cascade — deleting a laptop must not silently delete the PostgreSQL
-        # asset someone promoted from it, along with its own scan history.
-        db.execute(_sql("UPDATE grc_it_assets SET parent_asset_id = NULL WHERE parent_asset_id = :aid"),
-                   {"aid": asset_id})
-        db.execute(_sql("UPDATE grc_it_assets SET replacement_asset_id = NULL WHERE replacement_asset_id = :aid"),
-                   {"aid": asset_id})
+        _purge_asset_references(db, asset)
         db.delete(asset)
         db.commit()
     except Exception as exc:  # noqa: BLE001
@@ -1960,7 +2115,183 @@ def get_asset_detail(
         warranty_expiry=_g("warranty_expiry"),
         eol_date=_g("eol_date"),
         environment=_g("environment"),
+        # Typed-asset component block — the deep collector's CPU/GPU/DIMM/firmware/
+        # etc. sections + the kind that selects the detail card. These were never
+        # added to this response, so the Hardware CPU/GPU rows and the Deep
+        # Inventory card had NOTHING to render even after a fully successful
+        # collect. This was the real reason the page looked "still old".
+        platform_kind=_g("platform_kind"),
+        platform_properties=_g("platform_properties"),
     )
+
+
+@router.post("/{asset_id}/probe-inventory")
+def probe_asset_inventory(
+    asset_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Re-run the agentless collector on an EXISTING asset using its SAVED
+    credential — a re-scan that refreshes OS / hardware / software / deep
+    inventory without re-entering a login. No-op with a clear message when no
+    saved credential covers the host."""
+    user_tenants = get_user_tenants(current_user, db)
+    asset = db.query(ITAsset).filter(
+        ITAsset.id == asset_id, ITAsset.tenant_id.in_(user_tenants),
+    ).first()
+    if not asset:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
+    if not asset.ip_address:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Asset has no IP address to probe")
+    from grc.modules.asset_discovery.services.deep_collect import select_credential, collect_host
+    fam = (asset.os_family or "").lower()
+    transport = "linux" if fam.startswith(("linux", "ubuntu", "debian", "rhel", "centos", "fedora")) else "windows"
+    prof = select_credential(db, asset.tenant_id, asset.ip_address, transport)
+    if prof is None:
+        return {"collected": False, "error": "No saved login covers this host — connect it once first."}
+    try:
+        info = collect_host(db, asset, prof, transport)
+        db.commit()
+        return {"collected": True, "asset_id": asset.id, "os_family": asset.os_family,
+                "software": info.get("software")}
+    except Exception as exc:  # noqa: BLE001
+        db.rollback()
+        return {"collected": False, "error": str(exc)[:300]}
+
+
+class AssetServiceCollectBody(BaseModel):
+    kind: Optional[str] = None       # inferred from the asset when omitted
+    connection_id: Optional[int] = None  # pick a specific SAVED login (from the dropdown)
+    username: Optional[str] = None
+    password: Optional[str] = None    # provide only when adding a NEW login
+    host: Optional[str] = None       # defaults to the asset IP; set for a localhost-only service
+    port: Optional[int] = None
+    database: Optional[str] = None
+
+
+_ASSET_TYPED_ITYPE = {
+    "postgres": "postgres_sql", "mysql": "mysql_sql", "mssql": "mssql_sql",
+    "oracle": "oracle_sql", "k8s": "k8s_api", "ldap": "ldap_query", "cisco": "netdev_ssh",
+}
+
+
+@router.get("/{asset_id}/service-logins")
+def list_asset_service_logins(
+    asset_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Saved logins that can collect this asset's typed service — so the UI can
+    offer a pick-a-saved-login dropdown (and an 'add new' option) instead of
+    making the operator re-enter a credential they already saved."""
+    user_tenants = get_user_tenants(current_user, db)
+    asset = db.query(ITAsset).filter(
+        ITAsset.id == asset_id, ITAsset.tenant_id.in_(user_tenants),
+    ).first()
+    if not asset:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
+    kind = _infer_service_kind(asset)
+    itype = _ASSET_TYPED_ITYPE.get(kind or "")
+    if itype is None:
+        return {"kind": None, "logins": []}
+    from grc.models import IntegrationConnection
+    rows = db.query(IntegrationConnection).filter(
+        IntegrationConnection.tenant_id == asset.tenant_id,
+        IntegrationConnection.integration_type == itype,
+        IntegrationConnection.is_active.is_(True),
+    ).order_by(IntegrationConnection.id.desc()).all()
+    return {"kind": kind, "logins": [
+        {"connection_id": r.id, "label": f"{r.username or 'login'} @ {r.console_url}:{r.console_port or ''}".rstrip(':'),
+         "host": r.console_url, "port": r.console_port, "username": r.username}
+        for r in rows
+    ]}
+
+
+def _infer_service_kind(asset) -> Optional[str]:
+    key = (getattr(asset, "os_normalized", "") or getattr(asset, "name", "") or "").lower()
+    for token, kind in (("postgres", "postgres"), ("mysql", "mysql"), ("mariadb", "mysql"),
+                        ("mssql", "mssql"), ("sql-server", "mssql"), ("oracle", "oracle")):
+        if token in key:
+            return kind
+    return None
+
+
+@router.post("/{asset_id}/collect-service")
+def collect_asset_service(
+    asset_id: int,
+    body: AssetServiceCollectBody = AssetServiceCollectBody(),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Enrich an EXISTING asset (e.g. a Postgres app already promoted from the
+    host's software) with its TYPED service inventory IN PLACE — the same asset
+    gains its databases / schemas / roles / extensions. It REUSES the login you
+    already saved when you set the software up (its IntegrationConnection); only
+    if none exists does it need a login in the body. No re-discovery, no
+    duplicate, and no re-entering a credential you already gave."""
+    user_tenants = get_user_tenants(current_user, db)
+    asset = db.query(ITAsset).filter(
+        ITAsset.id == asset_id, ITAsset.tenant_id.in_(user_tenants),
+    ).first()
+    if not asset:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
+    kind = (body.kind or _infer_service_kind(asset) or "").lower()
+    itype = _ASSET_TYPED_ITYPE.get(kind)
+    if itype is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=f"Could not determine service kind. One of: {', '.join(_ASSET_TYPED_ITYPE)}")
+    from grc.modules.asset_discovery.services.deep_collect import (
+        typed_credentials_dict, live_port_open, SERVICE_SUGGESTIONS,
+    )
+    from grc.modules.asset_discovery.services.platform_collectors import collect_platform
+    from grc.modules.compliance_plugins.services.credentials import resolve_credentials_for_connection
+    from grc.models import IntegrationConnection
+
+    default_port = next((dp for _p, k, _i, _l, dp in SERVICE_SUGGESTIONS if k == kind), None)
+
+    # 1a) A specific saved login the operator picked from the dropdown.
+    host_name = asset.host_name or asset.ip_address
+    conn = None
+    if body.connection_id:
+        conn = db.query(IntegrationConnection).filter(
+            IntegrationConnection.id == body.connection_id,
+            IntegrationConnection.tenant_id == asset.tenant_id,
+        ).first()
+    # 1b) Otherwise, if no NEW login is being added, reuse the most recent saved one.
+    if conn is None and not body.password:
+        conn = db.query(IntegrationConnection).filter(
+            IntegrationConnection.tenant_id == asset.tenant_id,
+            IntegrationConnection.integration_type == itype,
+            IntegrationConnection.is_active.is_(True),
+            IntegrationConnection.console_url.in_([c for c in (host_name, asset.ip_address, asset.host_name) if c]),
+        ).order_by(IntegrationConnection.id.desc()).first()
+
+    if conn is not None:
+        creds = resolve_credentials_for_connection(conn)
+    elif body.password:
+        ip = (body.host or asset.ip_address or "127.0.0.1").strip()
+        port = int(body.port or default_port or 0)
+        if port and not live_port_open(ip, [port]):
+            return {"collected": False, "error": f"{kind} port {port} is not reachable on {ip} — check host/port, or use 127.0.0.1 for a localhost-only service."}
+        creds = typed_credentials_dict(kind, ip, port, body.username, body.password, body.database)
+    else:
+        return {"collected": False, "needs_login": True, "kind": kind,
+                "error": "No saved database login for this host — provide one below."}
+    try:
+        result = collect_platform(itype, creds)
+        if result is None:
+            raise RuntimeError(f"no collector registered for {itype}")
+        platform_kind, props = result
+        merged = dict(asset.platform_properties or {})
+        merged.update(props or {})
+        asset.platform_properties = merged
+        asset.platform_kind = platform_kind
+        asset.last_seen_at = datetime.utcnow()
+        db.commit()
+        return {"collected": True, "platform_kind": platform_kind}
+    except Exception as exc:  # noqa: BLE001
+        db.rollback()
+        return {"collected": False, "error": str(exc)[:300]}
 
 
 @router.get("/{asset_id}/trajectory")
@@ -3614,6 +3945,19 @@ def setup_software(
         conn = db.query(IntegrationConnection).get(connection_id)
         if conn is not None and hasattr(conn, "asset_id"):
             conn.asset_id = child.id
+        # Collect the typed inventory RIGHT NOW using the login just given, so the
+        # asset is born RICH (databases / schemas / roles / extensions) instead of
+        # only a name + saved connection. Best-effort — never fails the promote.
+        try:
+            from ..modules.compliance_plugins.services.credentials import resolve_credentials_for_connection
+            from ..modules.asset_discovery.services.platform_collectors import collect_platform
+            if conn is not None:
+                _res = collect_platform(itype, resolve_credentials_for_connection(conn))
+                if _res:
+                    child.platform_kind, child.platform_properties = _res
+        except Exception:  # noqa: BLE001
+            logging.getLogger(__name__).info(
+                "setup_software: typed collect failed for asset %s", child.id, exc_info=True)
     entry["promoted_asset_id"] = child.id
     asset.detected_software_json = inventory
     db.commit()
@@ -3681,62 +4025,6 @@ def _asset_own_compliance(db: Session, asset_id: int, tenant_id: int) -> Optiona
         return None
     passed = sum(1 for r in rows if r[0] == "passed")
     return round(100.0 * passed / len(rows), 1)
-
-
-class _CompositeWeightsIn(BaseModel):
-    low: float = 1.0
-    medium: float = 2.0
-    high: float = 3.0
-    critical: float = 4.0
-
-
-@router.get("/composite-weights")
-def get_composite_weights(
-    db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth),
-):
-    tid = get_user_primary_tenant(current_user, db)
-    tenant = db.query(Tenant).filter(Tenant.id == tid).first()
-    settings = tenant.settings or {} if tenant else {}
-    is_custom = "composite_weights" in settings
-    weights = settings.get("composite_weights", _CRIT_WEIGHT)
-    return {"weights": weights, "is_custom": is_custom, "defaults": _CRIT_WEIGHT}
-
-
-@router.put("/composite-weights")
-def update_composite_weights(
-    body: _CompositeWeightsIn,
-    db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth),
-):
-    tid = get_user_primary_tenant(current_user, db)
-    tenant = db.query(Tenant).filter(Tenant.id == tid).first()
-    if not tenant:
-        raise HTTPException(404, "Tenant not found")
-    weights = {"low": body.low, "medium": body.medium, "high": body.high, "critical": body.critical}
-    if any(v <= 0 for v in weights.values()):
-        raise HTTPException(400, "All weights must be positive numbers")
-    settings = dict(tenant.settings or {})
-    settings["composite_weights"] = weights
-    tenant.settings = settings
-    db.commit()
-    return {"weights": weights, "is_custom": True, "defaults": _CRIT_WEIGHT}
-
-
-@router.delete("/composite-weights")
-def reset_composite_weights(
-    db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth),
-):
-    tid = get_user_primary_tenant(current_user, db)
-    tenant = db.query(Tenant).filter(Tenant.id == tid).first()
-    if not tenant:
-        raise HTTPException(404, "Tenant not found")
-    settings = dict(tenant.settings or {})
-    settings.pop("composite_weights", None)
-    tenant.settings = settings
-    db.commit()
-    return {"weights": _CRIT_WEIGHT, "is_custom": False, "defaults": _CRIT_WEIGHT}
 
 
 @router.get("/{asset_id}/ip-peers")

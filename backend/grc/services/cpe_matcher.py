@@ -45,6 +45,36 @@ def auto_link_enabled() -> bool:
     """
     return os.getenv("VULN_AUTO_LINK_ASSETS", "0").strip().lower() in ("1", "true", "yes", "on")
 
+
+def connection_auto_link_enabled(connection) -> bool:
+    """Per-connection switch for AUTOMATIC scanner host-match linking (the Nessus/
+    Tenable import path). Default **ON**.
+
+    A credentialed scan is authoritative about which host it hit, so a finding whose
+    host matches an existing asset is linked automatically — that is the behaviour an
+    operator expects from a scanner feed. It is controlled per connection via
+    ``provider_config['auto_link_assets']`` (surfaced as a toggle in the connect
+    wizard) so one tenant can turn it off without affecting others.
+
+    Precedence:
+      * ``provider_config['auto_link_assets']`` set on the connection → that wins.
+      * Otherwise default ON, UNLESS the global ``VULN_AUTO_LINK_ASSETS`` env var is
+        explicitly set to a falsey value — that stays a hard kill-switch for every
+        tenant (ops escape hatch), matching the CPE-match path's env gate.
+
+    NOTE: this governs only the scanner HOST match. The CPE software-match on CVE
+    enrichment keeps using :func:`auto_link_enabled` (env, default OFF) — a different,
+    fuzzier signal the operator opted into separately.
+    """
+    cfg = getattr(connection, "provider_config", None) or {}
+    val = cfg.get("auto_link_assets")
+    if val is not None:
+        return bool(val)
+    env = os.getenv("VULN_AUTO_LINK_ASSETS")
+    if env is not None and env.strip().lower() in ("0", "false", "no", "off"):
+        return False
+    return True
+
 _CPE_PREFIX = "cpe:2.3:"
 # Versions: split on '.' / '-' / '_' and try int comparison per part.
 _VERSION_SPLIT = re.compile(r"[.\-_+]")

@@ -13,7 +13,7 @@ export type Platform =
   | 'cisco'
   | 'oracle' | 'mssql' | 'postgres' | 'mysql'
   | 'ad'
-  | 'aws' | 'digitalocean' | 'azure' | 'k8s';
+  | 'aws' | 'digitalocean' | 'digitalocean_api' | 'azure' | 'k8s';
 type ConnectMode = 'installer' | 'manual';
 
 type IssueTokenResp = {
@@ -41,7 +41,9 @@ export const PLATFORMS: Array<{ id: Platform; label: string; logo: string; subti
   { id: 'mysql',        label: 'MySQL / MariaDB',         logo: '🐬', subtitle: 'MySQL 3306 — read-only user. CIS MySQL Benchmark.' },
   { id: 'ad',           label: 'Active Directory / LDAP', logo: '🗂️', subtitle: 'Bind once — bulk-discover every domain-joined computer + onboard with shared creds.' },
   { id: 'aws',          label: 'AWS Account',             logo: '☁️', subtitle: 'IAM read-only access key' },
-  { id: 'digitalocean', label: 'DigitalOcean',            logo: '🌊', subtitle: 'Droplet IP + SSH credentials, or API token' },
+  // A single DigitalOcean droplet is just a Linux host over SSH — connect it with
+  // the "Linux Server" card. Only the account (API token) needs its own entry.
+  { id: 'digitalocean_api', label: 'DigitalOcean', logo: '🌊', subtitle: 'Read-only API token — all droplets, volumes, VPCs, DBs, K8s' },
   { id: 'azure',        label: 'Azure subscription',      logo: '🟦', subtitle: 'Service principal with Reader role + Entra ID.' },
   { id: 'k8s',          label: 'Kubernetes cluster',      logo: '☸️', subtitle: 'Any K8s 1.24+ — kubeconfig or server+token.' },
 ];
@@ -83,7 +85,7 @@ export const PLATFORM_GROUPS: Array<{ key: string; title: string; hint: string; 
     title: 'Cloud accounts',
     hint:
       "Public-internet provider APIs, no on-prem reachability concern. Cloud agentless (this page) is the only sensible path — no agent goes on an AWS account.",
-    ids: ['aws', 'digitalocean', 'azure', 'k8s'],
+    ids: ['aws', 'digitalocean_api', 'azure', 'k8s'],
   },
 ];
 
@@ -103,6 +105,7 @@ const DEFAULT_PORTS: Record<Platform, string> = {
   ad: '636',
   aws: '443',
   digitalocean: '22',
+  digitalocean_api: '443',
   azure: '443',
   k8s: '443',
 };
@@ -436,6 +439,13 @@ export default function ConnectWizardPage({
           />
         )}
 
+        {tokenData && status?.state !== 'ready' && picked === 'digitalocean_api' && (
+          <DoAccountForm
+            token={tokenData.token}
+            onCancel={() => { setTokenData(null); setPicked(null); setStatus(null); }}
+          />
+        )}
+
         {tokenData && status?.state !== 'ready' && picked && ['postgres', 'mssql', 'mysql', 'oracle'].includes(picked) && (
           <SqlDbForm
             platform={picked as SqlPlatformId}
@@ -479,7 +489,7 @@ export default function ConnectWizardPage({
             need a per-platform form (TNS hostname, MSSQL instance, AD
             base DN, AWS access key, etc.). Track in the deferred Phase 2
             of the CIS Module Updated drop. */}
-        {tokenData && status?.state !== 'ready' && picked && !['windows', 'linux', 'digitalocean', 'aws', 'postgres', 'mssql', 'mysql', 'oracle'].includes(picked) && (
+        {tokenData && status?.state !== 'ready' && picked && !['windows', 'linux', 'digitalocean', 'digitalocean_api', 'aws', 'postgres', 'mssql', 'mysql', 'oracle'].includes(picked) && (
           <div className="bg-white rounded-xl shadow-md p-8 border border-amber-200 max-w-3xl mx-auto text-center">
             <div className="text-5xl mb-3">🚧</div>
             <h2 className="text-xl font-bold text-slate-900 mb-2">
@@ -897,6 +907,75 @@ function ManualCredsForm({
 // AWS quick-connect form. The customer creates an IAM read-only programmatic
 // user with ReadOnlyAccess policy, then paste the access key here. We POST
 // directly to the handshake endpoint with those credentials.
+function DoAccountForm({ token, onCancel }: { token: string; onCancel: () => void }) {
+  const [label, setLabel] = useState('');
+  const [apiToken, setApiToken] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setSubmitting(true);
+    try {
+      const cleanLabel = (label || '').trim();
+      const cleanToken = (apiToken || '').trim();
+      const r = await apiClient.post('/connect-wizard/handshake', {
+        tenant_token: token,
+        hostname: cleanLabel || 'digitalocean-account',
+        os_name: 'DigitalOcean Account',
+        // The token is carried in the same field the other cloud/host forms use;
+        // the backend stores it as the read-only DigitalOcean API token.
+        agent_password: cleanToken,
+      });
+      if (r.status >= 200 && r.status < 300) setSuccess(true);
+    } catch (e: any) {
+      const d = e?.response?.data?.detail;
+      setError(typeof d === 'string' ? d : (d?.message || e?.message || 'Failed to connect DigitalOcean account'));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (success) {
+    return (
+      <div className="bg-white rounded-xl shadow-md p-8 border-2 border-emerald-300 text-center">
+        <div className="text-5xl mb-3">✅</div>
+        <h2 className="text-2xl font-bold text-slate-900 mb-2">DigitalOcean Account Connected!</h2>
+        <p className="text-slate-600 mb-4">Compliverse discovered your account resources (droplets, volumes, VPCs, databases, Kubernetes…). Open the asset to see them.</p>
+        <button onClick={() => window.location.href = '/assets'}
+          className="mt-3 px-5 py-2 bg-primary-600 text-white rounded-lg text-sm font-medium hover:bg-primary-700">
+          Go to inventory →
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={submit} className="bg-white rounded-xl shadow-md p-8 border border-slate-200 max-w-xl mx-auto">
+      <div className="flex items-center gap-2 mb-1"><span className="text-2xl">🌊</span>
+        <h2 className="text-lg font-bold text-slate-900">Connect DigitalOcean account</h2></div>
+      <p className="text-sm text-slate-500 mb-5">A read-only DigitalOcean API token enumerates every resource in the account. Generate one at DigitalOcean → API → Tokens (read scope).</p>
+      <label className="block text-xs font-medium text-slate-700 mb-1">Account label</label>
+      <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="My DigitalOcean account"
+        className="w-full mb-4 rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+      <label className="block text-xs font-medium text-slate-700 mb-1">API token (read-only)</label>
+      <input type="password" value={apiToken} onChange={(e) => setApiToken(e.target.value)} placeholder="dop_v1_…" required
+        className="w-full mb-4 rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono" />
+      {error && <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700 whitespace-pre-line">{error}</div>}
+      <div className="flex gap-2">
+        <button type="submit" disabled={submitting || !apiToken.trim()}
+          className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50">
+          {submitting ? 'Connecting…' : 'Connect account'}
+        </button>
+        <button type="button" onClick={onCancel} className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-600">Cancel</button>
+      </div>
+    </form>
+  );
+}
+
+
 function AwsForm({ token, onCancel }: { token: string; onCancel: () => void }) {
   const [accountName, setAccountName] = useState('');
   const [region, setRegion] = useState('us-east-1');

@@ -3206,8 +3206,14 @@ def _resolve_connection_for_plugin(
     """
     if not plugin.runner_type:
         return None
+    # A runner may be satisfied by more than one connection family. OpenSCAP
+    # evaluates Linux hosts over the SAME SSH transport (or locally on the
+    # backend host), so an `oscap` plugin is served by a linux_ssh / netdev_ssh
+    # connection — not by a connection literally typed "oscap" (there is none).
+    _COMPAT = {"oscap": ("oscap", "linux_ssh", "netdev_ssh")}
+    acceptable = _COMPAT.get(plugin.runner_type, (plugin.runner_type,))
     if (explicit_connection is not None and
-            explicit_connection.integration_type == plugin.runner_type):
+            explicit_connection.integration_type in acceptable):
         return explicit_connection
     cached = conn_cache.get(plugin.runner_type, "MISSING")
     if cached != "MISSING":
@@ -3216,7 +3222,7 @@ def _resolve_connection_for_plugin(
         db.query(IntegrationConnection)
         .filter(
             IntegrationConnection.tenant_id == tenant_id,
-            IntegrationConnection.integration_type == plugin.runner_type,
+            IntegrationConnection.integration_type.in_(acceptable),
             IntegrationConnection.is_active.is_(True),
         )
         .order_by(IntegrationConnection.updated_at.desc().nullslast(),
@@ -3725,7 +3731,14 @@ def _do_scan_all(
             # Pinned asset → ONLY the asset's own connection (or explicit
             # one if caller passed it). No tenant-wide fallback.
             connection = explicit_connection or asset_pinned_connection
-            if connection and plugin.runner_type and connection.integration_type != plugin.runner_type:
+            # A runner may accept multiple connection families: OpenSCAP evaluates
+            # over the linux_ssh transport (or locally), so an oscap plugin is
+            # served by a linux_ssh / netdev_ssh connection. Match by compatibility
+            # not exact equality — otherwise every oscap plugin is skipped against
+            # a linux_ssh connection and the scan creates 0 runs.
+            _accept = {"oscap": ("oscap", "linux_ssh", "netdev_ssh")}.get(
+                plugin.runner_type, (plugin.runner_type,))
+            if connection and plugin.runner_type and connection.integration_type not in _accept:
                 continue
             effective_asset = asset
         else:

@@ -447,7 +447,7 @@ $out.gpu = S {
   @(Get-CimInstance Win32_VideoController -ErrorAction Stop | ForEach-Object { @{
     vendor         = "$($_.AdapterCompatibility)"
     model          = "$($_.Name)"
-    vram_mb        = $(if ($_.AdapterRAM -and $_.AdapterRAM -gt 0) { [int][math]::Round($_.AdapterRAM / 1MB) } else { 0 })
+    vram_mb        = $(if ($_.AdapterRAM -and $_.AdapterRAM -gt 0) { [int][math]::Round($_.AdapterRAM / 1MB) } else { $null })
     driver_version = "$($_.DriverVersion)"
     driver_date    = "$($_.DriverDate)"
   } })
@@ -676,6 +676,54 @@ def _parse_deep_windows(stdout: str) -> dict[str, dict]:
     return {k: _deep_section(v) for k, v in data.items()}
 
 
+# The deep script exceeds Windows' command-line limit once WinRM base64-encodes
+# it for `powershell -EncodedCommand` (~8 KB cap → rc=1 "The command line is too
+# long", which silently killed the ENTIRE deep collect — no CPU model, no GPU).
+# Split it at the top-level `$out.<name> = S {}` boundaries and run it in bounded
+# batches that each re-use the shared S{} wrapper + $out map, then merge.
+_DEEP_HEADER_RE = re.compile(r'(?m)^\$out\.\w+ = S \{')
+_DEEP_FOOTER = "$out | ConvertTo-Json -Depth 8 -Compress"
+
+
+def _split_win_deep_sections() -> tuple[str, list[str]]:
+    """(header, [section_block, ...]) from the monolithic deep script. Each block
+    is a full `$out.NAME = S { ... }` chunk; the header defines S{} + $out; the
+    ConvertTo-Json footer is dropped (each batch re-adds its own)."""
+    body = _WIN_DEEP_PS
+    m = _DEEP_HEADER_RE.search(body)
+    if not m:
+        return body, []
+    header = body[:m.start()].strip()
+    rest = body[m.start():]
+    fi = rest.rfind(_DEEP_FOOTER)
+    if fi != -1:
+        rest = rest[:fi]
+    starts = [mm.start() for mm in _DEEP_HEADER_RE.finditer(rest)]
+    return header, [rest[s:(starts[i + 1] if i + 1 < len(starts) else len(rest))].strip()
+                    for i, s in enumerate(starts)]
+
+
+def _win_deep_batches(max_chars: int = 2400) -> list[str]:
+    """Group deep sections into scripts small enough to survive WinRM's base64
+    command-line limit (~8 KB → ~2.4 KB of source once UTF-16LE + base64)."""
+    header, blocks = _split_win_deep_sections()
+    if not blocks:
+        return [_WIN_DEEP_PS]
+    base = len(header) + len(_DEEP_FOOTER) + 4
+    batches: list[list[str]] = []
+    cur: list[str] = []
+    cur_len = base
+    for b in blocks:
+        if cur and cur_len + len(b) + 2 > max_chars:
+            batches.append(cur)
+            cur, cur_len = [], base
+        cur.append(b)
+        cur_len += len(b) + 2
+    if cur:
+        batches.append(cur)
+    return [header + "\n\n" + "\n\n".join(batch) + "\n" + _DEEP_FOOTER for batch in batches]
+
+
 def collect_windows_deep(credentials: dict, timeout: int = 120) -> dict[str, dict]:
     """Run the deep Windows inventory probe over WinRM and return status-wrapped
     sections for asset.platform_properties. Never raises for a partial/denied
@@ -697,9 +745,32 @@ def collect_windows_deep(credentials: dict, timeout: int = 120) -> dict[str, dic
         read_timeout_sec=timeout + 10,
         operation_timeout_sec=timeout,
     )
-    r = session.run_ps(_WIN_DEEP_PS)
-    out = (r.std_out or b"").decode("utf-8", errors="replace")
-    return _parse_deep_windows(out)
+    # Run the deep probe in bounded batches (each under the WinRM command-line
+    # limit) and merge the section fragments. A batch that fails is recorded but
+    # never discards the batches that succeeded.
+    merged: dict[str, dict] = {}
+    errors: list[str] = []
+    for script in _win_deep_batches():
+        r = session.run_ps(script)
+        out = (r.std_out or b"").decode("utf-8", errors="replace")
+        frag = _parse_deep_windows(out)
+        if frag:
+            merged.update(frag)
+            continue
+        rc = int(r.status_code) if r.status_code is not None else -1
+        err = (r.std_err or b"").decode("utf-8", errors="replace").strip()
+        errors.append(f"rc={rc}: {err[:120]}" if err else f"rc={rc}: no output ({len(out)}b)")
+    if merged:
+        # Some sections landed. If any batch failed, leave a visible note so the
+        # gap is explained rather than silent — but keep everything we did get.
+        if errors:
+            merged.setdefault("collection_status",
+                              section(ERROR, None, note=("partial: " + "; ".join(errors))[:280]))
+        return merged
+    # Nothing parsed across all batches. Do NOT return {} — surface WHY so the
+    # deep card explains itself instead of rendering blank.
+    note = ("; ".join(errors) or "deep probe returned no parseable output")[:280]
+    return {"collection_status": section(ERROR, None, note=note)}
 
 
 # ── Linux deep-probe parsing ────────────────────────────────────────────────
@@ -1043,12 +1114,18 @@ def collect_linux_deep(credentials: dict, timeout: int = 45) -> dict[str, dict]:
         client.connect(**kwargs)
         _in, out, _err = client.exec_command(_LINUX_DEEP_SH, timeout=timeout)
         stdout = out.read().decode("utf-8", errors="replace")
+        stderr = _err.read().decode("utf-8", errors="replace")
     finally:
         try:
             client.close()
         except Exception:  # noqa: BLE001
             pass
-    return _parse_deep_linux(stdout)
+    sections = _parse_deep_linux(stdout)
+    if sections:
+        return sections
+    # Same principle as Windows: never drop the failure silently.
+    note = (stderr.strip() or "deep probe returned no parseable output")[:300]
+    return {"collection_status": section(classify_error(Exception(stderr)) if stderr.strip() else ERROR, None, note=note)}
 
 
 def _transport_for(connection: IntegrationConnection, asset: ITAsset) -> Optional[str]:

@@ -188,6 +188,14 @@ _COLUMN_ADDS = [
     ("grc_it_assets", "platform_kind", "VARCHAR(30)",
      "ix_grc_it_assets_platform_kind"),
     ("grc_it_assets", "platform_properties", "JSON", None),
+    # Unified saved-login model: every connect type (DB/cloud/network/…) can be
+    # saved as a reusable credential, not just hosts. integration_type drives the
+    # UI category + reuse; extra_json holds the type-specific encrypted creds.
+    ("grc_credential_profiles", "integration_type", "VARCHAR(50)",
+     "ix_grc_credential_profiles_integration_type"),
+    ("grc_credential_profiles", "extra_json", "JSON", None),
+    # Per-campaign SNMP read communities for discovery fingerprinting.
+    ("grc_discovery_campaigns", "snmp_communities", "VARCHAR(500)", None),
     # Collector routing for plugin runs (Updated_CIS_Assests migration).
     ("grc_integration_connections", "assigned_collector_agent_id", "INTEGER",
      "ix_grc_integration_connections_assigned_collector_agent_id"),

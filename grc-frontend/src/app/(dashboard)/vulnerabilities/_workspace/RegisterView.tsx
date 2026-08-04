@@ -23,8 +23,19 @@ import {
   PriorityContextualCell,
   enrichmentPriority,
   OwnerCell,
-  ThreatChips,
   shortenVulnTitle,
+  CveCell,
+  CweCell,
+  CvssCell,
+  EpssCell,
+  VectorCell,
+  ExploitCell,
+  PatchCell,
+  KevCell,
+  AssetsCell,
+  parseAttackVector,
+  hasPublicExploit,
+  patchAvailable,
 } from './lib';
 import { RowActionsMenu } from './RowActionsMenu';
 
@@ -74,22 +85,16 @@ export function RegisterView({
       accessor: (v) => v.title,
       sortable: true,
       minWidth: '200px',
+      // KEV + EPSS used to ride here as chips; they now have dedicated columns, so
+      // the title is just the (shortened) title — no duplicated threat chips.
       render: (v) => (
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="truncate font-medium text-slate-900" title={v.title}>{shortenVulnTitle(v.title)}</span>
-          <ThreatChips vuln={v} />
-        </div>
+        <span className="block truncate font-medium text-slate-900" title={v.title}>{shortenVulnTitle(v.title)}</span>
       ),
     },
     {
-      id: 'severity',
-      header: 'Severity',
-      accessor: (v) => v.severity,
-      sortable: true,
-      minWidth: '110px',
-      render: (v) => <SeverityCell severity={v.severity} cvss={v.cvss_score} />,
-    },
-    {
+      // Face-value score FIRST — the naive CVSS/severity-only priority, before any
+      // context. The evidence columns follow, then the Contextual column at the end
+      // is the conclusion once that evidence is weighed in.
       id: 'priority_raw',
       header: 'Priority · Raw',
       accessor: (v) => enrichmentPriority(v).before,
@@ -98,6 +103,89 @@ export function RegisterView({
       render: (v) => <PriorityRawCell v={v} />,
     },
     {
+      id: 'cve',
+      header: 'CVE',
+      accessor: (v) => v.cve_id ?? '',
+      sortable: true,
+      minWidth: '120px',
+      render: (v) => <CveCell cve={v.cve_id} />,
+    },
+    {
+      id: 'cwe',
+      header: 'CWE',
+      accessor: (v) => v.cwe_id ?? '',
+      sortable: true,
+      minWidth: '92px',
+      render: (v) => <CweCell cwe={v.cwe_id} />,
+    },
+    {
+      id: 'severity',
+      header: 'Severity',
+      accessor: (v) => v.severity,
+      sortable: true,
+      minWidth: '96px',
+      render: (v) => <SeverityCell severity={v.severity} />,
+    },
+    {
+      id: 'cvss',
+      header: 'CVSS',
+      accessor: (v) => v.cvss_score ?? -1,
+      sortable: true,
+      minWidth: '72px',
+      render: (v) => <CvssCell score={v.cvss_score} />,
+    },
+    {
+      id: 'epss',
+      header: 'EPSS',
+      accessor: (v) => v.epss_score ?? -1,
+      sortable: true,
+      minWidth: '76px',
+      render: (v) => <EpssCell score={v.epss_score} percentile={v.epss_percentile} />,
+    },
+    {
+      id: 'vector',
+      header: 'Vector',
+      accessor: (v) => parseAttackVector(v.cvss_vector) ?? '',
+      sortable: true,
+      minWidth: '96px',
+      render: (v) => <VectorCell vector={v.cvss_vector} />,
+    },
+    {
+      id: 'exploit',
+      header: 'Exploit',
+      accessor: (v) => (hasPublicExploit(v) ? 1 : 0),
+      sortable: true,
+      minWidth: '88px',
+      render: (v) => <ExploitCell vuln={v} />,
+    },
+    {
+      id: 'patch',
+      header: 'Patch',
+      accessor: (v) => (patchAvailable(v) ? 1 : 0),
+      sortable: true,
+      minWidth: '92px',
+      render: (v) => <PatchCell vuln={v} />,
+    },
+    {
+      id: 'kev',
+      header: 'KEV',
+      accessor: (v) => (v.kev_flag ? 1 : 0),
+      sortable: true,
+      minWidth: '70px',
+      render: (v) => <KevCell kev={v.kev_flag} />,
+    },
+    {
+      id: 'assets',
+      header: 'Assets',
+      accessor: (v) => v.linked_assets?.length ?? 0,
+      sortable: true,
+      minWidth: '76px',
+      render: (v) => <AssetsCell vuln={v} />,
+    },
+    {
+      // THE CONCLUSION — placed AFTER all the evidence columns: the 7-signal
+      // contextual composite (with its ↑/↓ delta vs the Raw column up front), so the
+      // table reads left-to-right as face-value → evidence → final verdict.
       id: 'priority_ctx',
       header: 'Priority · Contextual',
       accessor: (v) => v.composite_priority ?? -1,
