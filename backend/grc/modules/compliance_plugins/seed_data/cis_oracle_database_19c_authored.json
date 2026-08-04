@@ -1,0 +1,1392 @@
+{
+  "benchmark": "CIS_Oracle_Database_19c_Benchmark_v2.0.0",
+  "authored_tag": "cis-oracle-19c",
+  "verification": "unverified-live",
+  "notes": "Parameter/profile/role-revoke checks use simplified non-CDB DBA_*/V$ shapes derived from CIS audit intent (unauthorized = non-Oracle-maintained). Remaining manuals are true CIS Manual or need org allowlists / CDB audit.",
+  "deterministic_ids": [
+    "2.1.2",
+    "2.1.3",
+    "2.1.4",
+    "2.2.1",
+    "2.2.10",
+    "2.2.11",
+    "2.2.2",
+    "2.2.3",
+    "2.2.4",
+    "2.2.5",
+    "2.2.6",
+    "2.2.7",
+    "2.2.8",
+    "2.3.1",
+    "2.3.10",
+    "2.3.11",
+    "2.3.12",
+    "2.3.13",
+    "2.3.14",
+    "2.3.15",
+    "2.3.2",
+    "2.3.3",
+    "2.3.5",
+    "2.3.6",
+    "2.3.7",
+    "2.3.8",
+    "2.3.9",
+    "3.2",
+    "3.4",
+    "3.5",
+    "3.7",
+    "3.8",
+    "4.1",
+    "4.4",
+    "4.5",
+    "6.1.10",
+    "6.1.4",
+    "6.1.5",
+    "6.1.8",
+    "6.1.9",
+    "6.2.10",
+    "6.2.11",
+    "6.2.12",
+    "6.2.13",
+    "6.2.14",
+    "6.2.15",
+    "6.2.16",
+    "6.2.17",
+    "6.2.18",
+    "6.2.19",
+    "6.2.2",
+    "6.2.20",
+    "6.2.21",
+    "6.2.3",
+    "6.2.4",
+    "6.2.5",
+    "6.2.6",
+    "6.2.7",
+    "6.2.8",
+    "6.2.9"
+  ],
+  "rules": {
+    "1.1": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS Oracle 19c 1.1: Ensure That Appropriate Version/Patches For Oracle Software Are Installed (Manual). Follow CIS audit steps and attest.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual"
+    },
+    "2.1.1": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS 2.1.1: Confirm extproc is not listener-exposed (or a documented exception applies). Audit: grep -i extproc $ORACLE_HOME/network/admin/listener.ora",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual"
+    },
+    "2.1.2": {
+      "runner_type": "linux_ssh",
+      "check_definition": {
+        "command": "sh -c 'f=\"$ORACLE_HOME/network/admin/sqlnet.ora\"; [ -f \"$f\" ] || { echo ok; exit 0; }; if grep -Ei \"^[^#]*ACCEPT_MD5_CERTS[[:space:]]*=[[:space:]]*TRUE\" \"$f\" >/dev/null; then echo bad; else echo ok; fi'",
+        "expect": {
+          "kind": "stdout_contains",
+          "value": "ok"
+        },
+        "pass_message": "ACCEPT_MD5_CERTS=TRUE absent from sqlnet.ora.",
+        "fail_message": "ACCEPT_MD5_CERTS=TRUE present in sqlnet.ora.",
+        "applicable_host_families": [
+          "linux"
+        ],
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 20
+      },
+      "authoring_class": "deterministic"
+    },
+    "2.1.3": {
+      "runner_type": "linux_ssh",
+      "check_definition": {
+        "command": "sh -c 'f=\"$ORACLE_HOME/network/admin/sqlnet.ora\"; [ -f \"$f\" ] || { echo ok; exit 0; }; if grep -Ei \"^[^#]*ACCEPT_SHA1_CERTS[[:space:]]*=[[:space:]]*TRUE\" \"$f\" >/dev/null; then echo bad; else echo ok; fi'",
+        "expect": {
+          "kind": "stdout_contains",
+          "value": "ok"
+        },
+        "pass_message": "ACCEPT_SHA1_CERTS=TRUE absent from sqlnet.ora.",
+        "fail_message": "ACCEPT_SHA1_CERTS=TRUE present in sqlnet.ora.",
+        "applicable_host_families": [
+          "linux"
+        ],
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 20
+      },
+      "authoring_class": "deterministic"
+    },
+    "2.1.4": {
+      "runner_type": "linux_ssh",
+      "check_definition": {
+        "command": "sh -c 'f=\"$ORACLE_HOME/network/admin/sqlnet.ora\"; [ -f \"$f\" ] || { echo ok; exit 0; }; line=$(grep -Ei \"^[[:space:]]*ALLOWED_WEAK_CERT_ALGORITHMS[[:space:]]*=\" \"$f\" | grep -Ev \"^[[:space:]]*#\" | head -1); if [ -z \"$line\" ]; then echo ok; elif echo \"$line\" | grep -Ei \"\\(NONE\\)\" >/dev/null; then echo ok; else echo bad; fi'",
+        "expect": {
+          "kind": "stdout_contains",
+          "value": "ok"
+        },
+        "pass_message": "ALLOWED_WEAK_CERT_ALGORITHMS is NONE or unset.",
+        "fail_message": "ALLOWED_WEAK_CERT_ALGORITHMS allows weak algorithms.",
+        "applicable_host_families": [
+          "linux"
+        ],
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 20
+      },
+      "authoring_class": "deterministic"
+    },
+    "2.2.1": {
+      "runner_type": "linux_ssh",
+      "check_definition": {
+        "command": "sh -c 'f=\"$ORACLE_HOME/network/admin/sqlnet.ora\"; [ -f \"$f\" ] || { echo ok; exit 0; }; if grep -Ei \"^[^#]*ACCEPT_MD5_CERTS[[:space:]]*=[[:space:]]*TRUE\" \"$f\" >/dev/null; then echo bad; else echo ok; fi'",
+        "expect": {
+          "kind": "stdout_contains",
+          "value": "ok"
+        },
+        "pass_message": "ACCEPT_MD5_CERTS=TRUE absent from sqlnet.ora.",
+        "fail_message": "ACCEPT_MD5_CERTS=TRUE present in sqlnet.ora.",
+        "applicable_host_families": [
+          "linux"
+        ],
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 20
+      },
+      "authoring_class": "deterministic"
+    },
+    "2.2.10": {
+      "runner_type": "linux_ssh",
+      "check_definition": {
+        "command": "sh -c 'f=\"$ORACLE_HOME/network/admin/sqlnet.ora\"; [ -f \"$f\" ] || { echo bad; exit 0; }; if grep -Ei \"^[[:space:]]*SQLNET\\.CRYPTO_CHECKSUM_CLIENT[[:space:]]*=[[:space:]]*REQUIRED[[:space:]]*$\" \"$f\" >/dev/null; then echo ok; else echo bad; fi'",
+        "expect": {
+          "kind": "stdout_contains",
+          "value": "ok"
+        },
+        "pass_message": "SQLNET.CRYPTO_CHECKSUM_CLIENT=REQUIRED.",
+        "fail_message": "SQLNET.CRYPTO_CHECKSUM_CLIENT is not REQUIRED.",
+        "applicable_host_families": [
+          "linux"
+        ],
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 20
+      },
+      "authoring_class": "deterministic"
+    },
+    "2.2.11": {
+      "runner_type": "linux_ssh",
+      "check_definition": {
+        "command": "sh -c 'f=\"$ORACLE_HOME/network/admin/sqlnet.ora\"; [ -f \"$f\" ] || { echo bad; exit 0; }; if grep -Ei \"^[[:space:]]*SQLNET\\.CRYPTO_CHECKSUM_SERVER[[:space:]]*=[[:space:]]*REQUIRED[[:space:]]*$\" \"$f\" >/dev/null; then echo ok; else echo bad; fi'",
+        "expect": {
+          "kind": "stdout_contains",
+          "value": "ok"
+        },
+        "pass_message": "SQLNET.CRYPTO_CHECKSUM_SERVER=REQUIRED.",
+        "fail_message": "SQLNET.CRYPTO_CHECKSUM_SERVER is not REQUIRED.",
+        "applicable_host_families": [
+          "linux"
+        ],
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 20
+      },
+      "authoring_class": "deterministic"
+    },
+    "2.2.2": {
+      "runner_type": "linux_ssh",
+      "check_definition": {
+        "command": "sh -c 'f=\"$ORACLE_HOME/network/admin/sqlnet.ora\"; [ -f \"$f\" ] || { echo ok; exit 0; }; if grep -Ei \"^[^#]*ACCEPT_SHA1_CERTS[[:space:]]*=[[:space:]]*TRUE\" \"$f\" >/dev/null; then echo bad; else echo ok; fi'",
+        "expect": {
+          "kind": "stdout_contains",
+          "value": "ok"
+        },
+        "pass_message": "ACCEPT_SHA1_CERTS=TRUE absent from sqlnet.ora.",
+        "fail_message": "ACCEPT_SHA1_CERTS=TRUE present in sqlnet.ora.",
+        "applicable_host_families": [
+          "linux"
+        ],
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 20
+      },
+      "authoring_class": "deterministic"
+    },
+    "2.2.3": {
+      "runner_type": "linux_ssh",
+      "check_definition": {
+        "command": "sh -c 'f=\"$ORACLE_HOME/network/admin/sqlnet.ora\"; [ -f \"$f\" ] || { echo ok; exit 0; }; line=$(grep -Ei \"^[[:space:]]*ALLOWED_WEAK_CERT_ALGORITHMS[[:space:]]*=\" \"$f\" | grep -Ev \"^[[:space:]]*#\" | head -1); if [ -z \"$line\" ]; then echo ok; elif echo \"$line\" | grep -Ei \"\\(NONE\\)\" >/dev/null; then echo ok; else echo bad; fi'",
+        "expect": {
+          "kind": "stdout_contains",
+          "value": "ok"
+        },
+        "pass_message": "ALLOWED_WEAK_CERT_ALGORITHMS is NONE or unset.",
+        "fail_message": "ALLOWED_WEAK_CERT_ALGORITHMS allows weak algorithms.",
+        "applicable_host_families": [
+          "linux"
+        ],
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 20
+      },
+      "authoring_class": "deterministic"
+    },
+    "2.2.4": {
+      "runner_type": "linux_ssh",
+      "check_definition": {
+        "command": "sh -c 'f=\"$ORACLE_HOME/network/admin/sqlnet.ora\"; [ -f \"$f\" ] || { echo bad; exit 0; }; if grep -Ei \"^[[:space:]]*SQLNET\\.ALLOWED_LOGON_VERSION_CLIENT[[:space:]]*=[[:space:]]*12a[[:space:]]*$\" \"$f\" >/dev/null; then echo ok; else echo bad; fi'",
+        "expect": {
+          "kind": "stdout_contains",
+          "value": "ok"
+        },
+        "pass_message": "SQLNET.ALLOWED_LOGON_VERSION_CLIENT=12a.",
+        "fail_message": "SQLNET.ALLOWED_LOGON_VERSION_CLIENT is not 12a.",
+        "applicable_host_families": [
+          "linux"
+        ],
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 20
+      },
+      "authoring_class": "deterministic"
+    },
+    "2.2.5": {
+      "runner_type": "linux_ssh",
+      "check_definition": {
+        "command": "sh -c 'f=\"$ORACLE_HOME/network/admin/sqlnet.ora\"; [ -f \"$f\" ] || { echo bad; exit 0; }; if grep -Ei \"^[[:space:]]*SQLNET\\.ALLOWED_LOGON_VERSION_SERVER[[:space:]]*=[[:space:]]*12a[[:space:]]*$\" \"$f\" >/dev/null; then echo ok; else echo bad; fi'",
+        "expect": {
+          "kind": "stdout_contains",
+          "value": "ok"
+        },
+        "pass_message": "SQLNET.ALLOWED_LOGON_VERSION_SERVER=12a.",
+        "fail_message": "SQLNET.ALLOWED_LOGON_VERSION_SERVER is not 12a.",
+        "applicable_host_families": [
+          "linux"
+        ],
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 20
+      },
+      "authoring_class": "deterministic"
+    },
+    "2.2.6": {
+      "runner_type": "linux_ssh",
+      "check_definition": {
+        "command": "sh -c 'f=\"$ORACLE_HOME/network/admin/sqlnet.ora\"; [ -f \"$f\" ] || { echo bad; exit 0; }; if grep -Ei \"^[[:space:]]*SQLNET\\.ENCRYPTION_CLIENT[[:space:]]*=[[:space:]]*REQUIRED[[:space:]]*$\" \"$f\" >/dev/null; then echo ok; else echo bad; fi'",
+        "expect": {
+          "kind": "stdout_contains",
+          "value": "ok"
+        },
+        "pass_message": "SQLNET.ENCRYPTION_CLIENT=REQUIRED.",
+        "fail_message": "SQLNET.ENCRYPTION_CLIENT is not REQUIRED.",
+        "applicable_host_families": [
+          "linux"
+        ],
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 20
+      },
+      "authoring_class": "deterministic"
+    },
+    "2.2.7": {
+      "runner_type": "linux_ssh",
+      "check_definition": {
+        "command": "sh -c 'f=\"$ORACLE_HOME/network/admin/sqlnet.ora\"; [ -f \"$f\" ] || { echo bad; exit 0; }; if grep -Ei \"^[[:space:]]*SQLNET\\.ENCRYPTION_SERVER[[:space:]]*=[[:space:]]*REQUIRED[[:space:]]*$\" \"$f\" >/dev/null; then echo ok; else echo bad; fi'",
+        "expect": {
+          "kind": "stdout_contains",
+          "value": "ok"
+        },
+        "pass_message": "SQLNET.ENCRYPTION_SERVER=REQUIRED.",
+        "fail_message": "SQLNET.ENCRYPTION_SERVER is not REQUIRED.",
+        "applicable_host_families": [
+          "linux"
+        ],
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 20
+      },
+      "authoring_class": "deterministic"
+    },
+    "2.2.8": {
+      "runner_type": "linux_ssh",
+      "check_definition": {
+        "command": "sh -c 'f=\"$ORACLE_HOME/network/admin/sqlnet.ora\"; [ -f \"$f\" ] || { echo bad; exit 0; }; if grep -Ei \"^[[:space:]]*SQLNET\\.ENCRYPTION_TYPES_CLIENT[[:space:]]*=[[:space:]]*\\(?AES256\\)?[[:space:]]*$\" \"$f\" >/dev/null; then echo ok; else echo bad; fi'",
+        "expect": {
+          "kind": "stdout_contains",
+          "value": "ok"
+        },
+        "pass_message": "SQLNET.ENCRYPTION_TYPES_CLIENT is AES256.",
+        "fail_message": "SQLNET.ENCRYPTION_TYPES_CLIENT is not AES256.",
+        "applicable_host_families": [
+          "linux"
+        ],
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 20
+      },
+      "authoring_class": "deterministic"
+    },
+    "2.2.9": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS Oracle 19c 2.2.9: Ensure 'SQLNET.ENCRYPTION_TYPES_SERVER' Is Set To AES256 (Manual). Follow CIS audit steps and attest.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual"
+    },
+    "2.3.1": {
+      "runner_type": "oracle_sql",
+      "check_definition": {
+        "sql": "SELECT value FROM v$parameter WHERE name = 'background_core_dump' AND UPPER(value) = UPPER('FULL')",
+        "expect": {
+          "kind": "row_count_zero"
+        },
+        "pass_message": "background_core_dump is not FULL.",
+        "fail_message": "background_core_dump is FULL.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 15
+      },
+      "authoring_class": "deterministic"
+    },
+    "2.3.10": {
+      "runner_type": "oracle_sql",
+      "check_definition": {
+        "sql": "SELECT value FROM v$parameter WHERE name = 'sec_return_server_release_banner'",
+        "expect": {
+          "kind": "value_equals",
+          "expected": "FALSE"
+        },
+        "pass_message": "sec_return_server_release_banner is FALSE.",
+        "fail_message": "sec_return_server_release_banner is not FALSE.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 15
+      },
+      "authoring_class": "deterministic"
+    },
+    "2.3.11": {
+      "runner_type": "oracle_sql",
+      "check_definition": {
+        "sql": "SELECT value FROM v$parameter WHERE name = 'remote_login_passwordfile'",
+        "expect": {
+          "kind": "value_equals",
+          "expected": "NONE"
+        },
+        "pass_message": "remote_login_passwordfile is NONE.",
+        "fail_message": "remote_login_passwordfile is not NONE.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 15
+      },
+      "authoring_class": "deterministic"
+    },
+    "2.3.12": {
+      "runner_type": "oracle_sql",
+      "check_definition": {
+        "sql": "SELECT value FROM v$parameter WHERE name = 'remote_listener' AND value IS NOT NULL AND TRIM(value) <> ''",
+        "expect": {
+          "kind": "row_count_zero"
+        },
+        "pass_message": "remote_listener is empty.",
+        "fail_message": "remote_listener is not empty.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 15
+      },
+      "authoring_class": "deterministic"
+    },
+    "2.3.13": {
+      "runner_type": "oracle_sql",
+      "check_definition": {
+        "sql": "SELECT value FROM v$parameter WHERE name = 'resource_limit'",
+        "expect": {
+          "kind": "value_equals",
+          "expected": "TRUE"
+        },
+        "pass_message": "resource_limit is TRUE.",
+        "fail_message": "resource_limit is not TRUE.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 15
+      },
+      "authoring_class": "deterministic"
+    },
+    "2.3.14": {
+      "runner_type": "oracle_sql",
+      "check_definition": {
+        "sql": "SELECT value FROM v$parameter WHERE name = 'remote_os_authent'",
+        "expect": {
+          "kind": "value_equals",
+          "expected": "FALSE"
+        },
+        "pass_message": "remote_os_authent is FALSE.",
+        "fail_message": "remote_os_authent is not FALSE.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 15
+      },
+      "authoring_class": "deterministic"
+    },
+    "2.3.15": {
+      "runner_type": "oracle_sql",
+      "check_definition": {
+        "sql": "SELECT value FROM v$parameter WHERE name = 'sec_case_sensitive_logon'",
+        "expect": {
+          "kind": "value_equals",
+          "expected": "TRUE"
+        },
+        "pass_message": "sec_case_sensitive_logon is TRUE.",
+        "fail_message": "sec_case_sensitive_logon is not TRUE.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 15
+      },
+      "authoring_class": "deterministic"
+    },
+    "2.3.2": {
+      "runner_type": "oracle_sql",
+      "check_definition": {
+        "sql": "SELECT value FROM v$parameter WHERE name = 'shadow_core_dump' AND UPPER(value) = UPPER('FULL')",
+        "expect": {
+          "kind": "row_count_zero"
+        },
+        "pass_message": "shadow_core_dump is not FULL.",
+        "fail_message": "shadow_core_dump is FULL.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 15
+      },
+      "authoring_class": "deterministic"
+    },
+    "2.3.3": {
+      "runner_type": "oracle_sql",
+      "check_definition": {
+        "sql": "SELECT value FROM v$parameter WHERE name = 'allow_group_access_to_sga'",
+        "expect": {
+          "kind": "value_equals",
+          "expected": "FALSE"
+        },
+        "pass_message": "allow_group_access_to_sga is FALSE.",
+        "fail_message": "allow_group_access_to_sga is not FALSE.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 15
+      },
+      "authoring_class": "deterministic"
+    },
+    "2.3.4": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS Oracle 19c 2.3.4: Review Undocumented (Underscore) Parameters Not Set To 'DEFAULT' Values (Manual). Follow CIS audit steps and attest.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual"
+    },
+    "2.3.5": {
+      "runner_type": "oracle_sql",
+      "check_definition": {
+        "sql": "SELECT value FROM v$parameter WHERE name = 'os_roles'",
+        "expect": {
+          "kind": "value_equals",
+          "expected": "FALSE"
+        },
+        "pass_message": "os_roles is FALSE.",
+        "fail_message": "os_roles is not FALSE.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 15
+      },
+      "authoring_class": "deterministic"
+    },
+    "2.3.6": {
+      "runner_type": "oracle_sql",
+      "check_definition": {
+        "sql": "SELECT value FROM v$parameter WHERE name = 'remote_os_roles'",
+        "expect": {
+          "kind": "value_equals",
+          "expected": "FALSE"
+        },
+        "pass_message": "remote_os_roles is FALSE.",
+        "fail_message": "remote_os_roles is not FALSE.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 15
+      },
+      "authoring_class": "deterministic"
+    },
+    "2.3.7": {
+      "runner_type": "oracle_sql",
+      "check_definition": {
+        "sql": "SELECT value FROM v$parameter WHERE name = 'sec_max_failed_login_attempts' AND TO_NUMBER(REGEXP_SUBSTR(value, '[0-9]+')) > 3",
+        "expect": {
+          "kind": "row_count_zero"
+        },
+        "pass_message": "sec_max_failed_login_attempts <= 3.",
+        "fail_message": "sec_max_failed_login_attempts is greater than 3.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 15
+      },
+      "authoring_class": "deterministic"
+    },
+    "2.3.8": {
+      "runner_type": "oracle_sql",
+      "check_definition": {
+        "sql": "SELECT value FROM v$parameter WHERE name = 'sec_protocol_error_further_action'",
+        "expect": {
+          "kind": "value_equals",
+          "expected": "(DROP,3)"
+        },
+        "pass_message": "sec_protocol_error_further_action is (DROP,3).",
+        "fail_message": "sec_protocol_error_further_action is not (DROP,3).",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 15
+      },
+      "authoring_class": "deterministic"
+    },
+    "2.3.9": {
+      "runner_type": "oracle_sql",
+      "check_definition": {
+        "sql": "SELECT value FROM v$parameter WHERE name = 'sec_protocol_error_trace_action'",
+        "expect": {
+          "kind": "value_equals",
+          "expected": "LOG"
+        },
+        "pass_message": "sec_protocol_error_trace_action is LOG.",
+        "fail_message": "sec_protocol_error_trace_action is not LOG.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 15
+      },
+      "authoring_class": "deterministic"
+    },
+    "3.2": {
+      "runner_type": "oracle_sql",
+      "check_definition": {
+        "sql": "SELECT p.profile, p.limit FROM dba_profiles p WHERE p.resource_name = 'PASSWORD_LOCK_TIME' AND TO_NUMBER(DECODE(p.limit,'DEFAULT',(SELECT DECODE(limit,'UNLIMITED','9999',limit)            FROM dba_profiles WHERE profile='DEFAULT'           AND resource_name='PASSWORD_LOCK_TIME'),'UNLIMITED','9999',p.limit)) < 1",
+        "expect": {
+          "kind": "row_count_zero"
+        },
+        "pass_message": "PASSWORD_LOCK_TIME >= 1 for all profiles.",
+        "fail_message": "A profile has PASSWORD_LOCK_TIME < 1.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 15
+      },
+      "authoring_class": "deterministic"
+    },
+    "3.3": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS Oracle Database 19c 3.3: Ensure 'PASSWORD_LIFE_TIME + PASSWORD_GRACE_TIME' Is Less Than Or Equal To '365' (Automated). Follow the CIS audit SQL/steps and attest. Left manual because the CIS check needs an org allowlist, CDB-only constructs, or multi-step review beyond a single SELECT.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual"
+    },
+    "3.4": {
+      "runner_type": "oracle_sql",
+      "check_definition": {
+        "sql": "SELECT profile, limit FROM dba_profiles WHERE resource_name = 'PASSWORD_REUSE_MAX' AND UPPER(limit) <> 'UNLIMITED' AND limit <> 'DEFAULT'",
+        "expect": {
+          "kind": "row_count_zero"
+        },
+        "pass_message": "PASSWORD_REUSE_MAX is UNLIMITED.",
+        "fail_message": "A profile has PASSWORD_REUSE_MAX not UNLIMITED.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 15
+      },
+      "authoring_class": "deterministic"
+    },
+    "3.5": {
+      "runner_type": "oracle_sql",
+      "check_definition": {
+        "sql": "SELECT profile, limit FROM dba_profiles WHERE resource_name = 'PASSWORD_VERIFY_FUNCTION' AND limit = 'NULL'",
+        "expect": {
+          "kind": "row_count_zero"
+        },
+        "pass_message": "PASSWORD_VERIFY_FUNCTION is set on all profiles.",
+        "fail_message": "A profile has PASSWORD_VERIFY_FUNCTION = NULL.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 15
+      },
+      "authoring_class": "deterministic"
+    },
+    "3.6": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS Oracle 19c 3.6: Ensure 'PASSWORD_VERIFY_FUNCTION' Is Configured Correctly (Manual). Follow CIS audit steps and attest.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual"
+    },
+    "3.7": {
+      "runner_type": "oracle_sql",
+      "check_definition": {
+        "sql": "SELECT profile, limit FROM dba_profiles WHERE resource_name = 'PASSWORD_ROLLOVER_TIME' AND limit NOT IN ('0', 'DEFAULT')",
+        "expect": {
+          "kind": "row_count_zero"
+        },
+        "pass_message": "PASSWORD_ROLLOVER_TIME is 0.",
+        "fail_message": "A profile has PASSWORD_ROLLOVER_TIME <> 0.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 15
+      },
+      "authoring_class": "deterministic"
+    },
+    "3.8": {
+      "runner_type": "oracle_sql",
+      "check_definition": {
+        "sql": "SELECT p.profile, p.limit FROM dba_profiles p WHERE p.resource_name = 'INACTIVE_ACCOUNT_TIME' AND TO_NUMBER(DECODE(p.limit,'DEFAULT',(SELECT DECODE(limit,'UNLIMITED','9999',limit)            FROM dba_profiles WHERE profile='DEFAULT'           AND resource_name='INACTIVE_ACCOUNT_TIME'),'UNLIMITED','9999',p.limit)) > 120",
+        "expect": {
+          "kind": "row_count_zero"
+        },
+        "pass_message": "INACTIVE_ACCOUNT_TIME <= 120 for all profiles.",
+        "fail_message": "A profile has INACTIVE_ACCOUNT_TIME > 120.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 15
+      },
+      "authoring_class": "deterministic"
+    },
+    "4.1": {
+      "runner_type": "oracle_sql",
+      "check_definition": {
+        "sql": "SELECT username FROM dba_users_with_defpwd",
+        "expect": {
+          "kind": "row_count_zero"
+        },
+        "pass_message": "No accounts use default passwords.",
+        "fail_message": "Accounts with default passwords exist.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 15
+      },
+      "authoring_class": "deterministic"
+    },
+    "4.2": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS Oracle Database 19c 4.2: Ensure No Custom 'ORACLE_MAINTAINED' Users Exist. Follow the CIS audit SQL/steps and attest. Left manual because the CIS check needs an org allowlist, CDB-only constructs, or multi-step review beyond a single SELECT.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual"
+    },
+    "4.3": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS Oracle Database 19c 4.3: Review The Users Created Through Real Application Security. Follow the CIS audit SQL/steps and attest. Left manual because the CIS check needs an org allowlist, CDB-only constructs, or multi-step review beyond a single SELECT.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual"
+    },
+    "4.4": {
+      "runner_type": "oracle_sql",
+      "check_definition": {
+        "sql": "SELECT username, password_versions FROM dba_users WHERE username <> 'SYS' AND NOT REGEXP_LIKE(password_versions, '^\\s*12C\\s*$')",
+        "expect": {
+          "kind": "row_count_zero"
+        },
+        "pass_message": "No old password versions in use.",
+        "fail_message": "Accounts still use pre-12C password versions.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 15
+      },
+      "authoring_class": "deterministic"
+    },
+    "4.5": {
+      "runner_type": "oracle_sql",
+      "check_definition": {
+        "sql": "SELECT format FROM v$passwordfile_info WHERE format <> '12.2'",
+        "expect": {
+          "kind": "row_count_zero"
+        },
+        "pass_message": "Password file format is 12.2.",
+        "fail_message": "Password file format is not 12.2.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 15
+      },
+      "authoring_class": "deterministic"
+    },
+    "4.6": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS Oracle Database 19c 4.6: Ensure That Users In Different RAC Instances Are Identical In PW Files (Automated). Follow the CIS audit SQL/steps and attest. Left manual because the CIS check needs an org allowlist, CDB-only constructs, or multi-step review beyond a single SELECT.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual"
+    },
+    "4.7": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS Oracle Database 19c 4.7: Ensure No Public Database Links Exist. Follow the CIS audit SQL/steps and attest. Left manual because the CIS check needs an org allowlist, CDB-only constructs, or multi-step review beyond a single SELECT.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual"
+    },
+    "4.8": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS Oracle Database 19c 4.8: Ensure That Database Link Passwords Are Using The Latest Encryption (Automated). Follow the CIS audit SQL/steps and attest. Left manual because the CIS check needs an org allowlist, CDB-only constructs, or multi-step review beyond a single SELECT.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual"
+    },
+    "5.1.1": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS Oracle Database 19c 5.1.1: Ensure All Auditable System Actions Commands Are Audited (Automated). Follow the CIS audit SQL/steps and attest. Left manual because the CIS check needs an org allowlist, CDB-only constructs, or multi-step review beyond a single SELECT.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual"
+    },
+    "5.1.2": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS Oracle Database 19c 5.1.2: Ensure the 'LOGON' AND 'LOGOFF' Actions Audit Is Enabled (Automated). Follow the CIS audit SQL/steps and attest. Left manual because the CIS check needs an org allowlist, CDB-only constructs, or multi-step review beyond a single SELECT.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual"
+    },
+    "5.1.3": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS Oracle Database 19c 5.1.3: Ensure Critical Packages Are Audited. Follow the CIS audit SQL/steps and attest. Left manual because the CIS check needs an org allowlist, CDB-only constructs, or multi-step review beyond a single SELECT.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual"
+    },
+    "5.1.4": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS Oracle Database 19c 5.1.4: Ensure All Export Activities Are Audited. Follow the CIS audit SQL/steps and attest. Left manual because the CIS check needs an org allowlist, CDB-only constructs, or multi-step review beyond a single SELECT.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual"
+    },
+    "5.1.5": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS Oracle Database 19c 5.1.5: Ensure The Use Of SYS* Privileges Is Audited. Follow the CIS audit SQL/steps and attest. Left manual because the CIS check needs an org allowlist, CDB-only constructs, or multi-step review beyond a single SELECT.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual"
+    },
+    "6.1.1": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS Oracle Database 19c 6.1.1: Ensure '%ANY%' Is Revoked From Unauthorized 'GRANTEE' (Automated). Follow the CIS audit SQL/steps and attest. Left manual because the CIS check needs an org allowlist, CDB-only constructs, or multi-step review beyond a single SELECT.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual"
+    },
+    "6.1.10": {
+      "runner_type": "oracle_sql",
+      "check_definition": {
+        "sql": "SELECT p.grantee FROM dba_sys_privs p WHERE p.privilege = 'CREATE LIBRARY' AND EXISTS (SELECT 1 FROM dba_users u             WHERE u.username = p.grantee AND u.oracle_maintained = 'N')",
+        "expect": {
+          "kind": "row_count_zero"
+        },
+        "pass_message": "CREATE LIBRARY is not granted to non-Oracle-maintained users.",
+        "fail_message": "CREATE LIBRARY is granted to a non-Oracle-maintained user.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 15
+      },
+      "authoring_class": "deterministic"
+    },
+    "6.1.11": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS Oracle Database 19c 6.1.11: Ensure All `SYSTEM` Privileges Are Revoked From Unauthorized 'GRANTEE' (Automated). Follow the CIS audit SQL/steps and attest. Left manual because the CIS check needs an org allowlist, CDB-only constructs, or multi-step review beyond a single SELECT.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual"
+    },
+    "6.1.2": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS Oracle Database 19c 6.1.2: Ensure Admin Privileges Are Revoked From Unauthorized 'GRANTEE' (Automated). Follow the CIS audit SQL/steps and attest. Left manual because the CIS check needs an org allowlist, CDB-only constructs, or multi-step review beyond a single SELECT.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual"
+    },
+    "6.1.3": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS Oracle Database 19c 6.1.3: Ensure 'IMPORT' And 'EXPORT' 'FULL DATABASE' Is Revoked From Unauthorized 'GRANTEE' (Automated). Follow the CIS audit SQL/steps and attest. Left manual because the CIS check needs an org allowlist, CDB-only constructs, or multi-step review beyond a single SELECT.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual"
+    },
+    "6.1.4": {
+      "runner_type": "oracle_sql",
+      "check_definition": {
+        "sql": "SELECT p.grantee FROM dba_sys_privs p WHERE p.privilege = 'CREATE EXTERNAL JOB' AND EXISTS (SELECT 1 FROM dba_users u             WHERE u.username = p.grantee AND u.oracle_maintained = 'N')",
+        "expect": {
+          "kind": "row_count_zero"
+        },
+        "pass_message": "CREATE EXTERNAL JOB is not granted to non-Oracle-maintained users.",
+        "fail_message": "CREATE EXTERNAL JOB is granted to a non-Oracle-maintained user.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 15
+      },
+      "authoring_class": "deterministic"
+    },
+    "6.1.5": {
+      "runner_type": "oracle_sql",
+      "check_definition": {
+        "sql": "SELECT p.grantee FROM dba_sys_privs p WHERE p.privilege = 'BECOME USER' AND EXISTS (SELECT 1 FROM dba_users u             WHERE u.username = p.grantee AND u.oracle_maintained = 'N')",
+        "expect": {
+          "kind": "row_count_zero"
+        },
+        "pass_message": "BECOME USER is not granted to non-Oracle-maintained users.",
+        "fail_message": "BECOME USER is granted to a non-Oracle-maintained user.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 15
+      },
+      "authoring_class": "deterministic"
+    },
+    "6.1.6": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS Oracle Database 19c 6.1.6: Ensure 'TEXT DATASTORE ACCESS' Is Revoked From Unauthorized 'GRANTEE' (Automated). Follow the CIS audit SQL/steps and attest. Left manual because the CIS check needs an org allowlist, CDB-only constructs, or multi-step review beyond a single SELECT.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual"
+    },
+    "6.1.7": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS Oracle Database 19c 6.1.7: Ensure 'CREATE', 'ALTER', And 'DROP' 'PUBLIC DATABASE LINK' Is Revoked From Unauthorized 'GRANTEE' (Automated). Follow the CIS audit SQL/steps and attest. Left manual because the CIS check needs an org allowlist, CDB-only constructs, or multi-step review beyond a single SELECT.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual"
+    },
+    "6.1.8": {
+      "runner_type": "oracle_sql",
+      "check_definition": {
+        "sql": "SELECT p.grantee FROM dba_sys_privs p WHERE p.privilege = 'LOGMINING' AND EXISTS (SELECT 1 FROM dba_users u             WHERE u.username = p.grantee AND u.oracle_maintained = 'N')",
+        "expect": {
+          "kind": "row_count_zero"
+        },
+        "pass_message": "LOGMINING is not granted to non-Oracle-maintained users.",
+        "fail_message": "LOGMINING is granted to a non-Oracle-maintained user.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 15
+      },
+      "authoring_class": "deterministic"
+    },
+    "6.1.9": {
+      "runner_type": "oracle_sql",
+      "check_definition": {
+        "sql": "SELECT p.grantee FROM dba_sys_privs p WHERE p.privilege = 'ALTER SYSTEM' AND EXISTS (SELECT 1 FROM dba_users u             WHERE u.username = p.grantee AND u.oracle_maintained = 'N')",
+        "expect": {
+          "kind": "row_count_zero"
+        },
+        "pass_message": "ALTER SYSTEM is not granted to non-Oracle-maintained users.",
+        "fail_message": "ALTER SYSTEM is granted to a non-Oracle-maintained user.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 15
+      },
+      "authoring_class": "deterministic"
+    },
+    "6.2.1": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS Oracle Database 19c 6.2.1: Ensure 'DBA' Is Revoked From Unauthorized 'GRANTEE'. Follow the CIS audit SQL/steps and attest. Left manual because the CIS check needs an org allowlist, CDB-only constructs, or multi-step review beyond a single SELECT.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual"
+    },
+    "6.2.10": {
+      "runner_type": "oracle_sql",
+      "check_definition": {
+        "sql": "SELECT p.grantee FROM dba_role_privs p WHERE p.granted_role = 'JAVA_ADMIN' AND ( EXISTS (SELECT 1 FROM dba_users u          WHERE u.username = p.grantee AND u.oracle_maintained = 'N')  OR EXISTS (SELECT 1 FROM dba_roles r             WHERE r.role = p.grantee AND r.oracle_maintained = 'N'))",
+        "expect": {
+          "kind": "row_count_zero"
+        },
+        "pass_message": "JAVA_ADMIN is not granted to non-Oracle-maintained grantees.",
+        "fail_message": "JAVA_ADMIN is granted to a non-Oracle-maintained grantee.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 15
+      },
+      "authoring_class": "deterministic"
+    },
+    "6.2.11": {
+      "runner_type": "oracle_sql",
+      "check_definition": {
+        "sql": "SELECT p.grantee FROM dba_role_privs p WHERE p.granted_role = 'JAVASYSPRIVS' AND ( EXISTS (SELECT 1 FROM dba_users u          WHERE u.username = p.grantee AND u.oracle_maintained = 'N')  OR EXISTS (SELECT 1 FROM dba_roles r             WHERE r.role = p.grantee AND r.oracle_maintained = 'N'))",
+        "expect": {
+          "kind": "row_count_zero"
+        },
+        "pass_message": "JAVASYSPRIVS is not granted to non-Oracle-maintained grantees.",
+        "fail_message": "JAVASYSPRIVS is granted to a non-Oracle-maintained grantee.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 15
+      },
+      "authoring_class": "deterministic"
+    },
+    "6.2.12": {
+      "runner_type": "oracle_sql",
+      "check_definition": {
+        "sql": "SELECT p.grantee FROM dba_role_privs p WHERE p.granted_role = 'LOGSTDBY_ADMINISTRATOR' AND ( EXISTS (SELECT 1 FROM dba_users u          WHERE u.username = p.grantee AND u.oracle_maintained = 'N')  OR EXISTS (SELECT 1 FROM dba_roles r             WHERE r.role = p.grantee AND r.oracle_maintained = 'N'))",
+        "expect": {
+          "kind": "row_count_zero"
+        },
+        "pass_message": "LOGSTDBY_ADMINISTRATOR is not granted to non-Oracle-maintained grantees.",
+        "fail_message": "LOGSTDBY_ADMINISTRATOR is granted to a non-Oracle-maintained grantee.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 15
+      },
+      "authoring_class": "deterministic"
+    },
+    "6.2.13": {
+      "runner_type": "oracle_sql",
+      "check_definition": {
+        "sql": "SELECT p.grantee FROM dba_role_privs p WHERE p.granted_role = 'MAINTPLAN_APP' AND ( EXISTS (SELECT 1 FROM dba_users u          WHERE u.username = p.grantee AND u.oracle_maintained = 'N')  OR EXISTS (SELECT 1 FROM dba_roles r             WHERE r.role = p.grantee AND r.oracle_maintained = 'N'))",
+        "expect": {
+          "kind": "row_count_zero"
+        },
+        "pass_message": "MAINTPLAN_APP is not granted to non-Oracle-maintained grantees.",
+        "fail_message": "MAINTPLAN_APP is granted to a non-Oracle-maintained grantee.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 15
+      },
+      "authoring_class": "deterministic"
+    },
+    "6.2.14": {
+      "runner_type": "oracle_sql",
+      "check_definition": {
+        "sql": "SELECT p.grantee FROM dba_role_privs p WHERE p.granted_role = 'JAVADEBUGPRIV' AND ( EXISTS (SELECT 1 FROM dba_users u          WHERE u.username = p.grantee AND u.oracle_maintained = 'N')  OR EXISTS (SELECT 1 FROM dba_roles r             WHERE r.role = p.grantee AND r.oracle_maintained = 'N'))",
+        "expect": {
+          "kind": "row_count_zero"
+        },
+        "pass_message": "JAVADEBUGPRIV is not granted to non-Oracle-maintained grantees.",
+        "fail_message": "JAVADEBUGPRIV is granted to a non-Oracle-maintained grantee.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 15
+      },
+      "authoring_class": "deterministic"
+    },
+    "6.2.15": {
+      "runner_type": "oracle_sql",
+      "check_definition": {
+        "sql": "SELECT p.grantee FROM dba_role_privs p WHERE p.granted_role = 'DV_PATCH_ADMIN' AND ( EXISTS (SELECT 1 FROM dba_users u          WHERE u.username = p.grantee AND u.oracle_maintained = 'N')  OR EXISTS (SELECT 1 FROM dba_roles r             WHERE r.role = p.grantee AND r.oracle_maintained = 'N'))",
+        "expect": {
+          "kind": "row_count_zero"
+        },
+        "pass_message": "DV_PATCH_ADMIN is not granted to non-Oracle-maintained grantees.",
+        "fail_message": "DV_PATCH_ADMIN is granted to a non-Oracle-maintained grantee.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 15
+      },
+      "authoring_class": "deterministic"
+    },
+    "6.2.16": {
+      "runner_type": "oracle_sql",
+      "check_definition": {
+        "sql": "SELECT p.grantee FROM dba_role_privs p WHERE p.granted_role = 'DV_POLICY_OWNER' AND ( EXISTS (SELECT 1 FROM dba_users u          WHERE u.username = p.grantee AND u.oracle_maintained = 'N')  OR EXISTS (SELECT 1 FROM dba_roles r             WHERE r.role = p.grantee AND r.oracle_maintained = 'N'))",
+        "expect": {
+          "kind": "row_count_zero"
+        },
+        "pass_message": "DV_POLICY_OWNER is not granted to non-Oracle-maintained grantees.",
+        "fail_message": "DV_POLICY_OWNER is granted to a non-Oracle-maintained grantee.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 15
+      },
+      "authoring_class": "deterministic"
+    },
+    "6.2.17": {
+      "runner_type": "oracle_sql",
+      "check_definition": {
+        "sql": "SELECT p.grantee FROM dba_role_privs p WHERE p.granted_role = 'AUDIT_ADMIN' AND ( EXISTS (SELECT 1 FROM dba_users u          WHERE u.username = p.grantee AND u.oracle_maintained = 'N')  OR EXISTS (SELECT 1 FROM dba_roles r             WHERE r.role = p.grantee AND r.oracle_maintained = 'N'))",
+        "expect": {
+          "kind": "row_count_zero"
+        },
+        "pass_message": "AUDIT_ADMIN is not granted to non-Oracle-maintained grantees.",
+        "fail_message": "AUDIT_ADMIN is granted to a non-Oracle-maintained grantee.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 15
+      },
+      "authoring_class": "deterministic"
+    },
+    "6.2.18": {
+      "runner_type": "oracle_sql",
+      "check_definition": {
+        "sql": "SELECT p.grantee FROM dba_role_privs p WHERE p.granted_role = 'AUDIT_VIEWER' AND ( EXISTS (SELECT 1 FROM dba_users u          WHERE u.username = p.grantee AND u.oracle_maintained = 'N')  OR EXISTS (SELECT 1 FROM dba_roles r             WHERE r.role = p.grantee AND r.oracle_maintained = 'N'))",
+        "expect": {
+          "kind": "row_count_zero"
+        },
+        "pass_message": "AUDIT_VIEWER is not granted to non-Oracle-maintained grantees.",
+        "fail_message": "AUDIT_VIEWER is granted to a non-Oracle-maintained grantee.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 15
+      },
+      "authoring_class": "deterministic"
+    },
+    "6.2.19": {
+      "runner_type": "oracle_sql",
+      "check_definition": {
+        "sql": "SELECT p.grantee FROM dba_role_privs p WHERE p.granted_role = 'PDB_DBA' AND ( EXISTS (SELECT 1 FROM dba_users u          WHERE u.username = p.grantee AND u.oracle_maintained = 'N')  OR EXISTS (SELECT 1 FROM dba_roles r             WHERE r.role = p.grantee AND r.oracle_maintained = 'N'))",
+        "expect": {
+          "kind": "row_count_zero"
+        },
+        "pass_message": "PDB_DBA is not granted to non-Oracle-maintained grantees.",
+        "fail_message": "PDB_DBA is granted to a non-Oracle-maintained grantee.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 15
+      },
+      "authoring_class": "deterministic"
+    },
+    "6.2.2": {
+      "runner_type": "oracle_sql",
+      "check_definition": {
+        "sql": "SELECT p.grantee FROM dba_role_privs p WHERE p.granted_role = 'EXP_FULL_DATABASE' AND ( EXISTS (SELECT 1 FROM dba_users u          WHERE u.username = p.grantee AND u.oracle_maintained = 'N')  OR EXISTS (SELECT 1 FROM dba_roles r             WHERE r.role = p.grantee AND r.oracle_maintained = 'N'))",
+        "expect": {
+          "kind": "row_count_zero"
+        },
+        "pass_message": "EXP_FULL_DATABASE is not granted to non-Oracle-maintained grantees.",
+        "fail_message": "EXP_FULL_DATABASE is granted to a non-Oracle-maintained grantee.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 15
+      },
+      "authoring_class": "deterministic"
+    },
+    "6.2.20": {
+      "runner_type": "oracle_sql",
+      "check_definition": {
+        "sql": "SELECT p.grantee FROM dba_role_privs p WHERE p.granted_role = 'SELECT_CATALOG_ROLE' AND ( EXISTS (SELECT 1 FROM dba_users u          WHERE u.username = p.grantee AND u.oracle_maintained = 'N')  OR EXISTS (SELECT 1 FROM dba_roles r             WHERE r.role = p.grantee AND r.oracle_maintained = 'N'))",
+        "expect": {
+          "kind": "row_count_zero"
+        },
+        "pass_message": "SELECT_CATALOG_ROLE is not granted to non-Oracle-maintained grantees.",
+        "fail_message": "SELECT_CATALOG_ROLE is granted to a non-Oracle-maintained grantee.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 15
+      },
+      "authoring_class": "deterministic"
+    },
+    "6.2.21": {
+      "runner_type": "oracle_sql",
+      "check_definition": {
+        "sql": "SELECT p.grantee FROM dba_role_privs p WHERE p.granted_role = 'EXECUTE_CATALOG_ROLE' AND ( EXISTS (SELECT 1 FROM dba_users u          WHERE u.username = p.grantee AND u.oracle_maintained = 'N')  OR EXISTS (SELECT 1 FROM dba_roles r             WHERE r.role = p.grantee AND r.oracle_maintained = 'N'))",
+        "expect": {
+          "kind": "row_count_zero"
+        },
+        "pass_message": "EXECUTE_CATALOG_ROLE is not granted to non-Oracle-maintained grantees.",
+        "fail_message": "EXECUTE_CATALOG_ROLE is granted to a non-Oracle-maintained grantee.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 15
+      },
+      "authoring_class": "deterministic"
+    },
+    "6.2.3": {
+      "runner_type": "oracle_sql",
+      "check_definition": {
+        "sql": "SELECT p.grantee FROM dba_role_privs p WHERE p.granted_role = 'IMP_FULL_DATABASE' AND ( EXISTS (SELECT 1 FROM dba_users u          WHERE u.username = p.grantee AND u.oracle_maintained = 'N')  OR EXISTS (SELECT 1 FROM dba_roles r             WHERE r.role = p.grantee AND r.oracle_maintained = 'N'))",
+        "expect": {
+          "kind": "row_count_zero"
+        },
+        "pass_message": "IMP_FULL_DATABASE is not granted to non-Oracle-maintained grantees.",
+        "fail_message": "IMP_FULL_DATABASE is granted to a non-Oracle-maintained grantee.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 15
+      },
+      "authoring_class": "deterministic"
+    },
+    "6.2.4": {
+      "runner_type": "oracle_sql",
+      "check_definition": {
+        "sql": "SELECT p.grantee FROM dba_role_privs p WHERE p.granted_role = 'DATAPUMP_EXP_FULL_DATABASE' AND ( EXISTS (SELECT 1 FROM dba_users u          WHERE u.username = p.grantee AND u.oracle_maintained = 'N')  OR EXISTS (SELECT 1 FROM dba_roles r             WHERE r.role = p.grantee AND r.oracle_maintained = 'N'))",
+        "expect": {
+          "kind": "row_count_zero"
+        },
+        "pass_message": "DATAPUMP_EXP_FULL_DATABASE is not granted to non-Oracle-maintained grantees.",
+        "fail_message": "DATAPUMP_EXP_FULL_DATABASE is granted to a non-Oracle-maintained grantee.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 15
+      },
+      "authoring_class": "deterministic"
+    },
+    "6.2.5": {
+      "runner_type": "oracle_sql",
+      "check_definition": {
+        "sql": "SELECT p.grantee FROM dba_role_privs p WHERE p.granted_role = 'DATAPUMP_IMP_FULL_DATABASE' AND ( EXISTS (SELECT 1 FROM dba_users u          WHERE u.username = p.grantee AND u.oracle_maintained = 'N')  OR EXISTS (SELECT 1 FROM dba_roles r             WHERE r.role = p.grantee AND r.oracle_maintained = 'N'))",
+        "expect": {
+          "kind": "row_count_zero"
+        },
+        "pass_message": "DATAPUMP_IMP_FULL_DATABASE is not granted to non-Oracle-maintained grantees.",
+        "fail_message": "DATAPUMP_IMP_FULL_DATABASE is granted to a non-Oracle-maintained grantee.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 15
+      },
+      "authoring_class": "deterministic"
+    },
+    "6.2.6": {
+      "runner_type": "oracle_sql",
+      "check_definition": {
+        "sql": "SELECT p.grantee FROM dba_role_privs p WHERE p.granted_role = 'DV_ADMIN' AND ( EXISTS (SELECT 1 FROM dba_users u          WHERE u.username = p.grantee AND u.oracle_maintained = 'N')  OR EXISTS (SELECT 1 FROM dba_roles r             WHERE r.role = p.grantee AND r.oracle_maintained = 'N'))",
+        "expect": {
+          "kind": "row_count_zero"
+        },
+        "pass_message": "DV_ADMIN is not granted to non-Oracle-maintained grantees.",
+        "fail_message": "DV_ADMIN is granted to a non-Oracle-maintained grantee.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 15
+      },
+      "authoring_class": "deterministic"
+    },
+    "6.2.7": {
+      "runner_type": "oracle_sql",
+      "check_definition": {
+        "sql": "SELECT p.grantee FROM dba_role_privs p WHERE p.granted_role = 'DV_AUDIT_CLEANUP' AND ( EXISTS (SELECT 1 FROM dba_users u          WHERE u.username = p.grantee AND u.oracle_maintained = 'N')  OR EXISTS (SELECT 1 FROM dba_roles r             WHERE r.role = p.grantee AND r.oracle_maintained = 'N'))",
+        "expect": {
+          "kind": "row_count_zero"
+        },
+        "pass_message": "DV_AUDIT_CLEANUP is not granted to non-Oracle-maintained grantees.",
+        "fail_message": "DV_AUDIT_CLEANUP is granted to a non-Oracle-maintained grantee.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 15
+      },
+      "authoring_class": "deterministic"
+    },
+    "6.2.8": {
+      "runner_type": "oracle_sql",
+      "check_definition": {
+        "sql": "SELECT p.grantee FROM dba_role_privs p WHERE p.granted_role = 'OLAP_DBA' AND ( EXISTS (SELECT 1 FROM dba_users u          WHERE u.username = p.grantee AND u.oracle_maintained = 'N')  OR EXISTS (SELECT 1 FROM dba_roles r             WHERE r.role = p.grantee AND r.oracle_maintained = 'N'))",
+        "expect": {
+          "kind": "row_count_zero"
+        },
+        "pass_message": "OLAP_DBA is not granted to non-Oracle-maintained grantees.",
+        "fail_message": "OLAP_DBA is granted to a non-Oracle-maintained grantee.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 15
+      },
+      "authoring_class": "deterministic"
+    },
+    "6.2.9": {
+      "runner_type": "oracle_sql",
+      "check_definition": {
+        "sql": "SELECT p.grantee FROM dba_role_privs p WHERE p.granted_role = 'LBAC_DBA' AND ( EXISTS (SELECT 1 FROM dba_users u          WHERE u.username = p.grantee AND u.oracle_maintained = 'N')  OR EXISTS (SELECT 1 FROM dba_roles r             WHERE r.role = p.grantee AND r.oracle_maintained = 'N'))",
+        "expect": {
+          "kind": "row_count_zero"
+        },
+        "pass_message": "LBAC_DBA is not granted to non-Oracle-maintained grantees.",
+        "fail_message": "LBAC_DBA is granted to a non-Oracle-maintained grantee.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live",
+        "timeout_seconds": 15
+      },
+      "authoring_class": "deterministic"
+    },
+    "6.3.1": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS Oracle Database 19c 6.3.1: Ensure 'ALL' Is Revoked On 'Sensitive' Tables. Follow the CIS audit SQL/steps and attest. Left manual because the CIS check needs an org allowlist, CDB-only constructs, or multi-step review beyond a single SELECT.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual"
+    },
+    "6.5.1": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS Oracle 19c 6.5.1: Ensure 'DBA_COL_PRIVS' Is Revoked From Unauthorized 'GRANTEE' (Manual). Follow CIS audit steps and attest.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual"
+    },
+    "6.6.1": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS Oracle 19c 6.6.1: Ensure Proxy User Privileges Are Revoked From Unauthorized 'GRANTEE' (Manual). Follow CIS audit steps and attest.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual"
+    },
+    "6.7.1": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS Oracle 19c 6.7.1: Ensure Custom Java Privileges Are Revoked From Unauthorized 'GRANTEE' (Manual). Follow CIS audit steps and attest.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual"
+    },
+    "6.8.1": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS Oracle 19c 6.8.1: Ensure Directory Object Access Is Revoked From Unauthorized 'GRANTEE' (Manual). Follow CIS audit steps and attest.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual"
+    },
+    "6.8.2": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS Oracle Database 19c 6.8.2: Review Directory Objects Privileges. Follow the CIS audit SQL/steps and attest. Left manual because the CIS check needs an org allowlist, CDB-only constructs, or multi-step review beyond a single SELECT.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual"
+    },
+    "6.8.3": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS Oracle Database 19c 6.8.3: Review External Tables With Preprocessor. Follow the CIS audit SQL/steps and attest. Left manual because the CIS check needs an org allowlist, CDB-only constructs, or multi-step review beyond a single SELECT.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-oracle-19c",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual"
+    }
+  }
+}

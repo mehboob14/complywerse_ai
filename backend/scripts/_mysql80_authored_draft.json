@@ -1,0 +1,1464 @@
+{
+  "benchmark": "CIS_MySQL_Enterprise_Edition_8.0_Benchmark",
+  "authored_tag": "cis-mysql-ee-8.0",
+  "verification": "unverified-live",
+  "authoring_notes": "Authored directly from the CIS MySQL EE 8.0 audit prose in _mysql80_rules_dump.json. No PostgreSQL translation. All SQL is read-only (SELECT/SHOW only), single-statement, and avoids the mysql_sql runner's read-only deny tokens (INSERT/UPDATE/DELETE/CREATE/ALTER/GRANT/REVOKE/LOAD/CALL/SET x=/...). All linux_ssh commands avoid sudo because the ssh_runner deny-list rejects it; anything that genuinely requires root was routed to manual per the authoring rules.",
+  "rules": {
+    "1.1": {
+      "runner_type": "mysql_sql",
+      "check_definition": {
+        "sql": "SELECT @@GLOBAL.datadir",
+        "expect": {
+          "kind": "first_value_regex",
+          "expected": "^(?!/$)(?!/var/)(?!/usr/)/.+"
+        },
+        "pass_message": "datadir is not located under /, /var, or /usr.",
+        "fail_message": "datadir resolves to a system path (/, /var, or /usr).",
+        "timeout_seconds": 15,
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "needs_human_review",
+      "notes": "CIS asks for `df -h <directory>` on datadir and every *dir/*file variable, so the real assertion is partition membership, not path text. This check only asserts the datadir path is not under /, /var, or /usr. A datadir such as /data/mysql that still lives on the root filesystem would pass here. Operator must confirm with df, and must also review the other *dir/*file variables CIS enumerates."
+    },
+    "1.2": {
+      "runner_type": "linux_ssh",
+      "check_definition": {
+        "command": "ps -eo user:20,args 2>/dev/null | grep \"[m]ysqld\"",
+        "expect": {
+          "kind": "stdout_regex",
+          "expected": "^mysql\\s+",
+          "value": "^mysql\\s+"
+        },
+        "pass_message": "mysqld is running under the dedicated 'mysql' OS account.",
+        "fail_message": "No mysqld process is running as the 'mysql' user (CIS: no lines returned is a fail).",
+        "applicable_host_families": [
+          "linux",
+          "windows"
+        ],
+        "timeout_seconds": 20,
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live",
+        "windows_winrm": {
+          "command": "$s = Get-CimInstance Win32_Service -Filter \"Name LIKE 'MySQL%'\" | Select-Object -First 1; if (-not $s) { 'SERVICE_MISSING' } elseif ($s.StartName -like '*LocalSystem*' -or $s.StartName -like '*NT AUTHORITY*') { 'SERVICE_PRIVILEGED' } else { 'SERVICE_DEDICATED_ACCOUNT' }",
+          "shell": "powershell",
+          "expect": {
+            "kind": "stdout_contains",
+            "value": "SERVICE_DEDICATED_ACCOUNT"
+          },
+          "pass_message": "MySQL Windows service runs under a dedicated (non-LocalSystem) account.",
+          "fail_message": "MySQL Windows service is missing or runs as LocalSystem / NT AUTHORITY.",
+          "applicable_host_families": [
+            "windows"
+          ],
+          "_authored": "cis-mysql-ee-8.0",
+          "_verification": "unverified-live"
+        }
+      },
+      "authoring_class": "deterministic",
+      "notes": "CIS audit is `ps -ef | egrep \"^mysql.*$\"` and states 'if no lines are returned, this is a fail'. CIS also notes the mysql account name is an assumption. The sudoers / `sudo -l` half of the CIS note is not covered (ssh_runner rejects sudo)."
+    },
+    "1.3": {
+      "runner_type": "linux_ssh",
+      "check_definition": {
+        "command": "sh -c 'BAD=$(find /home /root -name \".mysql_history\" 2>/dev/null | while read f; do [ \"$(readlink -f \"$f\")\" = \"/dev/null\" ] || echo bad; done); if [ -z \"$BAD\" ]; then echo MYSQL_HISTORY_OK; else echo MYSQL_HISTORY_BAD; fi'",
+        "expect": {
+          "kind": "stdout_contains",
+          "value": "MYSQL_HISTORY_OK"
+        },
+        "pass_message": "No .mysql_history file exists that is not symlinked to /dev/null.",
+        "fail_message": "One or more .mysql_history files exist that are not symlinked to /dev/null.",
+        "applicable_host_families": [
+          "linux"
+        ],
+        "timeout_seconds": 25,
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "needs_human_review",
+      "notes": "Covers the MySQL Client half of CIS 1.3 (.mysql_history symlinked to /dev/null). Two gaps: (a) an unprivileged SSH account cannot traverse /root or other users' home directories, so violations there are silently skipped, which can produce a false pass; (b) the MySQL Shell half (`$HOME/.mysqlsh/history.sql|.js|.py`, `\\option history.autoSave`) is not covered. CIS 1.3 is Linux/UNIX-only, so no Windows alternate is offered."
+    },
+    "1.4": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS 1.4 \u2014 Verify MYSQL_PWD is not in use by any running process. As root on the MySQL host run: `grep MYSQL_PWD /proc/*/environ` (one match for the grep process itself is expected). Any other match is a fail: it means MySQL credentials are held in clear text in a process environment. Remediate by moving unattended logins to MySQL Configuration Editor (.mylogin.cnf), X.509 certificate auth, or the MySQL Enterprise LDAP plugin with Kerberos/SASL. Attach the command output as evidence.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual",
+      "notes": "Reading /proc/<pid>/environ for processes owned by other users requires root, and the ssh_runner deny-list rejects sudo. Routed to manual per authoring rule 5."
+    },
+    "1.5": {
+      "runner_type": "linux_ssh",
+      "check_definition": {
+        "command": "getent passwd mysql",
+        "expect": {
+          "kind": "stdout_regex",
+          "expected": ":(/bin/false|/usr/bin/false|/sbin/nologin|/usr/sbin/nologin)\\s*$",
+          "value": ":(/bin/false|/usr/bin/false|/sbin/nologin|/usr/sbin/nologin)\\s*$"
+        },
+        "pass_message": "The mysql OS account has a non-interactive shell (/bin/false or nologin).",
+        "fail_message": "The mysql OS account has an interactive login shell (CIS: lack of output implies a fail).",
+        "applicable_host_families": [
+          "linux"
+        ],
+        "timeout_seconds": 20,
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "deterministic",
+      "notes": "Mirrors the CIS audit `getent passwd mysql | egrep \"^.*[\\/bin\\/false|\\/sbin\\/nologin]$\"`, with the CIS character-class typo corrected to a real alternation and /usr/sbin/nologin added for Debian/Ubuntu. Not applicable on Windows."
+    },
+    "1.6": {
+      "runner_type": "linux_ssh",
+      "check_definition": {
+        "command": "sh -c 'HITS=$(grep -l MYSQL_PWD /home/*/.bashrc /home/*/.bash_profile /home/*/.profile /root/.bashrc /root/.bash_profile /root/.profile /etc/profile /etc/environment 2>/dev/null ); if [ -z \"$HITS\" ]; then echo MYSQL_PWD_ABSENT; else echo MYSQL_PWD_PRESENT; fi'",
+        "expect": {
+          "kind": "stdout_contains",
+          "value": "MYSQL_PWD_ABSENT"
+        },
+        "pass_message": "MYSQL_PWD is not set in any readable login script.",
+        "fail_message": "MYSQL_PWD is set in one or more login scripts.",
+        "applicable_host_families": [
+          "linux",
+          "windows"
+        ],
+        "timeout_seconds": 20,
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live",
+        "windows_winrm": {
+          "command": "if ([Environment]::GetEnvironmentVariable('MYSQL_PWD','Machine') -or [Environment]::GetEnvironmentVariable('MYSQL_PWD','User')) { 'MYSQL_PWD_PRESENT' } else { 'MYSQL_PWD_ABSENT' }",
+          "shell": "powershell",
+          "expect": {
+            "kind": "stdout_contains",
+            "value": "MYSQL_PWD_ABSENT"
+          },
+          "pass_message": "MYSQL_PWD is not defined as a Machine or User environment variable.",
+          "fail_message": "MYSQL_PWD is defined as a persistent environment variable.",
+          "applicable_host_families": [
+            "windows"
+          ],
+          "_authored": "cis-mysql-ee-8.0",
+          "_verification": "unverified-live"
+        }
+      },
+      "authoring_class": "needs_human_review",
+      "notes": "Extends the CIS audit `grep MYSQL_PWD /home/*/.{bashrc,profile,bash_profile}` with /root and /etc/profile. Gap: home directories are commonly mode 700, so an unprivileged SSH account cannot read other users' dotfiles and the grep silently skips them \u2014 a pass can be an absence of evidence. Operator should re-run as root to confirm."
+    },
+    "1.7": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS 1.7 \u2014 Confirm MySQL runs inside a sandbox: at least ONE of (a) chroot: `cat /etc/mysql | egrep '(?<=^chroot=).+$'` returns a valid path different from datadir; (b) systemd: `systemctl status <mysqld>.service` shows a non-root Main PID owner; (c) Docker: `docker -v`, `docker images` shows a mysql image, and `docker ps` shows a running mysql container. If MySQL uses none of chroot, systemd, or Docker, this is a fail. Attach the output of whichever path applies.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual",
+      "notes": "Three-way OR across chroot / systemd / Docker. The Docker branch requires `sudo docker ...` and the systemd branch requires interpreting the Main PID owner; not expressible in a single unprivileged read-only command. Manual per authoring rules 5 and 7."
+    },
+    "10.1": {
+      "runner_type": "mysql_sql",
+      "check_definition": {
+        "sql": "SELECT @@GLOBAL.group_replication_ssl_mode",
+        "expect": {
+          "kind": "first_value_regex",
+          "expected": "(?i)^(REQUIRED|VERIFY_CA|VERIFY_IDENTITY)$"
+        },
+        "pass_message": "group_replication_ssl_mode requires SSL (REQUIRED, VERIFY_CA, or VERIFY_IDENTITY).",
+        "fail_message": "group_replication_ssl_mode is DISABLED or not set to an SSL-requiring value.",
+        "timeout_seconds": 15,
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "deterministic",
+      "notes": "CIS states DISABLED is a finding and REQUIRED / VERIFY_CA / VERIFY_IDENTITY indicate SSL is required. Applicability caveat: if the group_replication plugin is not installed the variable does not exist, the query returns zero rows, and the runner reports failed rather than not-applicable \u2014 scope this rule out for non-InnoDB-Cluster instances."
+    },
+    "10.2": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS 10.2 \u2014 Run `SELECT @@group_replication_ip_allowlist;` (8.0.22+) or `SELECT @@group_replication_ip_whitelist;` (pre-8.0.22). CIS recommendation: the result must be an explicit comma-separated allowlist of the IPv4/IPv6 addresses or host names approved to join the InnoDB Cluster (e.g. '203.0.113.0/24, 198.51.100.110'), not a permissive default. Confirm the returned list matches your approved cluster membership and attach the output.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual",
+      "notes": "CIS gives no fixed expected value \u2014 the allowlist contents are environment-specific. Manual per authoring rule 4."
+    },
+    "2.1.1": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS 2.1.1 \u2014 Confirm a documented MySQL backup policy and an actual backup schedule exist. CIS audit: check `crontab -l` (or the equivalent scheduler / backup product configuration) for a backup schedule covering all databases including the `mysql` schema. Attach the policy document reference and the schedule evidence.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual",
+      "notes": "Backup / policy rule \u2014 manual per authoring rule 6."
+    },
+    "2.1.2": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS 2.1.2 \u2014 Confirm backups are validated on a regular basis. CIS audit: review the reports of backup validation tests (restore tests). Provide the most recent validation report(s) and the documented cadence.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual",
+      "notes": "Backup validation evidence review \u2014 manual per authoring rule 6."
+    },
+    "2.1.4": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS 2.1.4 \u2014 Confirm backups are properly secured. CIS audit questions: are backup files or their directory world-readable (e.g. rw-r--r--)? Is the group mysql/backup-specific, and if not, are files non-group-readable? Are backups stored offsite and who has access? Are backups encrypted, where is the encryption key stored, and is it a guessable password? If MySQL Enterprise Backup is used, confirm the mysqlbackup command includes --encrypt-password; if it does not, the backup is unencrypted and this is a fail. Attach permissions listing and the backup command line.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual",
+      "notes": "Backup file permissions live on arbitrary (often offsite) storage and key custody is an interview question \u2014 manual per authoring rules 5 and 6."
+    },
+    "2.1.6": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS 2.1.6 \u2014 Confirm a formal Disaster Recovery plan exists for MySQL. CIS expects it to cover: replication topology in use (MySQL Cluster / group replication, Replica Sets / asynchronous replication, or both), a replica in a different data center and/or offsite backups, a stated Recovery Time Objective (RTO), whether the recovery site has equivalent capacity, use of delayed replicas, and network (default) plus at-rest encryption. Attach the DR plan and the most recent DR test result.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual",
+      "notes": "DR plan document review \u2014 manual per authoring rule 6."
+    },
+    "2.1.7": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS 2.1.7 \u2014 Confirm the backup set includes all of the following where in use: edited configuration files (my.cnf and any included files), the SET PERSIST file (mysqld-auto.cnf), key management / keyring files (KMIP or other KMS material), audit log files if not handled by another mechanism, SSL certificates and keys, User Defined Functions (UDFs), and source code for any customizations. Attach the backup job definition showing these paths.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual",
+      "notes": "Backup scope review \u2014 manual per authoring rule 6."
+    },
+    "2.10": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS 2.10 \u2014 Run `SELECT user, host FROM mysql.user WHERE length(user_attributes->\"$.additional_password\")>0;` to list accounts currently holding a dual (retained) password. CIS: if an account still has a dual password AND its password-rotation process has already completed, this is a fail \u2014 the old password should have been discarded with `ALTER USER ... DISCARD OLD PASSWORD`. For each account returned, state whether its rotation is complete and attach the query output.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual",
+      "notes": "Pass/fail depends on whether each account's rotation has completed, which is external state the database cannot report. Manual per authoring rules 6 and 7."
+    },
+    "2.11": {
+      "runner_type": "mysql_sql",
+      "check_definition": {
+        "sql": "SELECT user, host FROM mysql.user WHERE user IN ('mysql.infoschema','mysql.session','mysql.sys') AND account_locked <> 'Y'",
+        "expect": {
+          "kind": "row_count_zero"
+        },
+        "pass_message": "All MySQL reserved accounts are locked (account_locked = Y).",
+        "fail_message": "One or more MySQL reserved accounts are not locked.",
+        "timeout_seconds": 15,
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "needs_human_review",
+      "notes": "CIS 2.11 says 'Accounts not in use and MySQL Reserved accounts should show as locked (Y)'. Only the reserved-account half is machine-decidable; determining which non-reserved accounts are 'not in use' requires the account owner inventory. Operator must additionally review `SELECT user, host, account_locked FROM mysql.user;` and lock dormant accounts."
+    },
+    "2.12": {
+      "runner_type": "mysql_sql",
+      "check_definition": {
+        "sql": "SELECT @@GLOBAL.block_encryption_mode",
+        "expect": {
+          "kind": "first_value_regex",
+          "expected": "(?i)^aes-256-(ecb|cbc|cfb1|cfb8|cfb128|ofb)$"
+        },
+        "pass_message": "block_encryption_mode uses a 256-bit AES mode.",
+        "fail_message": "block_encryption_mode is not aes-256-* (CIS: any other value is a fail).",
+        "timeout_seconds": 15,
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "deterministic",
+      "notes": "CIS states 'A value other than aes-256-* is a fail' where * is one of ECB, CBC, CFB1, CFB8, CFB128, OFB. The CIS description prefers CBC specifically, but the audit prose accepts any aes-256-* mode, so the check follows the audit."
+    },
+    "2.13": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS 2.13 \u2014 Run `SELECT PLUGIN_NAME, PLUGIN_STATUS FROM INFORMATION_SCHEMA.PLUGINS WHERE PLUGIN_NAME LIKE 'auth%';` and `SELECT user, host, plugin FROM mysql.user WHERE plugin = 'auth_socket';`. CIS: this is a fail if auth_socket is enabled and your organization does not permit the feature, or if any listed account has a host other than localhost, or if an unauthorized user is listed. Confirm your organizational position on auth_socket and that every listed account is approved and localhost-only. Attach both query outputs.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual",
+      "notes": "Pass/fail turns on organizational policy ('if the organization does not allow use of this feature') and on an authorized-user list. Manual per authoring rules 4 and 7."
+    },
+    "2.14": {
+      "runner_type": "mysql_sql",
+      "check_definition": {
+        "sql": "SELECT @@GLOBAL.bind_address",
+        "expect": {
+          "kind": "first_value_regex",
+          "expected": "^(?!\\*$)(?!0\\.0\\.0\\.0$)(?!::$)(?!$).+"
+        },
+        "pass_message": "bind_address is set to a specific address rather than a wildcard.",
+        "fail_message": "bind_address is unset or bound to a wildcard (*, 0.0.0.0, ::) so MySQL accepts TCP/IP on all interfaces.",
+        "timeout_seconds": 15,
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "needs_human_review",
+      "notes": "The literal CIS audit is 'No rows returned implies a fail', which always passes on 8.0 because bind_address always has a value (default *). The check was tightened to reject wildcard binds, which is what the CIS description and rationale actually require ('If not configured to a specific IP all IPs for this server can be used'). CIS states no specific address, so the operator must confirm the configured address is the intended one, and must scope this rule out where multi-interface binding is a documented requirement."
+    },
+    "2.15": {
+      "runner_type": "mysql_sql",
+      "check_definition": {
+        "sql": "SELECT IF(@@global.tls_version REGEXP '(^|,)TLSv1(,|$)|(^|,)TLSv1[.]1(,|$)', 'INSECURE_TLS_ENABLED', 'TLS_OK') AS tls_state",
+        "expect": {
+          "kind": "first_value_equals",
+          "expected": "TLS_OK"
+        },
+        "pass_message": "tls_version does not include TLSv1 or TLSv1.1.",
+        "fail_message": "tls_version still accepts TLSv1 and/or TLSv1.1 (CIS: this is a fail).",
+        "timeout_seconds": 15,
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "deterministic",
+      "notes": "CIS: 'If the list includes TLSv1 and/or TLSv1.1, this is a fail.' Character class [.] is used instead of a backslash escape to keep the SQL literal free of escaping. The second half of the CIS audit (`performance_schema.status_by_thread` for live connections still negotiating TLSv1/1.1) is not covered \u2014 that is a point-in-time observation of connected clients."
+    },
+    "2.16": {
+      "runner_type": "mysql_sql",
+      "check_definition": {
+        "sql": "SELECT user, host, ssl_type FROM mysql.user WHERE user NOT IN ('mysql.infoschema','mysql.session','mysql.sys') AND ssl_type NOT IN ('X509','SPECIFIED')",
+        "expect": {
+          "kind": "row_count_zero"
+        },
+        "pass_message": "All non-reserved accounts require a client-side certificate (ssl_type X509 or SPECIFIED).",
+        "fail_message": "One or more non-reserved accounts do not require a client-side certificate.",
+        "timeout_seconds": 15,
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "needs_human_review",
+      "notes": "CIS 2.16 audit prose is descriptive ('If ssl_type returns X509 or SSL, client-side certificate details must be provided to connect') and never states an explicit pass threshold or an exclusion set. The check asserts every non-reserved account requires X509/SPECIFIED, which is stricter than the prose and will flag legitimately certificate-free local/socket accounts. Operator must confirm the intended scope, and note the overlap with 8.2 which limits the same assertion to remote hosts."
+    },
+    "2.17": {
+      "runner_type": "mysql_sql",
+      "check_definition": {
+        "sql": "SELECT IF((SELECT @@GLOBAL.ssl_cipher) = 'ECDHE-ECDSA-AES128-GCM-SHA256' AND (SELECT @@GLOBAL.tls_ciphersuites) = 'TLS_AES_256_GCM_SHA384', 'PASS', 'FAIL') AS cipher_state",
+        "expect": {
+          "kind": "first_value_equals",
+          "expected": "PASS"
+        },
+        "pass_message": "ssl_cipher and tls_ciphersuites match the CIS-approved suites.",
+        "fail_message": "ssl_cipher is not ECDHE-ECDSA-AES128-GCM-SHA256 and/or tls_ciphersuites is not TLS_AES_256_GCM_SHA384.",
+        "timeout_seconds": 15,
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "deterministic",
+      "notes": "CIS states the exact values: 'If ssl_cipher is not set to ECDHE-ECDSA-AES128-GCM-SHA256 or tls_ciphersuites is not set to TLS_AES_256_GCM_SHA384, this is a fail.' Both values are asserted exactly as written."
+    },
+    "2.18": {
+      "runner_type": "mysql_sql",
+      "check_definition": {
+        "sql": "SELECT IF((SELECT COUNT(*) FROM information_schema.PLUGINS WHERE PLUGIN_NAME IN ('CONNECTION_CONTROL','CONNECTION_CONTROL_FAILED_LOGIN_ATTEMPTS') AND PLUGIN_STATUS = 'ACTIVE') = 2 AND (SELECT CAST(@@GLOBAL.connection_control_failed_connections_threshold AS SIGNED)) >= 5 AND (SELECT CAST(@@GLOBAL.connection_control_min_connection_delay AS SIGNED)) >= 60000 AND (SELECT CAST(@@GLOBAL.connection_control_max_connection_delay AS SIGNED)) >= 1920000, 'PASS', 'FAIL') AS connection_control_state",
+        "expect": {
+          "kind": "first_value_equals",
+          "expected": "PASS"
+        },
+        "pass_message": "Both connection_control plugins are ACTIVE and the delay thresholds meet the CIS minimums.",
+        "fail_message": "connection_control plugins are not both ACTIVE, or threshold/min-delay/max-delay are below the CIS minimums (5 / 60000 ms / 1920000 ms).",
+        "timeout_seconds": 15,
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "deterministic",
+      "notes": "All four thresholds are CIS-stated verbatim: both plugins ACTIVE, connection_control_failed_connections_threshold >= 5, connection_control_min_connection_delay >= 60000 ms, connection_control_max_connection_delay >= 1920000 ms (and not 0). Gap: the final CIS step \u2014 per-account FAILED_LOGIN_ATTEMPTS >= 12 via `JSON_EXTRACT(user_attributes,'$.Password_locking.failed_login_attempts')` \u2014 is NOT covered here because JSON/NULL coercion across accounts is fragile; run it as a companion review query."
+    },
+    "2.19": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS 2.19 \u2014 Confirm MySQL uses a FIPS 140-2 certified OpenSSL. Steps: (1) `ldd` the mysqld executable and confirm libssl resolves to the OS OpenSSL, not a library bundled inside MySQL's own lib directory (a bundled OpenSSL is not FIPS certified \u2014 common on Windows, macOS, and generic Linux tarballs). (2) For OpenSSL < 3.0: `SHOW VARIABLES LIKE '%fips%'` or `SELECT @@ssl_fips_mode` \u2014 1 (ON) or 2 (STRICT) means FIPS mode is enabled, 0 (OFF) means it is not available. (3) For OpenSSL 3.0+: `fips-mode-setup -check` must report FIPS mode is enabled, `openssl version` must show 3.0+, and `openssl list -provider` must list FIPS. (4) Negative test: a connection forcing --tls-ciphersuites=TLS_CHACHA20_POLY1305_SHA256 must fail, and `SELECT md5(8)` must return all zeroes. Attach outputs.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual",
+      "notes": "Multi-step, OS- and OpenSSL-version-dependent, and requires ldd plus system-administrator commands and a negative connection test. No single deterministic expected value exists. Manual per authoring rules 5, 6, and 7."
+    },
+    "2.2.1": {
+      "runner_type": "mysql_sql",
+      "check_definition": {
+        "sql": "SELECT @@GLOBAL.binlog_encryption",
+        "expect": {
+          "kind": "first_value_equals",
+          "expected": "ON"
+        },
+        "pass_message": "binlog_encryption is ON \u2014 binary and relay logs are encrypted at rest.",
+        "fail_message": "binlog_encryption is not ON.",
+        "timeout_seconds": 15,
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "deterministic",
+      "notes": "CIS: 'Ensure it is set to ON.' Uses the same performance_schema.global_variables query the CIS audit specifies."
+    },
+    "2.3": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS 2.3 \u2014 Confirm the machine running MySQL is dedicated: verify there are no other roles enabled for the underlying operating system and that no additional applications or services unrelated to the proper operation of the MySQL server software are installed (security and operational tooling per policy excepted). Attach the installed-package/service inventory used for the review.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual",
+      "notes": "'No unrelated applications or services' has no enumerable expected state. Manual per authoring rules 6 and 7."
+    },
+    "2.4": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS 2.4 \u2014 Confirm passwords are never supplied on the command line. Check the process/task list and the shell/command history for visible passwords (e.g. `mysql -u admin -p password`, `mysqlsh -u admin -p password`). Confirm operators instead use -p with no argument and an interactive prompt, a properly secured .my.cnf, encrypted .mylogin.cnf, MySQL Shell \\connect, or a pluggable password store/keychain. Attach the evidence reviewed.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual",
+      "notes": "Process list and shell history inspection across all admin accounts is a practice review requiring privileged, point-in-time observation. Manual per authoring rules 5 and 6."
+    },
+    "2.5": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS 2.5 \u2014 Confirm no database username is reused. Run: `SELECT host, user, plugin, IF(plugin = 'mysql_native_password', 'WEAK SHA1', 'STRONG SHA2') AS HASHTYPE FROM mysql.user WHERE user NOT IN ('mysql.infoschema','mysql.session','mysql.sys') AND plugin NOT LIKE 'auth%' AND plugin <> 'mysql_no_login' AND LENGTH(authentication_string) > 0 ORDER BY plugin;`. Each account returned must map to exactly one of: a system account, a single person, or a single application. Attach the output annotated with the owner of each account.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual",
+      "notes": "Requires an external account-to-owner inventory. Manual per authoring rules 6 and 7."
+    },
+    "2.6": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS 2.6 \u2014 Confirm non-default, unique cryptographic material. Review all certificates and keys: they must be used only for MySQL and only for this one instance, and must not be MySQL auto-generated. CIS test: `cd <data_dir and/or ssl_cert>` then `openssl x509 -in server-cert.pem -subject -noout | grep Auto_Generated_Server_Certificate` \u2014 output such as 'subject= /CN=MySQL_Server_8.0.21_Auto_Generated_Server_Certificate' is a fail; no rows returned is a pass. Attach the openssl output for each certificate in use.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual",
+      "notes": "Certificates normally live inside the datadir (mode 750 mysql:mysql), so reading them needs root or the mysql account, and the 'not reused for other instances/purposes' half is an interview question. Manual per authoring rules 5 and 6."
+    },
+    "2.7": {
+      "runner_type": "mysql_sql",
+      "check_definition": {
+        "sql": "SELECT IF((SELECT CAST(@@GLOBAL.default_password_lifetime AS SIGNED)) <= 365 AND (SELECT COUNT(*) FROM mysql.user WHERE password_lifetime = 0 OR password_lifetime > 365) = 0, 'PASS', 'FAIL') AS password_lifetime_state",
+        "expect": {
+          "kind": "first_value_equals",
+          "expected": "PASS"
+        },
+        "pass_message": "Global default_password_lifetime is <= 365 and no account overrides it with 0 or a value > 365.",
+        "fail_message": "default_password_lifetime exceeds 365, or an account has password_lifetime = 0 (never expires) or > 365.",
+        "timeout_seconds": 15,
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "deterministic",
+      "notes": "Implements both CIS steps: global 'A value greater than 365 implies a fail', and the per-account query `WHERE password_lifetime = 0 OR password_lifetime > 365` where 'a lack of results implies compliance'. Note CIS 2.7 tolerates a global value of 0 ('not configured') while CIS 7.4 explicitly rejects 0 \u2014 7.4 enforces that separately, so do not reconcile them here."
+    },
+    "2.8": {
+      "runner_type": "mysql_sql",
+      "check_definition": {
+        "sql": "SELECT IF((SELECT CAST(@@GLOBAL.password_history AS SIGNED)) >= 5 AND (SELECT CAST(@@GLOBAL.password_reuse_interval AS SIGNED)) >= 365, 'PASS', 'FAIL') AS password_reuse_state",
+        "expect": {
+          "kind": "first_value_equals",
+          "expected": "PASS"
+        },
+        "pass_message": "password_history >= 5 and password_reuse_interval >= 365.",
+        "fail_message": "password_history < 5 and/or password_reuse_interval < 365 (0 means no policy is defined).",
+        "timeout_seconds": 15,
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "deterministic",
+      "notes": "CIS states both thresholds explicitly: 'The password_history should be greater than or equal to 5' and 'The value of password_reuse_interval should be greater than or equal to 365'."
+    },
+    "2.9": {
+      "runner_type": "mysql_sql",
+      "check_definition": {
+        "sql": "SELECT @@GLOBAL.password_require_current",
+        "expect": {
+          "kind": "first_value_equals",
+          "expected": "ON"
+        },
+        "pass_message": "password_require_current is ON.",
+        "fail_message": "password_require_current is not ON.",
+        "timeout_seconds": 15,
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "deterministic",
+      "notes": "CIS: 'The return value should be ON.'"
+    },
+    "3.1": {
+      "runner_type": "linux_ssh",
+      "check_definition": {
+        "command": "sh -c 'D=$(grep -h -E \"^[[:space:]]*datadir[[:space:]]*=\" /etc/my.cnf /etc/mysql/my.cnf /etc/mysql/mysql.conf.d/mysqld.cnf /etc/mysql/conf.d/*.cnf 2>/dev/null | tail -n 1 | cut -d= -f2 | tr -d \" \\t\"); [ -z \"$D\" ] && D=/var/lib/mysql; ls -ld \"$D\"'",
+        "expect": {
+          "kind": "stdout_regex",
+          "expected": "^drwxr-x---\\s+[0-9]+\\s+mysql\\s+mysql\\b",
+          "value": "^drwxr-x---\\s+[0-9]+\\s+mysql\\s+mysql\\b"
+        },
+        "pass_message": "datadir is mode 750 and owned by mysql:mysql.",
+        "fail_message": "datadir is not drwxr-x--- mysql mysql (CIS: lack of matching output implies a fail).",
+        "applicable_host_families": [
+          "linux",
+          "windows"
+        ],
+        "timeout_seconds": 20,
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live",
+        "windows_winrm": {
+          "command": "$d = 'C:\\ProgramData\\MySQL\\MySQL Server 8.0\\Data'; if (-not (Test-Path $d)) { 'DATADIR_NOT_FOUND' } else { $ids = (Get-Acl $d).Access | ForEach-Object { $_.IdentityReference.Value }; if ($ids -match 'Everyone|BUILTIN.Users|Authenticated Users') { 'DATADIR_ACL_BROAD' } else { 'DATADIR_ACL_RESTRICTED' } }",
+          "shell": "powershell",
+          "expect": {
+            "kind": "stdout_contains",
+            "value": "DATADIR_ACL_RESTRICTED"
+          },
+          "pass_message": "Windows datadir ACL does not grant Everyone / BUILTIN\\Users / Authenticated Users.",
+          "fail_message": "Windows datadir ACL grants a broad principal, or the default datadir path was not found.",
+          "applicable_host_families": [
+            "windows"
+          ],
+          "_authored": "cis-mysql-ee-8.0",
+          "_verification": "unverified-live"
+        }
+      },
+      "authoring_class": "deterministic",
+      "notes": "CIS greps `ls -ld <datadir>` for 'drwxr-x---.*mysql.*mysql', so mode 750 and mysql:mysql ownership are CIS-stated. Because the SSH runner cannot chain a SQL lookup, datadir is discovered from my.cnf with a /var/lib/mysql fallback; an unusual datadir set only via mysqld-auto.cnf or a non-standard include path would not be found. The Windows alternate assumes the default 8.0 ProgramData datadir and reports ACL breadth rather than a POSIX mode."
+    },
+    "3.10": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS 3.10 \u2014 Secure the MySQL Keyring. First confirm a keyring plugin or keyring file plugin IS configured (if none is configured, this is a fail). Then, for the plugin in use, locate its path from /etc/mysql/my.cnf and verify permissions are 750 mysql:mysql: keyring_file_data (keyring_file plugin \u2014 least secure, pre-production only); keyring_encrypted_file_data (plus a secure method for provisioning its passphrase); keyring_okv (OKV/KMIP); keyring_oci_key_file (OCI Vault); keyring_hashicorp_store_path (HashiCorp Vault); keyring_aws_conf_file and keyring_aws_data_file (AWS KMS). Attach the my.cnf grep output and the `ls -l` for each path.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual",
+      "notes": "Six mutually exclusive plugin variants, each with a config-derived path whose permissions must be inspected (typically inside the 750 mysql:mysql datadir, so root is required), plus an attestation about passphrase provisioning. Manual per authoring rules 5 and 7."
+    },
+    "3.2": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS 3.2 \u2014 Ensure log_bin_basename files have appropriate permissions. (1) Run `SHOW VARIABLES LIKE 'log_bin_basename';` to get the path. (2) As root, list `<log_bin_basename>.*` and confirm every file is mode 660 owned by mysql:mysql \u2014 CIS's egrep for non-compliant entries must return nothing. Remediate with `chmod 660 <log file>` and `chown mysql:mysql <log file>`. Attach the variable value and the `ls -l` output.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual",
+      "notes": "Binary logs live inside the datadir, which CIS 3.1 requires to be mode 750 mysql:mysql \u2014 an unprivileged SSH account cannot list it, and the ssh_runner rejects sudo. Manual per authoring rule 5."
+    },
+    "3.3": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS 3.3 \u2014 Ensure log_error has appropriate permissions. (1) Run `SHOW VARIABLES LIKE 'log_error';` to get the path. (2) As root, `ls -l <log_error>` and confirm it matches `-rw------- ... mysql mysql` (mode 600, owner mysql:mysql) \u2014 lack of matching output is a fail. Remediate with `chmod 600 <log file>` and `chown mysql:mysql <log file>`. Attach both outputs.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual",
+      "notes": "The error log path is instance-specific (datadir, /var/log/mysql, or an OS-specific location) and its parent directory is typically not world-readable, so a reliable check requires root. Manual per authoring rule 5."
+    },
+    "3.4": {
+      "runner_type": "mysql_sql",
+      "check_definition": {
+        "sql": "SELECT @@GLOBAL.slow_query_log",
+        "expect": {
+          "kind": "first_value_equals",
+          "expected": "OFF"
+        },
+        "pass_message": "slow_query_log is OFF, which CIS identifies as the preferred state.",
+        "fail_message": "slow_query_log is enabled \u2014 the slow query log file permissions must then be 660 mysql:mysql.",
+        "timeout_seconds": 15,
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "needs_human_review",
+      "notes": "CIS says 'Best for the slow query log to be disabled indicated by OFF', and the remediation is `SET PERSIST slow_query_log = OFF`, so OFF is a CIS-stated value. But CIS also allows a pass when the log is ENABLED and `<slow_query_log_file>.*` is 660 mysql:mysql \u2014 that file lives in the datadir and needs root, so this check will report a fail for a legitimately-enabled-and-hardened configuration. It also cannot verify that stale slow-log files were removed after disabling. Operator must review those two cases."
+    },
+    "3.5": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS 3.5 \u2014 Ensure relay_log_basename files have appropriate permissions. (1) Run `SHOW VARIABLES LIKE 'relay_log_basename';` to get the path. (2) As root, list `<relay_log_basename>.*` and confirm every file is mode 660 owned by mysql:mysql \u2014 CIS's egrep for non-compliant entries must return nothing. Remediate with `chmod 660 <log file>` and `chown mysql:mysql <log file>`. Attach both outputs.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual",
+      "notes": "Relay logs live inside the datadir (mode 750 mysql:mysql), so listing them needs root and the ssh_runner rejects sudo. Manual per authoring rule 5."
+    },
+    "3.6": {
+      "runner_type": "mysql_sql",
+      "check_definition": {
+        "sql": "SELECT @@GLOBAL.general_log",
+        "expect": {
+          "kind": "first_value_equals",
+          "expected": "OFF"
+        },
+        "pass_message": "general_log is OFF, which CIS identifies as the most secure state.",
+        "fail_message": "general_log is enabled \u2014 general_log_file must then be mode 600 owned by mysql:mysql.",
+        "timeout_seconds": 15,
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "needs_human_review",
+      "notes": "CIS: 'By default the general_log is disabled (0 or OFF). It's most secure to disable the general_log', with remediation `SET PERSIST @@GENERAL_LOG=OFF` \u2014 so OFF is CIS-stated. CIS still allows a pass when general_log is ON and `<general_log_file>` is `-rw------- mysql mysql`; that file inspection needs root. CIS also requires removing stale general log files after disabling, which this check cannot see. Operator must review both."
+    },
+    "3.7": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS 3.7 \u2014 Ensure SSL key files have appropriate permissions. (1) Locate the material: `SELECT * FROM performance_schema.global_variables WHERE REGEXP_LIKE(VARIABLE_NAME,'^.*ssl_(ca|capath|cert|crl|crlpath|key)$') AND VARIABLE_VALUE <> '';` (note: null mysqlx_% values inherit the classic protocol equivalents). (2) As root, `ls -l <ssl_file>` for each path and confirm mode 400 owned by mysql:mysql \u2014 CIS's egrep for non-compliant entries must return nothing. Remediate with `chown mysql:mysql <ssl_file>` and `chmod 400 <ssl_file>`. Attach both outputs.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual",
+      "notes": "SSL keys default into the datadir (mode 750 mysql:mysql) and mode-400 files are unreadable to anyone but the owner, so verification needs root. Manual per authoring rule 5."
+    },
+    "3.8": {
+      "runner_type": "linux_ssh",
+      "check_definition": {
+        "command": "sh -c 'for d in /usr/lib/mysql/plugin /usr/lib64/mysql/plugin /usr/local/mysql/lib/plugin /usr/lib/mysql/plugin64; do [ -d \"$d\" ] && ls -ld \"$d\"; done'",
+        "expect": {
+          "kind": "stdout_regex",
+          "expected": "^dr-xr-x(---|r--)",
+          "value": "^dr-xr-x(---|r--)"
+        },
+        "pass_message": "plugin_dir permissions are 550 or 554 as CIS requires.",
+        "fail_message": "plugin_dir is not dr-xr-x--- or dr-xr-xr-- (CIS: lack of matching output implies a fail).",
+        "applicable_host_families": [
+          "linux"
+        ],
+        "timeout_seconds": 20,
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "deterministic",
+      "notes": "CIS greps `ls -ld <plugin_dir>` for 'dr-xr-x---' or 'dr-xr-xr--' and notes 'Permissions are intended to be either 550 or 554', so the mode set is CIS-stated. Because the SSH runner cannot chain `SHOW VARIABLES WHERE variable_name = 'plugin_dir'`, the common plugin_dir locations are probed instead. The CIS remediation additionally expects mysql:mysql ownership, which the CIS audit grep does not assert and this check therefore does not assert either \u2014 review ownership in the raw output."
+    },
+    "3.9": {
+      "runner_type": "mysql_sql",
+      "check_definition": {
+        "sql": "SELECT @@GLOBAL.audit_log_file AND VARIABLE_VALUE <> ''",
+        "expect": {
+          "kind": "row_count_nonzero"
+        },
+        "pass_message": "audit_log_file is defined, so MySQL Enterprise Audit is installed.",
+        "fail_message": "audit_log_file returned no value \u2014 auditing is not installed (CIS: this is a fail).",
+        "timeout_seconds": 15,
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "needs_human_review",
+      "notes": "Covers only the first CIS assertion: 'If no value is returned, auditing is not installed, and this is a fail.' The main assertion \u2014 `ls -l <audit_log_file>` matching mode 660 owned by mysql:mysql, where no results is a fail \u2014 needs root because the audit log defaults into the datadir (CIS notes a bare filename resolves against datadir). Operator must verify the file permissions separately."
+    },
+    "4.1": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS 4.1 \u2014 Confirm the latest security patches are applied. Run `SHOW VARIABLES WHERE Variable_name LIKE \"version\";` and compare the reported version against current Oracle MySQL security announcements (and the OS vendor advisories if OS packages are used). Confirm the instance is on a supported, fully patched release. Attach the version output and the advisory comparison.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual",
+      "notes": "Requires comparison against an external, continuously changing advisory feed \u2014 no fixed expected version exists. Manual per authoring rules 4 and 7."
+    },
+    "4.10": {
+      "runner_type": "mysql_sql",
+      "check_definition": {
+        "sql": "SELECT VARIABLE_NAME FROM performance_schema.global_variables WHERE VARIABLE_NAME IN ('audit_log_encryption','binlog_encryption','innodb_redo_log_encrypt','innodb_undo_log_encrypt','table_encryption_privilege_check') AND UPPER(VARIABLE_VALUE) NOT IN ('ON','1','AES','Y')",
+        "expect": {
+          "kind": "row_count_zero"
+        },
+        "pass_message": "All present at-rest encryption variables are enabled (ON / AES).",
+        "fail_message": "One or more at-rest encryption variables are OFF or NONE.",
+        "timeout_seconds": 15,
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "needs_human_review",
+      "notes": "Covers the CIS global_variables step ('OFF or NONE indicate at-rest encryption is not enabled') for the five variables CIS names. Three gaps: (a) a variable that does not exist on this build \u2014 audit_log_encryption without MySQL Enterprise Audit, for example \u2014 is simply absent from the result and silently passes; (b) the CIS tablespace step `SELECT NAME, ENCRYPTION FROM information_schema.INNODB_TABLESPACES WHERE NAME NOT IN ('innodb_temporary','sys/sys_config')`, where any ENCRYPTION = 'N' is a fail, is not covered; (c) the CIS requirement that MySQL Enterprise Backup runs with --encrypt-password is an out-of-band attestation. Operator must close all three."
+    },
+    "4.2": {
+      "runner_type": "mysql_sql",
+      "check_definition": {
+        "sql": "SELECT SCHEMA_NAME FROM information_schema.SCHEMATA WHERE LOWER(SCHEMA_NAME) IN ('employees','world','world_x','sakila','airportdb','menagerie')",
+        "expect": {
+          "kind": "row_count_zero"
+        },
+        "pass_message": "No CIS-listed example database is present.",
+        "fail_message": "One or more CIS-listed example databases are present on this server.",
+        "timeout_seconds": 15,
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "deterministic",
+      "notes": "Uses exactly the six example database names CIS enumerates: employees, world, world_x, sakila, airportdb, menagerie. No additional names were invented. Note CIS's broader intent is a review of all non-system schemas on a production server, so a differently named sample dataset will not be caught."
+    },
+    "4.3": {
+      "runner_type": "linux_ssh",
+      "check_definition": {
+        "command": "sh -c 'HITS=$(my_print_defaults mysqld 2>/dev/null | grep -i -- \"allow-suspicious-udfs\"; ps -ww -eo args 2>/dev/null | grep \"[m]ysqld\" | grep -- \"--allow-suspicious-udfs\"); if [ -z \"$HITS\" ]; then echo SUSPICIOUS_UDFS_ABSENT; else echo SUSPICIOUS_UDFS_PRESENT; fi'",
+        "expect": {
+          "kind": "stdout_contains",
+          "value": "SUSPICIOUS_UDFS_ABSENT"
+        },
+        "pass_message": "allow-suspicious-udfs is absent from both the MySQL option files and the mysqld command line.",
+        "fail_message": "allow-suspicious-udfs is set in the MySQL configuration or on the mysqld command line.",
+        "applicable_host_families": [
+          "linux",
+          "windows"
+        ],
+        "timeout_seconds": 20,
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live",
+        "windows_winrm": {
+          "command": "$f = 'C:\\ProgramData\\MySQL\\MySQL Server 8.0\\my.ini'; if (-not (Test-Path $f)) { 'MYINI_NOT_FOUND' } elseif (Select-String -Path $f -Pattern 'allow-suspicious-udfs' -Quiet) { 'SUSPICIOUS_UDFS_PRESENT' } else { 'SUSPICIOUS_UDFS_ABSENT' }",
+          "shell": "powershell",
+          "expect": {
+            "kind": "stdout_contains",
+            "value": "SUSPICIOUS_UDFS_ABSENT"
+          },
+          "pass_message": "allow-suspicious-udfs is absent from my.ini.",
+          "fail_message": "allow-suspicious-udfs is present in my.ini, or my.ini was not found at the default path.",
+          "applicable_host_families": [
+            "windows"
+          ],
+          "_authored": "cis-mysql-ee-8.0",
+          "_verification": "unverified-live"
+        }
+      },
+      "authoring_class": "deterministic",
+      "notes": "Implements both CIS steps: `my_print_defaults mysqld | grep allow-suspicious-udfs` where 'no results returned is a pass', plus the requirement that --allow-suspicious-udfs is not on the mysqld start-up command line. my_print_defaults resolves the full option-file chain; if the binary is not on PATH the command-line half still applies."
+    },
+    "4.4": {
+      "runner_type": "mysql_sql",
+      "check_definition": {
+        "sql": "SELECT @@GLOBAL.local_infile",
+        "expect": {
+          "kind": "first_value_regex",
+          "expected": "(?i)^(OFF|0)$"
+        },
+        "pass_message": "local_infile is disabled (0/OFF).",
+        "fail_message": "local_infile is enabled.",
+        "timeout_seconds": 15,
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "needs_human_review",
+      "notes": "CIS 4.4 is conditional: 'If clients are older than 8.0.21 or if local_infile is not in use, ensure the value returned is 0.' The check asserts local_infile = 0, which is the CIS-stated value, but the precondition \u2014 client/connector versions gathered from `mysql --version`, `mysqlsh --version`, and connector library version calls \u2014 cannot be read from the server. If every client is 8.0.21+ and local_infile is genuinely required, CIS instead expects the client-side hardening (--load-data-local-dir plus --ssl-mode=VERIFY_IDENTITY); operator must confirm which branch applies."
+    },
+    "4.5": {
+      "runner_type": "linux_ssh",
+      "check_definition": {
+        "command": "sh -c 'HITS=$(my_print_defaults mysqld 2>/dev/null | grep -i -- \"skip-grant-tables\"; ps -ww -eo args 2>/dev/null | grep \"[m]ysqld\" | grep -- \"--skip-grant-tables\"); if [ -z \"$HITS\" ]; then echo SKIP_GRANT_TABLES_ABSENT; else echo SKIP_GRANT_TABLES_PRESENT; fi'",
+        "expect": {
+          "kind": "stdout_contains",
+          "value": "SKIP_GRANT_TABLES_ABSENT"
+        },
+        "pass_message": "skip-grant-tables is not enabled in the MySQL configuration or on the mysqld command line.",
+        "fail_message": "skip-grant-tables is present in the MySQL configuration or on the mysqld command line \u2014 the privilege system is bypassed.",
+        "applicable_host_families": [
+          "linux",
+          "windows"
+        ],
+        "timeout_seconds": 20,
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live",
+        "windows_winrm": {
+          "command": "$f = 'C:\\ProgramData\\MySQL\\MySQL Server 8.0\\my.ini'; if (-not (Test-Path $f)) { 'MYINI_NOT_FOUND' } elseif (Select-String -Path $f -Pattern 'skip.grant.tables' -Quiet) { 'SKIP_GRANT_TABLES_PRESENT' } else { 'SKIP_GRANT_TABLES_ABSENT' }",
+          "shell": "powershell",
+          "expect": {
+            "kind": "stdout_contains",
+            "value": "SKIP_GRANT_TABLES_ABSENT"
+          },
+          "pass_message": "skip-grant-tables is absent from my.ini.",
+          "fail_message": "skip-grant-tables is present in my.ini, or my.ini was not found at the default path.",
+          "applicable_host_families": [
+            "windows"
+          ],
+          "_authored": "cis-mysql-ee-8.0",
+          "_verification": "unverified-live"
+        }
+      },
+      "authoring_class": "deterministic",
+      "notes": "CIS audit is 'search the MySQL configuration for skip-grant-tables and ensure it is set to FALSE'. Absence is treated as compliant (the option is off by default and has no false form in practice); the mysqld command line is checked too since the option is most often passed there. The Windows alternate uses the regex 'skip.grant.tables' rather than the literal hyphenated option name because the winrm_runner safety filter reads 'grant-tables' as a Grant-* mutating cmdlet and would reject the command."
+    },
+    "4.6": {
+      "runner_type": "mysql_sql",
+      "check_definition": {
+        "sql": "SELECT @@GLOBAL.have_symlink",
+        "expect": {
+          "kind": "first_value_equals",
+          "expected": "DISABLED"
+        },
+        "pass_message": "have_symlink is DISABLED \u2014 symbolic link support is off.",
+        "fail_message": "have_symlink is not DISABLED.",
+        "timeout_seconds": 15,
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "deterministic",
+      "notes": "CIS: 'Ensure the Value returned is DISABLED.' Caveat: have_symlink was deprecated in the 8.0 series and removed in later majors \u2014 on a build where the variable is absent the query returns zero rows and the runner reports failed rather than not-applicable."
+    },
+    "4.7": {
+      "runner_type": "mysql_sql",
+      "check_definition": {
+        "sql": "SELECT PLUGIN_NAME FROM information_schema.plugins WHERE PLUGIN_NAME = 'daemon_memcached'",
+        "expect": {
+          "kind": "row_count_zero"
+        },
+        "pass_message": "The daemon_memcached plugin is not installed.",
+        "fail_message": "The daemon_memcached plugin is installed.",
+        "timeout_seconds": 15,
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "deterministic",
+      "notes": "CIS: 'Ensure that no rows are returned.'"
+    },
+    "4.8": {
+      "runner_type": "mysql_sql",
+      "check_definition": {
+        "sql": "SELECT IF(@@global.secure_file_priv IS NULL OR @@global.secure_file_priv <> '', 'PASS', 'FAIL') AS secure_file_priv_state",
+        "expect": {
+          "kind": "first_value_equals",
+          "expected": "PASS"
+        },
+        "pass_message": "secure_file_priv is NULL (feature disabled) or set to a path.",
+        "fail_message": "secure_file_priv is an empty string, which removes the import/export path restriction entirely.",
+        "timeout_seconds": 15,
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "deterministic",
+      "notes": "CIS: 'The Value should either contain NULL (thus is disabled entirely) or a valid path. If set to an empty string this is a fail.' @@global is used rather than performance_schema.global_variables because the NULL state is represented unreliably as a string in that table. Whether the configured path 'contains only resources expected to be loaded by MySQL' is not machine-verifiable."
+    },
+    "4.9": {
+      "runner_type": "mysql_sql",
+      "check_definition": {
+        "sql": "SELECT @@global.sql_mode AS sql_mode",
+        "expect": {
+          "kind": "first_value_contains",
+          "expected": "STRICT_ALL_TABLES"
+        },
+        "pass_message": "sql_mode contains STRICT_ALL_TABLES.",
+        "fail_message": "sql_mode does not contain STRICT_ALL_TABLES (CIS: this is a fail).",
+        "timeout_seconds": 15,
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "deterministic",
+      "notes": "CIS: 'If STRICT_ALL_TABLES is not in the list returned, this is a fail.' first_value_contains is case-sensitive and sql_mode is reported in upper case by MySQL."
+    },
+    "5.1": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS 5.1 \u2014 Run `SELECT * FROM information_schema.user_privileges WHERE grantee NOT LIKE ('\\'mysql.%localhost\\'');` (this form ignores MySQL internal reserved accounts). Confirm every grantee returned is an administrative user holding only the minimal privileges required for its role. List any non-administrative grantee and the REVOKE issued. Attach the query output.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual",
+      "notes": "CIS asks the auditor to confirm returned grantees are administrative with minimal privileges. There is no CIS-defined list of administrative accounts, so any automated exclusion set would be invented. Manual per authoring rules 4 and 7."
+    },
+    "5.10": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS 5.10 \u2014 Run `SHOW PROCEDURE STATUS;` and `SHOW FUNCTION STATUS;` and inspect the Definer and Security type of each routine. If DEFINER is a powerful account, evaluate that account's permissions; if INVOKER, the routine runs with the executing user's rights. Review the bodies with `SHOW CREATE PROCEDURE <name>;` / `SHOW CREATE FUNCTION <name>;`, and use `SELECT * FROM information_schema.routines;` and `SELECT * FROM information_schema.parameters;` for detail. Confirm no routine unnecessarily escalates privileges. Attach the routine inventory with the DEFINER/security-type decision for each.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual",
+      "notes": "Requires code review of each routine body and a judgement about whether the DEFINER account is 'powerful'. Manual per authoring rules 6 and 7."
+    },
+    "5.11": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS 5.11 \u2014 Run `SELECT GRANTEE FROM INFORMATION_SCHEMA.USER_PRIVILEGES WHERE PRIVILEGE_TYPE = 'SET_ANY_DEFINER';`. Confirm only administrative users are returned. For each non-administrative grantee, issue `REVOKE SET_ANY_DEFINER ON *.* FROM '<user>';`. Attach the query output annotated with each grantee's administrative status.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual",
+      "notes": "'Ensure only administrative users are returned' has no CIS-defined administrative account list; automating it would require inventing an exclusion set. Manual per authoring rules 4 and 7."
+    },
+    "5.12": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS 5.12 \u2014 Run `SELECT GRANTEE FROM INFORMATION_SCHEMA.USER_PRIVILEGES WHERE PRIVILEGE_TYPE = 'ALLOW_NONEXISTENT_DEFINER';`. Confirm only administrative users are returned. CIS notes this privilege is often needed only temporarily during database migration and should be removed once the migration is complete. For each non-administrative grantee, issue `REVOKE ALLOW_NONEXISTENT_DEFINER ON *.* FROM '<user>';`. Attach the query output.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual",
+      "notes": "Same administrative-list problem as the other 5.x grant rules, plus a migration-window exception that only the operator knows. Manual per authoring rules 4 and 7."
+    },
+    "5.2": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS 5.2 \u2014 Run `SELECT GRANTEE FROM INFORMATION_SCHEMA.USER_PRIVILEGES WHERE PRIVILEGE_TYPE = 'FILE';`. Confirm only administrative users are returned. For each non-administrative grantee, issue `REVOKE FILE ON *.* FROM '<user>';`. Attach the query output annotated with each grantee's administrative status.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual",
+      "notes": "'Ensure only administrative users are returned' requires an administrative account inventory CIS does not define. Manual per authoring rules 4 and 7."
+    },
+    "5.3": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS 5.3 \u2014 Run `SELECT GRANTEE FROM INFORMATION_SCHEMA.USER_PRIVILEGES WHERE PRIVILEGE_TYPE = 'PROCESS';`. Confirm only administrative users are returned. For each non-administrative grantee, issue `REVOKE PROCESS ON *.* FROM '<user>';`. Attach the query output annotated with each grantee's administrative status.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual",
+      "notes": "CIS marks this recommendation Manual and it depends on an administrative account inventory. Manual per authoring rules 4 and 7."
+    },
+    "5.4": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS 5.4 \u2014 Run `SELECT GRANTEE FROM INFORMATION_SCHEMA.USER_PRIVILEGES WHERE PRIVILEGE_TYPE = 'SUPER';`. Confirm only administrative users are returned, and that even those have been migrated off SUPER to the minimal set of dynamic privileges (SUPER is deprecated in 8.0). For each non-administrative grantee, issue `REVOKE SUPER ON *.* FROM '<user>';`; for administrators, grant the specific dynamic privileges needed (e.g. BINLOG_ADMIN, SYSTEM_VARIABLES_ADMIN) and then revoke SUPER. Attach the query output.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual",
+      "notes": "Requires an administrative account inventory plus a judgement on the minimal dynamic-privilege replacement per administrator. Manual per authoring rules 4 and 7."
+    },
+    "5.5": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS 5.5 \u2014 Run `SELECT GRANTEE FROM INFORMATION_SCHEMA.USER_PRIVILEGES WHERE PRIVILEGE_TYPE = 'SHUTDOWN';`. Confirm only administrative users are returned. For each non-administrative grantee, issue `REVOKE SHUTDOWN ON *.* FROM '<user>';`. Attach the query output annotated with each grantee's administrative status.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual",
+      "notes": "CIS marks this recommendation Manual and it depends on an administrative account inventory. Manual per authoring rules 4 and 7."
+    },
+    "5.6": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS 5.6 \u2014 Run `SELECT GRANTEE FROM INFORMATION_SCHEMA.USER_PRIVILEGES WHERE PRIVILEGE_TYPE = 'CREATE USER';`. Confirm only administrative users are returned. For each non-administrative grantee, revoke the CREATE USER privilege on *.*. Attach the query output annotated with each grantee's administrative status.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual",
+      "notes": "CIS marks this recommendation Manual and it depends on an administrative account inventory. Secondary note for anyone later automating it: the mysql_sql runner's read-only filter rejects the literal token 'CREATE', so the predicate must be written as `PRIVILEGE_TYPE LIKE 'CREAT%USER'` rather than `= 'CREATE USER'`."
+    },
+    "5.7": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS 5.7 \u2014 Run `SELECT DISTINCT GRANTEE FROM INFORMATION_SCHEMA.USER_PRIVILEGES WHERE IS_GRANTABLE = 'YES';`. Confirm only administrative users are returned. For each non-administrative grantee, revoke the GRANT OPTION on *.*. Attach the query output annotated with each grantee's administrative status.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual",
+      "notes": "CIS marks this recommendation Manual and it depends on an administrative account inventory. Manual per authoring rules 4 and 7."
+    },
+    "5.8": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS 5.8 \u2014 Run `SELECT GRANTEE FROM INFORMATION_SCHEMA.USER_PRIVILEGES WHERE PRIVILEGE_TYPE = 'REPLICATION SLAVE';`. Confirm only accounts designated for replica use are granted this privilege. For every other grantee, issue `REVOKE REPLICATION SLAVE ON *.* FROM '<user>';`. Attach the query output annotated with the designated replica accounts.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual",
+      "notes": "Requires knowing which accounts are designated replica users \u2014 external inventory. Manual per authoring rules 4 and 7."
+    },
+    "5.9": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS 5.9 \u2014 Run `SELECT User, Host, Db FROM mysql.db WHERE Select_priv='Y' OR Insert_priv='Y' OR Update_priv='Y' OR Delete_priv='Y' OR Create_priv='Y' OR Drop_priv='Y' OR Alter_priv='Y';`. Confirm every user returned is permitted to hold those DML/DDL privileges on the indicated database. For each unauthorized combination, revoke the specific privilege on <host>.<database>. Attach the query output annotated with the authorization decision per row.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual",
+      "notes": "Requires a per-database authorization matrix that CIS does not define. Manual per authoring rules 4 and 7."
+    },
+    "6.1": {
+      "runner_type": "mysql_sql",
+      "check_definition": {
+        "sql": "SELECT IF(@@global.log_error IS NULL OR @@global.log_error IN ('', 'stderr', './stderr.err'), 'FAIL', 'PASS') AS log_error_state",
+        "expect": {
+          "kind": "first_value_equals",
+          "expected": "PASS"
+        },
+        "pass_message": "log_error points to a file path rather than stderr.",
+        "fail_message": "log_error is unset or directed to stderr, so error logging is ephemeral and cannot be permission-restricted.",
+        "timeout_seconds": 15,
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "deterministic",
+      "notes": "CIS: 'Ensure the Value returned is a path to a file and not ./stderr.err.' Both the bare 'stderr' form and the './stderr.err' form CIS names are rejected, along with empty/NULL."
+    },
+    "6.2": {
+      "runner_type": "mysql_sql",
+      "check_definition": {
+        "sql": "SELECT @@global.log_bin_basename AS log_bin_basename",
+        "expect": {
+          "kind": "first_value_regex",
+          "expected": "^(?!/var/)(?!/usr/)(?!/[^/]+$)/.+"
+        },
+        "pass_message": "log_bin_basename is an absolute path outside /, /var, and /usr.",
+        "fail_message": "log_bin_basename is empty or resolves under root (/), /var, or /usr.",
+        "timeout_seconds": 15,
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "needs_human_review",
+      "notes": "CIS: 'Ensure the value returned does not indicate root (/), /var, or /usr.' Two review points: (a) binary logging is frequently disabled, in which case log_bin_basename is empty and this check fails where the rule is really not applicable; (b) as with 1.1, path text is a proxy for partition membership \u2014 a path like /data/mysql/binlog passes even if /data is on the root filesystem, so confirm with df."
+    },
+    "6.3": {
+      "runner_type": "mysql_sql",
+      "check_definition": {
+        "sql": "SELECT @@GLOBAL.log_error_verbosity",
+        "expect": {
+          "kind": "first_value_equals",
+          "expected": "2"
+        },
+        "pass_message": "log_error_verbosity is 2 (errors and warnings).",
+        "fail_message": "log_error_verbosity is not 2.",
+        "timeout_seconds": 15,
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "deterministic",
+      "notes": "CIS: 'Ensure the Value returned equals 2.' Exact equality is asserted, so verbosity 3 (informational) also fails, matching the CIS prose."
+    },
+    "6.4": {
+      "runner_type": "linux_ssh",
+      "check_definition": {
+        "command": "sh -c 'HITS=$(my_print_defaults mysqld 2>/dev/null | grep -i -- \"log-raw\" | grep -v -i -E -- \"log-raw[= ]*(0|OFF|FALSE)\"; ps -ww -eo args 2>/dev/null | grep \"[m]ysqld\" | grep -- \"--log-raw\"); if [ -z \"$HITS\" ]; then echo LOG_RAW_OFF; else echo LOG_RAW_ON; fi'",
+        "expect": {
+          "kind": "stdout_contains",
+          "value": "LOG_RAW_OFF"
+        },
+        "pass_message": "log-raw is absent or explicitly OFF, so passwords are rewritten before being logged.",
+        "fail_message": "log-raw is enabled \u2014 passwords may be written to the general query, slow query, and binary logs in plain text.",
+        "applicable_host_families": [
+          "linux",
+          "windows"
+        ],
+        "timeout_seconds": 20,
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live",
+        "windows_winrm": {
+          "command": "$f = 'C:\\ProgramData\\MySQL\\MySQL Server 8.0\\my.ini'; if (-not (Test-Path $f)) { 'MYINI_NOT_FOUND' } elseif (Select-String -Path $f -Pattern 'log-raw' -Quiet) { 'LOG_RAW_ON' } else { 'LOG_RAW_OFF' }",
+          "shell": "powershell",
+          "expect": {
+            "kind": "stdout_contains",
+            "value": "LOG_RAW_OFF"
+          },
+          "pass_message": "log-raw is absent from my.ini.",
+          "fail_message": "log-raw appears in my.ini, or my.ini was not found at the default path.",
+          "applicable_host_families": [
+            "windows"
+          ],
+          "_authored": "cis-mysql-ee-8.0",
+          "_verification": "unverified-live"
+        }
+      },
+      "authoring_class": "deterministic",
+      "notes": "CIS asks that the my.cnf log-raw entry be present and set to OFF. Absence is treated as compliant here because log-raw defaults to off; an entry set to 0/OFF/FALSE also passes. The Windows alternate is coarser \u2014 it flags any log-raw line regardless of value \u2014 because Select-String value parsing would need a regex the safety filter makes awkward."
+    },
+    "6.5": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS 6.5 \u2014 Confirm audit filters capture connection attempts. Run `SELECT * FROM mysql.audit_log_filter;` and `SELECT * FROM mysql.audit_log_user;` and determine whether the filters and their user bindings meet your security, business, and regulatory requirements \u2014 if they do not, this is a fail. Then test empirically: make a successful and a failed connection and confirm both appear in the audit log (successful connect shows \"class\":\"connection\", \"event\":\"connect\" with \"status\": 0; a failed connect shows a non-zero status such as 1045). Attach the filter definitions and the audit log excerpts for both cases.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual",
+      "notes": "CIS pass/fail is explicitly 'determine whether the filters and users assigned meet your security, business, and regulatory requirements', plus an empirical connect/fail test. No fixed expected filter JSON. Manual per authoring rules 4 and 6."
+    },
+    "6.6": {
+      "runner_type": "mysql_sql",
+      "check_definition": {
+        "sql": "SELECT f.NAME FROM mysql.audit_log_user u JOIN mysql.audit_log_filter f ON u.FILTERNAME = f.NAME WHERE u.USER = '%' AND JSON_EXTRACT(f.FILTER, '$.log') = TRUE",
+        "expect": {
+          "kind": "row_count_nonzero"
+        },
+        "pass_message": "A log-everything audit filter is bound to all users (%).",
+        "fail_message": "No filter defined as {\"filter\": {\"log\": true}} is bound to all users (%).",
+        "timeout_seconds": 15,
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "deterministic",
+      "notes": "CIS states the exact filter body `{\"filter\": {\"log\": true}}` and requires it be applied to all users via a `%` row in mysql.audit_log_user, so both halves are CIS-stated and the filter name is correctly treated as arbitrary. Caveat: mysql.audit_log_filter and mysql.audit_log_user only exist when MySQL Enterprise Audit is installed \u2014 without it the query errors and the runner reports error, not a false pass."
+    },
+    "6.7": {
+      "runner_type": "mysql_sql",
+      "check_definition": {
+        "sql": "SELECT @@GLOBAL.audit_log_strategy",
+        "expect": {
+          "kind": "first_value_regex",
+          "expected": "(?i)^(SYNCHRONOUS|SEMISYNCHRONOUS)$"
+        },
+        "pass_message": "audit_log_strategy is SYNCHRONOUS or SEMISYNCHRONOUS.",
+        "fail_message": "audit_log_strategy is not SYNCHRONOUS or SEMISYNCHRONOUS.",
+        "timeout_seconds": 15,
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "deterministic",
+      "notes": "CIS: 'The result should be SYNCHRONOUS or SEMISYNCHRONOUS.' Requires MySQL Enterprise Audit; without it the variable is absent, the query returns zero rows, and the runner reports failed rather than not-applicable."
+    },
+    "6.8": {
+      "runner_type": "mysql_sql",
+      "check_definition": {
+        "sql": "SELECT LOAD_OPTION FROM information_schema.plugins WHERE PLUGIN_NAME = 'audit_log'",
+        "expect": {
+          "kind": "first_value_equals",
+          "expected": "FORCE_PLUS_PERMANENT"
+        },
+        "pass_message": "The audit_log plugin is FORCE_PLUS_PERMANENT and cannot be unloaded.",
+        "fail_message": "The audit_log plugin is not FORCE_PLUS_PERMANENT (or is not installed).",
+        "timeout_seconds": 15,
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "deterministic",
+      "notes": "CIS: 'The result must be FORCE_PLUS_PERMANENT.' The column name LOAD_OPTION is safe against the runner's read-only filter because the LOAD token is followed by an underscore, so the word-boundary match does not fire."
+    },
+    "7.1": {
+      "runner_type": "mysql_sql",
+      "check_definition": {
+        "sql": "SELECT IF(@@global.default_authentication_plugin = 'mysql_native_password', 'FAIL', 'PASS') AS default_auth_plugin_state",
+        "expect": {
+          "kind": "first_value_equals",
+          "expected": "PASS"
+        },
+        "pass_message": "default_authentication_plugin is not mysql_native_password.",
+        "fail_message": "default_authentication_plugin is mysql_native_password, which relies on SHA1.",
+        "timeout_seconds": 15,
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "deterministic",
+      "notes": "CIS: 'Ensure the Value field is not set to mysql_native_password.' The check asserts exactly that negative rather than pinning caching_sha2_password, because CIS also accepts LDAP/AD authentication plugins. The CIS remediation's companion step (finding and migrating existing accounts still on mysql_native_password) is not covered here."
+    },
+    "7.2": {
+      "runner_type": "linux_ssh",
+      "check_definition": {
+        "command": "sh -c 'HITS=$(grep -h -E \"^[[:space:]]*(loose-)?password[[:space:]]*=\" /etc/my.cnf /etc/mysql/my.cnf /etc/mysql/conf.d/*.cnf /etc/mysql/mysql.conf.d/*.cnf /usr/etc/my.cnf 2>/dev/null ); if [ -z \"$HITS\" ]; then echo NO_PASSWORD_IN_GLOBAL_CONFIG; else echo PASSWORD_IN_GLOBAL_CONFIG; fi'",
+        "expect": {
+          "kind": "stdout_contains",
+          "value": "NO_PASSWORD_IN_GLOBAL_CONFIG"
+        },
+        "pass_message": "No password option is set in the global MySQL configuration files.",
+        "fail_message": "A password option is set in a global MySQL configuration file.",
+        "applicable_host_families": [
+          "linux",
+          "windows"
+        ],
+        "timeout_seconds": 20,
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live",
+        "windows_winrm": {
+          "command": "$f = 'C:\\ProgramData\\MySQL\\MySQL Server 8.0\\my.ini'; if (-not (Test-Path $f)) { 'MYINI_NOT_FOUND' } elseif (Select-String -Path $f -Pattern '^[ \\t]*password[ \\t]*=' -Quiet) { 'PASSWORD_IN_GLOBAL_CONFIG' } else { 'NO_PASSWORD_IN_GLOBAL_CONFIG' }",
+          "shell": "powershell",
+          "expect": {
+            "kind": "stdout_contains",
+            "value": "NO_PASSWORD_IN_GLOBAL_CONFIG"
+          },
+          "pass_message": "No password option is set in my.ini.",
+          "fail_message": "A password option is set in my.ini, or my.ini was not found at the default path.",
+          "applicable_host_families": [
+            "windows"
+          ],
+          "_authored": "cis-mysql-ee-8.0",
+          "_verification": "unverified-live"
+        }
+      },
+      "authoring_class": "deterministic",
+      "notes": "CIS scopes this to the [client] section of the global option file. This check is section-agnostic \u2014 it flags a password= entry anywhere in the global config \u2014 which is deliberately conservative, since a stored plaintext password under [mysqldump] or [mysql] is the same exposure. Global files only; user-specific ~/.my.cnf is out of scope for CIS 7.2."
+    },
+    "7.3": {
+      "runner_type": "mysql_sql",
+      "check_definition": {
+        "sql": "SELECT user, host FROM mysql.user WHERE (plugin IN ('sha256_password','caching_sha2_password') AND LENGTH(authentication_string) = 0) OR (plugin IN ('mysql_native_password','mysql_old_password','') AND (LENGTH(authentication_string) = 0 OR authentication_string IS NULL))",
+        "expect": {
+          "kind": "row_count_zero"
+        },
+        "pass_message": "Every MySQL account has a password set.",
+        "fail_message": "One or more MySQL accounts have a blank password.",
+        "timeout_seconds": 15,
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "deterministic",
+      "notes": "CIS: 'No rows will be returned if all accounts have a password set.' The CIS listing contains a stray semicolon before its UNION; the two branches were merged into one OR predicate to keep the statement single-statement for the runner's read-only filter, with identical semantics. Accounts using mysql_no_login or an authentication plugin (auth_socket, LDAP) are correctly out of scope because their plugin is not in either list."
+    },
+    "7.4": {
+      "runner_type": "mysql_sql",
+      "check_definition": {
+        "sql": "SELECT IF(@@global.default_password_lifetime > 0 AND @@global.default_password_lifetime <= 365, 'PASS', 'FAIL') AS default_password_lifetime_state",
+        "expect": {
+          "kind": "first_value_equals",
+          "expected": "PASS"
+        },
+        "pass_message": "default_password_lifetime is between 1 and 365 days.",
+        "fail_message": "default_password_lifetime is 0 (never expires) or greater than 365.",
+        "timeout_seconds": 15,
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "deterministic",
+      "notes": "CIS: 'The result should not be 0 and less than or equal to 365.' Both bounds are CIS-stated. This is intentionally stricter than 2.7, which tolerates an unconfigured global value."
+    },
+    "7.5": {
+      "runner_type": "mysql_sql",
+      "check_definition": {
+        "sql": "SELECT IF((SELECT COUNT(*) FROM mysql.component WHERE component_urn LIKE '%validate_password') > 0 AND (SELECT CAST(@@GLOBAL.validate_password.length AS SIGNED)) >= 14 AND (SELECT UPPER(VARIABLE_VALUE) FROM performance_schema.global_variables WHERE VARIABLE_NAME = 'validate_password.check_user_name') = 'ON' AND (SELECT UPPER(VARIABLE_VALUE) FROM performance_schema.global_variables WHERE VARIABLE_NAME = 'validate_password.policy') = 'STRONG', 'PASS', 'FAIL') AS password_policy_state",
+        "expect": {
+          "kind": "first_value_equals",
+          "expected": "PASS"
+        },
+        "pass_message": "validate_password component is installed with length >= 14, check_user_name ON, and policy STRONG.",
+        "fail_message": "validate_password component is missing, or length < 14, check_user_name is not ON, or policy is not STRONG.",
+        "timeout_seconds": 15,
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "deterministic",
+      "notes": "All four asserted conditions are CIS-stated: the component must be installed ('If no rows are returned, this check fails'), validate_password.length 14 or more, check_user_name ON, and policy STRONG. Not asserted: validate_password.dictionary_file must point at a real dictionary of breached/common/context-specific words \u2014 path existence and content quality need human review. CIS's 'use sparingly' guidance on mixed_case_count / number_count / special_char_count (not more than 1 each) is advisory and deliberately not enforced."
+    },
+    "7.6": {
+      "runner_type": "mysql_sql",
+      "check_definition": {
+        "sql": "SELECT user, host FROM mysql.user WHERE host = '%'",
+        "expect": {
+          "kind": "row_count_zero"
+        },
+        "pass_message": "No account uses a wildcard hostname.",
+        "fail_message": "One or more accounts use the wildcard host '%'.",
+        "timeout_seconds": 15,
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "deterministic",
+      "notes": "CIS: 'Ensure no rows are returned.' Matches the CIS query exactly."
+    },
+    "7.7": {
+      "runner_type": "mysql_sql",
+      "check_definition": {
+        "sql": "SELECT user, host FROM mysql.user WHERE user = ''",
+        "expect": {
+          "kind": "row_count_zero"
+        },
+        "pass_message": "No anonymous accounts exist.",
+        "fail_message": "One or more anonymous accounts (empty username) exist.",
+        "timeout_seconds": 15,
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "deterministic",
+      "notes": "CIS: 'The above query will return zero rows if no anonymous accounts are present.' Matches the CIS query exactly."
+    },
+    "8.1": {
+      "runner_type": "mysql_sql",
+      "check_definition": {
+        "sql": "SELECT @@GLOBAL.require_secure_transport",
+        "expect": {
+          "kind": "first_value_regex",
+          "expected": "(?i)^(ON|1)$"
+        },
+        "pass_message": "require_secure_transport is ON.",
+        "fail_message": "require_secure_transport is not ON.",
+        "timeout_seconds": 15,
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "deterministic",
+      "notes": "CIS: 'Ensure the returned Value is ON or 1.' Both accepted forms are allowed."
+    },
+    "8.2": {
+      "runner_type": "mysql_sql",
+      "check_definition": {
+        "sql": "SELECT user, host, ssl_type FROM mysql.user WHERE host NOT IN ('::1','127.0.0.1','localhost') AND ssl_type NOT IN ('X509','SPECIFIED')",
+        "expect": {
+          "kind": "row_count_zero"
+        },
+        "pass_message": "Every remote account has ssl_type X509 or SPECIFIED.",
+        "fail_message": "One or more remote accounts do not enforce SSL/TLS via ssl_type X509 or SPECIFIED.",
+        "timeout_seconds": 15,
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "deterministic",
+      "notes": "CIS: 'Ensure the ssl_type for each user returned is equal to X509, or SPECIFIED', over the same host exclusion set (::1, 127.0.0.1, localhost). ANY is deliberately excluded: the rule title lists it but the audit body's pass condition names only X509 and SPECIFIED, and CIS notes ANY makes the client certificate optional."
+    },
+    "8.3": {
+      "runner_type": "mysql_sql",
+      "check_definition": {
+        "sql": "SELECT IF(@@global.max_user_connections > 0 OR (SELECT COUNT(*) FROM mysql.user WHERE user NOT LIKE 'mysql.%' AND user <> 'root' AND max_user_connections = 0) = 0, 'PASS', 'FAIL') AS connection_limit_state",
+        "expect": {
+          "kind": "first_value_equals",
+          "expected": "PASS"
+        },
+        "pass_message": "A concurrent-connection limit is configured, either globally or on every non-reserved account.",
+        "fail_message": "No connection limits are configured \u2014 global max_user_connections is 0 and accounts inherit no per-user limit (CIS: this is a fail).",
+        "timeout_seconds": 15,
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "deterministic",
+      "notes": "CIS states only that a limit must exist: 'If the value of max_user_connections is 0 this means there is no limit... If no limits are configured this is a fail.' The check therefore asserts existence of a limit (> 0), not a specific number \u2014 the CIS remediation values (50 per user, 1000 server-wide) are examples, so no threshold was invented. The operator must still size the limit to the environment. The mysql.user query mirrors CIS's exclusion of 'mysql.%' and root accounts."
+    },
+    "9.1": {
+      "runner_type": "manual",
+      "check_definition": {
+        "requires_attestation": true,
+        "attestation_prompt": "CIS 9.1 \u2014 Confirm replication traffic is secured using one or more of: a private network, a VPN, SSL/TLS, or an SSH tunnel. The mechanism must provide confidentiality and integrity for the traffic and mutual authentication between the servers before replication proceeds. Attach the network/topology evidence or replication channel TLS configuration.",
+        "pass_message": "Operator attested compliant.",
+        "fail_message": "Operator attested non-compliant.",
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "manual",
+      "notes": "Four alternative controls, three of which are network-layer facts invisible to the database. Manual per authoring rules 6 and 7."
+    },
+    "9.2": {
+      "runner_type": "mysql_sql",
+      "check_definition": {
+        "sql": "SELECT ssl_verify_server_cert FROM mysql.slave_master_info",
+        "expect": {
+          "kind": "first_value_equals",
+          "expected": "1"
+        },
+        "pass_message": "SOURCE_SSL_VERIFY_SERVER_CERT is 1 \u2014 the replica verifies the source's certificate.",
+        "fail_message": "ssl_verify_server_cert is not 1 for the replication channel.",
+        "timeout_seconds": 15,
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "deterministic",
+      "notes": "CIS: 'Verify the value of ssl_verify_server_cert is 1', using the CIS-specified mysql.slave_master_info table. Applicability caveat: on a non-replica the table is empty, so the runner reports failed ('no rows returned') rather than not-applicable \u2014 scope this rule out on standalone instances. Only the first channel row is evaluated; multi-channel replicas need a per-channel review."
+    },
+    "9.3": {
+      "runner_type": "mysql_sql",
+      "check_definition": {
+        "sql": "SELECT @@GLOBAL.master_info_repository",
+        "expect": {
+          "kind": "first_value_equals",
+          "expected": "TABLE"
+        },
+        "pass_message": "master_info_repository is TABLE.",
+        "fail_message": "master_info_repository is not TABLE (FILE stores the replication password in a plaintext file).",
+        "timeout_seconds": 15,
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "deterministic",
+      "notes": "CIS: 'The result should be TABLE instead of FILE.' The CIS note that no source.info / master.info file should remain in the datadir is not covered (datadir listing needs root). The variable is deprecated in later 8.0 releases; if it is absent the query returns zero rows and reports failed."
+    },
+    "9.4": {
+      "runner_type": "mysql_sql",
+      "check_definition": {
+        "sql": "SELECT user, host FROM mysql.user WHERE Repl_slave_priv = 'Y' AND Super_priv = 'Y'",
+        "expect": {
+          "kind": "row_count_zero"
+        },
+        "pass_message": "No replication account holds the SUPER privilege.",
+        "fail_message": "A replication account also holds SUPER.",
+        "timeout_seconds": 15,
+        "_authored": "cis-mysql-ee-8.0",
+        "_verification": "unverified-live"
+      },
+      "authoring_class": "needs_human_review",
+      "notes": "The CIS audit hardcodes the account name: `SELECT user, host FROM mysql.user WHERE user='repl' AND Super_priv='Y';`. Since 'repl' is a naming convention rather than a guaranteed name, the predicate was generalized to any account holding Repl_slave_priv = 'Y'. Operator must confirm the generalization matches their replication account naming, and separately review the detailed CIS privilege expectations for the replication user (`SELECT * FROM mysql.user WHERE user='repl'`). Note the CIS remediation text for this rule is empty in the source benchmark."
+    }
+  }
+}

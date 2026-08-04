@@ -1,0 +1,1683 @@
+{
+  "id": "cis_controls",
+  "name": "CIS Critical Security Controls v8.1",
+  "version": "8.1",
+  "official_sources": [
+    {
+      "title": "CIS Controls v8.1",
+      "url": "https://www.cisecurity.org/controls"
+    },
+    {
+      "title": "CIS Risk Assessment Method (CIS RAM)",
+      "url": "https://www.cisecurity.org/insights/white-papers/cis-ram-risk-assessment-method"
+    },
+    {
+      "title": "Implementation Groups",
+      "url": "https://www.cisecurity.org/controls/implementation-groups"
+    }
+  ],
+  "assessment_shapes": [
+    "cis_safeguard",
+    "control_maturity"
+  ],
+  "methodology": "18 Controls, 153 Safeguards. IG1 (56 essential), IG2 adds ~74, IG3 all 153. Use CIS RAM for the underlying risk analysis (duty of care).",
+  "scoping_inputs": [
+    {
+      "id": "ig_target",
+      "type": "select",
+      "options": [
+        "IG1",
+        "IG2",
+        "IG3"
+      ],
+      "label": "Target Implementation Group"
+    },
+    {
+      "id": "asset_classes",
+      "type": "multi_select",
+      "options": [
+        "Devices",
+        "Software",
+        "Data",
+        "Users",
+        "Network",
+        "Documentation"
+      ],
+      "label": "Asset classes in scope"
+    }
+  ],
+  "risk_model": {
+    "factors": [
+      "asset",
+      "threat",
+      "vulnerability",
+      "likelihood",
+      "impact_c",
+      "impact_i",
+      "impact_a"
+    ],
+    "scales": {
+      "likelihood": [
+        {
+          "value": 1,
+          "label": "Rare",
+          "definition": "May occur only in exceptional circumstances (<5% per year)."
+        },
+        {
+          "value": 2,
+          "label": "Unlikely",
+          "definition": "Could occur but not expected (5-25% per year)."
+        },
+        {
+          "value": 3,
+          "label": "Possible",
+          "definition": "Might occur at some time (25-50% per year)."
+        },
+        {
+          "value": 4,
+          "label": "Likely",
+          "definition": "Will probably occur in most circumstances (50-75% per year)."
+        },
+        {
+          "value": 5,
+          "label": "Almost Certain",
+          "definition": "Expected to occur in most circumstances (>75% per year)."
+        }
+      ],
+      "impact": [
+        {
+          "value": 1,
+          "label": "Insignificant",
+          "definition": "Negligible operational, financial, regulatory or reputational impact."
+        },
+        {
+          "value": 2,
+          "label": "Minor",
+          "definition": "Limited impact contained within a single team or system; recoverable in <1 day."
+        },
+        {
+          "value": 3,
+          "label": "Moderate",
+          "definition": "Notable impact on a business unit; recoverable in 1-7 days; minor regulatory attention."
+        },
+        {
+          "value": 4,
+          "label": "Major",
+          "definition": "Significant impact across multiple business units; >1 week to recover; regulatory action probable."
+        },
+        {
+          "value": 5,
+          "label": "Severe",
+          "definition": "Existential or systemic impact; loss of license, major fines, sustained customer loss."
+        }
+      ],
+      "maturity": [
+        {
+          "value": 0,
+          "label": "Non-Existent",
+          "definition": "No process or control in place."
+        },
+        {
+          "value": 1,
+          "label": "Initial / Ad Hoc",
+          "definition": "Process exists but is informal and inconsistent."
+        },
+        {
+          "value": 2,
+          "label": "Repeatable",
+          "definition": "Process is documented and repeated, but not standardized across the organization."
+        },
+        {
+          "value": 3,
+          "label": "Defined",
+          "definition": "Process is documented, standardized, and integrated across the organization."
+        },
+        {
+          "value": 4,
+          "label": "Managed",
+          "definition": "Process is measured, monitored with KPIs, and controlled."
+        },
+        {
+          "value": 5,
+          "label": "Optimized",
+          "definition": "Process is continuously improved through monitoring, metrics, and lessons learned."
+        }
+      ],
+      "implementation_status": [
+        {
+          "value": "NI",
+          "label": "Not Implemented"
+        },
+        {
+          "value": "PI",
+          "label": "Partially Implemented"
+        },
+        {
+          "value": "LI",
+          "label": "Largely Implemented"
+        },
+        {
+          "value": "FI",
+          "label": "Fully Implemented"
+        }
+      ]
+    },
+    "matrix": "5x5",
+    "calculation": "max(impact_c, impact_i, impact_a) * likelihood",
+    "acceptance_threshold": 6,
+    "thresholds": {
+      "low": [
+        1,
+        4
+      ],
+      "medium": [
+        5,
+        9
+      ],
+      "high": [
+        10,
+        16
+      ],
+      "critical": [
+        17,
+        25
+      ]
+    }
+  },
+  "domains": [
+    {
+      "id": "1",
+      "name": "CIS Control 1: Inventory and Control of Enterprise Assets",
+      "description": "Applicability: IG1+",
+      "controls": [
+        {
+          "id": "CIS-1",
+          "title": "Inventory and Control of Enterprise Assets",
+          "description": "Sub-safeguards under Control 1. Load full safeguard list from CIS Controls v8.1.",
+          "question_block": {
+            "type": "cis_safeguard",
+            "questions": [
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Safeguard implementation status?"
+              },
+              {
+                "field": "ig_level_in_scope",
+                "type": "select",
+                "options": [
+                  "IG1",
+                  "IG2",
+                  "IG3"
+                ],
+                "prompt": "Which IG applies to this safeguard?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence?"
+              },
+              {
+                "field": "ram_likelihood_current",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "CIS RAM: likelihood (current state)?"
+              },
+              {
+                "field": "ram_impact_current",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "CIS RAM: impact (current state)?"
+              },
+              {
+                "field": "ram_likelihood_post",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "CIS RAM: likelihood after implementation?"
+              },
+              {
+                "field": "ram_impact_post",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "CIS RAM: impact after implementation?"
+              },
+              {
+                "field": "ram_burden",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "CIS RAM: burden of implementation (1-5)?"
+              },
+              {
+                "field": "acceptable",
+                "type": "boolean",
+                "prompt": "Risk acceptable post-implementation?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "2",
+      "name": "CIS Control 2: Inventory and Control of Software Assets",
+      "description": "Applicability: IG1+",
+      "controls": [
+        {
+          "id": "CIS-2",
+          "title": "Inventory and Control of Software Assets",
+          "description": "Sub-safeguards under Control 2. Load full safeguard list from CIS Controls v8.1.",
+          "question_block": {
+            "type": "cis_safeguard",
+            "questions": [
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Safeguard implementation status?"
+              },
+              {
+                "field": "ig_level_in_scope",
+                "type": "select",
+                "options": [
+                  "IG1",
+                  "IG2",
+                  "IG3"
+                ],
+                "prompt": "Which IG applies to this safeguard?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence?"
+              },
+              {
+                "field": "ram_likelihood_current",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "CIS RAM: likelihood (current state)?"
+              },
+              {
+                "field": "ram_impact_current",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "CIS RAM: impact (current state)?"
+              },
+              {
+                "field": "ram_likelihood_post",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "CIS RAM: likelihood after implementation?"
+              },
+              {
+                "field": "ram_impact_post",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "CIS RAM: impact after implementation?"
+              },
+              {
+                "field": "ram_burden",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "CIS RAM: burden of implementation (1-5)?"
+              },
+              {
+                "field": "acceptable",
+                "type": "boolean",
+                "prompt": "Risk acceptable post-implementation?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "3",
+      "name": "CIS Control 3: Data Protection",
+      "description": "Applicability: IG1+",
+      "controls": [
+        {
+          "id": "CIS-3",
+          "title": "Data Protection",
+          "description": "Sub-safeguards under Control 3. Load full safeguard list from CIS Controls v8.1.",
+          "question_block": {
+            "type": "cis_safeguard",
+            "questions": [
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Safeguard implementation status?"
+              },
+              {
+                "field": "ig_level_in_scope",
+                "type": "select",
+                "options": [
+                  "IG1",
+                  "IG2",
+                  "IG3"
+                ],
+                "prompt": "Which IG applies to this safeguard?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence?"
+              },
+              {
+                "field": "ram_likelihood_current",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "CIS RAM: likelihood (current state)?"
+              },
+              {
+                "field": "ram_impact_current",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "CIS RAM: impact (current state)?"
+              },
+              {
+                "field": "ram_likelihood_post",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "CIS RAM: likelihood after implementation?"
+              },
+              {
+                "field": "ram_impact_post",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "CIS RAM: impact after implementation?"
+              },
+              {
+                "field": "ram_burden",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "CIS RAM: burden of implementation (1-5)?"
+              },
+              {
+                "field": "acceptable",
+                "type": "boolean",
+                "prompt": "Risk acceptable post-implementation?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "4",
+      "name": "CIS Control 4: Secure Configuration of Enterprise Assets and Software",
+      "description": "Applicability: IG1+",
+      "controls": [
+        {
+          "id": "CIS-4",
+          "title": "Secure Configuration of Enterprise Assets and Software",
+          "description": "Sub-safeguards under Control 4. Load full safeguard list from CIS Controls v8.1.",
+          "question_block": {
+            "type": "cis_safeguard",
+            "questions": [
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Safeguard implementation status?"
+              },
+              {
+                "field": "ig_level_in_scope",
+                "type": "select",
+                "options": [
+                  "IG1",
+                  "IG2",
+                  "IG3"
+                ],
+                "prompt": "Which IG applies to this safeguard?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence?"
+              },
+              {
+                "field": "ram_likelihood_current",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "CIS RAM: likelihood (current state)?"
+              },
+              {
+                "field": "ram_impact_current",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "CIS RAM: impact (current state)?"
+              },
+              {
+                "field": "ram_likelihood_post",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "CIS RAM: likelihood after implementation?"
+              },
+              {
+                "field": "ram_impact_post",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "CIS RAM: impact after implementation?"
+              },
+              {
+                "field": "ram_burden",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "CIS RAM: burden of implementation (1-5)?"
+              },
+              {
+                "field": "acceptable",
+                "type": "boolean",
+                "prompt": "Risk acceptable post-implementation?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "5",
+      "name": "CIS Control 5: Account Management",
+      "description": "Applicability: IG1+",
+      "controls": [
+        {
+          "id": "CIS-5",
+          "title": "Account Management",
+          "description": "Sub-safeguards under Control 5. Load full safeguard list from CIS Controls v8.1.",
+          "question_block": {
+            "type": "cis_safeguard",
+            "questions": [
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Safeguard implementation status?"
+              },
+              {
+                "field": "ig_level_in_scope",
+                "type": "select",
+                "options": [
+                  "IG1",
+                  "IG2",
+                  "IG3"
+                ],
+                "prompt": "Which IG applies to this safeguard?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence?"
+              },
+              {
+                "field": "ram_likelihood_current",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "CIS RAM: likelihood (current state)?"
+              },
+              {
+                "field": "ram_impact_current",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "CIS RAM: impact (current state)?"
+              },
+              {
+                "field": "ram_likelihood_post",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "CIS RAM: likelihood after implementation?"
+              },
+              {
+                "field": "ram_impact_post",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "CIS RAM: impact after implementation?"
+              },
+              {
+                "field": "ram_burden",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "CIS RAM: burden of implementation (1-5)?"
+              },
+              {
+                "field": "acceptable",
+                "type": "boolean",
+                "prompt": "Risk acceptable post-implementation?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "6",
+      "name": "CIS Control 6: Access Control Management",
+      "description": "Applicability: IG1+",
+      "controls": [
+        {
+          "id": "CIS-6",
+          "title": "Access Control Management",
+          "description": "Sub-safeguards under Control 6. Load full safeguard list from CIS Controls v8.1.",
+          "question_block": {
+            "type": "cis_safeguard",
+            "questions": [
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Safeguard implementation status?"
+              },
+              {
+                "field": "ig_level_in_scope",
+                "type": "select",
+                "options": [
+                  "IG1",
+                  "IG2",
+                  "IG3"
+                ],
+                "prompt": "Which IG applies to this safeguard?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence?"
+              },
+              {
+                "field": "ram_likelihood_current",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "CIS RAM: likelihood (current state)?"
+              },
+              {
+                "field": "ram_impact_current",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "CIS RAM: impact (current state)?"
+              },
+              {
+                "field": "ram_likelihood_post",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "CIS RAM: likelihood after implementation?"
+              },
+              {
+                "field": "ram_impact_post",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "CIS RAM: impact after implementation?"
+              },
+              {
+                "field": "ram_burden",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "CIS RAM: burden of implementation (1-5)?"
+              },
+              {
+                "field": "acceptable",
+                "type": "boolean",
+                "prompt": "Risk acceptable post-implementation?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "7",
+      "name": "CIS Control 7: Continuous Vulnerability Management",
+      "description": "Applicability: IG1+",
+      "controls": [
+        {
+          "id": "CIS-7",
+          "title": "Continuous Vulnerability Management",
+          "description": "Sub-safeguards under Control 7. Load full safeguard list from CIS Controls v8.1.",
+          "question_block": {
+            "type": "cis_safeguard",
+            "questions": [
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Safeguard implementation status?"
+              },
+              {
+                "field": "ig_level_in_scope",
+                "type": "select",
+                "options": [
+                  "IG1",
+                  "IG2",
+                  "IG3"
+                ],
+                "prompt": "Which IG applies to this safeguard?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence?"
+              },
+              {
+                "field": "ram_likelihood_current",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "CIS RAM: likelihood (current state)?"
+              },
+              {
+                "field": "ram_impact_current",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "CIS RAM: impact (current state)?"
+              },
+              {
+                "field": "ram_likelihood_post",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "CIS RAM: likelihood after implementation?"
+              },
+              {
+                "field": "ram_impact_post",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "CIS RAM: impact after implementation?"
+              },
+              {
+                "field": "ram_burden",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "CIS RAM: burden of implementation (1-5)?"
+              },
+              {
+                "field": "acceptable",
+                "type": "boolean",
+                "prompt": "Risk acceptable post-implementation?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "8",
+      "name": "CIS Control 8: Audit Log Management",
+      "description": "Applicability: IG1+",
+      "controls": [
+        {
+          "id": "CIS-8",
+          "title": "Audit Log Management",
+          "description": "Sub-safeguards under Control 8. Load full safeguard list from CIS Controls v8.1.",
+          "question_block": {
+            "type": "cis_safeguard",
+            "questions": [
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Safeguard implementation status?"
+              },
+              {
+                "field": "ig_level_in_scope",
+                "type": "select",
+                "options": [
+                  "IG1",
+                  "IG2",
+                  "IG3"
+                ],
+                "prompt": "Which IG applies to this safeguard?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence?"
+              },
+              {
+                "field": "ram_likelihood_current",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "CIS RAM: likelihood (current state)?"
+              },
+              {
+                "field": "ram_impact_current",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "CIS RAM: impact (current state)?"
+              },
+              {
+                "field": "ram_likelihood_post",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "CIS RAM: likelihood after implementation?"
+              },
+              {
+                "field": "ram_impact_post",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "CIS RAM: impact after implementation?"
+              },
+              {
+                "field": "ram_burden",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "CIS RAM: burden of implementation (1-5)?"
+              },
+              {
+                "field": "acceptable",
+                "type": "boolean",
+                "prompt": "Risk acceptable post-implementation?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "9",
+      "name": "CIS Control 9: Email and Web Browser Protections",
+      "description": "Applicability: IG1+",
+      "controls": [
+        {
+          "id": "CIS-9",
+          "title": "Email and Web Browser Protections",
+          "description": "Sub-safeguards under Control 9. Load full safeguard list from CIS Controls v8.1.",
+          "question_block": {
+            "type": "cis_safeguard",
+            "questions": [
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Safeguard implementation status?"
+              },
+              {
+                "field": "ig_level_in_scope",
+                "type": "select",
+                "options": [
+                  "IG1",
+                  "IG2",
+                  "IG3"
+                ],
+                "prompt": "Which IG applies to this safeguard?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence?"
+              },
+              {
+                "field": "ram_likelihood_current",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "CIS RAM: likelihood (current state)?"
+              },
+              {
+                "field": "ram_impact_current",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "CIS RAM: impact (current state)?"
+              },
+              {
+                "field": "ram_likelihood_post",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "CIS RAM: likelihood after implementation?"
+              },
+              {
+                "field": "ram_impact_post",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "CIS RAM: impact after implementation?"
+              },
+              {
+                "field": "ram_burden",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "CIS RAM: burden of implementation (1-5)?"
+              },
+              {
+                "field": "acceptable",
+                "type": "boolean",
+                "prompt": "Risk acceptable post-implementation?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "10",
+      "name": "CIS Control 10: Malware Defenses",
+      "description": "Applicability: IG1+",
+      "controls": [
+        {
+          "id": "CIS-10",
+          "title": "Malware Defenses",
+          "description": "Sub-safeguards under Control 10. Load full safeguard list from CIS Controls v8.1.",
+          "question_block": {
+            "type": "cis_safeguard",
+            "questions": [
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Safeguard implementation status?"
+              },
+              {
+                "field": "ig_level_in_scope",
+                "type": "select",
+                "options": [
+                  "IG1",
+                  "IG2",
+                  "IG3"
+                ],
+                "prompt": "Which IG applies to this safeguard?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence?"
+              },
+              {
+                "field": "ram_likelihood_current",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "CIS RAM: likelihood (current state)?"
+              },
+              {
+                "field": "ram_impact_current",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "CIS RAM: impact (current state)?"
+              },
+              {
+                "field": "ram_likelihood_post",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "CIS RAM: likelihood after implementation?"
+              },
+              {
+                "field": "ram_impact_post",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "CIS RAM: impact after implementation?"
+              },
+              {
+                "field": "ram_burden",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "CIS RAM: burden of implementation (1-5)?"
+              },
+              {
+                "field": "acceptable",
+                "type": "boolean",
+                "prompt": "Risk acceptable post-implementation?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "11",
+      "name": "CIS Control 11: Data Recovery",
+      "description": "Applicability: IG1+",
+      "controls": [
+        {
+          "id": "CIS-11",
+          "title": "Data Recovery",
+          "description": "Sub-safeguards under Control 11. Load full safeguard list from CIS Controls v8.1.",
+          "question_block": {
+            "type": "cis_safeguard",
+            "questions": [
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Safeguard implementation status?"
+              },
+              {
+                "field": "ig_level_in_scope",
+                "type": "select",
+                "options": [
+                  "IG1",
+                  "IG2",
+                  "IG3"
+                ],
+                "prompt": "Which IG applies to this safeguard?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence?"
+              },
+              {
+                "field": "ram_likelihood_current",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "CIS RAM: likelihood (current state)?"
+              },
+              {
+                "field": "ram_impact_current",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "CIS RAM: impact (current state)?"
+              },
+              {
+                "field": "ram_likelihood_post",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "CIS RAM: likelihood after implementation?"
+              },
+              {
+                "field": "ram_impact_post",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "CIS RAM: impact after implementation?"
+              },
+              {
+                "field": "ram_burden",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "CIS RAM: burden of implementation (1-5)?"
+              },
+              {
+                "field": "acceptable",
+                "type": "boolean",
+                "prompt": "Risk acceptable post-implementation?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "12",
+      "name": "CIS Control 12: Network Infrastructure Management",
+      "description": "Applicability: IG1+",
+      "controls": [
+        {
+          "id": "CIS-12",
+          "title": "Network Infrastructure Management",
+          "description": "Sub-safeguards under Control 12. Load full safeguard list from CIS Controls v8.1.",
+          "question_block": {
+            "type": "cis_safeguard",
+            "questions": [
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Safeguard implementation status?"
+              },
+              {
+                "field": "ig_level_in_scope",
+                "type": "select",
+                "options": [
+                  "IG1",
+                  "IG2",
+                  "IG3"
+                ],
+                "prompt": "Which IG applies to this safeguard?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence?"
+              },
+              {
+                "field": "ram_likelihood_current",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "CIS RAM: likelihood (current state)?"
+              },
+              {
+                "field": "ram_impact_current",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "CIS RAM: impact (current state)?"
+              },
+              {
+                "field": "ram_likelihood_post",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "CIS RAM: likelihood after implementation?"
+              },
+              {
+                "field": "ram_impact_post",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "CIS RAM: impact after implementation?"
+              },
+              {
+                "field": "ram_burden",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "CIS RAM: burden of implementation (1-5)?"
+              },
+              {
+                "field": "acceptable",
+                "type": "boolean",
+                "prompt": "Risk acceptable post-implementation?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "13",
+      "name": "CIS Control 13: Network Monitoring and Defense",
+      "description": "Applicability: IG2+",
+      "controls": [
+        {
+          "id": "CIS-13",
+          "title": "Network Monitoring and Defense",
+          "description": "Sub-safeguards under Control 13. Load full safeguard list from CIS Controls v8.1.",
+          "question_block": {
+            "type": "cis_safeguard",
+            "questions": [
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Safeguard implementation status?"
+              },
+              {
+                "field": "ig_level_in_scope",
+                "type": "select",
+                "options": [
+                  "IG1",
+                  "IG2",
+                  "IG3"
+                ],
+                "prompt": "Which IG applies to this safeguard?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence?"
+              },
+              {
+                "field": "ram_likelihood_current",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "CIS RAM: likelihood (current state)?"
+              },
+              {
+                "field": "ram_impact_current",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "CIS RAM: impact (current state)?"
+              },
+              {
+                "field": "ram_likelihood_post",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "CIS RAM: likelihood after implementation?"
+              },
+              {
+                "field": "ram_impact_post",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "CIS RAM: impact after implementation?"
+              },
+              {
+                "field": "ram_burden",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "CIS RAM: burden of implementation (1-5)?"
+              },
+              {
+                "field": "acceptable",
+                "type": "boolean",
+                "prompt": "Risk acceptable post-implementation?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "14",
+      "name": "CIS Control 14: Security Awareness and Skills Training",
+      "description": "Applicability: IG1+",
+      "controls": [
+        {
+          "id": "CIS-14",
+          "title": "Security Awareness and Skills Training",
+          "description": "Sub-safeguards under Control 14. Load full safeguard list from CIS Controls v8.1.",
+          "question_block": {
+            "type": "cis_safeguard",
+            "questions": [
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Safeguard implementation status?"
+              },
+              {
+                "field": "ig_level_in_scope",
+                "type": "select",
+                "options": [
+                  "IG1",
+                  "IG2",
+                  "IG3"
+                ],
+                "prompt": "Which IG applies to this safeguard?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence?"
+              },
+              {
+                "field": "ram_likelihood_current",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "CIS RAM: likelihood (current state)?"
+              },
+              {
+                "field": "ram_impact_current",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "CIS RAM: impact (current state)?"
+              },
+              {
+                "field": "ram_likelihood_post",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "CIS RAM: likelihood after implementation?"
+              },
+              {
+                "field": "ram_impact_post",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "CIS RAM: impact after implementation?"
+              },
+              {
+                "field": "ram_burden",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "CIS RAM: burden of implementation (1-5)?"
+              },
+              {
+                "field": "acceptable",
+                "type": "boolean",
+                "prompt": "Risk acceptable post-implementation?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "15",
+      "name": "CIS Control 15: Service Provider Management",
+      "description": "Applicability: IG1+",
+      "controls": [
+        {
+          "id": "CIS-15",
+          "title": "Service Provider Management",
+          "description": "Sub-safeguards under Control 15. Load full safeguard list from CIS Controls v8.1.",
+          "question_block": {
+            "type": "cis_safeguard",
+            "questions": [
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Safeguard implementation status?"
+              },
+              {
+                "field": "ig_level_in_scope",
+                "type": "select",
+                "options": [
+                  "IG1",
+                  "IG2",
+                  "IG3"
+                ],
+                "prompt": "Which IG applies to this safeguard?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence?"
+              },
+              {
+                "field": "ram_likelihood_current",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "CIS RAM: likelihood (current state)?"
+              },
+              {
+                "field": "ram_impact_current",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "CIS RAM: impact (current state)?"
+              },
+              {
+                "field": "ram_likelihood_post",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "CIS RAM: likelihood after implementation?"
+              },
+              {
+                "field": "ram_impact_post",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "CIS RAM: impact after implementation?"
+              },
+              {
+                "field": "ram_burden",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "CIS RAM: burden of implementation (1-5)?"
+              },
+              {
+                "field": "acceptable",
+                "type": "boolean",
+                "prompt": "Risk acceptable post-implementation?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "16",
+      "name": "CIS Control 16: Application Software Security",
+      "description": "Applicability: IG2+",
+      "controls": [
+        {
+          "id": "CIS-16",
+          "title": "Application Software Security",
+          "description": "Sub-safeguards under Control 16. Load full safeguard list from CIS Controls v8.1.",
+          "question_block": {
+            "type": "cis_safeguard",
+            "questions": [
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Safeguard implementation status?"
+              },
+              {
+                "field": "ig_level_in_scope",
+                "type": "select",
+                "options": [
+                  "IG1",
+                  "IG2",
+                  "IG3"
+                ],
+                "prompt": "Which IG applies to this safeguard?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence?"
+              },
+              {
+                "field": "ram_likelihood_current",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "CIS RAM: likelihood (current state)?"
+              },
+              {
+                "field": "ram_impact_current",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "CIS RAM: impact (current state)?"
+              },
+              {
+                "field": "ram_likelihood_post",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "CIS RAM: likelihood after implementation?"
+              },
+              {
+                "field": "ram_impact_post",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "CIS RAM: impact after implementation?"
+              },
+              {
+                "field": "ram_burden",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "CIS RAM: burden of implementation (1-5)?"
+              },
+              {
+                "field": "acceptable",
+                "type": "boolean",
+                "prompt": "Risk acceptable post-implementation?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "17",
+      "name": "CIS Control 17: Incident Response Management",
+      "description": "Applicability: IG1+",
+      "controls": [
+        {
+          "id": "CIS-17",
+          "title": "Incident Response Management",
+          "description": "Sub-safeguards under Control 17. Load full safeguard list from CIS Controls v8.1.",
+          "question_block": {
+            "type": "cis_safeguard",
+            "questions": [
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Safeguard implementation status?"
+              },
+              {
+                "field": "ig_level_in_scope",
+                "type": "select",
+                "options": [
+                  "IG1",
+                  "IG2",
+                  "IG3"
+                ],
+                "prompt": "Which IG applies to this safeguard?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence?"
+              },
+              {
+                "field": "ram_likelihood_current",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "CIS RAM: likelihood (current state)?"
+              },
+              {
+                "field": "ram_impact_current",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "CIS RAM: impact (current state)?"
+              },
+              {
+                "field": "ram_likelihood_post",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "CIS RAM: likelihood after implementation?"
+              },
+              {
+                "field": "ram_impact_post",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "CIS RAM: impact after implementation?"
+              },
+              {
+                "field": "ram_burden",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "CIS RAM: burden of implementation (1-5)?"
+              },
+              {
+                "field": "acceptable",
+                "type": "boolean",
+                "prompt": "Risk acceptable post-implementation?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "18",
+      "name": "CIS Control 18: Penetration Testing",
+      "description": "Applicability: IG2+",
+      "controls": [
+        {
+          "id": "CIS-18",
+          "title": "Penetration Testing",
+          "description": "Sub-safeguards under Control 18. Load full safeguard list from CIS Controls v8.1.",
+          "question_block": {
+            "type": "cis_safeguard",
+            "questions": [
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Safeguard implementation status?"
+              },
+              {
+                "field": "ig_level_in_scope",
+                "type": "select",
+                "options": [
+                  "IG1",
+                  "IG2",
+                  "IG3"
+                ],
+                "prompt": "Which IG applies to this safeguard?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence?"
+              },
+              {
+                "field": "ram_likelihood_current",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "CIS RAM: likelihood (current state)?"
+              },
+              {
+                "field": "ram_impact_current",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "CIS RAM: impact (current state)?"
+              },
+              {
+                "field": "ram_likelihood_post",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "CIS RAM: likelihood after implementation?"
+              },
+              {
+                "field": "ram_impact_post",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "CIS RAM: impact after implementation?"
+              },
+              {
+                "field": "ram_burden",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "CIS RAM: burden of implementation (1-5)?"
+              },
+              {
+                "field": "acceptable",
+                "type": "boolean",
+                "prompt": "Risk acceptable post-implementation?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

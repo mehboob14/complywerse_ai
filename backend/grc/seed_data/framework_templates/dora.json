@@ -1,0 +1,1335 @@
+{
+ "framework_key": "dora",
+ "display_name": "DORA",
+ "name_patterns": [
+  "dora",
+  "digitaloperationalresilience"
+ ],
+ "registers": [
+  {
+   "type": "dora__dora_compliance_roadmap_template",
+   "label": "Compliance Roadmap",
+   "description": "DORA — Compliance Roadmap (from the template).",
+   "columns": [
+    {
+     "key": "ref",
+     "label": "Ref",
+     "type": "auto"
+    },
+    {
+     "key": "workstream",
+     "label": "Workstream",
+     "type": "text"
+    },
+    {
+     "key": "action",
+     "label": "Action",
+     "type": "textarea"
+    },
+    {
+     "key": "dora_article",
+     "label": "DORA article",
+     "type": "text",
+     "picker": "framework_controls"
+    },
+    {
+     "key": "priority",
+     "label": "Priority",
+     "type": "select",
+     "options": [
+      {
+       "value": "High",
+       "label": "High",
+       "tone": "rose"
+      }
+     ]
+    },
+    {
+     "key": "owner",
+     "label": "Owner",
+     "type": "text",
+     "picker": "users"
+    },
+    {
+     "key": "target_date",
+     "label": "Target date",
+     "type": "date"
+    },
+    {
+     "key": "status",
+     "label": "Status",
+     "type": "select",
+     "options": [
+      {
+       "value": "Not started",
+       "label": "Not started",
+       "tone": "slate"
+      }
+     ]
+    }
+   ],
+   "seed": [
+    {
+     "data": {
+      "ref": "1",
+      "workstream": "ICT risk management",
+      "action": "Formalise and have the management body approve the ICT risk-management framework",
+      "dora_article": "5-6",
+      "priority": "High",
+      "owner": "Head of ICT",
+      "target_date": "2026-09-01",
+      "status": "Not started"
+     }
+    },
+    {
+     "data": {
+      "ref": "2",
+      "workstream": "Incident reporting",
+      "action": "Build the major-incident classification and reporting workflow",
+      "dora_article": "17-19",
+      "priority": "High",
+      "owner": "SecOps",
+      "target_date": "2026-09-01",
+      "status": "Not started"
+     }
+    },
+    {
+     "data": {
+      "ref": "3",
+      "workstream": "Third-party risk",
+      "action": "Compile the register of information and remediate contract gaps",
+      "dora_article": "28-30",
+      "priority": "High",
+      "owner": "Procurement",
+      "target_date": "2026-10-01",
+      "status": "Not started"
+     }
+    }
+   ],
+   "formSections": [
+    {
+     "title": "Item",
+     "keys": [
+      "ref",
+      "workstream"
+     ]
+    },
+    {
+     "title": "Assessment",
+     "keys": [
+      "action",
+      "dora_article",
+      "priority",
+      "status"
+     ]
+    },
+    {
+     "title": "Ownership & dates",
+     "keys": [
+      "owner",
+      "target_date"
+     ]
+    }
+   ]
+  },
+  {
+   "type": "dora__dora_gap_assessment_template",
+   "label": "Gap Assessment",
+   "description": "DORA — Gap Assessment (from the template).",
+   "columns": [
+    {
+     "key": "pillar",
+     "label": "Pillar",
+     "type": "text"
+    },
+    {
+     "key": "article",
+     "label": "Article",
+     "type": "text",
+     "picker": "framework_controls"
+    },
+    {
+     "key": "obligation_to_verify",
+     "label": "Obligation to verify",
+     "type": "textarea"
+    },
+    {
+     "key": "status",
+     "label": "Status",
+     "type": "text"
+    },
+    {
+     "key": "evidence_notes",
+     "label": "Evidence / notes",
+     "type": "text",
+     "picker": "evidence"
+    },
+    {
+     "key": "owner",
+     "label": "Owner",
+     "type": "text",
+     "picker": "users"
+    }
+   ],
+   "seed": [
+    {
+     "data": {
+      "pillar": "Governance (Art. 5)",
+      "article": "5",
+      "obligation_to_verify": "The management body steers and is accountable for the ICT risk-management framework and allocates adequate budget",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "pillar": "ICT risk management (Art. 6-16)",
+      "article": "6",
+      "obligation_to_verify": "A comprehensive, documented ICT risk-management framework is in place",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "pillar": "ICT risk management (Art. 6-16)",
+      "article": "7",
+      "obligation_to_verify": "ICT systems are kept up to date and able to handle stressed conditions",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "pillar": "ICT risk management (Art. 6-16)",
+      "article": "9",
+      "obligation_to_verify": "Protection and prevention measures (encryption, access control, security) are implemented",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "pillar": "ICT risk management (Art. 6-16)",
+      "article": "10",
+      "obligation_to_verify": "Detection mechanisms identify anomalous activity and ICT-related incidents",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "pillar": "ICT risk management (Art. 6-16)",
+      "article": "11",
+      "obligation_to_verify": "Response and recovery procedures resolve incidents and ensure continuity",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "pillar": "ICT risk management (Art. 6-16)",
+      "article": "12",
+      "obligation_to_verify": "Backup, restoration and recovery objectives (RTO/RPO) are defined and tested",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "pillar": "ICT risk management (Art. 6-16)",
+      "article": "13",
+      "obligation_to_verify": "Lessons are learned from incidents and the framework evolves",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "pillar": "ICT risk management (Art. 6-16)",
+      "article": "14",
+      "obligation_to_verify": "Crisis communication procedures are in place",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "pillar": "Incident management (Art. 17-19)",
+      "article": "17",
+      "obligation_to_verify": "A documented ICT-related incident management process is in place",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "pillar": "Incident management (Art. 17-19)",
+      "article": "18",
+      "obligation_to_verify": "Incidents are classified, and major incidents identified against the criteria",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "pillar": "Incident management (Art. 17-19)",
+      "article": "19",
+      "obligation_to_verify": "Major ICT-related incidents are reported to the competent authority within the required timelines",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "pillar": "Resilience testing (Art. 24-27)",
+      "article": "24",
+      "obligation_to_verify": "ICT systems and staff are tested regularly for resilience",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "pillar": "Resilience testing (Art. 24-27)",
+      "article": "25",
+      "obligation_to_verify": "Testing includes vulnerability assessments, scans, gap analyses and scenario-based tests",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "pillar": "Resilience testing (Art. 24-27)",
+      "article": "26",
+      "obligation_to_verify": "Threat-led penetration testing (TLPT) is performed where the entity meets the criteria",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "pillar": "ICT third-party risk (Art. 28-30)",
+      "article": "28",
+      "obligation_to_verify": "ICT third-party risk is managed, with due diligence and concentration-risk assessment",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "pillar": "ICT third-party risk (Art. 28-30)",
+      "article": "29",
+      "obligation_to_verify": "A register of information on all ICT third-party arrangements is maintained",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "pillar": "ICT third-party risk (Art. 28-30)",
+      "article": "30",
+      "obligation_to_verify": "Contracts with ICT providers include the required key contractual provisions",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    }
+   ],
+   "formSections": [
+    {
+     "title": "Item",
+     "keys": [
+      "pillar",
+      "article"
+     ]
+    },
+    {
+     "title": "Assessment",
+     "keys": [
+      "obligation_to_verify",
+      "status",
+      "evidence_notes"
+     ]
+    },
+    {
+     "title": "Ownership & dates",
+     "keys": [
+      "owner"
+     ]
+    }
+   ]
+  },
+  {
+   "type": "dora__dora_ict_contractual_requirements_checklist_temp",
+   "label": "Ict Contractual Requirements Checklist",
+   "description": "DORA — Ict Contractual Requirements Checklist (from the template).",
+   "columns": [
+    {
+     "key": "area",
+     "label": "Area",
+     "type": "text"
+    },
+    {
+     "key": "article",
+     "label": "Article",
+     "type": "text",
+     "picker": "framework_controls"
+    },
+    {
+     "key": "required_contractual_provision",
+     "label": "Required contractual provision",
+     "type": "textarea"
+    },
+    {
+     "key": "status",
+     "label": "Status",
+     "type": "text"
+    },
+    {
+     "key": "evidence_notes",
+     "label": "Evidence / notes",
+     "type": "text",
+     "picker": "evidence"
+    },
+    {
+     "key": "owner",
+     "label": "Owner",
+     "type": "text",
+     "picker": "users"
+    }
+   ],
+   "seed": [
+    {
+     "data": {
+      "area": "Service & performance",
+      "article": "30(2)(a)",
+      "required_contractual_provision": "Clear and complete description of all functions and ICT services, including subcontracting of critical or important functions",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "area": "Service & performance",
+      "article": "30",
+      "required_contractual_provision": "Service levels, including performance targets, and quantitative and qualitative targets",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "area": "Locations",
+      "article": "30(2)(b)",
+      "required_contractual_provision": "The locations where functions and data are provided and processed, with notification of changes",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "area": "Data protection",
+      "article": "30(2)(c)",
+      "required_contractual_provision": "Provisions on availability, authenticity, integrity and confidentiality of data, including personal data",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "area": "Access & data return",
+      "article": "30(2)(d)",
+      "required_contractual_provision": "The right to access, recover and return data in an accessible format on termination",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "area": "Incident support",
+      "article": "30(2)(e)",
+      "required_contractual_provision": "The provider assists at no additional cost, or at a pre-agreed cost, during an ICT incident",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "area": "Cooperation with authorities",
+      "article": "30(2)(f)",
+      "required_contractual_provision": "The provider cooperates with the financial entity's competent authorities",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "area": "Termination & exit",
+      "article": "30(2)(g)",
+      "required_contractual_provision": "Termination rights and minimum notice periods, plus a documented exit strategy",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "area": "Audit & access rights",
+      "article": "30(3)(e)",
+      "required_contractual_provision": "Full access, inspection and audit rights for the financial entity and the competent authority",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "area": "Security & training",
+      "article": "30(3)(c)",
+      "required_contractual_provision": "The provider implements and tests ICT security and participates in security-awareness and training",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    },
+    {
+     "data": {
+      "area": "Subcontracting",
+      "article": "30(2)(a)",
+      "required_contractual_provision": "Conditions for subcontracting critical or important functions, where permitted",
+      "status": "",
+      "evidence_notes": "",
+      "owner": ""
+     }
+    }
+   ],
+   "formSections": [
+    {
+     "title": "Item",
+     "keys": [
+      "area",
+      "article"
+     ]
+    },
+    {
+     "title": "Assessment",
+     "keys": [
+      "required_contractual_provision",
+      "status",
+      "evidence_notes"
+     ]
+    },
+    {
+     "title": "Ownership & dates",
+     "keys": [
+      "owner"
+     ]
+    }
+   ]
+  },
+  {
+   "type": "dora__dora_ict_incident_register_template",
+   "label": "Ict Incident Register",
+   "description": "DORA — Ict Incident Register (from the template).",
+   "columns": [
+    {
+     "key": "ref",
+     "label": "Ref",
+     "type": "auto"
+    },
+    {
+     "key": "date_time_detected",
+     "label": "Date/time detected",
+     "type": "datetime"
+    },
+    {
+     "key": "description",
+     "label": "Description",
+     "type": "textarea"
+    },
+    {
+     "key": "classification",
+     "label": "Classification",
+     "type": "select",
+     "options": [
+      {
+       "value": "Major",
+       "label": "Major",
+       "tone": "slate"
+      }
+     ]
+    },
+    {
+     "key": "major",
+     "label": "Major?",
+     "type": "select",
+     "options": [
+      {
+       "value": "Yes",
+       "label": "Yes",
+       "tone": "emerald"
+      },
+      {
+       "value": "No",
+       "label": "No",
+       "tone": "rose"
+      }
+     ]
+    },
+    {
+     "key": "reported_to_authority",
+     "label": "Reported to authority?",
+     "type": "select",
+     "options": [
+      {
+       "value": "Yes",
+       "label": "Yes",
+       "tone": "emerald"
+      },
+      {
+       "value": "No",
+       "label": "No",
+       "tone": "rose"
+      }
+     ]
+    },
+    {
+     "key": "date_reported",
+     "label": "Date reported",
+     "type": "date"
+    },
+    {
+     "key": "root_cause",
+     "label": "Root cause",
+     "type": "text"
+    },
+    {
+     "key": "status",
+     "label": "Status",
+     "type": "select",
+     "options": [
+      {
+       "value": "Open",
+       "label": "Open",
+       "tone": "rose"
+      }
+     ]
+    },
+    {
+     "key": "owner",
+     "label": "Owner",
+     "type": "text",
+     "picker": "users"
+    },
+    {
+     "key": "lessons_learned",
+     "label": "Lessons learned",
+     "type": "text"
+    }
+   ],
+   "seed": [
+    {
+     "data": {
+      "ref": "I1",
+      "date_time_detected": "2026-06-01 10:00:00",
+      "description": "Outage of a core payment service",
+      "classification": "Major",
+      "major": "Yes",
+      "reported_to_authority": "Pending",
+      "date_reported": "",
+      "root_cause": "Under investigation",
+      "status": "Open",
+      "owner": "Head of ICT",
+      "lessons_learned": ""
+     }
+    }
+   ],
+   "formSections": [
+    {
+     "title": "Item",
+     "keys": [
+      "ref",
+      "date_time_detected"
+     ]
+    },
+    {
+     "title": "Assessment",
+     "keys": [
+      "description",
+      "classification",
+      "major",
+      "reported_to_authority",
+      "root_cause",
+      "status",
+      "lessons_learned"
+     ]
+    },
+    {
+     "title": "Ownership & dates",
+     "keys": [
+      "date_reported",
+      "owner"
+     ]
+    }
+   ]
+  },
+  {
+   "type": "dora__dora_register_of_information_template",
+   "label": "Register Of Information",
+   "description": "DORA — Register Of Information (from the template).",
+   "columns": [
+    {
+     "key": "ref",
+     "label": "Ref",
+     "type": "auto"
+    },
+    {
+     "key": "ict_third_party_provider",
+     "label": "ICT third-party provider",
+     "type": "text"
+    },
+    {
+     "key": "service_function_supported",
+     "label": "Service / function supported",
+     "type": "text"
+    },
+    {
+     "key": "supports_a_critical_or_important_function",
+     "label": "Supports a critical or important function?",
+     "type": "text"
+    },
+    {
+     "key": "contract_reference",
+     "label": "Contract reference",
+     "type": "text",
+     "picker": "framework_controls"
+    },
+    {
+     "key": "concentration_risk",
+     "label": "Concentration risk",
+     "type": "text"
+    },
+    {
+     "key": "subcontracting",
+     "label": "Subcontracting?",
+     "type": "select",
+     "options": [
+      {
+       "value": "Yes",
+       "label": "Yes",
+       "tone": "emerald"
+      },
+      {
+       "value": "No",
+       "label": "No",
+       "tone": "rose"
+      }
+     ]
+    },
+    {
+     "key": "exit_plan",
+     "label": "Exit plan?",
+     "type": "select",
+     "options": [
+      {
+       "value": "Yes",
+       "label": "Yes",
+       "tone": "emerald"
+      },
+      {
+       "value": "No",
+       "label": "No",
+       "tone": "rose"
+      }
+     ]
+    },
+    {
+     "key": "owner",
+     "label": "Owner",
+     "type": "text",
+     "picker": "users"
+    },
+    {
+     "key": "last_reviewed",
+     "label": "Last reviewed",
+     "type": "text"
+    }
+   ],
+   "seed": [
+    {
+     "data": {
+      "ref": "R1",
+      "ict_third_party_provider": "Cloud infrastructure provider",
+      "service_function_supported": "Core platform hosting",
+      "supports_a_critical_or_important_function": "Yes",
+      "contract_reference": "MSA-2026-01",
+      "concentration_risk": "High",
+      "subcontracting": "Yes",
+      "exit_plan": "Yes",
+      "owner": "Head of ICT",
+      "last_reviewed": "2026-06-01"
+     }
+    },
+    {
+     "data": {
+      "ref": "R2",
+      "ict_third_party_provider": "Payment processor",
+      "service_function_supported": "Card payment processing",
+      "supports_a_critical_or_important_function": "Yes",
+      "contract_reference": "MSA-2026-02",
+      "concentration_risk": "Medium",
+      "subcontracting": "No",
+      "exit_plan": "Yes",
+      "owner": "Payments",
+      "last_reviewed": "2026-06-01"
+     }
+    }
+   ],
+   "formSections": [
+    {
+     "title": "Item",
+     "keys": [
+      "ref",
+      "ict_third_party_provider"
+     ]
+    },
+    {
+     "title": "Assessment",
+     "keys": [
+      "service_function_supported",
+      "supports_a_critical_or_important_function",
+      "contract_reference",
+      "concentration_risk",
+      "subcontracting",
+      "exit_plan",
+      "last_reviewed"
+     ]
+    },
+    {
+     "title": "Ownership & dates",
+     "keys": [
+      "owner"
+     ]
+    }
+   ]
+  },
+  {
+   "type": "dora__dora_scope_applicability_assessment_template",
+   "label": "Scope Applicability Assessment",
+   "description": "DORA — Scope Applicability Assessment (from the template).",
+   "columns": [
+    {
+     "key": "step",
+     "label": "Step",
+     "type": "text"
+    },
+    {
+     "key": "question",
+     "label": "Question",
+     "type": "textarea"
+    },
+    {
+     "key": "your_answer",
+     "label": "Your answer",
+     "type": "text"
+    },
+    {
+     "key": "notes",
+     "label": "Notes",
+     "type": "textarea"
+    }
+   ],
+   "seed": [
+    {
+     "data": {
+      "step": "1",
+      "question": "Are you a financial entity listed in DORA Article 2 (e.g. credit institution, payment or e-money institution, investment firm, insurer/reinsurer, fund manager, trading venue, CCP, CSD, crypto-asset service provider, IORP, account information service provider)?",
+      "your_answer": "",
+      "notes": "[FILL IN: entity type]"
+     }
+    },
+    {
+     "data": {
+      "step": "2",
+      "question": "Are you established in or providing services in the EU and supervised under the relevant financial-services law?",
+      "your_answer": "",
+      "notes": ""
+     }
+    },
+    {
+     "data": {
+      "step": "3",
+      "question": "Are you a microenterprise, or otherwise eligible for the simplified ICT risk-management framework (Art. 16)?",
+      "your_answer": "",
+      "notes": "Proportionality"
+     }
+    },
+    {
+     "data": {
+      "step": "4",
+      "question": "Do you meet the criteria for advanced threat-led penetration testing (Art. 26: large, systemic, ICT-mature entities and certain market infrastructures)?",
+      "your_answer": "",
+      "notes": "TLPT applicability"
+     }
+    },
+    {
+     "data": {
+      "step": "5",
+      "question": "Determination: is DORA in scope, and which regime applies (full / simplified), and is TLPT required?",
+      "your_answer": "",
+      "notes": "In scope / Simplified / Out of scope"
+     }
+    }
+   ],
+   "formSections": [
+    {
+     "title": "Item",
+     "keys": [
+      "step",
+      "question"
+     ]
+    },
+    {
+     "title": "Assessment",
+     "keys": [
+      "your_answer",
+      "notes"
+     ]
+    }
+   ]
+  }
+ ],
+ "documents": [
+  {
+   "type": "dora__dora_ict_governance_policy_template_1",
+   "label": "Ict Governance Policy",
+   "control_ref": null,
+   "sections": [
+    {
+     "heading": "1. Purpose",
+     "body": "This policy sets out how the management body governs ICT risk under DORA, which makes the management body responsible for the entity's ICT risk-management framework."
+    },
+    {
+     "heading": "2. Scope",
+     "body": "The management body and the ICT governance arrangements of the financial entity."
+    },
+    {
+     "heading": "3. Responsibility for the Framework",
+     "body": "The management body holds ultimate, non-delegable responsibility for ICT risk:\n- It defines, approves and oversees the ICT risk-management framework and bears ultimate accountability for it.\n- It puts in place clear roles and responsibilities for all ICT-related functions.\n- It approves and oversees the policy on the use of third-party ICT service providers."
+    },
+    {
+     "heading": "4. Resourcing",
+     "body": "The management body allocates and periodically reviews the budget needed to meet the entity's digital operational resilience needs, including the resources for ICT security awareness and training."
+    },
+    {
+     "heading": "5. Oversight and Reporting",
+     "body": "The management body reviews ICT risk, major incidents and resilience testing results on a defined cadence, and sets the entity's risk tolerance for ICT risk.\n[FILL IN: state how often ICT risk is reviewed by the management body.]"
+    },
+    {
+     "heading": "6. Knowledge",
+     "body": "Management-body members maintain sufficient knowledge of ICT risk to understand and assess it, through regular training."
+    },
+    {
+     "heading": "7. Roles & Responsibilities",
+     "body": "",
+     "table": {
+      "columns": [
+       "Role",
+       "Responsibilities"
+      ],
+      "rows": [
+       [
+        "Management body",
+        "Owns ICT risk governance and accountability."
+       ],
+       [
+        "Head of ICT / CISO",
+        "Reports ICT risk and resilience to the management body."
+       ],
+       [
+        "Managers",
+        "Ensure their teams understand and follow the policy."
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "8. Compliance & Enforcement",
+     "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+    },
+    {
+     "heading": "9. Exceptions",
+     "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+    },
+    {
+     "heading": "10. Review",
+     "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+    }
+   ]
+  },
+  {
+   "type": "dora__dora_ict_incident_management_procedure_template_",
+   "label": "Ict Incident Management Procedure",
+   "control_ref": null,
+   "sections": [
+    {
+     "heading": "1. Purpose",
+     "body": "This procedure ensures ICT-related incidents are detected, managed, classified and, where they are major, reported to the competent authority within the DORA timelines."
+    },
+    {
+     "heading": "2. Scope",
+     "body": "All ICT-related incidents affecting the financial entity's services and systems."
+    },
+    {
+     "heading": "3. Incident Management Process",
+     "body": "A documented process records, classifies, handles and resolves ICT-related incidents, including containment and recovery, and assigns roles and responsibilities."
+    },
+    {
+     "heading": "4. Classification",
+     "body": "Incidents are classified, and major incidents identified, using the DORA criteria, including:\n- The number of clients or financial counterparts affected, and the economic impact.\n- The duration and service downtime, and the geographical spread.\n- Data losses (availability, integrity or confidentiality), and the criticality of the services affected.\n- [FILL IN: record your classification thresholds and who applies them.]"
+    },
+    {
+     "heading": "5. Reporting Major Incidents",
+     "body": "Major ICT-related incidents are reported to the competent authority in stages (initial notification, intermediate report and final report) within the timelines set by the regulation and its technical standards.\n[FILL IN: name your competent authority and reporting channel.]"
+    },
+    {
+     "heading": "6. Voluntary Threat Notification",
+     "body": "Significant cyber threats may be notified voluntarily to the authority and to affected clients where relevant."
+    },
+    {
+     "heading": "7. Client Communication",
+     "body": "Where a major incident affects clients' financial interests, they are informed without undue delay, along with the measures taken to mitigate it."
+    },
+    {
+     "heading": "8. Roles & Responsibilities",
+     "body": "",
+     "table": {
+      "columns": [
+       "Role",
+       "Responsibilities"
+      ],
+      "rows": [
+       [
+        "Incident lead",
+        "Runs the process and meets the reporting timelines."
+       ],
+       [
+        "Head of ICT / CISO",
+        "Owns incident management."
+       ],
+       [
+        "IT / Operations",
+        "Implements and maintains the technical controls described in this document."
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "9. Testing & Maintenance",
+     "body": "This plan is reviewed at least annually and after every activation or major change. Exercises (tabletop or full) are scheduled to validate the plan and results are recorded as improvement actions."
+    }
+   ]
+  },
+  {
+   "type": "dora__dora_ict_response_recovery_policy_template_1",
+   "label": "Ict Response Recovery Policy",
+   "control_ref": null,
+   "sections": [
+    {
+     "heading": "1. Purpose",
+     "body": "This policy ensures the financial entity can respond to and recover from ICT-related incidents and disruptions, maintaining the continuity of its critical and important functions, as part of the DORA ICT risk-management framework."
+    },
+    {
+     "heading": "2. Scope",
+     "body": "The ICT systems and services supporting the entity's critical and important functions."
+    },
+    {
+     "heading": "3. ICT Business Continuity",
+     "body": "ICT business continuity arrangements keep critical and important functions running or rapidly restore them during and after a disruption."
+    },
+    {
+     "heading": "4. Response Procedures",
+     "body": "Defined response procedures govern how an ICT incident is handled:\n- Incidents are contained and damage limited as quickly as possible.\n- The resumption of critical and important functions is prioritised over less critical activity.\n- Roles, decision authority and escalation are defined so the response is coordinated."
+    },
+    {
+     "heading": "5. Backup and Restoration",
+     "body": "Backups of data and ICT systems are taken, protected and tested, and restoration uses systems that are physically and logically separated from the source where appropriate.\n[FILL IN: state your backup scope, frequency and RTO/RPO.]"
+    },
+    {
+     "heading": "6. Testing and Crisis Communication",
+     "body": "Continuity and response plans are tested, and crisis communication keeps stakeholders and authorities informed during a disruption."
+    },
+    {
+     "heading": "7. Roles & Responsibilities",
+     "body": "",
+     "table": {
+      "columns": [
+       "Role",
+       "Responsibilities"
+      ],
+      "rows": [
+       [
+        "Head of ICT / CISO",
+        "Owns ICT response and recovery."
+       ],
+       [
+        "Continuity lead",
+        "Maintains and tests the plans."
+       ],
+       [
+        "IT / Operations",
+        "Implements and maintains the technical controls described in this document."
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "8. Testing & Maintenance",
+     "body": "This plan is reviewed at least annually and after every activation or major change. Exercises (tabletop or full) are scheduled to validate the plan and results are recorded as improvement actions."
+    }
+   ]
+  },
+  {
+   "type": "dora__dora_ict_risk_management_framework_policy_templa",
+   "label": "Ict Risk Management Framework Policy",
+   "control_ref": null,
+   "sections": [
+    {
+     "heading": "1. Purpose",
+     "body": "This policy establishes the comprehensive ICT risk-management framework DORA requires of financial entities, covering the identification, protection, detection, response, recovery, learning and communication functions for ICT risk."
+    },
+    {
+     "heading": "2. Scope",
+     "body": "All ICT systems, services and assets the entity relies on to deliver its financial services, and the people and processes that support them."
+    },
+    {
+     "heading": "3. Governance",
+     "body": "The management body steers, approves and is accountable for the ICT risk-management framework and allocates adequate budget and resources to it."
+    },
+    {
+     "heading": "4. Identification",
+     "body": "ICT-supported business functions, information assets and dependencies, including on ICT third-party providers, are identified and kept current."
+    },
+    {
+     "heading": "5. Protection and Prevention",
+     "body": "Protective measures keep ICT systems resilient:\n- ICT systems are kept up to date and able to handle stressed conditions.\n- Encryption, access control and security policies protect information and systems.\n- Change and patch management reduce exposure."
+    },
+    {
+     "heading": "6. Detection",
+     "body": "Mechanisms detect anomalous activity and ICT-related incidents promptly, with defined alerting thresholds."
+    },
+    {
+     "heading": "7. Response and Recovery",
+     "body": "Response and recovery procedures contain and resolve incidents and restore services, supported by backups and recovery objectives (see the response and recovery policy)."
+    },
+    {
+     "heading": "8. Backup and Restoration",
+     "body": "Backup policies, restoration procedures and recovery time and point objectives are defined and tested.\n[FILL IN: state your RTO/RPO for critical functions.]"
+    },
+    {
+     "heading": "9. Learning and Evolving",
+     "body": "Lessons are drawn from incidents, threat intelligence and tests, and the framework is updated."
+    },
+    {
+     "heading": "10. Communication",
+     "body": "Crisis communication procedures inform staff, clients, counterparts and authorities during ICT incidents."
+    },
+    {
+     "heading": "11. Roles & Responsibilities",
+     "body": "",
+     "table": {
+      "columns": [
+       "Role",
+       "Responsibilities"
+      ],
+      "rows": [
+       [
+        "Management body",
+        "Approves and is accountable for the framework."
+       ],
+       [
+        "Head of ICT / CISO",
+        "Owns and operates the ICT risk-management framework."
+       ],
+       [
+        "IT / Operations",
+        "Implements and maintains the technical controls described in this document."
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "12. Compliance & Enforcement",
+     "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+    },
+    {
+     "heading": "13. Exceptions",
+     "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+    },
+    {
+     "heading": "14. Review",
+     "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+    }
+   ]
+  },
+  {
+   "type": "dora__dora_ict_third_party_risk_policy_template_1",
+   "label": "Ict Third Party Risk Policy",
+   "control_ref": null,
+   "sections": [
+    {
+     "heading": "1. Purpose",
+     "body": "This policy manages the risks arising from the entity's use of ICT third-party service providers, as DORA requires, across the full lifecycle of those arrangements."
+    },
+    {
+     "heading": "2. Scope",
+     "body": "All arrangements for the use of ICT services provided by ICT third-party service providers."
+    },
+    {
+     "heading": "3. Sound Management and Due Diligence",
+     "body": "ICT third-party risk is managed as an integral part of the ICT risk framework, with due diligence before entering arrangements and ongoing monitoring throughout."
+    },
+    {
+     "heading": "4. Register of Information",
+     "body": "All contractual arrangements for ICT services are recorded in the register of information, distinguishing those supporting critical or important functions (see the register template)."
+    },
+    {
+     "heading": "5. Concentration Risk",
+     "body": "Before contracting, the entity assesses ICT concentration risk, including the risks of relying on a single provider or hard-to-substitute services."
+    },
+    {
+     "heading": "6. Key Contractual Provisions",
+     "body": "Contracts include the key provisions DORA requires, with stricter provisions for critical or important functions (see the contractual checklist):\n- Clear service-level descriptions and the data and access rights the entity needs.\n- Incident assistance and cooperation obligations, and audit and access rights.\n- Conditions on subcontracting of critical or important services.\n- Termination rights and exit support."
+    },
+    {
+     "heading": "7. Exit Strategies",
+     "body": "Exit strategies and transition plans exist for arrangements supporting critical or important functions, so the entity can exit without disruption.\n[FILL IN: identify your critical providers and their exit plans.]"
+    },
+    {
+     "heading": "8. Roles & Responsibilities",
+     "body": "",
+     "table": {
+      "columns": [
+       "Role",
+       "Responsibilities"
+      ],
+      "rows": [
+       [
+        "Procurement",
+        "Manages contracts and the register."
+       ],
+       [
+        "Head of ICT / CISO",
+        "Owns ICT third-party risk."
+       ],
+       [
+        "Managers",
+        "Ensure their teams understand and follow the policy."
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "9. Compliance & Enforcement",
+     "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+    },
+    {
+     "heading": "10. Exceptions",
+     "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+    },
+    {
+     "heading": "11. Review",
+     "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+    }
+   ]
+  },
+  {
+   "type": "dora__dora_resilience_testing_policy_template_1",
+   "label": "Resilience Testing Policy",
+   "control_ref": null,
+   "sections": [
+    {
+     "heading": "1. Purpose",
+     "body": "This policy establishes the digital operational resilience testing programme DORA requires, so the effectiveness of the entity's prevention, detection, response and recovery capabilities is regularly assessed and weaknesses are remediated."
+    },
+    {
+     "heading": "2. Scope",
+     "body": "The ICT systems, applications and staff supporting the entity's critical and important functions."
+    },
+    {
+     "heading": "3. Testing Programme",
+     "body": "A risk-based testing programme tests ICT systems and tools regularly, with the results feeding remediation."
+    },
+    {
+     "heading": "4. Types of Testing",
+     "body": "The programme uses a range of tests:\n- Vulnerability assessments and scans.\n- Gap analyses and security reviews.\n- Scenario-based, performance and end-to-end testing.\n- Source-code reviews where appropriate.\n- [FILL IN: list the tests you run and their frequency.]"
+    },
+    {
+     "heading": "5. Threat-Led Penetration Testing (TLPT)",
+     "body": "Where the entity meets the DORA criteria, threat-led penetration testing is performed at least every three years on the systems supporting critical or important functions, using qualified, independent testers."
+    },
+    {
+     "heading": "6. Remediation",
+     "body": "Findings are prioritised by risk, assigned an owner and a target date, remediated, and verified by re-testing before they are closed. Open findings feed the ICT risk-management framework and are reported to management."
+    },
+    {
+     "heading": "7. Independence and Records",
+     "body": "Tests are performed by parties with sufficient independence from the teams that built or run the system under test, and the scope, results and remediation of each test are documented and retained as evidence of the testing programme."
+    },
+    {
+     "heading": "8. Roles & Responsibilities",
+     "body": "",
+     "table": {
+      "columns": [
+       "Role",
+       "Responsibilities"
+      ],
+      "rows": [
+       [
+        "Head of ICT / CISO",
+        "Owns the testing programme."
+       ],
+       [
+        "Security testing lead",
+        "Plans and runs the tests."
+       ],
+       [
+        "IT / Operations",
+        "Implements and maintains the technical controls described in this document."
+       ]
+      ]
+     }
+    },
+    {
+     "heading": "9. Testing & Maintenance",
+     "body": "This plan is reviewed at least annually and after every activation or major change. Exercises (tabletop or full) are scheduled to validate the plan and results are recorded as improvement actions."
+    }
+   ]
+  }
+ ]
+}

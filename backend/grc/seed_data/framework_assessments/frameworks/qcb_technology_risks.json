@@ -1,0 +1,416 @@
+{
+  "id": "qcb_technology_risks",
+  "name": "Qatar Central Bank — Technology Risk Circular",
+  "version": "January 2018",
+  "official_sources": [
+    {
+      "title": "Qatar Central Bank — Technology Risk Circular (Cyber Security & IT Risk)",
+      "url": "https://www.qcb.gov.qa/EnglishSite/Pages/Default.aspx"
+    },
+    {
+      "title": "QCB Instructions to Banks (relevant cyber-risk obligations)",
+      "url": "https://www.qcb.gov.qa/EnglishSite/SiteAssets/Pages/Default.aspx"
+    },
+    {
+      "title": "Methodology: ISO/IEC 27005:2022 - Information security risk management",
+      "url": "https://www.iso.org/standard/80585.html"
+    },
+    {
+      "title": "Reference: Basel Committee — Principles for the sound management of operational risk",
+      "url": "https://www.bis.org/bcbs/publ/d559.htm"
+    }
+  ],
+  "assessment_shapes": [
+    "attestation",
+    "asset_threat_vulnerability"
+  ],
+  "methodology": "The QCB Technology Risks Circular mandates Qatari licensed banks (and selected non-bank financial institutions) to implement a documented cyber-security and IT-risk programme covering ten organisational domains. Each control is assessed against board-approved risk appetite, with residual risks rated on QCB's 5-point likelihood × impact matrix. Material findings are reportable to QCB; the regulator requires annual self-assessment, third-party penetration testing, and prompt notification of significant cyber incidents. The methodology follows ISO/IEC 27005 risk-management process — context, identification, analysis, evaluation, treatment, communication and monitoring — anchored to the Circular's organisational, technical and procedural requirements.",
+  "scoping_inputs": [
+    {
+      "id": "institution_type",
+      "type": "select",
+      "options": [
+        "Conventional bank",
+        "Islamic bank",
+        "Foreign bank branch",
+        "Specialised bank",
+        "Exchange house",
+        "Finance company",
+        "Investment company",
+        "Other regulated entity"
+      ],
+      "label": "QCB-regulated institution type"
+    },
+    {
+      "id": "qcb_licence_number",
+      "type": "text",
+      "label": "QCB licence reference"
+    },
+    {
+      "id": "critical_systems",
+      "type": "list",
+      "label": "Critical banking systems in scope (core banking, payments, online channels)"
+    },
+    {
+      "id": "branches_data_centres",
+      "type": "list",
+      "label": "Branches and data-centre locations (Qatar + offshore)"
+    },
+    {
+      "id": "outsourcing",
+      "type": "list",
+      "label": "Material outsourcing arrangements (cloud, managed services, SWIFT bureau)"
+    },
+    {
+      "id": "last_penetration_test",
+      "type": "date",
+      "label": "Date of most recent independent penetration test"
+    }
+  ],
+  "risk_model": {
+    "factors": [
+      "asset",
+      "threat",
+      "vulnerability",
+      "likelihood",
+      "impact_c",
+      "impact_i",
+      "impact_a",
+      "impact_financial",
+      "impact_regulatory",
+      "impact_reputation"
+    ],
+    "scales": {
+      "likelihood": [
+        { "value": 1, "label": "Rare",           "definition": "May occur only in exceptional circumstances (<5% per year)." },
+        { "value": 2, "label": "Unlikely",       "definition": "Could occur but not expected (5-25%)." },
+        { "value": 3, "label": "Possible",       "definition": "Might occur at some time (25-50%)." },
+        { "value": 4, "label": "Likely",         "definition": "Will probably occur (50-75%)." },
+        { "value": 5, "label": "Almost Certain", "definition": "Expected to occur (>75%)." }
+      ],
+      "impact": [
+        { "value": 1, "label": "Insignificant", "definition": "Negligible impact on banking operations / customer trust." },
+        { "value": 2, "label": "Minor",         "definition": "Limited service disruption; no customer harm; no regulator notification required." },
+        { "value": 3, "label": "Moderate",      "definition": "Notable service disruption or limited customer data exposure; QCB notification required." },
+        { "value": 4, "label": "Major",         "definition": "Significant customer impact, settlement disruption or material fraud; formal QCB reporting and remediation directive expected." },
+        { "value": 5, "label": "Severe",        "definition": "Systemic event — payment-system disruption, mass customer fraud, loss of QCB confidence; risk to licence." }
+      ],
+      "maturity": [
+        { "value": 0, "label": "Non-existent" },
+        { "value": 1, "label": "Initial / Ad-hoc" },
+        { "value": 2, "label": "Repeatable but Informal" },
+        { "value": 3, "label": "Defined Process" },
+        { "value": 4, "label": "Managed and Measurable" },
+        { "value": 5, "label": "Optimised" }
+      ],
+      "implementation_status": [
+        { "value": "NI", "label": "Not Implemented" },
+        { "value": "PI", "label": "Partially Implemented" },
+        { "value": "LI", "label": "Largely Implemented" },
+        { "value": "FI", "label": "Fully Implemented" },
+        { "value": "NA", "label": "Not Applicable (justify per QCB)" }
+      ]
+    },
+    "matrix": "5x5",
+    "calculation": "likelihood * max(impact_c, impact_i, impact_a, impact_financial, impact_regulatory, impact_reputation)",
+    "acceptance_threshold": 6,
+    "thresholds": {
+      "low":      [1, 4],
+      "medium":   [5, 9],
+      "high":     [10, 16],
+      "critical": [17, 25]
+    }
+  },
+  "domains": [
+    {
+      "id": "QCB_1_CYBER_ORG",
+      "name": "1 — Cyber security within the organization",
+      "controls": [
+        {
+          "id": "1.1.1",
+          "title": "Board-approved cyber security function and framework",
+          "description": "Establish and maintain a board-approved cyber-security function, framework and governance structure proportionate to the institution's size and risk profile.",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              { "field": "implementation_status", "type": "select", "scale": "implementation_status", "prompt": "Implementation status of board-approved cyber framework?" },
+              { "field": "ciso_appointed", "type": "boolean", "prompt": "Is a designated CISO (or equivalent) appointed and reporting to the board?" },
+              { "field": "board_review_freq", "type": "text", "prompt": "Frequency of board-level cyber risk review." },
+              { "field": "evidence", "type": "text", "prompt": "Evidence (board charter, CISO appointment letter, committee minutes)." },
+              { "field": "owner", "type": "text", "prompt": "Owner." },
+              { "field": "target_date", "type": "date", "prompt": "Target date for any remediation." }
+            ]
+          }
+        },
+        {
+          "id": "1.2.1",
+          "title": "Cyber risk appetite and tolerance",
+          "description": "Define, document and approve a cyber-risk appetite and tolerance aligned with overall enterprise risk appetite.",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              { "field": "implementation_status", "type": "select", "scale": "implementation_status", "prompt": "Implementation status?" },
+              { "field": "appetite_metrics", "type": "text", "prompt": "Quantitative metrics defined for cyber-risk appetite (e.g. max tolerable downtime, max acceptable fraud loss)." },
+              { "field": "tolerance_breaches", "type": "text", "prompt": "Recent appetite breaches and remediation actions." },
+              { "field": "evidence", "type": "text", "prompt": "Evidence." },
+              { "field": "owner", "type": "text", "prompt": "Owner." },
+              { "field": "target_date", "type": "date", "prompt": "Target date." }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "QCB_2_ENTERPRISE_SEC",
+      "name": "2 — Enterprise security",
+      "controls": [
+        {
+          "id": "2.1.1",
+          "title": "Identity and access management",
+          "description": "Implement role-based access, segregation of duties, privileged access management and multi-factor authentication for all sensitive systems.",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              { "field": "implementation_status", "type": "select", "scale": "implementation_status", "prompt": "Implementation status?" },
+              { "field": "mfa_coverage", "type": "text", "prompt": "MFA coverage on privileged accounts (%) and customer-facing channels (%)." },
+              { "field": "pam_tool", "type": "text", "prompt": "Privileged access management solution in use." },
+              { "field": "access_review_freq", "type": "text", "prompt": "Frequency of access recertification." },
+              { "field": "evidence", "type": "text", "prompt": "Evidence." },
+              { "field": "owner", "type": "text", "prompt": "Owner." },
+              { "field": "target_date", "type": "date", "prompt": "Target date." }
+            ]
+          }
+        },
+        {
+          "id": "2.2.1",
+          "title": "Network and endpoint security",
+          "description": "Layered network security including segmentation, firewalls, IDS/IPS, DDoS protection, EDR and DNS filtering.",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              { "field": "implementation_status", "type": "select", "scale": "implementation_status", "prompt": "Implementation status?" },
+              { "field": "segmentation_strategy", "type": "text", "prompt": "Network segmentation strategy (zones, DMZ, OT vs IT)." },
+              { "field": "edr_coverage", "type": "text", "prompt": "EDR coverage on endpoints (%) and servers (%)." },
+              { "field": "ddos_protection", "type": "text", "prompt": "DDoS protection arrangement (in-house / ISP / cloud)." },
+              { "field": "evidence", "type": "text", "prompt": "Evidence." },
+              { "field": "owner", "type": "text", "prompt": "Owner." },
+              { "field": "target_date", "type": "date", "prompt": "Target date." }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "QCB_3_BUSINESS_APPS",
+      "name": "3 — Business applications",
+      "controls": [
+        {
+          "id": "3.1.1",
+          "title": "Secure software development lifecycle",
+          "description": "Apply secure-by-design SDLC to all in-house and outsourced banking applications including code review, SAST/DAST and pre-release security testing.",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              { "field": "implementation_status", "type": "select", "scale": "implementation_status", "prompt": "Implementation status?" },
+              { "field": "sdlc_artifacts", "type": "text", "prompt": "SDLC artifacts (threat models, SAST/DAST reports, vendor security reviews)." },
+              { "field": "change_management", "type": "text", "prompt": "Change-management process for production banking apps." },
+              { "field": "evidence", "type": "text", "prompt": "Evidence." },
+              { "field": "owner", "type": "text", "prompt": "Owner." },
+              { "field": "target_date", "type": "date", "prompt": "Target date." }
+            ]
+          }
+        },
+        {
+          "id": "3.2.1",
+          "title": "Online and mobile banking security",
+          "description": "Implement strong customer authentication, transaction signing, anti-fraud monitoring and secure communication for online / mobile channels.",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              { "field": "implementation_status", "type": "select", "scale": "implementation_status", "prompt": "Implementation status?" },
+              { "field": "sca_method", "type": "text", "prompt": "Strong customer authentication method (OTP, push, biometric)." },
+              { "field": "fraud_monitoring", "type": "text", "prompt": "Fraud-monitoring platform and real-time rules." },
+              { "field": "evidence", "type": "text", "prompt": "Evidence." },
+              { "field": "owner", "type": "text", "prompt": "Owner." },
+              { "field": "target_date", "type": "date", "prompt": "Target date." }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "QCB_4_IT_OPS",
+      "name": "4 — IT operations",
+      "controls": [
+        {
+          "id": "4.1.1",
+          "title": "Patch and vulnerability management",
+          "description": "Maintain a documented vulnerability-management programme with risk-prioritised patching SLAs and independent verification.",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              { "field": "implementation_status", "type": "select", "scale": "implementation_status", "prompt": "Implementation status?" },
+              { "field": "patch_sla_critical", "type": "text", "prompt": "SLA for patching critical vulnerabilities (days)." },
+              { "field": "vuln_scan_frequency", "type": "text", "prompt": "Internal and external vulnerability scan frequency." },
+              { "field": "last_pentest_date", "type": "date", "prompt": "Date of last independent penetration test." },
+              { "field": "evidence", "type": "text", "prompt": "Evidence." },
+              { "field": "owner", "type": "text", "prompt": "Owner." },
+              { "field": "target_date", "type": "date", "prompt": "Target date." }
+            ]
+          }
+        },
+        {
+          "id": "4.2.1",
+          "title": "Logging, monitoring and SOC",
+          "description": "Centralised logging, 24x7 SOC monitoring and SIEM correlation across critical banking systems.",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              { "field": "implementation_status", "type": "select", "scale": "implementation_status", "prompt": "Implementation status?" },
+              { "field": "soc_model", "type": "select", "options": ["In-house 24x7", "Hybrid", "Outsourced MSSP", "Office-hours only", "None"], "prompt": "SOC operating model." },
+              { "field": "siem_log_sources", "type": "text", "prompt": "Number of log sources feeding SIEM and retention period." },
+              { "field": "evidence", "type": "text", "prompt": "Evidence." },
+              { "field": "owner", "type": "text", "prompt": "Owner." },
+              { "field": "target_date", "type": "date", "prompt": "Target date." }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "QCB_5_BCM",
+      "name": "5 — Business continuity management",
+      "controls": [
+        {
+          "id": "5.1.1",
+          "title": "BCM and disaster recovery programme",
+          "description": "Documented BCM and DR programme with RTO/RPO objectives for critical banking services and at-least-annual exercise.",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              { "field": "implementation_status", "type": "select", "scale": "implementation_status", "prompt": "Implementation status?" },
+              { "field": "rto_critical", "type": "text", "prompt": "RTO for core banking system (hours)." },
+              { "field": "rpo_critical", "type": "text", "prompt": "RPO for core banking system (minutes / hours)." },
+              { "field": "last_dr_exercise", "type": "date", "prompt": "Date of last full DR exercise." },
+              { "field": "evidence", "type": "text", "prompt": "Evidence (BIA, BCP, DR exercise report)." },
+              { "field": "owner", "type": "text", "prompt": "Owner." },
+              { "field": "target_date", "type": "date", "prompt": "Target date." }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "QCB_6_RISK_DEPT",
+      "name": "6 — Cyber security in the Risk department",
+      "controls": [
+        {
+          "id": "6.1.1",
+          "title": "Integrated cyber risk management",
+          "description": "Cyber risk is integrated into the enterprise risk management framework with consistent taxonomy, reporting and treatment processes.",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              { "field": "implementation_status", "type": "select", "scale": "implementation_status", "prompt": "Implementation status?" },
+              { "field": "risk_register", "type": "text", "prompt": "Cyber-risk register location and last update date." },
+              { "field": "kris_reported", "type": "text", "prompt": "Cyber KRIs reported to ERM (top 5)." },
+              { "field": "evidence", "type": "text", "prompt": "Evidence." },
+              { "field": "owner", "type": "text", "prompt": "Owner." },
+              { "field": "target_date", "type": "date", "prompt": "Target date." }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "QCB_7_PROCUREMENT",
+      "name": "7 — Cyber security in the Procurement department",
+      "controls": [
+        {
+          "id": "7.1.1",
+          "title": "Third-party security risk management",
+          "description": "Conduct pre-engagement security due diligence, contractual security obligations, ongoing monitoring and exit assurance for material vendors.",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              { "field": "implementation_status", "type": "select", "scale": "implementation_status", "prompt": "Implementation status?" },
+              { "field": "vendor_tiering", "type": "text", "prompt": "Vendor risk-tiering criteria and number of critical vendors." },
+              { "field": "due_diligence_freq", "type": "text", "prompt": "Re-assessment frequency by tier." },
+              { "field": "qcb_notification", "type": "boolean", "prompt": "QCB pre-notification process for material outsourcing in place?" },
+              { "field": "evidence", "type": "text", "prompt": "Evidence." },
+              { "field": "owner", "type": "text", "prompt": "Owner." },
+              { "field": "target_date", "type": "date", "prompt": "Target date." }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "QCB_8_LEGAL_COMPLIANCE",
+      "name": "8 — Cyber security in the Legal and Compliance department",
+      "controls": [
+        {
+          "id": "8.1.1",
+          "title": "Regulatory reporting and incident notification",
+          "description": "Maintain a documented process for prompt notification of significant cyber incidents to QCB and other regulators.",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              { "field": "implementation_status", "type": "select", "scale": "implementation_status", "prompt": "Implementation status?" },
+              { "field": "notification_sla", "type": "text", "prompt": "Internal SLA for QCB notification (hours after detection)." },
+              { "field": "trigger_criteria", "type": "text", "prompt": "Criteria triggering regulator notification." },
+              { "field": "evidence", "type": "text", "prompt": "Evidence (notification playbook, drill records)." },
+              { "field": "owner", "type": "text", "prompt": "Owner." },
+              { "field": "target_date", "type": "date", "prompt": "Target date." }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "QCB_9_HR",
+      "name": "9 — Cyber security in the Human Resources department",
+      "controls": [
+        {
+          "id": "9.1.1",
+          "title": "Personnel security and awareness",
+          "description": "Apply background checks, role-based security training, security clauses in employment contracts and exit procedures.",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              { "field": "implementation_status", "type": "select", "scale": "implementation_status", "prompt": "Implementation status?" },
+              { "field": "training_completion_rate", "type": "text", "prompt": "Annual security awareness completion rate (%)." },
+              { "field": "phishing_test_freq", "type": "text", "prompt": "Phishing simulation frequency and click-through rate." },
+              { "field": "evidence", "type": "text", "prompt": "Evidence." },
+              { "field": "owner", "type": "text", "prompt": "Owner." },
+              { "field": "target_date", "type": "date", "prompt": "Target date." }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "QCB_10_COMPLIANCE_CIRCULAR",
+      "name": "10 — Compliance with QCB circular",
+      "controls": [
+        {
+          "id": "10.1.1",
+          "title": "Annual self-assessment and independent review",
+          "description": "Conduct an annual self-assessment against this Circular plus an independent review at the cycle defined by QCB; remediation plans tracked to closure.",
+          "question_block": {
+            "type": "attestation",
+            "questions": [
+              { "field": "implementation_status", "type": "select", "scale": "implementation_status", "prompt": "Implementation status?" },
+              { "field": "last_self_assessment", "type": "date", "prompt": "Date of last completed self-assessment." },
+              { "field": "last_independent_review", "type": "date", "prompt": "Date of last independent third-party review." },
+              { "field": "open_findings", "type": "text", "prompt": "Number of open findings by severity." },
+              { "field": "evidence", "type": "text", "prompt": "Evidence (self-assessment report, independent review report)." },
+              { "field": "owner", "type": "text", "prompt": "Owner." },
+              { "field": "target_date", "type": "date", "prompt": "Target date." }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

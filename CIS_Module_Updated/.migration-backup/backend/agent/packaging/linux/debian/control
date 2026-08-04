@@ -1,0 +1,18 @@
+Package: complyverse-agent
+Version: 1.0.0
+Section: admin
+Priority: optional
+Architecture: all
+Depends: python3 (>= 3.9), python3-pip, python3-cryptography, python3-paramiko
+Maintainer: Compliverse <support@compliverse.app>
+Description: Compliverse compliance agent
+ Pulls CIS benchmark check jobs from Compliverse cloud and executes
+ them locally (Linux endpoint mode) or against remote network devices
+ via SSH (collector mode). Sends results back as immutable evidence.
+ .
+ Configuration after install:
+   sudo /opt/complyverse-agent/bin/complyverse-agent enroll \
+        --backend https://your-tenant.compliverse.app \
+        --token enroll_xxxxxxxxx
+   sudo systemctl enable --now complyverse-agent
+Homepage: https://compliverse.app
