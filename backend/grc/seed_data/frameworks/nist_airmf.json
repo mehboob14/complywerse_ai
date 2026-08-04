@@ -1,0 +1,2828 @@
+{
+  "metadata": {
+    "name": "NIST Artificial Intelligence Risk Management Framework (AI RMF 1.0)",
+    "description": "The NIST AI RMF 1.0 (NIST AI 100-1) is a voluntary framework to help organizations that design, develop, deploy, or use AI systems manage the many risks of AI and promote trustworthy and responsible development and use of AI systems. Part 2 (the AI RMF Core) comprises four functions - GOVERN, MAP, MEASURE, and MANAGE - each broken down into categories and subcategories that describe specific outcomes and actions for managing AI risk. GOVERN is a cross-cutting function infused throughout the other three. The framework is outcome-based and non-prescriptive.",
+    "version": "1.0",
+    "source_organization": "National Institute of Standards and Technology (NIST), U.S. Department of Commerce",
+    "effective_date": "2023-01-26",
+    "classification": "voluntary",
+    "framework_type": "voluntary",
+    "classification_confidence": 0.99,
+    "classification_reasoning": "NIST AI 100-1 explicitly states the framework is voluntary, rights-preserving, non-sector-specific, use-case agnostic, and outcome-focused rather than prescriptive. It is directed by the National AI Initiative Act of 2020 (P.L. 116-283) but imposes no mandatory legal obligations of its own. Subcategories describe outcomes, not mandatory controls.",
+    "framework_purpose": "To offer a resource to organizations designing, developing, deploying, or using AI systems to help manage the many risks of AI and promote trustworthy and responsible development and use of AI systems.",
+    "framework_scope": "AI actors across the AI lifecycle - organizations and individuals of all sizes and sectors that play an active role in the AI system lifecycle, including those that design, develop, deploy, evaluate, acquire, operate, or use AI systems. The framework is non-sector-specific and use-case agnostic.",
+    "framework_objectives": [
+      "Cultivate and implement a culture of AI risk management (GOVERN)",
+      "Establish and understand the context to frame risks related to an AI system (MAP)",
+      "Analyze, assess, benchmark, and monitor AI risk and related impacts (MEASURE)",
+      "Prioritize and act upon AI risks based on projected impact (MANAGE)",
+      "Enhance the trustworthiness of AI systems across characteristics: valid and reliable, safe, secure and resilient, accountable and transparent, explainable and interpretable, privacy-enhanced, and fair with harmful bias managed"
+    ],
+    "target_audience": "AI actors across the lifecycle - including organizational management, senior leadership, boards, data scientists, ML engineers, developers, deployers, operators, TEVV experts, domain experts, human factors experts, impact assessors, procurement, governance and oversight roles, and legal/privacy governance",
+    "certification_body": null,
+    "certification_validity_period": null,
+    "certification_levels": null,
+    "certification_lifecycle": null,
+    "required_artifacts": [
+      "AI system inventory",
+      "AI risk management policies, processes, and procedures",
+      "Documented organizational risk tolerance",
+      "AI impact assessments",
+      "Context documentation (intended purpose, deployment settings)",
+      "TEVV test plans and result documentation",
+      "Risk register and risk treatment plans",
+      "Post-deployment monitoring plans and incident records",
+      "Stakeholder engagement and feedback logs"
+    ],
+    "regulatory_authority": "NIST (issuing body); directed by the National Artificial Intelligence Initiative Act of 2020 (P.L. 116-283). The framework is voluntary and law/regulation-agnostic.",
+    "compliance_deadline": null,
+    "penalty_for_non_compliance": "None - the AI RMF is voluntary. It is intended to augment existing risk practices and should align with applicable laws, regulations, and norms, but the framework itself imposes no penalties.",
+    "adoption_approach": [
+      "Institute the outcomes in the GOVERN function (governance structure, policies, roles, culture)",
+      "Apply MAP to establish context and identify risks; make an initial go/no-go decision",
+      "Apply MEASURE to analyze, assess, benchmark, and monitor identified risks using TEVV",
+      "Apply MANAGE to prioritize, respond to, and recover from risks based on projected impact",
+      "Use AI RMF Profiles (use-case, temporal current/target, cross-sectoral) to tailor implementation",
+      "Iterate across functions throughout the AI lifecycle as context, capabilities, and impacts evolve"
+    ],
+    "hierarchy_structure": {
+      "levels": [
+        "Function (GOVERN / MAP / MEASURE / MANAGE)",
+        "Category (e.g., GOVERN 1, MAP 1)",
+        "Subcategory (e.g., GOVERN 1.1, MAP 1.1) - the specific outcomes/actions"
+      ],
+      "numbering_pattern": "FUNCTION N.N (e.g., GOVERN 1.1, MEASURE 2.13, MANAGE 4.3)"
+    },
+    "document_structure": {
+      "sections": [
+        "GOVERN (Function) - A culture of risk management is cultivated and present",
+        "MAP (Function) - Context is recognized and risks related to context are identified",
+        "MEASURE (Function) - Identified risks are assessed, analyzed, or tracked",
+        "MANAGE (Function) - Risks are prioritized and acted upon based on a projected impact"
+      ],
+      "control_patterns": {
+        "primary_pattern": "FUNCTION N.N",
+        "secondary_patterns": [
+          "FUNCTION N (category level)"
+        ],
+        "examples": [
+          "GOVERN 1.1",
+          "MAP 2.3",
+          "MEASURE 2.11",
+          "MANAGE 4.3"
+        ]
+      },
+      "requirement_indicators": {
+        "mandatory_keywords": [
+          "are in place",
+          "are documented",
+          "are established",
+          "is performed"
+        ],
+        "advisory_keywords": [
+          "should",
+          "may",
+          "can include",
+          "as necessary"
+        ]
+      },
+      "total_expected_controls": 72,
+      "total_functions": 4,
+      "total_categories": 19,
+      "total_subcategories": 72,
+      "function_breakdown": {
+        "GOVERN": "6 categories, 19 subcategories",
+        "MAP": "5 categories, 18 subcategories",
+        "MEASURE": "4 categories, 22 subcategories",
+        "MANAGE": "4 categories, 13 subcategories"
+      },
+      "note_on_controls": "The AI RMF Core describes OUTCOMES and actions (not a checklist or ordered steps). Subcategories are treated here as the framework's discrete requirements/controls. is_mandatory is set to false because the framework is explicitly voluntary and outcome-based.",
+      "trustworthiness_characteristics": [
+        "Valid and Reliable (necessary condition / base)",
+        "Safe",
+        "Secure and Resilient",
+        "Accountable and Transparent (cross-cutting)",
+        "Explainable and Interpretable",
+        "Privacy-Enhanced",
+        "Fair - with Harmful Bias Managed"
+      ]
+    },
+    "exported_at": "2026-05-11T00:00:00.000000",
+    "source_framework_id": "NIST AI 100-1 (AI RMF 1.0)",
+    "total_controls": 72
+  },
+  "controls": [
+    {
+      "control_id": "GOVERN 1.1",
+      "original_reference": "GOVERN 1.1",
+      "title": "Legal and Regulatory Requirements",
+      "description": "Legal and regulatory requirements involving AI are understood, managed, and documented.",
+      "full_text": "Legal and regulatory requirements involving AI are understood, managed, and documented.",
+      "domain": "GOVERN (Function)",
+      "category": "GOVERN 1: Policies, processes, procedures, and practices across the organization related to the mapping, measuring, and managing of AI risks are in place, transparent, and implemented effectively.",
+      "section_number": "GOVERN 1.1",
+      "parent_section": "GOVERN 1",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of GOVERN 1.1",
+          "description": "Documented evidence demonstrating the outcome of GOVERN 1.1: Legal and Regulatory Requirements - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Legal and regulatory requirements register mapping applicable AI laws",
+          "description": "Legal and regulatory requirements register mapping applicable AI laws, with owner and review dates - should contain item name, owner, classification/risk tier, status, last-review date, and traceability to source records.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Elicited system requirements with socio-technical design decision records",
+          "description": "Elicited system requirements with socio-technical design decision records - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Implementation records and artifacts evidencing this outcome within the AI",
+          "description": "Implementation records and artifacts evidencing this outcome within the AI lifecycle - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "GOVERN 1.2",
+      "original_reference": "GOVERN 1.2",
+      "title": "Trustworthy AI Characteristics in Policies",
+      "description": "The characteristics of trustworthy AI are integrated into organizational policies, processes, procedures, and practices.",
+      "full_text": "The characteristics of trustworthy AI are integrated into organizational policies, processes, procedures, and practices.",
+      "domain": "GOVERN (Function)",
+      "category": "GOVERN 1: Policies, processes, procedures, and practices across the organization related to the mapping, measuring, and managing of AI risks are in place, transparent, and implemented effectively.",
+      "section_number": "GOVERN 1.2",
+      "parent_section": "GOVERN 1",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of GOVERN 1.2",
+          "description": "Documented evidence demonstrating the outcome of GOVERN 1.2: Trustworthy AI Characteristics in Policies - board/management-approved, current version. Should include scope, applicability, roles and responsibilities, outcomes addressed, review frequency, approval signature, and version history.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Approved organizational policies and procedures",
+          "description": "Approved organizational policies and procedures supporting Trustworthy AI Characteristics in Policies - should include step-by-step instructions, responsible roles, control points, exception handling, and reference to the parent policy.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Implementation records and artifacts evidencing this outcome within the AI",
+          "description": "Implementation records and artifacts evidencing this outcome within the AI lifecycle - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "GOVERN 1.3",
+      "original_reference": "GOVERN 1.3",
+      "title": "Risk Management Activity Levels",
+      "description": "Processes, procedures, and practices are in place to determine the needed level of risk management activities based on the organization's risk tolerance.",
+      "full_text": "Processes, procedures, and practices are in place to determine the needed level of risk management activities based on the organization's risk tolerance.",
+      "domain": "GOVERN (Function)",
+      "category": "GOVERN 1: Policies, processes, procedures, and practices across the organization related to the mapping, measuring, and managing of AI risks are in place, transparent, and implemented effectively.",
+      "section_number": "GOVERN 1.3",
+      "parent_section": "GOVERN 1",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of GOVERN 1.3",
+          "description": "Documented evidence demonstrating the outcome of GOVERN 1.3: Risk Management Activity Levels - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Approved organizational policies and procedures",
+          "description": "Approved organizational policies and procedures supporting Risk Management Activity Levels - should include step-by-step instructions, responsible roles, control points, exception handling, and reference to the parent policy.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Documented organizational AI risk tolerance statement with approval records",
+          "description": "Documented organizational AI risk tolerance statement with approval records - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "GOVERN 1.4",
+      "original_reference": "GOVERN 1.4",
+      "title": "Risk Management Process and Outcomes",
+      "description": "The risk management process and its outcomes are established through transparent policies, procedures, and other controls based on organizational risk priorities.",
+      "full_text": "The risk management process and its outcomes are established through transparent policies, procedures, and other controls based on organizational risk priorities.",
+      "domain": "GOVERN (Function)",
+      "category": "GOVERN 1: Policies, processes, procedures, and practices across the organization related to the mapping, measuring, and managing of AI risks are in place, transparent, and implemented effectively.",
+      "section_number": "GOVERN 1.4",
+      "parent_section": "GOVERN 1",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of GOVERN 1.4",
+          "description": "Documented evidence demonstrating the outcome of GOVERN 1.4: Risk Management Process and Outcomes - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Approved organizational policies and procedures",
+          "description": "Approved organizational policies and procedures supporting Risk Management Process and Outcomes - should include step-by-step instructions, responsible roles, control points, exception handling, and reference to the parent policy.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Documented organizational AI risk tolerance statement with approval records",
+          "description": "Documented organizational AI risk tolerance statement with approval records - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "GOVERN 1.5",
+      "original_reference": "GOVERN 1.5",
+      "title": "Ongoing Monitoring and Periodic Review",
+      "description": "Ongoing monitoring and periodic review of the risk management process and its outcomes are planned and organizational roles and responsibilities clearly defined, including determining the frequency of periodic review.",
+      "full_text": "Ongoing monitoring and periodic review of the risk management process and its outcomes are planned and organizational roles and responsibilities clearly defined, including determining the frequency of periodic review.",
+      "domain": "GOVERN (Function)",
+      "category": "GOVERN 1: Policies, processes, procedures, and practices across the organization related to the mapping, measuring, and managing of AI risks are in place, transparent, and implemented effectively.",
+      "section_number": "GOVERN 1.5",
+      "parent_section": "GOVERN 1",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of GOVERN 1.5",
+          "description": "Documented evidence demonstrating the outcome of GOVERN 1.5: Ongoing Monitoring and Periodic Review - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "RACI matrix defining AI risk management roles",
+          "description": "RACI matrix defining AI risk management roles, responsibilities, and communication lines - should clearly identify owners, responsibilities, coverage of all relevant items, and last-update date.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Ongoing monitoring and periodic review records",
+          "description": "Ongoing monitoring and periodic review records with defined frequency and roles - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Implementation records and artifacts evidencing this outcome within the AI",
+          "description": "Implementation records and artifacts evidencing this outcome within the AI lifecycle - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "GOVERN 1.6",
+      "original_reference": "GOVERN 1.6",
+      "title": "AI System Inventory",
+      "description": "Mechanisms are in place to inventory AI systems and are resourced according to organizational risk priorities.",
+      "full_text": "Mechanisms are in place to inventory AI systems and are resourced according to organizational risk priorities.",
+      "domain": "GOVERN (Function)",
+      "category": "GOVERN 1: Policies, processes, procedures, and practices across the organization related to the mapping, measuring, and managing of AI risks are in place, transparent, and implemented effectively.",
+      "section_number": "GOVERN 1.6",
+      "parent_section": "GOVERN 1",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of GOVERN 1.6",
+          "description": "Documented evidence demonstrating the outcome of GOVERN 1.6: AI System Inventory - should contain item name, owner, classification/risk tier, status, last-review date, and traceability to source records.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "AI system inventory register with owners",
+          "description": "AI system inventory register with owners, risk tier, lifecycle status, and resourcing - should contain item name, owner, classification/risk tier, status, last-review date, and traceability to source records.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Documented organizational AI risk tolerance statement with approval records",
+          "description": "Documented organizational AI risk tolerance statement with approval records - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "GOVERN 1.7",
+      "original_reference": "GOVERN 1.7",
+      "title": "Decommissioning and Phasing Out AI Systems",
+      "description": "Processes and procedures are in place for decommissioning and phasing out AI systems safely and in a manner that does not increase risks or decrease the organization's trustworthiness.",
+      "full_text": "Processes and procedures are in place for decommissioning and phasing out AI systems safely and in a manner that does not increase risks or decrease the organization's trustworthiness.",
+      "domain": "GOVERN (Function)",
+      "category": "GOVERN 1: Policies, processes, procedures, and practices across the organization related to the mapping, measuring, and managing of AI risks are in place, transparent, and implemented effectively.",
+      "section_number": "GOVERN 1.7",
+      "parent_section": "GOVERN 1",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of GOVERN 1.7",
+          "description": "Documented evidence demonstrating the outcome of GOVERN 1.7: Decommissioning and Phasing Out AI Systems - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Approved organizational policies and procedures",
+          "description": "Approved organizational policies and procedures supporting Decommissioning and Phasing Out AI Systems - should include step-by-step instructions, responsible roles, control points, exception handling, and reference to the parent policy.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Decommissioning and deactivation procedure",
+          "description": "Decommissioning and deactivation procedure with records of safe phase-out execution - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Context documentation covering intended purposes",
+          "description": "Context documentation covering intended purposes, deployment settings, users, and assumptions - current, version-controlled, dated, and approved; traceable to the AI system and lifecycle stage.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Safety evaluation records including fail-safe behavior",
+          "description": "Safety evaluation records including fail-safe behavior, residual-risk, and real-time monitoring - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "GOVERN 2.1",
+      "original_reference": "GOVERN 2.1",
+      "title": "Roles, Responsibilities, and Communication Lines",
+      "description": "Roles and responsibilities and lines of communication related to mapping, measuring, and managing AI risks are documented and are clear to individuals and teams throughout the organization.",
+      "full_text": "Roles and responsibilities and lines of communication related to mapping, measuring, and managing AI risks are documented and are clear to individuals and teams throughout the organization.",
+      "domain": "GOVERN (Function)",
+      "category": "GOVERN 2: Accountability structures are in place so that the appropriate teams and individuals are empowered, responsible, and trained for mapping, measuring, and managing AI risks.",
+      "section_number": "GOVERN 2.1",
+      "parent_section": "GOVERN 2",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of GOVERN 2.1",
+          "description": "Documented evidence demonstrating the outcome of GOVERN 2.1: Roles, Responsibilities, and Communication Lines - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "RACI matrix defining AI risk management roles",
+          "description": "RACI matrix defining AI risk management roles, responsibilities, and communication lines - should clearly identify owners, responsibilities, coverage of all relevant items, and last-update date.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Implementation records and artifacts evidencing this outcome within the AI",
+          "description": "Implementation records and artifacts evidencing this outcome within the AI lifecycle - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "GOVERN 2.2",
+      "original_reference": "GOVERN 2.2",
+      "title": "AI Risk Management Training",
+      "description": "The organization's personnel and partners receive AI risk management training to enable them to perform their duties and responsibilities consistent with related policies, procedures, and agreements.",
+      "full_text": "The organization's personnel and partners receive AI risk management training to enable them to perform their duties and responsibilities consistent with related policies, procedures, and agreements.",
+      "domain": "GOVERN (Function)",
+      "category": "GOVERN 2: Accountability structures are in place so that the appropriate teams and individuals are empowered, responsible, and trained for mapping, measuring, and managing AI risks.",
+      "section_number": "GOVERN 2.2",
+      "parent_section": "GOVERN 2",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of GOVERN 2.2",
+          "description": "Documented evidence demonstrating the outcome of GOVERN 2.2: AI Risk Management Training - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Approved organizational policies and procedures",
+          "description": "Approved organizational policies and procedures supporting AI Risk Management Training - should include step-by-step instructions, responsible roles, control points, exception handling, and reference to the parent policy.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "AI risk management training records with attendees",
+          "description": "AI risk management training records with attendees, dates, content, and completion status - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "GOVERN 2.3",
+      "original_reference": "GOVERN 2.3",
+      "title": "Executive Leadership Responsibility",
+      "description": "Executive leadership of the organization takes responsibility for decisions about risks associated with AI system development and deployment.",
+      "full_text": "Executive leadership of the organization takes responsibility for decisions about risks associated with AI system development and deployment.",
+      "domain": "GOVERN (Function)",
+      "category": "GOVERN 2: Accountability structures are in place so that the appropriate teams and individuals are empowered, responsible, and trained for mapping, measuring, and managing AI risks.",
+      "section_number": "GOVERN 2.3",
+      "parent_section": "GOVERN 2",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of GOVERN 2.3",
+          "description": "Documented evidence demonstrating the outcome of GOVERN 2.3: Executive Leadership Responsibility - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Executive or board minutes evidencing leadership accountability for AI risk",
+          "description": "Executive or board minutes evidencing leadership accountability for AI risk decisions - should capture attendees, agenda, decisions taken, action items, owners, and target completion dates.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Context documentation covering intended purposes",
+          "description": "Context documentation covering intended purposes, deployment settings, users, and assumptions - current, version-controlled, dated, and approved; traceable to the AI system and lifecycle stage.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "GOVERN 3.1",
+      "original_reference": "GOVERN 3.1",
+      "title": "Diverse Team Decision-Making",
+      "description": "Decision-making related to mapping, measuring, and managing AI risks throughout the lifecycle is informed by a diverse team (e.g., diversity of demographics, disciplines, experience, expertise, and backgrounds).",
+      "full_text": "Decision-making related to mapping, measuring, and managing AI risks throughout the lifecycle is informed by a diverse team (e.g., diversity of demographics, disciplines, experience, expertise, and backgrounds).",
+      "domain": "GOVERN (Function)",
+      "category": "GOVERN 3: Workforce diversity, equity, inclusion, and accessibility processes are prioritized in the mapping, measuring, and managing of AI risks throughout the lifecycle.",
+      "section_number": "GOVERN 3.1",
+      "parent_section": "GOVERN 3",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of GOVERN 3.1",
+          "description": "Documented evidence demonstrating the outcome of GOVERN 3.1: Diverse Team Decision-Making - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Team composition records evidencing demographic, disciplinary, and domain diversity",
+          "description": "Team composition records evidencing demographic, disciplinary, and domain diversity - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Implementation records and artifacts evidencing this outcome within the AI",
+          "description": "Implementation records and artifacts evidencing this outcome within the AI lifecycle - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "GOVERN 3.2",
+      "original_reference": "GOVERN 3.2",
+      "title": "Human-AI Configuration Roles and Oversight",
+      "description": "Policies and procedures are in place to define and differentiate roles and responsibilities for human-AI configurations and oversight of AI systems.",
+      "full_text": "Policies and procedures are in place to define and differentiate roles and responsibilities for human-AI configurations and oversight of AI systems.",
+      "domain": "GOVERN (Function)",
+      "category": "GOVERN 3: Workforce diversity, equity, inclusion, and accessibility processes are prioritized in the mapping, measuring, and managing of AI risks throughout the lifecycle.",
+      "section_number": "GOVERN 3.2",
+      "parent_section": "GOVERN 3",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of GOVERN 3.2",
+          "description": "Documented evidence demonstrating the outcome of GOVERN 3.2: Human-AI Configuration Roles and Oversight - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Approved organizational policies and procedures",
+          "description": "Approved organizational policies and procedures supporting Human-AI Configuration Roles and Oversight - should include step-by-step instructions, responsible roles, control points, exception handling, and reference to the parent policy.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "RACI matrix defining AI risk management roles",
+          "description": "RACI matrix defining AI risk management roles, responsibilities, and communication lines - should clearly identify owners, responsibilities, coverage of all relevant items, and last-update date.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Human oversight and human-AI configuration design",
+          "description": "Human oversight and human-AI configuration design with override and appeal mechanisms - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "GOVERN 4.1",
+      "original_reference": "GOVERN 4.1",
+      "title": "Critical Thinking and Safety-First Mindset",
+      "description": "Organizational policies and practices are in place to foster a critical thinking and safety-first mindset in the design, development, deployment, and uses of AI systems to minimize potential negative impacts.",
+      "full_text": "Organizational policies and practices are in place to foster a critical thinking and safety-first mindset in the design, development, deployment, and uses of AI systems to minimize potential negative impacts.",
+      "domain": "GOVERN (Function)",
+      "category": "GOVERN 4: Organizational teams are committed to a culture that considers and communicates AI risk.",
+      "section_number": "GOVERN 4.1",
+      "parent_section": "GOVERN 4",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of GOVERN 4.1",
+          "description": "Documented evidence demonstrating the outcome of GOVERN 4.1: Critical Thinking and Safety-First Mindset - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Approved organizational policies and procedures",
+          "description": "Approved organizational policies and procedures supporting Critical Thinking and Safety-First Mindset - should include step-by-step instructions, responsible roles, control points, exception handling, and reference to the parent policy.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "AI impact assessment",
+          "description": "AI impact assessment documenting likelihood and magnitude of beneficial and harmful impacts - should include scope, criteria, methodology, findings, risk ratings, recommendations, and treatment decisions.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Context documentation covering intended purposes",
+          "description": "Context documentation covering intended purposes, deployment settings, users, and assumptions - current, version-controlled, dated, and approved; traceable to the AI system and lifecycle stage.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Safety evaluation records including fail-safe behavior",
+          "description": "Safety evaluation records including fail-safe behavior, residual-risk, and real-time monitoring - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "GOVERN 4.2",
+      "original_reference": "GOVERN 4.2",
+      "title": "Documenting and Communicating Risks and Impacts",
+      "description": "Organizational teams document the risks and potential impacts of the AI technology they design, develop, deploy, evaluate, and use, and they communicate about the impacts more broadly.",
+      "full_text": "Organizational teams document the risks and potential impacts of the AI technology they design, develop, deploy, evaluate, and use, and they communicate about the impacts more broadly.",
+      "domain": "GOVERN (Function)",
+      "category": "GOVERN 4: Organizational teams are committed to a culture that considers and communicates AI risk.",
+      "section_number": "GOVERN 4.2",
+      "parent_section": "GOVERN 4",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of GOVERN 4.2",
+          "description": "Documented evidence demonstrating the outcome of GOVERN 4.2: Documenting and Communicating Risks and Impacts - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "AI impact assessment",
+          "description": "AI impact assessment documenting likelihood and magnitude of beneficial and harmful impacts - should include scope, criteria, methodology, findings, risk ratings, recommendations, and treatment decisions.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Implementation records and artifacts evidencing this outcome within the AI",
+          "description": "Implementation records and artifacts evidencing this outcome within the AI lifecycle - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "GOVERN 4.3",
+      "original_reference": "GOVERN 4.3",
+      "title": "AI Testing, Incident Identification, and Information Sharing",
+      "description": "Organizational practices are in place to enable AI testing, identification of incidents, and information sharing.",
+      "full_text": "Organizational practices are in place to enable AI testing, identification of incidents, and information sharing.",
+      "domain": "GOVERN (Function)",
+      "category": "GOVERN 4: Organizational teams are committed to a culture that considers and communicates AI risk.",
+      "section_number": "GOVERN 4.3",
+      "parent_section": "GOVERN 4",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of GOVERN 4.3",
+          "description": "Documented evidence demonstrating the outcome of GOVERN 4.3: AI Testing, Incident Identification, and Information Sharing - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "TEVV test plans",
+          "description": "TEVV test plans, test sets, tooling documentation, and evaluation result reports - should include scope, methodology, findings, evidence references, risk ratings, recommendations, and management responses.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Incident response plan and incident or error register",
+          "description": "Incident response plan and incident or error register with tracking and recovery records - preserved for the required retention period, protected from tampering, with timestamp, actor, action, and outcome.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "GOVERN 5.1",
+      "original_reference": "GOVERN 5.1",
+      "title": "Collecting and Integrating External Feedback",
+      "description": "Organizational policies and practices are in place to collect, consider, prioritize, and integrate feedback from those external to the team that developed or deployed the AI system regarding the potential individual and societal impacts related to AI risks.",
+      "full_text": "Organizational policies and practices are in place to collect, consider, prioritize, and integrate feedback from those external to the team that developed or deployed the AI system regarding the potential individual and societal impacts related to AI risks.",
+      "domain": "GOVERN (Function)",
+      "category": "GOVERN 5: Processes are in place for robust engagement with relevant AI actors.",
+      "section_number": "GOVERN 5.1",
+      "parent_section": "GOVERN 5",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of GOVERN 5.1",
+          "description": "Documented evidence demonstrating the outcome of GOVERN 5.1: Collecting and Integrating External Feedback - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Approved organizational policies and procedures",
+          "description": "Approved organizational policies and procedures supporting Collecting and Integrating External Feedback - should include step-by-step instructions, responsible roles, control points, exception handling, and reference to the parent policy.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Stakeholder engagement and feedback log",
+          "description": "Stakeholder engagement and feedback log with adjudication and integration records - preserved for the required retention period, protected from tampering, with timestamp, actor, action, and outcome.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "AI impact assessment",
+          "description": "AI impact assessment documenting likelihood and magnitude of beneficial and harmful impacts - should include scope, criteria, methodology, findings, risk ratings, recommendations, and treatment decisions.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Risk treatment plan with prioritization",
+          "description": "Risk treatment plan with prioritization, response options, and tracking records - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "GOVERN 5.2",
+      "original_reference": "GOVERN 5.2",
+      "title": "Incorporating Adjudicated Feedback",
+      "description": "Mechanisms are established to enable the team that developed or deployed AI systems to regularly incorporate adjudicated feedback from relevant AI actors into system design and implementation.",
+      "full_text": "Mechanisms are established to enable the team that developed or deployed AI systems to regularly incorporate adjudicated feedback from relevant AI actors into system design and implementation.",
+      "domain": "GOVERN (Function)",
+      "category": "GOVERN 5: Processes are in place for robust engagement with relevant AI actors.",
+      "section_number": "GOVERN 5.2",
+      "parent_section": "GOVERN 5",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of GOVERN 5.2",
+          "description": "Documented evidence demonstrating the outcome of GOVERN 5.2: Incorporating Adjudicated Feedback - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Stakeholder engagement and feedback log",
+          "description": "Stakeholder engagement and feedback log with adjudication and integration records - preserved for the required retention period, protected from tampering, with timestamp, actor, action, and outcome.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Implementation records and artifacts evidencing this outcome within the AI",
+          "description": "Implementation records and artifacts evidencing this outcome within the AI lifecycle - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "GOVERN 6.1",
+      "original_reference": "GOVERN 6.1",
+      "title": "Third-Party Risk Policies",
+      "description": "Policies and procedures are in place that address AI risks associated with third-party entities, including risks of infringement of a third-party's intellectual property or other rights.",
+      "full_text": "Policies and procedures are in place that address AI risks associated with third-party entities, including risks of infringement of a third-party's intellectual property or other rights.",
+      "domain": "GOVERN (Function)",
+      "category": "GOVERN 6: Policies and procedures are in place to address AI risks and benefits arising from third-party software and data and other supply chain issues.",
+      "section_number": "GOVERN 6.1",
+      "parent_section": "GOVERN 6",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of GOVERN 6.1",
+          "description": "Documented evidence demonstrating the outcome of GOVERN 6.1: Third-Party Risk Policies - board/management-approved, current version. Should include scope, applicability, roles and responsibilities, outcomes addressed, review frequency, approval signature, and version history.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Approved organizational policies and procedures supporting Third-Party Risk Policies",
+          "description": "Approved organizational policies and procedures supporting Third-Party Risk Policies - should include step-by-step instructions, responsible roles, control points, exception handling, and reference to the parent policy.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Legal and regulatory requirements register mapping applicable AI laws",
+          "description": "Legal and regulatory requirements register mapping applicable AI laws, with owner and review dates - should contain item name, owner, classification/risk tier, status, last-review date, and traceability to source records.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Third-party AI and data risk assessments",
+          "description": "Third-party AI and data risk assessments, contracts with IP clauses, and monitoring records - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "GOVERN 6.2",
+      "original_reference": "GOVERN 6.2",
+      "title": "Third-Party Contingency Processes",
+      "description": "Contingency processes are in place to handle failures or incidents in third-party data or AI systems deemed to be high-risk.",
+      "full_text": "Contingency processes are in place to handle failures or incidents in third-party data or AI systems deemed to be high-risk.",
+      "domain": "GOVERN (Function)",
+      "category": "GOVERN 6: Policies and procedures are in place to address AI risks and benefits arising from third-party software and data and other supply chain issues.",
+      "section_number": "GOVERN 6.2",
+      "parent_section": "GOVERN 6",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of GOVERN 6.2",
+          "description": "Documented evidence demonstrating the outcome of GOVERN 6.2: Third-Party Contingency Processes - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Third-party AI and data risk assessments",
+          "description": "Third-party AI and data risk assessments, contracts with IP clauses, and monitoring records - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Incident response plan and incident or error register",
+          "description": "Incident response plan and incident or error register with tracking and recovery records - preserved for the required retention period, protected from tampering, with timestamp, actor, action, and outcome.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Implementation records and artifacts evidencing this outcome within the AI",
+          "description": "Implementation records and artifacts evidencing this outcome within the AI lifecycle - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "MAP 1.1",
+      "original_reference": "MAP 1.1",
+      "title": "Intended Purposes and Deployment Context",
+      "description": "Intended purposes, potentially beneficial uses, context-specific laws, norms and expectations, and prospective settings in which the AI system will be deployed are understood and documented.",
+      "full_text": "Intended purposes, potentially beneficial uses, context-specific laws, norms and expectations, and prospective settings in which the AI system will be deployed are understood and documented. Considerations include: the specific set or types of users along with their expectations; potential positive and negative impacts of system uses to individuals, communities, organizations, society, and the planet; assumptions and related limitations about AI system purposes, uses, and risks across the development or product AI lifecycle; and related TEVV and system metrics.",
+      "domain": "MAP (Function)",
+      "category": "MAP 1: Context is established and understood.",
+      "section_number": "MAP 1.1",
+      "parent_section": "MAP 1",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of MAP 1.1",
+          "description": "Documented evidence demonstrating the outcome of MAP 1.1: Intended Purposes and Deployment Context - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "TEVV test plans",
+          "description": "TEVV test plans, test sets, tooling documentation, and evaluation result reports - should include scope, methodology, findings, evidence references, risk ratings, recommendations, and management responses.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "AI impact assessment",
+          "description": "AI impact assessment documenting likelihood and magnitude of beneficial and harmful impacts - should include scope, criteria, methodology, findings, risk ratings, recommendations, and treatment decisions.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Context documentation covering intended purposes",
+          "description": "Context documentation covering intended purposes, deployment settings, users, and assumptions - current, version-controlled, dated, and approved; traceable to the AI system and lifecycle stage.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Defined AI risk metrics and measurement methodology",
+          "description": "Defined AI risk metrics and measurement methodology with periodic reassessment records - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "MAP 1.2",
+      "original_reference": "MAP 1.2",
+      "title": "Interdisciplinary AI Actors and Diversity",
+      "description": "Interdisciplinary AI actors, competencies, skills, and capacities for establishing context reflect demographic diversity and broad domain and user experience expertise, and their participation is documented.",
+      "full_text": "Interdisciplinary AI actors, competencies, skills, and capacities for establishing context reflect demographic diversity and broad domain and user experience expertise, and their participation is documented. Opportunities for interdisciplinary collaboration are prioritized.",
+      "domain": "MAP (Function)",
+      "category": "MAP 1: Context is established and understood.",
+      "section_number": "MAP 1.2",
+      "parent_section": "MAP 1",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of MAP 1.2",
+          "description": "Documented evidence demonstrating the outcome of MAP 1.2: Interdisciplinary AI Actors and Diversity - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "AI risk management training records with attendees",
+          "description": "AI risk management training records with attendees, dates, content, and completion status - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Team composition records evidencing demographic, disciplinary, and domain diversity",
+          "description": "Team composition records evidencing demographic, disciplinary, and domain diversity - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Context documentation covering intended purposes",
+          "description": "Context documentation covering intended purposes, deployment settings, users, and assumptions - current, version-controlled, dated, and approved; traceable to the AI system and lifecycle stage.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Risk treatment plan with prioritization",
+          "description": "Risk treatment plan with prioritization, response options, and tracking records - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "MAP 1.3",
+      "original_reference": "MAP 1.3",
+      "title": "Organizational Mission and AI Goals",
+      "description": "The organization's mission and relevant goals for AI technology are understood and documented.",
+      "full_text": "The organization's mission and relevant goals for AI technology are understood and documented.",
+      "domain": "MAP (Function)",
+      "category": "MAP 1: Context is established and understood.",
+      "section_number": "MAP 1.3",
+      "parent_section": "MAP 1",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of MAP 1.3",
+          "description": "Documented evidence demonstrating the outcome of MAP 1.3: Organizational Mission and AI Goals - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Context documentation covering intended purposes",
+          "description": "Context documentation covering intended purposes, deployment settings, users, and assumptions - current, version-controlled, dated, and approved; traceable to the AI system and lifecycle stage.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Implementation records and artifacts evidencing this outcome within the AI",
+          "description": "Implementation records and artifacts evidencing this outcome within the AI lifecycle - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "MAP 1.4",
+      "original_reference": "MAP 1.4",
+      "title": "Business Value and Context of Use",
+      "description": "The business value or context of business use has been clearly defined or – in the case of assessing existing AI systems – re-evaluated.",
+      "full_text": "The business value or context of business use has been clearly defined or – in the case of assessing existing AI systems – re-evaluated.",
+      "domain": "MAP (Function)",
+      "category": "MAP 1: Context is established and understood.",
+      "section_number": "MAP 1.4",
+      "parent_section": "MAP 1",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of MAP 1.4",
+          "description": "Documented evidence demonstrating the outcome of MAP 1.4: Business Value and Context of Use - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "TEVV test plans",
+          "description": "TEVV test plans, test sets, tooling documentation, and evaluation result reports - should include scope, methodology, findings, evidence references, risk ratings, recommendations, and management responses.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Context documentation covering intended purposes",
+          "description": "Context documentation covering intended purposes, deployment settings, users, and assumptions - current, version-controlled, dated, and approved; traceable to the AI system and lifecycle stage.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "MAP 1.5",
+      "original_reference": "MAP 1.5",
+      "title": "Organizational Risk Tolerances",
+      "description": "Organizational risk tolerances are determined and documented.",
+      "full_text": "Organizational risk tolerances are determined and documented.",
+      "domain": "MAP (Function)",
+      "category": "MAP 1: Context is established and understood.",
+      "section_number": "MAP 1.5",
+      "parent_section": "MAP 1",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of MAP 1.5",
+          "description": "Documented evidence demonstrating the outcome of MAP 1.5: Organizational Risk Tolerances - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Documented organizational AI risk tolerance statement with approval records",
+          "description": "Documented organizational AI risk tolerance statement with approval records - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Implementation records and artifacts evidencing this outcome within the AI",
+          "description": "Implementation records and artifacts evidencing this outcome within the AI lifecycle - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "MAP 1.6",
+      "original_reference": "MAP 1.6",
+      "title": "System Requirements and Socio-Technical Design",
+      "description": "System requirements (e.g., \"the system shall respect the privacy of its users\") are elicited from and understood by relevant AI actors.",
+      "full_text": "System requirements (e.g., \"the system shall respect the privacy of its users\") are elicited from and understood by relevant AI actors. Design decisions take socio-technical implications into account to address AI risks.",
+      "domain": "MAP (Function)",
+      "category": "MAP 1: Context is established and understood.",
+      "section_number": "MAP 1.6",
+      "parent_section": "MAP 1",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of MAP 1.6",
+          "description": "Documented evidence demonstrating the outcome of MAP 1.6: System Requirements and Socio-Technical Design - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Elicited system requirements with socio-technical design decision records",
+          "description": "Elicited system requirements with socio-technical design decision records - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Privacy risk assessment for the AI system",
+          "description": "Privacy risk assessment for the AI system with PETs and data-minimization evidence - should include scope, criteria, methodology, findings, risk ratings, recommendations, and treatment decisions.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "MAP 2.1",
+      "original_reference": "MAP 2.1",
+      "title": "AI System Tasks and Methods",
+      "description": "The specific tasks and methods used to implement the tasks that the AI system will support are defined (e.g., classifiers, generative models, recommenders).",
+      "full_text": "The specific tasks and methods used to implement the tasks that the AI system will support are defined (e.g., classifiers, generative models, recommenders).",
+      "domain": "MAP (Function)",
+      "category": "MAP 2: Categorization of the AI system is performed.",
+      "section_number": "MAP 2.1",
+      "parent_section": "MAP 2",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of MAP 2.1",
+          "description": "Documented evidence demonstrating the outcome of MAP 2.1: AI System Tasks and Methods - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Implementation records and artifacts evidencing this outcome within the AI",
+          "description": "Implementation records and artifacts evidencing this outcome within the AI lifecycle - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Management oversight records confirming the outcome is resourced and operating",
+          "description": "Management oversight records confirming the outcome is resourced and operating - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "MAP 2.2",
+      "original_reference": "MAP 2.2",
+      "title": "Knowledge Limits and Human Oversight Documentation",
+      "description": "Information about the AI system's knowledge limits and how system output may be utilized and overseen by humans is documented.",
+      "full_text": "Information about the AI system's knowledge limits and how system output may be utilized and overseen by humans is documented. Documentation provides sufficient information to assist relevant AI actors when making decisions and taking subsequent actions.",
+      "domain": "MAP (Function)",
+      "category": "MAP 2: Categorization of the AI system is performed.",
+      "section_number": "MAP 2.2",
+      "parent_section": "MAP 2",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of MAP 2.2",
+          "description": "Documented evidence demonstrating the outcome of MAP 2.2: Knowledge Limits and Human Oversight Documentation - current, version-controlled, dated, and approved; traceable to the AI system and lifecycle stage.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Implementation records and artifacts evidencing this outcome within the AI",
+          "description": "Implementation records and artifacts evidencing this outcome within the AI lifecycle - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Management oversight records confirming the outcome is resourced and operating",
+          "description": "Management oversight records confirming the outcome is resourced and operating - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "MAP 2.3",
+      "original_reference": "MAP 2.3",
+      "title": "Scientific Integrity and TEVV",
+      "description": "Scientific integrity and TEVV considerations are identified and documented, including those related to experimental design, data collection and selection (e.g., availability, representativeness, suitability), system trustworthiness, and construct validation.",
+      "full_text": "Scientific integrity and TEVV considerations are identified and documented, including those related to experimental design, data collection and selection (e.g., availability, representativeness, suitability), system trustworthiness, and construct validation.",
+      "domain": "MAP (Function)",
+      "category": "MAP 2: Categorization of the AI system is performed.",
+      "section_number": "MAP 2.3",
+      "parent_section": "MAP 2",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of MAP 2.3",
+          "description": "Documented evidence demonstrating the outcome of MAP 2.3: Scientific Integrity and TEVV - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "TEVV test plans",
+          "description": "TEVV test plans, test sets, tooling documentation, and evaluation result reports - should include scope, methodology, findings, evidence references, risk ratings, recommendations, and management responses.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Implementation records and artifacts evidencing this outcome within the AI",
+          "description": "Implementation records and artifacts evidencing this outcome within the AI lifecycle - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "MAP 3.1",
+      "original_reference": "MAP 3.1",
+      "title": "Potential Benefits Examined",
+      "description": "Potential benefits of intended AI system functionality and performance are examined and documented.",
+      "full_text": "Potential benefits of intended AI system functionality and performance are examined and documented.",
+      "domain": "MAP (Function)",
+      "category": "MAP 3: AI capabilities, targeted usage, goals, and expected benefits and costs compared with appropriate benchmarks are understood.",
+      "section_number": "MAP 3.1",
+      "parent_section": "MAP 3",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of MAP 3.1",
+          "description": "Documented evidence demonstrating the outcome of MAP 3.1: Potential Benefits Examined - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "AI impact assessment",
+          "description": "AI impact assessment documenting likelihood and magnitude of beneficial and harmful impacts - should include scope, criteria, methodology, findings, risk ratings, recommendations, and treatment decisions.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Validity and reliability demonstration with generalizability limitations documented",
+          "description": "Validity and reliability demonstration with generalizability limitations documented - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "MAP 3.2",
+      "original_reference": "MAP 3.2",
+      "title": "Potential Costs Examined",
+      "description": "Potential costs, including non-monetary costs, which result from expected or realized AI errors or system functionality and trustworthiness – as connected to organizational risk tolerance – are examined and documented.",
+      "full_text": "Potential costs, including non-monetary costs, which result from expected or realized AI errors or system functionality and trustworthiness – as connected to organizational risk tolerance – are examined and documented.",
+      "domain": "MAP (Function)",
+      "category": "MAP 3: AI capabilities, targeted usage, goals, and expected benefits and costs compared with appropriate benchmarks are understood.",
+      "section_number": "MAP 3.2",
+      "parent_section": "MAP 3",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of MAP 3.2",
+          "description": "Documented evidence demonstrating the outcome of MAP 3.2: Potential Costs Examined - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Documented organizational AI risk tolerance statement with approval records",
+          "description": "Documented organizational AI risk tolerance statement with approval records - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "AI impact assessment",
+          "description": "AI impact assessment documenting likelihood and magnitude of beneficial and harmful impacts - should include scope, criteria, methodology, findings, risk ratings, recommendations, and treatment decisions.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Incident response plan and incident or error register",
+          "description": "Incident response plan and incident or error register with tracking and recovery records - preserved for the required retention period, protected from tampering, with timestamp, actor, action, and outcome.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "MAP 3.3",
+      "original_reference": "MAP 3.3",
+      "title": "Targeted Application Scope",
+      "description": "Targeted application scope is specified and documented based on the system's capability, established context, and AI system categorization.",
+      "full_text": "Targeted application scope is specified and documented based on the system's capability, established context, and AI system categorization.",
+      "domain": "MAP (Function)",
+      "category": "MAP 3: AI capabilities, targeted usage, goals, and expected benefits and costs compared with appropriate benchmarks are understood.",
+      "section_number": "MAP 3.3",
+      "parent_section": "MAP 3",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of MAP 3.3",
+          "description": "Documented evidence demonstrating the outcome of MAP 3.3: Targeted Application Scope - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Context documentation covering intended purposes",
+          "description": "Context documentation covering intended purposes, deployment settings, users, and assumptions - current, version-controlled, dated, and approved; traceable to the AI system and lifecycle stage.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Implementation records and artifacts evidencing this outcome within the AI",
+          "description": "Implementation records and artifacts evidencing this outcome within the AI lifecycle - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "MAP 3.4",
+      "original_reference": "MAP 3.4",
+      "title": "Operator and Practitioner Proficiency",
+      "description": "Processes for operator and practitioner proficiency with AI system performance and trustworthiness – and relevant technical standards and certifications – are defined, assessed, and documented.",
+      "full_text": "Processes for operator and practitioner proficiency with AI system performance and trustworthiness – and relevant technical standards and certifications – are defined, assessed, and documented.",
+      "domain": "MAP (Function)",
+      "category": "MAP 3: AI capabilities, targeted usage, goals, and expected benefits and costs compared with appropriate benchmarks are understood.",
+      "section_number": "MAP 3.4",
+      "parent_section": "MAP 3",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of MAP 3.4",
+          "description": "Documented evidence demonstrating the outcome of MAP 3.4: Operator and Practitioner Proficiency - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "AI risk management training records with attendees",
+          "description": "AI risk management training records with attendees, dates, content, and completion status - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Validity and reliability demonstration with generalizability limitations documented",
+          "description": "Validity and reliability demonstration with generalizability limitations documented - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "MAP 3.5",
+      "original_reference": "MAP 3.5",
+      "title": "Human Oversight Processes",
+      "description": "Processes for human oversight are defined, assessed, and documented in accordance with organizational policies from the GOVERN function.",
+      "full_text": "Processes for human oversight are defined, assessed, and documented in accordance with organizational policies from the GOVERN function.",
+      "domain": "MAP (Function)",
+      "category": "MAP 3: AI capabilities, targeted usage, goals, and expected benefits and costs compared with appropriate benchmarks are understood.",
+      "section_number": "MAP 3.5",
+      "parent_section": "MAP 3",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of MAP 3.5",
+          "description": "Documented evidence demonstrating the outcome of MAP 3.5: Human Oversight Processes - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Approved organizational policies and procedures supporting Human Oversight Processes",
+          "description": "Approved organizational policies and procedures supporting Human Oversight Processes - should include step-by-step instructions, responsible roles, control points, exception handling, and reference to the parent policy.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Human oversight and human-AI configuration design",
+          "description": "Human oversight and human-AI configuration design with override and appeal mechanisms - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "MAP 4.1",
+      "original_reference": "MAP 4.1",
+      "title": "Mapping Technology and Legal Risks of Components",
+      "description": "Approaches for mapping AI technology and legal risks of its components – including the use of third-party data or software – are in place, followed, and documented, as are risks of infringement of a third party's intellectual property or other rights.",
+      "full_text": "Approaches for mapping AI technology and legal risks of its components – including the use of third-party data or software – are in place, followed, and documented, as are risks of infringement of a third party's intellectual property or other rights.",
+      "domain": "MAP (Function)",
+      "category": "MAP 4: Risks and benefits are mapped for all components of the AI system including third-party software and data.",
+      "section_number": "MAP 4.1",
+      "parent_section": "MAP 4",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of MAP 4.1",
+          "description": "Documented evidence demonstrating the outcome of MAP 4.1: Mapping Technology and Legal Risks of Components - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Legal and regulatory requirements register mapping applicable AI laws",
+          "description": "Legal and regulatory requirements register mapping applicable AI laws, with owner and review dates - should contain item name, owner, classification/risk tier, status, last-review date, and traceability to source records.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Third-party AI and data risk assessments",
+          "description": "Third-party AI and data risk assessments, contracts with IP clauses, and monitoring records - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Implementation records and artifacts evidencing this outcome within the AI",
+          "description": "Implementation records and artifacts evidencing this outcome within the AI lifecycle - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "MAP 4.2",
+      "original_reference": "MAP 4.2",
+      "title": "Internal Risk Controls for Components",
+      "description": "Internal risk controls for components of the AI system, including third-party AI technologies, are identified and documented.",
+      "full_text": "Internal risk controls for components of the AI system, including third-party AI technologies, are identified and documented.",
+      "domain": "MAP (Function)",
+      "category": "MAP 4: Risks and benefits are mapped for all components of the AI system including third-party software and data.",
+      "section_number": "MAP 4.2",
+      "parent_section": "MAP 4",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of MAP 4.2",
+          "description": "Documented evidence demonstrating the outcome of MAP 4.2: Internal Risk Controls for Components - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Third-party AI and data risk assessments",
+          "description": "Third-party AI and data risk assessments, contracts with IP clauses, and monitoring records - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Implementation records and artifacts evidencing this outcome within the AI",
+          "description": "Implementation records and artifacts evidencing this outcome within the AI lifecycle - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "MAP 5.1",
+      "original_reference": "MAP 5.1",
+      "title": "Likelihood and Magnitude of Impacts",
+      "description": "Likelihood and magnitude of each identified impact (both potentially beneficial and harmful) based on expected use, past uses of AI systems in similar contexts, public incident reports, feedback from those external to the team that developed or...",
+      "full_text": "Likelihood and magnitude of each identified impact (both potentially beneficial and harmful) based on expected use, past uses of AI systems in similar contexts, public incident reports, feedback from those external to the team that developed or deployed the AI system, or other data are identified and documented.",
+      "domain": "MAP (Function)",
+      "category": "MAP 5: Impacts to individuals, groups, communities, organizations, and society are characterized.",
+      "section_number": "MAP 5.1",
+      "parent_section": "MAP 5",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of MAP 5.1",
+          "description": "Documented evidence demonstrating the outcome of MAP 5.1: Likelihood and Magnitude of Impacts - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Stakeholder engagement and feedback log",
+          "description": "Stakeholder engagement and feedback log with adjudication and integration records - preserved for the required retention period, protected from tampering, with timestamp, actor, action, and outcome.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "AI impact assessment",
+          "description": "AI impact assessment documenting likelihood and magnitude of beneficial and harmful impacts - should include scope, criteria, methodology, findings, risk ratings, recommendations, and treatment decisions.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Context documentation covering intended purposes",
+          "description": "Context documentation covering intended purposes, deployment settings, users, and assumptions - current, version-controlled, dated, and approved; traceable to the AI system and lifecycle stage.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Incident response plan and incident or error register",
+          "description": "Incident response plan and incident or error register with tracking and recovery records - preserved for the required retention period, protected from tampering, with timestamp, actor, action, and outcome.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "MAP 5.2",
+      "original_reference": "MAP 5.2",
+      "title": "Engagement and Feedback on Impacts",
+      "description": "Practices and personnel for supporting regular engagement with relevant AI actors and integrating feedback about positive, negative, and unanticipated impacts are in place and documented.",
+      "full_text": "Practices and personnel for supporting regular engagement with relevant AI actors and integrating feedback about positive, negative, and unanticipated impacts are in place and documented.",
+      "domain": "MAP (Function)",
+      "category": "MAP 5: Impacts to individuals, groups, communities, organizations, and society are characterized.",
+      "section_number": "MAP 5.2",
+      "parent_section": "MAP 5",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of MAP 5.2",
+          "description": "Documented evidence demonstrating the outcome of MAP 5.2: Engagement and Feedback on Impacts - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Stakeholder engagement and feedback log",
+          "description": "Stakeholder engagement and feedback log with adjudication and integration records - preserved for the required retention period, protected from tampering, with timestamp, actor, action, and outcome.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "AI impact assessment",
+          "description": "AI impact assessment documenting likelihood and magnitude of beneficial and harmful impacts - should include scope, criteria, methodology, findings, risk ratings, recommendations, and treatment decisions.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "MEASURE 1.1",
+      "original_reference": "MEASURE 1.1",
+      "title": "Selecting Measurement Approaches and Metrics",
+      "description": "Approaches and metrics for measurement of AI risks enumerated during the MAP function are selected for implementation starting with the most significant AI risks.",
+      "full_text": "Approaches and metrics for measurement of AI risks enumerated during the MAP function are selected for implementation starting with the most significant AI risks. The risks or trustworthiness characteristics that will not – or cannot – be measured are properly documented.",
+      "domain": "MEASURE (Function)",
+      "category": "MEASURE 1: Appropriate methods and metrics are identified and applied.",
+      "section_number": "MEASURE 1.1",
+      "parent_section": "MEASURE 1",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of MEASURE 1.1",
+          "description": "Documented evidence demonstrating the outcome of MEASURE 1.1: Selecting Measurement Approaches and Metrics - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Defined AI risk metrics and measurement methodology",
+          "description": "Defined AI risk metrics and measurement methodology with periodic reassessment records - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Implementation records and artifacts evidencing this outcome within the AI",
+          "description": "Implementation records and artifacts evidencing this outcome within the AI lifecycle - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "MEASURE 1.2",
+      "original_reference": "MEASURE 1.2",
+      "title": "Assessing Appropriateness of Metrics and Controls",
+      "description": "Appropriateness of AI metrics and effectiveness of existing controls are regularly assessed and updated, including reports of errors and potential impacts on affected communities.",
+      "full_text": "Appropriateness of AI metrics and effectiveness of existing controls are regularly assessed and updated, including reports of errors and potential impacts on affected communities.",
+      "domain": "MEASURE (Function)",
+      "category": "MEASURE 1: Appropriate methods and metrics are identified and applied.",
+      "section_number": "MEASURE 1.2",
+      "parent_section": "MEASURE 1",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of MEASURE 1.2",
+          "description": "Documented evidence demonstrating the outcome of MEASURE 1.2: Assessing Appropriateness of Metrics and Controls - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "AI impact assessment",
+          "description": "AI impact assessment documenting likelihood and magnitude of beneficial and harmful impacts - should include scope, criteria, methodology, findings, risk ratings, recommendations, and treatment decisions.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Incident response plan and incident or error register",
+          "description": "Incident response plan and incident or error register with tracking and recovery records - preserved for the required retention period, protected from tampering, with timestamp, actor, action, and outcome.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Defined AI risk metrics and measurement methodology",
+          "description": "Defined AI risk metrics and measurement methodology with periodic reassessment records - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "MEASURE 1.3",
+      "original_reference": "MEASURE 1.3",
+      "title": "Independent and Internal Expert Assessment",
+      "description": "Internal experts who did not serve as front-line developers for the system and/or independent assessors are involved in regular assessments and updates.",
+      "full_text": "Internal experts who did not serve as front-line developers for the system and/or independent assessors are involved in regular assessments and updates. Domain experts, users, AI actors external to the team that developed or deployed the AI system, and affected communities are consulted in support of assessments as necessary per organizational risk tolerance.",
+      "domain": "MEASURE (Function)",
+      "category": "MEASURE 1: Appropriate methods and metrics are identified and applied.",
+      "section_number": "MEASURE 1.3",
+      "parent_section": "MEASURE 1",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of MEASURE 1.3",
+          "description": "Documented evidence demonstrating the outcome of MEASURE 1.3: Independent and Internal Expert Assessment - should include scope, criteria, methodology, findings, risk ratings, recommendations, and treatment decisions.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Documented organizational AI risk tolerance statement with approval records",
+          "description": "Documented organizational AI risk tolerance statement with approval records - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Stakeholder engagement and feedback log",
+          "description": "Stakeholder engagement and feedback log with adjudication and integration records - preserved for the required retention period, protected from tampering, with timestamp, actor, action, and outcome.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "MEASURE 2.1",
+      "original_reference": "MEASURE 2.1",
+      "title": "TEVV Test Sets, Metrics, and Tools Documentation",
+      "description": "Test sets, metrics, and details about the tools used during TEVV are documented.",
+      "full_text": "Test sets, metrics, and details about the tools used during TEVV are documented.",
+      "domain": "MEASURE (Function)",
+      "category": "MEASURE 2: AI systems are evaluated for trustworthy characteristics.",
+      "section_number": "MEASURE 2.1",
+      "parent_section": "MEASURE 2",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of MEASURE 2.1",
+          "description": "Documented evidence demonstrating the outcome of MEASURE 2.1: TEVV Test Sets, Metrics, and Tools Documentation - current, version-controlled, dated, and approved; traceable to the AI system and lifecycle stage.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "TEVV test plans",
+          "description": "TEVV test plans, test sets, tooling documentation, and evaluation result reports - should include scope, methodology, findings, evidence references, risk ratings, recommendations, and management responses.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Defined AI risk metrics and measurement methodology",
+          "description": "Defined AI risk metrics and measurement methodology with periodic reassessment records - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "MEASURE 2.2",
+      "original_reference": "MEASURE 2.2",
+      "title": "Human Subject Evaluations",
+      "description": "Evaluations involving human subjects meet applicable requirements (including human subject protection) and are representative of the relevant population.",
+      "full_text": "Evaluations involving human subjects meet applicable requirements (including human subject protection) and are representative of the relevant population.",
+      "domain": "MEASURE (Function)",
+      "category": "MEASURE 2: AI systems are evaluated for trustworthy characteristics.",
+      "section_number": "MEASURE 2.2",
+      "parent_section": "MEASURE 2",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of MEASURE 2.2",
+          "description": "Documented evidence demonstrating the outcome of MEASURE 2.2: Human Subject Evaluations - should include scope, criteria, methodology, findings, risk ratings, recommendations, and treatment decisions.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "TEVV test plans",
+          "description": "TEVV test plans, test sets, tooling documentation, and evaluation result reports - should include scope, methodology, findings, evidence references, risk ratings, recommendations, and management responses.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Elicited system requirements with socio-technical design decision records",
+          "description": "Elicited system requirements with socio-technical design decision records - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Human-subject protection approvals and representativeness evidence for evaluations",
+          "description": "Human-subject protection approvals and representativeness evidence for evaluations - should include scope, criteria, methodology, findings, risk ratings, recommendations, and treatment decisions.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "MEASURE 2.3",
+      "original_reference": "MEASURE 2.3",
+      "title": "Performance and Assurance Criteria",
+      "description": "AI system performance or assurance criteria are measured qualitatively or quantitatively and demonstrated for conditions similar to deployment setting(s).",
+      "full_text": "AI system performance or assurance criteria are measured qualitatively or quantitatively and demonstrated for conditions similar to deployment setting(s). Measures are documented.",
+      "domain": "MEASURE (Function)",
+      "category": "MEASURE 2: AI systems are evaluated for trustworthy characteristics.",
+      "section_number": "MEASURE 2.3",
+      "parent_section": "MEASURE 2",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of MEASURE 2.3",
+          "description": "Documented evidence demonstrating the outcome of MEASURE 2.3: Performance and Assurance Criteria - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Context documentation covering intended purposes",
+          "description": "Context documentation covering intended purposes, deployment settings, users, and assumptions - current, version-controlled, dated, and approved; traceable to the AI system and lifecycle stage.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Defined AI risk metrics and measurement methodology",
+          "description": "Defined AI risk metrics and measurement methodology with periodic reassessment records - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Validity and reliability demonstration with generalizability limitations documented",
+          "description": "Validity and reliability demonstration with generalizability limitations documented - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "MEASURE 2.4",
+      "original_reference": "MEASURE 2.4",
+      "title": "Production Monitoring of Functionality and Behavior",
+      "description": "The functionality and behavior of the AI system and its components – as identified in the MAP function – are monitored when in production.",
+      "full_text": "The functionality and behavior of the AI system and its components – as identified in the MAP function – are monitored when in production.",
+      "domain": "MEASURE (Function)",
+      "category": "MEASURE 2: AI systems are evaluated for trustworthy characteristics.",
+      "section_number": "MEASURE 2.4",
+      "parent_section": "MEASURE 2",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of MEASURE 2.4",
+          "description": "Documented evidence demonstrating the outcome of MEASURE 2.4: Production Monitoring of Functionality and Behavior - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Ongoing monitoring and periodic review records",
+          "description": "Ongoing monitoring and periodic review records with defined frequency and roles - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Implementation records and artifacts evidencing this outcome within the AI",
+          "description": "Implementation records and artifacts evidencing this outcome within the AI lifecycle - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "MEASURE 2.5",
+      "original_reference": "MEASURE 2.5",
+      "title": "Validity and Reliability Demonstrated",
+      "description": "The AI system to be deployed is demonstrated to be valid and reliable.",
+      "full_text": "The AI system to be deployed is demonstrated to be valid and reliable. Limitations of the generalizability beyond the conditions under which the technology was developed are documented.",
+      "domain": "MEASURE (Function)",
+      "category": "MEASURE 2: AI systems are evaluated for trustworthy characteristics.",
+      "section_number": "MEASURE 2.5",
+      "parent_section": "MEASURE 2",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of MEASURE 2.5",
+          "description": "Documented evidence demonstrating the outcome of MEASURE 2.5: Validity and Reliability Demonstrated - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Validity and reliability demonstration with generalizability limitations documented",
+          "description": "Validity and reliability demonstration with generalizability limitations documented - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Implementation records and artifacts evidencing this outcome within the AI",
+          "description": "Implementation records and artifacts evidencing this outcome within the AI lifecycle - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "MEASURE 2.6",
+      "original_reference": "MEASURE 2.6",
+      "title": "Safety Risk Evaluation",
+      "description": "The AI system is evaluated regularly for safety risks – as identified in the MAP function.",
+      "full_text": "The AI system is evaluated regularly for safety risks – as identified in the MAP function. The AI system to be deployed is demonstrated to be safe, its residual negative risk does not exceed the risk tolerance, and it can fail safely, particularly if made to operate beyond its knowledge limits. Safety metrics reflect system reliability and robustness, real-time monitoring, and response times for AI system failures.",
+      "domain": "MEASURE (Function)",
+      "category": "MEASURE 2: AI systems are evaluated for trustworthy characteristics.",
+      "section_number": "MEASURE 2.6",
+      "parent_section": "MEASURE 2",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of MEASURE 2.6",
+          "description": "Documented evidence demonstrating the outcome of MEASURE 2.6: Safety Risk Evaluation - should include scope, criteria, methodology, findings, risk ratings, recommendations, and treatment decisions.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Documented organizational AI risk tolerance statement with approval records",
+          "description": "Documented organizational AI risk tolerance statement with approval records - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "TEVV test plans",
+          "description": "TEVV test plans, test sets, tooling documentation, and evaluation result reports - should include scope, methodology, findings, evidence references, risk ratings, recommendations, and management responses.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Incident response plan and incident or error register",
+          "description": "Incident response plan and incident or error register with tracking and recovery records - preserved for the required retention period, protected from tampering, with timestamp, actor, action, and outcome.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Defined AI risk metrics and measurement methodology",
+          "description": "Defined AI risk metrics and measurement methodology with periodic reassessment records - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Safety evaluation records including fail-safe behavior",
+          "description": "Safety evaluation records including fail-safe behavior, residual-risk, and real-time monitoring - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "MEASURE 2.7",
+      "original_reference": "MEASURE 2.7",
+      "title": "Security and Resilience Evaluation",
+      "description": "AI system security and resilience – as identified in the MAP function – are evaluated and documented.",
+      "full_text": "AI system security and resilience – as identified in the MAP function – are evaluated and documented.",
+      "domain": "MEASURE (Function)",
+      "category": "MEASURE 2: AI systems are evaluated for trustworthy characteristics.",
+      "section_number": "MEASURE 2.7",
+      "parent_section": "MEASURE 2",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of MEASURE 2.7",
+          "description": "Documented evidence demonstrating the outcome of MEASURE 2.7: Security and Resilience Evaluation - should include scope, criteria, methodology, findings, risk ratings, recommendations, and treatment decisions.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "TEVV test plans",
+          "description": "TEVV test plans, test sets, tooling documentation, and evaluation result reports - should include scope, methodology, findings, evidence references, risk ratings, recommendations, and management responses.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Security and resilience evaluation reports",
+          "description": "Security and resilience evaluation reports covering adversarial testing and robustness - should include scope, methodology, findings, evidence references, risk ratings, recommendations, and management responses.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "MEASURE 2.8",
+      "original_reference": "MEASURE 2.8",
+      "title": "Transparency and Accountability Risk",
+      "description": "Risks associated with transparency and accountability – as identified in the MAP function – are examined and documented.",
+      "full_text": "Risks associated with transparency and accountability – as identified in the MAP function – are examined and documented.",
+      "domain": "MEASURE (Function)",
+      "category": "MEASURE 2: AI systems are evaluated for trustworthy characteristics.",
+      "section_number": "MEASURE 2.8",
+      "parent_section": "MEASURE 2",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of MEASURE 2.8",
+          "description": "Documented evidence demonstrating the outcome of MEASURE 2.8: Transparency and Accountability Risk - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "RACI matrix defining AI risk management roles",
+          "description": "RACI matrix defining AI risk management roles, responsibilities, and communication lines - should clearly identify owners, responsibilities, coverage of all relevant items, and last-update date.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Model explainability and interpretability documentation and transparency artifacts",
+          "description": "Model explainability and interpretability documentation and transparency artifacts - current, version-controlled, dated, and approved; traceable to the AI system and lifecycle stage.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "MEASURE 2.9",
+      "original_reference": "MEASURE 2.9",
+      "title": "Model Explanation, Validation, and Interpretation",
+      "description": "The AI model is explained, validated, and documented, and AI system output is interpreted within its context – as identified in the MAP function – to inform responsible use and governance.",
+      "full_text": "The AI model is explained, validated, and documented, and AI system output is interpreted within its context – as identified in the MAP function – to inform responsible use and governance.",
+      "domain": "MEASURE (Function)",
+      "category": "MEASURE 2: AI systems are evaluated for trustworthy characteristics.",
+      "section_number": "MEASURE 2.9",
+      "parent_section": "MEASURE 2",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of MEASURE 2.9",
+          "description": "Documented evidence demonstrating the outcome of MEASURE 2.9: Model Explanation, Validation, and Interpretation - should cover scope, objectives, roles, activation criteria, responsibilities, escalation paths, and review cadence.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Context documentation covering intended purposes",
+          "description": "Context documentation covering intended purposes, deployment settings, users, and assumptions - current, version-controlled, dated, and approved; traceable to the AI system and lifecycle stage.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Model explainability and interpretability documentation and transparency artifacts",
+          "description": "Model explainability and interpretability documentation and transparency artifacts - current, version-controlled, dated, and approved; traceable to the AI system and lifecycle stage.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "MEASURE 2.10",
+      "original_reference": "MEASURE 2.10",
+      "title": "Privacy Risk Examination",
+      "description": "Privacy risk of the AI system – as identified in the MAP function – is examined and documented.",
+      "full_text": "Privacy risk of the AI system – as identified in the MAP function – is examined and documented.",
+      "domain": "MEASURE (Function)",
+      "category": "MEASURE 2: AI systems are evaluated for trustworthy characteristics.",
+      "section_number": "MEASURE 2.10",
+      "parent_section": "MEASURE 2",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of MEASURE 2.10",
+          "description": "Documented evidence demonstrating the outcome of MEASURE 2.10: Privacy Risk Examination - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Privacy risk assessment for the AI system",
+          "description": "Privacy risk assessment for the AI system with PETs and data-minimization evidence - should include scope, criteria, methodology, findings, risk ratings, recommendations, and treatment decisions.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Implementation records and artifacts evidencing this outcome within the AI",
+          "description": "Implementation records and artifacts evidencing this outcome within the AI lifecycle - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "MEASURE 2.11",
+      "original_reference": "MEASURE 2.11",
+      "title": "Fairness and Bias Evaluation",
+      "description": "Fairness and bias – as identified in the MAP function – are evaluated and results are documented.",
+      "full_text": "Fairness and bias – as identified in the MAP function – are evaluated and results are documented.",
+      "domain": "MEASURE (Function)",
+      "category": "MEASURE 2: AI systems are evaluated for trustworthy characteristics.",
+      "section_number": "MEASURE 2.11",
+      "parent_section": "MEASURE 2",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of MEASURE 2.11",
+          "description": "Documented evidence demonstrating the outcome of MEASURE 2.11: Fairness and Bias Evaluation - should include scope, criteria, methodology, findings, risk ratings, recommendations, and treatment decisions.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "TEVV test plans",
+          "description": "TEVV test plans, test sets, tooling documentation, and evaluation result reports - should include scope, methodology, findings, evidence references, risk ratings, recommendations, and management responses.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Fairness and bias evaluation results across demographic groups",
+          "description": "Fairness and bias evaluation results across demographic groups with mitigation records - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "MEASURE 2.12",
+      "original_reference": "MEASURE 2.12",
+      "title": "Environmental Impact and Sustainability",
+      "description": "Environmental impact and sustainability of AI model training and management activities – as identified in the MAP function – are assessed and documented.",
+      "full_text": "Environmental impact and sustainability of AI model training and management activities – as identified in the MAP function – are assessed and documented.",
+      "domain": "MEASURE (Function)",
+      "category": "MEASURE 2: AI systems are evaluated for trustworthy characteristics.",
+      "section_number": "MEASURE 2.12",
+      "parent_section": "MEASURE 2",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of MEASURE 2.12",
+          "description": "Documented evidence demonstrating the outcome of MEASURE 2.12: Environmental Impact and Sustainability - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "AI risk management training records with attendees",
+          "description": "AI risk management training records with attendees, dates, content, and completion status - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "AI impact assessment",
+          "description": "AI impact assessment documenting likelihood and magnitude of beneficial and harmful impacts - should include scope, criteria, methodology, findings, risk ratings, recommendations, and treatment decisions.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Environmental impact and sustainability assessment of model training and operations",
+          "description": "Environmental impact and sustainability assessment of model training and operations - should include scope, criteria, methodology, findings, risk ratings, recommendations, and treatment decisions.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "MEASURE 2.13",
+      "original_reference": "MEASURE 2.13",
+      "title": "TEVV Metrics and Processes Effectiveness",
+      "description": "Effectiveness of the employed TEVV metrics and processes in the MEASURE function are evaluated and documented.",
+      "full_text": "Effectiveness of the employed TEVV metrics and processes in the MEASURE function are evaluated and documented.",
+      "domain": "MEASURE (Function)",
+      "category": "MEASURE 2: AI systems are evaluated for trustworthy characteristics.",
+      "section_number": "MEASURE 2.13",
+      "parent_section": "MEASURE 2",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of MEASURE 2.13",
+          "description": "Documented evidence demonstrating the outcome of MEASURE 2.13: TEVV Metrics and Processes Effectiveness - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "TEVV test plans",
+          "description": "TEVV test plans, test sets, tooling documentation, and evaluation result reports - should include scope, methodology, findings, evidence references, risk ratings, recommendations, and management responses.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Defined AI risk metrics and measurement methodology",
+          "description": "Defined AI risk metrics and measurement methodology with periodic reassessment records - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "MEASURE 3.1",
+      "original_reference": "MEASURE 3.1",
+      "title": "Tracking Existing and Emergent Risks",
+      "description": "Approaches, personnel, and documentation are in place to regularly identify and track existing, unanticipated, and emergent AI risks based on factors such as intended and actual performance in deployed contexts.",
+      "full_text": "Approaches, personnel, and documentation are in place to regularly identify and track existing, unanticipated, and emergent AI risks based on factors such as intended and actual performance in deployed contexts.",
+      "domain": "MEASURE (Function)",
+      "category": "MEASURE 3: Mechanisms for tracking identified AI risks over time are in place.",
+      "section_number": "MEASURE 3.1",
+      "parent_section": "MEASURE 3",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of MEASURE 3.1",
+          "description": "Documented evidence demonstrating the outcome of MEASURE 3.1: Tracking Existing and Emergent Risks - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Context documentation covering intended purposes",
+          "description": "Context documentation covering intended purposes, deployment settings, users, and assumptions - current, version-controlled, dated, and approved; traceable to the AI system and lifecycle stage.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Validity and reliability demonstration with generalizability limitations documented",
+          "description": "Validity and reliability demonstration with generalizability limitations documented - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Ongoing monitoring and periodic review records",
+          "description": "Ongoing monitoring and periodic review records with defined frequency and roles - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "MEASURE 3.2",
+      "original_reference": "MEASURE 3.2",
+      "title": "Risk Tracking for Hard-to-Assess Settings",
+      "description": "Risk tracking approaches are considered for settings where AI risks are difficult to assess using currently available measurement techniques or where metrics are not yet available.",
+      "full_text": "Risk tracking approaches are considered for settings where AI risks are difficult to assess using currently available measurement techniques or where metrics are not yet available.",
+      "domain": "MEASURE (Function)",
+      "category": "MEASURE 3: Mechanisms for tracking identified AI risks over time are in place.",
+      "section_number": "MEASURE 3.2",
+      "parent_section": "MEASURE 3",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of MEASURE 3.2",
+          "description": "Documented evidence demonstrating the outcome of MEASURE 3.2: Risk Tracking for Hard-to-Assess Settings - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Defined AI risk metrics and measurement methodology",
+          "description": "Defined AI risk metrics and measurement methodology with periodic reassessment records - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Ongoing monitoring and periodic review records",
+          "description": "Ongoing monitoring and periodic review records with defined frequency and roles - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Implementation records and artifacts evidencing this outcome within the AI",
+          "description": "Implementation records and artifacts evidencing this outcome within the AI lifecycle - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "MEASURE 3.3",
+      "original_reference": "MEASURE 3.3",
+      "title": "User and Community Feedback Processes",
+      "description": "Feedback processes for end users and impacted communities to report problems and appeal system outcomes are established and integrated into AI system evaluation metrics.",
+      "full_text": "Feedback processes for end users and impacted communities to report problems and appeal system outcomes are established and integrated into AI system evaluation metrics.",
+      "domain": "MEASURE (Function)",
+      "category": "MEASURE 3: Mechanisms for tracking identified AI risks over time are in place.",
+      "section_number": "MEASURE 3.3",
+      "parent_section": "MEASURE 3",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of MEASURE 3.3",
+          "description": "Documented evidence demonstrating the outcome of MEASURE 3.3: User and Community Feedback Processes - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Stakeholder engagement and feedback log",
+          "description": "Stakeholder engagement and feedback log with adjudication and integration records - preserved for the required retention period, protected from tampering, with timestamp, actor, action, and outcome.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "TEVV test plans",
+          "description": "TEVV test plans, test sets, tooling documentation, and evaluation result reports - should include scope, methodology, findings, evidence references, risk ratings, recommendations, and management responses.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "AI impact assessment",
+          "description": "AI impact assessment documenting likelihood and magnitude of beneficial and harmful impacts - should include scope, criteria, methodology, findings, risk ratings, recommendations, and treatment decisions.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Defined AI risk metrics and measurement methodology",
+          "description": "Defined AI risk metrics and measurement methodology with periodic reassessment records - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "MEASURE 4.1",
+      "original_reference": "MEASURE 4.1",
+      "title": "Connecting Measurement to Deployment Context",
+      "description": "Measurement approaches for identifying AI risks are connected to deployment context(s) and informed through consultation with domain experts and other end users.",
+      "full_text": "Measurement approaches for identifying AI risks are connected to deployment context(s) and informed through consultation with domain experts and other end users. Approaches are documented.",
+      "domain": "MEASURE (Function)",
+      "category": "MEASURE 4: Feedback about efficacy of measurement is gathered and assessed.",
+      "section_number": "MEASURE 4.1",
+      "parent_section": "MEASURE 4",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of MEASURE 4.1",
+          "description": "Documented evidence demonstrating the outcome of MEASURE 4.1: Connecting Measurement to Deployment Context - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Stakeholder engagement and feedback log",
+          "description": "Stakeholder engagement and feedback log with adjudication and integration records - preserved for the required retention period, protected from tampering, with timestamp, actor, action, and outcome.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Context documentation covering intended purposes",
+          "description": "Context documentation covering intended purposes, deployment settings, users, and assumptions - current, version-controlled, dated, and approved; traceable to the AI system and lifecycle stage.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Defined AI risk metrics and measurement methodology",
+          "description": "Defined AI risk metrics and measurement methodology with periodic reassessment records - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "MEASURE 4.2",
+      "original_reference": "MEASURE 4.2",
+      "title": "Validating Trustworthiness in Deployment",
+      "description": "Measurement results regarding AI system trustworthiness in deployment context(s) and across the AI lifecycle are informed by input from domain experts and relevant AI actors to validate whether the system is performing consistently as intended.",
+      "full_text": "Measurement results regarding AI system trustworthiness in deployment context(s) and across the AI lifecycle are informed by input from domain experts and relevant AI actors to validate whether the system is performing consistently as intended. Results are documented.",
+      "domain": "MEASURE (Function)",
+      "category": "MEASURE 4: Feedback about efficacy of measurement is gathered and assessed.",
+      "section_number": "MEASURE 4.2",
+      "parent_section": "MEASURE 4",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of MEASURE 4.2",
+          "description": "Documented evidence demonstrating the outcome of MEASURE 4.2: Validating Trustworthiness in Deployment - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Context documentation covering intended purposes",
+          "description": "Context documentation covering intended purposes, deployment settings, users, and assumptions - current, version-controlled, dated, and approved; traceable to the AI system and lifecycle stage.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Defined AI risk metrics and measurement methodology",
+          "description": "Defined AI risk metrics and measurement methodology with periodic reassessment records - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "MEASURE 4.3",
+      "original_reference": "MEASURE 4.3",
+      "title": "Performance Improvement and Decline Tracking",
+      "description": "Measurable performance improvements or declines based on consultations with relevant AI actors, including affected communities, and field data about context-relevant risks and trustworthiness characteristics are identified and documented.",
+      "full_text": "Measurable performance improvements or declines based on consultations with relevant AI actors, including affected communities, and field data about context-relevant risks and trustworthiness characteristics are identified and documented.",
+      "domain": "MEASURE (Function)",
+      "category": "MEASURE 4: Feedback about efficacy of measurement is gathered and assessed.",
+      "section_number": "MEASURE 4.3",
+      "parent_section": "MEASURE 4",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of MEASURE 4.3",
+          "description": "Documented evidence demonstrating the outcome of MEASURE 4.3: Performance Improvement and Decline Tracking - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Stakeholder engagement and feedback log",
+          "description": "Stakeholder engagement and feedback log with adjudication and integration records - preserved for the required retention period, protected from tampering, with timestamp, actor, action, and outcome.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Context documentation covering intended purposes",
+          "description": "Context documentation covering intended purposes, deployment settings, users, and assumptions - current, version-controlled, dated, and approved; traceable to the AI system and lifecycle stage.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Validity and reliability demonstration with generalizability limitations documented",
+          "description": "Validity and reliability demonstration with generalizability limitations documented - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "MANAGE 1.1",
+      "original_reference": "MANAGE 1.1",
+      "title": "Go/No-Go Determination on Purposes and Objectives",
+      "description": "A determination is made as to whether the AI system achieves its intended purposes and stated objectives and whether its development or deployment should proceed.",
+      "full_text": "A determination is made as to whether the AI system achieves its intended purposes and stated objectives and whether its development or deployment should proceed.",
+      "domain": "MANAGE (Function)",
+      "category": "MANAGE 1: AI risks based on assessments and other analytical output from the MAP and MEASURE functions are prioritized, responded to, and managed.",
+      "section_number": "MANAGE 1.1",
+      "parent_section": "MANAGE 1",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of MANAGE 1.1",
+          "description": "Documented evidence demonstrating the outcome of MANAGE 1.1: Go/No-Go Determination on Purposes and Objectives - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Context documentation covering intended purposes",
+          "description": "Context documentation covering intended purposes, deployment settings, users, and assumptions - current, version-controlled, dated, and approved; traceable to the AI system and lifecycle stage.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Implementation records and artifacts evidencing this outcome within the AI",
+          "description": "Implementation records and artifacts evidencing this outcome within the AI lifecycle - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "MANAGE 1.2",
+      "original_reference": "MANAGE 1.2",
+      "title": "Risk Treatment Prioritization",
+      "description": "Treatment of documented AI risks is prioritized based on impact, likelihood, and available resources or methods.",
+      "full_text": "Treatment of documented AI risks is prioritized based on impact, likelihood, and available resources or methods.",
+      "domain": "MANAGE (Function)",
+      "category": "MANAGE 1: AI risks based on assessments and other analytical output from the MAP and MEASURE functions are prioritized, responded to, and managed.",
+      "section_number": "MANAGE 1.2",
+      "parent_section": "MANAGE 1",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of MANAGE 1.2",
+          "description": "Documented evidence demonstrating the outcome of MANAGE 1.2: Risk Treatment Prioritization - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "AI impact assessment",
+          "description": "AI impact assessment documenting likelihood and magnitude of beneficial and harmful impacts - should include scope, criteria, methodology, findings, risk ratings, recommendations, and treatment decisions.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Risk treatment plan with prioritization",
+          "description": "Risk treatment plan with prioritization, response options, and tracking records - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "MANAGE 1.3",
+      "original_reference": "MANAGE 1.3",
+      "title": "High-Priority Risk Responses",
+      "description": "Responses to the AI risks deemed high priority, as identified by the MAP function, are developed, planned, and documented.",
+      "full_text": "Responses to the AI risks deemed high priority, as identified by the MAP function, are developed, planned, and documented. Risk response options can include mitigating, transferring, avoiding, or accepting.",
+      "domain": "MANAGE (Function)",
+      "category": "MANAGE 1: AI risks based on assessments and other analytical output from the MAP and MEASURE functions are prioritized, responded to, and managed.",
+      "section_number": "MANAGE 1.3",
+      "parent_section": "MANAGE 1",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of MANAGE 1.3",
+          "description": "Documented evidence demonstrating the outcome of MANAGE 1.3: High-Priority Risk Responses - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Incident response plan and incident or error register",
+          "description": "Incident response plan and incident or error register with tracking and recovery records - preserved for the required retention period, protected from tampering, with timestamp, actor, action, and outcome.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Risk treatment plan with prioritization",
+          "description": "Risk treatment plan with prioritization, response options, and tracking records - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "MANAGE 1.4",
+      "original_reference": "MANAGE 1.4",
+      "title": "Documenting Negative Residual Risks",
+      "description": "Negative residual risks (defined as the sum of all unmitigated risks) to both downstream acquirers of AI systems and end users are documented.",
+      "full_text": "Negative residual risks (defined as the sum of all unmitigated risks) to both downstream acquirers of AI systems and end users are documented.",
+      "domain": "MANAGE (Function)",
+      "category": "MANAGE 1: AI risks based on assessments and other analytical output from the MAP and MEASURE functions are prioritized, responded to, and managed.",
+      "section_number": "MANAGE 1.4",
+      "parent_section": "MANAGE 1",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of MANAGE 1.4",
+          "description": "Documented evidence demonstrating the outcome of MANAGE 1.4: Documenting Negative Residual Risks - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Residual risk register",
+          "description": "Residual risk register documenting unmitigated risks to acquirers and end users - should contain item name, owner, classification/risk tier, status, last-review date, and traceability to source records.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Risk treatment plan with prioritization",
+          "description": "Risk treatment plan with prioritization, response options, and tracking records - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "MANAGE 2.1",
+      "original_reference": "MANAGE 2.1",
+      "title": "Resource Allocation and Non-AI Alternatives",
+      "description": "Resources required to manage AI risks are taken into account – along with viable non-AI alternative systems, approaches, or methods – to reduce the magnitude or likelihood of potential impacts.",
+      "full_text": "Resources required to manage AI risks are taken into account – along with viable non-AI alternative systems, approaches, or methods – to reduce the magnitude or likelihood of potential impacts.",
+      "domain": "MANAGE (Function)",
+      "category": "MANAGE 2: Strategies to maximize AI benefits and minimize negative impacts are planned, prepared, implemented, documented, and informed by input from relevant AI actors.",
+      "section_number": "MANAGE 2.1",
+      "parent_section": "MANAGE 2",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of MANAGE 2.1",
+          "description": "Documented evidence demonstrating the outcome of MANAGE 2.1: Resource Allocation and Non-AI Alternatives - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "AI impact assessment",
+          "description": "AI impact assessment documenting likelihood and magnitude of beneficial and harmful impacts - should include scope, criteria, methodology, findings, risk ratings, recommendations, and treatment decisions.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Implementation records and artifacts evidencing this outcome within the AI",
+          "description": "Implementation records and artifacts evidencing this outcome within the AI lifecycle - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "MANAGE 2.2",
+      "original_reference": "MANAGE 2.2",
+      "title": "Sustaining Value of Deployed Systems",
+      "description": "Mechanisms are in place and applied to sustain the value of deployed AI systems.",
+      "full_text": "Mechanisms are in place and applied to sustain the value of deployed AI systems.",
+      "domain": "MANAGE (Function)",
+      "category": "MANAGE 2: Strategies to maximize AI benefits and minimize negative impacts are planned, prepared, implemented, documented, and informed by input from relevant AI actors.",
+      "section_number": "MANAGE 2.2",
+      "parent_section": "MANAGE 2",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of MANAGE 2.2",
+          "description": "Documented evidence demonstrating the outcome of MANAGE 2.2: Sustaining Value of Deployed Systems - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Implementation records and artifacts evidencing this outcome within the AI",
+          "description": "Implementation records and artifacts evidencing this outcome within the AI lifecycle - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Management oversight records confirming the outcome is resourced and operating",
+          "description": "Management oversight records confirming the outcome is resourced and operating - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "MANAGE 2.3",
+      "original_reference": "MANAGE 2.3",
+      "title": "Responding to Previously Unknown Risks",
+      "description": "Procedures are followed to respond to and recover from a previously unknown risk when it is identified.",
+      "full_text": "Procedures are followed to respond to and recover from a previously unknown risk when it is identified.",
+      "domain": "MANAGE (Function)",
+      "category": "MANAGE 2: Strategies to maximize AI benefits and minimize negative impacts are planned, prepared, implemented, documented, and informed by input from relevant AI actors.",
+      "section_number": "MANAGE 2.3",
+      "parent_section": "MANAGE 2",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of MANAGE 2.3",
+          "description": "Documented evidence demonstrating the outcome of MANAGE 2.3: Responding to Previously Unknown Risks - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Approved organizational policies and procedures",
+          "description": "Approved organizational policies and procedures supporting Responding to Previously Unknown Risks - should include step-by-step instructions, responsible roles, control points, exception handling, and reference to the parent policy.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Incident response plan and incident or error register",
+          "description": "Incident response plan and incident or error register with tracking and recovery records - preserved for the required retention period, protected from tampering, with timestamp, actor, action, and outcome.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "MANAGE 2.4",
+      "original_reference": "MANAGE 2.4",
+      "title": "Superseding, Disengaging, or Deactivating Systems",
+      "description": "Mechanisms are in place and applied, and responsibilities are assigned and understood, to supersede, disengage, or deactivate AI systems that demonstrate performance or outcomes inconsistent with intended use.",
+      "full_text": "Mechanisms are in place and applied, and responsibilities are assigned and understood, to supersede, disengage, or deactivate AI systems that demonstrate performance or outcomes inconsistent with intended use.",
+      "domain": "MANAGE (Function)",
+      "category": "MANAGE 2: Strategies to maximize AI benefits and minimize negative impacts are planned, prepared, implemented, documented, and informed by input from relevant AI actors.",
+      "section_number": "MANAGE 2.4",
+      "parent_section": "MANAGE 2",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of MANAGE 2.4",
+          "description": "Documented evidence demonstrating the outcome of MANAGE 2.4: Superseding, Disengaging, or Deactivating Systems - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Decommissioning and deactivation procedure",
+          "description": "Decommissioning and deactivation procedure with records of safe phase-out execution - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Validity and reliability demonstration with generalizability limitations documented",
+          "description": "Validity and reliability demonstration with generalizability limitations documented - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "MANAGE 3.1",
+      "original_reference": "MANAGE 3.1",
+      "title": "Monitoring Third-Party Risks and Benefits",
+      "description": "AI risks and benefits from third-party resources are regularly monitored, and risk controls are applied and documented.",
+      "full_text": "AI risks and benefits from third-party resources are regularly monitored, and risk controls are applied and documented.",
+      "domain": "MANAGE (Function)",
+      "category": "MANAGE 3: AI risks and benefits from third-party entities are managed.",
+      "section_number": "MANAGE 3.1",
+      "parent_section": "MANAGE 3",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of MANAGE 3.1",
+          "description": "Documented evidence demonstrating the outcome of MANAGE 3.1: Monitoring Third-Party Risks and Benefits - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Third-party AI and data risk assessments",
+          "description": "Third-party AI and data risk assessments, contracts with IP clauses, and monitoring records - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "AI impact assessment",
+          "description": "AI impact assessment documenting likelihood and magnitude of beneficial and harmful impacts - should include scope, criteria, methodology, findings, risk ratings, recommendations, and treatment decisions.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Ongoing monitoring and periodic review records",
+          "description": "Ongoing monitoring and periodic review records with defined frequency and roles - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "MANAGE 3.2",
+      "original_reference": "MANAGE 3.2",
+      "title": "Monitoring Pre-Trained Models",
+      "description": "Pre-trained models which are used for development are monitored as part of AI system regular monitoring and maintenance.",
+      "full_text": "Pre-trained models which are used for development are monitored as part of AI system regular monitoring and maintenance.",
+      "domain": "MANAGE (Function)",
+      "category": "MANAGE 3: AI risks and benefits from third-party entities are managed.",
+      "section_number": "MANAGE 3.2",
+      "parent_section": "MANAGE 3",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of MANAGE 3.2",
+          "description": "Documented evidence demonstrating the outcome of MANAGE 3.2: Monitoring Pre-Trained Models - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Third-party AI and data risk assessments",
+          "description": "Third-party AI and data risk assessments, contracts with IP clauses, and monitoring records - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Ongoing monitoring and periodic review records",
+          "description": "Ongoing monitoring and periodic review records with defined frequency and roles - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Implementation records and artifacts evidencing this outcome within the AI",
+          "description": "Implementation records and artifacts evidencing this outcome within the AI lifecycle - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "MANAGE 4.1",
+      "original_reference": "MANAGE 4.1",
+      "title": "Post-Deployment Monitoring Plans",
+      "description": "Post-deployment AI system monitoring plans are implemented, including mechanisms for capturing and evaluating input from users and other relevant AI actors, appeal and override, decommissioning, incident response, recovery, and change management.",
+      "full_text": "Post-deployment AI system monitoring plans are implemented, including mechanisms for capturing and evaluating input from users and other relevant AI actors, appeal and override, decommissioning, incident response, recovery, and change management.",
+      "domain": "MANAGE (Function)",
+      "category": "MANAGE 4: Risk treatments, including response and recovery, and communication plans for the identified and measured AI risks are documented and monitored regularly.",
+      "section_number": "MANAGE 4.1",
+      "parent_section": "MANAGE 4",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of MANAGE 4.1",
+          "description": "Documented evidence demonstrating the outcome of MANAGE 4.1: Post-Deployment Monitoring Plans - should cover scope, objectives, roles, activation criteria, responsibilities, escalation paths, and review cadence.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Decommissioning and deactivation procedure",
+          "description": "Decommissioning and deactivation procedure with records of safe phase-out execution - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Stakeholder engagement and feedback log",
+          "description": "Stakeholder engagement and feedback log with adjudication and integration records - preserved for the required retention period, protected from tampering, with timestamp, actor, action, and outcome.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Context documentation covering intended purposes",
+          "description": "Context documentation covering intended purposes, deployment settings, users, and assumptions - current, version-controlled, dated, and approved; traceable to the AI system and lifecycle stage.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Incident response plan and incident or error register",
+          "description": "Incident response plan and incident or error register with tracking and recovery records - preserved for the required retention period, protected from tampering, with timestamp, actor, action, and outcome.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Human oversight and human-AI configuration design",
+          "description": "Human oversight and human-AI configuration design with override and appeal mechanisms - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "MANAGE 4.2",
+      "original_reference": "MANAGE 4.2",
+      "title": "Continual Improvement Activities",
+      "description": "Measurable activities for continual improvements are integrated into AI system updates and include regular engagement with interested parties, including relevant AI actors.",
+      "full_text": "Measurable activities for continual improvements are integrated into AI system updates and include regular engagement with interested parties, including relevant AI actors.",
+      "domain": "MANAGE (Function)",
+      "category": "MANAGE 4: Risk treatments, including response and recovery, and communication plans for the identified and measured AI risks are documented and monitored regularly.",
+      "section_number": "MANAGE 4.2",
+      "parent_section": "MANAGE 4",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of MANAGE 4.2",
+          "description": "Documented evidence demonstrating the outcome of MANAGE 4.2: Continual Improvement Activities - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Stakeholder engagement and feedback log",
+          "description": "Stakeholder engagement and feedback log with adjudication and integration records - preserved for the required retention period, protected from tampering, with timestamp, actor, action, and outcome.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Periodic review records",
+          "description": "Periodic review records demonstrating the outcome is maintained and effective over time - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Implementation records and artifacts evidencing this outcome within the AI",
+          "description": "Implementation records and artifacts evidencing this outcome within the AI lifecycle - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "MANAGE 4.3",
+      "original_reference": "MANAGE 4.3",
+      "title": "Incident and Error Communication",
+      "description": "Incidents and errors are communicated to relevant AI actors, including affected communities.",
+      "full_text": "Incidents and errors are communicated to relevant AI actors, including affected communities. Processes for tracking, responding to, and recovering from incidents and errors are followed and documented.",
+      "domain": "MANAGE (Function)",
+      "category": "MANAGE 4: Risk treatments, including response and recovery, and communication plans for the identified and measured AI risks are documented and monitored regularly.",
+      "section_number": "MANAGE 4.3",
+      "parent_section": "MANAGE 4",
+      "responsible_party": "Organization / AI Actors",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented evidence demonstrating the outcome of MANAGE 4.3",
+          "description": "Documented evidence demonstrating the outcome of MANAGE 4.3: Incident and Error Communication - supporting artifact demonstrating the outcome, with date, owner, and reference to the related policy, process, or AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Incident response plan and incident or error register",
+          "description": "Incident response plan and incident or error register with tracking and recovery records - preserved for the required retention period, protected from tampering, with timestamp, actor, action, and outcome.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Ongoing monitoring and periodic review records",
+          "description": "Ongoing monitoring and periodic review records with defined frequency and roles - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Implementation records and artifacts evidencing this outcome within the AI",
+          "description": "Implementation records and artifacts evidencing this outcome within the AI lifecycle - should demonstrate the activity occurred, including date, performer, approver where applicable, and reference to the relevant outcome.",
+          "filetype": "PDF"
+        }
+      ]
+    }
+  ]
+}

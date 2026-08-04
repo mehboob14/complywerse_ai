@@ -1,0 +1,795 @@
+{
+  "framework_key": "hitrust_csf",
+  "display_name": "HITRUST CSF",
+  "name_patterns": [
+    "hitrust"
+  ],
+  "registers": [
+    {
+      "type": "hitrust_csf__hitrust_control_responsibility_evidence_tracker_",
+      "label": "Control Responsibility Evidence Tracker",
+      "description": "HITRUST CSF — Control Responsibility Evidence Tracker (from the template).",
+      "columns": [
+        {
+          "key": "ref",
+          "label": "Ref",
+          "type": "auto"
+        },
+        {
+          "key": "requirement_control",
+          "label": "Requirement / control",
+          "type": "text",
+          "picker": "framework_controls"
+        },
+        {
+          "key": "responsibility",
+          "label": "Responsibility",
+          "type": "text"
+        },
+        {
+          "key": "evidence",
+          "label": "Evidence",
+          "type": "text",
+          "picker": "evidence"
+        },
+        {
+          "key": "maturity_prisma",
+          "label": "Maturity (PRISMA)",
+          "type": "select",
+          "options": [
+            {
+              "value": "Measured",
+              "label": "Measured",
+              "tone": "slate"
+            },
+            {
+              "value": "Implemented",
+              "label": "Implemented",
+              "tone": "emerald"
+            }
+          ]
+        },
+        {
+          "key": "owner",
+          "label": "Owner",
+          "type": "text",
+          "picker": "users"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "type": "select",
+          "options": [
+            {
+              "value": "On track",
+              "label": "On track",
+              "tone": "slate"
+            }
+          ]
+        }
+      ],
+      "seed": [
+        {
+          "data": {
+            "ref": "1",
+            "requirement_control": "Access review",
+            "responsibility": "Your organisation",
+            "evidence": "Quarterly review records",
+            "maturity_prisma": "Measured",
+            "owner": "IT",
+            "status": "On track"
+          }
+        },
+        {
+          "data": {
+            "ref": "2",
+            "requirement_control": "Encryption at rest",
+            "responsibility": "Shared (cloud + you)",
+            "evidence": "Config screenshots",
+            "maturity_prisma": "Implemented",
+            "owner": "Eng",
+            "status": "On track"
+          }
+        }
+      ],
+      "formSections": [
+        {
+          "title": "Item",
+          "keys": [
+            "ref",
+            "requirement_control"
+          ]
+        },
+        {
+          "title": "Assessment",
+          "keys": [
+            "responsibility",
+            "evidence",
+            "maturity_prisma",
+            "status"
+          ]
+        },
+        {
+          "title": "Ownership & dates",
+          "keys": [
+            "owner"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "hitrust_csf__hitrust_csf_readiness_assessment_template_1",
+      "label": "Csf Readiness Assessment",
+      "description": "HITRUST CSF — Csf Readiness Assessment (from the template).",
+      "columns": [
+        {
+          "key": "control_area",
+          "label": "Control area",
+          "type": "textarea",
+          "picker": "framework_controls"
+        },
+        {
+          "key": "ref",
+          "label": "Ref",
+          "type": "auto"
+        },
+        {
+          "key": "what_to_verify",
+          "label": "What to verify",
+          "type": "text"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "type": "text"
+        },
+        {
+          "key": "evidence_notes",
+          "label": "Evidence / notes",
+          "type": "text",
+          "picker": "evidence"
+        },
+        {
+          "key": "owner",
+          "label": "Owner",
+          "type": "text",
+          "picker": "users"
+        }
+      ],
+      "seed": [
+        {
+          "data": {
+            "control_area": "Information Protection Program",
+            "ref": "",
+            "what_to_verify": "A governance program and risk management are in place",
+            "status": "",
+            "evidence_notes": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "control_area": "Access Control",
+            "ref": "",
+            "what_to_verify": "Access is provisioned, reviewed and removed on least privilege",
+            "status": "",
+            "evidence_notes": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "control_area": "Human Resources Security",
+            "ref": "",
+            "what_to_verify": "Screening, training and termination controls are in place",
+            "status": "",
+            "evidence_notes": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "control_area": "Risk Management",
+            "ref": "",
+            "what_to_verify": "Risks are assessed and treated",
+            "status": "",
+            "evidence_notes": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "control_area": "Incident Management",
+            "ref": "",
+            "what_to_verify": "Incidents are detected, responded to and reported",
+            "status": "",
+            "evidence_notes": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "control_area": "Business Continuity",
+            "ref": "",
+            "what_to_verify": "Continuity and disaster recovery are planned and tested",
+            "status": "",
+            "evidence_notes": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "control_area": "Configuration Management",
+            "ref": "",
+            "what_to_verify": "Secure configurations and change control are maintained",
+            "status": "",
+            "evidence_notes": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "control_area": "Vulnerability Management",
+            "ref": "",
+            "what_to_verify": "Vulnerabilities are scanned and remediated",
+            "status": "",
+            "evidence_notes": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "control_area": "Third-Party Assurance",
+            "ref": "",
+            "what_to_verify": "Third parties are assessed and managed",
+            "status": "",
+            "evidence_notes": "",
+            "owner": ""
+          }
+        },
+        {
+          "data": {
+            "control_area": "Data Protection and Privacy",
+            "ref": "",
+            "what_to_verify": "Data is classified, protected and handled per privacy obligations",
+            "status": "",
+            "evidence_notes": "",
+            "owner": ""
+          }
+        }
+      ],
+      "formSections": [
+        {
+          "title": "Item",
+          "keys": [
+            "control_area",
+            "ref"
+          ]
+        },
+        {
+          "title": "Assessment",
+          "keys": [
+            "what_to_verify",
+            "status",
+            "evidence_notes"
+          ]
+        },
+        {
+          "title": "Ownership & dates",
+          "keys": [
+            "owner"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "hitrust_csf__hitrust_csf_scoping_worksheet_template_1",
+      "label": "Csf Scoping Worksheet",
+      "description": "HITRUST CSF — Csf Scoping Worksheet (from the template).",
+      "columns": [
+        {
+          "key": "factor",
+          "label": "Factor",
+          "type": "text"
+        },
+        {
+          "key": "your_value",
+          "label": "Your value",
+          "type": "text"
+        },
+        {
+          "key": "notes",
+          "label": "Notes",
+          "type": "textarea"
+        }
+      ],
+      "seed": [
+        {
+          "data": {
+            "factor": "Assessment type",
+            "your_value": "[FILL IN: e1 / i1 / r2]",
+            "notes": "e1 essentials, i1 implemented, r2 risk-based"
+          }
+        },
+        {
+          "data": {
+            "factor": "Systems in scope",
+            "your_value": "[FILL IN]",
+            "notes": "Define the platform/boundary"
+          }
+        },
+        {
+          "data": {
+            "factor": "Organisational factors",
+            "your_value": "[FILL IN]",
+            "notes": "Size, geography, regulatory factors"
+          }
+        },
+        {
+          "data": {
+            "factor": "System factors",
+            "your_value": "[FILL IN]",
+            "notes": "Records volume, internet-facing, cloud, etc."
+          }
+        },
+        {
+          "data": {
+            "factor": "Regulatory factors",
+            "your_value": "[FILL IN]",
+            "notes": "HIPAA, state laws, etc."
+          }
+        }
+      ],
+      "formSections": [
+        {
+          "title": "Item",
+          "keys": [
+            "factor",
+            "your_value"
+          ]
+        },
+        {
+          "title": "Assessment",
+          "keys": [
+            "notes"
+          ]
+        }
+      ]
+    }
+  ],
+  "documents": [
+    {
+      "type": "hitrust_csf__hitrust_access_control_policy_template_2",
+      "label": "Access Control Policy",
+      "control_ref": null,
+      "sections": [
+        {
+          "heading": "1. Purpose",
+          "body": "This policy controls access to information systems and sensitive data, aligned to the HITRUST CSF access control and authentication categories."
+        },
+        {
+          "heading": "2. Scope",
+          "body": "Access to in-scope systems and sensitive data."
+        },
+        {
+          "heading": "3. Provisioning and Authorisation",
+          "body": "Access is granted only through a controlled process:\n- Access is requested, approved against the user's role, and provisioned on least privilege.\n- Default-deny applies: a user has no access until it is explicitly authorised.\n- [FILL IN: your access-approval and provisioning process.]"
+        },
+        {
+          "heading": "4. Authentication",
+          "body": "Users are uniquely identified and strongly authenticated:\n- Each user has a unique identity, and shared accounts are avoided.\n- Multi-factor authentication protects remote and privileged access.\n- Password and credential management follows defined standards."
+        },
+        {
+          "heading": "5. Reviews and Termination",
+          "body": "Standing access is kept correct over time:\n- Access rights are reviewed periodically and after role change.\n- Access is removed promptly on termination or when no longer needed.\n- Privileged access is restricted to those who need it and is monitored."
+        },
+        {
+          "heading": "6. Disclaimer",
+          "body": "This template is an independently created resource to help you prepare for a HITRUST assessment. It is not affiliated with or endorsed by HITRUST, does not reproduce the HITRUST CSF, and is not a substitute for the official CSF or a HITRUST assessor. Obtain the CSF from HITRUST."
+        },
+        {
+          "heading": "7. Roles & Responsibilities",
+          "body": "",
+          "table": {
+            "columns": [
+              "Role",
+              "Responsibilities"
+            ],
+            "rows": [
+              [
+                "IT",
+                "Owns access control."
+              ],
+              [
+                "CISO / Security Lead",
+                "Owns the policy, approves exceptions, monitors compliance and reports to leadership."
+              ]
+            ]
+          }
+        },
+        {
+          "heading": "8. Compliance & Enforcement",
+          "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+        },
+        {
+          "heading": "9. Exceptions",
+          "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+        },
+        {
+          "heading": "10. Review",
+          "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+        }
+      ]
+    },
+    {
+      "type": "hitrust_csf__hitrust_control_responsibility_policy_template_2",
+      "label": "Control Responsibility Policy",
+      "control_ref": null,
+      "sections": [
+        {
+          "heading": "1. Purpose",
+          "body": "This policy allocates responsibility for the in-scope controls between the organisation and its service providers, supporting the shared-responsibility and inheritance model used in a HITRUST assessment."
+        },
+        {
+          "heading": "2. Scope",
+          "body": "The controls in the assessment scope and the service providers involved."
+        },
+        {
+          "heading": "3. Control Responsibility",
+          "body": "Responsibility for every in-scope control is allocated explicitly:\n- Each control is assigned to the organisation, to a service provider, or as a shared responsibility.\n- The allocation is documented so there are no gaps or assumptions.\n- [FILL IN: your service providers and the controls they support.]"
+        },
+        {
+          "heading": "4. Inheritance",
+          "body": "Where controls are inherited from a certified service provider, the inheritance is documented and the residual responsibilities the organisation retains are made explicit."
+        },
+        {
+          "heading": "5. Coordination",
+          "body": "Shared controls are coordinated with the provider, with clear ownership of each part, so that no control falls between the parties."
+        },
+        {
+          "heading": "6. Disclaimer",
+          "body": "This template is an independently created resource to help you prepare for a HITRUST assessment. It is not affiliated with or endorsed by HITRUST, does not reproduce the HITRUST CSF, and is not a substitute for the official CSF or a HITRUST assessor. Obtain the CSF from HITRUST."
+        },
+        {
+          "heading": "7. Roles & Responsibilities",
+          "body": "",
+          "table": {
+            "columns": [
+              "Role",
+              "Responsibilities"
+            ],
+            "rows": [
+              [
+                "CISO",
+                "Owns control responsibility."
+              ],
+              [
+                "IT / Operations",
+                "Implements and maintains the technical controls described in this document."
+              ]
+            ]
+          }
+        },
+        {
+          "heading": "8. Compliance & Enforcement",
+          "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+        },
+        {
+          "heading": "9. Exceptions",
+          "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+        },
+        {
+          "heading": "10. Review",
+          "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+        }
+      ]
+    },
+    {
+      "type": "hitrust_csf__hitrust_corrective_action_plan_template_2",
+      "label": "Corrective Action Plan",
+      "control_ref": null,
+      "sections": [
+        {
+          "heading": "1. Purpose",
+          "body": "This template tracks corrective action plans (CAPs) to remediate gaps identified during HITRUST readiness or assessment."
+        },
+        {
+          "heading": "2. Scope",
+          "body": "Gaps in the in-scope controls identified during readiness or assessment."
+        },
+        {
+          "heading": "3. Recording Gaps",
+          "body": "Each gap is recorded with its control reference, the corrective action, an owner and a target date.\n[FILL IN: your gaps and the owners accountable for them.]"
+        },
+        {
+          "heading": "4. Tracking to Closure",
+          "body": "Corrective actions are prioritised by risk, tracked to closure and evidenced, and progress is reported to programme leadership."
+        },
+        {
+          "heading": "5. Verification",
+          "body": "On completion, each corrective action is verified, by re-testing the control or reviewing the evidence, to confirm the gap is genuinely closed before it is marked complete, and the evidence is retained for the assessment."
+        },
+        {
+          "heading": "6. Disclaimer",
+          "body": "This template is an independently created resource to help you prepare for a HITRUST assessment. It is not affiliated with or endorsed by HITRUST, does not reproduce the HITRUST CSF, and is not a substitute for the official CSF or a HITRUST assessor. Obtain the CSF from HITRUST."
+        },
+        {
+          "heading": "7. Roles & Responsibilities",
+          "body": "",
+          "table": {
+            "columns": [
+              "Role",
+              "Responsibilities"
+            ],
+            "rows": [
+              [
+                "CISO",
+                "Owns corrective actions."
+              ],
+              [
+                "Managers",
+                "Ensure their teams understand and follow the policy."
+              ]
+            ]
+          }
+        },
+        {
+          "heading": "8. Testing & Maintenance",
+          "body": "This plan is reviewed at least annually and after every activation or major change. Exercises (tabletop or full) are scheduled to validate the plan and results are recorded as improvement actions."
+        }
+      ]
+    },
+    {
+      "type": "hitrust_csf__hitrust_incident_management_policy_template_3",
+      "label": "Incident Management Policy",
+      "control_ref": null,
+      "sections": [
+        {
+          "heading": "1. Purpose",
+          "body": "This policy ensures security incidents are detected, responded to and reported, aligned to the HITRUST CSF incident management category."
+        },
+        {
+          "heading": "2. Scope",
+          "body": "Security incidents affecting in-scope systems and sensitive data."
+        },
+        {
+          "heading": "3. Incident Process",
+          "body": "A documented process governs the lifecycle of an incident:\n- Detection, reporting, triage, containment, eradication, recovery and closure are each defined.\n- Roles and severity levels are assigned so the response is coordinated and proportionate.\n- [FILL IN: your incident roles and severity levels.]"
+        },
+        {
+          "heading": "4. Notification",
+          "body": "Internal escalation and external notification (to customers, regulators or authorities) are defined and meet the organisation's applicable obligations and timelines."
+        },
+        {
+          "heading": "5. Detection and Records",
+          "body": "Security events are detected from monitoring, alerts and user reports, and incidents are recorded in an incident log with sufficient detail to support investigation, notification decisions and assessment evidence."
+        },
+        {
+          "heading": "6. Post-Incident and Testing",
+          "body": "Post-incident reviews capture root cause and lessons learned, improvements are tracked to closure, and the incident response capability is tested periodically."
+        },
+        {
+          "heading": "7. Disclaimer",
+          "body": "This template is an independently created resource to help you prepare for a HITRUST assessment. It is not affiliated with or endorsed by HITRUST, does not reproduce the HITRUST CSF, and is not a substitute for the official CSF or a HITRUST assessor. Obtain the CSF from HITRUST."
+        },
+        {
+          "heading": "8. Roles & Responsibilities",
+          "body": "",
+          "table": {
+            "columns": [
+              "Role",
+              "Responsibilities"
+            ],
+            "rows": [
+              [
+                "CISO",
+                "Owns incident management."
+              ],
+              [
+                "IT / Operations",
+                "Implements and maintains the technical controls described in this document."
+              ]
+            ]
+          }
+        },
+        {
+          "heading": "9. Testing & Maintenance",
+          "body": "This plan is reviewed at least annually and after every activation or major change. Exercises (tabletop or full) are scheduled to validate the plan and results are recorded as improvement actions."
+        }
+      ]
+    },
+    {
+      "type": "hitrust_csf__hitrust_information_protection_program_policy_te",
+      "label": "Information Protection Program Policy",
+      "control_ref": null,
+      "sections": [
+        {
+          "heading": "1. Purpose",
+          "body": "This policy establishes the information protection programme that underpins the organisation's controls aligned to the HITRUST CSF, covering governance, risk and the protection of sensitive information."
+        },
+        {
+          "heading": "2. Scope",
+          "body": "The organisation's information systems and sensitive data within the assessment scope."
+        },
+        {
+          "heading": "3. Governance",
+          "body": "Leadership establishes and oversees the information protection programme, assigns roles and responsibilities, and provides the resources it needs.\n[FILL IN: your governance structure and the roles accountable for the programme.]"
+        },
+        {
+          "heading": "4. Risk-Based Control Operation",
+          "body": "Controls across the HITRUST CSF control categories are implemented based on the organisation's scope and risk, operated consistently, and evidenced."
+        },
+        {
+          "heading": "5. Maturity and Improvement",
+          "body": "Control maturity is managed across the dimensions a HITRUST assessment evaluates:\n- Policy: the control is documented in approved policy.\n- Process (procedure): the control has defined operating procedures.\n- Implemented: the control is actually in place and operating.\n- At higher assurance levels, measured and managed: the control is monitored and improved.\n- The programme is continually improved as gaps and findings arise."
+        },
+        {
+          "heading": "6. Disclaimer",
+          "body": "This template is an independently created resource to help you prepare for a HITRUST assessment. It is not affiliated with or endorsed by HITRUST, does not reproduce the HITRUST CSF, and is not a substitute for the official CSF or a HITRUST assessor. Obtain the CSF from HITRUST."
+        },
+        {
+          "heading": "7. Roles & Responsibilities",
+          "body": "",
+          "table": {
+            "columns": [
+              "Role",
+              "Responsibilities"
+            ],
+            "rows": [
+              [
+                "CISO",
+                "Owns the programme."
+              ],
+              [
+                "IT / Operations",
+                "Implements and maintains the technical controls described in this document."
+              ],
+              [
+                "Managers",
+                "Ensure their teams understand and follow the policy."
+              ]
+            ]
+          }
+        },
+        {
+          "heading": "8. Compliance & Enforcement",
+          "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+        },
+        {
+          "heading": "9. Exceptions",
+          "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+        },
+        {
+          "heading": "10. Review",
+          "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+        }
+      ]
+    },
+    {
+      "type": "hitrust_csf__hitrust_risk_management_policy_template_2",
+      "label": "Risk Management Policy",
+      "control_ref": null,
+      "sections": [
+        {
+          "heading": "1. Purpose",
+          "body": "This policy governs how risks to sensitive information and in-scope systems are assessed and treated, aligned to the HITRUST CSF."
+        },
+        {
+          "heading": "2. Scope",
+          "body": "Risks to the information systems and sensitive data in scope."
+        },
+        {
+          "heading": "3. Risk Assessment",
+          "body": "Risks to sensitive information and in-scope systems are assessed consistently:\n- Risks are identified and assessed by likelihood and impact using a defined, repeatable methodology.\n- Assessments are performed on a defined cadence and when a significant change or new threat arises.\n- Risks are recorded in a risk register with enough context to support a treatment decision.\n- [FILL IN: your risk-assessment methodology and cadence.]"
+        },
+        {
+          "heading": "4. Risk Treatment",
+          "body": "Each risk is brought to an explicit decision:\n- Risks are treated by mitigating, transferring, avoiding or accepting them.\n- Each decision has a documented rationale and a named owner, and acceptances are time-bound.\n- Treatment actions are tracked to completion."
+        },
+        {
+          "heading": "5. Monitoring",
+          "body": "The risk register is monitored and reviewed so the picture stays current, and it feeds the corrective action plans and the wider control programme."
+        },
+        {
+          "heading": "6. Disclaimer",
+          "body": "This template is an independently created resource to help you prepare for a HITRUST assessment. It is not affiliated with or endorsed by HITRUST, does not reproduce the HITRUST CSF, and is not a substitute for the official CSF or a HITRUST assessor. Obtain the CSF from HITRUST."
+        },
+        {
+          "heading": "7. Roles & Responsibilities",
+          "body": "",
+          "table": {
+            "columns": [
+              "Role",
+              "Responsibilities"
+            ],
+            "rows": [
+              [
+                "CISO",
+                "Owns risk management."
+              ],
+              [
+                "Managers",
+                "Ensure their teams understand and follow the policy."
+              ]
+            ]
+          }
+        },
+        {
+          "heading": "8. Compliance & Enforcement",
+          "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+        },
+        {
+          "heading": "9. Exceptions",
+          "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+        },
+        {
+          "heading": "10. Review",
+          "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+        }
+      ]
+    },
+    {
+      "type": "hitrust_csf__hitrust_third_party_assurance_policy_template_2",
+      "label": "Third Party Assurance Policy",
+      "control_ref": null,
+      "sections": [
+        {
+          "heading": "1. Purpose",
+          "body": "This policy governs the assessment and oversight of third parties handling sensitive information, aligned to the HITRUST CSF third-party assurance category."
+        },
+        {
+          "heading": "2. Scope",
+          "body": "Third parties with access to in-scope systems or sensitive data."
+        },
+        {
+          "heading": "3. Due Diligence",
+          "body": "Third parties that will handle sensitive information are risk-assessed before engagement, and minimum security requirements are set based on the risk they present.\n[FILL IN: your due-diligence approach.]"
+        },
+        {
+          "heading": "4. Contracts",
+          "body": "Contracts require appropriate safeguards from the provider, including:\n- Access controls and encryption of sensitive information.\n- Notification to the organisation of a breach affecting its data.\n- The right to assess the provider or to obtain independent assurance evidence."
+        },
+        {
+          "heading": "5. Ongoing Assurance",
+          "body": "Third parties are reassessed periodically based on risk, using assurance evidence such as certifications or independent assessment reports."
+        },
+        {
+          "heading": "6. Disclaimer",
+          "body": "This template is an independently created resource to help you prepare for a HITRUST assessment. It is not affiliated with or endorsed by HITRUST, does not reproduce the HITRUST CSF, and is not a substitute for the official CSF or a HITRUST assessor. Obtain the CSF from HITRUST."
+        },
+        {
+          "heading": "7. Roles & Responsibilities",
+          "body": "",
+          "table": {
+            "columns": [
+              "Role",
+              "Responsibilities"
+            ],
+            "rows": [
+              [
+                "CISO / procurement",
+                "Owns third-party assurance."
+              ],
+              [
+                "Managers",
+                "Ensure their teams understand and follow the policy."
+              ]
+            ]
+          }
+        },
+        {
+          "heading": "8. Compliance & Enforcement",
+          "body": "Compliance with this policy is mandatory. Violations may result in disciplinary action up to and including termination of employment or contract, and may be reported to relevant authorities where required by law."
+        },
+        {
+          "heading": "9. Exceptions",
+          "body": "Any exception to this policy must be requested in writing, risk-assessed, and approved by [Approver / CISO] at [Company Name]. Approved exceptions are documented, time-bound and reviewed at expiry."
+        },
+        {
+          "heading": "10. Review",
+          "body": "This policy is reviewed at least annually, or after a significant change or security incident, and updated as required."
+        }
+      ]
+    }
+  ]
+}

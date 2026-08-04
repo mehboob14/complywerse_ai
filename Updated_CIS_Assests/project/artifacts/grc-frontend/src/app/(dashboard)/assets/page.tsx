@@ -1,0 +1,1613 @@
+﻿'use client';
+
+import React, { useState, useMemo } from 'react';
+import {
+  PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
+  RadarChart, Radar, PolarGrid, PolarAngleAxis,
+} from 'recharts';
+
+const ASSET_TYPE_COLORS: Record<string, string> = {
+  application:   '#3b82f6',
+  infrastructure:'#8b5cf6',
+  data:          '#10b981',
+  cloud:         '#f59e0b',
+  third_party:   '#ec4899',
+};
+const CRITICALITY_COLORS: Record<string, string> = {
+  critical: '#ef4444',
+  high:     '#f97316',
+  medium:   '#eab308',
+  low:      '#22c55e',
+};
+const AssetTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ name: string; value: number }> }) => {
+  if (active && payload?.length) {
+    return (
+      <div className="rounded-lg border border-gray-200 bg-white px-3 py-2 shadow-md text-xs">
+        <p className="font-medium text-gray-800 capitalize">{payload[0].name.replace(/_/g, ' ')}</p>
+        <p className="text-gray-500">{payload[0].value} assets</p>
+      </div>
+    );
+  }
+  return null;
+};
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useRouter } from '@/lib/navigation';
+import { usePermissions } from '@/hooks/usePermissions';
+import { assetsApi } from '@/lib/api';
+import { ITAsset, AssetType } from '@/types';
+import { SearchInput, MultiSelectDropdown } from '@/components/ui';
+import {
+  Server,
+  Loader2,
+  AlertCircle,
+  Plus,
+  X,
+  AppWindow,
+  HardDrive,
+  Database,
+  Cloud,
+  Building2,
+  ChevronDown,
+  ChevronRight,
+  Eye,
+  Edit,
+  Trash2,
+  Shield,
+  DollarSign,
+  Download,
+  Upload,
+  FileSpreadsheet,
+  CheckCircle2
+} from 'lucide-react';
+
+type StatusFilter = 'all' | 'active' | 'inactive' | 'decommissioned';
+type CriticalityFilter = 'all' | 'critical' | 'high' | 'medium' | 'low';
+
+const ASSET_TYPES = [
+  { value: 'application', label: 'Application', icon: AppWindow, description: 'Business applications and software systems' },
+  { value: 'infrastructure', label: 'Infrastructure', icon: HardDrive, description: 'Servers, network devices, and hardware' },
+  { value: 'data', label: 'Data', icon: Database, description: 'Databases, data stores, and data repositories' },
+  { value: 'cloud', label: 'Cloud Resource', icon: Cloud, description: 'Cloud services, SaaS, PaaS, and IaaS resources' },
+  { value: 'third_party', label: 'Third-Party System', icon: Building2, description: 'External vendor systems and services' },
+];
+
+const ASSET_COMPONENT_SUGGESTIONS: Record<AssetType, string[]> = {
+  infrastructure: ['Server', 'Router', 'Switch', 'Firewall', 'Desktop', 'Laptop', 'Storage', 'Access Point', 'Rack', 'Load Balancer'],
+  application: ['Web Application', 'Mobile Application', 'API Service', 'Authentication Service', 'ERP', 'CRM', 'Middleware', 'Microservice'],
+  data: ['Database', 'Data Warehouse', 'Data Lake', 'File Repository', 'Backup Store', 'ETL Pipeline', 'Analytics Store'],
+  cloud: ['Virtual Machine', 'Container Service', 'Serverless Function', 'Managed Database', 'Object Storage', 'Kubernetes Cluster', 'CDN'],
+  third_party: ['Payment Gateway', 'Identity Provider', 'Security Service', 'Managed SOC', 'External API', 'SaaS Platform', 'Managed Hosting'],
+};
+
+const ASSET_SUB_COMPONENT_SUGGESTIONS: Record<AssetType, Record<string, string[]>> = {
+  infrastructure: {
+    Server: ['CPU', 'RAM', 'ROM', 'NIC', 'Power Supply', 'RAID Controller'],
+    Router: ['Routing Engine', 'WAN Interface', 'LAN Interface', 'Power Module', 'Management Port'],
+    Switch: ['Line Card', 'Power Module', 'SFP Module', 'Backplane'],
+    Firewall: ['Policy Engine', 'VPN Module', 'Inspection Engine', 'HA Pairing'],
+    Desktop: ['CPU', 'RAM', 'Storage Disk', 'Network Adapter'],
+    Laptop: ['CPU', 'RAM', 'SSD', 'WiFi Adapter', 'Battery'],
+    Storage: ['Disk Array', 'Controller', 'Cache Module', 'Replication Module'],
+    'Access Point': ['Radio Module', 'Antenna', 'PoE Module', 'Controller Link'],
+    Rack: ['Power Distribution Unit', 'Cable Manager', 'Cooling Unit', 'UPS'],
+    'Load Balancer': ['Virtual Server', 'Pool Member', 'Health Monitor', 'SSL Profile'],
+  },
+  application: {
+    'Web Application': ['Frontend', 'Backend', 'Session Store', 'Admin Console'],
+    'Mobile Application': ['Mobile Client', 'Push Service', 'API Backend', 'Auth Module'],
+    'API Service': ['API Gateway', 'Rate Limiter', 'API Version', 'Authentication Layer'],
+    'Authentication Service': ['MFA Module', 'Token Service', 'User Directory Sync', 'Session Manager'],
+    ERP: ['Finance Module', 'HR Module', 'Inventory Module', 'Reporting Module'],
+    CRM: ['Customer Data Module', 'Workflow Engine', 'Email Integration', 'Analytics'],
+    Middleware: ['Message Broker', 'Transformer', 'Queue Worker', 'Connector'],
+    Microservice: ['Service Endpoint', 'Worker Process', 'Cache Layer', 'Service Config'],
+  },
+  data: {
+    Database: ['Schema', 'Table', 'Stored Procedure', 'Replication'],
+    'Data Warehouse': ['Fact Table', 'Dimension Table', 'ETL Job', 'Aggregation Layer'],
+    'Data Lake': ['Raw Zone', 'Curated Zone', 'Metadata Catalog', 'Access Policy'],
+    'File Repository': ['Folder Structure', 'Retention Policy', 'Access Control', 'Versioning'],
+    'Backup Store': ['Backup Set', 'Recovery Point', 'Encryption Key', 'Restore Job'],
+    'ETL Pipeline': ['Extractor', 'Transformer', 'Loader', 'Scheduler'],
+    'Analytics Store': ['Data Mart', 'Query Engine', 'Index', 'Dashboard Feed'],
+  },
+  cloud: {
+    'Virtual Machine': ['Instance', 'Disk Volume', 'Security Group', 'IAM Role'],
+    'Container Service': ['Container Image', 'Task Definition', 'Service Mesh', 'Secrets'],
+    'Serverless Function': ['Runtime', 'Trigger', 'Environment Variable', 'Execution Role'],
+    'Managed Database': ['Instance', 'Read Replica', 'Backup Policy', 'Parameter Group'],
+    'Object Storage': ['Bucket', 'Lifecycle Policy', 'Access Policy', 'Encryption Config'],
+    'Kubernetes Cluster': ['Node Pool', 'Ingress Controller', 'Namespace', 'RBAC Policy'],
+    CDN: ['Distribution', 'Origin', 'WAF Rule', 'TLS Certificate'],
+  },
+  third_party: {
+    'Payment Gateway': ['Merchant Account', 'API Credential', 'Webhook', 'Settlement Config'],
+    'Identity Provider': ['Directory Sync', 'SSO Config', 'MFA Policy', 'Provisioning Connector'],
+    'Security Service': ['Agent', 'Detection Policy', 'Alert Integration', 'Reporting Console'],
+    'Managed SOC': ['Log Ingestion', 'Use Case', 'Escalation Channel', 'Ticket Integration'],
+    'External API': ['API Key', 'OAuth App', 'Rate Plan', 'Webhook Endpoint'],
+    'SaaS Platform': ['Tenant Config', 'Role Mapping', 'Audit Log', 'Data Export'],
+    'Managed Hosting': ['Compute Plan', 'Support SLA', 'Backup Service', 'Network Segment'],
+  },
+};
+
+export default function AssetsPage() {
+  const router = useRouter();
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('assets:asset_inventory:create');
+  const canEdit = hasPermission('assets:asset_inventory:edit');
+  const canDelete = hasPermission('assets:asset_inventory:delete');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [criticalityFilter, setCriticalityFilter] = useState<CriticalityFilter>('all');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [editingAsset, setEditingAsset] = useState<ITAsset | null>(null);
+  const [expandedAsset, setExpandedAsset] = useState<number | null>(null);
+  const queryClient = useQueryClient();
+
+  const { data: assets, isLoading, error } = useQuery({
+    queryKey: ['assets'],
+    queryFn: async () => {
+      const response = await assetsApi.getAll();
+      return response.data;
+    },
+  });
+
+  const { data: dashboard } = useQuery({
+    queryKey: ['assets-dashboard'],
+    queryFn: async () => {
+      const response = await assetsApi.getDashboard();
+      return response.data;
+    },
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (data: Parameters<typeof assetsApi.create>[0]) => assetsApi.create(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['assets'] });
+      setIsModalOpen(false);
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: Parameters<typeof assetsApi.create>[0] }) => 
+      assetsApi.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['assets'] });
+      queryClient.invalidateQueries({ queryKey: ['assets-dashboard'] });
+      setEditingAsset(null);
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => assetsApi.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['assets'] });
+      queryClient.invalidateQueries({ queryKey: ['assets-dashboard'] });
+    },
+  });
+  
+  const handleEdit = (e: React.MouseEvent, asset: ITAsset) => {
+    e.stopPropagation();
+    setEditingAsset(asset);
+  };
+
+  const getAssetIcon = (type: string) => {
+    const assetType = ASSET_TYPES.find(t => t.value === type);
+    const Icon = assetType?.icon || Server;
+    return <Icon className="h-5 w-5 text-primary-400" />;
+  };
+
+  const getStatusBadge = (status: string) => {
+    const colors: Record<string, string> = {
+      active: 'bg-green-100',
+      inactive: 'bg-yellow-100',
+      decommissioned: 'bg-slate-100',
+    };
+    return (
+      <span className={`rounded-full px-2 py-0.5 text-xs font-medium text-slate-900 ${colors[status] || 'bg-slate-100'}`}>
+        {status}
+      </span>
+    );
+  };
+
+  const getCriticalityBadge = (criticality: string) => {
+    const colors: Record<string, string> = {
+      critical: 'bg-red-100',
+      high: 'bg-orange-100',
+      medium: 'bg-yellow-100',
+      low: 'bg-green-100',
+    };
+    return (
+      <span className={`rounded-full px-2 py-0.5 text-xs font-medium text-slate-900 ${colors[criticality] || 'bg-slate-100'}`}>
+        {criticality}
+      </span>
+    );
+  };
+
+  const getTypeBadge = (type: string) => {
+    const assetType = ASSET_TYPES.find(t => t.value === type);
+    const color = ASSET_TYPE_COLORS[type] ?? '#6b7280';
+    return (
+      <span
+        className="rounded-full px-2 py-0.5 text-xs font-medium text-slate-900"
+        style={{ backgroundColor: color + '22' }}
+      >
+        {assetType?.label || type}
+      </span>
+    );
+  };
+
+  const getCIARatingBar = (rating: number | undefined, label: string, color: string) => {
+    const value = rating || 0;
+    return (
+      <div className="flex items-center gap-1" title={`${label}: ${value}/5`}>
+        <span className="text-xs text-slate-500">{label[0]}</span>
+        <div className="flex gap-0.5">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div
+              key={i}
+              className={`h-2 w-1.5 rounded-sm ${i <= value ? color : 'bg-slate-200'}`}
+            />
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const formatCurrency = (value: number | undefined) => {
+    if (!value) return '-';
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(value);
+  };
+
+  const filteredAssets = assets?.filter((asset: ITAsset) => {
+    const matchesSearch = 
+      asset.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      asset.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      asset.vendor?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesStatus = statusFilter === 'all' || asset.status === statusFilter;
+    const matchesCriticality = criticalityFilter === 'all' || asset.criticality === criticalityFilter;
+    
+    return matchesSearch && matchesStatus && matchesCriticality;
+  });
+
+  const handleDelete = (e: React.MouseEvent, id: number) => {
+    e.stopPropagation();
+    if (confirm('Are you sure you want to delete this asset?')) {
+      deleteMutation.mutate(id);
+    }
+  };
+
+  const handleView = (e: React.MouseEvent, id: number) => {
+    e.stopPropagation();
+    router.push(`/assets/${id}`);
+  };
+
+  const assetTypeChartData = useMemo(() => {
+    const byType = dashboard?.by_type || {};
+    return Object.entries(byType)
+      .filter(([, v]) => (v as number) > 0)
+      .map(([key, value]) => ({
+        name: key.replace(/_/g, ' '),
+        value: value as number,
+        fill: ASSET_TYPE_COLORS[key] || '#6b7280',
+      }));
+  }, [dashboard?.by_type]);
+
+  const criticalityChartData = useMemo(() => {
+    const byCrit = dashboard?.by_criticality || {};
+    return ['critical', 'high', 'medium', 'low']
+      .filter((k) => (byCrit[k] ?? 0) > 0)
+      .map((key) => ({
+        name: key.charAt(0).toUpperCase() + key.slice(1),
+        value: byCrit[key] as number,
+        fill: CRITICALITY_COLORS[key],
+      }));
+  }, [dashboard?.by_criticality]);
+
+  const ciaRadarData = useMemo(() => {
+    const assetList = (assets as ITAsset[]) || [];
+    const types = ['application', 'infrastructure', 'data', 'cloud', 'third_party'];
+    return types.map((type) => {
+      const group = assetList.filter((a) => a.asset_type === type);
+      if (!group.length) return null;
+      const avg = (field: keyof ITAsset) =>
+        Math.round((group.reduce((s, a) => s + ((a[field] as number) || 0), 0) / group.length) * 10) / 10;
+      return {
+        type: type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
+        C: avg('confidentiality_rating'),
+        I: avg('integrity_rating'),
+        A: avg('availability_rating'),
+      };
+    }).filter(Boolean) as Array<{ type: string; C: number; I: number; A: number }>;
+  }, [assets]);
+
+  const totalAssets = dashboard?.total_assets || 0;
+
+  if (isLoading) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex h-64 flex-col items-center justify-center text-red-400">
+        <AlertCircle className="mb-2 h-8 w-8" />
+        <p>Failed to load assets</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="assets-light space-y-4 sm:space-y-5 px-1 sm:px-2 pt-1">
+      <InventoryHeader assetCount={assets?.length ?? 0} />
+
+      {/* Visual overview — 3 chart panels */}
+      <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-3">
+
+        {/* Panel 1 — Asset type donut */}
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">By Asset Type</p>
+          {assetTypeChartData.length === 0 ? (
+            <div className="flex h-[120px] items-center justify-center text-xs text-slate-400">No data</div>
+          ) : (
+            <div className="flex items-center gap-4">
+              <div className="relative h-[110px] w-[110px] flex-shrink-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={assetTypeChartData} cx="50%" cy="50%" innerRadius={30} outerRadius={50} dataKey="value" paddingAngle={2}>
+                      {assetTypeChartData.map((entry, i) => (
+                        <Cell key={i} fill={entry.fill} />
+                      ))}
+                    </Pie>
+                    <Tooltip content={<AssetTooltip />} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <span className="text-lg font-bold text-slate-900">{totalAssets}</span>
+                  <span className="text-[10px] text-slate-400">total</span>
+                </div>
+              </div>
+              <div className="flex flex-1 flex-col gap-1.5 min-w-0">
+                {assetTypeChartData.map((entry) => (
+                  <div key={entry.name} className="flex items-center gap-2 text-xs">
+                    <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: entry.fill }} />
+                    <span className="text-slate-500 capitalize truncate">{entry.name}</span>
+                    <span className="font-semibold text-slate-800 ml-auto">{entry.value}</span>
+                  </div>
+                ))}
+                <div className="mt-1 border-t border-slate-100 pt-1 flex justify-between text-[10px] text-slate-400">
+                  <span>High Value</span>
+                  <span className="font-semibold text-green-600">{dashboard?.high_value_assets || 0}</span>
+                </div>
+                <div className="flex justify-between text-[10px] text-slate-400">
+                  <span>Need CIA</span>
+                  <span className="font-semibold text-amber-500">{dashboard?.assets_needing_assessment || 0}</span>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Panel 2 — Criticality ring */}
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">By Criticality</p>
+          {criticalityChartData.length === 0 ? (
+            <div className="flex h-[120px] items-center justify-center text-xs text-slate-400">No data</div>
+          ) : (
+            <div className="flex items-center gap-4">
+              <div className="relative h-[110px] w-[110px] flex-shrink-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={criticalityChartData} cx="50%" cy="50%" innerRadius={30} outerRadius={50} dataKey="value" paddingAngle={2}>
+                      {criticalityChartData.map((entry, i) => (
+                        <Cell key={i} fill={entry.fill} />
+                      ))}
+                    </Pie>
+                    <Tooltip content={<AssetTooltip />} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <span className="text-lg font-bold text-slate-900">{criticalityChartData.reduce((s, e) => s + e.value, 0)}</span>
+                  <span className="text-[10px] text-slate-400">assets</span>
+                </div>
+              </div>
+              <div className="flex flex-1 flex-col gap-1.5 min-w-0">
+                {criticalityChartData.map((entry) => (
+                  <div key={entry.name} className="flex items-center gap-2 text-xs">
+                    <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: entry.fill }} />
+                    <span className="text-slate-500">{entry.name}</span>
+                    <span className="font-semibold text-slate-800 ml-auto">{entry.value}</span>
+                  </div>
+                ))}
+                <div className="mt-1 border-t border-slate-100 pt-1 flex justify-between text-[10px] text-slate-400">
+                  <span>Active</span>
+                  <span className="font-semibold text-green-600">{dashboard?.by_status?.active || 0}</span>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Panel 3 — CIA radar by asset type */}
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">CIA Profile by Type</p>
+          <p className="text-[10px] text-slate-400 mb-2">Avg Confidentiality / Integrity / Availability (1–5)</p>
+          {ciaRadarData.length === 0 ? (
+            <div className="flex h-[110px] items-center justify-center text-xs text-slate-400">Rate your assets to see CIA profile</div>
+          ) : (
+            <ResponsiveContainer width="100%" height={120}>
+              <RadarChart data={ciaRadarData} cx="50%" cy="50%" outerRadius={46}>
+                <PolarGrid stroke="#e2e8f0" />
+                <PolarAngleAxis dataKey="type" tick={{ fontSize: 9, fill: '#64748b' }} />
+                <Radar name="C" dataKey="C" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.15} />
+                <Radar name="I" dataKey="I" stroke="#10b981" fill="#10b981" fillOpacity={0.15} />
+                <Radar name="A" dataKey="A" stroke="#eab308" fill="#eab308" fillOpacity={0.15} />
+                <Tooltip formatter={(value, name) => [value, name === 'C' ? 'Confidentiality' : name === 'I' ? 'Integrity' : 'Availability']} />
+              </RadarChart>
+            </ResponsiveContainer>
+          )}
+          <div className="flex items-center justify-center gap-4 mt-1">
+            <div className="flex items-center gap-1 text-[10px] text-slate-500"><span className="h-2 w-2 rounded-full bg-blue-500" />C</div>
+            <div className="flex items-center gap-1 text-[10px] text-slate-500"><span className="h-2 w-2 rounded-full bg-emerald-500" />I</div>
+            <div className="flex items-center gap-1 text-[10px] text-slate-500"><span className="h-2 w-2 rounded-full bg-yellow-400" />A</div>
+          </div>
+        </div>
+
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex-1 min-w-[180px] sm:max-w-xs">
+          <SearchInput
+            value={searchTerm}
+            onChange={setSearchTerm}
+            placeholder="Search assets..."
+            size="md"
+          />
+        </div>
+
+        <MultiSelectDropdown
+          title="Status"
+          items={[
+            { value: 'active', label: 'Active' },
+            { value: 'inactive', label: 'Inactive' },
+            { value: 'decommissioned', label: 'Decommissioned' },
+          ]}
+          selectedValues={statusFilter !== 'all' ? [statusFilter] : []}
+          onApply={(v) => setStatusFilter((v[0] as StatusFilter) || 'all')}
+          multiSelect={false}
+          autoApply
+          placeholder="All Status"
+          size="md"
+        />
+
+        <MultiSelectDropdown
+          title="Criticality"
+          items={[
+            { value: 'critical', label: 'Critical' },
+            { value: 'high', label: 'High' },
+            { value: 'medium', label: 'Medium' },
+            { value: 'low', label: 'Low' },
+          ]}
+          selectedValues={criticalityFilter !== 'all' ? [criticalityFilter] : []}
+          onApply={(v) => setCriticalityFilter((v[0] as CriticalityFilter) || 'all')}
+          multiSelect={false}
+          autoApply
+          placeholder="All Criticality"
+          size="md"
+        />
+
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            onClick={() => assetsApi.downloadTemplate()}
+            className="btn-secondary"
+            title="Download CSV template for bulk import"
+          >
+            <Download size={16} />
+            Template
+          </button>
+          <button
+            onClick={() => setIsImportModalOpen(true)}
+            className="btn-secondary border-primary-200 text-primary-600"
+          >
+            <Upload size={16} />
+            Import
+          </button>
+          {canCreate && (
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="btn-primary"
+            >
+              <Plus size={18} />
+              Add Asset
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <table className="w-full">
+          <thead className="bg-slate-50">
+            <tr>
+              <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Asset</th>
+              <th className="hidden px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 md:table-cell">Type</th>
+              <th className="hidden px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 lg:table-cell">CIA Ratings</th>
+              <th className="hidden px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 lg:table-cell">Valuation</th>
+              <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Criticality</th>
+              <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Status</th>
+              <th className="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-200">
+            {filteredAssets?.map((asset: ITAsset) => {
+              const isExpanded = expandedAsset === asset.id;
+              const displayName = (() => {
+                const isAutoName = asset.name === asset.ip_address || asset.name?.startsWith('Nessus-Host-');
+                if (isAutoName) {
+                  const locationName = asset.location
+                    ? asset.location.split(',')[0].trim()
+                    : '';
+                  return asset.host_name || locationName || asset.name;
+                }
+                return asset.name;
+              })();
+              return (
+                <React.Fragment key={asset.id}>
+                  <tr 
+                    className="cursor-pointer bg-white transition-colors hover:bg-slate-50"
+                    onClick={() => setExpandedAsset(isExpanded ? null : asset.id)}
+                  >
+                    <td className="px-3 py-2.5">
+                      <div className="flex items-center gap-3">
+                        {getAssetIcon(asset.asset_type)}
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium text-slate-900">{displayName}</p>
+                            {asset.cde_environment && (
+                              <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">CDE</span>
+                            )}
+                          </div>
+                          <p className="line-clamp-1 text-sm text-slate-500">{asset.description || 'No description'}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="hidden px-3 py-2.5 md:table-cell">
+                      {getTypeBadge(asset.asset_type)}
+                    </td>
+                    <td className="hidden px-3 py-2.5 lg:table-cell">
+                      <div className="flex flex-col gap-1">
+                        {getCIARatingBar(asset.confidentiality_rating, 'Confidentiality', 'bg-blue-500')}
+                        {getCIARatingBar(asset.integrity_rating, 'Integrity', 'bg-green-500')}
+                        {getCIARatingBar(asset.availability_rating, 'Availability', 'bg-yellow-500')}
+                      </div>
+                    </td>
+                    <td className="hidden px-3 py-2.5 lg:table-cell">
+                      <div className="flex items-center gap-1 text-sm">
+                        <DollarSign className="h-3 w-3 text-green-400" />
+                        <span className="text-slate-700">{formatCurrency(asset.valuation)}</span>
+                      </div>
+                    </td>
+                    <td className="px-3 py-2.5">{getCriticalityBadge(asset.criticality)}</td>
+                    <td className="px-3 py-2.5">{getStatusBadge(asset.status)}</td>
+                    <td className="px-3 py-2.5">
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={(e) => handleView(e, asset.id)}
+                          className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                          title="View"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </button>
+                        <AssetScanButton assetId={asset.id} />
+                        {canEdit && (
+                          <button
+                            onClick={(e) => handleEdit(e, asset)}
+                            className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                            title="Edit"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </button>
+                        )}
+                        {canDelete && (
+                          <button
+                            onClick={(e) => handleDelete(e, asset.id)}
+                            className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-red-600"
+                            title="Delete"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
+                        {isExpanded ? (
+                          <ChevronDown className="h-4 w-4 text-slate-500" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4 text-slate-500" />
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                  {isExpanded && (
+                    <tr key={`${asset.id}-expanded`}>
+                      <td colSpan={7} className="bg-slate-50 px-3 py-3">
+                        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+                          <div>
+                            <h4 className="text-sm font-medium text-slate-500">Description</h4>
+                            <p className="mt-1 text-sm text-slate-900">{asset.description || 'No description'}</p>
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-medium text-slate-500">Owner</h4>
+                            <p className="mt-1 text-sm text-slate-900">{asset.owner_name || 'Not assigned'}</p>
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-medium text-slate-500">Vendor</h4>
+                            <p className="mt-1 text-sm text-slate-900">{asset.vendor || 'N/A'}</p>
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-medium text-slate-500">Location</h4>
+                            <p className="mt-1 text-sm text-slate-900">{asset.location || 'Unknown'}</p>
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-medium text-slate-500">Component</h4>
+                            <p className="mt-1 text-sm text-slate-900">{asset.host_name || 'Not specified'}</p>
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-medium text-slate-500">Sub-components</h4>
+                            <p className="mt-1 text-sm text-slate-900">{asset.custodian || 'Not specified'}</p>
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-medium text-slate-500">IP Address</h4>
+                            <p className="mt-1 text-sm text-slate-900">{asset.ip_address || 'N/A'}</p>
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-medium text-slate-400">Linked Controls</h4>
+                            <button 
+                              onClick={(e) => handleView(e, asset.id)}
+                              className="mt-1 flex items-center gap-1 text-sm text-primary-400 hover:text-primary-300"
+                            >
+                              <Shield size={14} />
+                              <span>View details</span>
+                            </button>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {(!filteredAssets || filteredAssets.length === 0) && (
+        <div className="card flex flex-col items-center justify-center py-10 text-center">
+          <Server className="mb-4 h-12 w-12 text-slate-600" />
+          <h3 className="text-lg font-medium text-slate-900">No assets found</h3>
+          <p className="mt-1 text-slate-500">Add your first IT asset to get started</p>
+        </div>
+      )}
+
+      {isModalOpen && (
+        <AssetModal
+          onClose={() => setIsModalOpen(false)}
+          onSave={(data) => createMutation.mutate(data)}
+          isLoading={createMutation.isPending}
+        />
+      )}
+
+      {editingAsset && (
+        <AssetModal
+          onClose={() => setEditingAsset(null)}
+          onSave={(data) => updateMutation.mutate({ id: editingAsset.id, data })}
+          isLoading={updateMutation.isPending}
+          initialData={editingAsset}
+        />
+      )}
+
+      {isImportModalOpen && (
+        <ImportAssetsModal
+          onClose={() => setIsImportModalOpen(false)}
+          onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ['assets'] });
+            queryClient.invalidateQueries({ queryKey: ['assets-dashboard'] });
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Structured OS picker: Family → Version dropdowns fed by the live
+ * benchmark library (/assets/os-catalog), so the operator can only pick
+ * OSes that actually have CIS rules. "Other / not listed" preserves the
+ * free-text path (backend regex + AI classifies on save). Partial entry
+ * is impossible: picking a family REQUIRES picking a version before the
+ * value is emitted.
+ */
+function OsPicker({
+  value, onChange, required,
+}: {
+  value: { os_version: string; os_normalized: string };
+  onChange: (v: { os_version: string; os_normalized: string }) => void;
+  required: boolean;
+}) {
+  const catalogQ = useQuery({
+    queryKey: ['assets', 'os-catalog'],
+    queryFn: () => assetsApi.getOsCatalog().then((r: any) => r.data),
+    staleTime: 5 * 60_000,
+  });
+  const families: Array<{ family: string; options: Array<{ key: string; label: string; rule_count: number }> }> =
+    catalogQ.data?.families ?? [];
+
+  // Derive picker state from the current value so editing an existing
+  // asset pre-selects correctly.
+  const allOptions = families.flatMap(f => f.options.map(o => ({ ...o, family: f.family })));
+  const selected = allOptions.find(o => o.key === value.os_normalized);
+  const [family, setFamily] = useState<string>(selected?.family || (value.os_version && !selected ? '__other__' : ''));
+  const famOptions = families.find(f => f.family === family)?.options ?? [];
+
+  const pickFamily = (f: string) => {
+    setFamily(f);
+    // Reset version on family change — never leave a stale half-pick.
+    onChange({ os_version: '', os_normalized: '' });
+  };
+  const pickVersion = (key: string) => {
+    const opt = famOptions.find(o => o.key === key);
+    if (opt) onChange({ os_version: opt.label, os_normalized: opt.key });
+  };
+
+  return (
+    <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+      <div>
+        <label className="block text-xs font-medium text-slate-600 mb-0.5">
+          OS family{required && <span className="text-red-500"> *</span>}
+        </label>
+        <select
+          value={family}
+          onChange={(e) => pickFamily(e.target.value)}
+          required={required}
+          className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+        >
+          <option value="">{catalogQ.isLoading ? 'Loading…' : '— Select family —'}</option>
+          {families.map(f => (
+            <option key={f.family} value={f.family}>{f.family}</option>
+          ))}
+          <option value="__other__">Other / not listed</option>
+        </select>
+      </div>
+      <div>
+        {family === '__other__' ? (
+          <>
+            <label className="block text-xs font-medium text-slate-600 mb-0.5">
+              Describe the OS{required && <span className="text-red-500"> *</span>}
+            </label>
+            <input
+              type="text"
+              value={value.os_version}
+              required={required}
+              onChange={(e) => onChange({ os_version: e.target.value, os_normalized: '' })}
+              className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+              placeholder='e.g., "AIX 7.3", "Solaris 11.4"'
+            />
+            <p className="mt-0.5 text-[10px] text-slate-500">
+              Free text — the backend classifies it (regex first, AI fallback).
+            </p>
+          </>
+        ) : (
+          <>
+            <label className="block text-xs font-medium text-slate-600 mb-0.5">
+              Version{required && family && <span className="text-red-500"> *</span>}
+            </label>
+            <select
+              value={value.os_normalized}
+              onChange={(e) => pickVersion(e.target.value)}
+              required={required && !!family}
+              disabled={!family}
+              className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none disabled:bg-slate-50 disabled:text-slate-400"
+            >
+              <option value="">{family ? '— Select version —' : 'Pick a family first'}</option>
+              {famOptions.map(o => (
+                <option key={o.key} value={o.key}>{o.label} · {o.rule_count} rules</option>
+              ))}
+            </select>
+            {value.os_normalized && (
+              <p className="mt-0.5 text-[10px] text-emerald-600">
+                ✓ Will match CIS benchmark for <code className="font-mono">{value.os_normalized}</code>
+              </p>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AssetModal({
+  onClose,
+  onSave,
+  isLoading,
+  initialData,
+}: {
+  onClose: () => void;
+  onSave: (data: Parameters<typeof assetsApi.create>[0]) => void;
+  isLoading: boolean;
+  initialData?: ITAsset | null;
+}) {
+  const parseSubComponents = (value?: string) =>
+    value
+      ? value
+          .split(',')
+          .map((item) => item.trim())
+          .filter(Boolean)
+      : [];
+
+  const [formData, setFormData] = useState({
+    name: initialData?.name || '',
+    description: initialData?.description || '',
+    asset_type: (initialData?.asset_type || 'application') as AssetType,
+    owner_id: initialData?.owner_id || null as number | null,
+    vendor: initialData?.vendor || '',
+    location: initialData?.location || '',
+    criticality: (initialData?.criticality || 'medium') as 'low' | 'medium' | 'high' | 'critical',
+    confidentiality_rating: initialData?.confidentiality_rating || 3,
+    integrity_rating: initialData?.integrity_rating || 3,
+    availability_rating: initialData?.availability_rating || 3,
+    valuation: initialData?.valuation || null as number | null,
+    component: initialData?.host_name || '',
+    sub_components: parseSubComponents(initialData?.custodian),
+    ip_address: initialData?.ip_address || '',
+    status: (initialData?.status || 'active') as 'active' | 'inactive' | 'decommissioned',
+    cde_environment: (initialData as any)?.cde_environment || false,
+    // OS profile fields — wired so the backend can auto-classify the
+    // asset against the CIS strict matcher the moment it's created.
+    // os_version alone is enough; os_normalized is optional (operator
+    // override). Without these the asset has 0 applicable rules until
+    // someone manually classifies later — see Gap A note in router.
+    os_version: (initialData as any)?.os_version || '',
+    os_normalized: (initialData as any)?.os_normalized || '',
+  });
+  const [customSubComponent, setCustomSubComponent] = useState('');
+  
+  const isEditMode = !!initialData;
+
+  // Host-bearing asset types (servers, workstations, app hosts) MUST carry
+  // an OS — without it the strict matcher can never resolve a benchmark and
+  // the asset sits dead at "0 applicable rules". Data / Cloud / Third-Party
+  // assets often have no scannable OS, so OS stays optional for them.
+  const osRequired =
+    formData.asset_type === 'infrastructure' || formData.asset_type === 'application';
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    // Native `required` on the pickers covers normal flow; this guard
+    // catches programmatic submits and the "Other / not listed" path.
+    if (osRequired && !formData.os_version && !formData.os_normalized) {
+      alert('This asset type requires an operating system. Pick the OS family and version (or "Other / not listed" + description).');
+      return;
+    }
+    const submitData: any = {
+      name: formData.name,
+      description: formData.description || undefined,
+      asset_type: formData.asset_type,
+      owner_id: formData.owner_id || undefined,
+      vendor: formData.vendor || undefined,
+      location: formData.location || undefined,
+      criticality: formData.criticality,
+      confidentiality_rating: formData.confidentiality_rating,
+      integrity_rating: formData.integrity_rating,
+      availability_rating: formData.availability_rating,
+      valuation: formData.valuation || undefined,
+      host_name: formData.component || undefined,
+      custodian: formData.sub_components.length > 0 ? formData.sub_components.join(', ') : undefined,
+      ip_address: formData.ip_address || undefined,
+      cde_environment: formData.cde_environment,
+      // OS profile passthrough — backend auto-classifies when os_version
+      // is provided and os_normalized is empty (see Gap A).
+      os_version: formData.os_version || undefined,
+      os_normalized: formData.os_normalized || undefined,
+    };
+    if (isEditMode) {
+      submitData.status = formData.status;
+    }
+    onSave(submitData);
+  };
+
+  const componentSuggestions = ASSET_COMPONENT_SUGGESTIONS[formData.asset_type] || [];
+  const subComponentSuggestions = formData.component
+    ? ASSET_SUB_COMPONENT_SUGGESTIONS[formData.asset_type]?.[formData.component] || []
+    : [];
+
+  const toggleSubComponent = (value: string) => {
+    const exists = formData.sub_components.includes(value);
+    if (exists) {
+      setFormData({
+        ...formData,
+        sub_components: formData.sub_components.filter((item) => item !== value),
+      });
+      return;
+    }
+    setFormData({
+      ...formData,
+      sub_components: [...formData.sub_components, value],
+    });
+  };
+
+  const addCustomSubComponent = () => {
+    const cleaned = customSubComponent.trim();
+    if (!cleaned || formData.sub_components.includes(cleaned)) {
+      return;
+    }
+    setFormData({
+      ...formData,
+      sub_components: [...formData.sub_components, cleaned],
+    });
+    setCustomSubComponent('');
+  };
+
+  const RatingSelector = ({ 
+    label, 
+    value, 
+    onChange,
+    color
+  }: { 
+    label: string; 
+    value: number; 
+    onChange: (v: number) => void;
+    color: string;
+  }) => (
+    <div>
+      <label className="block text-xs font-medium text-slate-600 mb-1">{label}</label>
+      <div className="flex gap-1">
+        {[1, 2, 3, 4, 5].map((rating) => (
+          <button
+            key={rating}
+            type="button"
+            onClick={() => onChange(rating)}
+            className={`flex h-6 w-6 items-center justify-center rounded border text-xs font-medium transition-colors ${
+              rating <= value
+                ? `${color} border-transparent text-white`
+                : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            {rating}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
+  return (
+    <>
+      <div className="fixed inset-y-0 right-0 z-50 flex w-[780px] flex-col bg-white shadow-2xl border-l border-slate-200">
+        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4 flex-shrink-0">
+          <h2 className="text-sm font-semibold text-slate-900">{isEditMode ? 'Edit Asset' : 'Add Asset'}</h2>
+          <button type="button" onClick={onClose} className="text-slate-500 hover:text-slate-900">
+            <X size={20} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+          <div className="flex-1 overflow-y-auto px-5 py-4">
+            {/* Row 1: Name + Description */}
+            <div className="grid grid-cols-2 gap-x-4 gap-y-3 mb-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-0.5">Name *</label>
+                <input
+                  type="text"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-0.5">Description</label>
+                <input
+                  type="text"
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                  placeholder="Brief description..."
+                />
+              </div>
+            </div>
+
+            {/* Asset Type */}
+            <div className="mb-3">
+              <label className="block text-xs font-medium text-slate-600 mb-1">Asset Type *</label>
+              <div className="grid grid-cols-3 gap-1.5">
+                {ASSET_TYPES.map((type) => {
+                  const Icon = type.icon;
+                  const isSelected = formData.asset_type === type.value;
+                  return (
+                    <button
+                      key={type.value}
+                      type="button"
+                      onClick={() => {
+                        const nextType = type.value as AssetType;
+                        const nextComponentSuggestions = ASSET_COMPONENT_SUGGESTIONS[nextType] || [];
+                        const keepCurrentComponent = nextComponentSuggestions.includes(formData.component);
+                        setFormData({
+                          ...formData,
+                          asset_type: nextType,
+                          component: keepCurrentComponent ? formData.component : '',
+                          sub_components: keepCurrentComponent ? formData.sub_components : [],
+                        });
+                      }}
+                      className={`flex items-center gap-2 rounded border px-2 py-1.5 text-left transition-colors ${
+                        isSelected
+                          ? 'border-blue-500 bg-blue-50'
+                          : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+                      }`}
+                    >
+                      <Icon className={`h-4 w-4 flex-shrink-0 ${isSelected ? 'text-blue-500' : 'text-slate-400'}`} />
+                      <span className={`text-xs font-medium truncate ${isSelected ? 'text-blue-700' : 'text-slate-700'}`}>
+                        {type.label}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Row: Primary Component + IP Address */}
+            <div className="grid grid-cols-2 gap-x-4 gap-y-3 mb-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-0.5">Primary Component</label>
+                <select
+                  value={formData.component}
+                  onChange={(e) => setFormData({ ...formData, component: e.target.value, sub_components: [] })}
+                  className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                >
+                  <option value="">Select component</option>
+                  {componentSuggestions.map((component) => (
+                    <option key={component} value={component}>{component}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-0.5">IP Address</label>
+                <input
+                  type="text"
+                  value={formData.ip_address}
+                  onChange={(e) => setFormData({ ...formData, ip_address: e.target.value })}
+                  className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                  placeholder="e.g., 10.0.10.15"
+                />
+              </div>
+            </div>
+
+            {/* Sub-components */}
+            {subComponentSuggestions.length > 0 && (
+              <div className="mb-3">
+                <label className="block text-xs font-medium text-slate-600 mb-1">Sub-components</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {subComponentSuggestions.map((subComponent) => {
+                    const isSelected = formData.sub_components.includes(subComponent);
+                    return (
+                      <button
+                        key={subComponent}
+                        type="button"
+                        onClick={() => toggleSubComponent(subComponent)}
+                        className={`rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
+                          isSelected
+                            ? 'border-blue-400 bg-blue-50 text-blue-700'
+                            : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+                        }`}
+                      >
+                        {subComponent}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Custom sub-component */}
+            <div className="mb-3">
+              <label className="block text-xs font-medium text-slate-600 mb-0.5">Custom Sub-component</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={customSubComponent}
+                  onChange={(e) => setCustomSubComponent(e.target.value)}
+                  className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                  placeholder="e.g., WiFi Controller"
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCustomSubComponent(); } }}
+                />
+                <button type="button" onClick={addCustomSubComponent} className="rounded border border-slate-200 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50">
+                  Add
+                </button>
+              </div>
+              {formData.sub_components.length > 0 && (
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {formData.sub_components.map((subComponent) => (
+                    <span key={subComponent} className="inline-flex items-center gap-1 rounded-full border border-blue-400 bg-blue-50 px-2.5 py-0.5 text-xs text-blue-700">
+                      {subComponent}
+                      <button type="button" onClick={() => toggleSubComponent(subComponent)} className="text-blue-500 hover:text-blue-700" aria-label={`Remove ${subComponent}`}>
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="border-t border-slate-200 pt-3 mt-1">
+              {/* Row: Vendor + Location */}
+              <div className="grid grid-cols-2 gap-x-4 gap-y-3 mb-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-0.5">Vendor</label>
+                  <input
+                    type="text"
+                    value={formData.vendor}
+                    onChange={(e) => setFormData({ ...formData, vendor: e.target.value })}
+                    className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                    placeholder="e.g., Microsoft, AWS"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-0.5">Location</label>
+                  <input
+                    type="text"
+                    value={formData.location}
+                    onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                    className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                    placeholder="e.g., US-East, On-Premise"
+                  />
+                </div>
+              </div>
+
+              {/* Row: Operating system — structured Family → Version
+                  pickers driven by /assets/os-catalog (the live benchmark
+                  library). Required for host-bearing types (Infrastructure
+                  + Application): free text alone let operators submit
+                  "windows" or typos that never matched a benchmark.
+                  "Other / not listed" keeps a free-text escape hatch
+                  (backend regex+AI classifies). */}
+              <div className="mb-3 rounded-md border border-blue-100 bg-blue-50/40 px-3 py-2.5">
+                <div className="mb-1.5 flex items-center gap-1.5">
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-blue-700">
+                    Operating system
+                  </span>
+                  <span className="text-[10px] text-slate-500">
+                    · feeds the CIS strict matcher
+                  </span>
+                  {osRequired && (
+                    <span className="rounded-full bg-red-50 px-1.5 text-[10px] font-medium text-red-600 ring-1 ring-red-200">required</span>
+                  )}
+                </div>
+                <OsPicker
+                  required={osRequired}
+                  value={{ os_version: formData.os_version, os_normalized: formData.os_normalized }}
+                  onChange={(v) => setFormData({ ...formData, os_version: v.os_version, os_normalized: v.os_normalized })}
+                />
+              </div>
+
+              {/* Row: Criticality + Asset Value */}
+              <div className="grid grid-cols-2 gap-x-4 gap-y-3 mb-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-0.5">Criticality</label>
+                  <select
+                    value={formData.criticality}
+                    onChange={(e) => setFormData({ ...formData, criticality: e.target.value as typeof formData.criticality })}
+                    className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                  >
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="critical">Critical</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-0.5">Asset Value (USD)</label>
+                  <div className="relative">
+                    <DollarSign className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="number"
+                      value={formData.valuation || ''}
+                      onChange={(e) => setFormData({ ...formData, valuation: e.target.value ? Number(e.target.value) : null })}
+                      className="w-full rounded border border-slate-200 bg-white py-1.5 pl-9 pr-3 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                      placeholder="0"
+                      min="0"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Row: PCI DSS + Status(edit) */}
+              <div className="grid grid-cols-2 gap-x-4 gap-y-3 mb-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">PCI DSS Scope</label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, cde_environment: !formData.cde_environment })}
+                      className={`relative inline-flex h-5 w-9 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
+                        formData.cde_environment ? 'bg-emerald-500' : 'bg-slate-200'
+                      }`}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ${
+                          formData.cde_environment ? 'translate-x-4' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                    <span className="text-xs text-slate-700">CDE Environment</span>
+                  </label>
+                </div>
+                {isEditMode && (
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-0.5">Status</label>
+                    <select
+                      value={formData.status}
+                      onChange={(e) => setFormData({ ...formData, status: e.target.value as typeof formData.status })}
+                      className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                    >
+                      <option value="active">Active</option>
+                      <option value="inactive">Inactive</option>
+                      <option value="decommissioned">Decommissioned</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {/* CIA Ratings */}
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">CIA Ratings</label>
+                <div className="grid grid-cols-3 gap-3">
+                  <RatingSelector
+                    label="Confidentiality"
+                    value={formData.confidentiality_rating}
+                    onChange={(v) => setFormData({ ...formData, confidentiality_rating: v })}
+                    color="bg-blue-600"
+                  />
+                  <RatingSelector
+                    label="Integrity"
+                    value={formData.integrity_rating}
+                    onChange={(v) => setFormData({ ...formData, integrity_rating: v })}
+                    color="bg-green-600"
+                  />
+                  <RatingSelector
+                    label="Availability"
+                    value={formData.availability_rating}
+                    onChange={(v) => setFormData({ ...formData, availability_rating: v })}
+                    color="bg-yellow-600"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+                    <div className="flex-shrink-0 flex justify-end gap-3 border-t border-slate-200 px-6 py-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg border border-slate-200 px-4 py-2 text-slate-700 hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
+            >
+              {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+              {isEditMode ? 'Save Changes' : 'Add Asset'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </>
+  );
+}
+
+function ImportAssetsModal({
+  onClose,
+  onSuccess,
+}: {
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [file, setFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [result, setResult] = useState<{
+    success: boolean;
+    imported: number;
+    total_rows: number;
+    errors: string[];
+    total_errors: number;
+    message: string;
+  } | null>(null);
+  const [dragActive, setDragActive] = useState(false);
+
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === 'dragenter' || e.type === 'dragover') {
+      setDragActive(true);
+    } else if (e.type === 'dragleave') {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      const droppedFile = e.dataTransfer.files[0];
+      if (droppedFile.name.match(/\.(csv|xlsx|xls)$/i)) {
+        setFile(droppedFile);
+        setResult(null);
+      }
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setFile(e.target.files[0]);
+      setResult(null);
+    }
+  };
+
+  const handleUpload = async () => {
+    if (!file) return;
+    
+    setIsUploading(true);
+    try {
+      const response = await assetsApi.importAssets(file);
+      setResult(response.data);
+      if (response.data.imported > 0) {
+        onSuccess();
+      }
+    } catch (error: any) {
+      setResult({
+        success: false,
+        imported: 0,
+        total_rows: 0,
+        errors: [error.response?.data?.detail || 'Upload failed'],
+        total_errors: 1,
+        message: 'Upload failed'
+      });
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-lg rounded-xl border border-gray-200 bg-white p-5 shadow-xl">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-base font-semibold text-black">Import IT Assets</h2>
+          <button onClick={onClose} className="text-gray-400 transition-colors hover:text-gray-600">
+            <X size={20} />
+          </button>
+        </div>
+
+        {!result ? (
+          <>
+            <div className="mb-4 rounded-lg border border-gray-200 bg-slate-50 p-4">
+              <div className="flex items-start gap-3">
+                <FileSpreadsheet className="mt-0.5 h-5 w-5 text-blue-600" />
+                <div>
+                  <p className="text-sm font-medium text-black">How to import assets:</p>
+                  <ol className="mt-2 list-inside list-decimal space-y-1 text-xs text-gray-600">
+                    <li>Click the Template button to download the CSV template</li>
+                    <li>Fill in your assets (keep the header row)</li>
+                    <li>Upload the completed file here</li>
+                  </ol>
+                </div>
+              </div>
+            </div>
+
+            <div
+              className={`relative mb-4 rounded-lg border-2 border-dashed p-8 text-center transition-colors ${
+                dragActive
+                  ? 'border-blue-500 bg-blue-50'
+                  : file
+                  ? 'border-green-500 bg-green-50'
+                  : 'border-gray-300 hover:border-gray-400'
+              }`}
+              onDragEnter={handleDrag}
+              onDragLeave={handleDrag}
+              onDragOver={handleDrag}
+              onDrop={handleDrop}
+            >
+              <input
+                type="file"
+                accept=".csv,.xlsx,.xls"
+                onChange={handleFileChange}
+                className="absolute inset-0 cursor-pointer opacity-0"
+              />
+              
+              {file ? (
+                <div className="flex flex-col items-center">
+                  <CheckCircle2 className="mb-2 h-10 w-10 text-green-600" />
+                  <p className="font-medium text-black">{file.name}</p>
+                  <p className="mt-1 text-sm text-gray-500">
+                    {(file.size / 1024).toFixed(1)} KB
+                  </p>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setFile(null);
+                    }}
+                    className="mt-2 text-xs text-gray-500 transition-colors hover:text-gray-700"
+                  >
+                    Choose different file
+                  </button>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center">
+                  <Upload className="mb-2 h-10 w-10 text-gray-400" />
+                  <p className="text-black">Drag and drop your file here</p>
+                  <p className="mt-1 text-sm text-gray-500">or click to browse</p>
+                  <p className="mt-2 text-xs text-gray-400">Supports CSV, XLSX, XLS</p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={onClose}
+                className="rounded-lg border border-gray-300 px-4 py-2 text-gray-600 transition-colors hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleUpload}
+                disabled={!file || isUploading}
+                className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+              >
+                {isUploading && <Loader2 className="h-4 w-4 animate-spin" />}
+                Import Assets
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className={`mb-4 rounded-lg p-4 ${
+              result.success && result.imported > 0
+                ? 'border border-green-200 bg-green-50'
+                : 'border border-red-200 bg-red-50'
+            }`}>
+              <div className="flex items-start gap-3">
+                {result.success && result.imported > 0 ? (
+                  <CheckCircle2 className="mt-0.5 h-5 w-5 text-green-600" />
+                ) : (
+                  <AlertCircle className="mt-0.5 h-5 w-5 text-red-600" />
+                )}
+                <div>
+                  <p className={`font-medium ${
+                    result.success && result.imported > 0 ? 'text-green-700' : 'text-red-700'
+                  }`}>
+                    {result.message}
+                  </p>
+                  <div className="mt-2 text-sm text-gray-600">
+                    <p>Imported: {result.imported} of {result.total_rows} rows</p>
+                    {result.total_errors > 0 && (
+                      <p className="text-red-600">Errors: {result.total_errors}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {result.errors.length > 0 && (
+              <div className="mb-4 max-h-40 overflow-y-auto rounded-lg border border-gray-200 bg-slate-50 p-3">
+                <p className="mb-2 text-xs font-medium text-gray-600">Error Details:</p>
+                <ul className="space-y-1 text-xs text-red-600">
+                  {result.errors.map((error, idx) => (
+                    <li key={idx}>{error}</li>
+                  ))}
+                </ul>
+                {result.total_errors > result.errors.length && (
+                  <p className="mt-2 text-xs text-gray-500">
+                    ... and {result.total_errors - result.errors.length} more errors
+                  </p>
+                )}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setFile(null);
+                  setResult(null);
+                }}
+                className="rounded-lg border border-gray-300 px-4 py-2 text-gray-600 transition-colors hover:bg-gray-50"
+              >
+                Import More
+              </button>
+              <button
+                onClick={onClose}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-white transition-colors hover:bg-blue-700"
+              >
+                Done
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Inventory header — title only ──────────────────────────────────────
+// Tenant-wide "Scan all assets" button removed per operator guidance: only
+// per-asset Scan-now is permitted from the inventory grid. To run every
+// asset, admins use the per-asset action one at a time or the scheduled
+// scan job — never a single click that fans out across the tenant.
+function InventoryHeader({ assetCount }: { assetCount: number }) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
+      <div>
+        <h1 className="text-lg font-semibold text-slate-900">IT Asset Inventory</h1>
+        <p className="text-xs text-slate-500">{assetCount} assets · CIA ratings, valuations, AI-tagged OS profiles, scan history</p>
+      </div>
+    </div>
+  );
+}
+
+// ─── Per-row scan button — runs all applicable rules for ONE asset ──
+// Avoids forcing the user to drill into the detail page just to fire a
+// scan. Calls the same scan-all endpoint with asset_id so the backend's
+// strict-version + AI filter routes only the rules that match this PC.
+function AssetScanButton({ assetId }: { assetId: number }) {
+  const [running, setRunning] = useState(false);
+  const [result, setResult] = useState<'idle' | 'done' | 'fail'>('idle');
+
+  const run = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setRunning(true);
+    setResult('idle');
+    try {
+      const { compliancePluginsApi } = await import('@/lib/api');
+      const r = await compliancePluginsApi.scanAll({ asset_id: assetId });
+      const d: any = r.data || {};
+      const exec = d.runs?.length ?? d.executed ?? 0;
+      setResult(exec > 0 ? 'done' : 'fail');
+    } catch {
+      setResult('fail');
+    } finally {
+      setRunning(false);
+      setTimeout(() => setResult('idle'), 3000);
+    }
+  };
+
+  return (
+    <button
+      onClick={run}
+      disabled={running}
+      className={`rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-emerald-700 ${
+        result === 'done' ? 'text-emerald-700' :
+        result === 'fail' ? 'text-red-600' :
+        running ? 'text-amber-600' : ''
+      }`}
+      title={running ? 'Scanning…' : 'Scan this asset against all applicable rules'}
+    >
+      {running ? (
+        <Loader2 className="h-4 w-4 animate-spin" />
+      ) : result === 'done' ? (
+        <CheckCircle2 className="h-4 w-4" />
+      ) : result === 'fail' ? (
+        <AlertCircle className="h-4 w-4" />
+      ) : (
+        <Shield className="h-4 w-4" />
+      )}
+    </button>
+  );
+}
