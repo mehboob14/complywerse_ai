@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>EV-SCR-005 — Privileged Access Workstation PAW Jump-Host Config</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { font-family: -apple-system, 'Segoe UI', Arial, sans-serif; background: #f4f6f8; color: #222; }
+  .page { max-width: 1280px; margin: 24px auto; padding: 0 24px 48px; }
+  /* COVER */
+  .cover { background: linear-gradient(135deg, #1F4E79 0%, #2E75B6 100%); color: #fff; border-radius: 10px; padding: 32px 36px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); }
+  .cover h1 { font-size: 28px; margin-bottom: 6px; letter-spacing: 0.5px; }
+  .cover h2 { font-size: 16px; font-weight: 400; opacity: 0.92; margin-bottom: 18px; }
+  .cover .meta { display: grid; grid-template-columns: 180px 1fr 180px 1fr; gap: 10px 16px; font-size: 13px; margin-top: 12px; }
+  .cover .meta b { opacity: 0.85; font-weight: 500; }
+  .cover .ev-id { position: absolute; top: 20px; right: 36px; background: rgba(255,255,255,0.15); padding: 6px 14px; border-radius: 20px; font-size: 12px; letter-spacing: 1px; }
+  .cover-wrap { position: relative; }
+  .fwgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 20px; margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.25); font-size: 12px; }
+  .fwgrid div { padding: 6px 10px; background: rgba(255,255,255,0.10); border-radius: 4px; }
+  .fwgrid b { font-weight: 600; }
+
+  /* LABEL ABOVE SCREENSHOT */
+  .shot-label { margin: 28px 0 8px; padding: 8px 14px; background: #fff; border-left: 4px solid #2E75B6; border-radius: 0 4px 4px 0; font-size: 13px; color: #555; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+  .shot-label b { color: #1F4E79; }
+
+  /* SCREENSHOT FRAME */
+  .screenshot { background: #fff; border: 1px solid #d8dde3; border-radius: 6px; overflow: hidden; box-shadow: 0 2px 12px rgba(0,0,0,0.10); }
+  .browser-bar { background: #e7e9ed; padding: 8px 12px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid #d0d4d9; }
+  .browser-bar .dot { width: 12px; height: 12px; border-radius: 50%; }
+  .browser-bar .dot.r { background: #ff5f57; } .browser-bar .dot.y { background: #ffbd2e; } .browser-bar .dot.g { background: #28c840; }
+  .browser-bar .url { flex: 1; background: #fff; border: 1px solid #c8cdd3; border-radius: 4px; padding: 4px 10px; font-size: 12px; color: #555; }
+  .content { padding: 20px; font-size: 13px; }
+
+  /* AUDIT STAMP */
+  .audit-stamp { margin-top: 10px; padding: 10px 14px; background: #e8f4ea; border-left: 4px solid #2d7a3f; font-size: 12px; color: #1a4d26; border-radius: 0 4px 4px 0; }
+  .audit-stamp b { color: #0f3d1a; }
+
+  /* COMMON UI */
+  table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 12.5px; }
+  th { background: #f3f5f7; text-align: left; padding: 8px 10px; border-bottom: 2px solid #ccd4dc; font-weight: 600; color: #333; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.4px; }
+  td { padding: 8px 10px; border-bottom: 1px solid #e8ecf0; color: #333; }
+  tr:last-child td { border-bottom: none; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+  .badge.ok { background: #e0f4e3; color: #1e7a30; }
+  .badge.warn { background: #fff2cc; color: #8a6215; }
+  .badge.bad { background: #fadbd8; color: #9c1414; }
+  .badge.info { background: #d6e4f0; color: #1F4E79; }
+  .kv { display: grid; grid-template-columns: 200px 1fr; gap: 6px 14px; font-size: 13px; }
+  .kv b { color: #555; font-weight: 500; }
+  .kv .val { color: #222; }
+  .hdr { font-size: 18px; font-weight: 600; color: #1F4E79; margin-bottom: 6px; }
+  .sub { color: #666; font-size: 12px; margin-bottom: 16px; }
+  .section { margin: 20px 0; padding: 12px 14px; background: #f8f9fb; border-radius: 4px; border: 1px solid #e1e5ea; }
+  .flex { display: flex; gap: 20px; align-items: flex-start; }
+  .flex > div { flex: 1; }
+  code { background: #f0f2f5; padding: 1px 6px; border-radius: 3px; font-family: 'Consolas','Monaco',monospace; font-size: 12px; color: #333; }
+  .timestamp { color: #888; font-size: 11px; }
+
+  /* PRINT */
+  @media print { .page { margin: 0; padding: 0; } .cover { break-after: page; } .screenshot { break-inside: avoid; } }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="cover-wrap">
+    <div class="cover">
+      <div class="ev-id">EV-SCR-005</div>
+      <h1>[Bank Name]</h1>
+      <h2>Privileged Access Workstation PAW Jump-Host Config</h2>
+      <div class="meta">
+        <b>Evidence ID:</b><div>EV-SCR-005</div>
+        <b>Captured On:</b><div>20-Mar-2026 14:48 GST</div>
+        <b>Classification:</b><div>CONFIDENTIAL</div>
+        <b>Retention:</b><div>1 year</div>
+        <b>Captured By:</b><div>Mona Al Mansoori (Compliance & GRC)</div>
+        <b>Reviewed By:</b><div>CISO Office</div>
+        <b>System / Tool:</b><div>CyberArk Privileged Access Security v13.4</div>
+        <b>Document Type:</b><div>Configuration Screenshot</div>
+      </div>
+      <div class="fwgrid">
+        <div><b>CBUAE Ch.14:</b> 14.3.3 Privileged Access</div>
+        <div><b>SBP ETGRMF:</b> 2.4.3 Privileged Access</div>
+        <div><b>ISO 27001:</b> A.8.2 Privileged Access Rights</div>
+        <div><b>PCI-DSS:</b> Req 7.2.2 Least Privilege</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="shot-label">CyberArk PAM active session monitoring console showing all privileged sessions mediated through jump hosts. <br/><b>Purpose:</b> Demonstrates privileged access control via PAW/jump hosts.</div>
+
+  <div class="screenshot">
+    <div style="background:#1F4E79;color:#fff;padding:10px 16px;font-weight:600;font-size:14px;">CyberArk PAS › PSM › Session Monitoring</div>
+    <div class="content"><div class="hdr">Privileged Session Management — Active & Recent Sessions</div>
+    <div class="sub">CyberArk PAS v13.4 · 28 active sessions · 417 recorded today · Jump hosts: PAW-DC01, PAW-DC02 (Primary); PAW-DR01 (DR)</div>
+    <div class="section">
+      <b>Active Privileged Sessions (as of 14:48 GST):</b>
+      <table><tr><th>User</th><th>Target System</th><th>Privileged Account</th><th>Connection</th><th>Started</th><th>Status</th></tr>
+      <tr><td>hassan.aldhaheri</td><td>flexcube-prod-01.corp.bank.ae</td><td>oracle@flexcube_admin</td><td>SSH</td><td>14:32</td><td><span class="badge ok">RECORDING</span></td></tr>
+      <tr><td>ahmed.alnuaimi</td><td>splunk-idx-01.corp.bank.ae</td><td>splunk_admin</td><td>SSH</td><td>14:15</td><td><span class="badge ok">RECORDING</span></td></tr>
+      <tr><td>jassim.alsuwaidi</td><td>paloalto-fw-ha.corp.bank.ae</td><td>panadmin</td><td>HTTPS</td><td>13:48</td><td><span class="badge ok">RECORDING</span></td></tr>
+      <tr><td>vendor.oracle_support</td><td>flexcube-prod-db.corp.bank.ae</td><td>sys@cbs_tns</td><td>SQL*Net</td><td>13:20</td><td><span class="badge ok">RECORDING · 4-EYES ACTIVE</span></td></tr>
+      </table>
+    </div>
+    <div class="section">
+      <b>PAW Enforcement Controls:</b>
+      <table><tr><th>Control</th><th>Status</th><th>Notes</th></tr>
+      <tr><td>Direct admin access from user workstations blocked (firewall rule)</td><td><span class="badge ok">ENABLED</span></td><td>Only PAW ranges permitted</td></tr>
+      <tr><td>All privileged accounts vaulted</td><td><span class="badge ok">ENABLED</span></td><td>1,147 accounts under management</td></tr>
+      <tr><td>Just-in-time access (auto-revoke after session)</td><td><span class="badge ok">ENABLED</span></td><td>Default 4-hour max</td></tr>
+      <tr><td>Session recording for all PSM sessions</td><td><span class="badge ok">ENABLED</span></td><td>Retention: 10 years</td></tr>
+      <tr><td>Credential rotation after use</td><td><span class="badge ok">ENABLED</span></td><td>Auto-rotate on session end</td></tr>
+      <tr><td>Dual control for vendor access</td><td><span class="badge ok">ENABLED</span></td><td>Requires IT Ops approver online</td></tr>
+      </table>
+    </div></div>
+  </div>
+
+  <div class="audit-stamp"><b>Control Assurance:</b> 100% of administrative access to production mediated through CyberArk. Session recording, auto-rotation, and JIT access enforced.</div>
+
+</div>
+</body>
+</html>

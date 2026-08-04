@@ -1,0 +1,48 @@
+[Unit]
+Description=Compliverse Compliance Agent
+Documentation=https://compliverse.app/docs/agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# Runs as a dedicated `complyverse` system user (created by post-install
+# script) — never as root. That account has no sudo, no shell, and read
+# access only to files the agent itself writes.
+User=complyverse
+Group=complyverse
+
+# The agent binary is /opt/complyverse-agent/bin/complyverse-agent —
+# a thin shell wrapper around `python3 -m complyverse_agent run`.
+ExecStart=/opt/complyverse-agent/bin/complyverse-agent run
+WorkingDirectory=/opt/complyverse-agent
+
+# Restart on crash with exponential backoff so a transient outage
+# doesn't tight-loop.
+Restart=on-failure
+RestartSec=30s
+StartLimitInterval=600s
+StartLimitBurst=5
+
+# Hardening — agent doesn't need most of the system
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+# Allow read+write only to the agent's own state dir
+ReadWritePaths=/var/lib/complyverse-agent /var/log/complyverse-agent
+
+# stdout/stderr go to journald
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=complyverse-agent
+
+[Install]
+WantedBy=multi-user.target
