@@ -1,0 +1,2197 @@
+{
+  "metadata": {
+    "name": "NIST SP 800-171 Rev 2 (Protecting CUI)",
+    "description": "NIST SP 800-171 provides 110 security requirements across 14 families for protecting Controlled Unclassified Information (CUI) in nonfederal systems and organizations. US Government public-domain publication.",
+    "version": "Rev 2",
+    "source_organization": "National Institute of Standards and Technology (NIST)",
+    "effective_date": "2021-01-28",
+    "classification": "compliance",
+    "framework_type": "regulatory",
+    "classification_confidence": 0.99,
+    "framework_purpose": "Protect the confidentiality of Controlled Unclassified Information in nonfederal systems.",
+    "framework_scope": "Nonfederal systems and organizations that process, store, or transmit CUI (e.g., DoD contractors).",
+    "target_audience": "CISOs, ISSOs, DoD/defense contractors, GRC and security teams",
+    "required_artifacts": [
+      "System Security Plan (SSP)",
+      "Plan of Action & Milestones (POA&M)",
+      "CUI Data Inventory & Flow Map",
+      "Access Control Policy",
+      "Account & Access Review Records",
+      "MFA Configuration Evidence",
+      "Remote Access / VPN Configuration",
+      "Configuration Baselines",
+      "Change Management Records",
+      "Least-Functionality / Ports & Services List",
+      "Encryption & Key Management Standard",
+      "Network Boundary / Segmentation Diagram",
+      "Audit Logging Configuration",
+      "Vulnerability Scan & Remediation Reports",
+      "Continuous Monitoring Records",
+      "Incident Response Plan",
+      "Incident Response Test Records",
+      "Media Sanitization / Destruction Records",
+      "Physical Access Logs",
+      "Personnel Screening & Termination Records",
+      "Anti-Malware / Endpoint Protection Config",
+      "Security Awareness & Training Records"
+    ],
+    "hierarchy_structure": {
+      "levels": [
+        "Family",
+        "Requirement"
+      ],
+      "numbering_pattern": "3.N.N"
+    },
+    "document_structure": {
+      "sections": [
+        "3.1: Access Control",
+        "3.2: Awareness and Training",
+        "3.3: Audit and Accountability",
+        "3.4: Configuration Management",
+        "3.5: Identification and Authentication",
+        "3.6: Incident Response",
+        "3.7: Maintenance",
+        "3.8: Media Protection",
+        "3.9: Personnel Security",
+        "3.10: Physical Protection",
+        "3.11: Risk Assessment",
+        "3.12: Security Assessment",
+        "3.13: System and Communications Protection",
+        "3.14: System and Information Integrity"
+      ]
+    },
+    "total_controls": 110,
+    "domains": [
+      "Access Control",
+      "Awareness and Training",
+      "Audit and Accountability",
+      "Configuration Management",
+      "Identification and Authentication",
+      "Incident Response",
+      "Maintenance",
+      "Media Protection",
+      "Personnel Security",
+      "Physical Protection",
+      "Risk Assessment",
+      "Security Assessment",
+      "System and Communications Protection",
+      "System and Information Integrity"
+    ]
+  },
+  "controls": [
+    {
+      "control_id": "3.1.1",
+      "original_reference": "3.1.1",
+      "title": "Limit system access to authorized users",
+      "description": "Limit system access to authorized users, processes acting on behalf of users, and devices (including other systems).",
+      "full_text": "Limit system access to authorized users, processes acting on behalf of users, and devices (including other systems).",
+      "domain": "Access Control",
+      "category": "Access Control",
+      "section_number": "3.1.1",
+      "parent_section": "3.1",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Limit system access to authorized users — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'limit system access to authorized users' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.1.2",
+      "original_reference": "3.1.2",
+      "title": "Limit access to authorized transactions",
+      "description": "Limit system access to the types of transactions and functions that authorized users are permitted to execute.",
+      "full_text": "Limit system access to the types of transactions and functions that authorized users are permitted to execute.",
+      "domain": "Access Control",
+      "category": "Access Control",
+      "section_number": "3.1.2",
+      "parent_section": "3.1",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Limit access to authorized transactions — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'limit access to authorized transactions' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.1.3",
+      "original_reference": "3.1.3",
+      "title": "Control the flow of CUI",
+      "description": "Control the flow of Controlled Unclassified Information in accordance with approved authorizations.",
+      "full_text": "Control the flow of Controlled Unclassified Information in accordance with approved authorizations.",
+      "domain": "Access Control",
+      "category": "Access Control",
+      "section_number": "3.1.3",
+      "parent_section": "3.1",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Control the flow of CUI — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'control the flow of cui' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.1.4",
+      "original_reference": "3.1.4",
+      "title": "Separate duties of individuals",
+      "description": "Separate the duties of individuals to reduce the risk of malevolent activity without collusion.",
+      "full_text": "Separate the duties of individuals to reduce the risk of malevolent activity without collusion.",
+      "domain": "Access Control",
+      "category": "Access Control",
+      "section_number": "3.1.4",
+      "parent_section": "3.1",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Separate duties of individuals — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'separate duties of individuals' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.1.5",
+      "original_reference": "3.1.5",
+      "title": "Employ least privilege",
+      "description": "Employ the principle of least privilege, including for specific security functions and privileged accounts.",
+      "full_text": "Employ the principle of least privilege, including for specific security functions and privileged accounts.",
+      "domain": "Access Control",
+      "category": "Access Control",
+      "section_number": "3.1.5",
+      "parent_section": "3.1",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Employ least privilege — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'employ least privilege' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.1.6",
+      "original_reference": "3.1.6",
+      "title": "Use non-privileged accounts for non-security functions",
+      "description": "Use non-privileged accounts or roles when accessing nonsecurity functions.",
+      "full_text": "Use non-privileged accounts or roles when accessing nonsecurity functions.",
+      "domain": "Access Control",
+      "category": "Access Control",
+      "section_number": "3.1.6",
+      "parent_section": "3.1",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Use non-privileged accounts for non-security functions — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'use non-privileged accounts for non-security functions' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.1.7",
+      "original_reference": "3.1.7",
+      "title": "Prevent non-privileged users running privileged functions",
+      "description": "Prevent non-privileged users from executing privileged functions and capture the execution of such functions in audit logs.",
+      "full_text": "Prevent non-privileged users from executing privileged functions and capture the execution of such functions in audit logs.",
+      "domain": "Access Control",
+      "category": "Access Control",
+      "section_number": "3.1.7",
+      "parent_section": "3.1",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Prevent non-privileged users running privileged functions — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'prevent non-privileged users running privileged functions' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.1.8",
+      "original_reference": "3.1.8",
+      "title": "Limit unsuccessful logon attempts",
+      "description": "Limit unsuccessful logon attempts.",
+      "full_text": "Limit unsuccessful logon attempts.",
+      "domain": "Access Control",
+      "category": "Access Control",
+      "section_number": "3.1.8",
+      "parent_section": "3.1",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Limit unsuccessful logon attempts — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'limit unsuccessful logon attempts' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.1.9",
+      "original_reference": "3.1.9",
+      "title": "Provide privacy and security notices",
+      "description": "Provide privacy and security notices consistent with applicable CUI rules.",
+      "full_text": "Provide privacy and security notices consistent with applicable CUI rules.",
+      "domain": "Access Control",
+      "category": "Access Control",
+      "section_number": "3.1.9",
+      "parent_section": "3.1",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Provide privacy and security notices — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'provide privacy and security notices' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.1.10",
+      "original_reference": "3.1.10",
+      "title": "Use session lock",
+      "description": "Use session lock with pattern-hiding displays to prevent access and viewing of data after a period of inactivity.",
+      "full_text": "Use session lock with pattern-hiding displays to prevent access and viewing of data after a period of inactivity.",
+      "domain": "Access Control",
+      "category": "Access Control",
+      "section_number": "3.1.10",
+      "parent_section": "3.1",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Use session lock — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'use session lock' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.1.11",
+      "original_reference": "3.1.11",
+      "title": "Terminate user sessions",
+      "description": "Terminate (automatically) a user session after a defined condition.",
+      "full_text": "Terminate (automatically) a user session after a defined condition.",
+      "domain": "Access Control",
+      "category": "Access Control",
+      "section_number": "3.1.11",
+      "parent_section": "3.1",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Terminate user sessions — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'terminate user sessions' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.1.12",
+      "original_reference": "3.1.12",
+      "title": "Monitor and control remote access",
+      "description": "Monitor and control remote access sessions.",
+      "full_text": "Monitor and control remote access sessions.",
+      "domain": "Access Control",
+      "category": "Access Control",
+      "section_number": "3.1.12",
+      "parent_section": "3.1",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Monitor and control remote access — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'monitor and control remote access' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.1.13",
+      "original_reference": "3.1.13",
+      "title": "Encrypt remote access sessions",
+      "description": "Employ cryptographic mechanisms to protect the confidentiality of remote access sessions.",
+      "full_text": "Employ cryptographic mechanisms to protect the confidentiality of remote access sessions.",
+      "domain": "Access Control",
+      "category": "Access Control",
+      "section_number": "3.1.13",
+      "parent_section": "3.1",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Encrypt remote access sessions — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'encrypt remote access sessions' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.1.14",
+      "original_reference": "3.1.14",
+      "title": "Route remote access via managed control points",
+      "description": "Route remote access via managed access control points.",
+      "full_text": "Route remote access via managed access control points.",
+      "domain": "Access Control",
+      "category": "Access Control",
+      "section_number": "3.1.14",
+      "parent_section": "3.1",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Route remote access via managed control points — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'route remote access via managed control points' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.1.15",
+      "original_reference": "3.1.15",
+      "title": "Authorize remote privileged commands",
+      "description": "Authorize remote execution of privileged commands and remote access to security-relevant information.",
+      "full_text": "Authorize remote execution of privileged commands and remote access to security-relevant information.",
+      "domain": "Access Control",
+      "category": "Access Control",
+      "section_number": "3.1.15",
+      "parent_section": "3.1",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Authorize remote privileged commands — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'authorize remote privileged commands' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.1.16",
+      "original_reference": "3.1.16",
+      "title": "Authorize wireless access",
+      "description": "Authorize wireless access prior to allowing such connections.",
+      "full_text": "Authorize wireless access prior to allowing such connections.",
+      "domain": "Access Control",
+      "category": "Access Control",
+      "section_number": "3.1.16",
+      "parent_section": "3.1",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Authorize wireless access — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'authorize wireless access' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.1.17",
+      "original_reference": "3.1.17",
+      "title": "Protect wireless access",
+      "description": "Protect wireless access using authentication and encryption.",
+      "full_text": "Protect wireless access using authentication and encryption.",
+      "domain": "Access Control",
+      "category": "Access Control",
+      "section_number": "3.1.17",
+      "parent_section": "3.1",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Protect wireless access — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'protect wireless access' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.1.18",
+      "original_reference": "3.1.18",
+      "title": "Control mobile device connection",
+      "description": "Control connection of mobile devices.",
+      "full_text": "Control connection of mobile devices.",
+      "domain": "Access Control",
+      "category": "Access Control",
+      "section_number": "3.1.18",
+      "parent_section": "3.1",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Control mobile device connection — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'control mobile device connection' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.1.19",
+      "original_reference": "3.1.19",
+      "title": "Encrypt CUI on mobile devices",
+      "description": "Encrypt CUI on mobile devices and mobile computing platforms.",
+      "full_text": "Encrypt CUI on mobile devices and mobile computing platforms.",
+      "domain": "Access Control",
+      "category": "Access Control",
+      "section_number": "3.1.19",
+      "parent_section": "3.1",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Encrypt CUI on mobile devices — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'encrypt cui on mobile devices' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.1.20",
+      "original_reference": "3.1.20",
+      "title": "Control connections to external systems",
+      "description": "Verify and control/limit connections to and use of external systems.",
+      "full_text": "Verify and control/limit connections to and use of external systems.",
+      "domain": "Access Control",
+      "category": "Access Control",
+      "section_number": "3.1.20",
+      "parent_section": "3.1",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Control connections to external systems — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'control connections to external systems' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.1.21",
+      "original_reference": "3.1.21",
+      "title": "Limit portable storage on external systems",
+      "description": "Limit use of portable storage devices on external systems.",
+      "full_text": "Limit use of portable storage devices on external systems.",
+      "domain": "Access Control",
+      "category": "Access Control",
+      "section_number": "3.1.21",
+      "parent_section": "3.1",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Limit portable storage on external systems — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'limit portable storage on external systems' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.1.22",
+      "original_reference": "3.1.22",
+      "title": "Control CUI on public systems",
+      "description": "Control CUI posted or processed on publicly accessible systems.",
+      "full_text": "Control CUI posted or processed on publicly accessible systems.",
+      "domain": "Access Control",
+      "category": "Access Control",
+      "section_number": "3.1.22",
+      "parent_section": "3.1",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Control CUI on public systems — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'control cui on public systems' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.2.1",
+      "original_reference": "3.2.1",
+      "title": "Security awareness of risks and policies",
+      "description": "Ensure that managers, systems administrators, and users are made aware of the security risks associated with their activities and of applicable policies, standards, and procedures.",
+      "full_text": "Ensure that managers, systems administrators, and users are made aware of the security risks associated with their activities and of applicable policies, standards, and procedures.",
+      "domain": "Awareness and Training",
+      "category": "Awareness and Training",
+      "section_number": "3.2.1",
+      "parent_section": "3.2",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Security awareness of risks and policies — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'security awareness of risks and policies' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.2.2",
+      "original_reference": "3.2.2",
+      "title": "Train personnel for security duties",
+      "description": "Ensure that personnel are trained to carry out their assigned information-security-related duties and responsibilities.",
+      "full_text": "Ensure that personnel are trained to carry out their assigned information-security-related duties and responsibilities.",
+      "domain": "Awareness and Training",
+      "category": "Awareness and Training",
+      "section_number": "3.2.2",
+      "parent_section": "3.2",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Train personnel for security duties — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'train personnel for security duties' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.2.3",
+      "original_reference": "3.2.3",
+      "title": "Insider-threat awareness training",
+      "description": "Provide security awareness training on recognizing and reporting potential indicators of insider threat.",
+      "full_text": "Provide security awareness training on recognizing and reporting potential indicators of insider threat.",
+      "domain": "Awareness and Training",
+      "category": "Awareness and Training",
+      "section_number": "3.2.3",
+      "parent_section": "3.2",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Insider-threat awareness training — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'insider-threat awareness training' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.3.1",
+      "original_reference": "3.3.1",
+      "title": "Create and retain audit logs",
+      "description": "Create and retain system audit logs and records to the extent needed to enable monitoring, analysis, investigation, and reporting of unlawful or unauthorized system activity.",
+      "full_text": "Create and retain system audit logs and records to the extent needed to enable monitoring, analysis, investigation, and reporting of unlawful or unauthorized system activity.",
+      "domain": "Audit and Accountability",
+      "category": "Audit and Accountability",
+      "section_number": "3.3.1",
+      "parent_section": "3.3",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Create and retain audit logs — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'create and retain audit logs' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.3.2",
+      "original_reference": "3.3.2",
+      "title": "Trace actions to individual users",
+      "description": "Ensure that the actions of individual system users can be uniquely traced to those users so they can be held accountable.",
+      "full_text": "Ensure that the actions of individual system users can be uniquely traced to those users so they can be held accountable.",
+      "domain": "Audit and Accountability",
+      "category": "Audit and Accountability",
+      "section_number": "3.3.2",
+      "parent_section": "3.3",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Trace actions to individual users — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'trace actions to individual users' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.3.3",
+      "original_reference": "3.3.3",
+      "title": "Review and update logged events",
+      "description": "Review and update logged events.",
+      "full_text": "Review and update logged events.",
+      "domain": "Audit and Accountability",
+      "category": "Audit and Accountability",
+      "section_number": "3.3.3",
+      "parent_section": "3.3",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Review and update logged events — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'review and update logged events' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.3.4",
+      "original_reference": "3.3.4",
+      "title": "Alert on audit logging failure",
+      "description": "Alert in the event of an audit logging process failure.",
+      "full_text": "Alert in the event of an audit logging process failure.",
+      "domain": "Audit and Accountability",
+      "category": "Audit and Accountability",
+      "section_number": "3.3.4",
+      "parent_section": "3.3",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Alert on audit logging failure — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'alert on audit logging failure' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.3.5",
+      "original_reference": "3.3.5",
+      "title": "Correlate audit review and reporting",
+      "description": "Correlate audit record review, analysis, and reporting processes for investigation and response to indications of unlawful or unauthorized activity.",
+      "full_text": "Correlate audit record review, analysis, and reporting processes for investigation and response to indications of unlawful or unauthorized activity.",
+      "domain": "Audit and Accountability",
+      "category": "Audit and Accountability",
+      "section_number": "3.3.5",
+      "parent_section": "3.3",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Correlate audit review and reporting — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'correlate audit review and reporting' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.3.6",
+      "original_reference": "3.3.6",
+      "title": "Audit reduction and report generation",
+      "description": "Provide audit record reduction and report generation to support on-demand analysis and reporting.",
+      "full_text": "Provide audit record reduction and report generation to support on-demand analysis and reporting.",
+      "domain": "Audit and Accountability",
+      "category": "Audit and Accountability",
+      "section_number": "3.3.6",
+      "parent_section": "3.3",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Audit reduction and report generation — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'audit reduction and report generation' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.3.7",
+      "original_reference": "3.3.7",
+      "title": "Synchronize clocks for time stamps",
+      "description": "Provide a system capability that compares and synchronizes internal system clocks with an authoritative source to generate time stamps for audit records.",
+      "full_text": "Provide a system capability that compares and synchronizes internal system clocks with an authoritative source to generate time stamps for audit records.",
+      "domain": "Audit and Accountability",
+      "category": "Audit and Accountability",
+      "section_number": "3.3.7",
+      "parent_section": "3.3",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Synchronize clocks for time stamps — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'synchronize clocks for time stamps' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.3.8",
+      "original_reference": "3.3.8",
+      "title": "Protect audit information and tools",
+      "description": "Protect audit information and audit logging tools from unauthorized access, modification, and deletion.",
+      "full_text": "Protect audit information and audit logging tools from unauthorized access, modification, and deletion.",
+      "domain": "Audit and Accountability",
+      "category": "Audit and Accountability",
+      "section_number": "3.3.8",
+      "parent_section": "3.3",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Protect audit information and tools — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'protect audit information and tools' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.3.9",
+      "original_reference": "3.3.9",
+      "title": "Limit audit management to privileged users",
+      "description": "Limit management of audit logging functionality to a subset of privileged users.",
+      "full_text": "Limit management of audit logging functionality to a subset of privileged users.",
+      "domain": "Audit and Accountability",
+      "category": "Audit and Accountability",
+      "section_number": "3.3.9",
+      "parent_section": "3.3",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Limit audit management to privileged users — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'limit audit management to privileged users' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.4.1",
+      "original_reference": "3.4.1",
+      "title": "Maintain baseline configurations and inventories",
+      "description": "Establish and maintain baseline configurations and inventories of organizational systems throughout the respective system development life cycles.",
+      "full_text": "Establish and maintain baseline configurations and inventories of organizational systems throughout the respective system development life cycles.",
+      "domain": "Configuration Management",
+      "category": "Configuration Management",
+      "section_number": "3.4.1",
+      "parent_section": "3.4",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Maintain baseline configurations and inventories — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'maintain baseline configurations and inventories' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.4.2",
+      "original_reference": "3.4.2",
+      "title": "Enforce security configuration settings",
+      "description": "Establish and enforce security configuration settings for information technology products employed in organizational systems.",
+      "full_text": "Establish and enforce security configuration settings for information technology products employed in organizational systems.",
+      "domain": "Configuration Management",
+      "category": "Configuration Management",
+      "section_number": "3.4.2",
+      "parent_section": "3.4",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Enforce security configuration settings — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'enforce security configuration settings' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.4.3",
+      "original_reference": "3.4.3",
+      "title": "Track and log system changes",
+      "description": "Track, review, approve or disapprove, and log changes to organizational systems.",
+      "full_text": "Track, review, approve or disapprove, and log changes to organizational systems.",
+      "domain": "Configuration Management",
+      "category": "Configuration Management",
+      "section_number": "3.4.3",
+      "parent_section": "3.4",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Track and log system changes — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'track and log system changes' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.4.4",
+      "original_reference": "3.4.4",
+      "title": "Analyze security impact of changes",
+      "description": "Analyze the security impact of changes prior to implementation.",
+      "full_text": "Analyze the security impact of changes prior to implementation.",
+      "domain": "Configuration Management",
+      "category": "Configuration Management",
+      "section_number": "3.4.4",
+      "parent_section": "3.4",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Analyze security impact of changes — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'analyze security impact of changes' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.4.5",
+      "original_reference": "3.4.5",
+      "title": "Enforce access restrictions for changes",
+      "description": "Define, document, approve, and enforce physical and logical access restrictions associated with changes to organizational systems.",
+      "full_text": "Define, document, approve, and enforce physical and logical access restrictions associated with changes to organizational systems.",
+      "domain": "Configuration Management",
+      "category": "Configuration Management",
+      "section_number": "3.4.5",
+      "parent_section": "3.4",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Enforce access restrictions for changes — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'enforce access restrictions for changes' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.4.6",
+      "original_reference": "3.4.6",
+      "title": "Employ least functionality",
+      "description": "Employ the principle of least functionality by configuring organizational systems to provide only essential capabilities.",
+      "full_text": "Employ the principle of least functionality by configuring organizational systems to provide only essential capabilities.",
+      "domain": "Configuration Management",
+      "category": "Configuration Management",
+      "section_number": "3.4.6",
+      "parent_section": "3.4",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Employ least functionality — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'employ least functionality' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.4.7",
+      "original_reference": "3.4.7",
+      "title": "Restrict nonessential programs and services",
+      "description": "Restrict, disable, or prevent the use of nonessential programs, functions, ports, protocols, and services.",
+      "full_text": "Restrict, disable, or prevent the use of nonessential programs, functions, ports, protocols, and services.",
+      "domain": "Configuration Management",
+      "category": "Configuration Management",
+      "section_number": "3.4.7",
+      "parent_section": "3.4",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Restrict nonessential programs and services — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'restrict nonessential programs and services' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.4.8",
+      "original_reference": "3.4.8",
+      "title": "Apply allowlist/denylist for software",
+      "description": "Apply deny-by-exception (blacklisting) policy to prevent the use of unauthorized software or deny-all, permit-by-exception (whitelisting) policy to allow the execution of authorized software.",
+      "full_text": "Apply deny-by-exception (blacklisting) policy to prevent the use of unauthorized software or deny-all, permit-by-exception (whitelisting) policy to allow the execution of authorized software.",
+      "domain": "Configuration Management",
+      "category": "Configuration Management",
+      "section_number": "3.4.8",
+      "parent_section": "3.4",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Apply allowlist/denylist for software — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'apply allowlist/denylist for software' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.4.9",
+      "original_reference": "3.4.9",
+      "title": "Control user-installed software",
+      "description": "Control and monitor user-installed software.",
+      "full_text": "Control and monitor user-installed software.",
+      "domain": "Configuration Management",
+      "category": "Configuration Management",
+      "section_number": "3.4.9",
+      "parent_section": "3.4",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Control user-installed software — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'control user-installed software' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.5.1",
+      "original_reference": "3.5.1",
+      "title": "Identify users, processes, and devices",
+      "description": "Identify system users, processes acting on behalf of users, and devices.",
+      "full_text": "Identify system users, processes acting on behalf of users, and devices.",
+      "domain": "Identification and Authentication",
+      "category": "Identification and Authentication",
+      "section_number": "3.5.1",
+      "parent_section": "3.5",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Identify users, processes, and devices — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'identify users, processes, and devices' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.5.2",
+      "original_reference": "3.5.2",
+      "title": "Authenticate identities before access",
+      "description": "Authenticate (or verify) the identities of users, processes, or devices as a prerequisite to allowing access to organizational systems.",
+      "full_text": "Authenticate (or verify) the identities of users, processes, or devices as a prerequisite to allowing access to organizational systems.",
+      "domain": "Identification and Authentication",
+      "category": "Identification and Authentication",
+      "section_number": "3.5.2",
+      "parent_section": "3.5",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Authenticate identities before access — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'authenticate identities before access' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.5.3",
+      "original_reference": "3.5.3",
+      "title": "Use multifactor authentication",
+      "description": "Use multifactor authentication for local and network access to privileged accounts and for network access to non-privileged accounts.",
+      "full_text": "Use multifactor authentication for local and network access to privileged accounts and for network access to non-privileged accounts.",
+      "domain": "Identification and Authentication",
+      "category": "Identification and Authentication",
+      "section_number": "3.5.3",
+      "parent_section": "3.5",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Use multifactor authentication — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'use multifactor authentication' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.5.4",
+      "original_reference": "3.5.4",
+      "title": "Employ replay-resistant authentication",
+      "description": "Employ replay-resistant authentication mechanisms for network access to privileged and non-privileged accounts.",
+      "full_text": "Employ replay-resistant authentication mechanisms for network access to privileged and non-privileged accounts.",
+      "domain": "Identification and Authentication",
+      "category": "Identification and Authentication",
+      "section_number": "3.5.4",
+      "parent_section": "3.5",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Employ replay-resistant authentication — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'employ replay-resistant authentication' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.5.5",
+      "original_reference": "3.5.5",
+      "title": "Prevent identifier reuse",
+      "description": "Prevent reuse of identifiers for a defined period.",
+      "full_text": "Prevent reuse of identifiers for a defined period.",
+      "domain": "Identification and Authentication",
+      "category": "Identification and Authentication",
+      "section_number": "3.5.5",
+      "parent_section": "3.5",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Prevent identifier reuse — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'prevent identifier reuse' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.5.6",
+      "original_reference": "3.5.6",
+      "title": "Disable inactive identifiers",
+      "description": "Disable identifiers after a defined period of inactivity.",
+      "full_text": "Disable identifiers after a defined period of inactivity.",
+      "domain": "Identification and Authentication",
+      "category": "Identification and Authentication",
+      "section_number": "3.5.6",
+      "parent_section": "3.5",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Disable inactive identifiers — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'disable inactive identifiers' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.5.7",
+      "original_reference": "3.5.7",
+      "title": "Enforce password complexity",
+      "description": "Enforce a minimum password complexity and change of characters when new passwords are created.",
+      "full_text": "Enforce a minimum password complexity and change of characters when new passwords are created.",
+      "domain": "Identification and Authentication",
+      "category": "Identification and Authentication",
+      "section_number": "3.5.7",
+      "parent_section": "3.5",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Enforce password complexity — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'enforce password complexity' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.5.8",
+      "original_reference": "3.5.8",
+      "title": "Prohibit password reuse",
+      "description": "Prohibit password reuse for a specified number of generations.",
+      "full_text": "Prohibit password reuse for a specified number of generations.",
+      "domain": "Identification and Authentication",
+      "category": "Identification and Authentication",
+      "section_number": "3.5.8",
+      "parent_section": "3.5",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Prohibit password reuse — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'prohibit password reuse' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.5.9",
+      "original_reference": "3.5.9",
+      "title": "Allow temporary password with forced change",
+      "description": "Allow temporary password use for system logons with an immediate change to a permanent password.",
+      "full_text": "Allow temporary password use for system logons with an immediate change to a permanent password.",
+      "domain": "Identification and Authentication",
+      "category": "Identification and Authentication",
+      "section_number": "3.5.9",
+      "parent_section": "3.5",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Allow temporary password with forced change — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'allow temporary password with forced change' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.5.10",
+      "original_reference": "3.5.10",
+      "title": "Protect stored and transmitted passwords",
+      "description": "Store and transmit only cryptographically-protected passwords.",
+      "full_text": "Store and transmit only cryptographically-protected passwords.",
+      "domain": "Identification and Authentication",
+      "category": "Identification and Authentication",
+      "section_number": "3.5.10",
+      "parent_section": "3.5",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Protect stored and transmitted passwords — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'protect stored and transmitted passwords' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.5.11",
+      "original_reference": "3.5.11",
+      "title": "Obscure authentication feedback",
+      "description": "Obscure feedback of authentication information.",
+      "full_text": "Obscure feedback of authentication information.",
+      "domain": "Identification and Authentication",
+      "category": "Identification and Authentication",
+      "section_number": "3.5.11",
+      "parent_section": "3.5",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Obscure authentication feedback — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'obscure authentication feedback' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.6.1",
+      "original_reference": "3.6.1",
+      "title": "Establish incident-handling capability",
+      "description": "Establish an operational incident-handling capability for organizational systems that includes preparation, detection, analysis, containment, recovery, and user response activities.",
+      "full_text": "Establish an operational incident-handling capability for organizational systems that includes preparation, detection, analysis, containment, recovery, and user response activities.",
+      "domain": "Incident Response",
+      "category": "Incident Response",
+      "section_number": "3.6.1",
+      "parent_section": "3.6",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Establish incident-handling capability — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'establish incident-handling capability' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.6.2",
+      "original_reference": "3.6.2",
+      "title": "Track, document, and report incidents",
+      "description": "Track, document, and report incidents to designated officials and/or authorities both internal and external to the organization.",
+      "full_text": "Track, document, and report incidents to designated officials and/or authorities both internal and external to the organization.",
+      "domain": "Incident Response",
+      "category": "Incident Response",
+      "section_number": "3.6.2",
+      "parent_section": "3.6",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Track, document, and report incidents — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'track, document, and report incidents' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.6.3",
+      "original_reference": "3.6.3",
+      "title": "Test incident response capability",
+      "description": "Test the organizational incident response capability.",
+      "full_text": "Test the organizational incident response capability.",
+      "domain": "Incident Response",
+      "category": "Incident Response",
+      "section_number": "3.6.3",
+      "parent_section": "3.6",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Test incident response capability — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'test incident response capability' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.7.1",
+      "original_reference": "3.7.1",
+      "title": "Perform system maintenance",
+      "description": "Perform maintenance on organizational systems.",
+      "full_text": "Perform maintenance on organizational systems.",
+      "domain": "Maintenance",
+      "category": "Maintenance",
+      "section_number": "3.7.1",
+      "parent_section": "3.7",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Perform system maintenance — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'perform system maintenance' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.7.2",
+      "original_reference": "3.7.2",
+      "title": "Control maintenance tools and personnel",
+      "description": "Provide controls on the tools, techniques, mechanisms, and personnel used to conduct system maintenance.",
+      "full_text": "Provide controls on the tools, techniques, mechanisms, and personnel used to conduct system maintenance.",
+      "domain": "Maintenance",
+      "category": "Maintenance",
+      "section_number": "3.7.2",
+      "parent_section": "3.7",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Control maintenance tools and personnel — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'control maintenance tools and personnel' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.7.3",
+      "original_reference": "3.7.3",
+      "title": "Sanitize equipment for off-site maintenance",
+      "description": "Ensure equipment removed for off-site maintenance is sanitized of any CUI.",
+      "full_text": "Ensure equipment removed for off-site maintenance is sanitized of any CUI.",
+      "domain": "Maintenance",
+      "category": "Maintenance",
+      "section_number": "3.7.3",
+      "parent_section": "3.7",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Sanitize equipment for off-site maintenance — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'sanitize equipment for off-site maintenance' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.7.4",
+      "original_reference": "3.7.4",
+      "title": "Check media for malicious code",
+      "description": "Check media containing diagnostic and test programs for malicious code before the media are used in organizational systems.",
+      "full_text": "Check media containing diagnostic and test programs for malicious code before the media are used in organizational systems.",
+      "domain": "Maintenance",
+      "category": "Maintenance",
+      "section_number": "3.7.4",
+      "parent_section": "3.7",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Check media for malicious code — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'check media for malicious code' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.7.5",
+      "original_reference": "3.7.5",
+      "title": "MFA for nonlocal maintenance",
+      "description": "Require multifactor authentication to establish nonlocal maintenance sessions via external network connections and terminate such connections when nonlocal maintenance is complete.",
+      "full_text": "Require multifactor authentication to establish nonlocal maintenance sessions via external network connections and terminate such connections when nonlocal maintenance is complete.",
+      "domain": "Maintenance",
+      "category": "Maintenance",
+      "section_number": "3.7.5",
+      "parent_section": "3.7",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "MFA for nonlocal maintenance — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'mfa for nonlocal maintenance' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.7.6",
+      "original_reference": "3.7.6",
+      "title": "Supervise maintenance without authorization",
+      "description": "Supervise the maintenance activities of personnel without required access authorization.",
+      "full_text": "Supervise the maintenance activities of personnel without required access authorization.",
+      "domain": "Maintenance",
+      "category": "Maintenance",
+      "section_number": "3.7.6",
+      "parent_section": "3.7",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Supervise maintenance without authorization — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'supervise maintenance without authorization' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.8.1",
+      "original_reference": "3.8.1",
+      "title": "Protect system media with CUI",
+      "description": "Protect (i.e., physically control and securely store) system media containing CUI, both paper and digital.",
+      "full_text": "Protect (i.e., physically control and securely store) system media containing CUI, both paper and digital.",
+      "domain": "Media Protection",
+      "category": "Media Protection",
+      "section_number": "3.8.1",
+      "parent_section": "3.8",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Protect system media with CUI — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'protect system media with cui' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.8.2",
+      "original_reference": "3.8.2",
+      "title": "Limit access to CUI on media",
+      "description": "Limit access to CUI on system media to authorized users.",
+      "full_text": "Limit access to CUI on system media to authorized users.",
+      "domain": "Media Protection",
+      "category": "Media Protection",
+      "section_number": "3.8.2",
+      "parent_section": "3.8",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Limit access to CUI on media — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'limit access to cui on media' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.8.3",
+      "original_reference": "3.8.3",
+      "title": "Sanitize or destroy media before disposal",
+      "description": "Sanitize or destroy system media containing CUI before disposal or release for reuse.",
+      "full_text": "Sanitize or destroy system media containing CUI before disposal or release for reuse.",
+      "domain": "Media Protection",
+      "category": "Media Protection",
+      "section_number": "3.8.3",
+      "parent_section": "3.8",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Sanitize or destroy media before disposal — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'sanitize or destroy media before disposal' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.8.4",
+      "original_reference": "3.8.4",
+      "title": "Mark media with CUI markings",
+      "description": "Mark media with necessary CUI markings and distribution limitations.",
+      "full_text": "Mark media with necessary CUI markings and distribution limitations.",
+      "domain": "Media Protection",
+      "category": "Media Protection",
+      "section_number": "3.8.4",
+      "parent_section": "3.8",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Mark media with CUI markings — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'mark media with cui markings' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.8.5",
+      "original_reference": "3.8.5",
+      "title": "Control media during transport",
+      "description": "Control access to media containing CUI and maintain accountability for media during transport outside of controlled areas.",
+      "full_text": "Control access to media containing CUI and maintain accountability for media during transport outside of controlled areas.",
+      "domain": "Media Protection",
+      "category": "Media Protection",
+      "section_number": "3.8.5",
+      "parent_section": "3.8",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Control media during transport — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'control media during transport' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.8.6",
+      "original_reference": "3.8.6",
+      "title": "Encrypt CUI on media in transport",
+      "description": "Implement cryptographic mechanisms to protect the confidentiality of CUI stored on digital media during transport unless otherwise protected by alternative physical safeguards.",
+      "full_text": "Implement cryptographic mechanisms to protect the confidentiality of CUI stored on digital media during transport unless otherwise protected by alternative physical safeguards.",
+      "domain": "Media Protection",
+      "category": "Media Protection",
+      "section_number": "3.8.6",
+      "parent_section": "3.8",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Encrypt CUI on media in transport — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'encrypt cui on media in transport' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.8.7",
+      "original_reference": "3.8.7",
+      "title": "Control removable media use",
+      "description": "Control the use of removable media on system components.",
+      "full_text": "Control the use of removable media on system components.",
+      "domain": "Media Protection",
+      "category": "Media Protection",
+      "section_number": "3.8.7",
+      "parent_section": "3.8",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Control removable media use — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'control removable media use' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.8.8",
+      "original_reference": "3.8.8",
+      "title": "Prohibit ownerless portable storage",
+      "description": "Prohibit the use of portable storage devices when such devices have no identifiable owner.",
+      "full_text": "Prohibit the use of portable storage devices when such devices have no identifiable owner.",
+      "domain": "Media Protection",
+      "category": "Media Protection",
+      "section_number": "3.8.8",
+      "parent_section": "3.8",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Prohibit ownerless portable storage — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'prohibit ownerless portable storage' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.8.9",
+      "original_reference": "3.8.9",
+      "title": "Protect backup CUI confidentiality",
+      "description": "Protect the confidentiality of backup CUI at storage locations.",
+      "full_text": "Protect the confidentiality of backup CUI at storage locations.",
+      "domain": "Media Protection",
+      "category": "Media Protection",
+      "section_number": "3.8.9",
+      "parent_section": "3.8",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Protect backup CUI confidentiality — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'protect backup cui confidentiality' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.9.1",
+      "original_reference": "3.9.1",
+      "title": "Screen individuals before access",
+      "description": "Screen individuals prior to authorizing access to organizational systems containing CUI.",
+      "full_text": "Screen individuals prior to authorizing access to organizational systems containing CUI.",
+      "domain": "Personnel Security",
+      "category": "Personnel Security",
+      "section_number": "3.9.1",
+      "parent_section": "3.9",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Screen individuals before access — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'screen individuals before access' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.9.2",
+      "original_reference": "3.9.2",
+      "title": "Protect CUI during personnel actions",
+      "description": "Ensure that organizational systems containing CUI are protected during and after personnel actions such as terminations and transfers.",
+      "full_text": "Ensure that organizational systems containing CUI are protected during and after personnel actions such as terminations and transfers.",
+      "domain": "Personnel Security",
+      "category": "Personnel Security",
+      "section_number": "3.9.2",
+      "parent_section": "3.9",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Protect CUI during personnel actions — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'protect cui during personnel actions' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.10.1",
+      "original_reference": "3.10.1",
+      "title": "Limit physical access to systems",
+      "description": "Limit physical access to organizational systems, equipment, and the respective operating environments to authorized individuals.",
+      "full_text": "Limit physical access to organizational systems, equipment, and the respective operating environments to authorized individuals.",
+      "domain": "Physical Protection",
+      "category": "Physical Protection",
+      "section_number": "3.10.1",
+      "parent_section": "3.10",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Limit physical access to systems — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'limit physical access to systems' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.10.2",
+      "original_reference": "3.10.2",
+      "title": "Protect and monitor the facility",
+      "description": "Protect and monitor the physical facility and support infrastructure for organizational systems.",
+      "full_text": "Protect and monitor the physical facility and support infrastructure for organizational systems.",
+      "domain": "Physical Protection",
+      "category": "Physical Protection",
+      "section_number": "3.10.2",
+      "parent_section": "3.10",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Protect and monitor the facility — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'protect and monitor the facility' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.10.3",
+      "original_reference": "3.10.3",
+      "title": "Escort and monitor visitors",
+      "description": "Escort visitors and monitor visitor activity.",
+      "full_text": "Escort visitors and monitor visitor activity.",
+      "domain": "Physical Protection",
+      "category": "Physical Protection",
+      "section_number": "3.10.3",
+      "parent_section": "3.10",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Escort and monitor visitors — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'escort and monitor visitors' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.10.4",
+      "original_reference": "3.10.4",
+      "title": "Maintain physical access logs",
+      "description": "Maintain audit logs of physical access.",
+      "full_text": "Maintain audit logs of physical access.",
+      "domain": "Physical Protection",
+      "category": "Physical Protection",
+      "section_number": "3.10.4",
+      "parent_section": "3.10",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Maintain physical access logs — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'maintain physical access logs' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.10.5",
+      "original_reference": "3.10.5",
+      "title": "Manage physical access devices",
+      "description": "Control and manage physical access devices.",
+      "full_text": "Control and manage physical access devices.",
+      "domain": "Physical Protection",
+      "category": "Physical Protection",
+      "section_number": "3.10.5",
+      "parent_section": "3.10",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Manage physical access devices — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'manage physical access devices' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.10.6",
+      "original_reference": "3.10.6",
+      "title": "Safeguard CUI at alternate sites",
+      "description": "Enforce safeguarding measures for CUI at alternate work sites.",
+      "full_text": "Enforce safeguarding measures for CUI at alternate work sites.",
+      "domain": "Physical Protection",
+      "category": "Physical Protection",
+      "section_number": "3.10.6",
+      "parent_section": "3.10",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Safeguard CUI at alternate sites — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'safeguard cui at alternate sites' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.11.1",
+      "original_reference": "3.11.1",
+      "title": "Assess risk from operating systems with CUI",
+      "description": "Periodically assess the risk to organizational operations, assets, and individuals resulting from the operation of organizational systems that process, store, or transmit CUI.",
+      "full_text": "Periodically assess the risk to organizational operations, assets, and individuals resulting from the operation of organizational systems that process, store, or transmit CUI.",
+      "domain": "Risk Assessment",
+      "category": "Risk Assessment",
+      "section_number": "3.11.1",
+      "parent_section": "3.11",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Assess risk from operating systems with CUI — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'assess risk from operating systems with cui' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.11.2",
+      "original_reference": "3.11.2",
+      "title": "Scan for vulnerabilities",
+      "description": "Scan for vulnerabilities in organizational systems and applications periodically and when new vulnerabilities affecting those systems are identified.",
+      "full_text": "Scan for vulnerabilities in organizational systems and applications periodically and when new vulnerabilities affecting those systems are identified.",
+      "domain": "Risk Assessment",
+      "category": "Risk Assessment",
+      "section_number": "3.11.2",
+      "parent_section": "3.11",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Scan for vulnerabilities — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'scan for vulnerabilities' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.11.3",
+      "original_reference": "3.11.3",
+      "title": "Remediate vulnerabilities by risk",
+      "description": "Remediate vulnerabilities in accordance with risk assessments.",
+      "full_text": "Remediate vulnerabilities in accordance with risk assessments.",
+      "domain": "Risk Assessment",
+      "category": "Risk Assessment",
+      "section_number": "3.11.3",
+      "parent_section": "3.11",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Remediate vulnerabilities by risk — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'remediate vulnerabilities by risk' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.12.1",
+      "original_reference": "3.12.1",
+      "title": "Assess security controls periodically",
+      "description": "Periodically assess the security controls in organizational systems to determine if the controls are effective in their application.",
+      "full_text": "Periodically assess the security controls in organizational systems to determine if the controls are effective in their application.",
+      "domain": "Security Assessment",
+      "category": "Security Assessment",
+      "section_number": "3.12.1",
+      "parent_section": "3.12",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Assess security controls periodically — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'assess security controls periodically' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.12.2",
+      "original_reference": "3.12.2",
+      "title": "Develop plans of action",
+      "description": "Develop and implement plans of action designed to correct deficiencies and reduce or eliminate vulnerabilities in organizational systems.",
+      "full_text": "Develop and implement plans of action designed to correct deficiencies and reduce or eliminate vulnerabilities in organizational systems.",
+      "domain": "Security Assessment",
+      "category": "Security Assessment",
+      "section_number": "3.12.2",
+      "parent_section": "3.12",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Develop plans of action — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'develop plans of action' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.12.3",
+      "original_reference": "3.12.3",
+      "title": "Monitor security controls continuously",
+      "description": "Monitor security controls on an ongoing basis to ensure the continued effectiveness of the controls.",
+      "full_text": "Monitor security controls on an ongoing basis to ensure the continued effectiveness of the controls.",
+      "domain": "Security Assessment",
+      "category": "Security Assessment",
+      "section_number": "3.12.3",
+      "parent_section": "3.12",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Monitor security controls continuously — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'monitor security controls continuously' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.12.4",
+      "original_reference": "3.12.4",
+      "title": "Maintain system security plans",
+      "description": "Develop, document, and periodically update system security plans that describe system boundaries, environments of operation, how requirements are implemented, and connections.",
+      "full_text": "Develop, document, and periodically update system security plans that describe system boundaries, environments of operation, how requirements are implemented, and connections.",
+      "domain": "Security Assessment",
+      "category": "Security Assessment",
+      "section_number": "3.12.4",
+      "parent_section": "3.12",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Maintain system security plans — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'maintain system security plans' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.13.1",
+      "original_reference": "3.13.1",
+      "title": "Monitor and protect boundaries",
+      "description": "Monitor, control, and protect communications at the external boundaries and key internal boundaries of organizational systems.",
+      "full_text": "Monitor, control, and protect communications at the external boundaries and key internal boundaries of organizational systems.",
+      "domain": "System and Communications Protection",
+      "category": "System and Communications Protection",
+      "section_number": "3.13.1",
+      "parent_section": "3.13",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Monitor and protect boundaries — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'monitor and protect boundaries' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.13.2",
+      "original_reference": "3.13.2",
+      "title": "Employ secure architecture and engineering",
+      "description": "Employ architectural designs, software development techniques, and systems engineering principles that promote effective information security within organizational systems.",
+      "full_text": "Employ architectural designs, software development techniques, and systems engineering principles that promote effective information security within organizational systems.",
+      "domain": "System and Communications Protection",
+      "category": "System and Communications Protection",
+      "section_number": "3.13.2",
+      "parent_section": "3.13",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Employ secure architecture and engineering — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'employ secure architecture and engineering' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.13.3",
+      "original_reference": "3.13.3",
+      "title": "Separate user and management functionality",
+      "description": "Separate user functionality from system management functionality.",
+      "full_text": "Separate user functionality from system management functionality.",
+      "domain": "System and Communications Protection",
+      "category": "System and Communications Protection",
+      "section_number": "3.13.3",
+      "parent_section": "3.13",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Separate user and management functionality — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'separate user and management functionality' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.13.4",
+      "original_reference": "3.13.4",
+      "title": "Prevent unauthorized shared-resource transfer",
+      "description": "Prevent unauthorized and unintended information transfer via shared system resources.",
+      "full_text": "Prevent unauthorized and unintended information transfer via shared system resources.",
+      "domain": "System and Communications Protection",
+      "category": "System and Communications Protection",
+      "section_number": "3.13.4",
+      "parent_section": "3.13",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Prevent unauthorized shared-resource transfer — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'prevent unauthorized shared-resource transfer' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.13.5",
+      "original_reference": "3.13.5",
+      "title": "Isolate public-facing components",
+      "description": "Implement subnetworks for publicly accessible system components that are physically or logically separated from internal networks.",
+      "full_text": "Implement subnetworks for publicly accessible system components that are physically or logically separated from internal networks.",
+      "domain": "System and Communications Protection",
+      "category": "System and Communications Protection",
+      "section_number": "3.13.5",
+      "parent_section": "3.13",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Isolate public-facing components — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'isolate public-facing components' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.13.6",
+      "original_reference": "3.13.6",
+      "title": "Deny network traffic by default",
+      "description": "Deny network communications traffic by default and allow network communications traffic by exception.",
+      "full_text": "Deny network communications traffic by default and allow network communications traffic by exception.",
+      "domain": "System and Communications Protection",
+      "category": "System and Communications Protection",
+      "section_number": "3.13.6",
+      "parent_section": "3.13",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Deny network traffic by default — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'deny network traffic by default' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.13.7",
+      "original_reference": "3.13.7",
+      "title": "Prevent split tunneling",
+      "description": "Prevent remote devices from simultaneously establishing non-remote connections with organizational systems and communicating via some other connection to external networks.",
+      "full_text": "Prevent remote devices from simultaneously establishing non-remote connections with organizational systems and communicating via some other connection to external networks.",
+      "domain": "System and Communications Protection",
+      "category": "System and Communications Protection",
+      "section_number": "3.13.7",
+      "parent_section": "3.13",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Prevent split tunneling — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'prevent split tunneling' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.13.8",
+      "original_reference": "3.13.8",
+      "title": "Encrypt CUI in transmission",
+      "description": "Implement cryptographic mechanisms to prevent unauthorized disclosure of CUI during transmission unless otherwise protected by alternative physical safeguards.",
+      "full_text": "Implement cryptographic mechanisms to prevent unauthorized disclosure of CUI during transmission unless otherwise protected by alternative physical safeguards.",
+      "domain": "System and Communications Protection",
+      "category": "System and Communications Protection",
+      "section_number": "3.13.8",
+      "parent_section": "3.13",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Encrypt CUI in transmission — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'encrypt cui in transmission' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.13.9",
+      "original_reference": "3.13.9",
+      "title": "Terminate network connections",
+      "description": "Terminate network connections associated with communications sessions at the end of the sessions or after a defined period of inactivity.",
+      "full_text": "Terminate network connections associated with communications sessions at the end of the sessions or after a defined period of inactivity.",
+      "domain": "System and Communications Protection",
+      "category": "System and Communications Protection",
+      "section_number": "3.13.9",
+      "parent_section": "3.13",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Terminate network connections — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'terminate network connections' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.13.10",
+      "original_reference": "3.13.10",
+      "title": "Manage cryptographic keys",
+      "description": "Establish and manage cryptographic keys for cryptography employed in organizational systems.",
+      "full_text": "Establish and manage cryptographic keys for cryptography employed in organizational systems.",
+      "domain": "System and Communications Protection",
+      "category": "System and Communications Protection",
+      "section_number": "3.13.10",
+      "parent_section": "3.13",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Manage cryptographic keys — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'manage cryptographic keys' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.13.11",
+      "original_reference": "3.13.11",
+      "title": "Employ FIPS-validated cryptography",
+      "description": "Employ FIPS-validated cryptography when used to protect the confidentiality of CUI.",
+      "full_text": "Employ FIPS-validated cryptography when used to protect the confidentiality of CUI.",
+      "domain": "System and Communications Protection",
+      "category": "System and Communications Protection",
+      "section_number": "3.13.11",
+      "parent_section": "3.13",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Employ FIPS-validated cryptography — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'employ fips-validated cryptography' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.13.12",
+      "original_reference": "3.13.12",
+      "title": "Prohibit remote activation of collaborative devices",
+      "description": "Prohibit remote activation of collaborative computing devices and provide indication of devices in use to users present at the device.",
+      "full_text": "Prohibit remote activation of collaborative computing devices and provide indication of devices in use to users present at the device.",
+      "domain": "System and Communications Protection",
+      "category": "System and Communications Protection",
+      "section_number": "3.13.12",
+      "parent_section": "3.13",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Prohibit remote activation of collaborative devices — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'prohibit remote activation of collaborative devices' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.13.13",
+      "original_reference": "3.13.13",
+      "title": "Control mobile code",
+      "description": "Control and monitor the use of mobile code.",
+      "full_text": "Control and monitor the use of mobile code.",
+      "domain": "System and Communications Protection",
+      "category": "System and Communications Protection",
+      "section_number": "3.13.13",
+      "parent_section": "3.13",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Control mobile code — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'control mobile code' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.13.14",
+      "original_reference": "3.13.14",
+      "title": "Control VoIP",
+      "description": "Control and monitor the use of Voice over Internet Protocol technologies.",
+      "full_text": "Control and monitor the use of Voice over Internet Protocol technologies.",
+      "domain": "System and Communications Protection",
+      "category": "System and Communications Protection",
+      "section_number": "3.13.14",
+      "parent_section": "3.13",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Control VoIP — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'control voip' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.13.15",
+      "original_reference": "3.13.15",
+      "title": "Protect session authenticity",
+      "description": "Protect the authenticity of communications sessions.",
+      "full_text": "Protect the authenticity of communications sessions.",
+      "domain": "System and Communications Protection",
+      "category": "System and Communications Protection",
+      "section_number": "3.13.15",
+      "parent_section": "3.13",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Protect session authenticity — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'protect session authenticity' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.13.16",
+      "original_reference": "3.13.16",
+      "title": "Protect CUI at rest",
+      "description": "Protect the confidentiality of CUI at rest.",
+      "full_text": "Protect the confidentiality of CUI at rest.",
+      "domain": "System and Communications Protection",
+      "category": "System and Communications Protection",
+      "section_number": "3.13.16",
+      "parent_section": "3.13",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Protect CUI at rest — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'protect cui at rest' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.14.1",
+      "original_reference": "3.14.1",
+      "title": "Identify and correct system flaws",
+      "description": "Identify, report, and correct system flaws in a timely manner.",
+      "full_text": "Identify, report, and correct system flaws in a timely manner.",
+      "domain": "System and Information Integrity",
+      "category": "System and Information Integrity",
+      "section_number": "3.14.1",
+      "parent_section": "3.14",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Identify and correct system flaws — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'identify and correct system flaws' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.14.2",
+      "original_reference": "3.14.2",
+      "title": "Protect against malicious code",
+      "description": "Provide protection from malicious code at designated locations within organizational systems.",
+      "full_text": "Provide protection from malicious code at designated locations within organizational systems.",
+      "domain": "System and Information Integrity",
+      "category": "System and Information Integrity",
+      "section_number": "3.14.2",
+      "parent_section": "3.14",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Protect against malicious code — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'protect against malicious code' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.14.3",
+      "original_reference": "3.14.3",
+      "title": "Monitor security alerts and advisories",
+      "description": "Monitor system security alerts and advisories and take action in response.",
+      "full_text": "Monitor system security alerts and advisories and take action in response.",
+      "domain": "System and Information Integrity",
+      "category": "System and Information Integrity",
+      "section_number": "3.14.3",
+      "parent_section": "3.14",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Monitor security alerts and advisories — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'monitor security alerts and advisories' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.14.4",
+      "original_reference": "3.14.4",
+      "title": "Update malicious code protection",
+      "description": "Update malicious code protection mechanisms when new releases are available.",
+      "full_text": "Update malicious code protection mechanisms when new releases are available.",
+      "domain": "System and Information Integrity",
+      "category": "System and Information Integrity",
+      "section_number": "3.14.4",
+      "parent_section": "3.14",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Update malicious code protection — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'update malicious code protection' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.14.5",
+      "original_reference": "3.14.5",
+      "title": "Perform periodic and real-time scans",
+      "description": "Perform periodic scans of organizational systems and real-time scans of files from external sources as files are downloaded, opened, or executed.",
+      "full_text": "Perform periodic scans of organizational systems and real-time scans of files from external sources as files are downloaded, opened, or executed.",
+      "domain": "System and Information Integrity",
+      "category": "System and Information Integrity",
+      "section_number": "3.14.5",
+      "parent_section": "3.14",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Perform periodic and real-time scans — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'perform periodic and real-time scans' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.14.6",
+      "original_reference": "3.14.6",
+      "title": "Monitor systems to detect attacks",
+      "description": "Monitor organizational systems, including inbound and outbound communications traffic, to detect attacks and indicators of potential attacks.",
+      "full_text": "Monitor organizational systems, including inbound and outbound communications traffic, to detect attacks and indicators of potential attacks.",
+      "domain": "System and Information Integrity",
+      "category": "System and Information Integrity",
+      "section_number": "3.14.6",
+      "parent_section": "3.14",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Monitor systems to detect attacks — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'monitor systems to detect attacks' is implemented and operating"
+      ]
+    },
+    {
+      "control_id": "3.14.7",
+      "original_reference": "3.14.7",
+      "title": "Identify unauthorized system use",
+      "description": "Identify unauthorized use of organizational systems.",
+      "full_text": "Identify unauthorized use of organizational systems.",
+      "domain": "System and Information Integrity",
+      "category": "System and Information Integrity",
+      "section_number": "3.14.7",
+      "parent_section": "3.14",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Identify unauthorized system use — documented policy/procedure or configuration evidence",
+        "Records demonstrating 'identify unauthorized system use' is implemented and operating"
+      ]
+    }
+  ],
+  "artifacts": [
+    {
+      "artifact_id": "N171-001",
+      "stage": "Stage 1: Scope & Plan",
+      "name": "System Security Plan (SSP)",
+      "type": "Plan",
+      "control_ref": "3.12.4",
+      "mandatory": true,
+      "description": "System boundary, environment, and how each requirement is implemented.",
+      "format": "DOCX",
+      "owner": "ISSO"
+    },
+    {
+      "artifact_id": "N171-002",
+      "stage": "Stage 1: Scope & Plan",
+      "name": "Plan of Action & Milestones (POA&M)",
+      "type": "Register",
+      "control_ref": "3.12.2",
+      "mandatory": true,
+      "description": "Open deficiencies with remediation owners and dates.",
+      "format": "XLSX",
+      "owner": "ISSO"
+    },
+    {
+      "artifact_id": "N171-003",
+      "stage": "Stage 1: Scope & Plan",
+      "name": "CUI Data Inventory & Flow Map",
+      "type": "Register",
+      "control_ref": "3.1.3",
+      "mandatory": true,
+      "description": "Where CUI is stored, processed, transmitted and how it flows.",
+      "format": "XLSX",
+      "owner": "Data Owner"
+    },
+    {
+      "artifact_id": "N171-004",
+      "stage": "Stage 2: Access",
+      "name": "Access Control Policy",
+      "type": "Policy",
+      "control_ref": "3.1.1",
+      "mandatory": true,
+      "description": "Least privilege, authorization, and account management rules.",
+      "format": "DOCX",
+      "owner": "Security Lead"
+    },
+    {
+      "artifact_id": "N171-005",
+      "stage": "Stage 2: Access",
+      "name": "Account & Access Review Records",
+      "type": "Record",
+      "control_ref": "3.1.2",
+      "mandatory": true,
+      "description": "Periodic review of user accounts and privileges.",
+      "format": "XLSX",
+      "owner": "IAM Lead"
+    },
+    {
+      "artifact_id": "N171-006",
+      "stage": "Stage 2: Access",
+      "name": "MFA Configuration Evidence",
+      "type": "Configuration",
+      "control_ref": "3.5.3",
+      "mandatory": true,
+      "description": "Enforced multifactor authentication settings.",
+      "format": "PDF",
+      "owner": "IAM Lead"
+    },
+    {
+      "artifact_id": "N171-007",
+      "stage": "Stage 2: Access",
+      "name": "Remote Access / VPN Configuration",
+      "type": "Configuration",
+      "control_ref": "3.1.12",
+      "mandatory": true,
+      "description": "Managed, encrypted, monitored remote access.",
+      "format": "PDF",
+      "owner": "Network Eng"
+    },
+    {
+      "artifact_id": "N171-008",
+      "stage": "Stage 3: Config",
+      "name": "Configuration Baselines",
+      "type": "Policy",
+      "control_ref": "3.4.1",
+      "mandatory": true,
+      "description": "Hardened baselines and inventories per system type.",
+      "format": "DOCX",
+      "owner": "Platform Eng"
+    },
+    {
+      "artifact_id": "N171-009",
+      "stage": "Stage 3: Config",
+      "name": "Change Management Records",
+      "type": "Record",
+      "control_ref": "3.4.3",
+      "mandatory": true,
+      "description": "Tracked, approved, and impact-analyzed changes.",
+      "format": "XLSX",
+      "owner": "Change Manager"
+    },
+    {
+      "artifact_id": "N171-010",
+      "stage": "Stage 3: Config",
+      "name": "Least-Functionality / Ports & Services List",
+      "type": "Register",
+      "control_ref": "3.4.6",
+      "mandatory": false,
+      "description": "Essential capabilities only; nonessential services disabled.",
+      "format": "XLSX",
+      "owner": "Platform Eng"
+    },
+    {
+      "artifact_id": "N171-011",
+      "stage": "Stage 4: Crypto & Comms",
+      "name": "Encryption & Key Management Standard",
+      "type": "Policy",
+      "control_ref": "3.13.10",
+      "mandatory": true,
+      "description": "FIPS-validated cryptography and key lifecycle.",
+      "format": "DOCX",
+      "owner": "Security Eng"
+    },
+    {
+      "artifact_id": "N171-012",
+      "stage": "Stage 4: Crypto & Comms",
+      "name": "Network Boundary / Segmentation Diagram",
+      "type": "Diagram",
+      "control_ref": "3.13.1",
+      "mandatory": true,
+      "description": "External and internal boundary protections.",
+      "format": "PDF",
+      "owner": "Network Eng"
+    },
+    {
+      "artifact_id": "N171-013",
+      "stage": "Stage 5: Detect",
+      "name": "Audit Logging Configuration",
+      "type": "Configuration",
+      "control_ref": "3.3.1",
+      "mandatory": true,
+      "description": "What is logged, retained, protected and reviewed.",
+      "format": "PDF",
+      "owner": "SecOps"
+    },
+    {
+      "artifact_id": "N171-014",
+      "stage": "Stage 5: Detect",
+      "name": "Vulnerability Scan & Remediation Reports",
+      "type": "Report",
+      "control_ref": "3.11.2",
+      "mandatory": true,
+      "description": "Scan results with remediation per risk.",
+      "format": "XLSX",
+      "owner": "SecOps"
+    },
+    {
+      "artifact_id": "N171-015",
+      "stage": "Stage 5: Detect",
+      "name": "Continuous Monitoring Records",
+      "type": "Record",
+      "control_ref": "3.12.3",
+      "mandatory": true,
+      "description": "Ongoing control monitoring evidence.",
+      "format": "XLSX",
+      "owner": "SecOps"
+    },
+    {
+      "artifact_id": "N171-016",
+      "stage": "Stage 6: Respond",
+      "name": "Incident Response Plan",
+      "type": "Plan",
+      "control_ref": "3.6.1",
+      "mandatory": true,
+      "description": "Preparation, detection, analysis, containment, recovery.",
+      "format": "DOCX",
+      "owner": "IR Lead"
+    },
+    {
+      "artifact_id": "N171-017",
+      "stage": "Stage 6: Respond",
+      "name": "Incident Response Test Records",
+      "type": "Record",
+      "control_ref": "3.6.3",
+      "mandatory": false,
+      "description": "Exercise results for the IR capability.",
+      "format": "DOCX",
+      "owner": "IR Lead"
+    },
+    {
+      "artifact_id": "N171-018",
+      "stage": "Stage 7: Media & Physical",
+      "name": "Media Sanitization / Destruction Records",
+      "type": "Record",
+      "control_ref": "3.8.3",
+      "mandatory": true,
+      "description": "Sanitization or destruction of CUI media.",
+      "format": "XLSX",
+      "owner": "IT Ops"
+    },
+    {
+      "artifact_id": "N171-019",
+      "stage": "Stage 7: Media & Physical",
+      "name": "Physical Access Logs",
+      "type": "Log",
+      "control_ref": "3.10.4",
+      "mandatory": true,
+      "description": "Facility access records and visitor logs.",
+      "format": "XLSX",
+      "owner": "Facilities"
+    },
+    {
+      "artifact_id": "N171-020",
+      "stage": "Stage 8: People",
+      "name": "Personnel Screening & Termination Records",
+      "type": "Record",
+      "control_ref": "3.9.1",
+      "mandatory": true,
+      "description": "Screening prior to access and access removal on exit.",
+      "format": "XLSX",
+      "owner": "HR"
+    },
+    {
+      "artifact_id": "N171-021",
+      "stage": "Stage 5: Detect",
+      "name": "Anti-Malware / Endpoint Protection Config",
+      "type": "Configuration",
+      "control_ref": "3.14.2",
+      "mandatory": true,
+      "description": "Malicious-code protection deployed and updated.",
+      "format": "PDF",
+      "owner": "SecOps"
+    },
+    {
+      "artifact_id": "N171-022",
+      "stage": "Stage 2: Access",
+      "name": "Security Awareness & Training Records",
+      "type": "Record",
+      "control_ref": "3.2.2",
+      "mandatory": true,
+      "description": "Role-based and awareness training completion.",
+      "format": "XLSX",
+      "owner": "HR"
+    }
+  ]
+}

@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>EV-SCR-023 — SIEM Dashboard Splunk Security Posture View</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { font-family: -apple-system, 'Segoe UI', Arial, sans-serif; background: #f4f6f8; color: #222; }
+  .page { max-width: 1280px; margin: 24px auto; padding: 0 24px 48px; }
+  /* COVER */
+  .cover { background: linear-gradient(135deg, #1F4E79 0%, #2E75B6 100%); color: #fff; border-radius: 10px; padding: 32px 36px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); }
+  .cover h1 { font-size: 28px; margin-bottom: 6px; letter-spacing: 0.5px; }
+  .cover h2 { font-size: 16px; font-weight: 400; opacity: 0.92; margin-bottom: 18px; }
+  .cover .meta { display: grid; grid-template-columns: 180px 1fr 180px 1fr; gap: 10px 16px; font-size: 13px; margin-top: 12px; }
+  .cover .meta b { opacity: 0.85; font-weight: 500; }
+  .cover .ev-id { position: absolute; top: 20px; right: 36px; background: rgba(255,255,255,0.15); padding: 6px 14px; border-radius: 20px; font-size: 12px; letter-spacing: 1px; }
+  .cover-wrap { position: relative; }
+  .fwgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 20px; margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.25); font-size: 12px; }
+  .fwgrid div { padding: 6px 10px; background: rgba(255,255,255,0.10); border-radius: 4px; }
+  .fwgrid b { font-weight: 600; }
+
+  /* LABEL ABOVE SCREENSHOT */
+  .shot-label { margin: 28px 0 8px; padding: 8px 14px; background: #fff; border-left: 4px solid #2E75B6; border-radius: 0 4px 4px 0; font-size: 13px; color: #555; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+  .shot-label b { color: #1F4E79; }
+
+  /* SCREENSHOT FRAME */
+  .screenshot { background: #fff; border: 1px solid #d8dde3; border-radius: 6px; overflow: hidden; box-shadow: 0 2px 12px rgba(0,0,0,0.10); }
+  .browser-bar { background: #e7e9ed; padding: 8px 12px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid #d0d4d9; }
+  .browser-bar .dot { width: 12px; height: 12px; border-radius: 50%; }
+  .browser-bar .dot.r { background: #ff5f57; } .browser-bar .dot.y { background: #ffbd2e; } .browser-bar .dot.g { background: #28c840; }
+  .browser-bar .url { flex: 1; background: #fff; border: 1px solid #c8cdd3; border-radius: 4px; padding: 4px 10px; font-size: 12px; color: #555; }
+  .content { padding: 20px; font-size: 13px; }
+
+  /* AUDIT STAMP */
+  .audit-stamp { margin-top: 10px; padding: 10px 14px; background: #e8f4ea; border-left: 4px solid #2d7a3f; font-size: 12px; color: #1a4d26; border-radius: 0 4px 4px 0; }
+  .audit-stamp b { color: #0f3d1a; }
+
+  /* COMMON UI */
+  table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 12.5px; }
+  th { background: #f3f5f7; text-align: left; padding: 8px 10px; border-bottom: 2px solid #ccd4dc; font-weight: 600; color: #333; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.4px; }
+  td { padding: 8px 10px; border-bottom: 1px solid #e8ecf0; color: #333; }
+  tr:last-child td { border-bottom: none; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+  .badge.ok { background: #e0f4e3; color: #1e7a30; }
+  .badge.warn { background: #fff2cc; color: #8a6215; }
+  .badge.bad { background: #fadbd8; color: #9c1414; }
+  .badge.info { background: #d6e4f0; color: #1F4E79; }
+  .kv { display: grid; grid-template-columns: 200px 1fr; gap: 6px 14px; font-size: 13px; }
+  .kv b { color: #555; font-weight: 500; }
+  .kv .val { color: #222; }
+  .hdr { font-size: 18px; font-weight: 600; color: #1F4E79; margin-bottom: 6px; }
+  .sub { color: #666; font-size: 12px; margin-bottom: 16px; }
+  .section { margin: 20px 0; padding: 12px 14px; background: #f8f9fb; border-radius: 4px; border: 1px solid #e1e5ea; }
+  .flex { display: flex; gap: 20px; align-items: flex-start; }
+  .flex > div { flex: 1; }
+  code { background: #f0f2f5; padding: 1px 6px; border-radius: 3px; font-family: 'Consolas','Monaco',monospace; font-size: 12px; color: #333; }
+  .timestamp { color: #888; font-size: 11px; }
+
+  /* PRINT */
+  @media print { .page { margin: 0; padding: 0; } .cover { break-after: page; } .screenshot { break-inside: avoid; } }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="cover-wrap">
+    <div class="cover">
+      <div class="ev-id">EV-SCR-023</div>
+      <h1>[Bank Name]</h1>
+      <h2>SIEM Dashboard Splunk Security Posture View</h2>
+      <div class="meta">
+        <b>Evidence ID:</b><div>EV-SCR-023</div>
+        <b>Captured On:</b><div>20-Mar-2026 15:42 GST</div>
+        <b>Classification:</b><div>CONFIDENTIAL</div>
+        <b>Retention:</b><div>10 years (SBP IB)</div>
+        <b>Captured By:</b><div>Ahmed Al Nuaimi</div>
+        <b>Reviewed By:</b><div>CISO Office</div>
+        <b>System / Tool:</b><div>Splunk Enterprise Security 7.3</div>
+        <b>Document Type:</b><div>Configuration Screenshot</div>
+      </div>
+      <div class="fwgrid">
+        <div><b>SBP ETGRMF:</b> 2.4.5 Logging & Monitoring</div>
+        <div><b>SBP IB:</b> 2.2.2(j), 2.3(a)(g) Monitoring</div>
+        <div><b>ISO 27001:</b> A.8.15-17 Logging/Monitoring/Clock</div>
+        <div><b>PCI-DSS:</b> Req 10 Log & Monitor</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="shot-label">Splunk ES security posture dashboard. <br/><b>Purpose:</b> Demonstrates centralized logging & monitoring per ETGRMF 2.4.5 / SBP IB / PCI Req 10.</div>
+
+  <div class="screenshot">
+    <div style="background:#1F4E79;color:#fff;padding:10px 16px;font-weight:600;font-size:14px;">Splunk Enterprise Security › Security Posture Dashboard</div>
+    <div class="content"><div class="hdr">Security Posture — Last 24 Hours</div>
+    <div class="sub">Tenant: [Bank Name] Production · 247 log sources · 14.2 TB/day average ingest</div>
+    <div class="section">
+      <div class="flex">
+        <div><div class="hdr" style="font-size:32px;color:#1F4E79;">14.2 TB</div><div class="sub">24h Log Volume</div></div>
+        <div><div class="hdr" style="font-size:32px;color:#2d7a3f;">247 / 247</div><div class="sub">Log Sources Healthy</div></div>
+        <div><div class="hdr" style="font-size:32px;color:#c62828;">0</div><div class="sub">Critical Notables</div></div>
+        <div><div class="hdr" style="font-size:32px;color:#8a6215;">14</div><div class="sub">Medium Notables</div></div>
+      </div>
+    </div>
+    <div class="section">
+      <b>Notable Events (last 24h):</b>
+      <table><tr><th>Time</th><th>Title</th><th>Urgency</th><th>Status</th><th>Assigned</th></tr>
+      <tr><td>03:14</td><td>Admin account lockout — CyberArk vaulted account</td><td><span class="badge warn">MEDIUM</span></td><td>Closed — false positive (service acct rotation)</td><td>T1-SOC</td></tr>
+      <tr><td>05:42</td><td>Unusual outbound volume from finance-workstation-214</td><td><span class="badge warn">MEDIUM</span></td><td>Investigated — legitimate M365 OneDrive sync</td><td>T1-SOC</td></tr>
+      <tr><td>09:18</td><td>DLP block — PII email to external</td><td><span class="badge warn">MEDIUM</span></td><td>Under review — awaiting user explanation</td><td>T2-SOC</td></tr>
+      <tr><td>11:35</td><td>Failed VPN logins x5 followed by success — duo-mfa-01</td><td><span class="badge warn">MEDIUM</span></td><td>Cleared — user phone reset, help-desk verified</td><td>T2-SOC</td></tr>
+      </table>
+    </div>
+    <div class="section">
+      <b>Log Source Health:</b>
+      <table><tr><th>Source Type</th><th>Hosts</th><th>Healthy</th><th>Last 24h</th></tr>
+      <tr><td>Windows Security / Sysmon</td><td>2,459</td><td>2,459 (100%)</td><td>4.2 TB</td></tr>
+      <tr><td>Linux audit.log / journald</td><td>247</td><td>247 (100%)</td><td>680 GB</td></tr>
+      <tr><td>Palo Alto Firewall</td><td>6</td><td>6 (100%)</td><td>2.1 TB</td></tr>
+      <tr><td>Oracle DB audit</td><td>12</td><td>12 (100%)</td><td>1.8 TB</td></tr>
+      <tr><td>CyberArk PSM</td><td>4</td><td>4 (100%)</td><td>820 GB</td></tr>
+      <tr><td>CrowdStrike Falcon</td><td>2,906 endpoints</td><td>2,906 (100%)</td><td>3.4 TB</td></tr>
+      <tr><td>Email Security (Proofpoint)</td><td>—</td><td>healthy</td><td>180 GB</td></tr>
+      <tr><td>Cloud (Azure + AWS)</td><td>2 tenants</td><td>healthy</td><td>1.0 TB</td></tr>
+      </table>
+    </div>
+    <div class="section">
+      <b>Retention:</b> Internet Banking logs retained 10 years (SBP IB); all others 7 years; SIEM hot tier 90 days; frozen tier thereafter (Glacier + Dubai DC).
+    </div></div>
+  </div>
+
+  <div class="audit-stamp"><b>Control Assurance:</b> 247 log sources all healthy; 14.2 TB/day ingest. 10-year retention for IB logs; 7 years all others. 24x7 SOC monitoring.</div>
+
+</div>
+</body>
+</html>
