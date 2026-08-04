@@ -1,0 +1,287 @@
+{
+  "framework_key": "iso_27001",
+  "display_name": "ISO 27001",
+  "name_patterns": [
+    "27001"
+  ],
+  "registers": [
+    {
+      "type": "iso_27001__risk_assessment",
+      "label": "Risk Assessment",
+      "description": "ISO 27001 risk assessment — for each Annex A control and asset, record the risk, rate it 1–10 and track completion.",
+      "columns": [
+        {
+          "key": "iso_control_reference",
+          "label": "ISO 27001 control ref",
+          "type": "text",
+          "picker": "framework_controls",
+          "minWidth": "150px"
+        },
+        {
+          "key": "control",
+          "label": "Control",
+          "type": "textarea",
+          "grow": true
+        },
+        {
+          "key": "asset",
+          "label": "Asset",
+          "type": "text",
+          "minWidth": "160px"
+        },
+        {
+          "key": "asset_reference_number",
+          "label": "Asset ref #",
+          "type": "text",
+          "minWidth": "120px"
+        },
+        {
+          "key": "confidential",
+          "label": "Confidential?",
+          "type": "select",
+          "options": [
+            {
+              "value": "Yes",
+              "label": "Yes",
+              "tone": "amber"
+            },
+            {
+              "value": "No",
+              "label": "No",
+              "tone": "slate"
+            }
+          ]
+        },
+        {
+          "key": "risk_details",
+          "label": "Risk details",
+          "type": "textarea",
+          "grow": true
+        },
+        {
+          "key": "risk_rating",
+          "label": "Risk rating (1–10)",
+          "type": "select",
+          "options": [
+            {
+              "value": "1",
+              "label": "1",
+              "tone": "emerald"
+            },
+            {
+              "value": "2",
+              "label": "2",
+              "tone": "emerald"
+            },
+            {
+              "value": "3",
+              "label": "3",
+              "tone": "emerald"
+            },
+            {
+              "value": "4",
+              "label": "4",
+              "tone": "amber"
+            },
+            {
+              "value": "5",
+              "label": "5",
+              "tone": "amber"
+            },
+            {
+              "value": "6",
+              "label": "6",
+              "tone": "amber"
+            },
+            {
+              "value": "7",
+              "label": "7",
+              "tone": "orange"
+            },
+            {
+              "value": "8",
+              "label": "8",
+              "tone": "orange"
+            },
+            {
+              "value": "9",
+              "label": "9",
+              "tone": "rose"
+            },
+            {
+              "value": "10",
+              "label": "10",
+              "tone": "rose"
+            }
+          ]
+        },
+        {
+          "key": "complete",
+          "label": "Complete?",
+          "type": "select",
+          "options": [
+            {
+              "value": "Yes",
+              "label": "Yes",
+              "tone": "emerald"
+            },
+            {
+              "value": "No",
+              "label": "No",
+              "tone": "slate"
+            }
+          ]
+        }
+      ],
+      "formSections": [
+        {
+          "title": "Control",
+          "keys": [
+            "iso_control_reference",
+            "control"
+          ]
+        },
+        {
+          "title": "Asset & risk",
+          "keys": [
+            "asset",
+            "asset_reference_number",
+            "confidential",
+            "risk_details",
+            "risk_rating",
+            "complete"
+          ]
+        }
+      ],
+      "seed": [
+        {
+          "data": {
+            "iso_control_reference": "5",
+            "control": "Information Security Policies"
+          }
+        },
+        {
+          "data": {
+            "iso_control_reference": "5.1",
+            "control": "Management direction for information security"
+          }
+        },
+        {
+          "data": {
+            "iso_control_reference": "6",
+            "control": "Organization of information security"
+          }
+        },
+        {
+          "data": {
+            "iso_control_reference": "6.1.1",
+            "control": "Information security roles and responsibilities"
+          }
+        },
+        {
+          "data": {
+            "iso_control_reference": "7",
+            "control": "Human resources security"
+          }
+        },
+        {
+          "data": {
+            "iso_control_reference": "7.1.2",
+            "control": "Terms and conditions of employment"
+          }
+        },
+        {
+          "data": {
+            "iso_control_reference": "8",
+            "control": "Asset management"
+          }
+        },
+        {
+          "data": {
+            "iso_control_reference": "8.1.2",
+            "control": "Responsibilities for assets"
+          }
+        },
+        {
+          "data": {
+            "iso_control_reference": "9",
+            "control": "Access control"
+          }
+        },
+        {
+          "data": {
+            "iso_control_reference": "9.2.6",
+            "control": "Responsibilities for assets"
+          }
+        },
+        {
+          "data": {
+            "iso_control_reference": "10",
+            "control": "Cryptography"
+          }
+        },
+        {
+          "data": {
+            "iso_control_reference": "11",
+            "control": "Secure areas"
+          }
+        },
+        {
+          "data": {
+            "iso_control_reference": "11.1.1",
+            "control": "Physical security perimeter"
+          }
+        },
+        {
+          "data": {
+            "iso_control_reference": "12",
+            "control": "Operations Security"
+          }
+        },
+        {
+          "data": {
+            "iso_control_reference": "13",
+            "control": "Communications security"
+          }
+        },
+        {
+          "data": {
+            "iso_control_reference": "14",
+            "control": "System acquisition, development and maintenance"
+          }
+        },
+        {
+          "data": {
+            "iso_control_reference": "15",
+            "control": "Suppliers relationships"
+          }
+        },
+        {
+          "data": {
+            "iso_control_reference": "16",
+            "control": "Information security incident management"
+          }
+        },
+        {
+          "data": {
+            "iso_control_reference": "17",
+            "control": "Information security aspects of business continuity management"
+          }
+        },
+        {
+          "data": {
+            "iso_control_reference": "18",
+            "control": "Compliance"
+          }
+        },
+        {
+          "data": {
+            "iso_control_reference": "18.1.4",
+            "control": "Privacy and protection of personally identifiable information"
+          }
+        }
+      ]
+    }
+  ],
+  "documents": []
+}

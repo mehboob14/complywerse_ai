@@ -1,0 +1,124 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+.venv/
+venv/
+ENV/
+env/
+.pythonlibs/
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+
+# Database
+# *.db  <-- removed so backend/grc.db and backend/grc_app.db are tracked
+*.sqlite
+*.sqlite3
+
+# Environment
+.env
+.env.local
+.env.*.local
+.env.staging
+.env.production
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build
+.claude/
+dist/
+build/
+.next/
+
+# Uploads (user files)
+backend/uploads/
+# Older code wrote tenant evidence here; rule now covers BOTH paths
+# so any new tenant data stays out of source control.
+backend/grc/uploads/
+
+# Attached assets (reference screenshots)
+attached_assets/
+
+# Temporary files
+cookies.txt
+*.sql
+
+# Data dumps produced by backend/scripts/export_*.py — these are
+# tenant snapshots meant to scp to other environments, not source.
+cis_library.json
+*_library.json
+*_dump.json
+
+# ALL zip/archive files anywhere in the repo
+**/*.zip
+**/*.tar.gz
+**/*.tar
+**/*.rar
+**/*.7z
+
+# Project-specific generated directories
+backend/venv/
+backend/__pycache__/
+backend/grc/__pycache__/
+backend/static/
+backend/venv
+backend/__pycache__/
+
+grc-frontend/node_modules/
+grc-frontend/.next/
+grc-frontend/out/
+grc-frontend/dist/
+grc-frontend/build/
+grc-frontend/uploads/
+
+# Generic nested dependency/cache folders
+**/node_modules/
+**/__pycache__/
+
+# Local tool/session state
+.local/
+# Large CIS benchmark reference data — too big for GitHub (Operating_Systems.json is 113MB,
+# over the 100MB hard limit). Kept on disk locally, excluded from version control.
+CIS_Benchmarks/
+
+# ---------------------------------------------------------------------------
+# Scratch, logs, one-off scripts, and generated dumps (not source of record)
+# ---------------------------------------------------------------------------
+*.log
+*.bak
+backend/_*
+grc-frontend/_*
+# accidental nested uploads dir
+backend/backend/
+backend/uploads/
+backend/pipeline_snapshots/
+backend/pipeline_traces/
+grc-frontend/public/domain_*.json
+grc-frontend/public/library_data.json
+grc-frontend/public/stage4_governance.json
+grc-frontend/src/app/library-preview/
+grc-frontend/src/app/redesign-preview/
+# NOTE: _redesign/ holds PRODUCTION assessment-module components (imported by the
+# assessments pages, NcaTab, PDPLAssessmentTab, etc.) — it must be tracked, not ignored.
+grc-frontend/**/*.tsx.bak

@@ -1,0 +1,2244 @@
+{
+  "id": "swift_cscf",
+  "name": "SWIFT Customer Security Controls Framework (CSCF)",
+  "version": "v2025",
+  "official_sources": [
+    {
+      "title": "SWIFT CSP & Security Controls",
+      "url": "https://www.swift.com/myswift/customer-security-programme-csp/security-controls"
+    },
+    {
+      "title": "CSP Document Centre",
+      "url": "https://www.swift.com/myswift/customer-security-programme-csp/customer-security-programme-document-centre"
+    }
+  ],
+  "assessment_shapes": [
+    "swift_attestation"
+  ],
+  "methodology": "Annual KYC-SA attestation. 32 controls, 25 mandatory + 7 advisory. Architecture type (A1/A2/A3/A4/B) determines applicability. Independent assessment required for mandatory controls. Control 2.8 requires a security risk assessment of each critical outsourced provider.",
+  "scoping_inputs": [
+    {
+      "id": "architecture_type",
+      "type": "select",
+      "options": [
+        "A1",
+        "A2",
+        "A3",
+        "A4",
+        "B"
+      ],
+      "label": "SWIFT architecture type"
+    },
+    {
+      "id": "critical_outsourced_providers",
+      "type": "list",
+      "label": "Critical outsourced providers (for 2.8 sub-assessment)"
+    }
+  ],
+  "risk_model": {
+    "factors": [
+      "asset",
+      "threat",
+      "vulnerability",
+      "likelihood",
+      "impact_c",
+      "impact_i",
+      "impact_a"
+    ],
+    "scales": {
+      "likelihood": [
+        {
+          "value": 1,
+          "label": "Rare",
+          "definition": "May occur only in exceptional circumstances (<5% per year)."
+        },
+        {
+          "value": 2,
+          "label": "Unlikely",
+          "definition": "Could occur but not expected (5-25% per year)."
+        },
+        {
+          "value": 3,
+          "label": "Possible",
+          "definition": "Might occur at some time (25-50% per year)."
+        },
+        {
+          "value": 4,
+          "label": "Likely",
+          "definition": "Will probably occur in most circumstances (50-75% per year)."
+        },
+        {
+          "value": 5,
+          "label": "Almost Certain",
+          "definition": "Expected to occur in most circumstances (>75% per year)."
+        }
+      ],
+      "impact": [
+        {
+          "value": 1,
+          "label": "Insignificant",
+          "definition": "Negligible operational, financial, regulatory or reputational impact."
+        },
+        {
+          "value": 2,
+          "label": "Minor",
+          "definition": "Limited impact contained within a single team or system; recoverable in <1 day."
+        },
+        {
+          "value": 3,
+          "label": "Moderate",
+          "definition": "Notable impact on a business unit; recoverable in 1-7 days; minor regulatory attention."
+        },
+        {
+          "value": 4,
+          "label": "Major",
+          "definition": "Significant impact across multiple business units; >1 week to recover; regulatory action probable."
+        },
+        {
+          "value": 5,
+          "label": "Severe",
+          "definition": "Existential or systemic impact; loss of license, major fines, sustained customer loss."
+        }
+      ],
+      "maturity": [
+        {
+          "value": 0,
+          "label": "Non-Existent",
+          "definition": "No process or control in place."
+        },
+        {
+          "value": 1,
+          "label": "Initial / Ad Hoc",
+          "definition": "Process exists but is informal and inconsistent."
+        },
+        {
+          "value": 2,
+          "label": "Repeatable",
+          "definition": "Process is documented and repeated, but not standardized across the organization."
+        },
+        {
+          "value": 3,
+          "label": "Defined",
+          "definition": "Process is documented, standardized, and integrated across the organization."
+        },
+        {
+          "value": 4,
+          "label": "Managed",
+          "definition": "Process is measured, monitored with KPIs, and controlled."
+        },
+        {
+          "value": 5,
+          "label": "Optimized",
+          "definition": "Process is continuously improved through monitoring, metrics, and lessons learned."
+        }
+      ],
+      "implementation_status": [
+        {
+          "value": "NI",
+          "label": "Not Implemented"
+        },
+        {
+          "value": "PI",
+          "label": "Partially Implemented"
+        },
+        {
+          "value": "LI",
+          "label": "Largely Implemented"
+        },
+        {
+          "value": "FI",
+          "label": "Fully Implemented"
+        }
+      ]
+    },
+    "matrix": "5x5",
+    "calculation": "max(impact_c, impact_i, impact_a) * likelihood",
+    "acceptance_threshold": 6,
+    "thresholds": {
+      "low": [
+        1,
+        4
+      ],
+      "medium": [
+        5,
+        9
+      ],
+      "high": [
+        10,
+        16
+      ],
+      "critical": [
+        17,
+        25
+      ]
+    }
+  },
+  "domains": [
+    {
+      "id": "OBJ1",
+      "name": "Objective 1 — Restrict Internet Access and Protect Critical Systems",
+      "controls": [
+        {
+          "id": "1.1",
+          "title": "SWIFT Environment Protection",
+          "description": "Mandatory",
+          "question_block": {
+            "type": "swift_attestation",
+            "questions": [
+              {
+                "field": "applicability",
+                "type": "multi_select",
+                "options": [
+                  "A1",
+                  "A2",
+                  "A3",
+                  "A4",
+                  "B"
+                ],
+                "prompt": "Architecture types this control applies to?"
+              },
+              {
+                "field": "compliance",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Compliant with deviations",
+                  "Not Compliant",
+                  "Not Applicable"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Implementation status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence?"
+              },
+              {
+                "field": "deviation_description",
+                "type": "text",
+                "prompt": "If 'Compliant with deviations', describe."
+              },
+              {
+                "field": "risk_drivers",
+                "type": "text",
+                "prompt": "Risk drivers (Appendix A)?"
+              },
+              {
+                "field": "remediation",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "1.2",
+          "title": "Operating System Privileged Account Control",
+          "description": "Mandatory",
+          "question_block": {
+            "type": "swift_attestation",
+            "questions": [
+              {
+                "field": "applicability",
+                "type": "multi_select",
+                "options": [
+                  "A1",
+                  "A2",
+                  "A3",
+                  "A4",
+                  "B"
+                ],
+                "prompt": "Architecture types this control applies to?"
+              },
+              {
+                "field": "compliance",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Compliant with deviations",
+                  "Not Compliant",
+                  "Not Applicable"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Implementation status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence?"
+              },
+              {
+                "field": "deviation_description",
+                "type": "text",
+                "prompt": "If 'Compliant with deviations', describe."
+              },
+              {
+                "field": "risk_drivers",
+                "type": "text",
+                "prompt": "Risk drivers (Appendix A)?"
+              },
+              {
+                "field": "remediation",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "1.3",
+          "title": "Virtualisation or Cloud Platform Protection",
+          "description": "Mandatory",
+          "question_block": {
+            "type": "swift_attestation",
+            "questions": [
+              {
+                "field": "applicability",
+                "type": "multi_select",
+                "options": [
+                  "A1",
+                  "A2",
+                  "A3",
+                  "A4",
+                  "B"
+                ],
+                "prompt": "Architecture types this control applies to?"
+              },
+              {
+                "field": "compliance",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Compliant with deviations",
+                  "Not Compliant",
+                  "Not Applicable"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Implementation status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence?"
+              },
+              {
+                "field": "deviation_description",
+                "type": "text",
+                "prompt": "If 'Compliant with deviations', describe."
+              },
+              {
+                "field": "risk_drivers",
+                "type": "text",
+                "prompt": "Risk drivers (Appendix A)?"
+              },
+              {
+                "field": "remediation",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "1.4",
+          "title": "Restriction of Internet Access",
+          "description": "Mandatory",
+          "question_block": {
+            "type": "swift_attestation",
+            "questions": [
+              {
+                "field": "applicability",
+                "type": "multi_select",
+                "options": [
+                  "A1",
+                  "A2",
+                  "A3",
+                  "A4",
+                  "B"
+                ],
+                "prompt": "Architecture types this control applies to?"
+              },
+              {
+                "field": "compliance",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Compliant with deviations",
+                  "Not Compliant",
+                  "Not Applicable"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Implementation status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence?"
+              },
+              {
+                "field": "deviation_description",
+                "type": "text",
+                "prompt": "If 'Compliant with deviations', describe."
+              },
+              {
+                "field": "risk_drivers",
+                "type": "text",
+                "prompt": "Risk drivers (Appendix A)?"
+              },
+              {
+                "field": "remediation",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "1.5",
+          "title": "Customer Environment Protection (Architecture A4)",
+          "description": "Mandatory",
+          "question_block": {
+            "type": "swift_attestation",
+            "questions": [
+              {
+                "field": "applicability",
+                "type": "multi_select",
+                "options": [
+                  "A1",
+                  "A2",
+                  "A3",
+                  "A4",
+                  "B"
+                ],
+                "prompt": "Architecture types this control applies to?"
+              },
+              {
+                "field": "compliance",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Compliant with deviations",
+                  "Not Compliant",
+                  "Not Applicable"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Implementation status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence?"
+              },
+              {
+                "field": "deviation_description",
+                "type": "text",
+                "prompt": "If 'Compliant with deviations', describe."
+              },
+              {
+                "field": "risk_drivers",
+                "type": "text",
+                "prompt": "Risk drivers (Appendix A)?"
+              },
+              {
+                "field": "remediation",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "OBJ2",
+      "name": "Objective 2 — Reduce Attack Surface and Vulnerabilities",
+      "controls": [
+        {
+          "id": "2.1",
+          "title": "Internal Data Flow Security",
+          "description": "Mandatory",
+          "question_block": {
+            "type": "swift_attestation",
+            "questions": [
+              {
+                "field": "applicability",
+                "type": "multi_select",
+                "options": [
+                  "A1",
+                  "A2",
+                  "A3",
+                  "A4",
+                  "B"
+                ],
+                "prompt": "Architecture types this control applies to?"
+              },
+              {
+                "field": "compliance",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Compliant with deviations",
+                  "Not Compliant",
+                  "Not Applicable"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Implementation status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence?"
+              },
+              {
+                "field": "deviation_description",
+                "type": "text",
+                "prompt": "If 'Compliant with deviations', describe."
+              },
+              {
+                "field": "risk_drivers",
+                "type": "text",
+                "prompt": "Risk drivers (Appendix A)?"
+              },
+              {
+                "field": "remediation",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "2.2",
+          "title": "Security Updates",
+          "description": "Mandatory",
+          "question_block": {
+            "type": "swift_attestation",
+            "questions": [
+              {
+                "field": "applicability",
+                "type": "multi_select",
+                "options": [
+                  "A1",
+                  "A2",
+                  "A3",
+                  "A4",
+                  "B"
+                ],
+                "prompt": "Architecture types this control applies to?"
+              },
+              {
+                "field": "compliance",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Compliant with deviations",
+                  "Not Compliant",
+                  "Not Applicable"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Implementation status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence?"
+              },
+              {
+                "field": "deviation_description",
+                "type": "text",
+                "prompt": "If 'Compliant with deviations', describe."
+              },
+              {
+                "field": "risk_drivers",
+                "type": "text",
+                "prompt": "Risk drivers (Appendix A)?"
+              },
+              {
+                "field": "remediation",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "2.3",
+          "title": "System Hardening",
+          "description": "Mandatory",
+          "question_block": {
+            "type": "swift_attestation",
+            "questions": [
+              {
+                "field": "applicability",
+                "type": "multi_select",
+                "options": [
+                  "A1",
+                  "A2",
+                  "A3",
+                  "A4",
+                  "B"
+                ],
+                "prompt": "Architecture types this control applies to?"
+              },
+              {
+                "field": "compliance",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Compliant with deviations",
+                  "Not Compliant",
+                  "Not Applicable"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Implementation status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence?"
+              },
+              {
+                "field": "deviation_description",
+                "type": "text",
+                "prompt": "If 'Compliant with deviations', describe."
+              },
+              {
+                "field": "risk_drivers",
+                "type": "text",
+                "prompt": "Risk drivers (Appendix A)?"
+              },
+              {
+                "field": "remediation",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "2.4A",
+          "title": "Back Office Data Flow Security",
+          "description": "Advisory",
+          "question_block": {
+            "type": "swift_attestation",
+            "questions": [
+              {
+                "field": "applicability",
+                "type": "multi_select",
+                "options": [
+                  "A1",
+                  "A2",
+                  "A3",
+                  "A4",
+                  "B"
+                ],
+                "prompt": "Architecture types this control applies to?"
+              },
+              {
+                "field": "compliance",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Compliant with deviations",
+                  "Not Compliant",
+                  "Not Applicable"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Implementation status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence?"
+              },
+              {
+                "field": "deviation_description",
+                "type": "text",
+                "prompt": "If 'Compliant with deviations', describe."
+              },
+              {
+                "field": "risk_drivers",
+                "type": "text",
+                "prompt": "Risk drivers (Appendix A)?"
+              },
+              {
+                "field": "remediation",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "2.5A",
+          "title": "External Transmission Data Protection",
+          "description": "Advisory",
+          "question_block": {
+            "type": "swift_attestation",
+            "questions": [
+              {
+                "field": "applicability",
+                "type": "multi_select",
+                "options": [
+                  "A1",
+                  "A2",
+                  "A3",
+                  "A4",
+                  "B"
+                ],
+                "prompt": "Architecture types this control applies to?"
+              },
+              {
+                "field": "compliance",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Compliant with deviations",
+                  "Not Compliant",
+                  "Not Applicable"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Implementation status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence?"
+              },
+              {
+                "field": "deviation_description",
+                "type": "text",
+                "prompt": "If 'Compliant with deviations', describe."
+              },
+              {
+                "field": "risk_drivers",
+                "type": "text",
+                "prompt": "Risk drivers (Appendix A)?"
+              },
+              {
+                "field": "remediation",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "2.6",
+          "title": "Operator Session Confidentiality and Integrity",
+          "description": "Mandatory",
+          "question_block": {
+            "type": "swift_attestation",
+            "questions": [
+              {
+                "field": "applicability",
+                "type": "multi_select",
+                "options": [
+                  "A1",
+                  "A2",
+                  "A3",
+                  "A4",
+                  "B"
+                ],
+                "prompt": "Architecture types this control applies to?"
+              },
+              {
+                "field": "compliance",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Compliant with deviations",
+                  "Not Compliant",
+                  "Not Applicable"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Implementation status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence?"
+              },
+              {
+                "field": "deviation_description",
+                "type": "text",
+                "prompt": "If 'Compliant with deviations', describe."
+              },
+              {
+                "field": "risk_drivers",
+                "type": "text",
+                "prompt": "Risk drivers (Appendix A)?"
+              },
+              {
+                "field": "remediation",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "2.7",
+          "title": "Vulnerability Scanning",
+          "description": "Mandatory",
+          "question_block": {
+            "type": "swift_attestation",
+            "questions": [
+              {
+                "field": "applicability",
+                "type": "multi_select",
+                "options": [
+                  "A1",
+                  "A2",
+                  "A3",
+                  "A4",
+                  "B"
+                ],
+                "prompt": "Architecture types this control applies to?"
+              },
+              {
+                "field": "compliance",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Compliant with deviations",
+                  "Not Compliant",
+                  "Not Applicable"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Implementation status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence?"
+              },
+              {
+                "field": "deviation_description",
+                "type": "text",
+                "prompt": "If 'Compliant with deviations', describe."
+              },
+              {
+                "field": "risk_drivers",
+                "type": "text",
+                "prompt": "Risk drivers (Appendix A)?"
+              },
+              {
+                "field": "remediation",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "2.8",
+          "title": "Outsourced Critical Activity Protection (now M)",
+          "description": "Mandatory",
+          "question_block": {
+            "type": "swift_attestation",
+            "questions": [
+              {
+                "field": "applicability",
+                "type": "multi_select",
+                "options": [
+                  "A1",
+                  "A2",
+                  "A3",
+                  "A4",
+                  "B"
+                ],
+                "prompt": "Architecture types this control applies to?"
+              },
+              {
+                "field": "compliance",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Compliant with deviations",
+                  "Not Compliant",
+                  "Not Applicable"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Implementation status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence?"
+              },
+              {
+                "field": "deviation_description",
+                "type": "text",
+                "prompt": "If 'Compliant with deviations', describe."
+              },
+              {
+                "field": "risk_drivers",
+                "type": "text",
+                "prompt": "Risk drivers (Appendix A)?"
+              },
+              {
+                "field": "remediation",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "2.9",
+          "title": "Transaction Business Controls",
+          "description": "Mandatory",
+          "question_block": {
+            "type": "swift_attestation",
+            "questions": [
+              {
+                "field": "applicability",
+                "type": "multi_select",
+                "options": [
+                  "A1",
+                  "A2",
+                  "A3",
+                  "A4",
+                  "B"
+                ],
+                "prompt": "Architecture types this control applies to?"
+              },
+              {
+                "field": "compliance",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Compliant with deviations",
+                  "Not Compliant",
+                  "Not Applicable"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Implementation status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence?"
+              },
+              {
+                "field": "deviation_description",
+                "type": "text",
+                "prompt": "If 'Compliant with deviations', describe."
+              },
+              {
+                "field": "risk_drivers",
+                "type": "text",
+                "prompt": "Risk drivers (Appendix A)?"
+              },
+              {
+                "field": "remediation",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "2.10",
+          "title": "Application Hardening",
+          "description": "Mandatory",
+          "question_block": {
+            "type": "swift_attestation",
+            "questions": [
+              {
+                "field": "applicability",
+                "type": "multi_select",
+                "options": [
+                  "A1",
+                  "A2",
+                  "A3",
+                  "A4",
+                  "B"
+                ],
+                "prompt": "Architecture types this control applies to?"
+              },
+              {
+                "field": "compliance",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Compliant with deviations",
+                  "Not Compliant",
+                  "Not Applicable"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Implementation status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence?"
+              },
+              {
+                "field": "deviation_description",
+                "type": "text",
+                "prompt": "If 'Compliant with deviations', describe."
+              },
+              {
+                "field": "risk_drivers",
+                "type": "text",
+                "prompt": "Risk drivers (Appendix A)?"
+              },
+              {
+                "field": "remediation",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "2.11A",
+          "title": "RMA Business Controls",
+          "description": "Advisory",
+          "question_block": {
+            "type": "swift_attestation",
+            "questions": [
+              {
+                "field": "applicability",
+                "type": "multi_select",
+                "options": [
+                  "A1",
+                  "A2",
+                  "A3",
+                  "A4",
+                  "B"
+                ],
+                "prompt": "Architecture types this control applies to?"
+              },
+              {
+                "field": "compliance",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Compliant with deviations",
+                  "Not Compliant",
+                  "Not Applicable"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Implementation status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence?"
+              },
+              {
+                "field": "deviation_description",
+                "type": "text",
+                "prompt": "If 'Compliant with deviations', describe."
+              },
+              {
+                "field": "risk_drivers",
+                "type": "text",
+                "prompt": "Risk drivers (Appendix A)?"
+              },
+              {
+                "field": "remediation",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "3.1",
+          "title": "Physical Security",
+          "description": "Mandatory",
+          "question_block": {
+            "type": "swift_attestation",
+            "questions": [
+              {
+                "field": "applicability",
+                "type": "multi_select",
+                "options": [
+                  "A1",
+                  "A2",
+                  "A3",
+                  "A4",
+                  "B"
+                ],
+                "prompt": "Architecture types this control applies to?"
+              },
+              {
+                "field": "compliance",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Compliant with deviations",
+                  "Not Compliant",
+                  "Not Applicable"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Implementation status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence?"
+              },
+              {
+                "field": "deviation_description",
+                "type": "text",
+                "prompt": "If 'Compliant with deviations', describe."
+              },
+              {
+                "field": "risk_drivers",
+                "type": "text",
+                "prompt": "Risk drivers (Appendix A)?"
+              },
+              {
+                "field": "remediation",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "OBJ3",
+      "name": "Objective 3 — Physically Secure the Environment / Manage IDs / Detect & Respond",
+      "controls": [
+        {
+          "id": "4.1",
+          "title": "Password Policy",
+          "description": "Mandatory",
+          "question_block": {
+            "type": "swift_attestation",
+            "questions": [
+              {
+                "field": "applicability",
+                "type": "multi_select",
+                "options": [
+                  "A1",
+                  "A2",
+                  "A3",
+                  "A4",
+                  "B"
+                ],
+                "prompt": "Architecture types this control applies to?"
+              },
+              {
+                "field": "compliance",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Compliant with deviations",
+                  "Not Compliant",
+                  "Not Applicable"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Implementation status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence?"
+              },
+              {
+                "field": "deviation_description",
+                "type": "text",
+                "prompt": "If 'Compliant with deviations', describe."
+              },
+              {
+                "field": "risk_drivers",
+                "type": "text",
+                "prompt": "Risk drivers (Appendix A)?"
+              },
+              {
+                "field": "remediation",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "4.2",
+          "title": "Multi-Factor Authentication",
+          "description": "Mandatory",
+          "question_block": {
+            "type": "swift_attestation",
+            "questions": [
+              {
+                "field": "applicability",
+                "type": "multi_select",
+                "options": [
+                  "A1",
+                  "A2",
+                  "A3",
+                  "A4",
+                  "B"
+                ],
+                "prompt": "Architecture types this control applies to?"
+              },
+              {
+                "field": "compliance",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Compliant with deviations",
+                  "Not Compliant",
+                  "Not Applicable"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Implementation status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence?"
+              },
+              {
+                "field": "deviation_description",
+                "type": "text",
+                "prompt": "If 'Compliant with deviations', describe."
+              },
+              {
+                "field": "risk_drivers",
+                "type": "text",
+                "prompt": "Risk drivers (Appendix A)?"
+              },
+              {
+                "field": "remediation",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "5.1",
+          "title": "Logical Access Control",
+          "description": "Mandatory",
+          "question_block": {
+            "type": "swift_attestation",
+            "questions": [
+              {
+                "field": "applicability",
+                "type": "multi_select",
+                "options": [
+                  "A1",
+                  "A2",
+                  "A3",
+                  "A4",
+                  "B"
+                ],
+                "prompt": "Architecture types this control applies to?"
+              },
+              {
+                "field": "compliance",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Compliant with deviations",
+                  "Not Compliant",
+                  "Not Applicable"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Implementation status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence?"
+              },
+              {
+                "field": "deviation_description",
+                "type": "text",
+                "prompt": "If 'Compliant with deviations', describe."
+              },
+              {
+                "field": "risk_drivers",
+                "type": "text",
+                "prompt": "Risk drivers (Appendix A)?"
+              },
+              {
+                "field": "remediation",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "5.2",
+          "title": "Token Management",
+          "description": "Mandatory",
+          "question_block": {
+            "type": "swift_attestation",
+            "questions": [
+              {
+                "field": "applicability",
+                "type": "multi_select",
+                "options": [
+                  "A1",
+                  "A2",
+                  "A3",
+                  "A4",
+                  "B"
+                ],
+                "prompt": "Architecture types this control applies to?"
+              },
+              {
+                "field": "compliance",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Compliant with deviations",
+                  "Not Compliant",
+                  "Not Applicable"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Implementation status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence?"
+              },
+              {
+                "field": "deviation_description",
+                "type": "text",
+                "prompt": "If 'Compliant with deviations', describe."
+              },
+              {
+                "field": "risk_drivers",
+                "type": "text",
+                "prompt": "Risk drivers (Appendix A)?"
+              },
+              {
+                "field": "remediation",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "5.3A",
+          "title": "Staff Screening Process",
+          "description": "Advisory",
+          "question_block": {
+            "type": "swift_attestation",
+            "questions": [
+              {
+                "field": "applicability",
+                "type": "multi_select",
+                "options": [
+                  "A1",
+                  "A2",
+                  "A3",
+                  "A4",
+                  "B"
+                ],
+                "prompt": "Architecture types this control applies to?"
+              },
+              {
+                "field": "compliance",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Compliant with deviations",
+                  "Not Compliant",
+                  "Not Applicable"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Implementation status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence?"
+              },
+              {
+                "field": "deviation_description",
+                "type": "text",
+                "prompt": "If 'Compliant with deviations', describe."
+              },
+              {
+                "field": "risk_drivers",
+                "type": "text",
+                "prompt": "Risk drivers (Appendix A)?"
+              },
+              {
+                "field": "remediation",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "5.4",
+          "title": "Password Repository Protection",
+          "description": "Mandatory",
+          "question_block": {
+            "type": "swift_attestation",
+            "questions": [
+              {
+                "field": "applicability",
+                "type": "multi_select",
+                "options": [
+                  "A1",
+                  "A2",
+                  "A3",
+                  "A4",
+                  "B"
+                ],
+                "prompt": "Architecture types this control applies to?"
+              },
+              {
+                "field": "compliance",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Compliant with deviations",
+                  "Not Compliant",
+                  "Not Applicable"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Implementation status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence?"
+              },
+              {
+                "field": "deviation_description",
+                "type": "text",
+                "prompt": "If 'Compliant with deviations', describe."
+              },
+              {
+                "field": "risk_drivers",
+                "type": "text",
+                "prompt": "Risk drivers (Appendix A)?"
+              },
+              {
+                "field": "remediation",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "6.1",
+          "title": "Malware Protection",
+          "description": "Mandatory",
+          "question_block": {
+            "type": "swift_attestation",
+            "questions": [
+              {
+                "field": "applicability",
+                "type": "multi_select",
+                "options": [
+                  "A1",
+                  "A2",
+                  "A3",
+                  "A4",
+                  "B"
+                ],
+                "prompt": "Architecture types this control applies to?"
+              },
+              {
+                "field": "compliance",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Compliant with deviations",
+                  "Not Compliant",
+                  "Not Applicable"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Implementation status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence?"
+              },
+              {
+                "field": "deviation_description",
+                "type": "text",
+                "prompt": "If 'Compliant with deviations', describe."
+              },
+              {
+                "field": "risk_drivers",
+                "type": "text",
+                "prompt": "Risk drivers (Appendix A)?"
+              },
+              {
+                "field": "remediation",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "6.2",
+          "title": "Software Integrity",
+          "description": "Mandatory",
+          "question_block": {
+            "type": "swift_attestation",
+            "questions": [
+              {
+                "field": "applicability",
+                "type": "multi_select",
+                "options": [
+                  "A1",
+                  "A2",
+                  "A3",
+                  "A4",
+                  "B"
+                ],
+                "prompt": "Architecture types this control applies to?"
+              },
+              {
+                "field": "compliance",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Compliant with deviations",
+                  "Not Compliant",
+                  "Not Applicable"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Implementation status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence?"
+              },
+              {
+                "field": "deviation_description",
+                "type": "text",
+                "prompt": "If 'Compliant with deviations', describe."
+              },
+              {
+                "field": "risk_drivers",
+                "type": "text",
+                "prompt": "Risk drivers (Appendix A)?"
+              },
+              {
+                "field": "remediation",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "6.3",
+          "title": "Database Integrity",
+          "description": "Mandatory",
+          "question_block": {
+            "type": "swift_attestation",
+            "questions": [
+              {
+                "field": "applicability",
+                "type": "multi_select",
+                "options": [
+                  "A1",
+                  "A2",
+                  "A3",
+                  "A4",
+                  "B"
+                ],
+                "prompt": "Architecture types this control applies to?"
+              },
+              {
+                "field": "compliance",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Compliant with deviations",
+                  "Not Compliant",
+                  "Not Applicable"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Implementation status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence?"
+              },
+              {
+                "field": "deviation_description",
+                "type": "text",
+                "prompt": "If 'Compliant with deviations', describe."
+              },
+              {
+                "field": "risk_drivers",
+                "type": "text",
+                "prompt": "Risk drivers (Appendix A)?"
+              },
+              {
+                "field": "remediation",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "6.4",
+          "title": "Logging and Monitoring",
+          "description": "Mandatory",
+          "question_block": {
+            "type": "swift_attestation",
+            "questions": [
+              {
+                "field": "applicability",
+                "type": "multi_select",
+                "options": [
+                  "A1",
+                  "A2",
+                  "A3",
+                  "A4",
+                  "B"
+                ],
+                "prompt": "Architecture types this control applies to?"
+              },
+              {
+                "field": "compliance",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Compliant with deviations",
+                  "Not Compliant",
+                  "Not Applicable"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Implementation status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence?"
+              },
+              {
+                "field": "deviation_description",
+                "type": "text",
+                "prompt": "If 'Compliant with deviations', describe."
+              },
+              {
+                "field": "risk_drivers",
+                "type": "text",
+                "prompt": "Risk drivers (Appendix A)?"
+              },
+              {
+                "field": "remediation",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "6.5A",
+          "title": "Intrusion Detection",
+          "description": "Advisory",
+          "question_block": {
+            "type": "swift_attestation",
+            "questions": [
+              {
+                "field": "applicability",
+                "type": "multi_select",
+                "options": [
+                  "A1",
+                  "A2",
+                  "A3",
+                  "A4",
+                  "B"
+                ],
+                "prompt": "Architecture types this control applies to?"
+              },
+              {
+                "field": "compliance",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Compliant with deviations",
+                  "Not Compliant",
+                  "Not Applicable"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Implementation status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence?"
+              },
+              {
+                "field": "deviation_description",
+                "type": "text",
+                "prompt": "If 'Compliant with deviations', describe."
+              },
+              {
+                "field": "risk_drivers",
+                "type": "text",
+                "prompt": "Risk drivers (Appendix A)?"
+              },
+              {
+                "field": "remediation",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "7.1",
+          "title": "Cyber Incident Response Planning",
+          "description": "Mandatory",
+          "question_block": {
+            "type": "swift_attestation",
+            "questions": [
+              {
+                "field": "applicability",
+                "type": "multi_select",
+                "options": [
+                  "A1",
+                  "A2",
+                  "A3",
+                  "A4",
+                  "B"
+                ],
+                "prompt": "Architecture types this control applies to?"
+              },
+              {
+                "field": "compliance",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Compliant with deviations",
+                  "Not Compliant",
+                  "Not Applicable"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Implementation status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence?"
+              },
+              {
+                "field": "deviation_description",
+                "type": "text",
+                "prompt": "If 'Compliant with deviations', describe."
+              },
+              {
+                "field": "risk_drivers",
+                "type": "text",
+                "prompt": "Risk drivers (Appendix A)?"
+              },
+              {
+                "field": "remediation",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "7.2",
+          "title": "Security Training and Awareness",
+          "description": "Mandatory",
+          "question_block": {
+            "type": "swift_attestation",
+            "questions": [
+              {
+                "field": "applicability",
+                "type": "multi_select",
+                "options": [
+                  "A1",
+                  "A2",
+                  "A3",
+                  "A4",
+                  "B"
+                ],
+                "prompt": "Architecture types this control applies to?"
+              },
+              {
+                "field": "compliance",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Compliant with deviations",
+                  "Not Compliant",
+                  "Not Applicable"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Implementation status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence?"
+              },
+              {
+                "field": "deviation_description",
+                "type": "text",
+                "prompt": "If 'Compliant with deviations', describe."
+              },
+              {
+                "field": "risk_drivers",
+                "type": "text",
+                "prompt": "Risk drivers (Appendix A)?"
+              },
+              {
+                "field": "remediation",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "7.3A",
+          "title": "Penetration Testing",
+          "description": "Advisory",
+          "question_block": {
+            "type": "swift_attestation",
+            "questions": [
+              {
+                "field": "applicability",
+                "type": "multi_select",
+                "options": [
+                  "A1",
+                  "A2",
+                  "A3",
+                  "A4",
+                  "B"
+                ],
+                "prompt": "Architecture types this control applies to?"
+              },
+              {
+                "field": "compliance",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Compliant with deviations",
+                  "Not Compliant",
+                  "Not Applicable"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Implementation status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence?"
+              },
+              {
+                "field": "deviation_description",
+                "type": "text",
+                "prompt": "If 'Compliant with deviations', describe."
+              },
+              {
+                "field": "risk_drivers",
+                "type": "text",
+                "prompt": "Risk drivers (Appendix A)?"
+              },
+              {
+                "field": "remediation",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "7.4A",
+          "title": "Scenario-based Risk Assessment",
+          "description": "Advisory",
+          "question_block": {
+            "type": "swift_attestation",
+            "questions": [
+              {
+                "field": "applicability",
+                "type": "multi_select",
+                "options": [
+                  "A1",
+                  "A2",
+                  "A3",
+                  "A4",
+                  "B"
+                ],
+                "prompt": "Architecture types this control applies to?"
+              },
+              {
+                "field": "compliance",
+                "type": "select",
+                "options": [
+                  "Compliant",
+                  "Compliant with deviations",
+                  "Not Compliant",
+                  "Not Applicable"
+                ],
+                "prompt": "Compliance status?"
+              },
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Implementation status?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "Evidence?"
+              },
+              {
+                "field": "deviation_description",
+                "type": "text",
+                "prompt": "If 'Compliant with deviations', describe."
+              },
+              {
+                "field": "risk_drivers",
+                "type": "text",
+                "prompt": "Risk drivers (Appendix A)?"
+              },
+              {
+                "field": "remediation",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Owner?"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
