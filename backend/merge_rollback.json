@@ -1,0 +1,649 @@
+{
+"merges": [
+{
+"kept": 4669,
+"dropped": [
+4574
+],
+"members": [
+944,
+3179,
+2748,
+788
+],
+"domain": "Governance, Risk & Compliance"
+},
+{
+"kept": 4570,
+"dropped": [
+4671
+],
+"members": [
+1067,
+2613,
+1367,
+943
+],
+"domain": "Governance, Risk & Compliance"
+},
+{
+"kept": 4572,
+"dropped": [
+4481
+],
+"members": [
+3171,
+3110,
+1703,
+168,
+1129,
+2365,
+1131,
+1045,
+2582,
+3355,
+1116,
+925
+],
+"domain": "Governance, Risk & Compliance"
+},
+{
+"kept": 4579,
+"dropped": [
+4679,
+4580
+],
+"members": [
+1539,
+5,
+778,
+2581,
+3357,
+166,
+1830,
+2729,
+2095,
+307,
+695,
+3389,
+1608,
+983,
+609,
+1125,
+2935,
+3192,
+2045
+],
+"domain": "Awareness & Training"
+},
+{
+"kept": 4496,
+"dropped": [
+4686
+],
+"members": [
+3236,
+840,
+1842,
+119,
+122,
+3132,
+1022
+],
+"domain": "Network Security"
+},
+{
+"kept": 4584,
+"dropped": [
+4683
+],
+"members": [
+2596,
+3396,
+1009,
+697,
+185,
+1726
+],
+"domain": "Network Security"
+},
+{
+"kept": 4689,
+"dropped": [
+4591
+],
+"members": [
+3268,
+1597,
+1828,
+1943
+],
+"domain": "Access Control & Identity Management"
+},
+{
+"kept": 4597,
+"dropped": [
+4695,
+4696
+],
+"members": [
+3200,
+3328,
+1199,
+946,
+2166,
+3351,
+88,
+1596,
+830
+],
+"domain": "Access Control & Identity Management"
+},
+{
+"kept": 4602,
+"dropped": [
+4701
+],
+"members": [
+1585,
+1825,
+1537,
+959
+],
+"domain": "Access Control & Identity Management"
+},
+{
+"kept": 4503,
+"dropped": [
+4691
+],
+"members": [
+688,
+693,
+3222,
+1687,
+1626
+],
+"domain": "Access Control & Identity Management"
+},
+{
+"kept": 4504,
+"dropped": [
+4596
+],
+"members": [
+64,
+3267,
+750,
+1234,
+3315,
+3316
+],
+"domain": "Access Control & Identity Management"
+},
+{
+"kept": 4600,
+"dropped": [
+4699
+],
+"members": [
+752,
+3217,
+1236,
+3384,
+699,
+766
+],
+"domain": "Access Control & Identity Management"
+},
+{
+"kept": 4589,
+"dropped": [
+4688
+],
+"members": [
+177,
+69,
+753,
+1238
+],
+"domain": "Access Control & Identity Management"
+},
+{
+"kept": 4511,
+"dropped": [
+4607
+],
+"members": [
+2919,
+1576,
+43,
+45,
+446
+],
+"domain": "Physical & Environmental Security"
+},
+{
+"kept": 4610,
+"dropped": [
+4611
+],
+"members": [
+3209,
+818,
+51,
+993
+],
+"domain": "Physical & Environmental Security"
+},
+{
+"kept": 4604,
+"dropped": [
+4603,
+4606
+],
+"members": [
+2592,
+1826,
+3269,
+3207,
+2697,
+1674,
+1675,
+46,
+815,
+1232,
+816,
+181,
+3321,
+3131,
+990
+],
+"domain": "Physical & Environmental Security"
+},
+{
+"kept": 4708,
+"dropped": [
+4614
+],
+"members": [
+1679,
+2433,
+1231,
+2471
+],
+"domain": "Physical & Environmental Security"
+},
+{
+"kept": 4514,
+"dropped": [
+4620
+],
+"members": [
+737,
+1700,
+883,
+1529,
+3292
+],
+"domain": "Data Protection & Privacy"
+},
+{
+"kept": 4619,
+"dropped": [
+4710,
+4715,
+4717
+],
+"members": [
+3296,
+2594,
+2755,
+37,
+38,
+39,
+1002,
+843,
+173,
+1425,
+1266,
+826,
+894
+],
+"domain": "Data Protection & Privacy"
+},
+{
+"kept": 4624,
+"dropped": [
+4622,
+4718,
+4623
+],
+"members": [
+3360,
+97,
+1018,
+1575,
+2599,
+1612,
+3308,
+2927,
+1840,
+854,
+3386,
+188
+],
+"domain": "Logging, Monitoring & Detection"
+},
+{
+"kept": 4534,
+"dropped": [
+4629,
+4723
+],
+"members": [
+960,
+1325,
+1561,
+1007,
+3121,
+1652,
+1237,
+3385
+],
+"domain": "Logging, Monitoring & Detection"
+},
+{
+"kept": 4535,
+"dropped": [
+4727,
+4541
+],
+"members": [
+907,
+1549,
+878,
+2607,
+3309,
+3245,
+879,
+601
+],
+"domain": "Business Continuity & Resilience"
+},
+{
+"kept": 4537,
+"dropped": [
+4536,
+4728,
+4729
+],
+"members": [
+1216,
+706,
+1219,
+3143,
+1415,
+2608,
+3248,
+3284,
+2807,
+1855
+],
+"domain": "Business Continuity & Resilience"
+},
+{
+"kept": 4630,
+"dropped": [
+4730
+],
+"members": [
+3398,
+1414,
+1645,
+1550,
+722
+],
+"domain": "Business Continuity & Resilience"
+},
+{
+"kept": 4633,
+"dropped": [
+4635,
+4632,
+4634
+],
+"members": [
+1540,
+2918,
+1577,
+810,
+171,
+15,
+3185,
+2583,
+1118,
+1119
+],
+"domain": "Asset Management"
+},
+{
+"kept": 4554,
+"dropped": [
+4737
+],
+"members": [
+1536,
+323,
+1031,
+2409,
+3343
+],
+"domain": "Application & Software Security"
+},
+{
+"kept": 4555,
+"dropped": [
+4557
+],
+"members": [
+350,
+2025,
+335,
+3152,
+2832,
+1304,
+347,
+3390
+],
+"domain": "Application & Software Security"
+},
+{
+"kept": 4653,
+"dropped": [
+4654
+],
+"members": [
+3201,
+2595,
+870,
+1193,
+1034,
+1197,
+2161,
+86,
+1591,
+184,
+3324,
+829,
+1439
+],
+"domain": "Configuration & Change Management"
+},
+{
+"kept": 4656,
+"dropped": [
+4561
+],
+"members": [
+100,
+3332,
+1191,
+2187,
+187,
+2973
+],
+"domain": "Configuration & Change Management"
+},
+{
+"kept": 4659,
+"dropped": [
+4562,
+4744,
+4657,
+4658
+],
+"members": [
+102,
+2598,
+872,
+1704,
+1928,
+3243,
+1010,
+3378,
+1302,
+186,
+2781
+],
+"domain": "Vulnerability & Threat Management"
+},
+{
+"kept": 4666,
+"dropped": [
+4564
+],
+"members": [
+2840,
+193,
+1566,
+615
+],
+"domain": "Incident Management"
+},
+{
+"kept": 4746,
+"dropped": [
+4747
+],
+"members": [
+613,
+1542,
+876,
+152,
+3229
+],
+"domain": "Incident Management"
+},
+{
+"kept": 4563,
+"dropped": [
+4565,
+4567
+],
+"members": [
+195,
+873,
+3163,
+157,
+1659,
+988,
+1564
+],
+"domain": "Incident Management"
+},
+{
+"kept": 4663,
+"dropped": [
+4661,
+4664
+],
+"members": [
+192,
+2056,
+1547,
+2604,
+1299,
+1203,
+1590,
+1657,
+3388,
+1661
+],
+"domain": "Incident Management"
+},
+{
+"kept": 4641,
+"dropped": [
+4734,
+4735,
+4736,
+4642,
+4643,
+4644
+],
+"members": [
+1121,
+1538,
+170,
+1738,
+3182,
+143,
+625,
+626,
+799,
+1589,
+125,
+1757,
+126,
+3359
+],
+"domain": "Third-Party & Supply Chain Risk"
+},
+{
+"kept": 4494,
+"dropped": [
+4576,
+4577
+],
+"members": [
+866,
+1251,
+3205,
+2375,
+137,
+1898,
+1899,
+1900,
+3307,
+1902,
+180,
+2591
+],
+"domain": "Cryptography & Key Management"
+},
+{
+"kept": 4682,
+"dropped": [
+4581
+],
+"members": [
+981,
+1691,
+3189,
+775
+],
+"domain": "Human Resources Security"
+}
+]
+}
