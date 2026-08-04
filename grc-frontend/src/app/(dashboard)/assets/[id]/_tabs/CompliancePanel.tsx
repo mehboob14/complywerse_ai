@@ -751,7 +751,7 @@ export default function CompliancePanel({ asset }: { asset: any }) {
                 scanMutation.isPending ||
                 scanProgress.running
               }
-              className="inline-flex items-center gap-1.5 rounded-lg bg-[#0d5c48] px-3.5 py-2 text-[12.5px] font-semibold text-white border border-[#0d5c48] transition-colors hover:bg-[#0a4a3a] disabled:cursor-not-allowed disabled:opacity-50 whitespace-nowrap"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-[#e7f1ec] px-3.5 py-2 text-[12.5px] font-semibold text-[#0d5c48] border border-[#bcd8cc] transition-colors hover:bg-[#d8e9e0] disabled:cursor-not-allowed disabled:opacity-50 whitespace-nowrap"
               title={
                 ((applicable.count ?? 0) + roomScan.selectedPeerRuleSum) === 0
                   ? 'No applicable rules. Classify the OS first (Re-detect OS or Edit the asset).'
