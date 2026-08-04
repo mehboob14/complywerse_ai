@@ -174,7 +174,7 @@ class SyncService:
         adapter = SyncService.build_adapter(connection)
         stats = {
             "assets_new": 0, "assets_updated": 0, "assets_unchanged": 0,
-            "vulns_new": 0, "vulns_updated": 0, "vulns_closed": 0,
+            "vulns_new": 0, "vulns_updated": 0, "vulns_closed": 0, "vulns_enriched": 0,
             "solutions_synced": 0, "scans_synced": 0, "errors_count": 0,
             "error_details": [],
         }
@@ -183,6 +183,45 @@ class SyncService:
             synced_assets = SyncService._sync_assets(db, adapter, connection, tenant_id, stats)
             SyncService._sync_vulnerabilities(db, adapter, connection, tenant_id, stats, synced_assets=synced_assets)
             SyncService._sync_scans(db, adapter, connection, tenant_id, stats)
+
+            # ── Auto-enrich CVE-bearing vulns (NVD CWE + EPSS + KEV) ──────────
+            # The per-vuln dispatch above uses Celery (.delay), which silently
+            # does nothing when no worker is running — which is how imported
+            # findings ended up with blank CWE/EPSS. run_full_sync itself
+            # executes in a background daemon thread (see integrations/router.py),
+            # so we can enrich SYNCHRONOUSLY here without a worker and without
+            # blocking the request or hitting the /api proxy timeout. This is
+            # self-healing: any CVE vuln still missing enrichment (from this or a
+            # prior sync, for any reason) is picked up on the next sync. Runs
+            # BEFORE composite scoring below so priorities use the fresh EPSS/KEV.
+            try:
+                from grc.modules.vuln_management.enrichment import enrich_vulnerability
+                _eq = db.query(Vulnerability).filter(
+                    Vulnerability.tenant_id == tenant_id,
+                    Vulnerability.cve_id.isnot(None),
+                    or_(Vulnerability.cwe_id.is_(None), Vulnerability.epss_score.is_(None)),
+                )
+                if hasattr(Vulnerability, "connection_id"):
+                    _eq = _eq.filter(Vulnerability.connection_id == connection.id)
+                _todo = _eq.all()
+                _enr_ok = 0
+                for _v in _todo:
+                    try:
+                        enrich_vulnerability(_v, db)
+                        _enr_ok += 1
+                    except Exception:
+                        logger.exception(
+                            "post-sync auto-enrich failed for vuln %s (non-fatal)",
+                            getattr(_v, "id", "?"),
+                        )
+                if _todo:
+                    logger.info(
+                        "post-sync enrichment: %d/%d CVE vulns enriched (conn=%s)",
+                        _enr_ok, len(_todo), connection.id,
+                    )
+                stats["vulns_enriched"] = _enr_ok
+            except Exception:
+                logger.exception("post-sync enrichment block failed (non-fatal)")
 
             # Score every synced vuln from its stored signals so freshly-imported
             # findings carry the correct composite priority immediately, instead of
