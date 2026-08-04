@@ -1811,7 +1811,7 @@ function AddConnectionModal({ onClose }: { onClose: () => void }) {
               <p style={{ fontSize: 13.5, color: 'var(--as-secondary)', marginTop: 0, marginBottom: 16 }}>How do you want to connect?</p>
               <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
                 {choice('agentless', 'Agentless', 'Connect with a login — nothing installed on the target. Windows · Linux · database · cloud · network device · Active Directory.')}
-                {choice('agent', 'Agent', "Install a small program on the machine — for endpoints you can't reach inbound: roaming laptops, NAT'd or firewalled boxes.")}
+                {choice('agent', 'Agent', "Install a small program on the machine — for endpoints you can't reach inbound: roaming laptops, NAT'd or firewalled boxes.", true)}
               </div>
             </div>
           )}
