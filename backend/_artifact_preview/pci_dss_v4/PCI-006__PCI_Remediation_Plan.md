@@ -1,0 +1,59 @@
+<!-- pci_dss_v4 / PCI-006 | type=Plan | mode=table | model=gpt-5.5 | 11824 chars -->
+
+## PCI Remediation Plan (XLSX template)
+
+_Editable template — add your own rows. The example row(s) below are placeholders to replace._
+
+| Remediation ID | Finding / Issue Title | Finding Source | Source Reference ID | PCI DSS v4.0.1 Requirement(s) | Control Objective / Security Outcome | Affected Entity / Business Unit | Affected System / Component | CDE Impact | Issue Description | Root Cause | Risk Rating | Risk Rationale | Remediation Action Plan | Interim Risk Mitigation / Compensating Control | Remediation Owner | Owner Role / Team | Accountable Executive | Target Remediation Date | Regulatory / Assessment Due Date | Priority | Current Status | Percent Complete | Key Milestones | Latest Progress Update | Blockers / Dependencies | Evidence Required for Closure | Evidence Location / Link | Validation Method | Validation Owner | Validation Date | Closure Criteria | Closure Date | Residual Risk Accepted | Risk Acceptance Approver | Risk Acceptance Expiry Date | Assessor / QSA Review Required | Assessor / QSA Comments | Last Updated Date | Next Review Date |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [EXAMPLE: PCI-REM-0001] | [EXAMPLE: Firewall rule review evidence incomplete] | [EXAMPLE: PCI DSS Assessment] | [EXAMPLE: ROC-FND-12] | [EXAMPLE: 1.2.7; 1.4.4] | [EXAMPLE: Network security controls are reviewed and maintained to restrict traffic to and from the CDE] | [EXAMPLE: Payments Operations] | [EXAMPLE: CDE perimeter firewall cluster] | [EXAMPLE: In CDE] | [EXAMPLE: Quarterly firewall rule review was not evidenced for one review period] | [EXAMPLE: Process gap - review completed but evidence was not retained in the approved repository] | [EXAMPLE: Medium] | [EXAMPLE: Missing evidence affects PCI assessment support, but current rule base remains restricted and monitored] | [EXAMPLE: Reperform the missed rule review, document approvals, update procedure to require evidence upload, and add calendar control] | [EXAMPLE: Daily firewall change monitoring remains in place] | [EXAMPLE: Jane Smith, jane.smith@example.com] | [EXAMPLE: Network Security Manager / Network Security Team] | [EXAMPLE: Alex Brown, Head of Infrastructure] | [EXAMPLE: 2026-03-15] | [EXAMPLE: 2026-04-01] | [EXAMPLE: P2] | [EXAMPLE: In Progress] | [EXAMPLE: 45] | [EXAMPLE: 2026-02-20 - rule export captured; 2026-03-05 - owner review scheduled] | [EXAMPLE: Rule export completed; awaiting application owner sign-off] | [EXAMPLE: Application owner availability] | [EXAMPLE: Approved firewall rule review, evidence of exceptions disposition, updated procedure, calendar reminder] | [EXAMPLE: GRC-12345 / Evidence Repository / PCI / Req-1] | [EXAMPLE: Document Review] | [EXAMPLE: Security Assurance Team] | [EXAMPLE: 2026-03-18] | [EXAMPLE: Review evidence is complete, approved, retained, and procedure update is implemented] | [EXAMPLE: 2026-03-20] | [EXAMPLE: No] | [EXAMPLE: Not Applicable] | [EXAMPLE: Not Applicable] | [EXAMPLE: Yes] | [EXAMPLE: QSA to confirm sufficiency of reperformed review evidence] | [EXAMPLE: 2026-02-15] | [EXAMPLE: 2026-02-22] |
+| [EXAMPLE: PCI-REM-0002] | [EXAMPLE: MFA not enforced for one administrative console] | [EXAMPLE: Internal Audit] | [EXAMPLE: IA-PCI-2026-07] | [EXAMPLE: 8.4.2; 8.5.1] | [EXAMPLE: Strong authentication is enforced for all access into the CDE and administrative access] | [EXAMPLE: Digital Commerce] | [EXAMPLE: Payment application administration portal] | [EXAMPLE: Connected to CDE] | [EXAMPLE: One administrator access path permits password-only authentication] | [EXAMPLE: Technical configuration exception created during migration and not removed] | [EXAMPLE: High] | [EXAMPLE: Administrative access without MFA increases likelihood of unauthorized access to systems connected to the CDE] | [EXAMPLE: Enable MFA policy for the console, remove legacy exception, test access, and update access standard] | [EXAMPLE: Access restricted to named administrators from corporate VPN until MFA is enabled] | [EXAMPLE: Ravi Patel, ravi.patel@example.com] | [EXAMPLE: IAM Lead / Identity and Access Management] | [EXAMPLE: Morgan Lee, Chief Information Security Officer] | [EXAMPLE: 2026-02-28] | [EXAMPLE: 2026-03-10] | [EXAMPLE: P1] | [EXAMPLE: Pending Validation] | [EXAMPLE: 90] | [EXAMPLE: 2026-02-10 - policy configured; 2026-02-14 - administrator testing completed] | [EXAMPLE: MFA enabled in test and production; validation evidence being collected] | [EXAMPLE: None] | [EXAMPLE: MFA configuration export, successful MFA login test, removed exception record, approved change ticket] | [EXAMPLE: IAM Ticket IAM-5678 / GRC Evidence PCI Req-8] | [EXAMPLE: Configuration Review] | [EXAMPLE: Compliance Team] | [EXAMPLE: 2026-02-25] | [EXAMPLE: All administrative access requires MFA and no password-only exception remains] | [EXAMPLE: 2026-02-26] | [EXAMPLE: No] | [EXAMPLE: Not Applicable] | [EXAMPLE: Not Applicable] | [EXAMPLE: To Be Confirmed] | [EXAMPLE: None] | [EXAMPLE: 2026-02-18] | [EXAMPLE: 2026-02-25] |
+
+### Column Guidance
+
+| Column | What to enter |
+|---|---|
+| Remediation ID | Enter a unique identifier for the remediation item, using a consistent format such as PCI-REM-0001. |
+| Finding / Issue Title | Enter a short, specific title describing the issue to be remediated. |
+| Finding Source | Enter the origin of the issue; allowed values: Internal Audit, External Audit, PCI DSS Assessment, ASV Scan, Vulnerability Scan, Penetration Test, Incident, Risk Assessment, Control Self-Assessment, QSA Finding, Other. |
+| Source Reference ID | Enter the reference number from the originating report, ticket, scan finding, audit observation, or assessment workbook. |
+| PCI DSS v4.0.1 Requirement(s) | Enter the applicable PCI DSS v4.0.1 requirement number(s), such as 1.2.1, 6.4.3, 8.3.6, 11.3.1, or multiple values separated by semicolons; use 'Multiple' only where a separate mapping is attached. |
+| Control Objective / Security Outcome | Enter the PCI DSS security outcome or objective affected by the issue, in plain language, such as 'restrict access to cardholder data by business need to know'. |
+| Affected Entity / Business Unit | Enter the legal entity, business unit, department, or service area responsible for or impacted by the issue. |
+| Affected System / Component | Enter the affected system, application, network segment, database, process, third-party service, or component name. |
+| CDE Impact | Enter the relationship to the cardholder data environment; allowed values: In CDE, Connected to CDE, Security-impacting system, Out of Scope, To Be Confirmed. |
+| Issue Description | Describe the control gap, deficiency, or non-compliance condition clearly enough for an independent reviewer to understand what is wrong. |
+| Root Cause | Enter the underlying cause of the issue, such as process gap, configuration error, missing evidence, technical limitation, resource constraint, vendor dependency, or policy non-adherence. |
+| Risk Rating | Enter the current risk rating using allowed values: Critical, High, Medium, Low. |
+| Risk Rationale | Briefly explain why the risk rating was assigned, considering likelihood, impact to cardholder data, exploitability, exposure, and compliance effect. |
+| Remediation Action Plan | Enter the specific actions required to remediate the issue, including technical, process, documentation, governance, or evidence actions. |
+| Interim Risk Mitigation / Compensating Control | Enter any temporary mitigation or compensating control in place until full remediation; if none, enter 'None'. |
+| Remediation Owner | Enter the named individual responsible for completing the remediation, using full name and preferably corporate email. |
+| Owner Role / Team | Enter the owner’s role and team, such as Network Security Manager, IAM Team, Application Owner, Vulnerability Management Team. |
+| Accountable Executive | Enter the senior accountable person for escalation and funding decisions, using full name and role. |
+| Target Remediation Date | Enter the planned completion date in YYYY-MM-DD format. |
+| Regulatory / Assessment Due Date | Enter the date by which remediation must be completed for PCI assessment, compliance, contractual, or management commitment purposes in YYYY-MM-DD format. |
+| Priority | Enter delivery priority using allowed values: P1, P2, P3, P4, where P1 is urgent/highest priority. |
+| Current Status | Enter the remediation lifecycle status using allowed values: Not Started, In Progress, Blocked, Pending Validation, Remediated, Risk Accepted, Closed, Cancelled. |
+| Percent Complete | Enter estimated completion as a whole number percentage from 0 to 100. |
+| Key Milestones | Enter dated milestones in concise format, such as 'YYYY-MM-DD - firewall rule review complete; YYYY-MM-DD - change deployed'. |
+| Latest Progress Update | Enter the most recent factual update, including completed work, decisions, and next action. |
+| Blockers / Dependencies | Enter any dependency preventing completion, such as change window, vendor fix, budget approval, resource availability, architecture decision, or third-party response; if none, enter 'None'. |
+| Evidence Required for Closure | Enter the evidence that must be produced to prove remediation, such as configuration export, access review, vulnerability rescan, change ticket, screenshot, policy, procedure, test result, or QSA confirmation. |
+| Evidence Location / Link | Enter the repository path, GRC record link, ticket link, document URL, or evidence archive location where closure evidence is stored. |
+| Validation Method | Enter how remediation effectiveness will be validated; allowed values: Document Review, Configuration Review, Ticket Review, Screenshot Review, Rescan, Retest, Walkthrough, Sampling, QSA Review, Other. |
+| Validation Owner | Enter the person or team responsible for independently validating closure, such as Compliance, Internal Audit, Security Assurance, Vulnerability Management, or QSA. |
+| Validation Date | Enter the date validation was completed in YYYY-MM-DD format; leave blank until validation is complete. |
+| Closure Criteria | Enter the exact conditions that must be met before the item can be closed, aligned to the PCI DSS requirement and required evidence. |
+| Closure Date | Enter the date the remediation item was formally closed in YYYY-MM-DD format; leave blank until closed. |
+| Residual Risk Accepted | Enter whether residual risk remains and is formally accepted; allowed values: Yes, No, Not Applicable. |
+| Risk Acceptance Approver | If residual risk is accepted, enter the approver’s full name and role; otherwise enter 'Not Applicable'. |
+| Risk Acceptance Expiry Date | If residual risk is accepted, enter the expiry or review date in YYYY-MM-DD format; otherwise enter 'Not Applicable'. |
+| Assessor / QSA Review Required | Enter whether review by the PCI assessor or QSA is required; allowed values: Yes, No, To Be Confirmed. |
+| Assessor / QSA Comments | Enter any assessor or QSA comments, conditions, or closure feedback; if none, enter 'None'. |
+| Last Updated Date | Enter the date this remediation record was last updated in YYYY-MM-DD format. |
+| Next Review Date | Enter the next planned review date for this remediation item in YYYY-MM-DD format. |
+
+### Maintenance
+
+The PCI Compliance Manager owns this template, with updates made at least weekly during remediation cycles and immediately after status changes, validation results, or assessor feedback. Source data should be drawn from the GRC platform, PCI assessment findings, audit reports, vulnerability management tools, change/ticketing systems, evidence repository, and QSA communications.

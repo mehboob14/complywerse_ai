@@ -1,0 +1,2644 @@
+{
+  "metadata": {
+    "name": "SBP Cloud Outsourcing Framework",
+    "description": "The State Bank of Pakistan Framework on Outsourcing to Cloud Service Providers sets out minimum requirements for Regulated Entities (REs) to outsource their material and non-material workloads to Cloud Service Providers (CSPs), covering governance, due diligence, oversight, security, data protection, contingency planning, and operational controls.",
+    "version": "2023",
+    "source_organization": "State Bank of Pakistan (SBP)",
+    "effective_date": "2023-01-16",
+    "classification": "compliance",
+    "framework_type": "regulatory",
+    "classification_confidence": 0.99,
+    "classification_reasoning": "The SBP Cloud Outsourcing Framework is a mandatory regulatory framework issued by the State Bank of Pakistan for all Regulated Entities (banks, MFBs, DFIs, DBs, EMIs, PSOs, PSPs) seeking to adopt cloud computing services. It requires prior SBP approval for material offshore workloads, submission of CO arrangement details, and periodic regulatory reporting.",
+    "framework_purpose": "To set out minimum requirements for Regulated Entities to safely and securely outsource their material and non-material workloads to Cloud Service Providers, while maintaining data sovereignty, operational resilience, regulatory compliance, and protection of customers' data.",
+    "framework_scope": "All Regulated Entities (REs) supervised by the State Bank of Pakistan — including Banks, Microfinance Banks (MFBs), Development Finance Institutions (DFIs), Digital Banks (DBs), Electronic Money Institutions (EMIs), Payment System Operators (PSOs), Payment Service Providers (PSPs), and designated PSOs/PSPs — for all cloud service models (SaaS, PaaS, IaaS) and all deployment models (public, private, community, hybrid).",
+    "framework_objectives": [
+      "Define permissible cloud outsourcing arrangements for onshore and offshore CSPs",
+      "Establish board-level governance and policy framework for cloud adoption",
+      "Ensure comprehensive due diligence of CSPs before engagement",
+      "Mandate effective oversight and ongoing monitoring of CSP arrangements",
+      "Require contingency planning and business continuity for cloud workloads",
+      "Ensure right to audit, access, and information for REs and SBP",
+      "Define structured exit planning to avoid lock-in and dependency risks",
+      "Govern sub-contracting arrangements and supply chain risks",
+      "Enforce user access management and multi-factor authentication",
+      "Mandate robust change and configuration management controls",
+      "Require formal incident management and cybersecurity response",
+      "Protect data security, confidentiality, integrity, and residency",
+      "Govern cryptographic key management and HSM requirements",
+      "Enable tokenization for sensitive data workloads",
+      "Mandate secure network architecture and cloud-specific protections",
+      "Require periodic security testing including penetration testing",
+      "Establish 24x7 security event monitoring integrated with SIEM",
+      "Ensure regulatory reporting to SBP for material cloud workloads"
+    ],
+    "target_audience": "Board of Directors, CIOs, CISOs, ITSC, IT Governance Teams, Compliance Officers, Internal Audit, Legal Function, and Procurement Teams of SBP-regulated entities",
+    "certification_body": null,
+    "certification_validity_period": null,
+    "certification_levels": null,
+    "certification_lifecycle": null,
+    "required_artifacts": null,
+    "regulatory_authority": "State Bank of Pakistan (SBP) — Banking Policy & Regulations Department (BPRD) for Banks, MFBs, DBs, DFIs; Payment Systems Policy & Oversight Department (PSP&OD) for designated PSOs/PSPs",
+    "compliance_deadline": null,
+    "penalty_for_non_compliance": "Non-compliance may result in regulatory penalties, restrictions on cloud outsourcing, enforcement actions, and SBP instructions to restrict or shift cloud workloads as per applicable regulations.",
+    "adoption_approach": "Risk-based implementation. SBP approval required before outsourcing material workloads to offshore CSPs. REs must submit CO arrangement details to SBP one month before placing material workloads with CSPs.",
+    "hierarchy_structure": {
+      "levels": [
+        "Domain",
+        "Section",
+        "Requirement"
+      ],
+      "numbering_pattern": "N.N"
+    },
+    "document_structure": {
+      "sections": [
+        "E. Permissible Cloud Outsourcing Arrangements",
+        "F. Governance",
+        "G. Due Diligence of Cloud Service Provider",
+        "H. Oversight",
+        "I. Contingency Planning",
+        "J. Right to Audit, Access and Information",
+        "K. Exit Planning",
+        "L. Sub-Contracting",
+        "M. User Access Management and Authentication",
+        "N. Change and Configuration Management",
+        "O. Incident Management",
+        "P. Data Security",
+        "Q. Cryptographic Key Management",
+        "R. Tokenization",
+        "S. Network Architecture",
+        "T. Security Testing",
+        "U. Security Event Monitoring",
+        "V. Other Requirements"
+      ],
+      "control_patterns": {
+        "primary_pattern": "N.N",
+        "secondary_patterns": [
+          "N.N.N"
+        ],
+        "examples": [
+          "1.1",
+          "2.3",
+          "5.2"
+        ]
+      },
+      "requirement_indicators": {
+        "mandatory_keywords": [
+          "shall",
+          "must",
+          "required"
+        ],
+        "advisory_keywords": [
+          "should",
+          "may",
+          "recommended"
+        ]
+      },
+      "total_expected_controls": 58
+    },
+    "exported_at": "2026-03-27T00:00:00.000000",
+    "source_framework_id": null,
+    "total_controls": 58
+  },
+  "controls": [
+    {
+      "control_id": "1.1",
+      "original_reference": "E.2",
+      "title": "Permissible Onshore Cloud Outsourcing",
+      "description": "All types of workloads (material and non-material) may be outsourced to reputable onshore (domestic) CSPs.",
+      "full_text": "All types of workloads (i.e. material and non-material) may be outsourced to reputable onshore (i.e. domestic) CSPs. REs shall give preference to onshore CSPs for outsourcing their workloads. REs shall not process and store their data in unfriendly or hostile jurisdictions.",
+      "domain": "Governance",
+      "category": "Permissible Arrangements — Onshore",
+      "section_number": "E.2.a",
+      "parent_section": "E",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Cloud Outsourcing Arrangement Register",
+          "description": "Register listing every cloud outsourcing arrangement with CSP classification (onshore/offshore), workload materiality, service/deployment model and status.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Board-Approved Onshore-Preference Policy",
+          "description": "Cloud outsourcing policy section (BoD approved) articulating preference for onshore CSPs and the rationale/criteria for any offshore deviation.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "CSP Reputability Assessment",
+          "description": "Assessment report documenting why the selected onshore CSP is deemed reputable, including reference checks, track record and certification review.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Hostile-Jurisdiction Exclusion Memo",
+          "description": "Legal/Compliance memo confirming none of the CSP data-centre locations fall within unfriendly or hostile jurisdictions per SBP direction.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Data Residency Enforcement Configuration",
+          "description": "Configuration export (e.g., Azure Policy / AWS SCP / GCP Org Policy) restricting resource deployment to permitted onshore regions.",
+          "filetype": "JSON"
+        }
+      ]
+    },
+    {
+      "control_id": "1.2",
+      "original_reference": "E.2.c",
+      "title": "SBP Approval for Material Offshore Workloads",
+      "description": "Banks, MFBs, DBs, DFIs, and designated PSOs/PSPs must obtain SBP approval before outsourcing material workloads to offshore CSPs. Non-material workloads may be outsourced to offshore CSPs without SBP approval.",
+      "full_text": "Banks, MFBs, DBs, DFIs and designated PSOs/PSPs may outsource their non-material workloads to offshore CSPs. However, outsourcing of their material workloads to offshore CSPs shall be subject to SBP approval whereby SBP may grant approval on case to case basis, after considering: systemic implications, institution specific risks, legal and other strategic risks, data processing and storage, availability and quality of services, security and other controls, contingency and exit planning, resilience, sub-contracting, assurance mechanism, and roles and responsibilities. For approval, banks, MFBs, DBs and DFIs shall submit their request to BPRD whereas designated PSOs/PSPs shall submit it to PSP&OD.",
+      "domain": "Compliance",
+      "category": "Regulatory Approval",
+      "section_number": "E.2.c-d",
+      "parent_section": "E",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "SBP Approval Letter (Material Offshore CO)",
+          "description": "Signed SBP approval letter from BPRD or PSP&OD authorising outsourcing of material workload(s) to the named offshore CSP.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "BPRD / PSP&OD Submission Package",
+          "description": "Submission package sent to BPRD (banks/MFBs/DBs/DFIs) or PSP&OD (designated PSOs/PSPs) covering all eleven SBP evaluation criteria.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Material Workload Risk Assessment",
+          "description": "Detailed risk assessment covering systemic implications, institution-specific risks, legal/strategic risks, data processing/storage, availability, security, contingency, exit, resilience, sub-contracting, assurance and roles.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Material vs Non-Material Workload Register",
+          "description": "Register distinguishing material from non-material workloads with materiality criteria, classification rationale and approver.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Internal Pre-Submission Approval Records",
+          "description": "ITSC/Board approval records authorising the pre-placement submission to SBP for each material offshore CO arrangement.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "1.3",
+      "original_reference": "E.2.b",
+      "title": "EMI and Non-Designated PSO/PSP Offshore Outsourcing",
+      "description": "EMIs and non-designated PSOs/PSPs may outsource their material and non-material workloads to offshore CSPs.",
+      "full_text": "EMIs, non-designated PSOs/PSPs may outsource their material and non-material workloads to offshore (i.e. outside Pakistan) CSPs.",
+      "domain": "Governance",
+      "category": "Permissible Arrangements — Offshore",
+      "section_number": "E.2.b",
+      "parent_section": "E",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        {
+          "name": "Regulatory Classification Evidence",
+          "description": "SBP licensing/authorisation documentation confirming RE's classification as EMI or non-designated PSO/PSP.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Cloud Outsourcing Arrangement Register",
+          "description": "Register of offshore CO arrangements with workload materiality, CSP, jurisdiction and go-live dates.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Signed Offshore CSP Contract",
+          "description": "Executed CSP contract for the offshore arrangement meeting all framework requirements (Appendix-I areas).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Framework Compliance Checklist",
+          "description": "Checklist demonstrating that the offshore arrangement complies with every section of this framework despite exemption from BPRD pre-approval.",
+          "filetype": "XLSX"
+        }
+      ]
+    },
+    {
+      "control_id": "1.4",
+      "original_reference": "E.3-6",
+      "title": "RE Accountability and SBP Oversight Powers",
+      "description": "Outsourcing to CSPs does not absolve REs from their prime responsibilities. SBP may instruct REs to restrict cloud outsourcing or shift workloads to an SBP-designated onshore community cloud.",
+      "full_text": "Outsourcing of services to CSPs does not absolve the REs from their prime responsibilities including managing and running the business operations effectively, legal and regulatory compliance, and protection of customers' data. SBP may instruct any RE to restrict outsourcing of their workloads to CSPs due to its systemic impact, unacceptable risks and any other concerns. REs shall submit details of their CO arrangements to SBP, as and when required. SBP may instruct REs to shift their cloud based workloads to SBP designated onshore community cloud as and when the same is available.",
+      "domain": "Governance",
+      "category": "Accountability and SBP Oversight",
+      "section_number": "E.3-6",
+      "parent_section": "E",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "BoD Resolution — Cloud Accountability",
+          "description": "Board of Directors resolution acknowledging ultimate accountability for cloud-hosted information assets and confirming non-absolution from prime responsibilities.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "SBP Information Response Log",
+          "description": "Log of information requests received from SBP on CO arrangements with response date and contents submitted.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "CO Arrangement Dossier for SBP",
+          "description": "Consolidated dossier of cloud outsourcing arrangements maintained in readiness for SBP submission on demand.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "IA Independent Certification to Board",
+          "description": "Internal Audit certification to the Board confirming legal and regulatory compliance of CO arrangements.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Community Cloud Readiness Note",
+          "description": "Documented readiness / contingency note showing capability to shift workloads to SBP-designated onshore community cloud when announced.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "2.1",
+      "original_reference": "F.1",
+      "title": "Board-Approved Cloud Outsourcing Policy",
+      "description": "REs shall develop a comprehensive cloud outsourcing policy duly approved by their Board of Directors, covering all aspects prescribed in the framework.",
+      "full_text": "Develop a comprehensive policy for CO duly approved by their BoD. In this regard, the REs can also amend their existing 'Policy for Outsourcing Arrangements' to include/update CO. The policy shall encompass all services, as per requirements provided in section E above that can be outsourced to CSP, and at least include all those aspects that have been prescribed in this framework.",
+      "domain": "Governance",
+      "category": "Cloud Outsourcing Policy",
+      "section_number": "F.1",
+      "parent_section": "F",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Cloud Outsourcing Policy",
+          "description": "Comprehensive BoD-approved cloud outsourcing policy (or amended Outsourcing Policy incorporating CO) covering all aspects of this framework.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "BoD Meeting Minutes — Policy Approval",
+          "description": "Board minutes recording approval of the Cloud Outsourcing Policy and any subsequent reviews/updates.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Policy Review Log",
+          "description": "Version-controlled log of periodic policy reviews with dates, reviewer, changes and approval references.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Framework-to-Policy Coverage Matrix",
+          "description": "Matrix mapping each SBP Framework requirement (sections E through V plus Appendix-I) to the corresponding clause in the policy.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Policy Dissemination Records",
+          "description": "Records evidencing dissemination of the approved policy to relevant stakeholders with acknowledgements.",
+          "filetype": "EML"
+        }
+      ]
+    },
+    {
+      "control_id": "2.2",
+      "original_reference": "F.2",
+      "title": "Due Diligence and Proactive Risk Identification",
+      "description": "REs shall conduct appropriate due diligence of CSPs and proactively identify any risks from CO arrangements, including sub-contracting risks.",
+      "full_text": "Conduct appropriate due diligence of CSPs and proactively identify any risks emanating from their CO arrangements including risks associated with sub-contracting by CSPs.",
+      "domain": "Vendor",
+      "category": "CSP Due Diligence",
+      "section_number": "F.2",
+      "parent_section": "F",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "CSP Due Diligence Procedure",
+          "description": "Documented procedure for conducting CSP due diligence covering all criteria in section G (G.1-G.16) of the Framework.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Completed CSP Due Diligence Reports",
+          "description": "Completed due diligence reports for each engaged CSP with findings, risk rating and go/no-go decision.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Cloud Outsourcing Risk Register",
+          "description": "Risk register covering CSP-specific risks, sub-contracting risks, residual risks and treatment plans.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Sub-contracting Risk Assessment",
+          "description": "Dedicated sub-contracting risk assessment for each CSP's supply chain with visibility, depth and mitigation.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "2.3",
+      "original_reference": "F.3",
+      "title": "Enterprise Risk Management Framework Update for Cloud",
+      "description": "REs shall update their Enterprise Risk Management framework to include cloud-specific risks: sub-contracting, geographic/jurisdictional risks, legal, regulatory, connectivity, political/security situation, and oversight feasibility.",
+      "full_text": "Update their Enterprise Risk Management framework or other relevant policies for effective oversight and management of risks emanating from the CO arrangement(s). The framework shall include sub-contracting risks, assessment of cloud service location(s) especially if outside Pakistan with specific focus on areas including but not limited to legal aspects; regulatory issues; jurisdictional concerns; availability; security and resilience of information assets and services; connectivity; political and security situation; ease of oversight; plausibility of RE, SBP and external audit staff to travel for onsite assessment/audit or alternate assurance mechanism.",
+      "domain": "Risk",
+      "category": "Enterprise Risk Management",
+      "section_number": "F.3",
+      "parent_section": "F",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Updated Enterprise Risk Management Framework",
+          "description": "ERM framework (or equivalent policy) updated to explicitly cover cloud outsourcing risks including sub-contracting and location risks.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Cloud Location Risk Assessment",
+          "description": "Jurisdictional risk assessment for each offshore cloud service location covering legal, regulatory, availability, security, connectivity, political/security and oversight feasibility.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Cloud Risk Register with Location Ratings",
+          "description": "Register of cloud service locations with risk ratings, onsite-audit feasibility and approval status.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Alternate Assurance Mechanism Document",
+          "description": "Documented alternate assurance mechanism for locations where onsite assessment by RE/SBP/external audit is impractical.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "ERM Approval Records",
+          "description": "Management/Board approval records for the updated ERM framework.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "2.4",
+      "original_reference": "F.4",
+      "title": "ITSC Cloud Governance Delegation",
+      "description": "Cloud-specific governance responsibilities including SLA oversight, KPI/KRI review, and incident oversight shall be delegated to the IT Steering Committee (ITSC) with suitably amended Terms of Reference.",
+      "full_text": "Delegate cloud specific governance responsibilities such as for overseeing adherence to regulatory as well as performance requirements, including cloud service SLAs, reviewing of KPIs and KRIs, incidents (including cybersecurity incidents) and other relevant matters to the ITSC. In this regard, the ToRs of ITSC shall be suitably amended to include these responsibilities.",
+      "domain": "Governance",
+      "category": "ITSC Governance",
+      "section_number": "F.4",
+      "parent_section": "F",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Amended ITSC Terms of Reference",
+          "description": "Updated ITSC ToR explicitly including cloud outsourcing governance responsibilities (SLAs, KPIs/KRIs, incidents).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "ITSC Meeting Minutes — Cloud Oversight",
+          "description": "ITSC meeting minutes evidencing review of CSP SLAs, KPI/KRI performance and cloud incidents (including cybersecurity incidents).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Cloud KPI/KRI Dashboard for ITSC",
+          "description": "Dashboard pack submitted to ITSC showing CSP performance KPIs and cloud risk KRIs.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Delegation Approval Evidence",
+          "description": "Approval record of the amended ITSC ToR by the Board (or committee with authority).",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "2.5",
+      "original_reference": "F.5",
+      "title": "Legally Binding SLAs with CSPs",
+      "description": "All CO arrangements shall be undertaken through legally binding SLAs covering all areas in Appendix I, vetted by the RE's legal function, and executed by the RE itself (not parent/subsidiary) with governing law preferably of Pakistan.",
+      "full_text": "Undertake all CO arrangements through legally binding SLAs, which shall at least include the areas prescribed in Appendix – I. These SLAs must be vetted by the legal function of the RE and be executed by the REs (except branches of foreign banks) themselves instead of their parent company or subsidiary, with governing law preferably as law of Pakistan. However, compliance with the laws of Pakistan, along with compliance to any legal obligation as prescribed by the host country of the CSP, shall be mandatory at all times.",
+      "domain": "Vendor",
+      "category": "CSP Contracting / SLA",
+      "section_number": "F.5",
+      "parent_section": "F",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Signed CSP Service Level Agreements",
+          "description": "Legally binding SLAs executed with each CSP covering all 33 areas prescribed in Appendix-I of the Framework.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Legal Function Vetting Sign-off",
+          "description": "Legal function vetting sign-off records on each SLA before execution.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Appendix-I Clause Coverage Matrix",
+          "description": "Matrix mapping each Appendix-I SLA area to the corresponding clause in the executed SLA.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Execution Authority Evidence",
+          "description": "Evidence confirming SLA executed by the RE itself (not parent/subsidiary) — applicable to all REs except branches of foreign banks.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Governing Law Attestation",
+          "description": "Attestation confirming Pakistani law as governing law (or rationale for deviation) and simultaneous compliance with any host-country legal obligations.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "2.6",
+      "original_reference": "F.6",
+      "title": "Defined Roles and Responsibilities Before Transfer",
+      "description": "REs shall define and agree upon roles and responsibilities of IT and operational departments before transferring information assets and services to a CSP.",
+      "full_text": "Define and agree upon the roles and responsibilities of the IT and operational departments (e.g. requirement analysis, performance testing, UAT, responsibility for data validation, etc.), before transferring information assets and services to a CSP.",
+      "domain": "Governance",
+      "category": "Roles and Responsibilities",
+      "section_number": "F.6",
+      "parent_section": "F",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Cloud Migration RACI Matrix",
+          "description": "RACI matrix for IT and operational departments covering requirement analysis, performance testing, UAT and data validation responsibilities pre-transfer.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Pre-Transfer Roles Agreement",
+          "description": "Signed document agreeing roles and responsibilities for each cloud migration prior to transfer of information assets.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Migration Runbook",
+          "description": "Runbook for transferring information assets and services to a CSP with role-by-role task assignments.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Sign-off Records for Information Asset Transfer",
+          "description": "Pre-go-live sign-off records confirming agreed roles have been executed prior to workload cut-over.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "2.7",
+      "original_reference": "F.7",
+      "title": "Internal Audit Certification of Regulatory Compliance",
+      "description": "CO arrangements must be compliant with legal and regulatory requirements, and the Internal Audit function shall provide independent certification to the Board of Directors.",
+      "full_text": "Ensure that the CO arrangements are compliant with the relevant legal and regulatory requirements, and the IA functions of the REs shall provide independent certification to their BoDs in this regard.",
+      "domain": "Audit",
+      "category": "Internal Audit Certification",
+      "section_number": "F.7",
+      "parent_section": "F",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "IA Independent Certification Report to BoD",
+          "description": "Internal Audit's independent certification to the Board confirming regulatory and legal compliance of CO arrangements.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "IA Cloud Audit Scope & Methodology",
+          "description": "IA's documented scope, methodology and sampling approach for certifying CO compliance.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Regulatory Compliance Matrix",
+          "description": "Matrix mapping CO arrangement controls to SBP Framework, applicable laws and regulations with IA review conclusions.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "BoD/Audit Committee Minutes — IA Certification",
+          "description": "Board or Audit Committee minutes receiving and discussing the IA certification.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "3.1",
+      "original_reference": "G.1-4",
+      "title": "CSP Feasibility and Financial Due Diligence",
+      "description": "REs shall evaluate feasibility of CO arrangements (cost, quality, regulatory compliance), assess CSP's ability to meet Pakistan's legal/regulatory requirements, financial strength, and competence/track record.",
+      "full_text": "REs shall exercise reasonable care before entering into CO arrangements. Due diligence criteria shall include: Evaluation of feasibility of CO arrangements including cost effectiveness, quality of service, and legal/regulatory/compliance risks. Ability of CSP to meet legal and regulatory requirements of Pakistan. Assessment of financial strength and resources. Competence, business structure, experience, track record in delivering such services.",
+      "domain": "Vendor",
+      "category": "CSP Due Diligence — Feasibility & Financial",
+      "section_number": "G.1-4",
+      "parent_section": "G",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Feasibility Study Report",
+          "description": "Feasibility study covering cost-effectiveness, service quality, and legal/regulatory/compliance risks of the CO arrangement.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Pakistan Regulatory Compliance Assessment",
+          "description": "Assessment of CSP's ability to meet Pakistan legal and regulatory requirements applicable to the outsourced workload with gap analysis.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "CSP Financial Strength Analysis",
+          "description": "Assessment report covering audited financial statements, credit rating, liquidity and going-concern indicators of the CSP.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "CSP Audited Financials",
+          "description": "CSP's latest audited financial statements obtained during due diligence.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "CSP Track Record Verification",
+          "description": "Corporate profile, client reference list and verified track record documentation including the Framework's minimum 5-year experience check.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Cost-Benefit Analysis",
+          "description": "Cost-benefit analysis comparing cloud vs on-premise or alternate arrangements.",
+          "filetype": "XLSX"
+        }
+      ]
+    },
+    {
+      "control_id": "3.2",
+      "original_reference": "G.5-8",
+      "title": "CSP Security, Governance, and Cybersecurity Assessment",
+      "description": "REs shall assess CSP's ability to comply with minimum controls (confidentiality, integrity, availability, resilience), corporate governance, data residency control, and cybersecurity/IT capabilities including international standards adherence.",
+      "full_text": "Assessment of CSPs ability to comply with necessary minimum controls including physical security/internal controls based on the intended workloads, especially with respect to confidentiality, integrity, availability and resilience. Assessment of corporate governance and entity level controls. Assessment of CSPs ability to provide REs the control over data residency enabling them to shift over preferred data center instance, depending upon the cloud service model, in order to host these services at such locations/countries/regions considering geopolitical risks. Cybersecurity and IT capabilities including adherence to international standards and best practices.",
+      "domain": "Vendor",
+      "category": "CSP Due Diligence — Security & Governance",
+      "section_number": "G.5-8",
+      "parent_section": "G",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "CSP Controls Assessment Report",
+          "description": "Assessment of CSP physical security and internal controls against intended workload CIA and resilience requirements.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Corporate Governance Review of CSP",
+          "description": "Review report on CSP corporate governance, board composition, oversight practices and entity-level controls.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Data Residency Capability Assessment",
+          "description": "Assessment of CSP's ability to provide RE control over data residency, including shifting between preferred data-centre instances considering geopolitical risks.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Data Residency Configuration Screenshots",
+          "description": "Screenshots from the CSP portal showing data residency controls and region restrictions.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "CSP Cybersecurity Certification Pack",
+          "description": "CSP security certifications reviewed (ISO 27001, SOC 2 Type II, PCI DSS, CSA STAR) evidencing adherence to international standards.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "CSP Certifications Register",
+          "description": "Register tracking CSP certifications, issue dates, expiry dates and scope of coverage.",
+          "filetype": "XLSX"
+        }
+      ]
+    },
+    {
+      "control_id": "3.3",
+      "original_reference": "G.9-14",
+      "title": "CSP Sub-Contracting, Data Security, Audit Rights, and Certifications",
+      "description": "Due diligence shall cover CSP sub-contracting risk management, data security controls, audit/access/information rights, support services, contingency/exit arrangements, and up-to-date certifications (IT service delivery, BCP/DR, cybersecurity, Tier III data center).",
+      "full_text": "Due diligence criteria shall include: Sub-contracting risk management. Data security related controls. Access, audit and information rights of REs, SBP and external auditors of the REs. Support services. Contingency, resilience and exit arrangements. Up to date certification and attestation of the CSPs including but not limited to IT service delivery, business continuity & disaster recovery, cyber/information security, and data center Tier III certification.",
+      "domain": "Vendor",
+      "category": "CSP Due Diligence — Controls & Certifications",
+      "section_number": "G.9-14",
+      "parent_section": "G",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "CSP Sub-contracting Risk Assessment",
+          "description": "Assessment of CSP sub-contracting practices including sub-contractor inventory and risk mitigation.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "CSP Data Security Controls Assessment",
+          "description": "Assessment of CSP data security controls (encryption, key management, DLP, access controls, data classification).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Contractual Audit Rights Clauses",
+          "description": "SLA clauses granting audit, access and information rights to RE, SBP and RE's external auditors over CSP and sub-contractors.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "CSP Support Services SLA",
+          "description": "Support services SLA covering response times, escalation tiers, 24x7 availability and language.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "CSP Contingency & Exit Review",
+          "description": "Review of CSP-side contingency plan, DR capability and exit support.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "CSP Certification Register — Tier III / ISO 27001 / ISO 22301 / SOC 2",
+          "description": "Register and copies of CSP certifications covering IT service delivery, BCP/DR, cybersecurity/information security and Tier III data centre.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Certification Copies (PDF Evidence)",
+          "description": "Copies of each CSP certification document obtained and validated.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "3.4",
+      "original_reference": "G.15",
+      "title": "CSP Liability for Security and Service Failures",
+      "description": "Due diligence shall cover CSP liability for unauthorized transactions, service disruptions, security breaches, and enforcement/penal actions against REs caused by CSP faults.",
+      "full_text": "Liability of claims/penalties on CSPs for: Unauthorized transactions; Service disruptions; Security breaches; Enforcement and penal actions that may be taken by regulatory and legal authorities against the REs for not complying the regulatory and legal requirements, due to faults by CSPs.",
+      "domain": "Vendor",
+      "category": "CSP Liability & Remedies",
+      "section_number": "G.15",
+      "parent_section": "G",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Liability & Penalty SLA Clauses",
+          "description": "SLA clauses establishing CSP liability and penalties for unauthorised transactions, service disruptions, security breaches and regulatory penal actions caused by CSP faults.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Indemnification Provisions",
+          "description": "Indemnification clauses covering regulatory/legal penalties imposed on the RE attributable to CSP.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Liquidated Damages Schedule",
+          "description": "Schedule of liquidated damages and service credits by event type and severity.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Legal Enforceability Opinion",
+          "description": "Legal opinion confirming enforceability of liquidated damages clauses under governing law.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "3.5",
+      "original_reference": "G.16",
+      "title": "Material Workload — Threat and Vulnerability Assessment of CSP Data Centers",
+      "description": "For material workloads, REs shall conduct Threat & Vulnerability Assessment or equivalent independent assessments of CSP data centers covering physical/environmental security, perimeter security, access controls, monitoring, redundancy, natural disasters, and political/economic climate. Independent assessments required; SOC Reports (level 1, 2 & 3) may be considered.",
+      "full_text": "For material workloads: Threat & Vulnerability Assessment or equivalent independent assessments of data centers to identify the security and operational weaknesses. The scope of such assessments shall include physical and environmental security, perimeter security, access controls, security & emergency procedures, monitoring, redundancy, natural disasters, and the political and economic climate of the country in which the data center resides. The assessment shall cover all data centers where the REs' data/systems will reside. Independent assessments instead of solely relying on attestations by the CSPs, and the results shall be reviewed by REs' IA as well as Information Security (IS) function. However, the REs may consider SOC Reports (level 1, 2 & 3).",
+      "domain": "Vendor",
+      "category": "Material Workload Due Diligence",
+      "section_number": "G.16",
+      "parent_section": "G",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "T&V Assessment Report (CSP Data Centres)",
+          "description": "Threat & Vulnerability Assessment (or equivalent independent) report covering all CSP data centres hosting RE data/systems for material workloads.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "T&V Scope Confirmation",
+          "description": "Scope document confirming assessment covers physical/environmental security, perimeter, access controls, emergency procedures, monitoring, redundancy, natural disasters, and country political/economic climate.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Data Centre Coverage List",
+          "description": "List of all data centres where RE data/systems reside with confirmation that each was included in the T&V assessment.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Country Risk Report",
+          "description": "Political and economic climate risk report for each data-centre country.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "SOC 1/2/3 Reports",
+          "description": "CSP SOC 1, SOC 2 Type II and SOC 3 reports reviewed as supplementary assurance for material workloads.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "IA and InfoSec Review Records",
+          "description": "Internal Audit and Information Security function review records of the independent assessment results.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "T&V Findings Remediation Tracker",
+          "description": "Tracker of findings from CSP data-centre assessments with owners, due dates and closure evidence.",
+          "filetype": "XLSX"
+        }
+      ]
+    },
+    {
+      "control_id": "4.1",
+      "original_reference": "H.1",
+      "title": "Effective Oversight Mechanism for CSPs",
+      "description": "REs shall develop and maintain an effective oversight mechanism covering CSP performance against SLAs, ongoing viability, cybersecurity practices, changes in service location, sub-contracting, change of ownership, control environment, and timely response to emerging risks.",
+      "full_text": "Develop and maintain an effective oversight mechanism including but not limited to the assessment of performance against desired service levels and ongoing viability of the CSP and its services, cybersecurity practices and controls, changes in service location(s), sub-contracting, change of ownership, control environment; and timely response to emerging risks and issues.",
+      "domain": "Vendor",
+      "category": "CSP Oversight",
+      "section_number": "H.1",
+      "parent_section": "H",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "CSP Oversight Framework",
+          "description": "Documented framework for ongoing CSP oversight covering performance, viability, cyber practices, location/sub-contracting/ownership changes and emerging risks.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "CSP Oversight Dashboard",
+          "description": "Oversight dashboard tracking SLA performance, viability indicators, security metrics and change-event alerts.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Oversight Review Minutes",
+          "description": "Minutes of periodic oversight reviews (ITSC or designated committee) with decisions and actions.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Emerging Risks Register",
+          "description": "Register of emerging cloud risks with response actions, owners and timelines.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "CSP Change Log",
+          "description": "Log of notified CSP changes in ownership, service locations and sub-contracting with RE response.",
+          "filetype": "XLSX"
+        }
+      ]
+    },
+    {
+      "control_id": "4.2",
+      "original_reference": "H.2",
+      "title": "Ongoing CSP Compliance Monitoring",
+      "description": "REs shall on an ongoing basis review and monitor the CSP's compliance with legal, regulatory, and contractual obligations.",
+      "full_text": "On an ongoing basis, review and monitor the CSP's compliance with legal, regulatory and contractual obligations.",
+      "domain": "Compliance",
+      "category": "CSP Compliance Monitoring",
+      "section_number": "H.2",
+      "parent_section": "H",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "CSP Compliance Monitoring Register",
+          "description": "Register tracking CSP compliance against legal, regulatory and contractual obligations with review cadence and evidence.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Periodic Compliance Review Reports",
+          "description": "Periodic compliance review reports on the CSP with findings and follow-up actions.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Contractual Obligation Tracker",
+          "description": "Tracker of contractual obligations and their fulfilment status throughout the contract lifecycle.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Regulatory Change Impact Log",
+          "description": "Log of regulatory changes impacting CSP obligations and actions taken to reflect them.",
+          "filetype": "XLSX"
+        }
+      ]
+    },
+    {
+      "control_id": "4.3",
+      "original_reference": "H.3",
+      "title": "Cloud Data and Workload Access Monitoring",
+      "description": "REs shall monitor access to their cloud data and workloads, wherever possible, such as through cloud activity reports.",
+      "full_text": "Monitor access to their cloud data/workloads, wherever possible such as through cloud activity reports.",
+      "domain": "Access",
+      "category": "Cloud Access Monitoring",
+      "section_number": "H.3",
+      "parent_section": "H",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Cloud Activity Logs",
+          "description": "Cloud activity logs (CloudTrail / Azure Activity / GCP Audit Logs) capturing access to cloud data and workloads.",
+          "filetype": "LOG"
+        },
+        {
+          "name": "Cloud Access Monitoring Configuration",
+          "description": "Configuration screenshots showing enabled cloud activity logging and log retention settings.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Periodic Access Review Reports",
+          "description": "Periodic access review reports derived from cloud activity logs with anomalies investigated.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Anomalous Access Alerting Rules",
+          "description": "Alerting rules configured to detect anomalous data/workload access patterns in the cloud.",
+          "filetype": "JSON"
+        }
+      ]
+    },
+    {
+      "control_id": "4.4",
+      "original_reference": "H.4",
+      "title": "Review of CSP Internal Control and Audit Reports",
+      "description": "REs shall review internal control assessment and audit reports of CSPs to obtain assurance regarding security and resilience.",
+      "full_text": "Review internal control assessment/audit reports of the CSPs, in order to obtain assurance regarding the security and resilience.",
+      "domain": "Audit",
+      "category": "CSP Control Report Review",
+      "section_number": "H.4",
+      "parent_section": "H",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "CSP SOC / ISO Audit Reports",
+          "description": "CSP SOC 2 Type II, ISO 27001, ISO 22301 and other control/audit reports obtained and reviewed.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "CSP Report Review Records",
+          "description": "Documented review of CSP reports with conclusions on security and resilience assurance.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Findings Tracker from CSP Reports",
+          "description": "Tracker of findings identified in CSP audit reports with RE response and remediation monitoring.",
+          "filetype": "XLSX"
+        }
+      ]
+    },
+    {
+      "control_id": "4.5",
+      "original_reference": "H.5",
+      "title": "Material Workload — Comprehensive CSP Audit",
+      "description": "For material workloads, REs shall conduct comprehensive audits of CSPs (themselves or through third-party assessors/pooled audits) at least once every two years, covering infrastructure and related software. In valid cases where onsite audit is not possible, internationally recognized third-party certifications may be relied upon.",
+      "full_text": "For material workload, conduct comprehensive audit of the CSPs, either themselves or through third party assessors/pooled audits, at least once in two years. The scope of the audit shall at least include the infrastructure and related software used to deliver cloud services to the RE. However, in case where audit/onsite assessment cannot be conducted due to a valid reason(s), REs may rely on internationally recognized third party certifications and reports made available by the CSPs, after sufficient understanding and review of their scope, methodology and the ability of the assessors.",
+      "domain": "Audit",
+      "category": "Material Workload Audit",
+      "section_number": "H.5",
+      "parent_section": "H",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Biennial CSP Audit Report (Material Workload)",
+          "description": "Comprehensive CSP audit report (self, third-party or pooled audit) conducted at least once every two years for material workloads.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Audit Scope Document",
+          "description": "Documented audit scope confirming coverage of infrastructure and related software used to deliver cloud services.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Third-Party Assessor Engagement Letter",
+          "description": "Engagement letter with third-party assessor (or pooled-audit agreement) specifying independence, scope and deliverables.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Third-Party Certification Reliance Justification",
+          "description": "Where onsite audit not feasible, documented justification plus review of third-party certification scope, methodology and assessor qualifications.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "2-Year Rolling Audit Schedule",
+          "description": "Rolling biennial audit schedule for material-workload CSPs with planned dates.",
+          "filetype": "XLSX"
+        }
+      ]
+    },
+    {
+      "control_id": "5.1",
+      "original_reference": "I.1-3",
+      "title": "Contingency Plan for Cloud Workloads — Design and Redundancy",
+      "description": "REs shall develop contingency plans for CO workloads. They shall prudently select implementation options for resilience, maximize redundancy by design, implement health checks for High Availability, and ensure redundant connectivity through different international internet cables with contractual penalties for disruptions.",
+      "full_text": "REs shall develop contingency plan for their CO workloads in order to deal with any disruption/degradation of cloud related services. The contingency plan shall take into account all possible scenarios regarding the unavailability of CSP related services. REs shall: Prudently select appropriate implementation option (service and deployment model, availability zones, server/server-less, etc.) along with related communication technologies, to offer better resilience that commensurate with their workload. Maximize the redundancy by design and workload distribution, and implement health and monitoring checks for ensuring HA of their cloud workloads. Ensure redundant and robust connectivity arrangements through different international internet cables and include penalties for disruption and downtimes in their agreements.",
+      "domain": "BCP",
+      "category": "Resilience Architecture",
+      "section_number": "I.1-3",
+      "parent_section": "I",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Cloud Contingency Plan",
+          "description": "Comprehensive cloud contingency plan addressing CSP disruption, connectivity loss and legal-action scenarios affecting cloud services.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Resilience Architecture Document",
+          "description": "Architecture decision document justifying service/deployment model, availability zones, server vs server-less selection with workload-resilience mapping.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "HA Architecture Diagram",
+          "description": "High Availability architecture diagram showing redundancy and workload distribution across availability zones/regions.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Health Check Configuration",
+          "description": "Configuration of health and monitoring checks (load balancers, uptime probes) for cloud workloads.",
+          "filetype": "YAML"
+        },
+        {
+          "name": "Redundant Connectivity Arrangement",
+          "description": "Documentation and diagram of redundant connectivity via different international internet cables / ISPs with diversity attestation.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "ISP Contracts with Penalty Clauses",
+          "description": "Signed ISP/connectivity contracts containing penalty clauses for disruption and downtime.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "5.2",
+      "original_reference": "I.4-5",
+      "title": "Contingency Plan — Roles, Review, and Update",
+      "description": "REs shall define clear roles and responsibilities for the contingency plan and periodically review and update it, taking into account changes in availability zones, business requirements, alternate CSPs, and technology changes.",
+      "full_text": "Define clear roles and responsibilities including responsibility for signing off, updating and activating the contingency plan. Periodically review and update the contingency plan, taking into account developments which may affect their feasibility. These may include increase in number of availability zones, changes in business requirements, new viable alternate CSPs, technological changes, etc.",
+      "domain": "BCP",
+      "category": "Contingency Governance",
+      "section_number": "I.4-5",
+      "parent_section": "I",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Contingency Plan RACI",
+          "description": "RACI matrix for cloud contingency plan covering sign-off, update and activation responsibilities.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Named Roles and Deputies List",
+          "description": "List of named individuals with primary and deputy responsibilities for the contingency plan.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Plan Review Records",
+          "description": "Records of periodic reviews of the contingency plan with conclusions and update decisions.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Plan Version History",
+          "description": "Version history/change log of the contingency plan documenting each update with rationale.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Feasibility Trigger Log",
+          "description": "Log of developments (new availability zones, business changes, alternate CSPs, technology changes) that triggered contingency plan reviews.",
+          "filetype": "XLSX"
+        }
+      ]
+    },
+    {
+      "control_id": "5.3",
+      "original_reference": "I.6",
+      "title": "Contingency Plan — Annual Testing",
+      "description": "REs shall periodically (at least once annually) test the contingency plan against various scenarios including internet/communication service disruption and CSP unavailability. Deficiencies identified during testing shall be recorded and corrective actions implemented.",
+      "full_text": "Periodically (at least once annually) test the contingency plan against various scenarios including disruption of internet/communication services, unavailability of CSP, etc. Where possible, REs may conduct collaborative testing of their contingency plan with their CSPs. Further, the REs shall ensure that the deficiencies identified during testing are recorded and corrective actions are implemented.",
+      "domain": "BCP",
+      "category": "Contingency Testing",
+      "section_number": "I.6",
+      "parent_section": "I",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Annual Contingency Test Report",
+          "description": "Annual contingency test report covering internet/communication disruption and CSP unavailability scenarios.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Test Scenarios Library",
+          "description": "Library of contingency test scenarios with coverage mapping against threats.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Collaborative CSP Test Evidence",
+          "description": "Evidence of collaborative testing conducted with the CSP (where applicable).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Test Deficiency Register",
+          "description": "Register of deficiencies identified during contingency tests with corrective action status and closure evidence.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Test Sign-off Records",
+          "description": "Sign-off records by responsible heads confirming test completion and acceptance.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "6.1",
+      "original_reference": "J.1",
+      "title": "Audit and Access Rights for Internal/External Auditors and SBP",
+      "description": "REs shall ensure their internal and external auditors, independent assessors, and SBP have the right to conduct audits and onsite assessments of the CSP and sub-contractors without restriction.",
+      "full_text": "Ensure that their internal & external auditors/independent assessors and SBP have right to conduct audits and onsite assessments of the CSP and its sub-contractors, if required. Further, there should be no restriction or prohibition on access to REs' cloud related information assets and services for the RE, its auditors, independent assessors or SBP's authorized staff or such visits are otherwise not impractical.",
+      "domain": "Audit",
+      "category": "Audit & Access Rights",
+      "section_number": "J.1",
+      "parent_section": "J",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Audit Rights SLA Clauses",
+          "description": "SLA clauses granting audit and onsite assessment rights to RE internal/external auditors, independent assessors and SBP over CSP and sub-contractors.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "No-Restriction Attestation",
+          "description": "CSP attestation confirming no restriction or prohibition on RE / auditor / SBP access to cloud-related information assets and services.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Audit Access Exercise Log",
+          "description": "Log of audit/onsite assessment access exercised by RE, auditors or SBP with dates, scope and outcomes.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Access Request Procedure",
+          "description": "Documented procedure for initiating and fulfilling audit/access requests to the CSP.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "6.2",
+      "original_reference": "J.2",
+      "title": "Scope of Contractual Audit and Information Rights",
+      "description": "Access, audit, and information rights in contractual arrangements shall cover premises, data, devices, systems, networks, security testing results, sub-contractor security testing results, company and financial information, and CSP's external auditors and personnel.",
+      "full_text": "Ensure that access, audit and information rights provided through the contractual arrangement include where relevant: Premises, data, devices, information, systems, and networks used for providing the cloud services or monitoring its performance — including CSP's (and its sub-contractors') policies, processes, and controls; Results of security testing carried out by CSP or on its behalf; Results of security testing carried out by sub-contractors; Company and financial information; CSPs' external auditors, personnel, and premises.",
+      "domain": "Audit",
+      "category": "Audit Scope",
+      "section_number": "J.2",
+      "parent_section": "J",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Audit Scope SLA Clauses",
+          "description": "SLA clauses covering all required audit and information rights areas — premises, data, devices, systems, networks, policies, processes, controls.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Contract Coverage Matrix",
+          "description": "Matrix confirming each J.2 area (a-e) is covered in the executed CSP contract.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "CSP Security Testing Results Received",
+          "description": "CSP-provided security testing results (VA/PT reports, code reviews) reviewed by RE InfoSec/IA.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Sub-contractor Security Testing Results",
+          "description": "Sub-contractor security testing results obtained through the CSP with RE review notes.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "CSP Company and Financial Information",
+          "description": "CSP company and financial information obtained during oversight (financial statements, management information).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "External Auditor Interaction Records",
+          "description": "Records of RE interactions with CSP's external auditors (calls, walk-throughs, minutes).",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "6.3",
+      "original_reference": "J.3",
+      "title": "Third-Party Certification Reliance When Onsite Audit Not Feasible",
+      "description": "Where onsite audit is not feasible for valid reasons, REs may rely on internationally recognized third-party certifications with adequate scope review. REs shall have contractual right to request scope expansion of certifications/assessments.",
+      "full_text": "In case, where audit/onsite assessment cannot be conducted for a valid reason(s), REs may rely on internationally recognized third party certifications, and reports made available by the CSP. However, reliance on these third party certifications and reports shall be supported by adequate understanding and review of the scope, the methodology applied therein and the ability of the third party and CSP to clarify matters relating to the assessment. Further, the REs shall have contractual right to request for the expansion of the scope of the certifications/assessments/audits to cover relevant controls and systems.",
+      "domain": "Audit",
+      "category": "Certification Reliance",
+      "section_number": "J.3",
+      "parent_section": "J",
+      "is_mandatory": false,
+      "priority": "medium",
+      "evidence_requirements": [
+        {
+          "name": "Third-Party Reliance Justification Memo",
+          "description": "Memo documenting valid reasons onsite audit is not feasible and justification for relying on third-party certifications.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Certification Scope/Methodology Review",
+          "description": "Documented review of third-party certification scope, methodology and assessor qualifications and ability.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Scope Expansion SLA Clause",
+          "description": "SLA clause granting RE contractual right to request scope expansion of certifications/assessments/audits.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Scope Expansion Requests Log",
+          "description": "Log of scope-expansion requests submitted to the CSP with responses and outcomes.",
+          "filetype": "XLSX"
+        }
+      ]
+    },
+    {
+      "control_id": "6.4",
+      "original_reference": "J.4-5",
+      "title": "SBP Information Requests and Audit Finding Remediation",
+      "description": "REs shall ensure CSPs timely provide any information requested by SBP and follow up to ensure timely remediation of all audit findings.",
+      "full_text": "Ensure that CSPs timely provide any information requested by SBP, whenever required. Follow up with the CSP to ensure that all appropriate and timely remediation actions are taken to address any audit findings.",
+      "domain": "Audit",
+      "category": "Remediation & SBP Requests",
+      "section_number": "J.4-5",
+      "parent_section": "J",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "SBP Information Response Clause",
+          "description": "SLA clause obligating CSP to timely provide any information requested by SBP.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "SBP Information Request Response Log",
+          "description": "Log of SBP information requests and CSP/RE responses with timeliness metrics.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "CSP Audit Findings Tracker",
+          "description": "Tracker of audit findings on CSP with target dates, owner, remediation status and closure evidence.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Follow-up Correspondence",
+          "description": "Email correspondence with CSP regarding audit finding remediation and status updates.",
+          "filetype": "EML"
+        },
+        {
+          "name": "Overdue Finding Escalation Records",
+          "description": "Records of escalations of overdue CSP findings to ITSC/management.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "7.1",
+      "original_reference": "K.1-4",
+      "title": "Exit Plan — Coverage, Trigger Events, and Continuity Measures",
+      "description": "REs shall develop an exit plan covering stressed and non-stressed scenarios, defined trigger events, alternative solutions, transition plans, roles and responsibilities, and measures to ensure continuity of critical business services during exit.",
+      "full_text": "REs shall develop an exit plan by considering the materiality and impact of their workloads outsourced to CSPs. The exit plan shall: Cover scenarios for stressed and non-stressed exit circumstances. Have defined trigger events, alternative solutions, transition plans, and roles and responsibilities including responsibility for signing off, updating and activating the plan. Be periodically reviewed and tested. Implement measures including but not limited to contractual or escrow arrangements, to ensure continuity of critical business services in case of exit.",
+      "domain": "BCP",
+      "category": "Cloud Exit Planning",
+      "section_number": "K.1-4",
+      "parent_section": "K",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Cloud Exit Plan",
+          "description": "Comprehensive exit plan covering stressed (CSP insolvency/breach/security incident) and non-stressed (planned migration) scenarios with materiality assessment.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Trigger Event Register",
+          "description": "Register of defined trigger events for exit plan activation with classification (stressed/non-stressed).",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Alternative CSP Shortlist",
+          "description": "Pre-vetted shortlist of alternative CSP solutions to enable rapid pivot.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Transition Playbook",
+          "description": "Transition playbook covering data migration, cut-over, rollback and verification steps.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Exit Plan RACI",
+          "description": "RACI matrix for sign-off, update and activation of the exit plan.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Escrow/Continuity Agreements",
+          "description": "Executed escrow or continuity arrangements ensuring critical business service continuity during exit.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Exit Plan Test Report",
+          "description": "Report of exit plan testing (tabletop or technical rehearsal) with findings and corrective actions.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "7.2",
+      "original_reference": "K.5",
+      "title": "Data Deletion Upon Exit",
+      "description": "REs shall ensure complete removal of data including logs from all CSP locations upon exit.",
+      "full_text": "Ensure complete removal of data including logs from all locations of CSP in case of exit.",
+      "domain": "Data",
+      "category": "Data Destruction on Exit",
+      "section_number": "K.5",
+      "parent_section": "K",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Data Deletion SLA Clause",
+          "description": "SLA clause requiring complete removal of RE data including logs from all CSP storage locations on exit.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Data Destruction Procedure",
+          "description": "Procedure for executing and verifying data destruction on exit (primary, replicas, backups, logs, archives, sub-contractor stores).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Sample CSP Data Destruction Certificate",
+          "description": "Sample/template written deletion confirmation from CSP covering all storage locations including sub-contractor sites.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Data Destruction Verification Records",
+          "description": "Records of RE verification that data and logs have been removed from all CSP locations (past exits or test decommissioning).",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "7.3",
+      "original_reference": "K.6",
+      "title": "Contractual Termination Rights — Anti-Lock-In",
+      "description": "CO contracts shall have no lock-in clauses, defined termination rights (ownership change, insolvency, judicial administration, breach, security breach, service deterioration), documented minimum termination periods, and rights to continue arrangement until substitute is arranged.",
+      "full_text": "To avoid the lock-in and dependency risks, REs shall in their CO arrangement contracts: Avoid inclusion of any lock-in clause or exclusivity arrangements. Ensure right to terminate the CO agreement in at least the following circumstances: Change in ownership of the CSP; Insolvency or liquidation of the CSP; CSP goes into judicial administration; CSP is in breach of applicable laws, regulations or contractual provisions; Significant and material breach of security or confidentiality; Demonstrable deterioration to perform the contracted service. Ensure that the minimum termination period is documented in their CO contracts.",
+      "domain": "Vendor",
+      "category": "Anti-Lock-In & Termination",
+      "section_number": "K.6",
+      "parent_section": "K",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Legal Vetting Certificate — No Lock-In",
+          "description": "Legal function certificate confirming absence of lock-in and exclusivity clauses in the CSP contract.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Termination Rights Clause",
+          "description": "SLA termination rights clause covering all six circumstances: ownership change, insolvency/liquidation, judicial administration, legal/regulatory/contractual breach, significant security/confidentiality breach, demonstrable service deterioration.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Termination Scenario Coverage Matrix",
+          "description": "Matrix confirming each of the six termination circumstances is covered in the executed SLA.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Minimum Termination Period Clause",
+          "description": "SLA clause documenting the minimum termination period agreed for the CO arrangement.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Continue-Until-Substitute Clause",
+          "description": "SLA clause granting RE contractual right to continue the arrangement until substitute is ready (Appendix-I item 30).",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "8.1",
+      "original_reference": "L.1-2",
+      "title": "Sub-Contractor Visibility and Impact Assessment",
+      "description": "For material sub-contracting, REs shall maintain visibility of the CSP supply chain by ensuring an updated sub-contractor list is provided, and shall assess the potential impact of large/complex sub-contracting on operational resilience.",
+      "full_text": "The CO arrangements expose REs to various risks relating to sub-contracting. For material sub-contracting, REs shall: Have visibility of the CSP supply chain by ensuring that the CSP maintains and provides an updated list of its sub-contractors. Consider potential impact of large, complex sub-contracting by the CSPs on their operational resilience, and ability to oversee and monitor the emanating risks.",
+      "domain": "Vendor",
+      "category": "Sub-Contracting — Visibility",
+      "section_number": "L.1-2",
+      "parent_section": "L",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "CSP Sub-contractor List",
+          "description": "Up-to-date list of CSP sub-contractors provided by the CSP with scope of services, locations and criticality.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Sub-contractor List Update Log",
+          "description": "Log of CSP sub-contractor list updates received and reviewed by the RE.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Sub-contracting Impact Assessment",
+          "description": "Assessment of large/complex CSP sub-contracting and its impact on operational resilience.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "CSP Supply Chain Map",
+          "description": "Map of CSP supply chain visualising sub-contractor dependencies for the outsourced workload.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Oversight Capacity Evaluation",
+          "description": "Evaluation of RE's capacity to oversee and monitor emerging risks from complex sub-contracting chains.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "8.2",
+      "original_reference": "L.3-5",
+      "title": "Sub-Contracting Approval and Compliance Requirements",
+      "description": "Sub-contracting shall only be permitted if it does not create excessive operational risks and if sub-contractors comply with all legal, regulatory, contractual, audit, and access requirements. REs shall review material sub-contracting agreements and ensure CSPs can oversee sub-contracting on an ongoing basis.",
+      "full_text": "Only permit sub-contracting by CSPs if such arrangements do not give rise to excessive operational risks, and sub-contractor agrees to comply with all applicable legal, regulatory, contractual, audit and access requirements including granting REs and SBP contractual access, audit and information rights. Review material sub-contracting agreements of the CSP and ascertain that the legal, regulatory, operational, and cybersecurity requirements are complied with, throughout the supply chain. Ensure that the CSPs have the capability and capacity to oversee any material sub-contracting on an ongoing basis.",
+      "domain": "Vendor",
+      "category": "Sub-Contracting — Controls",
+      "section_number": "L.3-5",
+      "parent_section": "L",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Sub-contracting Permission Procedure",
+          "description": "Procedure for evaluating and permitting CSP sub-contracting based on operational risk acceptability.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Rights Flow-Down Clause",
+          "description": "SLA clause obligating CSP to flow-down legal/regulatory/contractual/audit/access requirements (including RE & SBP rights) to its sub-contractors.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Sub-contractor Compliance Attestations",
+          "description": "Attestations from sub-contractors confirming compliance with flowed-down requirements.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Material Sub-contracting Agreement Review Reports",
+          "description": "Review reports on material sub-contracting agreements confirming legal/regulatory/operational/cybersecurity compliance throughout the supply chain.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "CSP Oversight Capability Assessment",
+          "description": "Assessment of CSP's capability and capacity to oversee its material sub-contractors on an ongoing basis.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Risk Acceptance Records",
+          "description": "Risk assessment and acceptance decisions for each sub-contracting arrangement.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "9.1",
+      "original_reference": "M.1-4",
+      "title": "User Access Management — Four-Eye Principle and Privileged Accounts",
+      "description": "REs shall implement the four-eye principle for user access administration, periodically review access rights independently, control and monitor service/generic/administrative accounts with MFA and dedicated machines, and create separate administrative accounts with enhanced password controls.",
+      "full_text": "REs shall implement complete life cycle of user access management for their cloud related workloads: Implement at-least four eye principle for user access administration. Periodically review user access right changes independently. Ensure that the use and access of service, generic and administrative accounts are controlled and monitored. Moreover, the REs shall implement MFA and limit use of these accounts through dedicated machines only. Create separate account of administrative users for routine operations, and implement enhanced password controls (length, complexity, age).",
+      "domain": "Access",
+      "category": "User Access & Privileged Accounts",
+      "section_number": "M.1-4",
+      "parent_section": "M",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Cloud Access Management Policy",
+          "description": "Policy covering the complete user access lifecycle for cloud workloads including four-eye principle requirement.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Four-Eye Workflow Configuration",
+          "description": "IAM/access-management tool configuration evidencing enforced four-eye (maker-checker) workflow.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Independent Access Review Reports",
+          "description": "Records of periodic independent reviews of user access right changes with reviewer sign-off.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Service/Generic/Admin Accounts Register",
+          "description": "Register of service, generic and administrative accounts with owners, justification and control details.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "MFA Configuration for Privileged Accounts",
+          "description": "Configuration evidence that MFA is enforced on service, generic and administrative accounts.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Dedicated Machine Policy and Evidence",
+          "description": "Policy and technical enforcement evidence restricting privileged account use to dedicated administrative machines only.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Password Policy Configuration",
+          "description": "Password policy configuration for admin accounts enforcing enhanced length, complexity and age controls.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Separate Admin Account Mapping",
+          "description": "Mapping evidence showing administrative users have separate accounts for routine operations vs privileged tasks.",
+          "filetype": "XLSX"
+        }
+      ]
+    },
+    {
+      "control_id": "9.2",
+      "original_reference": "M.5-8",
+      "title": "User Access Management — MFA, Master Account, Backups, and CSP Access Restriction",
+      "description": "REs shall implement MFA and IP source restrictions for cloud users, monitor master account usage, implement access controls for data backups and log data, and ensure CSPs do not have access to REs' systems, software, and data.",
+      "full_text": "Implement MFA and IP source restrictions (wherever possible) for their users accessing cloud environment. Monitor and document the use of master account, and permit its usage only under exceptional circumstances. Implement access controls for data backups including log data, of cloud related workloads. Ensure that CSPs do not have access to REs' systems, software and data.",
+      "domain": "Access",
+      "category": "Cloud Access Controls",
+      "section_number": "M.5-8",
+      "parent_section": "M",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "MFA Enforcement Configuration",
+          "description": "Configuration evidence showing enforced MFA for all users accessing the cloud environment.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "IP Source Restriction Configuration",
+          "description": "Configuration of IP source restrictions / allow-lists for cloud access (where technically possible).",
+          "filetype": "JSON"
+        },
+        {
+          "name": "Master Account Use Log",
+          "description": "Log documenting each use of the master account with justification, approver and timestamp.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Master Account Alerting Rules",
+          "description": "Alerting rules configured to notify security team immediately on any master account use.",
+          "filetype": "JSON"
+        },
+        {
+          "name": "Backup/Log Access Control Configuration",
+          "description": "Configuration of access controls on cloud backup stores and log data (immutability, vault lock, ACLs).",
+          "filetype": "JSON"
+        },
+        {
+          "name": "CSP Access Prohibition Clause",
+          "description": "SLA clause prohibiting CSP access to RE systems, software and data.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "BYOK/HYOK Custody Evidence",
+          "description": "Evidence that RE retains sole custody of encryption keys (BYOK/HYOK) preventing CSP data access.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "CSP Access Monitoring Logs",
+          "description": "Monitoring logs/alerts for any CSP access attempts to RE data/systems.",
+          "filetype": "LOG"
+        }
+      ]
+    },
+    {
+      "control_id": "10.1",
+      "original_reference": "N.1-3",
+      "title": "Change and Configuration Management — Detection and Procedures",
+      "description": "REs shall implement mechanisms to detect unauthorized changes with automated alerts, document CM procedures mutually agreed with CSPs (including change requests, approval, prioritization, impact assessment, reporting, roles, patching timelines), and ensure CSPs have robust CM controls with advance notification to REs.",
+      "full_text": "REs shall plan and implement configuration management in conjunction with IT change management. Implement mechanism for detecting unauthorized changes to cloud environment, and configure automated alerts for the changes. Ensure CM procedures for cloud related workloads are documented and mutually agreed with the CSP — including change request and approval procedures, change prioritization and impact assessment, change reporting, roles and responsibilities, timeframe for patching and software releases. Ensure that the CSPs have well-defined and robust CM controls, and notify the REs in advance of the changes.",
+      "domain": "Operations",
+      "category": "Change Management",
+      "section_number": "N.1-3",
+      "parent_section": "N",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Change Detection Tool Configuration",
+          "description": "Configuration of cloud change-detection tooling (AWS Config / Azure Policy / GCP SCC or equivalent).",
+          "filetype": "JSON"
+        },
+        {
+          "name": "Automated Alert Rules",
+          "description": "Automated alerting rules for unauthorised cloud configuration changes.",
+          "filetype": "YAML"
+        },
+        {
+          "name": "Unauthorised-Change Alert Sample",
+          "description": "Sample unauthorised-change alerts with triage and remediation records.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Mutually Agreed CM Procedure",
+          "description": "CM procedure document jointly agreed and signed by RE and CSP covering change request/approval, prioritisation, impact assessment, reporting, roles and patch/release timeframes.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Change Request & Approval Workflow",
+          "description": "Workflow documentation for change request and approval (ServiceNow / Jira etc.) with screenshots.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Patching/Release Timeframe Schedule",
+          "description": "Documented timeframes for patching and software releases by criticality.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "CSP Advance Change Notifications",
+          "description": "CSP advance change notification emails/records received and acknowledged by RE.",
+          "filetype": "EML"
+        },
+        {
+          "name": "CSP CM Controls Documentation",
+          "description": "CSP-provided documentation of its Change Management controls reviewed by RE.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "10.2",
+      "original_reference": "N.4-6",
+      "title": "Change and Configuration Management — Testing, Segregation, and Baselines",
+      "description": "Changes shall be tested before production implementation. Roles for configuration management shall be defined with segregation of infrastructure, security, and application roles. Baselines shall be created and maintained for cloud-hosted systems with periodic review and remediation of non-compliance.",
+      "full_text": "Ensure that the changes are tested before their implementation on the production environment. Define roles and responsibilities of REs staff for configuration management of the cloud environment, and at least segregate infrastructure, security and application roles. Create and maintain baselines for cloud hosted systems, and periodically review, monitor, report and remediate non-compliance with the baselines.",
+      "domain": "Operations",
+      "category": "Configuration Management",
+      "section_number": "N.4-6",
+      "parent_section": "N",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Change Test Plans & Results",
+          "description": "Change test plans and results demonstrating testing (UAT / pre-production) before production deployment.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "CI/CD Pipeline Configuration",
+          "description": "CI/CD pipeline configuration enforcing test gates before production promotion.",
+          "filetype": "YAML"
+        },
+        {
+          "name": "Role Definition Document",
+          "description": "Role definition document segregating infrastructure, security and application configuration-management roles.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "RBAC Configuration Export",
+          "description": "Cloud RBAC/IAM configuration evidence showing segregation-of-duties across infra/security/app roles.",
+          "filetype": "JSON"
+        },
+        {
+          "name": "SoD Matrix",
+          "description": "Segregation-of-Duties matrix with verification that no single role spans incompatible functions.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Cloud Configuration Baselines",
+          "description": "Documented baselines (CIS Benchmarks, hardening standards) for cloud-hosted systems.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Baseline Compliance Reports",
+          "description": "Periodic baseline compliance reports from cloud-native tooling.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Non-Compliance Remediation Tracker",
+          "description": "Tracker of baseline non-compliance items and remediation status.",
+          "filetype": "XLSX"
+        }
+      ]
+    },
+    {
+      "control_id": "11.1",
+      "original_reference": "O.1-4",
+      "title": "Incident Management — Procedures, SIRT, and CSP Access",
+      "description": "REs shall define and document escalation, notification, containment, and closure procedures for IT and cyber incidents in consensus with CSPs. A Security Incident Response Team (SIRT) shall be designated with formalized roles. CSPs shall provide access to incident and root cause analysis reports and assist in investigations.",
+      "full_text": "For incident management, REs shall comply with the following requirements: Define and document criteria, performance requirements and procedures for escalation, notification, containment and closure of incidents (including IT, cyber incidents) in consensus with the CSP(s). Ensure access to incident and root cause analysis reports of the CSPs. Designate a SIRT to provide timely response to IT/cyber incidents. In this regard, roles and responsibilities of CSP and REs' teams shall be formalized. Ensure that CSPs shall provide reasonable access to necessary information to assist in any REs' investigation arising due to an incident in the cloud.",
+      "domain": "Incident",
+      "category": "Incident Response",
+      "section_number": "O.1-4",
+      "parent_section": "O",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Cloud Incident Handling Procedure",
+          "description": "Documented procedure for escalation, notification, containment and closure of cloud IT/cyber incidents, mutually agreed with CSPs.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Incident Classification Criteria",
+          "description": "Incident classification criteria (severity levels) with response times and performance requirements.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "CSP-RE Incident Handling MoU",
+          "description": "MoU or joint incident-handling document signed with CSP defining collaboration.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "SIRT Charter",
+          "description": "Charter establishing the Security Incident Response Team with mission, authorities and membership.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "SIRT RACI with CSP",
+          "description": "RACI matrix formalising roles and responsibilities between CSP and RE incident teams.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "SIRT Roster and On-call Schedule",
+          "description": "Current SIRT roster and on-call schedule.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Incident/RCA Access Clause",
+          "description": "SLA clause granting RE access to CSP incident and root cause analysis reports.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "CSP RCA Reports Received",
+          "description": "Root cause analysis reports received from the CSP for material incidents.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Investigation Cooperation Clause",
+          "description": "SLA clause requiring CSP to provide reasonable information access for RE-led incident investigations.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "11.2",
+      "original_reference": "O.5-7",
+      "title": "Incident Management — Post-Incident Review, ITSC Oversight, and Annual Testing",
+      "description": "CSPs shall conduct formal post-incident reviews for material cloud incidents. ITSC shall review and discuss cloud-related incidents as part of oversight. The Incident Response Plan shall be reviewed and tested at least once annually with cybersecurity as a key consideration.",
+      "full_text": "Ensure that the CSPs conduct formal post incident review of the material cloud related incidents and provide their report to the RE. Ensure that ITSC as part of their oversight reviews and discusses cloud related incidents. Periodically review and test Incident Response Plan of cloud related workloads at least once annually, keeping in view cybersecurity as one of key considerations.",
+      "domain": "Incident",
+      "category": "Incident Review & Testing",
+      "section_number": "O.5-7",
+      "parent_section": "O",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Post-Incident Review SLA Clause",
+          "description": "SLA clause requiring CSP to conduct and share post-incident reviews for material cloud incidents.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "CSP PIR Reports Received",
+          "description": "CSP Post-Incident Review reports received for material incidents with RE review notes.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "ITSC Meeting Minutes — Cloud Incidents",
+          "description": "ITSC meeting minutes evidencing review and discussion of cloud-related incidents.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Cloud Incident Pack to ITSC",
+          "description": "Periodic cloud incident pack submitted to ITSC with trends, significant events and actions.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Cloud Incident Response Plan",
+          "description": "Documented Incident Response Plan for cloud-related workloads with cybersecurity considerations.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Annual IRP Test Report",
+          "description": "Annual IRP test report (tabletop or live exercise) for cloud workloads.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Test Deficiency Tracker",
+          "description": "Tracker of deficiencies identified in IRP testing and closure status.",
+          "filetype": "XLSX"
+        }
+      ]
+    },
+    {
+      "control_id": "12.1",
+      "original_reference": "P.1-5",
+      "title": "Data Security — Encryption, Desensitization, Segregation, PII, and Commercial Use",
+      "description": "REs shall encrypt data at rest and in transit using strong, non-obsolete cryptographic algorithms. Production data shall be desensitized before use in non-production environments. Cloud data shall be clearly identifiable and segregated. Appropriate PII protection measures and Pakistan law compliance are mandatory. CSPs shall not use RE data for commercial purposes.",
+      "full_text": "Outsourcing of the workloads to the CSPs does not relieve the REs from the responsibility of safeguarding data confidentiality and integrity. REs shall: Encrypt data at rest (including backups) and in transit using strong and non-obsolete cryptographic algorithms. Desensitize the production data before porting or using it on non-production environment(s). Ensure that their data in the cloud environment is clearly identifiable and segregated. Take appropriate measures for the protection of Personally Identifiable Information (PII); and ensure compliance with the requirements of laws of Pakistan at all times. Further, REs shall ensure that CSPs do not disclose their data to any third party including foreign governments/courts/law enforcement agencies without their consent. Ensure that CSP does not use their data for any commercial purposes.",
+      "domain": "Data",
+      "category": "Data Protection — Core",
+      "section_number": "P.1-5",
+      "parent_section": "P",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Cloud Data Security Policy",
+          "description": "Board-approved data security policy for cloud workloads covering encryption, desensitisation, segregation, PII protection and prohibition on commercial use.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Encryption Standard Document",
+          "description": "Cryptographic standard specifying approved algorithms (e.g., AES-256 at rest, TLS 1.2+/1.3 in transit) and prohibited obsolete algorithms.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Cloud Encryption Configuration Export",
+          "description": "Configuration export from the cloud platform showing encryption-at-rest enabled for all storage, databases and backups with approved KMS keys.",
+          "filetype": "JSON"
+        },
+        {
+          "name": "TLS Scan Report",
+          "description": "SSL/TLS scan reports for cloud-exposed endpoints confirming strong cipher suites and disallowed protocol versions.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Data Desensitisation Procedure",
+          "description": "Procedure defining masking/tokenisation/hashing techniques and approval workflow for moving production data to non-production.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Masking Tool Job Logs",
+          "description": "Execution logs from the data masking tool showing masked datasets provisioned to UAT/DEV environments.",
+          "filetype": "LOG"
+        },
+        {
+          "name": "Tenant Isolation Architecture",
+          "description": "Architecture document describing logical/physical segregation (dedicated accounts/subscriptions, VPCs, tagging, dedicated keys) isolating RE data.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Resource Tagging Standard & Compliance",
+          "description": "Tagging standard and compliance report showing every resource tagged with owner, classification and business unit.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "PII Data Flow and DPIA",
+          "description": "Data Protection Impact Assessment and PII data-flow diagrams identifying PII elements, residency, legal basis and controls.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Legal Memo on Pakistan Law Compliance",
+          "description": "Legal memo confirming CSP contract and operational arrangements comply with applicable Pakistan laws at all times.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Third-Party/Foreign Authority Disclosure Clause",
+          "description": "Executed SLA clause prohibiting disclosure to foreign governments / courts / LEAs without RE's prior written consent.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Commercial-Use Prohibition Clause",
+          "description": "Executed SLA clause explicitly prohibiting CSP from using RE data for commercial purposes, analytics or model training.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "CSP Opt-Out Configuration",
+          "description": "Screenshots/configuration evidence showing opt-out of any CSP telemetry/analytics/AI-training features that would ingest RE data.",
+          "filetype": "PNG"
+        }
+      ]
+    },
+    {
+      "control_id": "12.2",
+      "original_reference": "P.6-10",
+      "title": "Data Security — Backup, Exfiltration Controls, Data Location, and Post-Exit Deletion",
+      "description": "REs shall implement backup and restoration testing (at least half-yearly with ransomware protection), implement controls to prevent unauthorized data exfiltration, ensure notification rights for data location changes, and ensure data deletion from all CSP locations upon exit.",
+      "full_text": "Implement reasonable backup and restoration testing mechanism, depending on the nature of the workloads in compliance with the defined RPOs. Further, the backup mechanism shall have ransomware protection, and the backup restoration testing exercise shall be conducted at least on a half-yearly basis. Classify information assets in terms of their sensitivity, confidentiality & availability, and implement additional controls for high value cloud information assets. Implement controls to prevent unauthorized exfiltration of data from the cloud environment including deployment of content inspection technologies, controls on data downloading and extraction, monitoring unusual data access, etc. Ensure that they are notified about any proposed change in the location of their data, and have contractual right to reject such change, or terminate the CO arrangement on such grounds. Ensure that data is deleted from all storage locations of the CSP following an exit or termination of the CO arrangement, and where applicable, from the systems of any sub-contractor by requesting written confirmation from the CSP.",
+      "domain": "Data",
+      "category": "Data Lifecycle — Backup, DLP, Residency, Deletion",
+      "section_number": "P.6-10",
+      "parent_section": "P",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Cloud Backup & Restoration Policy",
+          "description": "Approved policy specifying backup frequency, retention, RPOs, ransomware protection and half-yearly restoration testing.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Immutable / Object-Lock Backup Configuration",
+          "description": "Configuration showing immutability (S3 Object Lock / Azure immutable blob / write-once snapshots) on backup repositories.",
+          "filetype": "JSON"
+        },
+        {
+          "name": "Half-Yearly Restoration Test Reports",
+          "description": "Signed restoration test reports from the last two cycles documenting scenarios, restore times, data integrity and corrective actions.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Backup Job Execution Logs",
+          "description": "Backup job execution logs covering the review period showing successful completion against schedule.",
+          "filetype": "LOG"
+        },
+        {
+          "name": "Information Classification Policy",
+          "description": "Policy defining sensitivity/CIA tiers and handling requirements for each classification level.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Cloud Asset Inventory with Classification",
+          "description": "Inventory of cloud information assets tagged with classification, owner, criticality and applicable controls.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Enhanced Controls Matrix for High-Value Assets",
+          "description": "Matrix of additional controls applied to high-value cloud assets (CMEK/BYOK, DLP, MFA, enhanced logging, PAM).",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Cloud DLP Policy and Rule Set",
+          "description": "DLP policy and active rule export for cloud email/storage/SaaS covering PII, CNIC, account numbers, card data.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "CASB/DLP Configuration Export",
+          "description": "Configuration export from CASB/cloud-native DLP showing inspection and blocking actions on uploads/downloads/shares.",
+          "filetype": "JSON"
+        },
+        {
+          "name": "UEBA / Anomalous Access Alerts",
+          "description": "Sample alerts from UEBA or cloud-native anomaly detection for unusual data access with triage records.",
+          "filetype": "LOG"
+        },
+        {
+          "name": "Data Location Change Clause",
+          "description": "SLA clause requiring CSP advance notification of data location changes with RE right to reject or terminate.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Current Data Residency Register",
+          "description": "Register documenting current data centre / region for every workload and dataset.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Region Enforcement Configuration",
+          "description": "Configuration (Azure Policy / AWS SCPs / GCP Org Policies) restricting resource deployment to approved regions only.",
+          "filetype": "JSON"
+        },
+        {
+          "name": "Data Deletion Clause",
+          "description": "SLA clause mandating secure deletion of all RE data from all CSP and sub-contractor storage locations on exit.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Sample CSP Data Deletion Certificate",
+          "description": "Written deletion confirmation template from CSP covering all storage locations including sub-contractor sites.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "13.1",
+      "original_reference": "Q.1-4",
+      "title": "Cryptographic Key Management — Policies, Review, and Ownership",
+      "description": "REs shall develop policies for cryptographic material lifecycle, ensure expert review of cryptographic algorithms and parameters, document location/ownership/management of encryption keys and HSMs with CSP agreement, and ensure keys are generated solely by REs with sole management authority.",
+      "full_text": "CSPs use cryptographic controls to secure access and segregate customers' data. REs shall comply with the following: Develop and implement policies and procedures governing the lifecycle of the cryptographic material. Ensure that details of the cryptographic algorithms and other related parameters such as key lengths, renewals etc. are reviewed by a subject matter expert. Ensure that details of the location, ownership and management of the encryption keys and HSM are agreed with the CSP and documented. Ensure that the cryptographic keys are unique and generated only by the REs. Further, REs must have the sole ability to administer/manage these keys and HSM.",
+      "domain": "Data",
+      "category": "Key Governance",
+      "section_number": "Q.1-4",
+      "parent_section": "Q",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Cryptographic Key Management Policy",
+          "description": "Approved policy governing cloud cryptographic key management including selection of key options (CMEK/BYOK/HYOK) by workload significance.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Key Lifecycle Procedure",
+          "description": "Procedure covering generation, distribution, storage, use, backup, archive, rotation, revocation and destruction of cryptographic material.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Key Ceremony Records",
+          "description": "Signed key ceremony records for master key generation and rotation under dual control.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "SME Review Report on Algorithms",
+          "description": "Signed SME review covering algorithms, key lengths, modes, IV/nonce handling, rotation periods — mapped to international standards (NIST, ISO).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "SME Credentials & Independence Record",
+          "description": "Evidence of SME qualifications (CISSP/CCSP/cryptography certs) and independence from implementation teams.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Key / HSM Location & Ownership Document",
+          "description": "Signed document agreed with the CSP specifying key and HSM location(s), ownership and management responsibilities.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "HSM Deployment Diagram",
+          "description": "Architecture diagram showing HSM placement, key hierarchy and integration with cloud services.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "BYOK/HYOK Implementation Evidence",
+          "description": "Evidence of BYOK/HYOK implementation (AWS External Key Store / Azure Key Vault BYOK / Google EKM) with RE-generated key material.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Key Uniqueness Verification",
+          "description": "Report verifying each workload uses distinct keys with no cross-environment re-use.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Sole-Administration Access Policy",
+          "description": "Key/HSM access policy export showing CSP principals denied key administration actions and only RE custodians authorised.",
+          "filetype": "JSON"
+        },
+        {
+          "name": "Key Inventory Register",
+          "description": "Inventory of all cryptographic keys with purpose, owner, algorithm, length, rotation date and custodian.",
+          "filetype": "XLSX"
+        }
+      ]
+    },
+    {
+      "control_id": "13.2",
+      "original_reference": "Q.5-7",
+      "title": "Cryptographic Key Management — Rotation, Storage Separation, and HSM",
+      "description": "REs shall periodically change cryptographic keys per international standards, store encryption keys separately from virtual images and information assets, and for material workloads deploy Hardware Security Modules (HSMs) with due controls.",
+      "full_text": "Periodically change the cryptographic keys in accordance with the international standards and best practices. Ensure that the encryption keys are stored separate from the virtual images and information assets. For material workloads, deploy/implement HSM with due controls.",
+      "domain": "Data",
+      "category": "Key Operations & HSM",
+      "section_number": "Q.5-7",
+      "parent_section": "Q",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Key Rotation Schedule",
+          "description": "Documented rotation schedule aligned with standards (e.g., NIST SP 800-57) specifying periods per key type/usage.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Automated Rotation Configuration",
+          "description": "Configuration export showing automatic rotation enabled in KMS/HSM with period settings.",
+          "filetype": "JSON"
+        },
+        {
+          "name": "Key Rotation Execution Logs",
+          "description": "KMS/HSM logs showing successful rotation events against schedule with exceptions investigated.",
+          "filetype": "LOG"
+        },
+        {
+          "name": "Key Storage Architecture",
+          "description": "Architecture document showing keys reside in dedicated KMS/HSM service and are not embedded in VM images, containers, code or asset stores.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Secrets Scanning Results",
+          "description": "Scan results (git-secrets, trufflehog, cloud-native scanners) confirming no key material in images, repos or storage buckets.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "HSM Deployment Design (Material Workloads)",
+          "description": "Design document showing HSM deployment for each material workload with FIPS 140-2/3 Level 3 attestation.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "HSM FIPS / Common Criteria Certification",
+          "description": "Vendor certification evidence for the HSM (FIPS 140-2/3 Level 3 or Common Criteria EAL4+).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "HSM Activity Logs",
+          "description": "HSM activity/audit logs demonstrating monitored operations and forwarding to SIEM.",
+          "filetype": "LOG"
+        },
+        {
+          "name": "Material Workload to HSM Mapping",
+          "description": "Register mapping each material workload to the HSM instance protecting its keys with custodian assignments.",
+          "filetype": "XLSX"
+        }
+      ]
+    },
+    {
+      "control_id": "14.1",
+      "original_reference": "R",
+      "title": "Tokenization for Sensitive Data",
+      "description": "Depending on data sensitivity, REs may implement tokenization to minimize data footprint. REs shall assess tokenization solution features and ensure CSPs do not have access or control over the tokenization solution.",
+      "full_text": "Depending on the sensitivity of data workload, REs may implement tokenization to minimize the data footprint. While implementing tokenization, REs shall assess and evaluate the features and data interactions of the tokenization solution. REs shall also ensure that the CSPs do not have access or control over the tokenization solution.",
+      "domain": "Data",
+      "category": "Tokenization",
+      "section_number": "R",
+      "parent_section": "R",
+      "is_mandatory": false,
+      "priority": "medium",
+      "evidence_requirements": [
+        {
+          "name": "Tokenization Solution Assessment Report",
+          "description": "Assessment evaluating tokenization solution features, data interactions, token format/vaulting approach and residual risks.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Tokenization Architecture Document",
+          "description": "Architecture document showing tokenization solution placement such that CSP has no access or control (e.g., on-premise token vault, RE-managed tokenization service).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "CSP Access Restriction Evidence",
+          "description": "Configuration and network diagrams demonstrating CSP principals and networks cannot access tokenization vault, keys or detokenization functions.",
+          "filetype": "JSON"
+        },
+        {
+          "name": "Tokenization Scope Register",
+          "description": "Register of data elements tokenized (PAN, CNIC, account number) with scope, format-preservation choices and owners.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Data Sensitivity Classification",
+          "description": "Data sensitivity classification document driving tokenization decisions.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "15.1",
+      "original_reference": "S.1",
+      "title": "Network Architecture — Perimeter and Cloud-Specific Security Controls",
+      "description": "REs shall implement perimeter security controls including network IDS/IPS, WAF, and DDoS protection to detect and mitigate security breaches and cloud-specific attacks.",
+      "full_text": "The network structure and logical layout is of paramount importance in any cloud implementation. REs must implement controls for protection against plausible threats/attacks including cloud specific attacks: Ensure security of their CO arrangements and on premise environments by implementing controls at appropriate locations to detect and mitigate security breaches and ongoing attacks. These controls shall include but not limited to perimeter security, network IDS/IPS, WAF, DDoS protection, etc.",
+      "domain": "Security",
+      "category": "Perimeter Security",
+      "section_number": "S.1",
+      "parent_section": "S",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Network Architecture Diagram",
+          "description": "Approved network architecture diagram showing perimeter security, IDS/IPS, WAF and DDoS protection placement.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Perimeter / IDS-IPS / WAF / DDoS Configuration",
+          "description": "Configuration export for perimeter firewalls, IDS/IPS, WAF and DDoS protection (AWS Shield/WAF, Azure Front Door/WAF, Cloudflare).",
+          "filetype": "JSON"
+        },
+        {
+          "name": "Detection & Mitigation Test Evidence",
+          "description": "Evidence from simulated attacks or red-team exercises showing detection and mitigation (WAF blocks, IDS alerts, DDoS absorption).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Security Service Status Dashboard",
+          "description": "Dashboard export showing health and alert counts for IDS/IPS, WAF and DDoS services.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Cloud-Specific Threat Model",
+          "description": "Threat model mapping cloud-specific threats (hypervisor jumping, weak APIs, wrapping, side channel) to implemented perimeter controls.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "15.2",
+      "original_reference": "S.2",
+      "title": "Network Architecture — Segmentation and Traffic Routing",
+      "description": "REs shall implement network segmentation based on workload type and purpose, with a dedicated management network not accessible from operational segments. All internet traffic shall route through a dedicated security segment; other segments shall not have direct internet access.",
+      "full_text": "Implement network segmentation based on type of workloads (e.g. production, pre-production, quality assurance, development, etc.) and purpose (e.g. end-users, critical servers, other servers, middleware, interface, etc.). In this regard, a dedicated network segment (i.e. management network) not accessible from other operational segments shall be implemented for administration purposes. Further, all internet traffic shall be routed through a dedicated network segment (i.e. security segment) and other network segments shall not have direct internet access.",
+      "domain": "Security",
+      "category": "Network Segmentation",
+      "section_number": "S.2",
+      "parent_section": "S",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Segmentation Design Document",
+          "description": "Design document defining segments by workload type (prod/pre-prod/QA/dev) and purpose (end-users/critical servers/middleware/interface) with management and security segments.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "VPC / VNet / Subnet Configuration",
+          "description": "Cloud network configuration export (VPC/VNet, subnets, route tables, NACLs/NSGs) demonstrating segmentation and management-segment isolation.",
+          "filetype": "JSON"
+        },
+        {
+          "name": "Internet Egress Routing Evidence",
+          "description": "Route/firewall configuration showing all internet traffic routed through the dedicated security segment with no direct egress from other segments.",
+          "filetype": "JSON"
+        },
+        {
+          "name": "Management Network Access Test Results",
+          "description": "Test results (failed connectivity tests, verified policy enforcement) demonstrating the management segment is not reachable from operational segments.",
+          "filetype": "LOG"
+        },
+        {
+          "name": "Segmentation Validation Report",
+          "description": "Periodic validation report from segmentation assessment tools or pen-test confirming designed boundaries are enforced.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "15.3",
+      "original_reference": "S.3-4",
+      "title": "Network Architecture — VPN/Secure Connectivity and Firewall Reviews",
+      "description": "REs shall secure cloud-to-on-premise traffic via VPN or direct network connection with stringent access control rules. Firewall rules and access lists shall be regularly reviewed especially after changes.",
+      "full_text": "Secure traffic between the cloud and on premise environment using a VPN or direct network connection with stringent access control rules configured to ensure routing of traffic from/to dedicated source and destination IPs. Monitor and control access to and security of the cloud environments. In this regard, regularly review the firewall rules and access lists, especially after any changes.",
+      "domain": "Security",
+      "category": "Connectivity & Firewall Review",
+      "section_number": "S.3-4",
+      "parent_section": "S",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "VPN / Direct Connect Configuration",
+          "description": "Configuration details of site-to-site VPN or direct connection (AWS Direct Connect / Azure ExpressRoute / MPLS) with encryption, BGP, redundancy and failover.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Access Control Rules for Cloud-OnPrem Traffic",
+          "description": "Firewall/ACL rule export showing traffic permitted only between dedicated source/destination IPs and ports.",
+          "filetype": "JSON"
+        },
+        {
+          "name": "IP Address Management Register",
+          "description": "IP register identifying dedicated source and destination IPs for cloud-to-on-premise traffic.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Firewall Rule Review Procedure",
+          "description": "Procedure defining review frequency (quarterly), post-change triggers, reviewers and sign-off.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Firewall Rule Review Records",
+          "description": "Completed firewall/ACL review records with rule-by-rule justification and stale-rule removal evidence.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Rule Analysis Tool Reports",
+          "description": "Reports from rule analysis tools (Tufin / AlgoSec / FireMon) identifying redundant, shadowed or overly permissive rules.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "16.1",
+      "original_reference": "T.1",
+      "title": "Security Testing — Annual Vulnerability Assessment and Penetration Testing",
+      "description": "REs shall conduct vulnerability assessment, penetration testing, and scenario-based security testing of cloud-hosted systems at least once annually.",
+      "full_text": "The dynamic and evolving nature of cyber threats requires a high degree of validation and testing of security posture on periodic basis. REs shall: Conduct vulnerability assessment, penetration testing and scenario based security testing of their systems hosted with the CSPs on periodic basis, at least once annually.",
+      "domain": "Security",
+      "category": "VA / PT — RE Systems",
+      "section_number": "T.1",
+      "parent_section": "T",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Annual VA/PT Report — Cloud Systems",
+          "description": "Latest annual VA and PT reports for cloud-hosted systems with findings, severity, recommendations and status.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Scenario-Based Testing Report",
+          "description": "Scenario-based / red-team / purple-team testing reports for cloud workloads covering realistic attack chains.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Testing Scope & Methodology Document",
+          "description": "Scope and methodology document aligned to OWASP, PTES, NIST SP 800-115 agreed with testers.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Finding Remediation Tracker",
+          "description": "Tracker of findings from cloud VA/PT/scenario testing with severity, owner, target date and post-validation results.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Tester Engagement Letter",
+          "description": "Engagement letter / SOW with independent tester confirming scope, independence and deliverables.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "CSP Testing Authorization Records",
+          "description": "CSP-required pre-authorization / notification records for customer-initiated penetration testing.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "16.2",
+      "original_reference": "T.2",
+      "title": "Security Testing — CSP Annual Penetration Testing",
+      "description": "REs shall ensure CSPs conduct annual vulnerability assessments and penetration testing on the infrastructure and applications they manage. REs shall be cognizant of the scope of such assessments.",
+      "full_text": "Ensure that CSPs conduct vulnerability assessment and penetration testing for the infrastructure and applications managed by them, at least once annually in order to provide security assurance to the REs. Further, the REs shall be fully cognizant of the scope of such assessments while examining the results.",
+      "domain": "Security",
+      "category": "CSP Security Testing Review",
+      "section_number": "T.2",
+      "parent_section": "T",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "CSP VA / PT Reports",
+          "description": "CSP-provided VA/PT reports for their infrastructure and applications, reviewed within the last year.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Scope Understanding Memo",
+          "description": "Memo by RE IS/IA function documenting understanding of CSP testing scope, methodology, inclusions/exclusions and limitations.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "CSP Assessment Reliance Register",
+          "description": "Register of CSP-provided assessments relied upon with scope, date, next-expected-date and reviewer sign-off.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Findings Review Notes",
+          "description": "Review notes on CSP findings including RE-side actions required (configuration changes, compensating controls).",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "16.3",
+      "original_reference": "T.3",
+      "title": "Security Testing — Cloud-Specific Threat Scenarios",
+      "description": "Security testing shall cover cloud-specific threats including hypervisor jumping, weak APIs, DoS, hyper jacking, wrapping attacks, cloud malware injection, and side channel attacks.",
+      "full_text": "Ensure that security testing is conducted while taking into consideration various scenarios and threats that are unique to cloud services including but not limited to hypervisor jumping, weak application programming interfaces, DoS hyper jacking, wrapping attacks, cloud malware injection, side channel attacks, etc.",
+      "domain": "Security",
+      "category": "Cloud-Specific Threat Testing",
+      "section_number": "T.3",
+      "parent_section": "T",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Cloud-Specific Test Case Library",
+          "description": "Test case library covering hypervisor jumping, weak/insecure APIs, DoS hyper jacking, wrapping attacks, cloud malware injection, side channel attacks.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Cloud-Specific Testing Report",
+          "description": "Penetration testing reports explicitly exercising cloud-specific attack scenarios with results and residual risk.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "API Security Testing Evidence",
+          "description": "API-specific testing evidence (OWASP API Top 10) for all cloud-exposed APIs with tool output and fix verification.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Threat Scenario-to-Control Mapping",
+          "description": "Mapping of each cloud-specific threat to implemented controls and test coverage.",
+          "filetype": "XLSX"
+        }
+      ]
+    },
+    {
+      "control_id": "16.4",
+      "original_reference": "T.4",
+      "title": "Security Testing — Vulnerability Tracking and Remediation",
+      "description": "All vulnerabilities identified for cloud workloads shall be categorized by risk, tracked, and remediated (with post-validation). For CSP-managed infrastructure, alternate assurance mechanisms shall be implemented for timely remediation.",
+      "full_text": "Ensure that all vulnerabilities identified for their cloud related workloads are categorized in terms of risk, tracked and rectified (including post validated). For the infrastructure and applications managed by the CSPs, REs shall implement alternate mechanism for obtaining assurance that the vulnerabilities are timely rectified.",
+      "domain": "Security",
+      "category": "Vulnerability Management",
+      "section_number": "T.4",
+      "parent_section": "T",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Vulnerability Management Procedure (Cloud)",
+          "description": "Procedure defining risk categorisation (Critical/High/Medium/Low), rectification SLAs, tracking and post-validation for cloud vulnerabilities.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Vulnerability Tracker with Post-Validation",
+          "description": "Tracker showing categorisation, owner, rectification status and post-validation evidence for cloud workloads.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "CSP-Managed Assurance Mechanism",
+          "description": "Document describing alternate assurance mechanisms (SOC 2 reviews, CSP disclosure programs, attestations, compliance dashboards) for CSP-managed components.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Scanner Configuration & Scan Outputs",
+          "description": "Configuration and outputs from vulnerability scanners (Qualys, Tenable, Rapid7, AWS Inspector, Defender for Cloud).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Post-Validation Closure Reports",
+          "description": "Reports evidencing closure of vulnerabilities after remediation through re-testing.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "16.5",
+      "original_reference": "T.5",
+      "title": "Material CO — Annual Independent Threat and Vulnerability Assessment of CSP Data Centers",
+      "description": "For material cloud outsourcing arrangements, REs shall ensure an independent Threat and Vulnerability Assessment of CSP data centers hosting RE data/systems at least once annually.",
+      "full_text": "In case of material CO, ensure independent Threat & Vulnerability Assessment of CSP's data centers hosting the data/systems of REs, at least once annually.",
+      "domain": "Security",
+      "category": "Material Workload T&V Assessment",
+      "section_number": "T.5",
+      "parent_section": "T",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Annual Independent T&V Report (Material CO)",
+          "description": "Latest annual independent Threat & Vulnerability Assessment report of CSP data centres hosting material RE workloads.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Independent Assessor Engagement Letter",
+          "description": "Engagement letter confirming assessor independence, scope across all relevant data centres and methodology.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Material Workload to Data Centre Mapping",
+          "description": "Mapping of each material workload to the specific CSP data centre(s) where data/systems reside.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "T&V Finding Remediation Tracker",
+          "description": "Tracker of T&V findings from the CSP data-centre assessment with RE-side and CSP-side actions, owners and status.",
+          "filetype": "XLSX"
+        }
+      ]
+    },
+    {
+      "control_id": "17.1",
+      "original_reference": "U.1",
+      "title": "Security Event Monitoring — Cloud Native Controls and Automation",
+      "description": "REs shall leverage cloud-environment controls and tools to enforce consistent security standards and baselines, and implement automated response, remediation, and notification.",
+      "full_text": "REs shall establish mechanisms for SEM by complying with the following requirements: Wherever possible, leverage the controls/tools available in the cloud environment to enforce consistent security standards and baselines, automated response, remediation and notification.",
+      "domain": "Security",
+      "category": "Cloud-Native SEM",
+      "section_number": "U.1",
+      "parent_section": "U",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Cloud-Native Security Tooling Inventory",
+          "description": "Inventory of cloud-native security tools deployed (AWS Security Hub/GuardDuty/Config, Azure Defender/Sentinel, GCP SCC).",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Security Baseline / Guardrail Configuration",
+          "description": "Configuration export of security baselines and guardrails (CIS Benchmarks, AWS SCPs, Azure Policy, GCP Org Policies).",
+          "filetype": "JSON"
+        },
+        {
+          "name": "Automated Response / Remediation Workflows",
+          "description": "SOAR / function / automation workflows for automated response, remediation and notification.",
+          "filetype": "YAML"
+        },
+        {
+          "name": "Benchmark Compliance Dashboard",
+          "description": "Dashboard export showing compliance scores against security baselines with trends.",
+          "filetype": "PNG"
+        }
+      ]
+    },
+    {
+      "control_id": "17.2",
+      "original_reference": "U.2",
+      "title": "Security Event Monitoring — SIEM Integration with Cloud-Specific Correlation Rules",
+      "description": "REs shall integrate CSP-related services with their SIEM solutions for detailed security log analysis. Cloud-specific incident scenarios with correlation rules shall be implemented. AI/ML technologies shall be explored and preferably adopted where available.",
+      "full_text": "Integrate CSP related services with their SIEM solutions to provide a detailed analysis of the security logs. In this regard, cloud specific incident scenarios with correlation rules shall be implemented. Further, AI and ML driven technologies may be explored and preferably adopted, where available.",
+      "domain": "Security",
+      "category": "SIEM Integration",
+      "section_number": "U.2",
+      "parent_section": "U",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "SIEM Integration Inventory",
+          "description": "Inventory of CSP log sources integrated with SIEM (CloudTrail, VPC Flow, GuardDuty, Azure Activity, Defender, GCP Audit Logs).",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Cloud-Specific Correlation Rules",
+          "description": "Export of SIEM correlation rules/use cases targeting cloud-specific threats (IAM abuse, root console use, impossible travel, unusual API calls, S3 policy changes).",
+          "filetype": "YAML"
+        },
+        {
+          "name": "AI / ML Detection Tooling Evidence",
+          "description": "Evidence of AI/ML detection tooling (UEBA, ML anomaly detection) with model performance metrics.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "SIEM Alert Tuning & Closure Records",
+          "description": "Records of SIEM alerts from cloud-specific rules with triage and closure for a sample period.",
+          "filetype": "LOG"
+        }
+      ]
+    },
+    {
+      "control_id": "17.3",
+      "original_reference": "U.3",
+      "title": "Security Event Monitoring — 24x7 SOC Monitoring",
+      "description": "REs shall ensure cloud-related activities are effectively monitored by their Security Operations Center (SOC) on a 24x7 basis.",
+      "full_text": "Ensure that cloud related activities are effectively monitored by their SOC on 24x7 basis.",
+      "domain": "Security",
+      "category": "SOC Operations",
+      "section_number": "U.3",
+      "parent_section": "U",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "SOC Operating Model & 24x7 Roster",
+          "description": "SOC operating model document and 24x7 roster (internal or MSSP) demonstrating continuous monitoring coverage for cloud workloads.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "SOC Cloud Runbooks",
+          "description": "Runbooks/playbooks for cloud-specific incident types used by the SOC.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "SOC Shift Handover Logs",
+          "description": "Shift handover logs from the SOC for a sample period covering cloud monitoring coverage and open investigations.",
+          "filetype": "LOG"
+        },
+        {
+          "name": "SOC KPI / KRI Reports",
+          "description": "Monthly SOC KPI/KRI reports including cloud-specific metrics (MTTD, MTTR, alert volumes, false positives).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "MSSP Contract / SLA (if outsourced)",
+          "description": "Executed MSSP contract/SLA covering 24x7 cloud monitoring scope, response times and reporting.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "18.1",
+      "original_reference": "V.1-2",
+      "title": "Other Requirements — Capacity Monitoring and Cloud Training",
+      "description": "REs shall monitor and review cloud workload capacity utilization and provide adequate training on cloud environments to end-users and privileged users.",
+      "full_text": "REs shall monitor and review capacity utilization of their cloud workloads. REs shall provide adequate training of the cloud environment, to their end-users and privileged users.",
+      "domain": "Operations",
+      "category": "Capacity & Training",
+      "section_number": "V.1-2",
+      "parent_section": "V",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        {
+          "name": "Cloud Capacity Management Procedure",
+          "description": "Procedure defining capacity monitoring scope, thresholds, review cadence and escalation for cloud workloads.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Capacity Utilization Dashboard",
+          "description": "Monitoring dashboard exports (CloudWatch / Azure Monitor / GCP Operations) showing CPU/memory/storage/network utilisation and trends.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Capacity Review Meeting Minutes",
+          "description": "Periodic capacity review meeting minutes with forecasts, threshold breaches and decisions.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Cloud Training Curriculum",
+          "description": "Training curriculum with distinct modules for end-users and privileged users covering cloud usage, security, acceptable use and incident reporting.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Training Completion Records",
+          "description": "LMS records showing completion by end-users and privileged users within the required period.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Privileged User Certification Results",
+          "description": "Assessment results for privileged users on cloud administration and security.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "18.2",
+      "original_reference": "V.3",
+      "title": "Security Incident Reporting to SBP",
+      "description": "All security incidents/breaches shall be reported to SBP per the Enterprise Technology Governance & Risk Management Framework. REs shall investigate root causes, implement corrective actions to prevent recurrence, and fix responsibility.",
+      "full_text": "All security incidents/breaches shall be reported to SBP in compliance with the requirements specified in the 'Enterprise Technology Governance & Risk Management Framework for Financial Institutions' or as advised by SBP from time to time. Further, REs shall conduct investigations to identify the root cause, take appropriate actions to prevent recurrence of such incidents in future and fix responsibility for such lapse.",
+      "domain": "Incident",
+      "category": "SBP Incident Reporting",
+      "section_number": "V.3",
+      "parent_section": "V",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "SBP Incident Reporting Procedure",
+          "description": "Procedure referencing ETGRMF requirements and subsequent SBP directives for timely reporting of security incidents/breaches.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "SBP Incident Notifications",
+          "description": "Sample (redacted) SBP incident notification communications demonstrating timely submission and completeness.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Root Cause Analysis Reports",
+          "description": "RCA reports for reported incidents including findings, corrective actions, preventive actions and responsibility fixing.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Disciplinary / Responsibility-Fixing Records",
+          "description": "Records demonstrating responsibility fixing outcomes (HR/line-management actions) where applicable.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Recurrence Prevention Tracker",
+          "description": "Tracker of actions from incident reviews to prevent recurrence with owners and status.",
+          "filetype": "XLSX"
+        }
+      ]
+    },
+    {
+      "control_id": "18.3",
+      "original_reference": "V.4",
+      "title": "Pre-Placement Notification to SBP for Material Workloads",
+      "description": "For material workloads, REs shall provide specified information to SBP one month before placing services with CSPs: CSP name and parent company, description of activities and data, commencement/renewal/expiry dates, last contract renewal date, and service and deployment models.",
+      "full_text": "For material workloads, REs shall provide following information to SBP one month before placing their services with the CSPs: Name of the CSPs, and their parent company (if any); Description of the activities and details of data to be placed with the CSP; Date of commencement/renewal/expiry of services; Last contract renewal date (where applicable); Service and Deployment Models. Banks, MFBs, DBs and DFIs shall provide the required information to BPRD, whereas designated PSOs/PSPs shall provide the same to PSP&OD.",
+      "domain": "Compliance",
+      "category": "Regulatory Notification",
+      "section_number": "V.4",
+      "parent_section": "V",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Pre-Placement Submission Template",
+          "description": "Standard submission template covering all required fields: CSP name/parent company, activities and data description, commencement/renewal/expiry dates, last renewal date, service/deployment models.",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "Submitted Pre-Placement Notifications",
+          "description": "Copies of actual submissions to BPRD (banks/MFBs/DBs/DFIs) or PSP&OD (designated PSOs/PSPs) for each material workload placement with acknowledgments.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Submission Acknowledgment from SBP",
+          "description": "Receipt acknowledgments from BPRD / PSP&OD confirming SBP received the one-month-prior notification.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Material Workload Pre-Placement Register",
+          "description": "Register tracking material workloads placed with CSPs, submission date, placement date and one-month lead-time adherence.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Internal Approval Records",
+          "description": "Internal sign-off records (ITSC / Management) authorising submission and placement.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Corporate Structure Diagram",
+          "description": "CSP corporate ownership diagram identifying the contracting entity and its parent company.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Data Inventory & Classification Extract",
+          "description": "Extract from the data inventory showing classification and sensitivity of datasets to be hosted on the CSP.",
+          "filetype": "XLSX"
+        }
+      ]
+    }
+  ]
+}
