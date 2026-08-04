@@ -45,12 +45,20 @@ import HostApplicationsPanel from './_host-applications-panel';
 import { PlatformDetails, PLATFORM_META } from './_platform-detail-card';
 import AssetOverviewDesign from './_overview-design';
 import { buildOverviewData } from './_overview-map';
-import {
-  SoftwarePanel, RelationshipsPanel,
-  LifecyclePanel, ActivityPanel,
-} from './_components/AssetWorkTabs';
-import RiskControlsTab from './_components/RiskControlsTab';
-import { NotesPanel, AlertsPanel, HistoryPanel } from '@/components/shared/EntityExtras';
+import { ActivityPanel } from './_components/AssetWorkTabs';
+// Redesigned tab panels (Overview design language). Each is a drop-in that
+// absorbs the former inline tab renderer with the same prop contract.
+import SoftwarePanel from './_tabs/SoftwarePanel';
+import RelationshipsPanel from './_tabs/RelationshipsPanel';
+import LifecyclePanel from './_tabs/LifecyclePanel';
+import NotesPanel from './_tabs/NotesPanel';
+import HistoryPanel from './_tabs/HistoryPanel';
+import RisksPanel from './_tabs/RisksPanel';
+import VulnerabilitiesPanel from './_tabs/VulnerabilitiesPanel';
+import AttachmentsPanel from './_tabs/AttachmentsPanel';
+import CompliancePanel from './_tabs/CompliancePanel';
+import TrajectoryPanel from './_tabs/TrajectoryPanel';
+import CriticalityPanel from './_tabs/CriticalityPanel';
 import { RoomScanProvider, useRoomScan } from './_room-scan-context';
 import { GuideMarker, useGuide } from '@/components/guide';
 import {
@@ -854,25 +862,12 @@ export default function AssetDetailPage() {
             {activeTab === 'overview' && (
               <AssetOverviewDesign A={overviewData} />
             )}
-            {activeTab === 'trajectory' && (
-              <div className="space-y-2">
-                <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
-                  <Network className="h-4 w-4 text-primary-600" strokeWidth={1.75} />
-                  Risk trajectory
-                  <GuideMarker id="asset.trajWhy" n={1} />
-                </h2>
-                <p className="text-xs text-slate-500">
-                  Asset → Vulnerability → Risk. Click a node to trace its sub-chain.
-                  <GuideMarker id="asset.trajAudience" n={2} />
-                </p>
-                <TrajectoryMap assetId={assetId} />
-              </div>
-            )}
+            {activeTab === 'trajectory' && <TrajectoryPanel assetId={assetId} />}
             {activeTab === 'compliance' && (
               <RoomScanProvider>
                 <div className="space-y-4">
                   <HostApplicationsPanel assetId={assetId} />
-                  <ComplianceTab asset={asset} />
+                  <CompliancePanel asset={asset} />
                   {/* Absorbed from the former Activity tab — the same scan runs,
                       previously fetched a second time under its own cache key. */}
                   <ActivityPanel assetId={assetId} />
@@ -914,7 +909,7 @@ export default function AssetDetailPage() {
             {activeTab === 'notes' && <NotesPanel entityType="asset" entityId={assetId} />}
             {activeTab === 'history' && <HistoryPanel entityType="asset" entityId={assetId} />}
             {activeTab === 'evidence' && (
-              <EvidenceTab
+              <AttachmentsPanel
                 asset={asset}
                 allEvidence={allEvidence || []}
                 evidenceLoading={evidenceLoading}
@@ -928,14 +923,9 @@ export default function AssetDetailPage() {
               />
             )}
             {activeTab === 'vulnerabilities' && (
-              <div className="space-y-4">
-              {/* Alerts had its own tab, but /asset-alerts/{id} builds every alert
-                  from the same VulnerabilityAssetLink join this tab lists, plus
-                  one staleness check on last_seen_at. It was a severity ranking
-                  of this list, not a second dataset — so it sits on top of the
-                  list it ranks. */}
-              <AlertsPanel assetId={assetId} canEdit={canEdit} />
-              <VulnerabilitiesTab
+              <VulnerabilitiesPanel
+                assetId={assetId}
+                canEdit={canEdit}
                 asset={asset}
                 allVulnerabilities={allVulnerabilities || []}
                 vulnsLoading={vulnsLoading}
@@ -944,7 +934,6 @@ export default function AssetDetailPage() {
                 onUnlinkVulnerability={(vulnId) => unlinkVulnerabilityMutation.mutate(vulnId)}
                 isUnlinking={unlinkVulnerabilityMutation.isPending}
               />
-              </div>
             )}
             {activeTab === 'risks' && (
               // Command Center's three cards (Residual Risk / CIA / CIS) on top,
@@ -952,41 +941,31 @@ export default function AssetDetailPage() {
               // linking + linked-risk list sit below as children — real
               // management the reference lacks. Linked Issues moved out (it
               // belongs in the Issues module, not here).
-              <RiskControlsTab
+              <RisksPanel
                 assetId={assetId}
                 asset={asset}
                 onOpenCompliance={() => setActiveTab('compliance')}
-              >
-                <ControlsTab
-                  coveragePctFromApi={coverage?.coverage_percentage ?? asset.coverage_percentage ?? null}
-                  asset={asset}
-                  allControls={(allControls || []).map((c) => ({
-                    id: c.id,
-                    internal_id: c.control_id,
-                    name: c.name,
-                    category: c.category,
-                  }))}
-                  controlsLoading={controlsLoading}
-                  onLinkControl={(controlId) => linkControlMutation.mutate({
-                    internal_control_id: controlId,
-                    coverage_status: 'partial',
-                  })}
-                  isLinkingControl={linkControlMutation.isPending}
-                  onUnlinkInternalControl={(linkId) => unlinkInternalControlMutation.mutate(linkId)}
-                  onUnlinkFrameworkControl={(linkId) => unlinkFrameworkControlMutation.mutate(linkId)}
-                  isUnlinkingInternal={unlinkInternalControlMutation.isPending}
-                  isUnlinkingFramework={unlinkFrameworkControlMutation.isPending}
-                />
-                <RisksTab asset={asset} />
-                {/* Absorbed from the former Mapping Recommendations tab. It
-                    writes the same AssetFrameworkControlLink rows the control
-                    list above writes, so the suggestion and the thing it acts on
-                    are now in one place instead of two tabs apart. */}
-                <MappingRecommendationsTab assetId={assetId} />
-              </RiskControlsTab>
+                coveragePctFromApi={coverage?.coverage_percentage ?? asset.coverage_percentage ?? null}
+                allControls={(allControls || []).map((c) => ({
+                  id: c.id,
+                  internal_id: c.control_id,
+                  name: c.name,
+                  category: c.category,
+                }))}
+                controlsLoading={controlsLoading}
+                onLinkControl={(controlId) => linkControlMutation.mutate({
+                  internal_control_id: controlId,
+                  coverage_status: 'partial',
+                })}
+                isLinkingControl={linkControlMutation.isPending}
+                onUnlinkInternalControl={(linkId) => unlinkInternalControlMutation.mutate(linkId)}
+                onUnlinkFrameworkControl={(linkId) => unlinkFrameworkControlMutation.mutate(linkId)}
+                isUnlinkingInternal={unlinkInternalControlMutation.isPending}
+                isUnlinkingFramework={unlinkFrameworkControlMutation.isPending}
+              />
             )}
             {activeTab === 'criticality' && (
-              <CriticalityAssessmentsTab assetId={assetId} />
+              <CriticalityPanel assetId={assetId} />
             )}
             {/* Mapping Recommendations wrote the same AssetFrameworkControlLink
                 rows the Controls list on Risk & Controls writes, and invalidated
