@@ -2022,9 +2022,9 @@ def probe_asset_inventory(
 
 
 class AssetServiceCollectBody(BaseModel):
-    kind: str                        # postgres | mysql | mssql | oracle | k8s | ldap | cisco
+    kind: Optional[str] = None       # inferred from the asset when omitted
     username: Optional[str] = None
-    password: str
+    password: Optional[str] = None    # omit to REUSE the saved connection login
     host: Optional[str] = None       # defaults to the asset IP; set for a localhost-only service
     port: Optional[int] = None
     database: Optional[str] = None
@@ -2036,39 +2036,68 @@ _ASSET_TYPED_ITYPE = {
 }
 
 
+def _infer_service_kind(asset) -> Optional[str]:
+    key = (getattr(asset, "os_normalized", "") or getattr(asset, "name", "") or "").lower()
+    for token, kind in (("postgres", "postgres"), ("mysql", "mysql"), ("mariadb", "mysql"),
+                        ("mssql", "mssql"), ("sql-server", "mssql"), ("oracle", "oracle")):
+        if token in key:
+            return kind
+    return None
+
+
 @router.post("/{asset_id}/collect-service")
 def collect_asset_service(
     asset_id: int,
-    body: AssetServiceCollectBody,
+    body: AssetServiceCollectBody = AssetServiceCollectBody(),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
     """Enrich an EXISTING asset (e.g. a Postgres app already promoted from the
-    host's software) with its TYPED service inventory IN PLACE — connect to
-    host:port with a DB/service login and attach the collector's
-    platform_properties. No re-discovery: the same asset gains its databases /
-    schemas / roles / extensions and becomes a first-class database asset."""
+    host's software) with its TYPED service inventory IN PLACE — the same asset
+    gains its databases / schemas / roles / extensions. It REUSES the login you
+    already saved when you set the software up (its IntegrationConnection); only
+    if none exists does it need a login in the body. No re-discovery, no
+    duplicate, and no re-entering a credential you already gave."""
     user_tenants = get_user_tenants(current_user, db)
     asset = db.query(ITAsset).filter(
         ITAsset.id == asset_id, ITAsset.tenant_id.in_(user_tenants),
     ).first()
     if not asset:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
-    kind = (body.kind or "").lower()
+    kind = (body.kind or _infer_service_kind(asset) or "").lower()
     itype = _ASSET_TYPED_ITYPE.get(kind)
     if itype is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
-                            detail=f"Unsupported kind '{kind}'. One of: {', '.join(_ASSET_TYPED_ITYPE)}")
+                            detail=f"Could not determine service kind. One of: {', '.join(_ASSET_TYPED_ITYPE)}")
     from grc.modules.asset_discovery.services.deep_collect import (
         typed_credentials_dict, live_port_open, SERVICE_SUGGESTIONS,
     )
     from grc.modules.asset_discovery.services.platform_collectors import collect_platform
-    ip = (body.host or asset.ip_address or "127.0.0.1").strip()
+    from grc.modules.compliance_plugins.services.credentials import resolve_credentials_for_connection
+    from grc.models import IntegrationConnection
+
     default_port = next((dp for _p, k, _i, _l, dp in SERVICE_SUGGESTIONS if k == kind), None)
-    port = int(body.port or default_port or 0)
-    if port and not live_port_open(ip, [port]):
-        return {"collected": False, "error": f"{kind} port {port} is not reachable on {ip} — check host/port, or use 127.0.0.1 for a localhost-only service."}
-    creds = typed_credentials_dict(kind, ip, port, body.username, body.password, body.database)
+
+    # 1) REUSE the connection saved at software-setup time (console_url == host).
+    host_name = asset.host_name or asset.ip_address
+    conn = db.query(IntegrationConnection).filter(
+        IntegrationConnection.tenant_id == asset.tenant_id,
+        IntegrationConnection.integration_type == itype,
+        IntegrationConnection.is_active.is_(True),
+        IntegrationConnection.console_url.in_([c for c in (host_name, asset.ip_address, asset.host_name) if c]),
+    ).order_by(IntegrationConnection.id.desc()).first()
+
+    if conn is not None:
+        creds = resolve_credentials_for_connection(conn)
+    elif body.password:
+        ip = (body.host or asset.ip_address or "127.0.0.1").strip()
+        port = int(body.port or default_port or 0)
+        if port and not live_port_open(ip, [port]):
+            return {"collected": False, "error": f"{kind} port {port} is not reachable on {ip} — check host/port, or use 127.0.0.1 for a localhost-only service."}
+        creds = typed_credentials_dict(kind, ip, port, body.username, body.password, body.database)
+    else:
+        return {"collected": False, "needs_login": True, "kind": kind,
+                "error": "No saved database login for this host — provide one below."}
     try:
         result = collect_platform(itype, creds)
         if result is None:

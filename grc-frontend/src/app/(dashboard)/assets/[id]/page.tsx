@@ -422,6 +422,8 @@ export default function AssetDetailPage() {
     mutationFn: (data: any) => assetsApi.collectAssetService(assetId, data),
     onSuccess: (res: any) => {
       if (res.data?.collected) { setCollectSvcOpen(false); queryClient.invalidateQueries({ queryKey: ['asset-detail', assetId] }); }
+      // Only ask for a login when there's genuinely no saved connection to reuse.
+      else if (res.data?.needs_login) { setCollectSvcOpen(true); }
     },
   });
 
@@ -738,7 +740,7 @@ export default function AssetDetailPage() {
       onClick: () => setActiveTab(s.id),
     })),
     actions: [
-      ...(dbAppKind ? [{ label: 'Collect database details', primary: true, onClick: () => setCollectSvcOpen(true) }] : []),
+      ...(dbAppKind ? [{ label: collectSvc.isPending ? 'Collecting…' : 'Collect database details', primary: true, onClick: () => collectSvc.mutate({}) }] : []),
       { label: 'Assess risk', primary: !dbAppKind, onClick: () => setActiveTab('criticality') },
       ...(canEdit ? [{ label: 'Edit', onClick: () => setShowEditModal(true) }] : []),
       ...(canEdit ? [{ label: 'Lifecycle', onClick: () => setShowLifecycleModal(true) }] : []),
