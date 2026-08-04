@@ -1,0 +1,2504 @@
+{
+  "id": "hipaa",
+  "name": "HIPAA Security Rule",
+  "version": "Current",
+  "official_sources": [
+    {
+      "title": "45 CFR §164.302–318",
+      "url": "https://www.ecfr.gov/current/title-45/subtitle-A/subchapter-C/part-164"
+    },
+    {
+      "title": "HHS Guidance on Risk Analysis",
+      "url": "https://www.hhs.gov/hipaa/for-professionals/security/guidance/guidance-risk-analysis/index.html"
+    },
+    {
+      "title": "ONC/HHS Security Risk Assessment (SRA) Tool",
+      "url": "https://healthit.gov/privacy-security/security-risk-assessment-tool"
+    }
+  ],
+  "assessment_shapes": [
+    "asset_threat_vulnerability"
+  ],
+  "methodology": "45 CFR §164.308(a)(1)(ii)(A) — Risk Analysis (Required). OCR-endorsed methodology: NIST SP 800-30. The ONC SRA Tool implements ~156 questions across the safeguards.",
+  "scoping_inputs": [
+    {
+      "id": "entity_type",
+      "type": "select",
+      "options": [
+        "Covered Entity",
+        "Business Associate",
+        "Both"
+      ],
+      "label": "Entity type"
+    },
+    {
+      "id": "ephi_systems",
+      "type": "list",
+      "label": "Systems that create/receive/maintain/transmit ePHI"
+    },
+    {
+      "id": "locations",
+      "type": "list",
+      "label": "Physical locations"
+    }
+  ],
+  "risk_model": {
+    "factors": [
+      "asset",
+      "threat",
+      "vulnerability",
+      "likelihood",
+      "impact_c",
+      "impact_i",
+      "impact_a"
+    ],
+    "scales": {
+      "likelihood": [
+        {
+          "value": 1,
+          "label": "Rare",
+          "definition": "May occur only in exceptional circumstances (<5% per year)."
+        },
+        {
+          "value": 2,
+          "label": "Unlikely",
+          "definition": "Could occur but not expected (5-25% per year)."
+        },
+        {
+          "value": 3,
+          "label": "Possible",
+          "definition": "Might occur at some time (25-50% per year)."
+        },
+        {
+          "value": 4,
+          "label": "Likely",
+          "definition": "Will probably occur in most circumstances (50-75% per year)."
+        },
+        {
+          "value": 5,
+          "label": "Almost Certain",
+          "definition": "Expected to occur in most circumstances (>75% per year)."
+        }
+      ],
+      "impact": [
+        {
+          "value": 1,
+          "label": "Insignificant",
+          "definition": "Negligible operational, financial, regulatory or reputational impact."
+        },
+        {
+          "value": 2,
+          "label": "Minor",
+          "definition": "Limited impact contained within a single team or system; recoverable in <1 day."
+        },
+        {
+          "value": 3,
+          "label": "Moderate",
+          "definition": "Notable impact on a business unit; recoverable in 1-7 days; minor regulatory attention."
+        },
+        {
+          "value": 4,
+          "label": "Major",
+          "definition": "Significant impact across multiple business units; >1 week to recover; regulatory action probable."
+        },
+        {
+          "value": 5,
+          "label": "Severe",
+          "definition": "Existential or systemic impact; loss of license, major fines, sustained customer loss."
+        }
+      ],
+      "maturity": [
+        {
+          "value": 0,
+          "label": "Non-Existent",
+          "definition": "No process or control in place."
+        },
+        {
+          "value": 1,
+          "label": "Initial / Ad Hoc",
+          "definition": "Process exists but is informal and inconsistent."
+        },
+        {
+          "value": 2,
+          "label": "Repeatable",
+          "definition": "Process is documented and repeated, but not standardized across the organization."
+        },
+        {
+          "value": 3,
+          "label": "Defined",
+          "definition": "Process is documented, standardized, and integrated across the organization."
+        },
+        {
+          "value": 4,
+          "label": "Managed",
+          "definition": "Process is measured, monitored with KPIs, and controlled."
+        },
+        {
+          "value": 5,
+          "label": "Optimized",
+          "definition": "Process is continuously improved through monitoring, metrics, and lessons learned."
+        }
+      ],
+      "implementation_status": [
+        {
+          "value": "NI",
+          "label": "Not Implemented"
+        },
+        {
+          "value": "PI",
+          "label": "Partially Implemented"
+        },
+        {
+          "value": "LI",
+          "label": "Largely Implemented"
+        },
+        {
+          "value": "FI",
+          "label": "Fully Implemented"
+        }
+      ]
+    },
+    "matrix": "5x5",
+    "calculation": "max(impact_c, impact_i, impact_a) * likelihood",
+    "acceptance_threshold": 6,
+    "thresholds": {
+      "low": [
+        1,
+        4
+      ],
+      "medium": [
+        5,
+        9
+      ],
+      "high": [
+        10,
+        16
+      ],
+      "critical": [
+        17,
+        25
+      ]
+    }
+  },
+  "domains": [
+    {
+      "id": "ADMIN",
+      "name": "Administrative Safeguards (45 CFR §164.308)",
+      "controls": [
+        {
+          "id": "164.308(a)(1)",
+          "title": "Security Management Process — Risk Analysis, Risk Management, Sanction Policy, Information System Activity Review",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "ephi_asset",
+                "type": "text",
+                "prompt": "Which ePHI asset / system / location is in scope?"
+              },
+              {
+                "field": "safeguard_category",
+                "type": "select",
+                "options": [
+                  "Administrative",
+                  "Physical",
+                  "Technical"
+                ],
+                "prompt": "Safeguard category?"
+              },
+              {
+                "field": "hipaa_citation",
+                "type": "text",
+                "prompt": "HIPAA citation (e.g., 164.308(a)(1)(ii)(A))?"
+              },
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "164.308(a)(2)",
+          "title": "Assigned Security Responsibility",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "ephi_asset",
+                "type": "text",
+                "prompt": "Which ePHI asset / system / location is in scope?"
+              },
+              {
+                "field": "safeguard_category",
+                "type": "select",
+                "options": [
+                  "Administrative",
+                  "Physical",
+                  "Technical"
+                ],
+                "prompt": "Safeguard category?"
+              },
+              {
+                "field": "hipaa_citation",
+                "type": "text",
+                "prompt": "HIPAA citation (e.g., 164.308(a)(1)(ii)(A))?"
+              },
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "164.308(a)(3)",
+          "title": "Workforce Security — Authorization, Clearance, Termination",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "ephi_asset",
+                "type": "text",
+                "prompt": "Which ePHI asset / system / location is in scope?"
+              },
+              {
+                "field": "safeguard_category",
+                "type": "select",
+                "options": [
+                  "Administrative",
+                  "Physical",
+                  "Technical"
+                ],
+                "prompt": "Safeguard category?"
+              },
+              {
+                "field": "hipaa_citation",
+                "type": "text",
+                "prompt": "HIPAA citation (e.g., 164.308(a)(1)(ii)(A))?"
+              },
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "164.308(a)(4)",
+          "title": "Information Access Management — Isolation, Authorization, Modification",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "ephi_asset",
+                "type": "text",
+                "prompt": "Which ePHI asset / system / location is in scope?"
+              },
+              {
+                "field": "safeguard_category",
+                "type": "select",
+                "options": [
+                  "Administrative",
+                  "Physical",
+                  "Technical"
+                ],
+                "prompt": "Safeguard category?"
+              },
+              {
+                "field": "hipaa_citation",
+                "type": "text",
+                "prompt": "HIPAA citation (e.g., 164.308(a)(1)(ii)(A))?"
+              },
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "164.308(a)(5)",
+          "title": "Security Awareness and Training",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "ephi_asset",
+                "type": "text",
+                "prompt": "Which ePHI asset / system / location is in scope?"
+              },
+              {
+                "field": "safeguard_category",
+                "type": "select",
+                "options": [
+                  "Administrative",
+                  "Physical",
+                  "Technical"
+                ],
+                "prompt": "Safeguard category?"
+              },
+              {
+                "field": "hipaa_citation",
+                "type": "text",
+                "prompt": "HIPAA citation (e.g., 164.308(a)(1)(ii)(A))?"
+              },
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "164.308(a)(6)",
+          "title": "Security Incident Procedures — Response and Reporting",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "ephi_asset",
+                "type": "text",
+                "prompt": "Which ePHI asset / system / location is in scope?"
+              },
+              {
+                "field": "safeguard_category",
+                "type": "select",
+                "options": [
+                  "Administrative",
+                  "Physical",
+                  "Technical"
+                ],
+                "prompt": "Safeguard category?"
+              },
+              {
+                "field": "hipaa_citation",
+                "type": "text",
+                "prompt": "HIPAA citation (e.g., 164.308(a)(1)(ii)(A))?"
+              },
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "164.308(a)(7)",
+          "title": "Contingency Plan — Data Backup, DR Plan, Emergency Mode, Testing, Application & Data Criticality Analysis",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "ephi_asset",
+                "type": "text",
+                "prompt": "Which ePHI asset / system / location is in scope?"
+              },
+              {
+                "field": "safeguard_category",
+                "type": "select",
+                "options": [
+                  "Administrative",
+                  "Physical",
+                  "Technical"
+                ],
+                "prompt": "Safeguard category?"
+              },
+              {
+                "field": "hipaa_citation",
+                "type": "text",
+                "prompt": "HIPAA citation (e.g., 164.308(a)(1)(ii)(A))?"
+              },
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "164.308(a)(8)",
+          "title": "Evaluation",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "ephi_asset",
+                "type": "text",
+                "prompt": "Which ePHI asset / system / location is in scope?"
+              },
+              {
+                "field": "safeguard_category",
+                "type": "select",
+                "options": [
+                  "Administrative",
+                  "Physical",
+                  "Technical"
+                ],
+                "prompt": "Safeguard category?"
+              },
+              {
+                "field": "hipaa_citation",
+                "type": "text",
+                "prompt": "HIPAA citation (e.g., 164.308(a)(1)(ii)(A))?"
+              },
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "164.308(b)(1)",
+          "title": "Business Associate Contracts and Other Arrangements",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "ephi_asset",
+                "type": "text",
+                "prompt": "Which ePHI asset / system / location is in scope?"
+              },
+              {
+                "field": "safeguard_category",
+                "type": "select",
+                "options": [
+                  "Administrative",
+                  "Physical",
+                  "Technical"
+                ],
+                "prompt": "Safeguard category?"
+              },
+              {
+                "field": "hipaa_citation",
+                "type": "text",
+                "prompt": "HIPAA citation (e.g., 164.308(a)(1)(ii)(A))?"
+              },
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "PHYSICAL",
+      "name": "Physical Safeguards (45 CFR §164.310)",
+      "controls": [
+        {
+          "id": "164.310(a)(1)",
+          "title": "Facility Access Controls — Contingency Operations, Facility Security Plan, Access Control & Validation, Maintenance Records",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "ephi_asset",
+                "type": "text",
+                "prompt": "Which ePHI asset / system / location is in scope?"
+              },
+              {
+                "field": "safeguard_category",
+                "type": "select",
+                "options": [
+                  "Administrative",
+                  "Physical",
+                  "Technical"
+                ],
+                "prompt": "Safeguard category?"
+              },
+              {
+                "field": "hipaa_citation",
+                "type": "text",
+                "prompt": "HIPAA citation (e.g., 164.308(a)(1)(ii)(A))?"
+              },
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "164.310(b)",
+          "title": "Workstation Use",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "ephi_asset",
+                "type": "text",
+                "prompt": "Which ePHI asset / system / location is in scope?"
+              },
+              {
+                "field": "safeguard_category",
+                "type": "select",
+                "options": [
+                  "Administrative",
+                  "Physical",
+                  "Technical"
+                ],
+                "prompt": "Safeguard category?"
+              },
+              {
+                "field": "hipaa_citation",
+                "type": "text",
+                "prompt": "HIPAA citation (e.g., 164.308(a)(1)(ii)(A))?"
+              },
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "164.310(c)",
+          "title": "Workstation Security",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "ephi_asset",
+                "type": "text",
+                "prompt": "Which ePHI asset / system / location is in scope?"
+              },
+              {
+                "field": "safeguard_category",
+                "type": "select",
+                "options": [
+                  "Administrative",
+                  "Physical",
+                  "Technical"
+                ],
+                "prompt": "Safeguard category?"
+              },
+              {
+                "field": "hipaa_citation",
+                "type": "text",
+                "prompt": "HIPAA citation (e.g., 164.308(a)(1)(ii)(A))?"
+              },
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "164.310(d)(1)",
+          "title": "Device and Media Controls — Disposal, Media Re-use, Accountability, Data Backup and Storage",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "ephi_asset",
+                "type": "text",
+                "prompt": "Which ePHI asset / system / location is in scope?"
+              },
+              {
+                "field": "safeguard_category",
+                "type": "select",
+                "options": [
+                  "Administrative",
+                  "Physical",
+                  "Technical"
+                ],
+                "prompt": "Safeguard category?"
+              },
+              {
+                "field": "hipaa_citation",
+                "type": "text",
+                "prompt": "HIPAA citation (e.g., 164.308(a)(1)(ii)(A))?"
+              },
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "TECHNICAL",
+      "name": "Technical Safeguards (45 CFR §164.312)",
+      "controls": [
+        {
+          "id": "164.312(a)(1)",
+          "title": "Access Control — Unique User ID, Emergency Access, Automatic Logoff, Encryption/Decryption",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "ephi_asset",
+                "type": "text",
+                "prompt": "Which ePHI asset / system / location is in scope?"
+              },
+              {
+                "field": "safeguard_category",
+                "type": "select",
+                "options": [
+                  "Administrative",
+                  "Physical",
+                  "Technical"
+                ],
+                "prompt": "Safeguard category?"
+              },
+              {
+                "field": "hipaa_citation",
+                "type": "text",
+                "prompt": "HIPAA citation (e.g., 164.308(a)(1)(ii)(A))?"
+              },
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "164.312(b)",
+          "title": "Audit Controls",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "ephi_asset",
+                "type": "text",
+                "prompt": "Which ePHI asset / system / location is in scope?"
+              },
+              {
+                "field": "safeguard_category",
+                "type": "select",
+                "options": [
+                  "Administrative",
+                  "Physical",
+                  "Technical"
+                ],
+                "prompt": "Safeguard category?"
+              },
+              {
+                "field": "hipaa_citation",
+                "type": "text",
+                "prompt": "HIPAA citation (e.g., 164.308(a)(1)(ii)(A))?"
+              },
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "164.312(c)(1)",
+          "title": "Integrity — Mechanism to Authenticate ePHI",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "ephi_asset",
+                "type": "text",
+                "prompt": "Which ePHI asset / system / location is in scope?"
+              },
+              {
+                "field": "safeguard_category",
+                "type": "select",
+                "options": [
+                  "Administrative",
+                  "Physical",
+                  "Technical"
+                ],
+                "prompt": "Safeguard category?"
+              },
+              {
+                "field": "hipaa_citation",
+                "type": "text",
+                "prompt": "HIPAA citation (e.g., 164.308(a)(1)(ii)(A))?"
+              },
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "164.312(d)",
+          "title": "Person or Entity Authentication",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "ephi_asset",
+                "type": "text",
+                "prompt": "Which ePHI asset / system / location is in scope?"
+              },
+              {
+                "field": "safeguard_category",
+                "type": "select",
+                "options": [
+                  "Administrative",
+                  "Physical",
+                  "Technical"
+                ],
+                "prompt": "Safeguard category?"
+              },
+              {
+                "field": "hipaa_citation",
+                "type": "text",
+                "prompt": "HIPAA citation (e.g., 164.308(a)(1)(ii)(A))?"
+              },
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "164.312(e)(1)",
+          "title": "Transmission Security — Integrity Controls, Encryption",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "ephi_asset",
+                "type": "text",
+                "prompt": "Which ePHI asset / system / location is in scope?"
+              },
+              {
+                "field": "safeguard_category",
+                "type": "select",
+                "options": [
+                  "Administrative",
+                  "Physical",
+                  "Technical"
+                ],
+                "prompt": "Safeguard category?"
+              },
+              {
+                "field": "hipaa_citation",
+                "type": "text",
+                "prompt": "HIPAA citation (e.g., 164.308(a)(1)(ii)(A))?"
+              },
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "ORG",
+      "name": "Organizational Requirements (45 CFR §164.314)",
+      "controls": [
+        {
+          "id": "164.314(a)(1)",
+          "title": "Business Associate Contracts",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "ephi_asset",
+                "type": "text",
+                "prompt": "Which ePHI asset / system / location is in scope?"
+              },
+              {
+                "field": "safeguard_category",
+                "type": "select",
+                "options": [
+                  "Administrative",
+                  "Physical",
+                  "Technical"
+                ],
+                "prompt": "Safeguard category?"
+              },
+              {
+                "field": "hipaa_citation",
+                "type": "text",
+                "prompt": "HIPAA citation (e.g., 164.308(a)(1)(ii)(A))?"
+              },
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "164.314(b)(1)",
+          "title": "Requirements for Group Health Plans",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "ephi_asset",
+                "type": "text",
+                "prompt": "Which ePHI asset / system / location is in scope?"
+              },
+              {
+                "field": "safeguard_category",
+                "type": "select",
+                "options": [
+                  "Administrative",
+                  "Physical",
+                  "Technical"
+                ],
+                "prompt": "Safeguard category?"
+              },
+              {
+                "field": "hipaa_citation",
+                "type": "text",
+                "prompt": "HIPAA citation (e.g., 164.308(a)(1)(ii)(A))?"
+              },
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "POLICIES",
+      "name": "Policies, Procedures, and Documentation (45 CFR §164.316)",
+      "controls": [
+        {
+          "id": "164.316(a)",
+          "title": "Policies and Procedures",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "ephi_asset",
+                "type": "text",
+                "prompt": "Which ePHI asset / system / location is in scope?"
+              },
+              {
+                "field": "safeguard_category",
+                "type": "select",
+                "options": [
+                  "Administrative",
+                  "Physical",
+                  "Technical"
+                ],
+                "prompt": "Safeguard category?"
+              },
+              {
+                "field": "hipaa_citation",
+                "type": "text",
+                "prompt": "HIPAA citation (e.g., 164.308(a)(1)(ii)(A))?"
+              },
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        },
+        {
+          "id": "164.316(b)(1)",
+          "title": "Documentation — Time Limit, Availability, Updates",
+          "question_block": {
+            "type": "asset_threat_vulnerability",
+            "questions": [
+              {
+                "field": "ephi_asset",
+                "type": "text",
+                "prompt": "Which ePHI asset / system / location is in scope?"
+              },
+              {
+                "field": "safeguard_category",
+                "type": "select",
+                "options": [
+                  "Administrative",
+                  "Physical",
+                  "Technical"
+                ],
+                "prompt": "Safeguard category?"
+              },
+              {
+                "field": "hipaa_citation",
+                "type": "text",
+                "prompt": "HIPAA citation (e.g., 164.308(a)(1)(ii)(A))?"
+              },
+              {
+                "field": "asset",
+                "type": "text",
+                "prompt": "Which information asset, system or process does this risk affect?"
+              },
+              {
+                "field": "threat",
+                "type": "text",
+                "prompt": "What threat could exploit this asset?"
+              },
+              {
+                "field": "vulnerability",
+                "type": "text",
+                "prompt": "What weakness or condition enables the threat?"
+              },
+              {
+                "field": "existing_controls",
+                "type": "text",
+                "prompt": "What controls are currently in place?"
+              },
+              {
+                "field": "likelihood",
+                "type": "scale",
+                "scale": "likelihood",
+                "prompt": "Likelihood of occurrence (1-5)?"
+              },
+              {
+                "field": "impact_c",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Confidentiality impact (1-5)?"
+              },
+              {
+                "field": "impact_i",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Integrity impact (1-5)?"
+              },
+              {
+                "field": "impact_a",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Availability impact (1-5)?"
+              },
+              {
+                "field": "inherent_risk",
+                "type": "computed",
+                "formula": "likelihood * max(impact_c, impact_i, impact_a)"
+              },
+              {
+                "field": "treatment",
+                "type": "select",
+                "options": [
+                  "modify",
+                  "retain",
+                  "avoid",
+                  "share"
+                ],
+                "prompt": "Risk treatment option?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Risk owner?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target remediation date?"
+              },
+              {
+                "field": "residual_risk",
+                "type": "computed",
+                "formula": "post-treatment likelihood * impact"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "notes": "Documentation must be retained for at least 6 years. Assessment must be reviewed periodically and after significant change."
+}

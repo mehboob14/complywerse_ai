@@ -1,0 +1,1476 @@
+{
+ "stage": 1,
+ "title": "Stage 1 - Verified framework categories & control counts",
+ "verified": {
+  "json_equals_db": true,
+  "total_controls": 3419,
+  "true_duplicate_controls": 0,
+  "frameworks": 30
+ },
+ "frameworks": [
+  {
+   "name": "Abu Dhabi Healthcare Information and Cyber Security Standard",
+   "file": "adhics.json",
+   "controls": 162,
+   "category_count": 11,
+   "categories": [
+    {
+     "name": "Asset Management",
+     "controls": 30
+    },
+    {
+     "name": "Operations Management",
+     "controls": 21
+    },
+    {
+     "name": "Physical and Environmental Security",
+     "controls": 20
+    },
+    {
+     "name": "Access Control",
+     "controls": 20
+    },
+    {
+     "name": "Information Systems Acquisition, Development, and Maintenance",
+     "controls": 20
+    },
+    {
+     "name": "Communications",
+     "controls": 19
+    },
+    {
+     "name": "Human Resources Security",
+     "controls": 12
+    },
+    {
+     "name": "Information Security Incident Management",
+     "controls": 10
+    },
+    {
+     "name": "Third Party Security",
+     "controls": 4
+    },
+    {
+     "name": "Information Systems Continuity Management",
+     "controls": 4
+    },
+    {
+     "name": "Health Information and Security",
+     "controls": 2
+    }
+   ]
+  },
+  {
+   "name": "ARAMCO Cybersecurity Compliance Certification",
+   "file": "aramco_ccc.json",
+   "controls": 35,
+   "category_count": 8,
+   "categories": [
+    {
+     "name": "Operations Security",
+     "controls": 8
+    },
+    {
+     "name": "Incident Management",
+     "controls": 6
+    },
+    {
+     "name": "Governance",
+     "controls": 5
+    },
+    {
+     "name": "Access Control",
+     "controls": 5
+    },
+    {
+     "name": "Risk Management",
+     "controls": 3
+    },
+    {
+     "name": "Asset Management",
+     "controls": 3
+    },
+    {
+     "name": "Physical Security",
+     "controls": 3
+    },
+    {
+     "name": "Cryptography",
+     "controls": 2
+    }
+   ]
+  },
+  {
+   "name": "CIS Critical Security Controls v8",
+   "file": "cis_controls.json",
+   "controls": 153,
+   "category_count": 18,
+   "categories": [
+    {
+     "name": "Data Protection",
+     "controls": 14
+    },
+    {
+     "name": "Application Software Security",
+     "controls": 14
+    },
+    {
+     "name": "Secure Configuration of Enterprise Assets and Software",
+     "controls": 12
+    },
+    {
+     "name": "Audit Log Management",
+     "controls": 12
+    },
+    {
+     "name": "Network Monitoring and Defense",
+     "controls": 11
+    },
+    {
+     "name": "Security Awareness and Skills Training",
+     "controls": 9
+    },
+    {
+     "name": "Incident Response Management",
+     "controls": 9
+    },
+    {
+     "name": "Access Control Management",
+     "controls": 8
+    },
+    {
+     "name": "Network Infrastructure Management",
+     "controls": 8
+    },
+    {
+     "name": "Inventory and Control of Software Assets",
+     "controls": 7
+    },
+    {
+     "name": "Continuous Vulnerability Management",
+     "controls": 7
+    },
+    {
+     "name": "Email and Web Browser Protections",
+     "controls": 7
+    },
+    {
+     "name": "Malware Defenses",
+     "controls": 7
+    },
+    {
+     "name": "Service Provider Management",
+     "controls": 7
+    },
+    {
+     "name": "Account Management",
+     "controls": 6
+    },
+    {
+     "name": "Inventory and Control of Enterprise Assets",
+     "controls": 5
+    },
+    {
+     "name": "Data Recovery",
+     "controls": 5
+    },
+    {
+     "name": "Penetration Testing",
+     "controls": 5
+    }
+   ]
+  },
+  {
+   "name": "COBIT 2019",
+   "file": "cobit.json",
+   "controls": 40,
+   "category_count": 5,
+   "categories": [
+    {
+     "name": "Align, Plan and Organize",
+     "controls": 14
+    },
+    {
+     "name": "Build, Acquire and Implement",
+     "controls": 11
+    },
+    {
+     "name": "Deliver, Service and Support",
+     "controls": 6
+    },
+    {
+     "name": "Evaluate, Direct and Monitor",
+     "controls": 5
+    },
+    {
+     "name": "Monitor, Evaluate and Assess",
+     "controls": 4
+    }
+   ]
+  },
+  {
+   "name": "Digital Operational Resilience Act (DORA)",
+   "file": "dora.json",
+   "controls": 54,
+   "category_count": 5,
+   "categories": [
+    {
+     "name": "ICT Risk Management",
+     "controls": 25
+    },
+    {
+     "name": "ICT Third-Party Risk Management",
+     "controls": 12
+    },
+    {
+     "name": "ICT Incident Management",
+     "controls": 7
+    },
+    {
+     "name": "Digital Operational Resilience Testing",
+     "controls": 7
+    },
+    {
+     "name": "Information Sharing",
+     "controls": 3
+    }
+   ]
+  },
+  {
+   "name": "DOH Policy on the Abu Dhabi Health Information Exchange (ADHIE)",
+   "file": "doh_adhie_policy.json",
+   "controls": 195,
+   "category_count": 8,
+   "categories": [
+    {
+     "name": "Data Management",
+     "controls": 76
+    },
+    {
+     "name": "Procedural Roles and Responsibilities",
+     "controls": 58
+    },
+    {
+     "name": "Universal Stakeholder Participation",
+     "controls": 17
+    },
+    {
+     "name": "Data Quality",
+     "controls": 10
+    },
+    {
+     "name": "Implementation - Escalation and Enforcement",
+     "controls": 10
+    },
+    {
+     "name": "Implementation - Monitoring and Evaluation",
+     "controls": 9
+    },
+    {
+     "name": "Universal Patient Participation",
+     "controls": 8
+    },
+    {
+     "name": "Implementation - Roles and Responsibilities",
+     "controls": 7
+    }
+   ]
+  },
+  {
+   "name": "General Data Protection Regulation",
+   "file": "gdpr.json",
+   "controls": 41,
+   "category_count": 5,
+   "categories": [
+    {
+     "name": "Controller and Processor",
+     "controls": 13
+    },
+    {
+     "name": "Principles",
+     "controls": 10
+    },
+    {
+     "name": "Rights of Data Subjects",
+     "controls": 10
+    },
+    {
+     "name": "Transfers of Personal Data",
+     "controls": 5
+    },
+    {
+     "name": "Remedies, Liability and Penalties",
+     "controls": 3
+    }
+   ]
+  },
+  {
+   "name": "HIPAA Security & Privacy Rule",
+   "file": "hipaa.json",
+   "controls": 67,
+   "category_count": 6,
+   "categories": [
+    {
+     "name": "Administrative Safeguards",
+     "controls": 30
+    },
+    {
+     "name": "Physical Safeguards",
+     "controls": 12
+    },
+    {
+     "name": "Technical Safeguards",
+     "controls": 12
+    },
+    {
+     "name": "Privacy Rule",
+     "controls": 10
+    },
+    {
+     "name": "Organizational Requirements",
+     "controls": 2
+    },
+    {
+     "name": "Breach Notification",
+     "controls": 1
+    }
+   ]
+  },
+  {
+   "name": "HITRUST Common Security Framework (CSF)",
+   "file": "hitrust_csf.json",
+   "controls": 156,
+   "category_count": 14,
+   "categories": [
+    {
+     "name": "Communications and Operations Management",
+     "controls": 32
+    },
+    {
+     "name": "Access Control",
+     "controls": 25
+    },
+    {
+     "name": "Privacy Practices",
+     "controls": 21
+    },
+    {
+     "name": "Physical and Environmental Security",
+     "controls": 13
+    },
+    {
+     "name": "Information Systems Acquisition, Development, and Maintenance",
+     "controls": 13
+    },
+    {
+     "name": "Organization of Information Security",
+     "controls": 11
+    },
+    {
+     "name": "Compliance",
+     "controls": 10
+    },
+    {
+     "name": "Human Resources Security",
+     "controls": 9
+    },
+    {
+     "name": "Asset Management",
+     "controls": 5
+    },
+    {
+     "name": "Information Security Incident Management",
+     "controls": 5
+    },
+    {
+     "name": "Business Continuity Management",
+     "controls": 5
+    },
+    {
+     "name": "Risk Management",
+     "controls": 4
+    },
+    {
+     "name": "Security Policy",
+     "controls": 2
+    },
+    {
+     "name": "Information Security Management Program",
+     "controls": 1
+    }
+   ]
+  },
+  {
+   "name": "ISO 22301:2019 Business Continuity Management System",
+   "file": "iso_22301.json",
+   "controls": 40,
+   "category_count": 7,
+   "categories": [
+    {
+     "name": "Operation",
+     "controls": 17
+    },
+    {
+     "name": "Support",
+     "controls": 7
+    },
+    {
+     "name": "Context of the Organization",
+     "controls": 4
+    },
+    {
+     "name": "Performance Evaluation",
+     "controls": 4
+    },
+    {
+     "name": "Leadership",
+     "controls": 3
+    },
+    {
+     "name": "Planning",
+     "controls": 3
+    },
+    {
+     "name": "Improvement",
+     "controls": 2
+    }
+   ]
+  },
+  {
+   "name": "ISO/IEC 27001:2022",
+   "file": "iso_27001.json",
+   "controls": 93,
+   "category_count": 4,
+   "categories": [
+    {
+     "name": "Organizational Controls",
+     "controls": 37
+    },
+    {
+     "name": "Technological Controls",
+     "controls": 34
+    },
+    {
+     "name": "Physical Controls",
+     "controls": 14
+    },
+    {
+     "name": "People Controls",
+     "controls": 8
+    }
+   ]
+  },
+  {
+   "name": "ISO/IEC 42001:2023 AI Management System",
+   "file": "iso_42001.json",
+   "controls": 70,
+   "category_count": 16,
+   "categories": [
+    {
+     "name": "AI Lifecycle",
+     "controls": 9
+    },
+    {
+     "name": "Support",
+     "controls": 7
+    },
+    {
+     "name": "Risk Management",
+     "controls": 6
+    },
+    {
+     "name": "Performance Evaluation",
+     "controls": 6
+    },
+    {
+     "name": "Resources for AI Systems",
+     "controls": 5
+    },
+    {
+     "name": "Data Management",
+     "controls": 5
+    },
+    {
+     "name": "Governance",
+     "controls": 4
+    },
+    {
+     "name": "Operation",
+     "controls": 4
+    },
+    {
+     "name": "Impact Assessment",
+     "controls": 4
+    },
+    {
+     "name": "Information for Interested Parties",
+     "controls": 4
+    },
+    {
+     "name": "Leadership",
+     "controls": 3
+    },
+    {
+     "name": "AI Policy",
+     "controls": 3
+    },
+    {
+     "name": "Use of AI Systems",
+     "controls": 3
+    },
+    {
+     "name": "Third-Party Management",
+     "controls": 3
+    },
+    {
+     "name": "Improvement",
+     "controls": 2
+    },
+    {
+     "name": "Internal Organization",
+     "controls": 2
+    }
+   ]
+  },
+  {
+   "name": "KSA National Data Management and Personal Data Protection Standards",
+   "file": "NDMO_Data_Management_Standardsv1.5.json",
+   "controls": 202,
+   "category_count": 15,
+   "categories": [
+    {
+     "name": "Data Governance",
+     "controls": 28
+    },
+    {
+     "name": "Data Catalog and Metadata",
+     "controls": 20
+    },
+    {
+     "name": "Reference and Master Data Management",
+     "controls": 18
+    },
+    {
+     "name": "Data Sharing and Interoperability",
+     "controls": 16
+    },
+    {
+     "name": "Data Operations",
+     "controls": 14
+    },
+    {
+     "name": "Data Quality",
+     "controls": 13
+    },
+    {
+     "name": "Data Architecture and Modeling",
+     "controls": 13
+    },
+    {
+     "name": "Document and Content Management",
+     "controls": 12
+    },
+    {
+     "name": "Data Security and Protection",
+     "controls": 11
+    },
+    {
+     "name": "Business Intelligence and Analytics",
+     "controls": 10
+    },
+    {
+     "name": "Open Data",
+     "controls": 10
+    },
+    {
+     "name": "Data Classification",
+     "controls": 10
+    },
+    {
+     "name": "Personal Data Protection",
+     "controls": 10
+    },
+    {
+     "name": "Freedom of Information",
+     "controls": 9
+    },
+    {
+     "name": "Data Value Realization",
+     "controls": 8
+    }
+   ]
+  },
+  {
+   "name": "MAS Technology Risk Management Guidelines",
+   "file": "mas_trm.json",
+   "controls": 236,
+   "category_count": 14,
+   "categories": [
+    {
+     "name": "Security",
+     "controls": 109
+    },
+    {
+     "name": "Access",
+     "controls": 20
+    },
+    {
+     "name": "BCP",
+     "controls": 16
+    },
+    {
+     "name": "Governance",
+     "controls": 14
+    },
+    {
+     "name": "Risk",
+     "controls": 13
+    },
+    {
+     "name": "Operational",
+     "controls": 13
+    },
+    {
+     "name": "Incident",
+     "controls": 13
+    },
+    {
+     "name": "Network",
+     "controls": 9
+    },
+    {
+     "name": "Data",
+     "controls": 7
+    },
+    {
+     "name": "Physical",
+     "controls": 6
+    },
+    {
+     "name": "Vendor",
+     "controls": 5
+    },
+    {
+     "name": "HR",
+     "controls": 4
+    },
+    {
+     "name": "Compliance",
+     "controls": 4
+    },
+    {
+     "name": "Asset",
+     "controls": 3
+    }
+   ]
+  },
+  {
+   "name": "NIS2 Directive",
+   "file": "nis2.json",
+   "controls": 47,
+   "category_count": 16,
+   "categories": [
+    {
+     "name": "Systems Security",
+     "controls": 6
+    },
+    {
+     "name": "Compliance",
+     "controls": 6
+    },
+    {
+     "name": "Risk Management",
+     "controls": 5
+    },
+    {
+     "name": "Incident Reporting",
+     "controls": 5
+    },
+    {
+     "name": "Supply Chain",
+     "controls": 4
+    },
+    {
+     "name": "Incident Management",
+     "controls": 3
+    },
+    {
+     "name": "Business Continuity",
+     "controls": 3
+    },
+    {
+     "name": "Access Control",
+     "controls": 3
+    },
+    {
+     "name": "Governance",
+     "controls": 3
+    },
+    {
+     "name": "Human Security",
+     "controls": 2
+    },
+    {
+     "name": "Data Protection",
+     "controls": 2
+    },
+    {
+     "name": "Authentication",
+     "controls": 1
+    },
+    {
+     "name": "Information Sharing",
+     "controls": 1
+    },
+    {
+     "name": "Monitoring",
+     "controls": 1
+    },
+    {
+     "name": "Physical Security",
+     "controls": 1
+    },
+    {
+     "name": "Asset Management",
+     "controls": 1
+    }
+   ]
+  },
+  {
+   "name": "NIST Artificial Intelligence Risk Management Framework (AI RMF 1.0)",
+   "file": "nist_airmf.json",
+   "controls": 72,
+   "category_count": 4,
+   "categories": [
+    {
+     "name": "MEASURE (Function)",
+     "controls": 22
+    },
+    {
+     "name": "GOVERN (Function)",
+     "controls": 19
+    },
+    {
+     "name": "MAP (Function)",
+     "controls": 18
+    },
+    {
+     "name": "MANAGE (Function)",
+     "controls": 13
+    }
+   ]
+  },
+  {
+   "name": "NIST Cybersecurity Framework",
+   "file": "nist_csf.json",
+   "controls": 46,
+   "category_count": 5,
+   "categories": [
+    {
+     "name": "Protect",
+     "controls": 17
+    },
+    {
+     "name": "Identify",
+     "controls": 13
+    },
+    {
+     "name": "Detect",
+     "controls": 7
+    },
+    {
+     "name": "Respond",
+     "controls": 6
+    },
+    {
+     "name": "Recover",
+     "controls": 3
+    }
+   ]
+  },
+  {
+   "name": "NIST SP 800-53 Rev 5",
+   "file": "nist_800_53.json",
+   "controls": 148,
+   "category_count": 20,
+   "categories": [
+    {
+     "name": "Access Control",
+     "controls": 15
+    },
+    {
+     "name": "Audit and Accountability",
+     "controls": 11
+    },
+    {
+     "name": "Configuration Management",
+     "controls": 10
+    },
+    {
+     "name": "System and Communications Protection",
+     "controls": 10
+    },
+    {
+     "name": "System and Information Integrity",
+     "controls": 10
+    },
+    {
+     "name": "Contingency Planning",
+     "controls": 8
+    },
+    {
+     "name": "Incident Response",
+     "controls": 8
+    },
+    {
+     "name": "Physical and Environmental Protection",
+     "controls": 8
+    },
+    {
+     "name": "System and Services Acquisition",
+     "controls": 8
+    },
+    {
+     "name": "Assessment, Authorization, and Monitoring",
+     "controls": 7
+    },
+    {
+     "name": "Identification and Authentication",
+     "controls": 7
+    },
+    {
+     "name": "Personnel Security",
+     "controls": 7
+    },
+    {
+     "name": "Media Protection",
+     "controls": 6
+    },
+    {
+     "name": "Supply Chain Risk Management",
+     "controls": 6
+    },
+    {
+     "name": "Maintenance",
+     "controls": 5
+    },
+    {
+     "name": "Program Management",
+     "controls": 5
+    },
+    {
+     "name": "PII Processing and Transparency",
+     "controls": 5
+    },
+    {
+     "name": "Risk Assessment",
+     "controls": 5
+    },
+    {
+     "name": "Awareness and Training",
+     "controls": 4
+    },
+    {
+     "name": "Planning",
+     "controls": 3
+    }
+   ]
+  },
+  {
+   "name": "PCI Data Security Standard",
+   "file": "pci_dss.json",
+   "controls": 205,
+   "category_count": 18,
+   "categories": [
+    {
+     "name": "Identity Management",
+     "controls": 28
+    },
+    {
+     "name": "Network Security",
+     "controls": 19
+    },
+    {
+     "name": "Data Protection",
+     "controls": 19
+    },
+    {
+     "name": "Physical Security",
+     "controls": 18
+    },
+    {
+     "name": "Logging and Monitoring",
+     "controls": 18
+    },
+    {
+     "name": "Security Testing",
+     "controls": 16
+    },
+    {
+     "name": "Configuration Management",
+     "controls": 11
+    },
+    {
+     "name": "Malware Protection",
+     "controls": 11
+    },
+    {
+     "name": "Access Control",
+     "controls": 11
+    },
+    {
+     "name": "Governance",
+     "controls": 10
+    },
+    {
+     "name": "Application Security",
+     "controls": 9
+    },
+    {
+     "name": "Vendor",
+     "controls": 7
+    },
+    {
+     "name": "Incident",
+     "controls": 7
+    },
+    {
+     "name": "Change Management",
+     "controls": 6
+    },
+    {
+     "name": "Cryptography",
+     "controls": 4
+    },
+    {
+     "name": "Risk",
+     "controls": 4
+    },
+    {
+     "name": "HR",
+     "controls": 4
+    },
+    {
+     "name": "Vulnerability Management",
+     "controls": 3
+    }
+   ]
+  },
+  {
+   "name": "Qatar Central Bank Technology Risks Circular",
+   "file": "qcb_technology_risks.json",
+   "controls": 516,
+   "category_count": 10,
+   "categories": [
+    {
+     "name": "Enterprise security",
+     "controls": 209
+    },
+    {
+     "name": "IT operations",
+     "controls": 138
+    },
+    {
+     "name": "Business applications",
+     "controls": 71
+    },
+    {
+     "name": "Cyber security within the organization",
+     "controls": 21
+    },
+    {
+     "name": "Cyber security in the Human Resources (HR) department",
+     "controls": 20
+    },
+    {
+     "name": "Cyber security in the Risk department",
+     "controls": 16
+    },
+    {
+     "name": "Business continuity management",
+     "controls": 16
+    },
+    {
+     "name": "Cyber security in the Legal and Compliance department",
+     "controls": 15
+    },
+    {
+     "name": "Cyber security in the Procurement department",
+     "controls": 6
+    },
+    {
+     "name": "Compliance with QCB circular",
+     "controls": 4
+    }
+   ]
+  },
+  {
+   "name": "Regulation on Personal Data Transfer Outside the Kingdom",
+   "file": "Regulation on_Personal_Data_Transfer_Outside_KSA.json",
+   "controls": 21,
+   "category_count": 5,
+   "categories": [
+    {
+     "name": "Data Transfer",
+     "controls": 12
+    },
+    {
+     "name": "Compliance",
+     "controls": 3
+    },
+    {
+     "name": "Governance",
+     "controls": 3
+    },
+    {
+     "name": "Risk",
+     "controls": 2
+    },
+    {
+     "name": "Privacy",
+     "controls": 1
+    }
+   ]
+  },
+  {
+   "name": "SABIC CyberTrust Guidelines",
+   "file": "sabic_cybertrust.json",
+   "controls": 35,
+   "category_count": 10,
+   "categories": [
+    {
+     "name": "Operations Security",
+     "controls": 5
+    },
+    {
+     "name": "Compliance",
+     "controls": 5
+    },
+    {
+     "name": "Governance",
+     "controls": 4
+    },
+    {
+     "name": "Access Control",
+     "controls": 4
+    },
+    {
+     "name": "Communications Security",
+     "controls": 4
+    },
+    {
+     "name": "Asset Management",
+     "controls": 3
+    },
+    {
+     "name": "Physical Security",
+     "controls": 3
+    },
+    {
+     "name": "Incident Management",
+     "controls": 3
+    },
+    {
+     "name": "Cryptography",
+     "controls": 2
+    },
+    {
+     "name": "Business Continuity",
+     "controls": 2
+    }
+   ]
+  },
+  {
+   "name": "SAMA Cyber Security Framework",
+   "file": "sama_csf.json",
+   "controls": 170,
+   "category_count": 14,
+   "categories": [
+    {
+     "name": "Governance",
+     "controls": 42
+    },
+    {
+     "name": "Security",
+     "controls": 27
+    },
+    {
+     "name": "Risk",
+     "controls": 23
+    },
+    {
+     "name": "Cloud",
+     "controls": 18
+    },
+    {
+     "name": "Compliance",
+     "controls": 12
+    },
+    {
+     "name": "HR",
+     "controls": 11
+    },
+    {
+     "name": "Vendor",
+     "controls": 11
+    },
+    {
+     "name": "Physical",
+     "controls": 8
+    },
+    {
+     "name": "Data",
+     "controls": 6
+    },
+    {
+     "name": "Asset",
+     "controls": 5
+    },
+    {
+     "name": "BCP",
+     "controls": 3
+    },
+    {
+     "name": "Network",
+     "controls": 2
+    },
+    {
+     "name": "Access",
+     "controls": 1
+    },
+    {
+     "name": "Incident",
+     "controls": 1
+    }
+   ]
+  },
+  {
+   "name": "SBP Cloud Outsourcing Framework",
+   "file": "sbp_cloud.json",
+   "controls": 58,
+   "category_count": 11,
+   "categories": [
+    {
+     "name": "Vendor",
+     "controls": 11
+    },
+    {
+     "name": "Security",
+     "controls": 11
+    },
+    {
+     "name": "Audit",
+     "controls": 7
+    },
+    {
+     "name": "Governance",
+     "controls": 6
+    },
+    {
+     "name": "Data",
+     "controls": 6
+    },
+    {
+     "name": "BCP",
+     "controls": 4
+    },
+    {
+     "name": "Compliance",
+     "controls": 3
+    },
+    {
+     "name": "Access",
+     "controls": 3
+    },
+    {
+     "name": "Operations",
+     "controls": 3
+    },
+    {
+     "name": "Incident",
+     "controls": 3
+    },
+    {
+     "name": "Risk",
+     "controls": 1
+    }
+   ]
+  },
+  {
+   "name": "SBP ETGRMF",
+   "file": "sbp_etgrmf.json",
+   "controls": 262,
+   "category_count": 11,
+   "categories": [
+    {
+     "name": "Governance",
+     "controls": 60
+    },
+    {
+     "name": "Security",
+     "controls": 46
+    },
+    {
+     "name": "Operations",
+     "controls": 41
+    },
+    {
+     "name": "BCP",
+     "controls": 40
+    },
+    {
+     "name": "Audit",
+     "controls": 24
+    },
+    {
+     "name": "Vendor",
+     "controls": 19
+    },
+    {
+     "name": "Risk",
+     "controls": 16
+    },
+    {
+     "name": "HR",
+     "controls": 7
+    },
+    {
+     "name": "Incident",
+     "controls": 3
+    },
+    {
+     "name": "Data",
+     "controls": 3
+    },
+    {
+     "name": "Compliance",
+     "controls": 3
+    }
+   ]
+  },
+  {
+   "name": "SBP Internet Banking Framework",
+   "file": "sbp_internet_banking.json",
+   "controls": 66,
+   "category_count": 14,
+   "categories": [
+    {
+     "name": "Security",
+     "controls": 11
+    },
+    {
+     "name": "Compliance",
+     "controls": 10
+    },
+    {
+     "name": "Access",
+     "controls": 8
+    },
+    {
+     "name": "Risk",
+     "controls": 7
+    },
+    {
+     "name": "Vendor",
+     "controls": 7
+    },
+    {
+     "name": "Customer",
+     "controls": 6
+    },
+    {
+     "name": "BCP",
+     "controls": 5
+    },
+    {
+     "name": "Governance",
+     "controls": 3
+    },
+    {
+     "name": "Fraud",
+     "controls": 3
+    },
+    {
+     "name": "Data",
+     "controls": 2
+    },
+    {
+     "name": "Physical",
+     "controls": 1
+    },
+    {
+     "name": "HR",
+     "controls": 1
+    },
+    {
+     "name": "Incident",
+     "controls": 1
+    },
+    {
+     "name": "Audit",
+     "controls": 1
+    }
+   ]
+  },
+  {
+   "name": "SOC 2 Type II",
+   "file": "soc2.json",
+   "controls": 65,
+   "category_count": 5,
+   "categories": [
+    {
+     "name": "Security",
+     "controls": 36
+    },
+    {
+     "name": "Privacy",
+     "controls": 17
+    },
+    {
+     "name": "Processing Integrity",
+     "controls": 5
+    },
+    {
+     "name": "Availability",
+     "controls": 4
+    },
+    {
+     "name": "Confidentiality",
+     "controls": 3
+    }
+   ]
+  },
+  {
+   "name": "SOX IT General Controls",
+   "file": "sox.json",
+   "controls": 54,
+   "category_count": 8,
+   "categories": [
+    {
+     "name": "Access to Programs and Data",
+     "controls": 10
+    },
+    {
+     "name": "Program Changes / Change Management",
+     "controls": 9
+    },
+    {
+     "name": "Computer Operations",
+     "controls": 7
+    },
+    {
+     "name": "Program Development / SDLC",
+     "controls": 7
+    },
+    {
+     "name": "Entity-Level Controls",
+     "controls": 7
+    },
+    {
+     "name": "Financial Close Controls",
+     "controls": 7
+    },
+    {
+     "name": "End-User Computing",
+     "controls": 4
+    },
+    {
+     "name": "Segregation of Duties",
+     "controls": 3
+    }
+   ]
+  },
+  {
+   "name": "Sri Lanka Baseline Security Standard (BSS)",
+   "file": "sl_csf.json",
+   "controls": 79,
+   "category_count": 14,
+   "categories": [
+    {
+     "name": "Systems Acquisition, Development and Maintenance",
+     "controls": 13
+    },
+    {
+     "name": "Human Resource Security",
+     "controls": 9
+    },
+    {
+     "name": "Organization of Information Security Management",
+     "controls": 8
+    },
+    {
+     "name": "Physical and Environmental Security",
+     "controls": 8
+    },
+    {
+     "name": "Operations Security",
+     "controls": 7
+    },
+    {
+     "name": "Access Control",
+     "controls": 5
+    },
+    {
+     "name": "Information Security Incident Management",
+     "controls": 5
+    },
+    {
+     "name": "Business Continuity Management",
+     "controls": 5
+    },
+    {
+     "name": "Third Parties",
+     "controls": 4
+    },
+    {
+     "name": "Information Systems Acceptable Use",
+     "controls": 4
+    },
+    {
+     "name": "Information Security Policy",
+     "controls": 3
+    },
+    {
+     "name": "Information Asset Management",
+     "controls": 3
+    },
+    {
+     "name": "Internet and E-mail Security",
+     "controls": 3
+    },
+    {
+     "name": "Cryptography",
+     "controls": 2
+    }
+   ]
+  },
+  {
+   "name": "SWIFT Customer Security Controls Framework",
+   "file": "swift_cscf.json",
+   "controls": 31,
+   "category_count": 5,
+   "categories": [
+    {
+     "name": "Know and Limit Access",
+     "controls": 13
+    },
+    {
+     "name": "Secure your Environment",
+     "controls": 8
+    },
+    {
+     "name": "Manage and Oversee",
+     "controls": 5
+    },
+    {
+     "name": "Detect and Respond",
+     "controls": 3
+    },
+    {
+     "name": "Share and Prepare",
+     "controls": 2
+    }
+   ]
+  }
+ ]
+}

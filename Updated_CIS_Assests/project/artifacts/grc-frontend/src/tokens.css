@@ -1,0 +1,55 @@
+:root {
+        --color-base: #1ed4b0;
+        --color-base-strong: #17b898;
+        --color-on-base: #0A0A0A;
+        --color-surface: #FFFFFF;
+        --color-subtle: #F1F3F5;
+        --color-border: #DDE1E7;
+        --color-text: #1A1A1A;
+        --color-muted: #6B7280;
+        --color-success: #2D6A4F;
+        --color-warning: #92570E;
+        --color-danger: #9B1C1C;
+        --color-base-soft: rgba(30, 212, 176, 0.10);
+        --color-base-soft-strong: rgba(30, 212, 176, 0.15);
+        --color-warning-soft: rgba(146, 87, 14, 0.1);
+        --color-warning-soft-light: rgba(146, 87, 14, 0.08);
+        --color-danger-soft: rgba(155, 28, 28, 0.1);
+        --color-danger-soft-light: rgba(155, 28, 28, 0.03);
+        --color-danger-border-soft: rgba(155, 28, 28, 0.3);
+        --color-success-soft: rgba(45, 106, 79, 0.1);
+        --color-overlay: rgba(10, 25, 35, 0.55);
+
+        --color-status-draft: #64748B;
+        --color-status-review: #EAB308;
+        --color-status-approval: #F59E0B;
+        --color-status-approved: #3B82F6;
+        --color-status-published: #10B981;
+        --color-status-expired: #F43F5E;
+        --color-status-archived: #6B7280;
+
+        --color-text-inverse: #FFFFFF;
+        --sidebar-bg: #FFFFFF;
+        --sidebar-text: #374151;
+        --sidebar-text-subitem: #4B5563;
+        --sidebar-text-section: #6B7280;
+        --sidebar-text-collapse: #6B7280;
+        --sidebar-icon: #9CA3AF;
+        --sidebar-hover-bg: #F1F5F9;
+        --sidebar-active-bg: #1ed4b0;
+        --sidebar-active-border: #1ed4b0;
+
+        --color-hover: #F1F5F9;
+        --color-base-hover: #17b898;
+
+        --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
+
+        --radius-md: 6px;
+        --radius-lg: 8px;
+        --space-2: 8px;
+        --space-3: 12px;
+        --space-4: 16px;
+        --space-5: 20px;
+        --space-6: 24px;
+}

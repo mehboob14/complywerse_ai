@@ -1,0 +1,887 @@
+{
+  "metadata": {
+    "name": "ISO 45001:2018 Occupational Health and Safety Management System",
+    "description": "ISO 45001:2018 specifies requirements for an occupational health and safety (OH&S) management system, with guidance for its use, to enable organizations to provide safe and healthy workplaces by preventing work-related injury and ill health and proactively improving OH&S performance.",
+    "version": "2018",
+    "source_organization": "International Organization for Standardization (ISO)",
+    "effective_date": "2018-03-12",
+    "classification": "certification",
+    "framework_type": "certification",
+    "classification_confidence": 0.98,
+    "classification_reasoning": "ISO 45001 is a certifiable international management-system standard for occupational health and safety.",
+    "framework_purpose": "To provide a framework to manage OH&S risks and opportunities, prevent work-related injury and ill health, and provide safe and healthy workplaces.",
+    "framework_scope": "Applicable to any organization, regardless of size, type or nature, that wishes to establish, implement and maintain an OH&S management system.",
+    "target_audience": "OH&S / EHS Managers, Safety Officers, HR, Operations Managers, Top Management",
+    "certification_body": "Accredited Certification Bodies (e.g., BSI, DNV, Bureau Veritas, SGS, Lloyd's Register)",
+    "certification_validity_period": "3 years (with annual surveillance audits)",
+    "certification_levels": [
+      "Stage 1 Audit (Documentation Review)",
+      "Stage 2 Audit (Implementation Audit)",
+      "Surveillance Audits",
+      "Recertification"
+    ],
+    "required_artifacts": [
+      "OH&S Policy",
+      "Scope Statement",
+      "Hazard Identification & Risk Assessment",
+      "Legal & Other Requirements Register",
+      "OH&S Objectives & Plans",
+      "Emergency Preparedness Plans",
+      "Internal Audit Programme",
+      "Management Review Records",
+      "Incident & Corrective Action Records"
+    ],
+    "regulatory_authority": "None (voluntary certification; underlying OH&S laws are jurisdiction-specific)",
+    "adoption_approach": [
+      "Secure leadership commitment and define scope",
+      "Identify hazards and assess OH&S risks",
+      "Establish policy, objectives and controls",
+      "Implement operational controls and emergency response",
+      "Monitor, audit and review",
+      "Certify and continually improve"
+    ],
+    "hierarchy_structure": {
+      "levels": [
+        "Clause",
+        "Sub-clause",
+        "Requirement"
+      ],
+      "numbering_pattern": "N.N.N"
+    },
+    "document_structure": {
+      "sections": [
+        "Clause 4: Context of the Organization",
+        "Clause 5: Leadership and Worker Participation",
+        "Clause 6: Planning",
+        "Clause 7: Support",
+        "Clause 8: Operation",
+        "Clause 9: Performance Evaluation",
+        "Clause 10: Improvement"
+      ]
+    },
+    "total_controls": 36,
+    "domains": [
+      "Context of the Organization",
+      "Leadership and Worker Participation",
+      "Planning",
+      "Support",
+      "Operation",
+      "Performance Evaluation",
+      "Improvement"
+    ]
+  },
+  "controls": [
+    {
+      "control_id": "4.1",
+      "original_reference": "4.1",
+      "title": "Understanding the organization and its context",
+      "description": "Determine the external and internal issues relevant to the organization's purpose that can affect the intended results of the OH&S management system.",
+      "full_text": "Determine the external and internal issues relevant to the organization's purpose that can affect the intended results of the OH&S management system.",
+      "domain": "Context of the Organization",
+      "category": "Context of the Organization",
+      "section_number": "4.1",
+      "parent_section": "4",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Understanding the organization and its context — documented information (policy / procedure / record)",
+        "Records demonstrating 'understanding the organization and its context' is implemented and effective"
+      ]
+    },
+    {
+      "control_id": "4.2",
+      "original_reference": "4.2",
+      "title": "Understanding the needs and expectations of workers and other interested parties",
+      "description": "Identify workers and other interested parties relevant to the OH&S management system, and determine their relevant needs, expectations and which of these become compliance obligations.",
+      "full_text": "Identify workers and other interested parties relevant to the OH&S management system, and determine their relevant needs, expectations and which of these become compliance obligations.",
+      "domain": "Context of the Organization",
+      "category": "Context of the Organization",
+      "section_number": "4.2",
+      "parent_section": "4",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Understanding the needs and expectations of workers and other interested parties — documented information (policy / procedure / record)",
+        "Records demonstrating 'understanding the needs and expectations of workers and other interested parties' is implemented and effective"
+      ]
+    },
+    {
+      "control_id": "4.3",
+      "original_reference": "4.3",
+      "title": "Determining the scope of the OH&S management system",
+      "description": "Define and document the boundaries and applicability of the OH&S management system, considering context, interested parties, work-related activities and authority.",
+      "full_text": "Define and document the boundaries and applicability of the OH&S management system, considering context, interested parties, work-related activities and authority.",
+      "domain": "Context of the Organization",
+      "category": "Context of the Organization",
+      "section_number": "4.3",
+      "parent_section": "4",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Determining the scope of the OH&S management system — documented information (policy / procedure / record)",
+        "Records demonstrating 'determining the scope of the oh&s management system' is implemented and effective"
+      ]
+    },
+    {
+      "control_id": "4.4",
+      "original_reference": "4.4",
+      "title": "OH&S management system",
+      "description": "Establish, implement, maintain and continually improve the OH&S management system, including the processes needed and their interactions.",
+      "full_text": "Establish, implement, maintain and continually improve the OH&S management system, including the processes needed and their interactions.",
+      "domain": "Context of the Organization",
+      "category": "Context of the Organization",
+      "section_number": "4.4",
+      "parent_section": "4",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "OH&S management system — documented information (policy / procedure / record)",
+        "Records demonstrating 'oh&s management system' is implemented and effective"
+      ]
+    },
+    {
+      "control_id": "5.1",
+      "original_reference": "5.1",
+      "title": "Leadership and commitment",
+      "description": "Top management shall demonstrate leadership and commitment to the OH&S management system, taking accountability for prevention of work-related injury and ill health and providing safe workplaces.",
+      "full_text": "Top management shall demonstrate leadership and commitment to the OH&S management system, taking accountability for prevention of work-related injury and ill health and providing safe workplaces.",
+      "domain": "Leadership and Worker Participation",
+      "category": "Leadership and Worker Participation",
+      "section_number": "5.1",
+      "parent_section": "5",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Leadership and commitment — documented information (policy / procedure / record)",
+        "Records demonstrating 'leadership and commitment' is implemented and effective"
+      ]
+    },
+    {
+      "control_id": "5.2",
+      "original_reference": "5.2",
+      "title": "OH&S policy",
+      "description": "Establish, implement and maintain an OH&S policy that includes commitments to safe working conditions, hazard elimination, legal compliance, consultation of workers and continual improvement.",
+      "full_text": "Establish, implement and maintain an OH&S policy that includes commitments to safe working conditions, hazard elimination, legal compliance, consultation of workers and continual improvement.",
+      "domain": "Leadership and Worker Participation",
+      "category": "Leadership and Worker Participation",
+      "section_number": "5.2",
+      "parent_section": "5",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "OH&S policy — documented information (policy / procedure / record)",
+        "Records demonstrating 'oh&s policy' is implemented and effective"
+      ]
+    },
+    {
+      "control_id": "5.3",
+      "original_reference": "5.3",
+      "title": "Organizational roles, responsibilities and authorities",
+      "description": "Assign, communicate and document responsibilities and authorities for relevant roles within the OH&S management system.",
+      "full_text": "Assign, communicate and document responsibilities and authorities for relevant roles within the OH&S management system.",
+      "domain": "Leadership and Worker Participation",
+      "category": "Leadership and Worker Participation",
+      "section_number": "5.3",
+      "parent_section": "5",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Organizational roles, responsibilities and authorities — documented information (policy / procedure / record)",
+        "Records demonstrating 'organizational roles, responsibilities and authorities' is implemented and effective"
+      ]
+    },
+    {
+      "control_id": "5.4",
+      "original_reference": "5.4",
+      "title": "Consultation and participation of workers",
+      "description": "Establish processes for consultation and participation of workers at all levels in the development, planning, implementation, evaluation and improvement of the OH&S management system.",
+      "full_text": "Establish processes for consultation and participation of workers at all levels in the development, planning, implementation, evaluation and improvement of the OH&S management system.",
+      "domain": "Leadership and Worker Participation",
+      "category": "Leadership and Worker Participation",
+      "section_number": "5.4",
+      "parent_section": "5",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Consultation and participation of workers — documented information (policy / procedure / record)",
+        "Records demonstrating 'consultation and participation of workers' is implemented and effective"
+      ]
+    },
+    {
+      "control_id": "6.1.1",
+      "original_reference": "6.1.1",
+      "title": "Actions to address risks and opportunities — General",
+      "description": "When planning the OH&S management system, consider context, interested parties and scope, and determine the risks and opportunities that need to be addressed to assure intended outcomes.",
+      "full_text": "When planning the OH&S management system, consider context, interested parties and scope, and determine the risks and opportunities that need to be addressed to assure intended outcomes.",
+      "domain": "Planning",
+      "category": "Planning",
+      "section_number": "6.1.1",
+      "parent_section": "6",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Actions to address risks and opportunities — General — documented information (policy / procedure / record)",
+        "Records demonstrating 'actions to address risks and opportunities — general' is implemented and effective"
+      ]
+    },
+    {
+      "control_id": "6.1.2",
+      "original_reference": "6.1.2",
+      "title": "Hazard identification and assessment of risks and opportunities",
+      "description": "Establish ongoing, proactive processes to identify hazards, assess OH&S risks and other risks, and identify OH&S opportunities and other opportunities.",
+      "full_text": "Establish ongoing, proactive processes to identify hazards, assess OH&S risks and other risks, and identify OH&S opportunities and other opportunities.",
+      "domain": "Planning",
+      "category": "Planning",
+      "section_number": "6.1.2",
+      "parent_section": "6",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Hazard identification and assessment of risks and opportunities — documented information (policy / procedure / record)",
+        "Records demonstrating 'hazard identification and assessment of risks and opportunities' is implemented and effective"
+      ]
+    },
+    {
+      "control_id": "6.1.3",
+      "original_reference": "6.1.3",
+      "title": "Determination of legal requirements and other requirements",
+      "description": "Establish processes to determine and access up-to-date legal requirements and other requirements applicable to the organization's hazards, OH&S risks and management system.",
+      "full_text": "Establish processes to determine and access up-to-date legal requirements and other requirements applicable to the organization's hazards, OH&S risks and management system.",
+      "domain": "Planning",
+      "category": "Planning",
+      "section_number": "6.1.3",
+      "parent_section": "6",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Determination of legal requirements and other requirements — documented information (policy / procedure / record)",
+        "Records demonstrating 'determination of legal requirements and other requirements' is implemented and effective"
+      ]
+    },
+    {
+      "control_id": "6.1.4",
+      "original_reference": "6.1.4",
+      "title": "Planning action",
+      "description": "Plan actions to address the identified risks, opportunities, legal and other requirements, integrate them into the management system, and evaluate their effectiveness.",
+      "full_text": "Plan actions to address the identified risks, opportunities, legal and other requirements, integrate them into the management system, and evaluate their effectiveness.",
+      "domain": "Planning",
+      "category": "Planning",
+      "section_number": "6.1.4",
+      "parent_section": "6",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Planning action — documented information (policy / procedure / record)",
+        "Records demonstrating 'planning action' is implemented and effective"
+      ]
+    },
+    {
+      "control_id": "6.2.1",
+      "original_reference": "6.2.1",
+      "title": "OH&S objectives",
+      "description": "Establish OH&S objectives at relevant functions and levels that are measurable, monitored, communicated and consistent with the OH&S policy.",
+      "full_text": "Establish OH&S objectives at relevant functions and levels that are measurable, monitored, communicated and consistent with the OH&S policy.",
+      "domain": "Planning",
+      "category": "Planning",
+      "section_number": "6.2.1",
+      "parent_section": "6",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "OH&S objectives — documented information (policy / procedure / record)",
+        "Records demonstrating 'oh&s objectives' is implemented and effective"
+      ]
+    },
+    {
+      "control_id": "6.2.2",
+      "original_reference": "6.2.2",
+      "title": "Planning to achieve OH&S objectives",
+      "description": "Determine what will be done, resources required, who is responsible, timelines, and how results will be evaluated when planning to achieve OH&S objectives.",
+      "full_text": "Determine what will be done, resources required, who is responsible, timelines, and how results will be evaluated when planning to achieve OH&S objectives.",
+      "domain": "Planning",
+      "category": "Planning",
+      "section_number": "6.2.2",
+      "parent_section": "6",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Planning to achieve OH&S objectives — documented information (policy / procedure / record)",
+        "Records demonstrating 'planning to achieve oh&s objectives' is implemented and effective"
+      ]
+    },
+    {
+      "control_id": "7.1",
+      "original_reference": "7.1",
+      "title": "Resources",
+      "description": "Determine and provide the resources needed to establish, implement, maintain and continually improve the OH&S management system.",
+      "full_text": "Determine and provide the resources needed to establish, implement, maintain and continually improve the OH&S management system.",
+      "domain": "Support",
+      "category": "Support",
+      "section_number": "7.1",
+      "parent_section": "7",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Resources — documented information (policy / procedure / record)",
+        "Records demonstrating 'resources' is implemented and effective"
+      ]
+    },
+    {
+      "control_id": "7.2",
+      "original_reference": "7.2",
+      "title": "Competence",
+      "description": "Determine the necessary competence of workers affecting OH&S performance and ensure competence through education, training or experience.",
+      "full_text": "Determine the necessary competence of workers affecting OH&S performance and ensure competence through education, training or experience.",
+      "domain": "Support",
+      "category": "Support",
+      "section_number": "7.2",
+      "parent_section": "7",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Competence — documented information (policy / procedure / record)",
+        "Records demonstrating 'competence' is implemented and effective"
+      ]
+    },
+    {
+      "control_id": "7.3",
+      "original_reference": "7.3",
+      "title": "Awareness",
+      "description": "Ensure workers are aware of the OH&S policy, their contribution, OH&S risks relevant to them, incidents and their ability to remove themselves from imminent danger.",
+      "full_text": "Ensure workers are aware of the OH&S policy, their contribution, OH&S risks relevant to them, incidents and their ability to remove themselves from imminent danger.",
+      "domain": "Support",
+      "category": "Support",
+      "section_number": "7.3",
+      "parent_section": "7",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Awareness — documented information (policy / procedure / record)",
+        "Records demonstrating 'awareness' is implemented and effective"
+      ]
+    },
+    {
+      "control_id": "7.4.1",
+      "original_reference": "7.4.1",
+      "title": "Communication — General",
+      "description": "Establish processes for the internal and external communications relevant to the OH&S management system, including what, when, with whom and how to communicate.",
+      "full_text": "Establish processes for the internal and external communications relevant to the OH&S management system, including what, when, with whom and how to communicate.",
+      "domain": "Support",
+      "category": "Support",
+      "section_number": "7.4.1",
+      "parent_section": "7",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Communication — General — documented information (policy / procedure / record)",
+        "Records demonstrating 'communication — general' is implemented and effective"
+      ]
+    },
+    {
+      "control_id": "7.4.2",
+      "original_reference": "7.4.2",
+      "title": "Internal communication",
+      "description": "Internally communicate information relevant to the OH&S management system across levels and functions, including changes, and enable workers to contribute to continual improvement.",
+      "full_text": "Internally communicate information relevant to the OH&S management system across levels and functions, including changes, and enable workers to contribute to continual improvement.",
+      "domain": "Support",
+      "category": "Support",
+      "section_number": "7.4.2",
+      "parent_section": "7",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Internal communication — documented information (policy / procedure / record)",
+        "Records demonstrating 'internal communication' is implemented and effective"
+      ]
+    },
+    {
+      "control_id": "7.4.3",
+      "original_reference": "7.4.3",
+      "title": "External communication",
+      "description": "Externally communicate information relevant to the OH&S management system as established and as required by compliance obligations.",
+      "full_text": "Externally communicate information relevant to the OH&S management system as established and as required by compliance obligations.",
+      "domain": "Support",
+      "category": "Support",
+      "section_number": "7.4.3",
+      "parent_section": "7",
+      "is_mandatory": true,
+      "priority": "low",
+      "evidence_requirements": [
+        "External communication — documented information (policy / procedure / record)",
+        "Records demonstrating 'external communication' is implemented and effective"
+      ]
+    },
+    {
+      "control_id": "7.5.1",
+      "original_reference": "7.5.1",
+      "title": "Documented information — General",
+      "description": "The OH&S management system shall include documented information required by the standard and determined by the organization as necessary for its effectiveness.",
+      "full_text": "The OH&S management system shall include documented information required by the standard and determined by the organization as necessary for its effectiveness.",
+      "domain": "Support",
+      "category": "Support",
+      "section_number": "7.5.1",
+      "parent_section": "7",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Documented information — General — documented information (policy / procedure / record)",
+        "Records demonstrating 'documented information — general' is implemented and effective"
+      ]
+    },
+    {
+      "control_id": "7.5.2",
+      "original_reference": "7.5.2",
+      "title": "Creating and updating documented information",
+      "description": "When creating and updating documented information, ensure appropriate identification, format, and review and approval for suitability and adequacy.",
+      "full_text": "When creating and updating documented information, ensure appropriate identification, format, and review and approval for suitability and adequacy.",
+      "domain": "Support",
+      "category": "Support",
+      "section_number": "7.5.2",
+      "parent_section": "7",
+      "is_mandatory": true,
+      "priority": "low",
+      "evidence_requirements": [
+        "Creating and updating documented information — documented information (policy / procedure / record)",
+        "Records demonstrating 'creating and updating documented information' is implemented and effective"
+      ]
+    },
+    {
+      "control_id": "7.5.3",
+      "original_reference": "7.5.3",
+      "title": "Control of documented information",
+      "description": "Control documented information so it is available, suitable and adequately protected, addressing distribution, access, storage, version control and retention.",
+      "full_text": "Control documented information so it is available, suitable and adequately protected, addressing distribution, access, storage, version control and retention.",
+      "domain": "Support",
+      "category": "Support",
+      "section_number": "7.5.3",
+      "parent_section": "7",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Control of documented information — documented information (policy / procedure / record)",
+        "Records demonstrating 'control of documented information' is implemented and effective"
+      ]
+    },
+    {
+      "control_id": "8.1.1",
+      "original_reference": "8.1.1",
+      "title": "Operational planning and control — General",
+      "description": "Plan, implement, control and maintain the processes needed to meet OH&S requirements, including criteria, controls and adapting work to workers.",
+      "full_text": "Plan, implement, control and maintain the processes needed to meet OH&S requirements, including criteria, controls and adapting work to workers.",
+      "domain": "Operation",
+      "category": "Operation",
+      "section_number": "8.1.1",
+      "parent_section": "8",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Operational planning and control — General — documented information (policy / procedure / record)",
+        "Records demonstrating 'operational planning and control — general' is implemented and effective"
+      ]
+    },
+    {
+      "control_id": "8.1.2",
+      "original_reference": "8.1.2",
+      "title": "Eliminating hazards and reducing OH&S risks",
+      "description": "Establish processes to eliminate hazards and reduce OH&S risks using the hierarchy of controls (eliminate, substitute, engineering controls, administrative controls, PPE).",
+      "full_text": "Establish processes to eliminate hazards and reduce OH&S risks using the hierarchy of controls (eliminate, substitute, engineering controls, administrative controls, PPE).",
+      "domain": "Operation",
+      "category": "Operation",
+      "section_number": "8.1.2",
+      "parent_section": "8",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Eliminating hazards and reducing OH&S risks — documented information (policy / procedure / record)",
+        "Records demonstrating 'eliminating hazards and reducing oh&s risks' is implemented and effective"
+      ]
+    },
+    {
+      "control_id": "8.1.3",
+      "original_reference": "8.1.3",
+      "title": "Management of change",
+      "description": "Establish processes to implement and control planned temporary and permanent changes that affect OH&S performance, and review consequences of unintended changes.",
+      "full_text": "Establish processes to implement and control planned temporary and permanent changes that affect OH&S performance, and review consequences of unintended changes.",
+      "domain": "Operation",
+      "category": "Operation",
+      "section_number": "8.1.3",
+      "parent_section": "8",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Management of change — documented information (policy / procedure / record)",
+        "Records demonstrating 'management of change' is implemented and effective"
+      ]
+    },
+    {
+      "control_id": "8.1.4",
+      "original_reference": "8.1.4",
+      "title": "Procurement (including contractors and outsourcing)",
+      "description": "Establish processes to control the procurement of goods and services, coordinate with contractors, and ensure outsourced functions and processes are controlled to meet OH&S requirements.",
+      "full_text": "Establish processes to control the procurement of goods and services, coordinate with contractors, and ensure outsourced functions and processes are controlled to meet OH&S requirements.",
+      "domain": "Operation",
+      "category": "Operation",
+      "section_number": "8.1.4",
+      "parent_section": "8",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Procurement (including contractors and outsourcing) — documented information (policy / procedure / record)",
+        "Records demonstrating 'procurement (including contractors and outsourcing)' is implemented and effective"
+      ]
+    },
+    {
+      "control_id": "8.2",
+      "original_reference": "8.2",
+      "title": "Emergency preparedness and response",
+      "description": "Establish, implement and maintain processes to prepare for and respond to potential emergency situations, including planned responses, training, testing and communication.",
+      "full_text": "Establish, implement and maintain processes to prepare for and respond to potential emergency situations, including planned responses, training, testing and communication.",
+      "domain": "Operation",
+      "category": "Operation",
+      "section_number": "8.2",
+      "parent_section": "8",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Emergency preparedness and response — documented information (policy / procedure / record)",
+        "Records demonstrating 'emergency preparedness and response' is implemented and effective"
+      ]
+    },
+    {
+      "control_id": "9.1.1",
+      "original_reference": "9.1.1",
+      "title": "Monitoring, measurement, analysis and evaluation — General",
+      "description": "Determine what needs to be monitored and measured, the methods, criteria and when, then analyze and evaluate OH&S performance and the effectiveness of the management system.",
+      "full_text": "Determine what needs to be monitored and measured, the methods, criteria and when, then analyze and evaluate OH&S performance and the effectiveness of the management system.",
+      "domain": "Performance Evaluation",
+      "category": "Performance Evaluation",
+      "section_number": "9.1.1",
+      "parent_section": "9",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Monitoring, measurement, analysis and evaluation — General — documented information (policy / procedure / record)",
+        "Records demonstrating 'monitoring, measurement, analysis and evaluation — general' is implemented and effective"
+      ]
+    },
+    {
+      "control_id": "9.1.2",
+      "original_reference": "9.1.2",
+      "title": "Evaluation of compliance",
+      "description": "Establish processes to evaluate compliance with legal requirements and other requirements, take action as needed, and maintain knowledge of compliance status.",
+      "full_text": "Establish processes to evaluate compliance with legal requirements and other requirements, take action as needed, and maintain knowledge of compliance status.",
+      "domain": "Performance Evaluation",
+      "category": "Performance Evaluation",
+      "section_number": "9.1.2",
+      "parent_section": "9",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Evaluation of compliance — documented information (policy / procedure / record)",
+        "Records demonstrating 'evaluation of compliance' is implemented and effective"
+      ]
+    },
+    {
+      "control_id": "9.2.1",
+      "original_reference": "9.2.1",
+      "title": "Internal audit — General",
+      "description": "Conduct internal audits at planned intervals to provide information on whether the OH&S management system conforms to requirements and is effectively implemented and maintained.",
+      "full_text": "Conduct internal audits at planned intervals to provide information on whether the OH&S management system conforms to requirements and is effectively implemented and maintained.",
+      "domain": "Performance Evaluation",
+      "category": "Performance Evaluation",
+      "section_number": "9.2.1",
+      "parent_section": "9",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Internal audit — General — documented information (policy / procedure / record)",
+        "Records demonstrating 'internal audit — general' is implemented and effective"
+      ]
+    },
+    {
+      "control_id": "9.2.2",
+      "original_reference": "9.2.2",
+      "title": "Internal audit programme",
+      "description": "Plan, establish, implement and maintain an audit programme, define audit criteria and scope, select auditors ensuring objectivity, and report results to relevant management.",
+      "full_text": "Plan, establish, implement and maintain an audit programme, define audit criteria and scope, select auditors ensuring objectivity, and report results to relevant management.",
+      "domain": "Performance Evaluation",
+      "category": "Performance Evaluation",
+      "section_number": "9.2.2",
+      "parent_section": "9",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Internal audit programme — documented information (policy / procedure / record)",
+        "Records demonstrating 'internal audit programme' is implemented and effective"
+      ]
+    },
+    {
+      "control_id": "9.3",
+      "original_reference": "9.3",
+      "title": "Management review",
+      "description": "Top management shall review the OH&S management system at planned intervals to ensure its continuing suitability, adequacy and effectiveness, addressing defined inputs and outputs.",
+      "full_text": "Top management shall review the OH&S management system at planned intervals to ensure its continuing suitability, adequacy and effectiveness, addressing defined inputs and outputs.",
+      "domain": "Performance Evaluation",
+      "category": "Performance Evaluation",
+      "section_number": "9.3",
+      "parent_section": "9",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Management review — documented information (policy / procedure / record)",
+        "Records demonstrating 'management review' is implemented and effective"
+      ]
+    },
+    {
+      "control_id": "10.1",
+      "original_reference": "10.1",
+      "title": "Improvement — General",
+      "description": "Determine opportunities for improvement and implement actions to achieve the intended outcomes of the OH&S management system.",
+      "full_text": "Determine opportunities for improvement and implement actions to achieve the intended outcomes of the OH&S management system.",
+      "domain": "Improvement",
+      "category": "Improvement",
+      "section_number": "10.1",
+      "parent_section": "10",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Improvement — General — documented information (policy / procedure / record)",
+        "Records demonstrating 'improvement — general' is implemented and effective"
+      ]
+    },
+    {
+      "control_id": "10.2",
+      "original_reference": "10.2",
+      "title": "Incident, nonconformity and corrective action",
+      "description": "Establish processes to report, investigate and take action on incidents and nonconformities, including correcting them, evaluating root cause, and preventing recurrence.",
+      "full_text": "Establish processes to report, investigate and take action on incidents and nonconformities, including correcting them, evaluating root cause, and preventing recurrence.",
+      "domain": "Improvement",
+      "category": "Improvement",
+      "section_number": "10.2",
+      "parent_section": "10",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Incident, nonconformity and corrective action — documented information (policy / procedure / record)",
+        "Records demonstrating 'incident, nonconformity and corrective action' is implemented and effective"
+      ]
+    },
+    {
+      "control_id": "10.3",
+      "original_reference": "10.3",
+      "title": "Continual improvement",
+      "description": "Continually improve the suitability, adequacy and effectiveness of the OH&S management system, enhancing performance, promoting a safety culture and participation of workers.",
+      "full_text": "Continually improve the suitability, adequacy and effectiveness of the OH&S management system, enhancing performance, promoting a safety culture and participation of workers.",
+      "domain": "Improvement",
+      "category": "Improvement",
+      "section_number": "10.3",
+      "parent_section": "10",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Continual improvement — documented information (policy / procedure / record)",
+        "Records demonstrating 'continual improvement' is implemented and effective"
+      ]
+    }
+  ],
+  "artifacts": [
+    {
+      "artifact_id": "OHS-001",
+      "stage": "Stage 1: Context & Leadership",
+      "name": "OH&S Management System Scope Statement",
+      "type": "Policy",
+      "control_ref": "4.3",
+      "mandatory": true,
+      "description": "Documented boundaries and applicability of the OH&S management system.",
+      "format": "DOCX",
+      "owner": "OH&S Manager"
+    },
+    {
+      "artifact_id": "OHS-002",
+      "stage": "Stage 1: Context & Leadership",
+      "name": "Interested Parties & Needs Register",
+      "type": "Register",
+      "control_ref": "4.2",
+      "mandatory": true,
+      "description": "Workers and interested parties with their relevant needs and compliance obligations.",
+      "format": "XLSX",
+      "owner": "OH&S Manager"
+    },
+    {
+      "artifact_id": "OHS-003",
+      "stage": "Stage 1: Context & Leadership",
+      "name": "OH&S Policy",
+      "type": "Policy",
+      "control_ref": "5.2",
+      "mandatory": true,
+      "description": "Top-management-approved OH&S policy with commitments to safe workplaces and worker consultation.",
+      "format": "DOCX",
+      "owner": "Top Management"
+    },
+    {
+      "artifact_id": "OHS-004",
+      "stage": "Stage 1: Context & Leadership",
+      "name": "Roles, Responsibilities & Authorities Matrix",
+      "type": "Matrix",
+      "control_ref": "5.3",
+      "mandatory": true,
+      "description": "Assigned OH&S responsibilities and authorities across relevant roles.",
+      "format": "XLSX",
+      "owner": "HR"
+    },
+    {
+      "artifact_id": "OHS-005",
+      "stage": "Stage 1: Context & Leadership",
+      "name": "Worker Consultation & Participation Plan",
+      "type": "Plan",
+      "control_ref": "5.4",
+      "mandatory": true,
+      "description": "How workers are consulted and participate across the OH&S management system.",
+      "format": "DOCX",
+      "owner": "OH&S Manager"
+    },
+    {
+      "artifact_id": "OHS-006",
+      "stage": "Stage 2: Planning",
+      "name": "Hazard Identification & Risk Assessment Register",
+      "type": "Register",
+      "control_ref": "6.1.2",
+      "mandatory": true,
+      "description": "Hazards, assessed OH&S risks and opportunities with controls.",
+      "format": "XLSX",
+      "owner": "Safety Officer"
+    },
+    {
+      "artifact_id": "OHS-007",
+      "stage": "Stage 2: Planning",
+      "name": "Legal & Other Requirements Register",
+      "type": "Register",
+      "control_ref": "6.1.3",
+      "mandatory": true,
+      "description": "Applicable OH&S legal and other requirements with compliance status.",
+      "format": "XLSX",
+      "owner": "Compliance Officer"
+    },
+    {
+      "artifact_id": "OHS-008",
+      "stage": "Stage 2: Planning",
+      "name": "OH&S Objectives & Improvement Plan",
+      "type": "Plan",
+      "control_ref": "6.2.1",
+      "mandatory": true,
+      "description": "Measurable OH&S objectives with actions, owners, timelines and evaluation.",
+      "format": "XLSX",
+      "owner": "OH&S Manager"
+    },
+    {
+      "artifact_id": "OHS-009",
+      "stage": "Stage 3: Support",
+      "name": "Competence & Training Records",
+      "type": "Record",
+      "control_ref": "7.2",
+      "mandatory": true,
+      "description": "Training and competence evidence for workers affecting OH&S performance.",
+      "format": "XLSX",
+      "owner": "HR"
+    },
+    {
+      "artifact_id": "OHS-010",
+      "stage": "Stage 3: Support",
+      "name": "OH&S Communication Log",
+      "type": "Log",
+      "control_ref": "7.4.1",
+      "mandatory": false,
+      "description": "Internal and external OH&S communications record.",
+      "format": "XLSX",
+      "owner": "OH&S Manager"
+    },
+    {
+      "artifact_id": "OHS-011",
+      "stage": "Stage 4: Operation",
+      "name": "Hierarchy of Controls / Safe Work Procedures",
+      "type": "Procedure",
+      "control_ref": "8.1.2",
+      "mandatory": true,
+      "description": "Operational controls applying the hierarchy of controls to eliminate hazards.",
+      "format": "DOCX",
+      "owner": "Operations"
+    },
+    {
+      "artifact_id": "OHS-012",
+      "stage": "Stage 4: Operation",
+      "name": "Management of Change Procedure",
+      "type": "Procedure",
+      "control_ref": "8.1.3",
+      "mandatory": false,
+      "description": "Process to control changes affecting OH&S performance.",
+      "format": "DOCX",
+      "owner": "Operations"
+    },
+    {
+      "artifact_id": "OHS-013",
+      "stage": "Stage 4: Operation",
+      "name": "Contractor & Procurement OH&S Requirements",
+      "type": "Procedure",
+      "control_ref": "8.1.4",
+      "mandatory": false,
+      "description": "OH&S requirements for procurement, contractors and outsourced processes.",
+      "format": "DOCX",
+      "owner": "Procurement"
+    },
+    {
+      "artifact_id": "OHS-014",
+      "stage": "Stage 4: Operation",
+      "name": "Emergency Preparedness & Response Plan",
+      "type": "Plan",
+      "control_ref": "8.2",
+      "mandatory": true,
+      "description": "Planned responses, drills and communication for emergency situations.",
+      "format": "DOCX",
+      "owner": "Safety Officer"
+    },
+    {
+      "artifact_id": "OHS-015",
+      "stage": "Stage 5: Evaluation",
+      "name": "OH&S Monitoring & Measurement Records",
+      "type": "Record",
+      "control_ref": "9.1.1",
+      "mandatory": true,
+      "description": "Monitoring, measurement, analysis and evaluation of OH&S performance.",
+      "format": "XLSX",
+      "owner": "OH&S Manager"
+    },
+    {
+      "artifact_id": "OHS-016",
+      "stage": "Stage 5: Evaluation",
+      "name": "Internal Audit Programme & Reports",
+      "type": "Report",
+      "control_ref": "9.2.2",
+      "mandatory": true,
+      "description": "Audit programme, criteria, scope and results for the OH&S management system.",
+      "format": "DOCX",
+      "owner": "Internal Audit"
+    },
+    {
+      "artifact_id": "OHS-017",
+      "stage": "Stage 5: Evaluation",
+      "name": "Management Review Minutes",
+      "type": "Record",
+      "control_ref": "9.3",
+      "mandatory": true,
+      "description": "Top-management review of suitability, adequacy and effectiveness of the system.",
+      "format": "DOCX",
+      "owner": "Top Management"
+    },
+    {
+      "artifact_id": "OHS-018",
+      "stage": "Stage 6: Improvement",
+      "name": "Incident, Nonconformity & Corrective Action Log",
+      "type": "Log",
+      "control_ref": "10.2",
+      "mandatory": true,
+      "description": "Reported incidents/nonconformities with investigation, root cause and corrective actions.",
+      "format": "XLSX",
+      "owner": "Safety Officer"
+    }
+  ]
+}

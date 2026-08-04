@@ -1,0 +1,135 @@
+[1mdiff --git a/backend/backend/grc/uploads/compliance_assessments/72714ddc-523d-4259-a162-75b61f9e1411.xlsx b/backend/backend/grc/uploads/compliance_assessments/72714ddc-523d-4259-a162-75b61f9e1411.xlsx[m
+[1mdeleted file mode 100644[m
+[1mindex 0758261..0000000[m
+Binary files a/backend/backend/grc/uploads/compliance_assessments/72714ddc-523d-4259-a162-75b61f9e1411.xlsx and /dev/null differ
+[1mdiff --git a/backend/backend/grc/uploads/compliance_assessments/a4ba325f-f2e4-48c5-bfb9-02d93714b490.xlsx b/backend/backend/grc/uploads/compliance_assessments/7e7193f9-ed09-4f40-90a6-3af23475d96f.xlsx[m
+[1msimilarity index 100%[m
+[1mrename from backend/backend/grc/uploads/compliance_assessments/a4ba325f-f2e4-48c5-bfb9-02d93714b490.xlsx[m
+[1mrename to backend/backend/grc/uploads/compliance_assessments/7e7193f9-ed09-4f40-90a6-3af23475d96f.xlsx[m
+[1mdiff --git a/backend/backend/grc/uploads/compliance_assessments/8da2dbd8-1d99-437e-9e8d-9ae0dfae0918.xlsx b/backend/backend/grc/uploads/compliance_assessments/8da2dbd8-1d99-437e-9e8d-9ae0dfae0918.xlsx[m
+[1mdeleted file mode 100644[m
+[1mindex b7d67b1..0000000[m
+Binary files a/backend/backend/grc/uploads/compliance_assessments/8da2dbd8-1d99-437e-9e8d-9ae0dfae0918.xlsx and /dev/null differ
+[1mdiff --git a/backend/backend/grc/uploads/compliance_assessments/dadcce7f-9522-4eba-aaff-56e3410fe97e.xlsx b/backend/backend/grc/uploads/compliance_assessments/dadcce7f-9522-4eba-aaff-56e3410fe97e.xlsx[m
+[1mdeleted file mode 100644[m
+[1mindex d0f5d16..0000000[m
+Binary files a/backend/backend/grc/uploads/compliance_assessments/dadcce7f-9522-4eba-aaff-56e3410fe97e.xlsx and /dev/null differ
+[1mdiff --git a/backend/grc_app.db b/backend/grc_app.db[m
+[1mindex fa4111e..a1027f9 100644[m
+Binary files a/backend/grc_app.db and b/backend/grc_app.db differ
+[1mdiff --git a/grc-frontend/src/app/(dashboard)/admin/page.tsx b/grc-frontend/src/app/(dashboard)/admin/page.tsx[m
+[1mindex c25fc1e..2410b8b 100644[m
+[1m--- a/grc-frontend/src/app/(dashboard)/admin/page.tsx[m
+[1m+++ b/grc-frontend/src/app/(dashboard)/admin/page.tsx[m
+[36m@@ -1,20 +1,26 @@[m
+ 'use client';[m
+ [m
+ import { useState } from 'react';[m
+[31m-import { Building2, Users as UsersIcon, ShieldCheck, ScrollText } from 'lucide-react';[m
+[32m+[m[32mimport { Building2, Users as UsersIcon, ShieldCheck, ScrollText, Bot, GitPullRequest } from 'lucide-react';[m
+ import OrganizationProfilePage from './organization/page';[m
+ import UsersManagementPage from './users/page';[m
+ import RolesManagementPage from './roles/page';[m
+ import AuditLogsPage from './audit-logs/page';[m
+[32m+[m[32mimport IntegrationsConnectionsPage from '../integrations/connections/page';[m
+[32m+[m[32mimport WorkflowEnginePage from '../workflow-engine/page';[m
+[32m+[m
+[32m+[m[32mtype AdminTab = 'company' | 'users' | 'roles' | 'integrations' | 'workflow' | 'audit';[m
+ [m
+ export default function AdminPage() {[m
+[31m-  const [activeTab, setActiveTab] = useState<'company' | 'users' | 'roles' | 'audit'>('company');[m
+[32m+[m[32m  const [activeTab, setActiveTab] = useState<AdminTab>('company');[m
+ [m
+[31m-  const adminTabs = [[m
+[31m-    { id: 'company' as const, label: 'Company', icon: Building2 },[m
+[31m-    { id: 'users' as const, label: 'User Management', icon: UsersIcon },[m
+[31m-    { id: 'roles' as const, label: 'Role Management', icon: ShieldCheck },[m
+[31m-    { id: 'audit' as const, label: 'Audit Logs', icon: ScrollText },[m
+[32m+[m[32m  const adminTabs: { id: AdminTab; label: string; icon: typeof Building2 }[] = [[m
+[32m+[m[32m    { id: 'company', label: 'Company', icon: Building2 },[m
+[32m+[m[32m    { id: 'users', label: 'User Management', icon: UsersIcon },[m
+[32m+[m[32m    { id: 'roles', label: 'Role Management', icon: ShieldCheck },[m
+[32m+[m[32m    { id: 'integrations', label: 'Integrations', icon: Bot },[m
+[32m+[m[32m    { id: 'workflow', label: 'Workflow Engine', icon: GitPullRequest },[m
+[32m+[m[32m    { id: 'audit', label: 'Audit Logs', icon: ScrollText },[m
+   ];[m
+ [m
+   return ([m
+[36m@@ -46,6 +52,8 @@[m [mexport default function AdminPage() {[m
+         {activeTab === 'company' && <OrganizationProfilePage />}[m
+         {activeTab === 'users' && <UsersManagementPage />}[m
+         {activeTab === 'roles' && <RolesManagementPage />}[m
+[32m+[m[32m        {activeTab === 'integrations' && <IntegrationsConnectionsPage />}[m
+[32m+[m[32m        {activeTab === 'workflow' && <WorkflowEnginePage />}[m
+         {activeTab === 'audit' && <AuditLogsPage />}[m
+       </div>[m
+     </div>[m
+[1mdiff --git a/grc-frontend/src/app/(dashboard)/auditor-portal/page.tsx b/grc-frontend/src/app/(dashboard)/auditor-portal/page.tsx[m
+[1mnew file mode 100644[m
+[1mindex 0000000..5a77f04[m
+[1m--- /dev/null[m
+[1m+++ b/grc-frontend/src/app/(dashboard)/auditor-portal/page.tsx[m
+[36m@@ -0,0 +1,109 @@[m
+[32m+[m[32m'use client';[m
+[32m+[m
+[32m+[m[32mimport { useMemo, useState } from 'react';[m
+[32m+[m[32mimport { useQuery } from '@tanstack/react-query';[m
+[32m+[m[32mimport Link from 'next/link';[m
+[32m+[m[32mimport { certificationsApi } from '@/lib/api';[m
+[32m+[m[32mimport { CertificationJourney } from '@/types';[m
+[32m+[m[32mimport { SearchInput } from '@/components/ui';[m
+[32m+[m[32mimport {[m
+[32m+[m[32m  Loader2,[m
+[32m+[m[32m  Shield,[m
+[32m+[m[32m  ChevronRight,[m
+[32m+[m[32m  ExternalLink,[m
+[32m+[m[32m  AlertCircle,[m
+[32m+[m[32m} from 'lucide-react';[m
+[32m+[m
+[32m+[m[32mexport default function AuditorPortalIndexPage() {[m
+[32m+[m[32m  const [search, setSearch] = useState('');[m
+[32m+[m
+[32m+[m[32m  const { data: certifications, isLoading, error } = useQuery({[m
+[32m+[m[32m    queryKey: ['certifications'],[m
+[32m+[m[32m    queryFn: async () => {[m
+[32m+[m[32m      const response = await certificationsApi.getAll();[m
+[32m+[m[32m      return response.data as CertificationJourney[];[m
+[32m+[m[32m    },[m
+[32m+[m[32m  });[m
+[32m+[m
+[32m+[m[32m  const frameworks = useMemo(() => {[m
+[32m+[m[32m    const list = (certifications || []) as CertificationJourney[];[m
+[32m+[m[32m    const term = search.trim().toLowerCase();[m
+[32m+[m[32m    if (!term) return list;[m
+[32m+[m[32m    return list.filter((j) => {[m
+[32m+[m[32m      const name = (j.framework?.name || '').toLowerCase();[m
+[32m+[m[32m      const code = (j.framework?.short_code || '').toLowerCase();[m
+[32m+[m[32m      return name.includes(term) || code.includes(term);[m
+[32m+[m[32m    });[m
+[32m+[m[32m  }, [certifications, search]);[m
+[32m+[m
+[32m+[m[32m  return ([m
+[32m+[m[32m    <div className="space-y-4 sm:space-y-6">[m
+[32m+[m[32m      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">[m
+[32m+[m[32m        <div className="min-w-0">[m
+[32m+[m[32m          <h1 className="text-lg sm:text-xl font-semibold text-slate-900 tracking-tight">Auditor Portal</h1>[m
+[32m+[m[32m          <p className="mt-1 text-sm text-slate-600">Pick a framework certification journey to review evidence, controls, and compliance progress.</p>[m
+[32m+[m[32m        </div>[m
+[32m+[m[32m        <div className="w-full sm:w-72 flex-shrink-0">[m
+[32m+[m[32m          <SearchInput[m
+[32m+[m[32m            value={search}[m
+[32m+[m[32m            onChange={setSearch}[m
+[32m+[m[32m            placeholder="Search frameworks..."[m
+[32m+[m[32m            size="md"[m
+[32m+[m[32m          />[m
+[32m+[m[32m        </div>[m
+[32m+[m[32m      </div>[m
+[32m+[m
+[32m+[m[32m      {isLoading ? ([m
+[32m+[m[32m        <div className="flex h-64 items-center justify-center">[m
+[32m+[m[32m          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />[m
+[32m+[m[32m        </div>[m
+[32m+[m[32m      ) : error ? ([m
+[32m+[m[32m        <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 flex items-center gap-2">[m
+[32m+[m[32m          <AlertCircle className="h-4 w-4" />[m
+[32m+[m[32m        

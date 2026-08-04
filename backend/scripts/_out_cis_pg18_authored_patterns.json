@@ -1,0 +1,192 @@
+[
+  {
+    "rule_id": "3.1.3",
+    "title": "Ensure the logging collector is enabled",
+    "check_definition": {
+      "runner": "postgres_sql",
+      "sql": "SELECT setting FROM pg_settings WHERE name = 'logging_collector'",
+      "expect": {
+        "kind": "first_value_equals",
+        "expected": "on"
+      },
+      "pass_message": "Logging collector is enabled.",
+      "fail_message": "Logging collector is OFF \u2014 server logs are not captured.",
+      "_authored": "cis-pg18-config",
+      "timeout_seconds": 15
+    }
+  },
+  {
+    "rule_id": "3.1.7",
+    "title": "Ensure 'log_truncate_on_rotation' is enabled",
+    "check_definition": {
+      "runner": "postgres_sql",
+      "sql": "SELECT setting FROM pg_settings WHERE name = 'log_truncate_on_rotation'",
+      "expect": {
+        "kind": "first_value_equals",
+        "expected": "on"
+      },
+      "pass_message": "log_truncate_on_rotation is enabled.",
+      "fail_message": "log_truncate_on_rotation is OFF.",
+      "_authored": "cis-pg18-config",
+      "timeout_seconds": 15
+    }
+  },
+  {
+    "rule_id": "3.1.16",
+    "title": "Ensure 'debug_print_parse' is disabled",
+    "check_definition": {
+      "runner": "postgres_sql",
+      "sql": "SELECT setting FROM pg_settings WHERE name = 'debug_print_parse'",
+      "expect": {
+        "kind": "first_value_equals",
+        "expected": "off"
+      },
+      "pass_message": "debug_print_parse is disabled.",
+      "fail_message": "debug_print_parse is ON (leaks internals to the log).",
+      "_authored": "cis-pg18-config",
+      "timeout_seconds": 15
+    }
+  },
+  {
+    "rule_id": "3.1.17",
+    "title": "Ensure 'debug_print_rewritten' is disabled",
+    "check_definition": {
+      "runner": "postgres_sql",
+      "sql": "SELECT setting FROM pg_settings WHERE name = 'debug_print_rewritten'",
+      "expect": {
+        "kind": "first_value_equals",
+        "expected": "off"
+      },
+      "pass_message": "debug_print_rewritten is disabled.",
+      "fail_message": "debug_print_rewritten is ON.",
+      "_authored": "cis-pg18-config",
+      "timeout_seconds": 15
+    }
+  },
+  {
+    "rule_id": "3.1.18",
+    "title": "Ensure 'debug_print_plan' is disabled",
+    "check_definition": {
+      "runner": "postgres_sql",
+      "sql": "SELECT setting FROM pg_settings WHERE name = 'debug_print_plan'",
+      "expect": {
+        "kind": "first_value_equals",
+        "expected": "off"
+      },
+      "pass_message": "debug_print_plan is disabled.",
+      "fail_message": "debug_print_plan is ON.",
+      "_authored": "cis-pg18-config",
+      "timeout_seconds": 15
+    }
+  },
+  {
+    "rule_id": "3.1.20",
+    "title": "Ensure 'log_connections' is enabled",
+    "check_definition": {
+      "runner": "postgres_sql",
+      "sql": "SELECT setting FROM pg_settings WHERE name = 'log_connections'",
+      "expect": {
+        "kind": "first_value_equals",
+        "expected": "on"
+      },
+      "pass_message": "log_connections is enabled.",
+      "fail_message": "log_connections is OFF \u2014 connections are not audited.",
+      "_authored": "cis-pg18-config",
+      "timeout_seconds": 15
+    }
+  },
+  {
+    "rule_id": "3.1.21",
+    "title": "Ensure 'log_disconnections' is enabled",
+    "check_definition": {
+      "runner": "postgres_sql",
+      "sql": "SELECT setting FROM pg_settings WHERE name = 'log_disconnections'",
+      "expect": {
+        "kind": "first_value_equals",
+        "expected": "on"
+      },
+      "pass_message": "log_disconnections is enabled.",
+      "fail_message": "log_disconnections is OFF.",
+      "_authored": "cis-pg18-config",
+      "timeout_seconds": 15
+    }
+  },
+  {
+    "rule_id": "3.1.23",
+    "title": "Ensure 'log_hostname' is set correctly",
+    "check_definition": {
+      "runner": "postgres_sql",
+      "sql": "SELECT setting FROM pg_settings WHERE name = 'log_hostname'",
+      "expect": {
+        "kind": "first_value_equals",
+        "expected": "on"
+      },
+      "pass_message": "log_hostname is enabled.",
+      "fail_message": "log_hostname is OFF.",
+      "_authored": "cis-pg18-config",
+      "timeout_seconds": 15
+    }
+  },
+  {
+    "rule_id": "3.2",
+    "title": "Ensure the PostgreSQL Audit Extension (pgAudit) is enabled",
+    "check_definition": {
+      "runner": "postgres_sql",
+      "sql": "SELECT setting FROM pg_settings WHERE name='shared_preload_libraries'",
+      "expect": {
+        "kind": "first_value_contains",
+        "expected": "pgaudit"
+      },
+      "pass_message": "pgAudit is loaded (shared_preload_libraries).",
+      "fail_message": "pgAudit is NOT loaded \u2014 no statement-level audit trail.",
+      "_authored": "cis-pg18-config",
+      "timeout_seconds": 15
+    }
+  },
+  {
+    "rule_id": "4.8",
+    "title": "Ensure the set_user extension is installed",
+    "check_definition": {
+      "runner": "postgres_sql",
+      "sql": "SELECT count(*) FROM pg_extension WHERE extname='set_user'",
+      "expect": {
+        "kind": "row_count_nonzero"
+      },
+      "pass_message": "set_user extension is installed.",
+      "fail_message": "set_user extension is NOT installed.",
+      "_authored": "cis-pg18-config"
+    }
+  },
+  {
+    "rule_id": "5.2",
+    "title": "Ensure PostgreSQL is Bound to an IP Address",
+    "check_definition": {
+      "runner": "postgres_sql",
+      "sql": "SELECT setting FROM pg_settings WHERE name = 'listen_addresses'",
+      "expect": {
+        "kind": "first_value_regex",
+        "expected": "^(?!\\*).+"
+      },
+      "pass_message": "listen_addresses is bound to specific host(s), not '*'.",
+      "fail_message": "listen_addresses is '*' \u2014 the DB accepts connections on every interface.",
+      "_authored": "cis-pg18-config",
+      "timeout_seconds": 15
+    }
+  },
+  {
+    "rule_id": "6.8",
+    "title": "Ensure TLS is enabled and configured correctly",
+    "check_definition": {
+      "runner": "postgres_sql",
+      "sql": "SELECT setting FROM pg_settings WHERE name = 'ssl'",
+      "expect": {
+        "kind": "first_value_equals",
+        "expected": "on"
+      },
+      "pass_message": "TLS/SSL is enabled.",
+      "fail_message": "SSL is OFF \u2014 database traffic (including credentials) is unencrypted.",
+      "_authored": "cis-pg18-config",
+      "timeout_seconds": 15
+    }
+  }
+]
