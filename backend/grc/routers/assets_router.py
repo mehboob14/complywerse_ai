@@ -2023,8 +2023,9 @@ def probe_asset_inventory(
 
 class AssetServiceCollectBody(BaseModel):
     kind: Optional[str] = None       # inferred from the asset when omitted
+    connection_id: Optional[int] = None  # pick a specific SAVED login (from the dropdown)
     username: Optional[str] = None
-    password: Optional[str] = None    # omit to REUSE the saved connection login
+    password: Optional[str] = None    # provide only when adding a NEW login
     host: Optional[str] = None       # defaults to the asset IP; set for a localhost-only service
     port: Optional[int] = None
     database: Optional[str] = None
@@ -2034,6 +2035,38 @@ _ASSET_TYPED_ITYPE = {
     "postgres": "postgres_sql", "mysql": "mysql_sql", "mssql": "mssql_sql",
     "oracle": "oracle_sql", "k8s": "k8s_api", "ldap": "ldap_query", "cisco": "netdev_ssh",
 }
+
+
+@router.get("/{asset_id}/service-logins")
+def list_asset_service_logins(
+    asset_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Saved logins that can collect this asset's typed service — so the UI can
+    offer a pick-a-saved-login dropdown (and an 'add new' option) instead of
+    making the operator re-enter a credential they already saved."""
+    user_tenants = get_user_tenants(current_user, db)
+    asset = db.query(ITAsset).filter(
+        ITAsset.id == asset_id, ITAsset.tenant_id.in_(user_tenants),
+    ).first()
+    if not asset:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
+    kind = _infer_service_kind(asset)
+    itype = _ASSET_TYPED_ITYPE.get(kind or "")
+    if itype is None:
+        return {"kind": None, "logins": []}
+    from grc.models import IntegrationConnection
+    rows = db.query(IntegrationConnection).filter(
+        IntegrationConnection.tenant_id == asset.tenant_id,
+        IntegrationConnection.integration_type == itype,
+        IntegrationConnection.is_active.is_(True),
+    ).order_by(IntegrationConnection.id.desc()).all()
+    return {"kind": kind, "logins": [
+        {"connection_id": r.id, "label": f"{r.username or 'login'} @ {r.console_url}:{r.console_port or ''}".rstrip(':'),
+         "host": r.console_url, "port": r.console_port, "username": r.username}
+        for r in rows
+    ]}
 
 
 def _infer_service_kind(asset) -> Optional[str]:
@@ -2078,14 +2111,22 @@ def collect_asset_service(
 
     default_port = next((dp for _p, k, _i, _l, dp in SERVICE_SUGGESTIONS if k == kind), None)
 
-    # 1) REUSE the connection saved at software-setup time (console_url == host).
+    # 1a) A specific saved login the operator picked from the dropdown.
     host_name = asset.host_name or asset.ip_address
-    conn = db.query(IntegrationConnection).filter(
-        IntegrationConnection.tenant_id == asset.tenant_id,
-        IntegrationConnection.integration_type == itype,
-        IntegrationConnection.is_active.is_(True),
-        IntegrationConnection.console_url.in_([c for c in (host_name, asset.ip_address, asset.host_name) if c]),
-    ).order_by(IntegrationConnection.id.desc()).first()
+    conn = None
+    if body.connection_id:
+        conn = db.query(IntegrationConnection).filter(
+            IntegrationConnection.id == body.connection_id,
+            IntegrationConnection.tenant_id == asset.tenant_id,
+        ).first()
+    # 1b) Otherwise, if no NEW login is being added, reuse the most recent saved one.
+    if conn is None and not body.password:
+        conn = db.query(IntegrationConnection).filter(
+            IntegrationConnection.tenant_id == asset.tenant_id,
+            IntegrationConnection.integration_type == itype,
+            IntegrationConnection.is_active.is_(True),
+            IntegrationConnection.console_url.in_([c for c in (host_name, asset.ip_address, asset.host_name) if c]),
+        ).order_by(IntegrationConnection.id.desc()).first()
 
     if conn is not None:
         creds = resolve_credentials_for_connection(conn)
@@ -3766,6 +3807,19 @@ def setup_software(
         conn = db.query(IntegrationConnection).get(connection_id)
         if conn is not None and hasattr(conn, "asset_id"):
             conn.asset_id = child.id
+        # Collect the typed inventory RIGHT NOW using the login just given, so the
+        # asset is born RICH (databases / schemas / roles / extensions) instead of
+        # only a name + saved connection. Best-effort — never fails the promote.
+        try:
+            from ..modules.compliance_plugins.services.credentials import resolve_credentials_for_connection
+            from ..modules.asset_discovery.services.platform_collectors import collect_platform
+            if conn is not None:
+                _res = collect_platform(itype, resolve_credentials_for_connection(conn))
+                if _res:
+                    child.platform_kind, child.platform_properties = _res
+        except Exception:  # noqa: BLE001
+            logging.getLogger(__name__).info(
+                "setup_software: typed collect failed for asset %s", child.id, exc_info=True)
     entry["promoted_asset_id"] = child.id
     asset.detected_software_json = inventory
     db.commit()
