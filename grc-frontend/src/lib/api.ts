@@ -684,6 +684,10 @@ export const assetsApi = {
   }) => apiClient.get<ITAsset[]>('/assets', { params }),
   getById: (id: number) => apiClient.get<ITAsset>(`/assets/${id}`),
   getDetail: (id: number) => apiClient.get(`/assets/${id}/detail`),
+  // Enrich an existing asset IN PLACE with its typed service inventory (e.g. a
+  // Postgres app → its databases/schemas/roles) — no re-discovery needed.
+  collectAssetService: (id: number, data: { kind: string; username?: string; password: string; host?: string; port?: number; database?: string }) =>
+    apiClient.post(`/assets/${id}/collect-service`, data),
   // Phase 5.3 — Lifecycle state transition. Backend enforces the FSM and
   // returns the new state + a count of auto-closed vulnerabilities.
   transitionLifecycle: (

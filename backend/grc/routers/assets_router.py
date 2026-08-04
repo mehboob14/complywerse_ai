@@ -2021,6 +2021,71 @@ def probe_asset_inventory(
         return {"collected": False, "error": str(exc)[:300]}
 
 
+class AssetServiceCollectBody(BaseModel):
+    kind: str                        # postgres | mysql | mssql | oracle | k8s | ldap | cisco
+    username: Optional[str] = None
+    password: str
+    host: Optional[str] = None       # defaults to the asset IP; set for a localhost-only service
+    port: Optional[int] = None
+    database: Optional[str] = None
+
+
+_ASSET_TYPED_ITYPE = {
+    "postgres": "postgres_sql", "mysql": "mysql_sql", "mssql": "mssql_sql",
+    "oracle": "oracle_sql", "k8s": "k8s_api", "ldap": "ldap_query", "cisco": "netdev_ssh",
+}
+
+
+@router.post("/{asset_id}/collect-service")
+def collect_asset_service(
+    asset_id: int,
+    body: AssetServiceCollectBody,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Enrich an EXISTING asset (e.g. a Postgres app already promoted from the
+    host's software) with its TYPED service inventory IN PLACE — connect to
+    host:port with a DB/service login and attach the collector's
+    platform_properties. No re-discovery: the same asset gains its databases /
+    schemas / roles / extensions and becomes a first-class database asset."""
+    user_tenants = get_user_tenants(current_user, db)
+    asset = db.query(ITAsset).filter(
+        ITAsset.id == asset_id, ITAsset.tenant_id.in_(user_tenants),
+    ).first()
+    if not asset:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
+    kind = (body.kind or "").lower()
+    itype = _ASSET_TYPED_ITYPE.get(kind)
+    if itype is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=f"Unsupported kind '{kind}'. One of: {', '.join(_ASSET_TYPED_ITYPE)}")
+    from grc.modules.asset_discovery.services.deep_collect import (
+        typed_credentials_dict, live_port_open, SERVICE_SUGGESTIONS,
+    )
+    from grc.modules.asset_discovery.services.platform_collectors import collect_platform
+    ip = (body.host or asset.ip_address or "127.0.0.1").strip()
+    default_port = next((dp for _p, k, _i, _l, dp in SERVICE_SUGGESTIONS if k == kind), None)
+    port = int(body.port or default_port or 0)
+    if port and not live_port_open(ip, [port]):
+        return {"collected": False, "error": f"{kind} port {port} is not reachable on {ip} — check host/port, or use 127.0.0.1 for a localhost-only service."}
+    creds = typed_credentials_dict(kind, ip, port, body.username, body.password, body.database)
+    try:
+        result = collect_platform(itype, creds)
+        if result is None:
+            raise RuntimeError(f"no collector registered for {itype}")
+        platform_kind, props = result
+        merged = dict(asset.platform_properties or {})
+        merged.update(props or {})
+        asset.platform_properties = merged
+        asset.platform_kind = platform_kind
+        asset.last_seen_at = datetime.utcnow()
+        db.commit()
+        return {"collected": True, "platform_kind": platform_kind}
+    except Exception as exc:  # noqa: BLE001
+        db.rollback()
+        return {"collected": False, "error": str(exc)[:300]}
+
+
 @router.get("/{asset_id}/trajectory")
 def get_asset_trajectory(
     asset_id: int,

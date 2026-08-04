@@ -342,6 +342,7 @@ export default function AssetDetailPage() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showLifecycleModal, setShowLifecycleModal] = useState(false);
   const [setupEntry, setSetupEntry] = useState<SoftwareSetupEntry | null>(null);
+  const [collectSvcOpen, setCollectSvcOpen] = useState(false);
 
   const { data: asset, isLoading, error } = useQuery<AssetDetailData>({
     queryKey: ['asset-detail', assetId],
@@ -413,6 +414,15 @@ export default function AssetDetailPage() {
       return response.data as Array<{ id: number; vuln_id?: string; title?: string; severity?: string; status?: string }>;
     },
     enabled: activeTab === 'vulnerabilities',
+  });
+
+  // Enrich a DB app IN PLACE with its database inventory (a Postgres login,
+  // applied to this same asset — no re-discovery).
+  const collectSvc = useMutation({
+    mutationFn: (data: any) => assetsApi.collectAssetService(assetId, data),
+    onSuccess: (res: any) => {
+      if (res.data?.collected) { setCollectSvcOpen(false); queryClient.invalidateQueries({ queryKey: ['asset-detail', assetId] }); }
+    },
   });
 
   const assessRiskMutation = useMutation({
@@ -702,6 +712,17 @@ export default function AssetDetailPage() {
 
   // Live data mapped into the shape the delivered AssetOverview design consumes.
   // The design component itself is used verbatim — all adaptation happens here.
+  // A DB app (Postgres/MySQL/… promoted from software) with no deep inventory yet
+  // can be enriched in place with a DB login.
+  const DB_KINDS: Record<string, string> = { postgresql: 'postgres', postgres: 'postgres', mysql: 'mysql', mariadb: 'mysql', mssql: 'mssql', 'sql-server': 'mssql', oracle: 'oracle' };
+  const dbAppKind: string | null = (() => {
+    if (asset?.asset_type !== 'application') return null;
+    const key = (asset?.os_normalized || asset?.name || '').toLowerCase();
+    const m = Object.keys(DB_KINDS).find((k) => key.includes(k));
+    const hasDeep = asset?.platform_properties && Object.keys(asset.platform_properties).length > 0;
+    return m && !hasDeep ? DB_KINDS[m] : null;
+  })();
+
   const overviewData = buildOverviewData(asset, {
     software,
     posture,
@@ -717,7 +738,8 @@ export default function AssetDetailPage() {
       onClick: () => setActiveTab(s.id),
     })),
     actions: [
-      { label: 'Assess risk', primary: true, onClick: () => setActiveTab('criticality') },
+      ...(dbAppKind ? [{ label: 'Collect database details', primary: true, onClick: () => setCollectSvcOpen(true) }] : []),
+      { label: 'Assess risk', primary: !dbAppKind, onClick: () => setActiveTab('criticality') },
       ...(canEdit ? [{ label: 'Edit', onClick: () => setShowEditModal(true) }] : []),
       ...(canEdit ? [{ label: 'Lifecycle', onClick: () => setShowLifecycleModal(true) }] : []),
       { label: 'CIS scans', onClick: () => router.push(`/compliance-plugins/asset/${assetId}`) },
@@ -1023,6 +1045,61 @@ export default function AssetDetailPage() {
           }}
         />
       )}
+
+      {collectSvcOpen && dbAppKind && (
+        <CollectServiceModal
+          kind={dbAppKind}
+          defaultHost={asset.ip_address || '127.0.0.1'}
+          defaultPort={(asset.app_attributes_json as any)?.listen_port}
+          pending={collectSvc.isPending}
+          error={(collectSvc.data as any)?.data?.error || ((collectSvc.error as any)?.response?.data?.detail)}
+          onClose={() => setCollectSvcOpen(false)}
+          onRun={(data: any) => collectSvc.mutate(data)}
+        />
+      )}
+    </div>
+  );
+}
+
+// Enrich a DB app in place — a one-time DB login that adds its databases /
+// schemas / roles to THIS asset (no re-discovery).
+function CollectServiceModal({ kind, defaultHost, defaultPort, pending, error, onClose, onRun }: any) {
+  const LABEL: Record<string, string> = { postgres: 'PostgreSQL', mysql: 'MySQL', mssql: 'SQL Server', oracle: 'Oracle' };
+  const DEFPORT: Record<string, string> = { postgres: '5432', mysql: '3306', mssql: '1433', oracle: '1521' };
+  const [host, setHost] = useState(String(defaultHost || ''));
+  const [port, setPort] = useState(String(defaultPort || DEFPORT[kind] || ''));
+  const [user, setUser] = useState(kind === 'postgres' ? 'postgres' : '');
+  const [pass, setPass] = useState('');
+  const [dbName, setDbName] = useState('');
+  const lbl = 'block text-[11px] font-semibold text-slate-600 mb-1';
+  const inp = 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-primary-500';
+  return (
+    <div onClick={onClose} className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/45 p-4 backdrop-blur-sm">
+      <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
+        <div className="border-b border-slate-100 px-5 py-4">
+          <div className="text-base font-bold text-slate-900">Collect {LABEL[kind] || kind} details</div>
+          <div className="mt-1 text-xs leading-snug text-slate-500">A one-time {LABEL[kind] || kind} login reads this database’s databases, schemas, roles and settings and attaches them to <b>this</b> asset — no re-discovery. The login is saved (encrypted) and reused.</div>
+        </div>
+        <div className="flex flex-col gap-3 px-5 py-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className={lbl}>Host</label><input className={inp} value={host} onChange={(e) => setHost(e.target.value)} placeholder="127.0.0.1" /></div>
+            <div><label className={lbl}>Port</label><input className={inp} value={port} onChange={(e) => setPort(e.target.value)} placeholder={DEFPORT[kind]} /></div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className={lbl}>Username</label><input className={inp} value={user} onChange={(e) => setUser(e.target.value)} placeholder={kind === 'postgres' ? 'postgres' : 'user'} /></div>
+            <div><label className={lbl}>Password</label><input className={inp} type="password" value={pass} onChange={(e) => setPass(e.target.value)} /></div>
+          </div>
+          <div><label className={lbl}>Database (optional)</label><input className={inp} value={dbName} onChange={(e) => setDbName(e.target.value)} placeholder={kind === 'postgres' ? 'postgres' : 'default'} /></div>
+          {error && <div className="text-xs font-medium text-red-600">{error}</div>}
+        </div>
+        <div className="flex justify-end gap-2 border-t border-slate-100 px-5 py-3">
+          <button onClick={onClose} className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-600">Cancel</button>
+          <button disabled={pending || !pass || !host} onClick={() => onRun({ kind, username: user || undefined, password: pass, host: host.trim(), port: port ? Number(port) : undefined, database: dbName || undefined })}
+            className="rounded-full bg-primary-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
+            {pending ? 'Connecting…' : 'Collect'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
