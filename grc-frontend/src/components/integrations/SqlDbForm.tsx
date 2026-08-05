@@ -179,6 +179,8 @@ export function SqlDbForm({
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Save-only: persist the login without a live connect (status 'pending').
+  const [savedOnly, setSavedOnly] = useState(false);
   const [success, setSuccess] = useState(false);
   // Sync state with prop changes that arrive AFTER mount. The wizard page
   // reads URL params via useSearchParams() and propagates them down as
@@ -223,8 +225,8 @@ export function SqlDbForm({
     }
   }
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
+  async function submit(e?: React.FormEvent, saveOnly = false) {
+    e?.preventDefault?.();
     setError(null);
     setSubmitting(true);
     try {
@@ -289,9 +291,10 @@ export function SqlDbForm({
         payload.database_name = cleanDb;
       }
 
-      const r = await apiClient.post('/connect-wizard/handshake', payload);
+      const endpoint = saveOnly ? '/connect-wizard/save-connection' : '/connect-wizard/handshake';
+      const r = await apiClient.post(endpoint, payload);
       if (r.status >= 200 && r.status < 300) {
-        setSuccess(true);
+        if (saveOnly) setSavedOnly(true); else setSuccess(true);
         onSuccess?.();
       }
     } catch (err: any) {
@@ -299,6 +302,18 @@ export function SqlDbForm({
     } finally {
       setSubmitting(false);
     }
+  }
+
+  if (savedOnly) {
+    return (
+      <div className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-4">
+        <h3 className="text-sm font-semibold text-sky-900 mb-1">Login saved</h3>
+        <p className="text-sm text-sky-800">
+          The {cfg.label} login for <strong className="font-medium">{hostname}</strong> is saved (encrypted) but <strong>not yet verified</strong>. Run <em>Test</em> or <em>Sync</em> from Integrations → Connections once the database is reachable.
+        </p>
+        <button type="button" onClick={onCancel} className="mt-3 text-sm text-primary-600 hover:underline">Done</button>
+      </div>
+    );
   }
 
   if (success) {
@@ -492,13 +507,27 @@ export function SqlDbForm({
           >
             {embedded ? 'Cancel' : '← Pick a different platform'}
           </button>
-          <button
-            type="submit"
-            disabled={submitting}
-            className="inline-flex items-center gap-2 rounded-md bg-primary-600 px-4 py-2.5 text-sm font-semibold text-[color:var(--color-on-base,#0a0a0a)] shadow-sm hover:bg-primary-700 disabled:opacity-60 disabled:cursor-not-allowed"
-          >
-            {submitting ? 'Connecting…' : buttonLabel}
-          </button>
+          <div className="flex items-center gap-3">
+            {/* Save-only: persist the login without connecting. Wizard mode
+                only (needs a token); hidden in the embedded collect flow. */}
+            {token && !onSubmitCredentials && (
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={() => submit(undefined, true)}
+                className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {submitting ? 'Saving…' : 'Save without connecting'}
+              </button>
+            )}
+            <button
+              type="submit"
+              disabled={submitting}
+              className="inline-flex items-center gap-2 rounded-md bg-primary-600 px-4 py-2.5 text-sm font-semibold text-[color:var(--color-on-base,#0a0a0a)] shadow-sm hover:bg-primary-700 disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {submitting ? 'Connecting…' : buttonLabel}
+            </button>
+          </div>
         </div>
       </form>
     </>

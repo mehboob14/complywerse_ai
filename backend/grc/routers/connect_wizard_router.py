@@ -293,6 +293,166 @@ def handshake(body: HandshakeIn, db: Session = Depends(get_db)):
         raise
 
 
+@router.post("/save-connection")
+def save_connection(body: HandshakeIn, db: Session = Depends(get_db)):
+    """Save-ONLY companion to /handshake.
+
+    Persists the connection's credential exactly as the handshake does
+    (same integration_type map, same encrypted `credentials_extra_json`
+    shape, same IntegrationConnection row) but WITHOUT the live pre-flight,
+    the asset creation, or the deep-collect. The row is marked
+    status='pending' (saved but unverified).
+
+    This gives every platform — including databases, cloud, AD/LDAP and
+    network devices, which the handshake only persists on a successful
+    connect — a "save the login for later" path, mirroring the save-only
+    that scanners and Windows/Linux hosts already have. A later Test / Sync
+    (or a Collect that reuses the login) picks it up unchanged, because the
+    stored shape is identical to what the handshake writes.
+    """
+    return _save_connection_inner(body, db)
+
+
+def _save_connection_inner(body: "HandshakeIn", db: Session) -> dict:
+    payload = _verify(body.tenant_token)
+    tenant_id = payload["tenant_id"]
+    user_id = payload.get("user_id")
+    nonce = payload["nonce"]
+    platform = payload["platform"]
+
+    def _clean(s: str | None) -> str | None:
+        if s is None:
+            return None
+        return (s.strip().replace("\t", "").replace("\r", "").replace("\n", "")) or None
+
+    body.hostname = _clean(body.hostname) or body.hostname
+    body.display_label = _clean(body.display_label)
+    body.service_account = _clean(body.service_account)
+    body.agent_password = _clean(body.agent_password)
+
+    label = (body.display_label or body.hostname).strip()
+    conn_name = f"{platform.capitalize()} — {label}"
+    integration_type = {
+        "windows": "windows_winrm", "linux": "linux_ssh", "aws": "aws_readonly",
+        "digitalocean": "linux_ssh", "digitalocean_api": "digitalocean_api",
+        "cisco": "netdev_ssh", "oracle": "oracle_sql", "mssql": "mssql_sql",
+        "postgres": "postgres_sql", "mysql": "mysql_sql", "ad": "ldap_query",
+        "azure": "azure_readonly", "k8s": "k8s_api",
+    }[platform]
+    console_url = body.hostname
+    if platform == "windows":
+        console_port = 5986
+    elif platform in ("aws", "azure", "digitalocean_api"):
+        console_port = 443
+    elif platform == "mssql":
+        console_port = body.db_port or 1433
+    elif platform == "postgres":
+        console_port = body.db_port or 5432
+    elif platform == "mysql":
+        console_port = body.db_port or 3306
+    elif platform == "ad":
+        console_port = 636 if body.ldap_use_ssl else 389
+    elif platform == "k8s":
+        console_port = 443
+    else:
+        console_port = 22 if platform != "oracle" else 1521
+
+    # credentials_extra_json — identical shape/encryption to the handshake so a
+    # later Test/Sync/reuse reads it unchanged. (Mirror of _handshake_inner.)
+    extra: Optional[dict] = None
+    if platform in ("mssql", "postgres", "mysql"):
+        p = platform
+        extra = {
+            f"{p}_host": body.hostname, f"{p}_port": console_port,
+            f"{p}_username": body.service_account,
+            f"{p}_password": encrypt_secret(body.agent_password) if body.agent_password else None,
+            f"{p}_database": body.database_name or None,
+        }
+    elif platform == "oracle":
+        extra = {
+            "oracle_host": body.hostname, "oracle_port": console_port,
+            "oracle_username": body.service_account,
+            "oracle_password": encrypt_secret(body.agent_password) if body.agent_password else None,
+            "oracle_service_name": (body.oracle_service_name or body.database_name or None),
+            "oracle_sid": body.oracle_sid or None,
+        }
+    elif platform == "ad":
+        extra = {
+            "ldap_host": body.hostname, "ldap_port": console_port,
+            "ldap_use_ssl": bool(body.ldap_use_ssl),
+            "ldap_bind_dn": body.ldap_bind_dn or body.service_account,
+            "ldap_username": body.service_account,
+            "ldap_password": encrypt_secret(body.agent_password) if body.agent_password else None,
+        }
+    elif platform == "azure":
+        extra = {
+            "azure_subscription_id": body.azure_subscription_id,
+            "azure_tenant_id": body.azure_tenant_id,
+            "azure_client_id": body.azure_client_id,
+            "azure_client_secret": encrypt_secret(body.azure_client_secret or ""),
+        }
+    elif platform == "k8s":
+        if body.kubeconfig:
+            extra = {"kubeconfig": encrypt_secret(body.kubeconfig)}
+        elif body.k8s_server and body.k8s_token:
+            extra = {
+                "k8s_server": body.k8s_server,
+                "k8s_token": encrypt_secret(body.k8s_token),
+                "k8s_ca_cert": body.k8s_ca_cert,
+            }
+    elif platform == "digitalocean_api":
+        extra = {"do_api_token": encrypt_secret(body.agent_password or "")}
+
+    prefix = f"WIZARD_{nonce.upper().replace('-', '')[:10]}"
+    existing = (
+        db.query(IntegrationConnection)
+        .filter(
+            IntegrationConnection.tenant_id == tenant_id,
+            IntegrationConnection.connection_name == conn_name,
+        )
+        .first()
+    )
+    if existing:
+        conn = existing
+        conn.console_url = console_url
+        conn.console_port = console_port
+        conn.username = body.service_account or f"complivrs_t{tenant_id}"
+        if body.agent_password:
+            conn.password = encrypt_secret(body.agent_password)
+        if extra is not None:
+            conn.credentials_extra_json = extra
+        conn.is_active = True
+        # Don't demote a previously-verified connection back to pending.
+        if conn.status != "connected":
+            conn.status = "pending"
+    else:
+        conn = IntegrationConnection(
+            tenant_id=tenant_id,
+            integration_type=integration_type,
+            connection_name=conn_name,
+            console_url=console_url,
+            console_port=console_port,
+            auth_method="basic",
+            credential_env_prefix=prefix,
+            username=body.service_account or f"complivrs_t{tenant_id}",
+            password=encrypt_secret(body.agent_password) if body.agent_password else None,
+            credentials_extra_json=extra,
+            is_active=True,
+            status="pending",
+            created_by_user_id=user_id,
+        )
+        db.add(conn)
+    db.commit()
+    db.refresh(conn)
+    return {
+        "saved": True,
+        "connection_id": conn.id,
+        "status": conn.status,
+        "connection_name": conn_name,
+        "integration_type": integration_type,
+    }
+
+
 def _handshake_inner(body: "HandshakeIn", db: Session) -> dict:
     payload = _verify(body.tenant_token)
     tenant_id = payload["tenant_id"]
