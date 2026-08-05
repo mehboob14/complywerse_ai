@@ -913,17 +913,15 @@ function DoAccountForm({ token, onCancel }: { token: string; onCancel: () => voi
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-  const [savedOnly, setSavedOnly] = useState(false);
 
-  async function submit(e?: React.FormEvent, saveOnly = false) {
-    e?.preventDefault?.();
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
     setError(null);
     setSubmitting(true);
     try {
       const cleanLabel = (label || '').trim();
       const cleanToken = (apiToken || '').trim();
-      const endpoint = saveOnly ? '/connect-wizard/save-connection' : '/connect-wizard/handshake';
-      const r = await apiClient.post(endpoint, {
+      const r = await apiClient.post('/connect-wizard/handshake', {
         tenant_token: token,
         hostname: cleanLabel || 'digitalocean-account',
         os_name: 'DigitalOcean Account',
@@ -931,24 +929,13 @@ function DoAccountForm({ token, onCancel }: { token: string; onCancel: () => voi
         // the backend stores it as the read-only DigitalOcean API token.
         agent_password: cleanToken,
       });
-      if (r.status >= 200 && r.status < 300) { if (saveOnly) setSavedOnly(true); else setSuccess(true); }
+      if (r.status >= 200 && r.status < 300) setSuccess(true);
     } catch (e: any) {
       const d = e?.response?.data?.detail;
       setError(typeof d === 'string' ? d : (d?.message || e?.message || 'Failed to connect DigitalOcean account'));
     } finally {
       setSubmitting(false);
     }
-  }
-
-  if (savedOnly) {
-    return (
-      <div className="bg-white rounded-xl shadow-md p-8 border-2 border-sky-300 text-center">
-        <div className="text-5xl mb-3">💾</div>
-        <h2 className="text-2xl font-bold text-slate-900 mb-2">Login saved</h2>
-        <p className="text-slate-600 mb-4">The DigitalOcean token is saved (encrypted) but <strong>not yet verified</strong>. Run Test / Sync from Integrations → Connections when you&apos;re ready.</p>
-        <button onClick={onCancel} className="mt-3 px-5 py-2 border border-slate-300 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50">Done</button>
-      </div>
-    );
   }
 
   if (success) {
@@ -982,10 +969,6 @@ function DoAccountForm({ token, onCancel }: { token: string; onCancel: () => voi
           className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50">
           {submitting ? 'Connecting…' : 'Connect account'}
         </button>
-        <button type="button" disabled={submitting || !apiToken.trim()} onClick={() => submit(undefined, true)}
-          className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50">
-          {submitting ? 'Saving…' : 'Save without connecting'}
-        </button>
         <button type="button" onClick={onCancel} className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-600">Cancel</button>
       </div>
     </form>
@@ -1001,10 +984,9 @@ function AwsForm({ token, onCancel }: { token: string; onCancel: () => void }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-  const [savedOnly, setSavedOnly] = useState(false);
 
-  async function submit(e?: React.FormEvent, saveOnly = false) {
-    e?.preventDefault?.();
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
     setError(null);
     setSubmitting(true);
     try {
@@ -1016,8 +998,7 @@ function AwsForm({ token, onCancel }: { token: string; onCancel: () => void }) {
       const cleanRegion = (region || '').trim() || 'us-east-1';
       const cleanAccessKey = (accessKey || '').trim();
       const cleanSecretKey = (secretKey || '').trim();
-      const endpoint = saveOnly ? '/connect-wizard/save-connection' : '/connect-wizard/handshake';
-      const r = await apiClient.post(endpoint, {
+      const r = await apiClient.post('/connect-wizard/handshake', {
         tenant_token: token,
         hostname: cleanName || `aws-${cleanRegion}`,
         os_name: `AWS Account · ${cleanRegion}`,
@@ -1025,7 +1006,7 @@ function AwsForm({ token, onCancel }: { token: string; onCancel: () => void }) {
         agent_password: cleanSecretKey,
       });
       if (r.status >= 200 && r.status < 300) {
-        if (saveOnly) setSavedOnly(true); else setSuccess(true);
+        setSuccess(true);
       }
     } catch (e: any) {
       // Same structured pre-flight error format as the WinRM/SSH form —
@@ -1048,17 +1029,6 @@ function AwsForm({ token, onCancel }: { token: string; onCancel: () => void }) {
     } finally {
       setSubmitting(false);
     }
-  }
-
-  if (savedOnly) {
-    return (
-      <div className="bg-white rounded-xl shadow-md p-8 border-2 border-sky-300 text-center">
-        <div className="text-5xl mb-3">💾</div>
-        <h2 className="text-2xl font-bold text-slate-900 mb-2">Login saved</h2>
-        <p className="text-slate-600 mb-4">The AWS key is saved (encrypted) but <strong>not yet verified</strong>. Run Test / Sync from Integrations → Connections when you&apos;re ready.</p>
-        <button onClick={onCancel} className="mt-3 px-5 py-2 border border-slate-300 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50">Done</button>
-      </div>
-    );
   }
 
   if (success) {
@@ -1164,14 +1134,6 @@ function AwsForm({ token, onCancel }: { token: string; onCancel: () => void }) {
             className="px-4 py-2 text-sm text-slate-700 rounded-lg border border-slate-300 hover:bg-slate-50"
           >
             ← Back
-          </button>
-          <button
-            type="button"
-            disabled={submitting}
-            onClick={() => submit(undefined, true)}
-            className="px-4 py-2 text-sm font-medium text-slate-700 bg-white rounded-lg border border-slate-300 hover:bg-slate-50 disabled:opacity-50"
-          >
-            {submitting ? 'Saving…' : 'Save without connecting'}
           </button>
           <button
             type="submit"

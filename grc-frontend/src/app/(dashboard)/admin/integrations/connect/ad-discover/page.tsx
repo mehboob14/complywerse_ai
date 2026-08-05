@@ -48,10 +48,6 @@ export default function ADDiscoverPage() {
   const [baseDn, setBaseDn] = useState('');
   const [discoverError, setDiscoverError] = useState<string | null>(null);
   const [discovering, setDiscovering] = useState(false);
-  // Save-only: persist the LDAP bind credential without binding/discovering.
-  const [savingCreds, setSavingCreds] = useState(false);
-  const [savedCreds, setSavedCreds] = useState(false);
-  const [saveCredError, setSaveCredError] = useState<string | null>(null);
 
   // Step 2 results
   const [discovered, setDiscovered] = useState<DiscoverResp | null>(null);
@@ -125,35 +121,6 @@ export default function ADDiscoverPage() {
       setDiscoverError(e?.response?.data?.detail || e?.message || 'AD discovery failed');
     } finally {
       setDiscovering(false);
-    }
-  };
-
-  // Save-only: park the LDAP bind credential (encrypted, status 'pending')
-  // WITHOUT binding/enumerating — for when the DC isn't reachable yet. Issues
-  // an 'ad' wizard token, then persists via the shared save-connection endpoint
-  // (identical shape to a later verified connect).
-  const saveCredentials = async () => {
-    setSaveCredError(null);
-    setSavingCreds(true);
-    try {
-      const raw = ldapUrl.trim();
-      const useSsl = /^ldaps:\/\//i.test(raw);
-      const host = raw.replace(/^ldaps?:\/\//i, '').replace(/[/:].*$/, '').trim() || raw;
-      const tk = await apiClient.post('/connect-wizard/issue-token', { platform: 'ad' });
-      await apiClient.post('/connect-wizard/save-connection', {
-        tenant_token: (tk.data as { token: string }).token,
-        hostname: host,
-        display_label: baseDn.trim() || host,
-        service_account: bindDn.trim(),
-        agent_password: bindPassword,
-        ldap_bind_dn: bindDn.trim(),
-        ldap_use_ssl: useSsl,
-      });
-      setSavedCreds(true);
-    } catch (e: any) {
-      setSaveCredError(e?.response?.data?.detail || e?.message || 'Failed to save AD credentials');
-    } finally {
-      setSavingCreds(false);
     }
   };
 
@@ -350,24 +317,7 @@ export default function ADDiscoverPage() {
             {discoverError && (
               <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">{discoverError}</div>
             )}
-            {saveCredError && (
-              <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">{saveCredError}</div>
-            )}
-            {savedCreds && (
-              <div className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800">
-                Bind credential <strong>saved (not verified)</strong>. Run Test / Sync from Integrations → Connections once the domain controller is reachable.
-              </div>
-            )}
-            <div className="flex justify-end gap-2">
-              {/* Save-only: park the bind credential without discovering. */}
-              <button
-                type="button"
-                disabled={savingCreds || discovering || !bindDn.trim() || !bindPassword}
-                onClick={saveCredentials}
-                className="rounded-md border border-slate-300 bg-white px-5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-              >
-                {savingCreds ? 'Saving…' : 'Save without connecting'}
-              </button>
+            <div className="flex justify-end">
               <button
                 type="submit"
                 disabled={discovering}
