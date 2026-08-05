@@ -1650,6 +1650,54 @@ def list_credentials(
     return {"credentials": [_credential_dict(c) for c in rows]}
 
 
+@router.get("/credentials/applicable")
+def applicable_credentials(
+    ip: str,
+    kind: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Saved logins that could connect the host at `ip` — so the Connect UI can
+    offer one-click reuse instead of re-typing.
+
+    This is the "siblings share one domain account" case: connect Window A and
+    save its login; when Window B/C on the same network come up, their Connect
+    form finds that saved login here and offers to reuse it (no re-entry).
+
+    Ranking (best first): credentials whose applies_to_cidrs explicitly covers
+    this IP, then tenant-wide credentials (empty CIDR = any host), then other
+    saved host logins of the right kind (the sibling case — same account, saved
+    against a different host). Secrets are never returned.
+    """
+    tid = get_user_primary_tenant(current_user, db)
+    from grc.modules.asset_discovery.services.deep_collect import _cidr_match
+
+    q = db.query(CredentialProfile).filter(
+        CredentialProfile.tenant_id == tid,
+        CredentialProfile.is_active.is_(True),
+    )
+    if kind:
+        q = q.filter(CredentialProfile.kind == kind)
+    rows = q.order_by(CredentialProfile.priority, CredentialProfile.id).all()
+
+    out = []
+    for c in rows:
+        cidrs = c.applies_to_cidrs or []
+        covers = bool(cidrs) and _cidr_match(ip, cidrs)
+        tenant_wide = not cidrs
+        out.append({
+            **_credential_dict(c),
+            "covers_host": covers,        # explicitly scoped to this IP/subnet
+            "tenant_wide": tenant_wide,   # empty CIDR → applies to any host
+        })
+    # covers-this-host first, then tenant-wide, then other host creds (sibling reuse)
+    out.sort(key=lambda x: (
+        0 if x["covers_host"] else (1 if x["tenant_wide"] else 2),
+        x.get("priority", 100),
+    ))
+    return {"ip": ip, "credentials": out}
+
+
 @router.post("/credentials", status_code=201)
 def create_credential(
     body: CredentialIn,
