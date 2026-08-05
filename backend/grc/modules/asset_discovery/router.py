@@ -27,7 +27,7 @@ from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
-from grc.crypto import encrypt_secret
+from grc.crypto import encrypt_secret, decrypt_secret
 from grc.models import (
     GRCUser,
     ITAsset,
@@ -909,10 +909,43 @@ def list_discovered_devices(
 
 
 class DeviceConnectBody(BaseModel):
-    username: str
-    password: str
+    # username/password are optional ONLY when reusing a saved login via
+    # credential_id (the sibling case — Window B/C reuse Window A's domain login
+    # without re-typing). For a first-time connect they're required.
+    username: Optional[str] = None
+    password: Optional[str] = None
     domain: Optional[str] = None
     transport: Optional[str] = None
+    credential_id: Optional[int] = None  # reuse a saved host login instead
+
+
+def _resolve_host_profile(db, tid, body, *, name, kind, ip, current_user):
+    """Return the CredentialProfile to connect a host with: the saved one when
+    `credential_id` is given (reuse — no re-entry), otherwise a new one built
+    from the entered username/password. Shared by connect + reconnect."""
+    if getattr(body, "credential_id", None):
+        prof = db.query(CredentialProfile).filter(
+            CredentialProfile.id == body.credential_id,
+            CredentialProfile.tenant_id == tid,
+            CredentialProfile.is_active.is_(True),
+        ).first()
+        if not prof:
+            raise HTTPException(404, "Saved login not found.")
+        return prof
+    if not body.username or not body.password:
+        raise HTTPException(400, "Provide a username + password, or a credential_id to reuse a saved login.")
+    prof = CredentialProfile(
+        tenant_id=tid, name=name, kind=kind, username=body.username,
+        secret_kind="password", secret_encrypted=encrypt_secret(body.password),
+        domain=(body.domain or None), applies_to_cidrs=[f"{ip}/32"],
+        priority=100, is_active=True,
+        created_by_id=getattr(current_user, "id", None),
+        created_by_name=getattr(current_user, "username", None),
+    )
+    db.add(prof)
+    db.commit()
+    db.refresh(prof)
+    return prof
 
 
 @router.post("/devices/{observation_id}/connect")
@@ -949,18 +982,10 @@ def connect_discovered_device(
     if transport not in ("windows", "linux"):
         transport = transport_for_observation(obs) or "windows"
     kind = "winrm" if transport == "windows" else "ssh"
-    prof = CredentialProfile(
-        tenant_id=tid, name=f"{obs.host_name or ip} - {kind}", kind=kind,
-        username=body.username, secret_kind="password",
-        secret_encrypted=encrypt_secret(body.password),
-        domain=(body.domain or None), applies_to_cidrs=[f"{ip}/32"],
-        priority=100, is_active=True,
-        created_by_id=getattr(current_user, "id", None),
-        created_by_name=getattr(current_user, "username", None),
+    prof = _resolve_host_profile(
+        db, tid, body, name=f"{obs.host_name or ip} - {kind}", kind=kind, ip=ip,
+        current_user=current_user,
     )
-    db.add(prof)
-    db.commit()
-    db.refresh(prof)
 
     result: Dict[str, Any] = {"credential_id": prof.id, "collected": False}
     try:
@@ -1026,19 +1051,36 @@ def connect_discovered_service(
         reason = f"{kind} port {port} is not reachable on {ip} right now."
         obs.resolution_note = reason; db.commit()
         return {"collected": False, "error": reason}
-    username = body.username or ""
-    creds = typed_credentials_dict(kind, ip, port, username, body.password, body.database)
-    prof = CredentialProfile(
-        tenant_id=tid, name=f"{obs.host_name or ip} - {kind}", kind=kind,
-        username=username, secret_kind="password",
-        secret_encrypted=encrypt_secret(body.password),
-        port=port or None, applies_to_cidrs=[f"{ip}/32"],
-        priority=100, is_active=True,
-        created_by_id=getattr(current_user, "id", None),
-        created_by_name=getattr(current_user, "username", None),
-    )
-    db.add(prof); db.commit(); db.refresh(prof)
-    result: Dict[str, Any] = {"credential_id": prof.id, "collected": False, "kind": kind}
+    # Reuse a saved typed login (credential_id) — decrypt its secret and connect
+    # with it, no re-entry — or create a new profile from the entered password.
+    if body.credential_id:
+        prof = db.query(CredentialProfile).filter(
+            CredentialProfile.id == body.credential_id,
+            CredentialProfile.tenant_id == tid,
+            CredentialProfile.is_active.is_(True),
+        ).first()
+        if not prof:
+            raise HTTPException(404, "Saved login not found.")
+        username = prof.username or (body.username or "")
+        pw = decrypt_secret(prof.secret_encrypted) or ""
+        db_name = body.database or (prof.extra_json or {}).get(f"{kind}_database")
+        creds = typed_credentials_dict(kind, ip, port, username, pw, db_name)
+    else:
+        if not body.password:
+            raise HTTPException(400, "Provide a password, or a credential_id to reuse a saved login.")
+        username = body.username or ""
+        creds = typed_credentials_dict(kind, ip, port, username, body.password, body.database)
+        prof = CredentialProfile(
+            tenant_id=tid, name=f"{obs.host_name or ip} - {kind}", kind=kind,
+            username=username, secret_kind="password",
+            secret_encrypted=encrypt_secret(body.password),
+            port=port or None, applies_to_cidrs=[f"{ip}/32"],
+            priority=100, is_active=True,
+            created_by_id=getattr(current_user, "id", None),
+            created_by_name=getattr(current_user, "username", None),
+        )
+        db.add(prof); db.commit(); db.refresh(prof)
+    result: Dict[str, Any] = {"collected": False, "kind": kind, "credential_id": prof.id}
     try:
         asset = promote_observation_typed(db, obs, kind, itype, creds)
         db.commit()
@@ -1084,18 +1126,10 @@ def reconnect_asset(
         fam = (a.os_family or "").lower()
         transport = "linux" if fam.startswith(_LINUX_FAMS) else "windows"
     kind = "winrm" if transport == "windows" else "ssh"
-    prof = CredentialProfile(
-        tenant_id=tid, name=f"{a.name or ip} - {kind}", kind=kind,
-        username=body.username, secret_kind="password",
-        secret_encrypted=encrypt_secret(body.password),
-        domain=(body.domain or None), applies_to_cidrs=[f"{ip}/32"],
-        priority=100, is_active=True,
-        created_by_id=getattr(current_user, "id", None),
-        created_by_name=getattr(current_user, "username", None),
+    prof = _resolve_host_profile(
+        db, tid, body, name=f"{a.name or ip} - {kind}", kind=kind, ip=ip,
+        current_user=current_user,
     )
-    db.add(prof)
-    db.commit()
-    db.refresh(prof)
     result: Dict[str, Any] = {"credential_id": prof.id, "collected": False, "asset_id": a.id}
     try:
         from grc.modules.asset_discovery.services.deep_collect import collect_host

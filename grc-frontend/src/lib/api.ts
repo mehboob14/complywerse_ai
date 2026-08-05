@@ -884,16 +884,21 @@ export const discoveryApi = {
     apiClient.get('/discovery/discovered-devices', { params: runId != null ? { run_id: runId } : undefined }),
   // Promote an unclaimed discovered device (keyed by OBSERVATION id) — it only
   // becomes an asset if the login works.
-  connectDevice: (observationId: number, data: { username: string; password: string; domain?: string; transport?: string }) =>
+  connectDevice: (observationId: number, data: { username?: string; password?: string; domain?: string; transport?: string; credential_id?: number }) =>
     apiClient.post(`/discovery/devices/${observationId}/connect`, data),
   // Discovery→kind bridge: connect a discovered device AS the service detected on
   // it (postgres | mysql | mssql | oracle | k8s | ldap | cisco) with that kind's
   // own credential, promoting it to a TYPED asset with its component inventory.
-  connectService: (observationId: number, data: { kind: string; username?: string; password: string; port?: number; database?: string }) =>
+  connectService: (observationId: number, data: { kind: string; username?: string; password?: string; port?: number; database?: string; credential_id?: number }) =>
     apiClient.post(`/discovery/devices/${observationId}/connect-service`, data),
   // Re-collect a device that is already in inventory (keyed by asset id).
-  reconnectAsset: (assetId: number, data: { username: string; password: string; domain?: string; transport?: string }) =>
+  reconnectAsset: (assetId: number, data: { username?: string; password?: string; domain?: string; transport?: string; credential_id?: number }) =>
     apiClient.post(`/discovery/assets/${assetId}/reconnect`, data),
+  // Saved logins that could connect a given host IP — powers one-click reuse in
+  // the Connect form (siblings sharing a domain account don't re-enter it).
+  applicableCredentials: (ip: string, kind?: string) =>
+    apiClient.get<{ ip: string; credentials: Array<{ id: number; name: string; username: string; kind: string; domain?: string | null; covers_host: boolean; tenant_wide: boolean }> }>(
+      `/discovery/credentials/applicable`, { params: { ip, ...(kind ? { kind } : {}) } }),
   disconnectDevice: (assetId: number) =>
     apiClient.post(`/discovery/devices/${assetId}/disconnect`),
   connectProgress: () => apiClient.get('/discovery/connect-progress'),

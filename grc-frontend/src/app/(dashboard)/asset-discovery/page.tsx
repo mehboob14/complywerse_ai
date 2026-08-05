@@ -1123,25 +1123,40 @@ function ConnectDeviceForm({ device, onDone }: { device: any; onDone: () => void
   const hostOk = device.transport === 'windows' || device.transport === 'linux';
   const [mode, setMode] = useState<string>(hostOk ? 'host' : (svcs[0]?.kind || 'host'));
   const svc = svcs.find((s) => s.kind === mode);
+  // Saved logins that fit this host — so siblings sharing a domain account
+  // reuse the login instead of re-typing it (the "Window B/C use Window A's
+  // account" case). Kind = the credential type for the current mode.
+  const credKind = svc ? svc.kind : (isWin ? 'winrm' : 'ssh');
+  const applicableQ = useQuery({
+    queryKey: ['disc-applicable', device.ip_address, credKind],
+    queryFn: async () => (await discoveryApi.applicableCredentials(device.ip_address, credKind)).data,
+    enabled: !!device.ip_address,
+  });
+  const saved = applicableQ.data?.credentials || [];
+  const [addNew, setAddNew] = useState(false);
+  // Show the credential form only when there's no saved login to reuse, or the
+  // operator explicitly chose to enter a different one.
+  const showForm = addNew || (!applicableQ.isLoading && saved.length === 0);
   const m = useMutation({
     // Typed service → its own collector. Otherwise the host path:
     // already in inventory → re-collect onto that asset; not yet → promote the
-    // observation, which only creates the asset if the login succeeds.
-    mutationFn: () => svc
-      ? discoveryApi.connectService(device.observation_id, {
-          kind: svc.kind, username: f.username || undefined, password: f.password,
-          port: f.port ? Number(f.port) : (svc.default_port || undefined),
-          database: f.database || undefined,
-        })
-      : device.asset_id
-      ? discoveryApi.reconnectAsset(device.asset_id, {
-          username: f.username, password: f.password,
-          domain: f.domain || undefined, transport: device.transport || undefined,
-        })
-      : discoveryApi.connectDevice(device.observation_id, {
-          username: f.username, password: f.password,
-          domain: f.domain || undefined, transport: device.transport || undefined,
-        }),
+    // observation, which only creates the asset if the login succeeds. A
+    // credential_id reuses a saved login (no username/password needed).
+    mutationFn: (opts?: { credential_id?: number }) => {
+      const cid = opts?.credential_id;
+      const port = f.port ? Number(f.port) : (svc?.default_port || undefined);
+      return svc
+        ? discoveryApi.connectService(device.observation_id, cid
+            ? { kind: svc.kind, credential_id: cid, port, database: f.database || undefined }
+            : { kind: svc.kind, username: f.username || undefined, password: f.password, port, database: f.database || undefined })
+        : device.asset_id
+        ? discoveryApi.reconnectAsset(device.asset_id, cid
+            ? { credential_id: cid, transport: device.transport || undefined }
+            : { username: f.username, password: f.password, domain: f.domain || undefined, transport: device.transport || undefined })
+        : discoveryApi.connectDevice(device.observation_id, cid
+            ? { credential_id: cid, transport: device.transport || undefined }
+            : { username: f.username, password: f.password, domain: f.domain || undefined, transport: device.transport || undefined });
+    },
     onSuccess: (res: any) => {
       if (res.data?.collected) onDone();
       else setErr(res.data?.error || 'Login saved, but the device could not be read. Check it and retry.');
@@ -1178,31 +1193,55 @@ function ConnectDeviceForm({ device, onDone }: { device: any; onDone: () => void
           </div>
         </div>
       )}
-      {!device.asset_id && (
-        <div style={{ fontSize: 11.5, color: 'var(--as-faint)', marginBottom: 10, maxWidth: 620, lineHeight: 1.5 }}>
-          {svc
-            ? `This device is not in IT Asset Inventory yet. If the ${svc.label} login works it is inventoried as a ${svc.label} asset with its own component detail. If it fails, nothing is added.`
-            : 'This device is not in IT Asset Inventory yet. If the login works it is scanned in depth and added with its OS, hardware and software. If it fails, nothing is added.'}
+      {/* Reuse: saved logins that fit this host — one click, no re-entry. This
+          is the sibling case (Window B/C reuse Window A's domain account). */}
+      {saved.length > 0 && !showForm && (
+        <div style={{ marginBottom: 12 }}>
+          <label style={label}>Saved login — reuse it, no need to re-enter</label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {saved.map((c: any) => (
+              <button key={c.id} disabled={m.isPending} onClick={() => { setErr(null); m.mutate({ credential_id: c.id }); }}
+                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, border: '1px solid var(--as-border)', background: '#fff', borderRadius: 8, padding: '8px 12px', cursor: 'pointer', textAlign: 'left' }}>
+                <span style={{ minWidth: 0 }}>
+                  <span style={{ display: 'block', fontWeight: 600, fontSize: 12.5, color: 'var(--as-ink)' }}>{c.username || c.name}</span>
+                  <span style={{ display: 'block', fontSize: 11, color: 'var(--as-faint)' }}>{c.name}{c.covers_host ? ' · covers this host' : c.tenant_wide ? ' · applies to any host' : ' · same account, saved elsewhere'}</span>
+                </span>
+                <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--as-good)' }}>{m.isPending ? '…' : 'Use →'}</span>
+              </button>
+            ))}
+          </div>
+          <button onClick={() => setAddNew(true)} style={{ marginTop: 8, background: 'none', border: 'none', color: 'var(--as-link, #0d6a52)', font: '600 11.5px inherit', cursor: 'pointer', padding: 0 }}>＋ Enter a different login</button>
         </div>
       )}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
-        <div><label style={label}>{svc?.kind === 'k8s' ? 'Username (optional)' : 'Username'}</label><input className="as-input" value={f.username} onChange={(e) => setF({ ...f, username: e.target.value })} placeholder={svc ? (svc.kind === 'postgres' ? 'postgres' : svc.kind === 'mysql' ? 'root' : svc.kind === 'ldap' ? 'CN=svc,DC=corp,DC=local' : 'user') : (isWin ? 'Administrator' : 'root')} /></div>
-        <div><label style={label}>{svc?.kind === 'k8s' ? 'Token' : 'Password'}</label><input className="as-input" type="password" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} /></div>
-        {!svc && isWin && <div><label style={label}>Domain (optional)</label><input className="as-input" value={f.domain} onChange={(e) => setF({ ...f, domain: e.target.value })} placeholder={device.host_name || 'CORP'} /></div>}
-        {svc && <div><label style={label}>Port</label><input className="as-input" value={f.port} onChange={(e) => setF({ ...f, port: e.target.value })} placeholder={String(svc.default_port)} /></div>}
-        {svc && ['postgres', 'mysql', 'mssql', 'oracle'].includes(svc.kind) && (
-          <div><label style={label}>Database (optional)</label><input className="as-input" value={f.database} onChange={(e) => setF({ ...f, database: e.target.value })} placeholder={svc.kind === 'postgres' ? 'postgres' : 'default'} /></div>
-        )}
-      </div>
-      <div style={{ display: 'flex', gap: 8, marginTop: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-        <button className="as-btn as-btn-primary" disabled={!f.password || (!f.username && svc?.kind !== 'k8s') || m.isPending} onClick={() => { setErr(null); m.mutate(); }}>
-          {m.isPending ? 'Connecting…' : (svc ? `Connect as ${svc.label}` : 'Approve & connect')}
-        </button>
-        <span style={{ fontSize: 11.5, color: 'var(--as-faint)' }}>
-          {svc ? `Saves a ${svc.kind} login for this host and reads its ${svc.label} inventory.` : 'Saves a login for this one host and reads its OS + software.'}
-        </span>
-        {err && <span style={{ fontSize: 12, color: 'var(--as-danger-text)' }}>{err}</span>}
-      </div>
+      {showForm && (
+        <>
+          {!device.asset_id && (
+            <div style={{ fontSize: 11.5, color: 'var(--as-faint)', marginBottom: 10, maxWidth: 620, lineHeight: 1.5 }}>
+              {svc
+                ? `This device is not in IT Asset Inventory yet. If the ${svc.label} login works it is inventoried as a ${svc.label} asset with its own component detail. If it fails, nothing is added.`
+                : 'This device is not in IT Asset Inventory yet. If the login works it is scanned in depth and added with its OS, hardware and software. If it fails, nothing is added.'}
+            </div>
+          )}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
+            <div><label style={label}>{svc?.kind === 'k8s' ? 'Username (optional)' : 'Username'}</label><input className="as-input" value={f.username} onChange={(e) => setF({ ...f, username: e.target.value })} placeholder={svc ? (svc.kind === 'postgres' ? 'postgres' : svc.kind === 'mysql' ? 'root' : svc.kind === 'ldap' ? 'CN=svc,DC=corp,DC=local' : 'user') : (isWin ? 'Administrator' : 'root')} /></div>
+            <div><label style={label}>{svc?.kind === 'k8s' ? 'Token' : 'Password'}</label><input className="as-input" type="password" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} /></div>
+            {!svc && isWin && <div><label style={label}>Domain (optional)</label><input className="as-input" value={f.domain} onChange={(e) => setF({ ...f, domain: e.target.value })} placeholder={device.host_name || 'CORP'} /></div>}
+            {svc && <div><label style={label}>Port</label><input className="as-input" value={f.port} onChange={(e) => setF({ ...f, port: e.target.value })} placeholder={String(svc.default_port)} /></div>}
+            {svc && ['postgres', 'mysql', 'mssql', 'oracle'].includes(svc.kind) && (
+              <div><label style={label}>Database (optional)</label><input className="as-input" value={f.database} onChange={(e) => setF({ ...f, database: e.target.value })} placeholder={svc.kind === 'postgres' ? 'postgres' : 'default'} /></div>
+            )}
+          </div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+            <button className="as-btn as-btn-primary" disabled={!f.password || (!f.username && svc?.kind !== 'k8s') || m.isPending} onClick={() => { setErr(null); m.mutate({}); }}>
+              {m.isPending ? 'Connecting…' : (svc ? `Connect as ${svc.label}` : 'Approve & connect')}
+            </button>
+            <span style={{ fontSize: 11.5, color: 'var(--as-faint)' }}>
+              {svc ? `Saves a ${svc.kind} login for this host and reads its ${svc.label} inventory.` : 'Saves a login for this one host and reads its OS + software.'}
+            </span>
+          </div>
+        </>
+      )}
+      {err && <div style={{ marginTop: 10, fontSize: 12, color: 'var(--as-danger-text)' }}>{err}</div>}
     </div>
   );
 }
