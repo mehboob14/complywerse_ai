@@ -147,7 +147,7 @@ const KIND_GROUPS: Record<string, { title: string; keys: string[] }[]> = {
   server: [
     { title: 'Hardware', keys: ['cpu', 'memory', 'gpu', 'firmware', 'storage', 'storage_disks', 'storage_mounts', 'lvm', 'raid'] },
     { title: 'Network', keys: ['network', 'net_addr', 'net_link', 'net_route', 'dns'] },
-    { title: 'Security', keys: ['defender', 'firewall', 'bitlocker', 'selinux', 'apparmor', 'sshd'] },
+    { title: 'Security', keys: ['security_products', 'defender', 'firewall', 'bitlocker', 'selinux', 'apparmor', 'sshd'] },
     { title: 'Accounts & Access', keys: ['local_users', 'local_groups', 'users', 'sudoers'] },
     { title: 'System', keys: ['os', 'operating_system', 'identity', 'windows_update', 'scheduled_tasks', 'shares', 'services', 'pkg', 'sec_updates', 'virt', 'docker', 'podman'] },
   ],

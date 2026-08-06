@@ -535,6 +535,20 @@ $out.firewall = S {
   } })
 }
 
+$out.security_products = S {
+  $av = @(Get-CimInstance -Namespace root/SecurityCenter2 -ClassName AntiVirusProduct -ErrorAction SilentlyContinue | ForEach-Object {
+    $st = [int]$_.productState
+    @{ name = "$($_.displayName)"; enabled = (($st -band 0x1000) -ne 0); up_to_date = (($st -band 0x10) -eq 0); state_hex = ('0x{0:X}' -f $st) }
+  })
+  $known = @{ 'CrowdStrike Falcon'='CSFalconService'; 'SentinelOne'='SentinelAgent'; 'VMware Carbon Black'='CbDefense'; 'Microsoft Defender for Endpoint'='Sense'; 'Palo Alto Cortex XDR'='cyserver'; 'Cylance'='CylanceSvc'; 'Sophos Intercept X'='Sophos MCS Agent'; 'Trend Micro Apex One'='ntrtscan'; 'Elastic Defend'='ElasticEndpoint'; 'Tanium'='Tanium Client'; 'Cybereason'='CybereasonActiveProbe' }
+  $edr = @()
+  foreach ($n in $known.Keys) {
+    $s = Get-Service -Name $known[$n] -ErrorAction SilentlyContinue
+    if ($s) { $edr += @{ product = $n; type = 'EDR/XDR'; service = "$($s.Name)"; status = "$($s.Status)"; running = ("$($s.Status)" -eq 'Running') } }
+  }
+  @{ antivirus = $av; edr_xdr = $edr; edr_present = ($edr.Count -gt 0) }
+}
+
 $out.bitlocker = S {
   @(Get-BitLockerVolume -ErrorAction Stop | ForEach-Object { @{
     mount_point           = "$($_.MountPoint)"
@@ -570,7 +584,10 @@ $out.scheduled_tasks = S {
 $out.windows_update = S {
   $hf = @(Get-HotFix -ErrorAction Stop | Sort-Object InstalledOn -Descending)
   $last = $hf | Select-Object -First 1
-  @{ hotfix_count = $hf.Count; last_hotfix = "$($last.HotFixID)"; last_installed = "$($last.InstalledOn)" }
+  $daysSince = $null
+  if ($last -and $last.InstalledOn) { $daysSince = [int]((New-TimeSpan -Start $last.InstalledOn -End (Get-Date)).TotalDays) }
+  $recent = @($hf | Select-Object -First 8 | ForEach-Object { @{ id = "$($_.HotFixID)"; type = "$($_.Description)"; installed = "$($_.InstalledOn)" } })
+  @{ hotfix_count = $hf.Count; last_hotfix = "$($last.HotFixID)"; last_installed = "$($last.InstalledOn)"; days_since_last_patch = $daysSince; recent_hotfixes = $recent }
 }
 
 $out.shares = S {
