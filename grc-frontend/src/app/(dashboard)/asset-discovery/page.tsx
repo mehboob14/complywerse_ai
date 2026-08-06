@@ -1197,7 +1197,7 @@ function ConnectDeviceForm({ device, onDone }: { device: any; onDone: () => void
           is the sibling case (Window B/C reuse Window A's domain account). */}
       {saved.length > 0 && !showForm && (
         <div style={{ marginBottom: 12 }}>
-          <label style={label}>Saved login — reuse it, no need to re-enter</label>
+          <label style={label}>Saved {svc ? svc.label : (isWin ? 'WinRM' : 'SSH')} login{saved.length > 1 ? 's' : ''} — reuse, no re-entry <span style={{ color: 'var(--as-faint)', fontWeight: 500 }}>(only {svc ? svc.label : (isWin ? 'WinRM' : 'SSH')} logins are ever shown here)</span></label>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {saved.map((c: any) => (
               <button key={c.id} disabled={m.isPending} onClick={() => { setErr(null); m.mutate({ credential_id: c.id }); }}

@@ -259,7 +259,7 @@ export default function AssetOverview({ A }: { A: any }) {
 
   return (
     <div className="min-h-screen bg-[#eef1ec] text-[#1a2b24] font-['Public_Sans',system-ui,sans-serif] px-6 pt-7 pb-16 [font-feature-settings:'ss01']">
-      <div className="max-w-[1300px] mx-auto">
+      <div className="w-full">
 
         {/* HEADER */}
         <div className={CARD}>
