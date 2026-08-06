@@ -206,6 +206,56 @@ def infer_internet_facing(ip: Optional[str]) -> Optional[bool]:
     return bool(addr.is_global)
 
 
+def link_orphan_vulns_to_asset(db: Session, asset) -> int:
+    """Retro-link scanner findings that were imported BEFORE this asset existed.
+
+    A Nessus/Tenable finding carries the scanned host name. If the asset didn't
+    exist yet at import time (e.g. the scan landed before network discovery
+    created the host), the finding stayed unlinked. When the asset is later
+    created, link any finding whose ``affected_host`` matches this asset's
+    host_name / fqdn / ip — the SAME name-first/IP-last identity the scanner sync
+    uses — so the register and inventory converge instead of drifting. Best-effort:
+    never raises into the caller (a link failure must not fail asset creation)."""
+    import logging
+    from sqlalchemy import or_, func
+    from grc.models import Vulnerability, VulnerabilityAssetLink
+    try:
+        names = {n.lower() for n in (getattr(asset, "host_name", None), getattr(asset, "fqdn", None)) if n}
+        ip = getattr(asset, "ip_address", None)
+        conds = []
+        if names:
+            conds.append(func.lower(Vulnerability.affected_host).in_(names))
+        if ip:
+            conds.append(Vulnerability.affected_host == ip)
+        if not conds:
+            return 0
+        vulns = db.query(Vulnerability).filter(
+            Vulnerability.tenant_id == asset.tenant_id,
+            Vulnerability.affected_host.isnot(None),
+            or_(*conds),
+        ).all()
+        linked = 0
+        for v in vulns:
+            if db.query(VulnerabilityAssetLink.id).filter(
+                VulnerabilityAssetLink.vulnerability_id == v.id,
+                VulnerabilityAssetLink.asset_id == asset.id,
+            ).first():
+                continue
+            db.add(VulnerabilityAssetLink(
+                vulnerability_id=v.id, asset_id=asset.id,
+                impact_on_asset="Detected by scanner on this host",
+                created_by=None, link_source="scanner", auto_linked=True,
+            ))
+            linked += 1
+        return linked
+    except Exception:
+        logging.getLogger(__name__).exception(
+            "link_orphan_vulns_to_asset failed (non-fatal) for asset %s",
+            getattr(asset, "id", "?"),
+        )
+        return 0
+
+
 def promote_observation(db: Session, obs: DiscoveryObservation,
                         profile: CredentialProfile, transport: str) -> ITAsset:
     """Authenticate to an unclaimed device and, ONLY on success, make it an asset.
@@ -251,6 +301,8 @@ def promote_observation(db: Session, obs: DiscoveryObservation,
     obs.resolution = "created"
     obs.resolved_asset_id = asset.id
     obs.resolution_note = f"credential '{profile.name}' succeeded — promoted to asset #{asset.id}"
+    # Retro-link any scanner findings imported before this host existed.
+    link_orphan_vulns_to_asset(db, asset)
     db.flush()
     return asset
 
@@ -431,6 +483,7 @@ def promote_observation_typed(db: Session, obs: DiscoveryObservation,
     obs.resolution = "created"
     obs.resolved_asset_id = asset.id
     obs.resolution_note = f"connected as {kind} — promoted to typed asset #{asset.id}"
+    link_orphan_vulns_to_asset(db, asset)
     db.flush()
     return asset
 
