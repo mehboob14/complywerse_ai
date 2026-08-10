@@ -127,15 +127,24 @@ def record_vuln_evidence(
     result: str,
     tested_at: datetime,
     details: Optional[Dict[str, Any]] = None,
+    actor_user_id: Optional[int] = None,
 ) -> int:
     """Upsert one evidence row per control linked to `vuln`.
 
     Bounded by design: identity is (control ref × vulnerability × source), so
     repeat closures/retests update tested_at/result in place — a noisy
-    scanner cannot flood the panel. Never raises; never commits (runs inside
-    the caller's transaction: sync flush or request commit)."""
+    scanner cannot flood the panel. The trade-off is that the overwrite
+    erases prior state from the evidence table — so every RESULT TRANSITION
+    (pass→fail, fail→pass) writes an AuditLog row carrying the old result and
+    old tested_at first. "When did this control fail and when did it recover"
+    stays answerable from audit even though the table holds only the latest
+    fact. Same-result refreshes (a re-scan bumping tested_at) are not
+    transitions and are deliberately not audited — auditing those would
+    re-create the per-sync flood the upsert exists to prevent.
+
+    Never raises; never commits (runs inside the caller's transaction)."""
     try:
-        from ..models import ControlEffectivenessEvidence, VulnerabilityControlLink
+        from ..models import AuditLog, ControlEffectivenessEvidence, VulnerabilityControlLink
     except Exception:
         logger.exception("control_assurance: models unavailable")
         return 0
@@ -156,6 +165,26 @@ def record_vuln_evidence(
                 **ref,
             ).first()
             if row:
+                if row.result != result:
+                    try:
+                        db.add(AuditLog(
+                            tenant_id=vuln.tenant_id,
+                            user_id=actor_user_id,
+                            action="control_evidence.result_changed",
+                            resource_type="control_effectiveness_evidence",
+                            resource_id=row.id,
+                            changes={
+                                "old_result": row.result,
+                                "old_tested_at": row.tested_at.isoformat() if row.tested_at else None,
+                                "new_result": result,
+                                "new_tested_at": tested_at.isoformat() if tested_at else None,
+                                "source_type": source_type,
+                                "vulnerability_id": vuln.id,
+                                "control_ref": {k: v for k, v in ref.items() if v is not None},
+                            },
+                        ))
+                    except Exception:
+                        logger.exception("control_assurance: transition audit failed (non-fatal)")
                 row.result = result
                 row.tested_at = tested_at
                 row.details = details

@@ -109,6 +109,7 @@ def create_retest(
             details={"retest_result": request.result,
                      "tester_id": current_user.id,
                      "vuln_id": vuln.vuln_id},
+            actor_user_id=current_user.id,
         )
     except Exception:
         import logging

@@ -249,6 +249,11 @@ def benchmark_for_software_key(db: Session, software_key: str) -> Optional[str]:
             )
             .filter(
                 CompliancePlugin.enabled.is_(True),
+                # NOTE: rows storing JSON 'null' (not SQL NULL) pass this
+                # isnot() check — harmless ONLY because the contains() below
+                # can never match JSON null. The column is none_as_null now
+                # and legacy 'null' rows were normalised, but keep the
+                # contains() adjacent to this filter if you ever edit it.
                 CompliancePlugin.os_keys.isnot(None),
                 CompliancePlugin.os_keys.cast(JSONB).contains([key]),
             )

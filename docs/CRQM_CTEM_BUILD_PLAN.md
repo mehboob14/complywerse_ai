@@ -254,6 +254,22 @@ hard-restricted**, so a tenant that wants broader coverage later costs
 nothing. Matches FAIR's 10–30 well-formed-scenarios guidance and is fully
 reversible.
 
+## Operational findings (recorded, not silently fixed)
+
+- **RBAC catalogue is lazily populated**: Permission rows are created from the
+  static matrix only when an admin saves a role (`admin_router.
+  _get_or_create_permission`). An empty catalogue therefore fails CLOSED —
+  non-admin users get 403 everywhere — it does not grant admin to anyone.
+  Residuals: verify production tenants have configured roles (unreachable
+  from the dev box); "seed default roles on tenant creation" is a roadmap
+  item next to the approve-permission tier. The UI-side hiding of decision
+  buttons still needs one human check with a real viewer login.
+- **Evidence upsert + audit**: result transitions (pass→fail, fail→pass) on
+  effectiveness evidence write an AuditLog row carrying the old result and
+  old tested-at before the overwrite, so failure/recovery timelines survive
+  the bounded-volume upsert. Same-result refreshes are deliberately not
+  audited (that would re-create the per-sync flood the upsert prevents).
+
 ## Implementation notes from review
 
 - One-active-model-per-risk is enforced transactionally (row lock around
