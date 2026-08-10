@@ -61,11 +61,17 @@ def _ticket_request(vuln):
     )
 
 
-def _ensure_remediation_plan(db: Session, vuln, *, user_id: Optional[int] = None) -> bool:
+def _ensure_remediation_plan(db: Session, vuln, connection, *, user_id: Optional[int] = None) -> bool:
     """Pushing to ITSM IS mobilisation, and the `mobilized` cycle counter reads
     `VulnRemediationPlan` — so a ticketed finding MUST carry a plan or its
     mobilisation is invisible to the counter. Create a minimal one if none
-    exists (idempotent — one plan per finding). Returns True if it created one."""
+    exists (idempotent — one plan per finding). Returns True if it created one.
+
+    Provenance is SELF-DECLARED and SYSTEM-ATTRIBUTED: the plan says it was
+    created by an ITSM push (with the connector name) and its `approved` status
+    carries a system approver name + timestamp — an `approved` plan with a
+    blank approver is an audit-shape trap that reads as a human decision that
+    never happened."""
     from ..models import VulnRemediationPlan
     existing = db.query(VulnRemediationPlan).filter(
         VulnRemediationPlan.tenant_id == vuln.tenant_id,
@@ -73,15 +79,22 @@ def _ensure_remediation_plan(db: Session, vuln, *, user_id: Optional[int] = None
     ).first()
     if existing:
         return False
+    now = datetime.utcnow()
+    approver = f"ITSM push · {connection.connection_name}"
     db.add(VulnRemediationPlan(
         tenant_id=vuln.tenant_id, vulnerability_id=vuln.id,
         fix_type="patch",
-        title=f"Remediate {vuln.vuln_id}",
-        summary="Mobilised via ITSM — tracked in the linked ticket.",
+        title=f"Remediate {vuln.vuln_id} via ITSM",
+        summary=(f"Created by an ITSM push to {connection.connection_name} "
+                 f"({connection.integration_type}). Remediation is tracked in the "
+                 f"linked ticket; this plan makes the mobilisation visible to "
+                 f"reporting. System-attributed — not a human approval."),
         fix_artifact="See the linked ITSM ticket for remediation steps and status.",
-        rationale="Finding pushed to ITSM for remediation.",
+        rationale="Finding mobilised to ITSM for remediation.",
         source="itsm",
-        status="approved",  # pushing to ITSM is a decision to fix
+        status="approved",  # pushing to ITSM is a decision to fix …
+        approved_by_name=approver,  # … stamped so the approval isn't headless
+        approved_at=now,
     ))
     db.flush()
     return True
@@ -103,7 +116,7 @@ def push_finding(db: Session, vuln, connection, *, user_id: Optional[int] = None
     ).first()
     if live and live.external_ticket_id:
         # Already have a live ticket — idempotent no-op.
-        _ensure_remediation_plan(db, vuln, user_id=user_id)
+        _ensure_remediation_plan(db, vuln, connection, user_id=user_id)
         return {"external_ticket_id": live.external_ticket_id, "created": False,
                 "status": live.normalised_status}
 
@@ -125,7 +138,7 @@ def push_finding(db: Session, vuln, connection, *, user_id: Optional[int] = None
         link.plan_advanced_at = None
         link.push_error = None
         link.updated_at = datetime.utcnow()
-        plan_created = _ensure_remediation_plan(db, vuln, user_id=user_id)
+        plan_created = _ensure_remediation_plan(db, vuln, connection, user_id=user_id)
         db.flush()
         _audit(db, vuln.tenant_id, connection.id, user_id, "itsm.ticket_pushed",
                link.id, {"vulnerability_id": vuln.id, "external_ticket_id": ext_id,

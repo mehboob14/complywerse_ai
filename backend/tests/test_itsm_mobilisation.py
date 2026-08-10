@@ -118,7 +118,21 @@ def test_push_creates_plan_when_none_exists(db):
     r = itsm.push_finding(db, v, db.query(IntegrationConnection).get(2), user_id=7)
     db.commit()
     assert r["plan_created"] is True
-    assert db.query(VulnRemediationPlan).filter_by(vulnerability_id=2).count() == 1
+    plan = db.query(VulnRemediationPlan).filter_by(vulnerability_id=2).one()
+    # A1: shape + provenance — no headless approval, self-declared source.
+    assert plan.status == "approved"
+    assert plan.approved_by_name and "ITSM push" in plan.approved_by_name  # not blank
+    assert plan.approved_at is not None
+    assert plan.source == "itsm"
+    assert plan.title and plan.summary and plan.fix_artifact and plan.rationale  # no empty fields
+    assert "SN2" in plan.summary  # names the connector
+
+
+def test_push_reuses_existing_plan_no_second_plan(db):
+    v, conn = _seed(db)  # _seed creates an approved plan already
+    itsm.push_finding(db, v, conn, user_id=7); db.commit()
+    # still exactly one plan — push did NOT create a duplicate
+    assert db.query(VulnRemediationPlan).filter_by(vulnerability_id=1).count() == 1
 
 
 def test_reopened_finding_can_reticket(db):

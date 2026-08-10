@@ -10,16 +10,36 @@ HERE, one line each: an item enters when raised, and either LANDS (with where),
 gets DECLINED (with why), or stays OPEN with its blocker. Nothing evaporates
 between review rounds.
 
+Owners: **A** = agent debt (blocks unqualified done); **B** = user (real-world
+guarantees); **C** = user decision; **D** = inventory-gated connectors;
+**E** = elective refinements.
+
 | Item | Status | Where / blocker |
 |---|---|---|
-| Enrich the 4 reachability gap-findings (no CWE/CVSS → unlikely) | OPEN | Was sequenced "before Phase 5"; not a blocker for shipped work — raises Phase 4 viability coverage. Needs an enrichment pass over those 4 findings. |
-| Prioritized-counter non-vacuity fixture (hermetic, N>0 in-window) | OPEN | Wiring proven live 3/3, but the permanent hermetic test asserts an inaugural-backfill split only; add an in-window (non-inaugural) fixture. |
-| Verdict-engine: concluded-severed vs defaulted-on-missing-data note | LANDED | Diagnosed in Phase 4 doc: 11 genuinely severed + 4 enrichment-gaps; surfaced on the choke-point view's two-lever copy. |
-| ITSM closed-with-fix-resolution-code advance (beyond resolved-only) | OPEN | Deliberately resolved-only now (safe); a close_code check could add legitimate closed-fix advances. |
-| ITSM live end-to-end (push → resolve → plan applied) | OPEN | Blocked on a configured ServiceNow PDI. Two-stage plan recorded in Phase 5. |
-| Prod role-catalogue check (do the gates bite in production?) | OPEN — yours | Needs production access; gates every decision endpoint across six capabilities. Highest-leverage half-hour. |
-| Viewer-login UI hide check (buttons hidden, not just API-403) | OPEN — yours | Needs a real viewer login; API-403 boundary already proven 9/9. |
-| Push local commits / add a private remote | OPEN — yours | 24+ unpushed commits; bundle covers loss, but a private remote earns its keep now. Your rule to keep or lift. |
+| A1 Auto-created plan shape + provenance | LANDED | `itsm_service._ensure_remediation_plan` stamps system approver + self-declared source; hermetic test asserts fields; counter-attribution nuance in Phase 5 doc. |
+| A2 Prioritized-counter non-vacuity fixture | LANDED | `test_ctem_stage_counters.py`: out-of-scope `first_seen` asserted EXCLUDED + backfill split + absent-when-none. |
+| A3 Enrich the 4 reachability gap-findings | DECLINED | The 4 (ids 273/127/131/134) are CVE-less Nessus info findings — no CVE/CWE to enrich FROM (enrichment is CVE→NVD→CWE). Their "unlikely" is genuine un-derivability, not a fixable gap. Real issue is E4 (engine defaulting). |
+| A4 Remaining rule dimensions in the harness | LANDED | Resolver supports exactly asset_ids / departments / asset_types / name_contains (no tag/subnet). All four + AND-narrowing already tested in `test_ctem_scope_membership.py`. |
+| Verdict-engine concluded-vs-defaulted diagnostic | LANDED | Phase 4 doc: 11 genuinely severed + 4 enrichment-un-derivable; two-lever copy on the choke view. (Structural distinction = E4, still open.) |
+| B1 ServiceNow PDI + two-stage live verification | OPEN — yours | The one item between Phase 5 and unqualified done. Provision a PDI, configure creds in the connectors UI, then: (1) dormant adapter alone via `/connectors` test+sync; (2) full push→resolve(-only, not closed)→applied loop + reopen re-ticket. |
+| B2 Prod role-catalogue check | OPEN — yours | Empty catalogue fails closed = everyone-admin, so no gate bites. Needs prod inspection; empty → E7 becomes next build. Highest-leverage half-hour. |
+| B3 Viewer-login UI hide check | OPEN — yours | ~2 min; API-403 proven 9/9. Creating the viewer role populates the catalogue (overlaps B2). |
+| C1 no-push rule / private remote | OPEN — yours | 25+ commits, one working tree; bundle covers loss but not history/CI/2nd-machine. Decide consciously. |
+| D1 Jira provider | OPEN | Cheapest connector (free Jira Cloud); only new layer on proven lifecycle. Prove standalone via `/connectors` before wiring lifecycle. |
+| D2 EASM connector | OPEN | Needs a real estate + account; feeds asset register + chain generation (the 206-chainless lever). |
+| D3 BAS connector | OPEN | Needs license/Caldera; feeds Phase 2 `tested-effective` tier. |
+| E1 Workbench evidence panel | OPEN | Surface Phase 2 evidence rows inside the CT&A workbench control view. |
+| E2 Scorecard blend | OPEN | Factor automated tiers into the assurance scorecard weights. |
+| E3 ITSM closed-with-fix-code advance | OPEN | Resolved-only now (safe); close_code check could add legit closed-fix advances. |
+| E4 Verdict-engine concluded-vs-defaulted (structural) | OPEN | Distinguish concluded severance from enrichment-pending so a default isn't read as posture. |
+| E5 Portfolio correlation term | OPEN | Shared-factor extension; independence assumption stamped + on-card today. |
+| E6 Approve-tier permission | OPEN | Activation/material-flag sit at edit level; no approve-level string platform-wide. |
+| E7 Seed default roles on tenant creation | OPEN | Conditional on B2 outcome. |
+| E8 Chain-generation coverage metric | OPEN | Promote "9 of 215 carry chains" to a tracked roadmap number. |
+| E9 Remediation simulation (set-cover) | OPEN | Select findings → residual reachable assets; marginal insight without conditional rank numbers. |
+| E10 Technique-leverage view | OPEN | Technique frequency × assurance tier as a control-side lens. |
+| E11 Periodic status sync | OPEN | Manual-only by architecture; joins here if a scheduler ever lands. |
+| E12 Rule-era link_basis cosmetic | OPEN | Accurate provenance on manually recreated links; revisit only if it confuses. |
 
 ## Ground rules for every phase
 
@@ -410,7 +430,13 @@ configured via the connectors UI, never through the vuln endpoints.
 - **Push ensures a remediation plan exists** (creates a minimal `approved` one
   if none). The `mobilized` counter reads `VulnRemediationPlan`, so pushing IS
   mobilising and the counter can see it — a ticketed-but-planless finding
-  would otherwise be invisible mobilisation.
+  would otherwise be invisible mobilisation. The auto-created plan is
+  SELF-DECLARED and SYSTEM-ATTRIBUTED (title/summary name the connector; the
+  `approved` status carries a system approver name + timestamp, never a blank
+  approver that reads as a human decision). Counter nuance: pushing onto a
+  finding that ALREADY has a plan reuses it, so the `mobilized` counter
+  attributes that mobilisation to the earlier plan's creation date — correct
+  (the finding was mobilised then), but stated so the date isn't misread.
 - **Idempotency is partial, keyed on LIVE tickets** (partial unique index
   `WHERE resolved_at IS NULL`). One live ticket per (vuln, connection), but a
   resolved-then-reopened finding CAN re-ticket — reopens are first-class here,
