@@ -526,6 +526,20 @@ def auto_map_compliance_controls(
         if delete_stale:
             for pfc_id, row in existing_auto_by_pfc_id.items():
                 if pfc_id not in target_pfc_ids:
+                    # A stale auto-link retracts the evidence it produced —
+                    # same rule as manual unlink (audited per row).
+                    try:
+                        from ....services.control_assurance import retract_link_evidence
+                        retract_link_evidence(
+                            db,
+                            tenant_id=vuln.tenant_id,
+                            vulnerability_id=vuln.id,
+                            control_ref={"parsed_framework_control_id": pfc_id},
+                            actor_user_id=user_id,
+                            reason="auto_link_stale_removed",
+                        )
+                    except Exception:
+                        logger.exception("stale-link evidence retraction failed (non-fatal)")
                     db.delete(row)
                     summary["removed_stale"] += 1
 

@@ -521,6 +521,31 @@ def delete_control_link(
     if not link:
         raise HTTPException(status_code=404, detail="Control link not found")
 
+    # CTEM Phase 2: evidence exists BECAUSE of the link — unlinking retracts
+    # it (with per-row audit), or a pruned wrong link would keep feeding the
+    # control's assurance badge forever.
+    try:
+        from ....services.control_assurance import retract_link_evidence
+        vuln = db.query(Vulnerability).filter(Vulnerability.id == vuln_id).first()
+        retract_link_evidence(
+            db,
+            tenant_id=vuln.tenant_id,
+            vulnerability_id=vuln_id,
+            control_ref={
+                "framework_control_id": link.framework_control_id,
+                "normalized_control_id": link.normalized_control_id,
+                "internal_control_id": link.internal_control_id,
+                "parsed_framework_control_id": link.parsed_framework_control_id,
+            },
+            actor_user_id=current_user.id,
+            reason="link_removed_manually",
+        )
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception(
+            "evidence retraction failed for link %s (non-fatal)", link_id
+        )
+
     db.delete(link)
     db.commit()
 
@@ -794,6 +819,13 @@ def bulk_automap_preview(
     basis = {"cwe_specific": 0, "vuln_mgmt_rule": 0, "kev_rule": 0}
     frameworks: dict[int, dict] = {}
     distinct_new_controls: set = set()
+    # Controls with ANY existing link, tenant-wide — needed to split "receives
+    # an additional link" from "newly evidence-eligible". Conflating the two
+    # made a preview promise 48 where the coverage meter could only move 23;
+    # the consent surface must state both numbers.
+    linked_anywhere: set = set()
+    for sets in existing.values():
+        linked_anywhere |= sets
 
     for v in findings:
         cwe_key = normalise_cwe(v.cwe_id) if v.cwe_id else ""
@@ -827,11 +859,16 @@ def bulk_automap_preview(
                 fw["projected_links"] += 1
                 fw["controls"].add(rc.parsed_control_id)
 
+    newly_eligible = distinct_new_controls - linked_anywhere
     return {
         "eligible_findings": len(findings),
         "findings_gaining_links": findings_gaining,
         "projected_new_links": projected_new,
-        "distinct_controls_gaining_evidence_eligibility": len(distinct_new_controls),
+        # Two DIFFERENT claims, both stated: how many controls receive at
+        # least one new link, and how many of those had no link at all before
+        # (the number the coverage meter will move by).
+        "controls_receiving_links": len(distinct_new_controls),
+        "controls_newly_evidence_eligible": len(newly_eligible),
         "basis_counts": basis,
         "frameworks": [
             {"framework": f["framework"], "projected_links": f["projected_links"],

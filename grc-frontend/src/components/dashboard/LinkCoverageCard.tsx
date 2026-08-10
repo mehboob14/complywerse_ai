@@ -123,8 +123,11 @@ export default function LinkCoverageCard() {
       {preview && (
         <div className="mt-3 rounded-lg border border-primary-200 bg-primary-50/40 p-3 text-xs space-y-2">
           <p className="font-medium text-slate-800">
-            {preview.projected_new_links} new link(s) across {preview.findings_gaining_links} finding(s),
-            making {preview.distinct_controls_gaining_evidence_eligibility} more control(s) evidence-eligible.
+            {preview.projected_new_links} new link(s) across {preview.findings_gaining_links} finding(s) —{' '}
+            {preview.controls_newly_evidence_eligible} control(s) newly evidence-eligible
+            (the coverage number above will rise by exactly this),{' '}
+            {Math.max((preview.controls_receiving_links || 0) - (preview.controls_newly_evidence_eligible || 0), 0)}{' '}
+            already-linked control(s) receiving additional links.
           </p>
           <p className="text-slate-600">
             Why: {preview.basis_counts?.cwe_specific || 0} finding(s) match the CWE crosswalk ·{' '}

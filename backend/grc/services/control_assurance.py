@@ -149,6 +149,43 @@ def record_vuln_evidence(
         logger.exception("control_assurance: models unavailable")
         return 0
 
+    # Classify each link's basis so the evidence row can say WHY the control
+    # was linked ("via KEV rule" etc.) — a closure routed to an
+    # incident-response control via the KEV rule is a weaker claim than one
+    # reaching a patch-management control via the CWE crosswalk, and the
+    # badge tooltip must let an auditor discount it knowingly. Sets are
+    # resolver-cached per tenant; failure just omits the basis.
+    kev_set: set = set()
+    vm_set: set = set()
+    cwe_set: set = set()
+    try:
+        from ..modules.vuln_management.control_mapping.cwe_resolver import (
+            resolve_cwe_to_framework_controls,
+        )
+        kev_set = {rc.parsed_control_id for rc in resolve_cwe_to_framework_controls(
+            db, tenant_id=vuln.tenant_id, cwe_id=None, has_cve=False, is_kev=True)}
+        vm_set = {rc.parsed_control_id for rc in resolve_cwe_to_framework_controls(
+            db, tenant_id=vuln.tenant_id, cwe_id=None, has_cve=True, is_kev=False)}
+        if getattr(vuln, "cwe_id", None):
+            cwe_set = {rc.parsed_control_id for rc in resolve_cwe_to_framework_controls(
+                db, tenant_id=vuln.tenant_id, cwe_id=vuln.cwe_id, has_cve=False, is_kev=False)}
+    except Exception:
+        logger.exception("control_assurance: basis classification unavailable (non-fatal)")
+
+    def _link_basis(link) -> List[str]:
+        notes = getattr(link, "notes", None) or ""
+        if not notes.startswith("auto:cwe:"):
+            return ["manual"]
+        pfc = getattr(link, "parsed_framework_control_id", None)
+        bases = []
+        if pfc in cwe_set:
+            bases.append("cwe_crosswalk")
+        if pfc in vm_set:
+            bases.append("vuln_mgmt_rule")
+        if pfc in kev_set:
+            bases.append("kev_rule")
+        return bases or ["auto"]
+
     written = 0
     try:
         links = db.query(VulnerabilityControlLink).filter(
@@ -158,6 +195,8 @@ def record_vuln_evidence(
             ref = {f: getattr(link, f, None) for f in _CONTROL_REF_FIELDS}
             if not any(ref.values()):
                 continue
+            row_details = dict(details or {})
+            row_details["link_basis"] = _link_basis(link)
             row = db.query(ControlEffectivenessEvidence).filter_by(
                 tenant_id=vuln.tenant_id,
                 vulnerability_id=vuln.id,
@@ -187,7 +226,7 @@ def record_vuln_evidence(
                         logger.exception("control_assurance: transition audit failed (non-fatal)")
                 row.result = result
                 row.tested_at = tested_at
-                row.details = details
+                row.details = row_details
                 row.updated_at = datetime.utcnow()
             else:
                 db.add(ControlEffectivenessEvidence(
@@ -196,7 +235,7 @@ def record_vuln_evidence(
                     source_type=source_type,
                     result=result,
                     tested_at=tested_at,
-                    details=details,
+                    details=row_details,
                     **ref,
                 ))
             written += 1
@@ -207,6 +246,67 @@ def record_vuln_evidence(
                          getattr(vuln, "id", "?"))
         return 0
     return written
+
+
+def retract_link_evidence(
+    db: Session,
+    *,
+    tenant_id: int,
+    vulnerability_id: int,
+    control_ref: Dict[str, Optional[int]],
+    actor_user_id: Optional[int] = None,
+    reason: str = "link_removed",
+) -> int:
+    """A removed vuln↔control link retracts the evidence it produced.
+
+    Evidence exists BECAUSE of the link — rule-created links can be wrong,
+    and pruning a wrong link must not leave its evidence feeding the badge
+    forever. Deletion gets the same audit treatment as creation: one
+    AuditLog row per retracted evidence row, carrying the old values.
+    Never raises; never commits (caller's transaction)."""
+    try:
+        from ..models import AuditLog, ControlEffectivenessEvidence
+    except Exception:
+        logger.exception("control_assurance: models unavailable for retraction")
+        return 0
+    ref = {k: v for k, v in control_ref.items() if k in _CONTROL_REF_FIELDS}
+    if not any(ref.values()):
+        return 0
+    removed = 0
+    try:
+        rows = db.query(ControlEffectivenessEvidence).filter_by(
+            tenant_id=tenant_id,
+            vulnerability_id=vulnerability_id,
+            **ref,
+        ).all()
+        for row in rows:
+            try:
+                db.add(AuditLog(
+                    tenant_id=tenant_id,
+                    user_id=actor_user_id,
+                    action="control_evidence.retracted",
+                    resource_type="control_effectiveness_evidence",
+                    resource_id=row.id,
+                    changes={
+                        "reason": reason,
+                        "old_result": row.result,
+                        "old_tested_at": row.tested_at.isoformat() if row.tested_at else None,
+                        "source_type": row.source_type,
+                        "vulnerability_id": vulnerability_id,
+                        "control_ref": {k: v for k, v in ref.items() if v is not None},
+                        "details": row.details,
+                    },
+                ))
+            except Exception:
+                logger.exception("control_assurance: retraction audit failed (non-fatal)")
+            db.delete(row)
+            removed += 1
+        if removed:
+            db.flush()
+    except Exception:
+        logger.exception("control_assurance: evidence retraction failed (non-fatal)")
+        return 0
+    return removed
 
 
 # ── read-side rollups ───────────────────────────────────────────────────────

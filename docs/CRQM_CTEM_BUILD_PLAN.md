@@ -185,17 +185,39 @@ evidence trail. The user confirms — the model never silently self-updates.
 
 ## Phase 3 — CTEM scopes and cycles
 
-- New tables: `grc_ctem_scopes` (name, business owner, cadence, criteria) +
-  membership (explicit asset ids and/or rule-based: department, tag, subnet) +
-  `grc_ctem_cycles` (one row per run of the loop per scope, tracking stage
-  completion counts — discovered / prioritized / validated / mobilized — with
-  started/closed dates).
+Three semantics settled BEFORE code (review front-load):
+
+1. **Freeze semantics.** Rule-based membership churns, so "numbers freeze
+   into the cycle row" means: on close, the cycle row stores the counts, the
+   RULE DEFINITION as-of-close, and a membership hash (sorted member-asset
+   ids). Full asset-list snapshots are the heavyweight alternative and are
+   deliberately not v1. Drill-down is honestly limited to OPEN cycles — a
+   closed cycle's counts are verifiable against the frozen rule + hash, not
+   re-explorable, and the UI says so.
+2. **Stage counters only from real tables.** v1 ships THREE honest counters,
+   not five decorative ones:
+   - discovered — findings created in-window on member assets
+     (`grc_vulnerabilities` × asset links);
+   - validated — retest / reachability-snapshot / scanner-closure events
+     in-window on member assets (the Phase 2 evidence stream);
+   - mobilized — remediation plans + approved exceptions created in-window
+     for member-asset findings.
+   "Prioritized" has no event table until Phase 4's choke points land and is
+   OMITTED rather than faked.
+3. **Cadence is advisory metadata only.** No scheduler exists in this
+   architecture; cycles open and close by explicit human action, and the UI
+   never implies one will open itself.
+
+- New tables: `grc_ctem_scopes` (name, business owner, advisory cadence,
+  membership criteria) + explicit/rule membership + `grc_ctem_cycles` (one
+  row per run: stage counts, started/closed, frozen rule + membership hash
+  on close).
 - Scope filter parameter added to the vulnerability register, asset register,
   and dashboards (they already take filter params — this is one more).
 - UI: Scopes page (list + detail with cycle history and a stage-progress
   card), scope selector on registers.
 - Acceptance: define "payment platform" scope → every dashboard answers for
-  that slice → close a cycle and the numbers freeze into the cycle row.
+  that slice → close a cycle and the counts freeze with rule + hash.
 
 ## Phase 4 — Choke-point analysis
 
@@ -259,11 +281,21 @@ reversible.
 - **RBAC catalogue is lazily populated**: Permission rows are created from the
   static matrix only when an admin saves a role (`admin_router.
   _get_or_create_permission`). An empty catalogue therefore fails CLOSED —
-  non-admin users get 403 everywhere — it does not grant admin to anyone.
-  Residuals: verify production tenants have configured roles (unreachable
-  from the dev box); "seed default roles on tenant creation" is a roadmap
-  item next to the approve-permission tier. The UI-side hiding of decision
-  buttons still needs one human check with a real viewer login.
+  non-admin users get 403 everywhere. The practical consequence is sharper
+  than "safe": in any tenant without configured roles, every FUNCTIONING
+  user must be an admin — everyone-is-admin by necessity rather than by
+  bug. The production role-catalogue check therefore determines whether the
+  platform's real posture matches its design, not optional hygiene; if prod
+  catalogues are empty, "seed default roles on tenant creation" moves from
+  roadmap to near-term. The UI-side hiding of decision buttons still needs
+  one human check with a real viewer login.
+- **Evidence follows links, both directions**: removing a vuln↔control link
+  (manual unlink or auto-map stale removal) retracts the evidence that link
+  produced, with a per-row audit entry carrying the old values — a pruned
+  wrong link must not keep feeding the badge. Evidence rows also carry
+  `link_basis` (cwe_crosswalk / vuln_mgmt_rule / kev_rule / manual) so a
+  KEV-rule-routed closure on an incident-response control is visibly
+  discountable in the tooltip.
 - **Evidence upsert + audit**: result transitions (pass→fail, fail→pass) on
   effectiveness evidence write an AuditLog row carrying the old result and
   old tested-at before the overwrite, so failure/recovery timelines survive

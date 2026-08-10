@@ -221,6 +221,21 @@ export default function FrameworkControlDetailPage() {
                     {e.source_type === 'scanner_closure' ? 'Scanner-verified closure' : 'Finding retest'}
                     {e.details?.scan_name ? ` · ${e.details.scan_name}` : ''}
                     {e.details?.vuln_id ? ` · ${e.details.vuln_id}` : ''}
+                    {Array.isArray(e.details?.link_basis) && e.details.link_basis.includes('kev_rule') && (
+                      <span
+                        className="ml-1.5 inline-flex rounded-full bg-amber-50 px-1.5 py-0 text-[10px] font-semibold text-amber-700"
+                        title="This control was linked by the KEV always-applicable rule — the closure proves the finding was fixed, which is weaker evidence for an incident-response control than for a patch-management one. Discount accordingly."
+                      >
+                        via KEV rule
+                      </span>
+                    )}
+                    {Array.isArray(e.details?.link_basis) && !e.details.link_basis.includes('kev_rule')
+                      && e.details.link_basis.includes('vuln_mgmt_rule') && !e.details.link_basis.includes('cwe_crosswalk') && (
+                      <span className="ml-1.5 inline-flex rounded-full bg-slate-100 px-1.5 py-0 text-[10px] font-semibold text-slate-500"
+                        title="Linked by the always-applicable vulnerability-management rule (any CVE-bearing finding).">
+                        via vuln-mgmt rule
+                      </span>
+                    )}
                   </span>
                   <span className="shrink-0">
                     <span className={`mr-2 inline-flex rounded-full px-1.5 py-0 text-[10px] font-semibold uppercase ${
