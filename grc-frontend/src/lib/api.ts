@@ -1119,6 +1119,40 @@ export const ermApi = {
   dashboard: {
     getSectionsOverview: () => apiClient.get('/erm/dashboard/sections-overview'),
   },
+  // CRQM — FAIR quantification (scenario, versioned loss models, Monte Carlo runs).
+  quantification: {
+    getScenario: (riskId: number) =>
+      apiClient.get(`/erm/quantification/risks/${riskId}/scenario`),
+    updateScenario: (riskId: number, data: Record<string, unknown>) =>
+      apiClient.put(`/erm/quantification/risks/${riskId}/scenario`, data),
+    listLossModels: (riskId: number) =>
+      apiClient.get(`/erm/quantification/risks/${riskId}/loss-models`),
+    createLossModel: (riskId: number, data: Record<string, unknown>) =>
+      apiClient.post(`/erm/quantification/risks/${riskId}/loss-models`, data),
+    updateLossModel: (modelId: number, data: Record<string, unknown>) =>
+      apiClient.put(`/erm/quantification/loss-models/${modelId}`, data),
+    activateLossModel: (modelId: number) =>
+      apiClient.post(`/erm/quantification/loss-models/${modelId}/activate`),
+    simulate: (modelId: number, data?: Record<string, unknown>) =>
+      apiClient.post(`/erm/quantification/loss-models/${modelId}/simulate`, data || {}),
+    listRuns: (riskId: number, limit = 20) =>
+      apiClient.get(`/erm/quantification/risks/${riskId}/runs`, { params: { limit } }),
+    getRun: (runId: number) =>
+      apiClient.get(`/erm/quantification/runs/${runId}`),
+    controlComparison: (riskId: number, data: Record<string, unknown>) =>
+      apiClient.post(`/erm/quantification/risks/${riskId}/control-comparison`, data),
+    setControlEffect: (linkId: number, data: Record<string, unknown>) =>
+      apiClient.put(`/erm/quantification/control-links/${linkId}/effect`, data),
+    simulatePortfolio: (data?: Record<string, unknown>) =>
+      apiClient.post('/erm/quantification/portfolio/simulate', data || {}),
+    listPortfolioRuns: (limit = 10) =>
+      apiClient.get('/erm/quantification/portfolio/runs', { params: { limit } }),
+    getSummary: () => apiClient.get('/erm/quantification/summary'),
+    getPosSuggestion: (riskId: number) =>
+      apiClient.get(`/erm/quantification/risks/${riskId}/pos-suggestion`),
+    acceptPosSuggestion: (modelId: number) =>
+      apiClient.post(`/erm/quantification/loss-models/${modelId}/accept-pos-suggestion`),
+  },
   risks: {
     getAll: (filters?: { category?: string; register_type?: string; status?: string; min_score?: number; max_score?: number }) => {
       const params = new URLSearchParams();

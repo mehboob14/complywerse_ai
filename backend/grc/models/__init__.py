@@ -21,3 +21,4 @@ from ._46_ai_budget import *  # noqa: F401,F403 - tenant-local AI token budget/q
 from ._47_asset_discovery_models import *  # noqa: F401,F403 - discovery campaigns/scopes/runs/jobs/observations
 from ._48_statutory_audit_models import *  # noqa: F401,F403 - statutory audit observations
 from ._49_document_attestation_models import *  # noqa: F401,F403 - document attestation campaigns
+from ._50_risk_quantification_models import *  # noqa: F401,F403 - CRQM loss models + simulation runs

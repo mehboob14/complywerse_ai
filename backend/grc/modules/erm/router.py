@@ -22,6 +22,7 @@ from .routers import (
     sections_dashboard_router,
     onboarding_router,
     kris_workflow_router,
+    quantification_router,
 )
 
 router = APIRouter(
@@ -52,6 +53,7 @@ router.include_router(advanced_analytics_router, tags=["ERM - Advanced Analytics
 router.include_router(sections_dashboard_router, tags=["ERM Sections Dashboard"])
 router.include_router(onboarding_router, tags=["ERM Onboarding"])
 router.include_router(kris_workflow_router, tags=["ERM - KRI Workflow"])
+router.include_router(quantification_router, tags=["ERM - Risk Quantification"])
 
 
 @router.get("")

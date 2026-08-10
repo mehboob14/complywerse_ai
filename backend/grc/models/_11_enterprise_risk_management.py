@@ -52,6 +52,19 @@ class Risk(Base):
     source_incident_id = Column(Integer, ForeignKey("grc_risk_incidents.id"), nullable=True, index=True)
     source_rcsa_finding_id = Column(Integer, nullable=True, index=True)
     source_reference = Column(String(255), nullable=True)
+    # --- CRQM (FAIR quantification) — Phase 1 ---
+    # is_material gates the Quantification UI (FAIR works best on 10-30
+    # well-formed scenarios, not the whole register). UI-gate only — the API
+    # is deliberately not hard-restricted, so broader coverage later is free.
+    is_material = Column(Boolean, default=False, nullable=True, index=True)
+    # Structured scenario — a modellable statement needs all four parts
+    # (actor, asset via RiskAssetLink, effect, method); free-text "cyber risk"
+    # cannot be quantified. scenario_statement is the composed sentence shown
+    # and reported; the parts stay queryable.
+    scenario_actor = Column(String(200), nullable=True)
+    scenario_method = Column(Text, nullable=True)
+    scenario_effect = Column(JSON, nullable=True)  # {"confidentiality": bool, "integrity": bool, "availability": bool}
+    scenario_statement = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -94,11 +107,27 @@ class Risk(Base):
 
 class RiskControlLink(Base):
     __tablename__ = "grc_risk_control_links"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     risk_id = Column(Integer, ForeignKey("grc_risks.id"), nullable=False, index=True)
     normalized_control_id = Column(Integer, ForeignKey("grc_normalized_controls.id"), nullable=False, index=True)
-    
+
+    # --- CRQM control effect (FAIR) ---
+    # How much this control reduces the scenario's event frequency and/or
+    # loss magnitude, as min/ml/max percentages (0-100) — ranges, like every
+    # CRQM estimate, sampled per iteration by the simulation engine. NULL =
+    # no effect modelled. The rationale is first-class: "why do we believe
+    # 30-60%?" is what gets defended, not the number.
+    freq_reduction_min_pct = Column(Float, nullable=True)
+    freq_reduction_ml_pct = Column(Float, nullable=True)
+    freq_reduction_max_pct = Column(Float, nullable=True)
+    mag_reduction_min_pct = Column(Float, nullable=True)
+    mag_reduction_ml_pct = Column(Float, nullable=True)
+    mag_reduction_max_pct = Column(Float, nullable=True)
+    effect_rationale = Column(Text, nullable=True)
+    effect_updated_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    effect_updated_at = Column(DateTime, nullable=True)
+
     risk = relationship("Risk", back_populates="control_links")
     normalized_control = relationship("NormalizedControl", back_populates="risk_links")
     
