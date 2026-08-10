@@ -250,6 +250,33 @@ Five decisions settled BEFORE code (review front-load):
    between this and a black-box score. Acceptance is unchanged: click a choke
    point → see the precise paths.
 
+Build-time decisions with a "before the table exists" deadline:
+
+6. **Persist first-appearance separately from snapshot retention, or lose the
+   `prioritized` event forever.** The settled event ("finding first appears in
+   a choke-point snapshot during the cycle window") is only derivable if that
+   fact survives recomputes. Decouple it: write a `first_in_snapshot_at` fact
+   per finding (small side table or column) at snapshot-write time, FIRST
+   WRITE WINS, never updated. Then `grc_choke_point_snapshots` rows can be
+   replaced/pruned freely as a pure storage decision, and the prioritized
+   counter is a trivial windowed query when wired. If this isn't in from day
+   one, a replace-on-recompute snapshot table destroys the fact irrecoverably.
+7. **Stable choke-point identity = the finding.** "Fix X" is a remediation of
+   a FINDING that appears in chain steps, so the finding (vulnerability id) is
+   the natural key — it gives click-through and the first-appearance fact a
+   well-defined subject. Decide this before the snapshot schema, not after.
+8. **Deterministic ranking under ties.** Order by count desc, THEN a stable
+   key (finding id) — so identical recomputes produce byte-identical order and
+   don't shuffle. Only real changes (fixes landing between syncs) reshuffle;
+   that legitimate reshuffle must not be indistinguishable from tie-jitter.
+
+Dev-tenant chain inventory (run before building, per the Phase 2 lesson):
+**15 reachability snapshots across 9 findings and 5 assets, 72 steps.**
+Modest but non-vacuous — enough to verify ranking against real shared-step
+chains, though shallow. Decide at build time whether verification adds
+synthetic-but-realistic chains, and whether chain-GENERATION coverage joins
+the roadmap the way link coverage did at Phase 2.5.
+
 - Aggregation service over data already stored (reachability steps, technique
   chains, asset links): rank single remediations by number of stored viable
   attack chains they interrupt.
@@ -331,6 +358,12 @@ reversible.
     IT created (`notes LIKE 'auto:cwe:%'`) — a manual link (the link row is
     itself a human's assertion) is never a pruning candidate. Soft-retraction
     protects the evidence; the provenance gate protects the human's statement.
+  - **Uniform auto marker (design fact, not accident)**: all three rule
+    families (CWE crosswalk, always-applicable vuln-mgmt, always-applicable
+    KEV) write the SAME `auto:cwe:<cwe|vuln-mgmt>` note prefix — there is no
+    `auto:cve:`/`auto:kev:`. So the `auto:cwe:%` prune filter covers every
+    auto link, and no rule family sits outside the pruning path. Confirmed in
+    the dev DB: 374/374 auto links carry `auto:cwe:`.
   - **Known cosmetic**: evidence reinstated when a link is MANUALLY recreated
     still carries its rule-era `link_basis`, so the chip may read "via KEV
     rule" on a now-manual link. Acceptable provenance (that IS how the
