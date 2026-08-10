@@ -1115,6 +1115,16 @@ export const certificationsApi = {
     ),
 };
 
+// CTEM Phase 3 — scopes + cycles.
+export const ctemScopesApi = {
+  list: () => apiClient.get('/erm/ctem/scopes'),
+  get: (id: number) => apiClient.get(`/erm/ctem/scopes/${id}`),
+  create: (data: Record<string, unknown>) => apiClient.post('/erm/ctem/scopes', data),
+  update: (id: number, data: Record<string, unknown>) => apiClient.put(`/erm/ctem/scopes/${id}`, data),
+  openCycle: (scopeId: number) => apiClient.post(`/erm/ctem/scopes/${scopeId}/cycles/open`),
+  closeCycle: (cycleId: number) => apiClient.post(`/erm/ctem/scopes/cycles/${cycleId}/close`),
+};
+
 // CTEM Phase 2/2.5 — automated control-effectiveness evidence + bulk link coverage.
 export const controlAssuranceApi = {
   evidenceSummary: () => apiClient.get('/control-library/assurance/evidence-summary'),

@@ -226,6 +226,10 @@ def list_vulnerabilities(
     # ATT&CK tactic richness filter — True keeps findings whose mapped chain
     # spans ≥ HIGH_TACTICS_MIN distinct tactics (see attack.selection).
     high_tactics: Optional[bool] = None,
+    # CTEM Phase 3 — scope filter. Findings on the scope's member assets,
+    # resolved by the ONE shared resolver so this register and a scope's
+    # cycle counters can never disagree.
+    ctem_scope_id: Optional[int] = None,
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
@@ -289,6 +293,30 @@ def list_vulnerabilities(
             query = query.filter(Vulnerability.status.in_(_LIST_CLOSED_STATUSES))
         elif not include_closed:
             query = query.filter(Vulnerability.status.notin_(_LIST_CLOSED_STATUSES))
+    if ctem_scope_id:
+        # Same resolver the cycle counters use — no second in-scope
+        # definition can drift from the counts shown next to this register.
+        try:
+            from ....models import CtemScope, VulnerabilityAssetLink as _VAL
+            from ....services.ctem_scopes import resolve_scope_assets
+            _scope = db.query(CtemScope).filter(
+                CtemScope.id == ctem_scope_id,
+                CtemScope.tenant_id.in_(user_tenants),
+            ).first()
+            if not _scope:
+                raise HTTPException(status_code=404, detail="CTEM scope not found")
+            _asset_ids = resolve_scope_assets(db, _scope.tenant_id, _scope.membership_rule)
+            if _asset_ids:
+                _scoped_vuln_ids = db.query(_VAL.vulnerability_id).filter(
+                    _VAL.asset_id.in_(_asset_ids)).distinct().subquery()
+                query = query.filter(Vulnerability.id.in_(_scoped_vuln_ids))
+            else:
+                query = query.filter(False)  # empty scope → no rows, honestly
+        except HTTPException:
+            raise
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception("ctem scope filter failed (non-fatal)")
     if assigned_to:
         query = query.filter(Vulnerability.assigned_to == assigned_to)
     if cve_id:
