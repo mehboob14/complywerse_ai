@@ -15,6 +15,7 @@ from .routers import (
     escalations_router,
     remediation_plans_router,
     exploitability_router,
+    choke_points_router,
 )
 
 router = APIRouter(prefix="/vuln-management", tags=["Vulnerability Management"])
@@ -34,6 +35,7 @@ router.include_router(workflows_router)
 router.include_router(escalations_router)
 router.include_router(remediation_plans_router)
 router.include_router(exploitability_router)
+router.include_router(choke_points_router)
 
 
 @router.get("")

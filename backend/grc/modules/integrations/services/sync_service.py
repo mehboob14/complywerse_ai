@@ -255,6 +255,19 @@ class SyncService:
             except Exception:
                 logger.exception("post-sync composite scoring failed (non-fatal)")
 
+            # ── Choke-point recompute (Phase 4) ───────────────────────────────
+            # Reachability may have shifted this sync (new findings, closures),
+            # so refresh the ranking + stamp first-appearance. Best-effort:
+            # a failure never fails the sync (the ranking is recomputable and
+            # explicit-recompute exists on the API).
+            try:
+                from grc.services.choke_points import persist_snapshot
+                persist_snapshot(db, tenant_id)
+                db.commit()
+            except Exception:
+                logger.exception("post-sync choke-point recompute failed (non-fatal)")
+                db.rollback()
+
             # ── Outbound write-back retry ─────────────────────────────────────
             # Push (or record-as-skipped) any pending/failed GRC→scanner
             # decision actions for this connection. Runs in this background

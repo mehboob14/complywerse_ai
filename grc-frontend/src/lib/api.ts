@@ -2697,6 +2697,11 @@ export const vulnManagementApi = {
     // evidence + remediation. Per-asset: the verdict differs by which host.
     exploitability: (id: number, assetId: number) =>
       apiClient.get(`/vuln-management/vulnerabilities/${id}/exploitability`, { params: { asset_id: assetId } }),
+    // CTEM Phase 4 — choke points: findings ranked by how many viable attack
+    // chains their remediation severs. computed_at + coverage travel with it.
+    chokePoints: () => apiClient.get('/vuln-management/choke-points'),
+    recomputeChokePoints: () => apiClient.post('/vuln-management/choke-points/recompute'),
+    chokePointFinding: (id: number) => apiClient.get(`/vuln-management/choke-points/findings/${id}`),
     // AI attacker-walkthrough for the same (finding × asset): a runtime narration
     // of the computed chain — what an attacker does at each stage. Separate call
     // so the chain paints instantly and this (an LLM call) loads progressively.
