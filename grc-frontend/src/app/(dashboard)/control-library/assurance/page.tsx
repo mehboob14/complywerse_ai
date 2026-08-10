@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic';
 
 import ControlSurfaceTabs from '@/components/dashboard/ControlSurfaceTabs';
 import ControlAssuranceOverviewCards from '@/components/dashboard/ControlAssuranceOverviewCards';
+import LinkCoverageCard from '@/components/dashboard/LinkCoverageCard';
 
 export default function ControlAssurancePage() {
   return (
@@ -16,6 +17,8 @@ export default function ControlAssurancePage() {
         </p>
       </div>
       <ControlAssuranceOverviewCards />
+      {/* CTEM Phase 2.5 — automated evidence coverage + bulk link suggestions */}
+      <LinkCoverageCard />
     </div>
   );
 }

@@ -1115,6 +1115,17 @@ export const certificationsApi = {
     ),
 };
 
+// CTEM Phase 2/2.5 — automated control-effectiveness evidence + bulk link coverage.
+export const controlAssuranceApi = {
+  evidenceSummary: () => apiClient.get('/control-library/assurance/evidence-summary'),
+  controlEvidence: (kind: string, controlId: number) =>
+    apiClient.get(`/control-library/assurance/controls/${kind}/${controlId}/evidence`),
+  bulkAutomapPreview: () =>
+    apiClient.get('/vuln-management/control-links/bulk-automap-preview'),
+  bulkAutomapAccept: () =>
+    apiClient.post('/vuln-management/control-links/bulk-automap'),
+};
+
 export const ermApi = {
   dashboard: {
     getSectionsOverview: () => apiClient.get('/erm/dashboard/sections-overview'),

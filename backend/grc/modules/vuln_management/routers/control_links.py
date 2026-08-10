@@ -13,7 +13,9 @@ from pydantic import BaseModel, Field
 from ....schemas import (
     VulnerabilityControlLinkCreate, VulnerabilityControlLinkResponse, MessageResponse
 )
-from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from ....routers.auth_router import (
+    require_auth, get_user_tenants, get_user_primary_tenant, require_tenant_permission,
+)
 
 # Reused by the response builder + the auto-map endpoint so the "auto" vs
 # "manual" decision lives in one place.
@@ -744,3 +746,151 @@ def preview_cwe_resolution(
             for o in overrides
         ],
     }
+
+
+# ═══ CTEM Phase 2.5 — bulk link coverage ════════════════════════════════════
+# The per-vuln auto-mapper above runs one finding at a time behind a button,
+# which is why link coverage sat at ~1%. These endpoints drive the SAME
+# mapper (same curated crosswalk, same provenance notes, same idempotency)
+# across every eligible finding, behind an explicit preview → accept flow:
+# nothing is written until a human accepts, and every accepted link carries
+# the auto:cwe provenance an auditor can distinguish from curated links.
+
+def _bulk_eligible_findings(db: Session, tenant_id: int, limit: int = 5000):
+    from sqlalchemy import or_
+    return db.query(Vulnerability).filter(
+        Vulnerability.tenant_id == tenant_id,
+        or_(
+            Vulnerability.cwe_id.isnot(None),
+            Vulnerability.cve_id.ilike("CVE-%"),
+            Vulnerability.kev_flag.is_(True),
+        ),
+    ).limit(limit).all()
+
+
+@router.get("/control-links/bulk-automap-preview")
+def bulk_automap_preview(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Dry-run: what would bulk auto-mapping create? Computed with the same
+    resolver the writer uses (per-tenant cached), zero writes."""
+    from ..control_mapping.cwe_resolver import resolve_cwe_to_framework_controls
+
+    tenant_id = get_user_primary_tenant(current_user, db)
+    findings = _bulk_eligible_findings(db, tenant_id)
+
+    existing: dict[int, set] = {}
+    for link in db.query(
+        VulnerabilityControlLink.vulnerability_id,
+        VulnerabilityControlLink.parsed_framework_control_id,
+    ).join(Vulnerability, Vulnerability.id == VulnerabilityControlLink.vulnerability_id
+    ).filter(Vulnerability.tenant_id == tenant_id,
+             VulnerabilityControlLink.parsed_framework_control_id.isnot(None)).all():
+        existing.setdefault(link[0], set()).add(link[1])
+
+    projected_new = 0
+    findings_gaining = 0
+    basis = {"cwe_specific": 0, "vuln_mgmt_rule": 0, "kev_rule": 0}
+    frameworks: dict[int, dict] = {}
+    distinct_new_controls: set = set()
+
+    for v in findings:
+        cwe_key = normalise_cwe(v.cwe_id) if v.cwe_id else ""
+        has_cve = bool(v.cve_id and v.cve_id.strip().upper().startswith("CVE-"))
+        is_kev = bool(v.kev_flag)
+        if cwe_key and cwe_key in CWE_TO_CONTROL_IDS:
+            basis["cwe_specific"] += 1
+        if has_cve:
+            basis["vuln_mgmt_rule"] += 1
+        if is_kev:
+            basis["kev_rule"] += 1
+        try:
+            resolved = resolve_cwe_to_framework_controls(
+                db, tenant_id=tenant_id, cwe_id=cwe_key, has_cve=has_cve, is_kev=is_kev,
+            )
+        except Exception:
+            continue
+        have = existing.get(v.id, set())
+        new_here = [rc for rc in resolved if rc.parsed_control_id not in have]
+        if new_here:
+            findings_gaining += 1
+            projected_new += len(new_here)
+            for rc in new_here:
+                distinct_new_controls.add(rc.parsed_control_id)
+                fw = frameworks.setdefault(rc.uploaded_framework_id, {
+                    "framework": getattr(rc, "framework_short_code", None)
+                                 or getattr(rc, "framework_name", None)
+                                 or f"framework {rc.uploaded_framework_id}",
+                    "projected_links": 0, "controls": set(),
+                })
+                fw["projected_links"] += 1
+                fw["controls"].add(rc.parsed_control_id)
+
+    return {
+        "eligible_findings": len(findings),
+        "findings_gaining_links": findings_gaining,
+        "projected_new_links": projected_new,
+        "distinct_controls_gaining_evidence_eligibility": len(distinct_new_controls),
+        "basis_counts": basis,
+        "frameworks": [
+            {"framework": f["framework"], "projected_links": f["projected_links"],
+             "controls": len(f["controls"])}
+            for f in frameworks.values()
+        ],
+        "provenance_note": (
+            "Accepted links are stamped auto:cwe:<basis> in notes — auditors can "
+            "always distinguish accepted suggestions from manually curated links."
+        ),
+    }
+
+
+@router.post("/control-links/bulk-automap")
+def bulk_automap_accept(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(require_tenant_permission("vulnerabilities:vulnerability_register:edit")),
+):
+    """Human-accepted bulk run of the per-vuln auto-mapper across every
+    eligible finding. Idempotent (the mapper keeps/dedupes) and audited as
+    one summarized event."""
+    tenant_id = get_user_primary_tenant(current_user, db)
+    findings = _bulk_eligible_findings(db, tenant_id)
+
+    totals = {"findings_processed": 0, "links_added": 0, "links_kept": 0,
+              "stale_removed": 0, "errors": 0}
+    for v in findings:
+        try:
+            s = auto_map_compliance_controls(v, db, delete_stale=True, user_id=current_user.id)
+            totals["findings_processed"] += 1
+            totals["links_added"] += s.get("added", 0)
+            totals["links_kept"] += s.get("kept", 0)
+            totals["stale_removed"] += s.get("removed_stale", 0)
+            if s.get("errors"):
+                totals["errors"] += len(s["errors"])
+        except Exception:
+            totals["errors"] += 1
+    db.commit()
+
+    coverage_after = None
+    try:
+        from ....services.control_assurance import assurance_summary
+        coverage_after = assurance_summary(db, tenant_id).get("coverage")
+    except Exception:
+        pass
+
+    try:
+        from ....models import AuditLog
+        db.add(AuditLog(
+            tenant_id=tenant_id,
+            user_id=current_user.id,
+            action="vulnerability.bulk_automap_accepted",
+            resource_type="vulnerability_control_link",
+            resource_id=0,
+            changes={**totals, "coverage_after": coverage_after},
+        ))
+        db.commit()
+    except Exception:
+        db.rollback()
+
+    return {**totals, "coverage_after": coverage_after}
