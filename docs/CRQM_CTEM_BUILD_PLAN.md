@@ -261,6 +261,19 @@ Build-time decisions with a "before the table exists" deadline:
    replaced/pruned freely as a pure storage decision, and the prioritized
    counter is a trivial windowed query when wired. If this isn't in from day
    one, a replace-on-recompute snapshot table destroys the fact irrecoverably.
+   - **Pin the predicate in code**: "appears in a snapshot" means "appears as
+     a RANKABLE REMEDIATION" — has ≥1 chain step in the computed snapshot —
+     named explicitly (e.g. `is_rankable_in_snapshot`), so the event can never
+     drift between "in any chain" and "in the ranked list."
+   - **Inaugural backfill (decided, not left to chance)**: the FIRST snapshot
+     stamps the entire existing chained backlog at launch time, so any cycle
+     whose window spans launch shows a one-time prioritized spike that is
+     backfill, not workflow. DECISION: keep the stamp (the backlog's
+     first-appearance is a real fact future logic needs uniformly) and surface
+     the spike as a labelled launch artifact on the cycle card — do NOT
+     silently exclude, which would make the backlog un-prioritizable in any
+     legitimately-scoped future cycle. Cycles opened AFTER launch are
+     unaffected (their window starts past the backfill stamp).
 7. **Stable choke-point identity = the finding.** "Fix X" is a remediation of
    a FINDING that appears in chain steps, so the finding (vulnerability id) is
    the natural key — it gives click-through and the first-appearance fact a
@@ -270,12 +283,22 @@ Build-time decisions with a "before the table exists" deadline:
    don't shuffle. Only real changes (fixes landing between syncs) reshuffle;
    that legitimate reshuffle must not be indistinguishable from tie-jitter.
 
+**Verification strategy — analytic ground truth, not spot-check.** At this
+scale the expected per-finding chain counts are HAND-COMPUTABLE: precompute
+them with plain SQL over `grc_reachability_steps` and assert the service's
+ranking equals that exactly (the analytic-truth pattern from the 39.3% curve
+check — available precisely because the data is small, and categorically
+stronger than eyeballing a plausible list). Real chains verify CORRECTNESS;
+synthetic-but-realistic chains verify SCALE and TIE-BREAK only, marked and
+cleaned up.
+
 Dev-tenant chain inventory (run before building, per the Phase 2 lesson):
-**15 reachability snapshots across 9 findings and 5 assets, 72 steps.**
-Modest but non-vacuous — enough to verify ranking against real shared-step
-chains, though shallow. Decide at build time whether verification adds
-synthetic-but-realistic chains, and whether chain-GENERATION coverage joins
-the roadmap the way link coverage did at Phase 2.5.
+**15 reachability snapshots across 9 findings and 5 assets, 72 steps** — the
+ranking spans 9 of 215 findings. Non-vacuous but shallow, so carry the
+Phase 2 honesty pattern onto the VIEW ITSELF ("ranks remediations across 9 of
+215 findings with stored chains") — a short list must read as coverage-limited,
+not broken — and give chain-GENERATION coverage its roadmap number the way
+link coverage got one at Phase 2.5.
 
 - Aggregation service over data already stored (reachability steps, technique
   chains, asset links): rank single remediations by number of stored viable
@@ -364,6 +387,12 @@ reversible.
     `auto:cve:`/`auto:kev:`. So the `auto:cwe:%` prune filter covers every
     auto link, and no rule family sits outside the pruning path. Confirmed in
     the dev DB: 374/374 auto links carry `auto:cwe:`.
+  - **Residue of the uniform marker**: because the link note no longer
+    distinguishes family, "which rule created this link" is answerable ONLY
+    through evidence rows' `link_basis` — so a link that has not yet produced
+    any evidence has no visible family until it does. Acceptable (family only
+    matters once evidence exists to discount), documented so it isn't
+    discovered as a surprise.
   - **Known cosmetic**: evidence reinstated when a link is MANUALLY recreated
     still carries its rule-era `link_basis`, so the chip may read "via KEV
     rule" on a now-manual link. Acceptable provenance (that IS how the
