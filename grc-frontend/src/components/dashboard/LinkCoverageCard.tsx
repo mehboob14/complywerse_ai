@@ -47,7 +47,13 @@ export default function LinkCoverageCard() {
   const acceptMutation = useMutation({
     mutationFn: async () => (await controlAssuranceApi.bulkAutomapAccept()).data,
     onSuccess: (data) => {
-      setAcceptResult(data);
+      // Keep the projection alongside the actuals — the preview was
+      // zero-write and time passed, so the truth line must compare them.
+      setAcceptResult({
+        ...data,
+        projected_new_links: preview?.projected_new_links ?? null,
+        projected_newly_eligible: preview?.controls_newly_evidence_eligible ?? null,
+      });
       setPreview(null);
       setError(null);
       queryClient.invalidateQueries({ queryKey: ['assurance-evidence-summary'] });
@@ -120,6 +126,15 @@ export default function LinkCoverageCard() {
         </div>
       )}
 
+      {(summary?.evidence_basis?.controls_resting_solely_on_kev_rule ?? 0) > 0 && (
+        <p className="mt-2 flex items-start gap-1.5 rounded-md border border-amber-200 bg-amber-50/70 p-2 text-[11px] text-amber-800">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
+          {summary.evidence_basis.controls_resting_solely_on_kev_rule} badged control(s) rest
+          solely on KEV-rule links — closures there prove fixes landed, which is weaker
+          evidence for incident-response controls. Discount accordingly.
+        </p>
+      )}
+
       {preview && (
         <div className="mt-3 rounded-lg border border-primary-200 bg-primary-50/40 p-3 text-xs space-y-2">
           <p className="font-medium text-slate-800">
@@ -162,15 +177,34 @@ export default function LinkCoverageCard() {
         </div>
       )}
 
-      {acceptResult && (
-        <p className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-800">
-          Accepted: {acceptResult.links_added} link(s) added, {acceptResult.links_kept} kept,{' '}
-          {acceptResult.stale_removed} stale removed across {acceptResult.findings_processed} finding(s).
-          {acceptResult.coverage_after && (
-            <> Coverage now: {acceptResult.coverage_after.controls_with_linked_findings} control(s) with linked findings.</>
-          )}
-        </p>
-      )}
+      {acceptResult && (() => {
+        const projLinks = acceptResult.projected_new_links;
+        const projEligible = acceptResult.projected_newly_eligible;
+        const actEligible = acceptResult.actual_controls_newly_eligible;
+        const linksMatch = projLinks == null || projLinks === acceptResult.links_added;
+        const eligibleMatch = projEligible == null || actEligible == null || projEligible === actEligible;
+        const drifted = !linksMatch || !eligibleMatch;
+        return (
+          <p className={`mt-3 rounded-md border p-2 text-xs ${
+            drifted ? 'border-amber-200 bg-amber-50 text-amber-800'
+                    : 'border-emerald-200 bg-emerald-50 text-emerald-800'
+          }`}>
+            Accepted: {acceptResult.links_added} link(s) added, {acceptResult.links_kept} kept,{' '}
+            {acceptResult.stale_removed} stale removed across {acceptResult.findings_processed} finding(s).
+            {projLinks != null && (
+              <> Links: projected {projLinks}, created {acceptResult.links_added}
+              {linksMatch ? '' : ' — state changed between preview and accept'}.</>
+            )}
+            {projEligible != null && actEligible != null && (
+              <> Newly eligible controls: projected {projEligible}, actual {actEligible}
+              {eligibleMatch ? '' : ' — state changed between preview and accept'}.</>
+            )}
+            {acceptResult.coverage_after && (
+              <> Coverage now: {acceptResult.coverage_after.controls_with_linked_findings} control(s) with linked findings.</>
+            )}
+          </p>
+        );
+      })()}
     </div>
   );
 }

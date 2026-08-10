@@ -48,6 +48,16 @@ class ControlEffectivenessEvidence(Base):
     # original result ("partial" maps to fail but is preserved here), etc.
     details = Column(JSON, nullable=True)
 
+    # Soft retraction — set when the link that produced this evidence was
+    # removed by RULE fluctuation (auto-map stale removal). Retracted rows are
+    # excluded from every tier derivation and listing, but survive so a
+    # crosswalk edit that gets reverted can REINSTATE them — producers fire
+    # on events and past closures never replay, so hard-deleting on a rule
+    # change would permanently degrade badges on an admin round-trip. Manual
+    # unlink stays a hard delete: a human asserted the link (and therefore
+    # its evidence) was wrong.
+    retracted_at = Column(DateTime, nullable=True, index=True)
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

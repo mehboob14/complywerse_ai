@@ -204,6 +204,10 @@ def record_vuln_evidence(
                 **ref,
             ).first()
             if row:
+                if row.retracted_at is not None:
+                    # A NEW event on a retracted identity is itself
+                    # reinstatement — the link evidently exists again.
+                    row.retracted_at = None
                 if row.result != result:
                     try:
                         db.add(AuditLog(
@@ -256,13 +260,19 @@ def retract_link_evidence(
     control_ref: Dict[str, Optional[int]],
     actor_user_id: Optional[int] = None,
     reason: str = "link_removed",
+    mode: str = "hard",
 ) -> int:
     """A removed vuln↔control link retracts the evidence it produced.
 
-    Evidence exists BECAUSE of the link — rule-created links can be wrong,
-    and pruning a wrong link must not leave its evidence feeding the badge
-    forever. Deletion gets the same audit treatment as creation: one
-    AuditLog row per retracted evidence row, carrying the old values.
+    Two modes, matching WHO removed the link:
+      * mode="hard" (manual unlink) — a human asserted the link was wrong, so
+        its evidence is invalid: rows are DELETED.
+      * mode="soft" (rule-driven removal, e.g. auto-map stale pruning) —
+        rules fluctuate and producers fire on events that never replay, so a
+        crosswalk edit round-trip must not permanently degrade badges. Rows
+        get `retracted_at` (excluded from every derivation/listing) and are
+        REINSTATED if the link comes back.
+    Either way: one AuditLog row per evidence row, carrying the old values.
     Never raises; never commits (caller's transaction)."""
     try:
         from ..models import AuditLog, ControlEffectivenessEvidence
@@ -273,6 +283,7 @@ def retract_link_evidence(
     if not any(ref.values()):
         return 0
     removed = 0
+    now = datetime.utcnow()
     try:
         rows = db.query(ControlEffectivenessEvidence).filter_by(
             tenant_id=tenant_id,
@@ -280,6 +291,8 @@ def retract_link_evidence(
             **ref,
         ).all()
         for row in rows:
+            if mode == "soft" and row.retracted_at is not None:
+                continue  # already retracted — nothing new to record
             try:
                 db.add(AuditLog(
                     tenant_id=tenant_id,
@@ -289,6 +302,7 @@ def retract_link_evidence(
                     resource_id=row.id,
                     changes={
                         "reason": reason,
+                        "mode": mode,
                         "old_result": row.result,
                         "old_tested_at": row.tested_at.isoformat() if row.tested_at else None,
                         "source_type": row.source_type,
@@ -299,7 +313,11 @@ def retract_link_evidence(
                 ))
             except Exception:
                 logger.exception("control_assurance: retraction audit failed (non-fatal)")
-            db.delete(row)
+            if mode == "soft":
+                row.retracted_at = now
+                row.updated_at = now
+            else:
+                db.delete(row)
             removed += 1
         if removed:
             db.flush()
@@ -307,6 +325,62 @@ def retract_link_evidence(
         logger.exception("control_assurance: evidence retraction failed (non-fatal)")
         return 0
     return removed
+
+
+def reinstate_link_evidence(
+    db: Session,
+    *,
+    tenant_id: int,
+    vulnerability_id: int,
+    control_ref: Dict[str, Optional[int]],
+    actor_user_id: Optional[int] = None,
+    reason: str = "link_recreated",
+) -> int:
+    """Un-retract soft-retracted evidence when its link comes back (e.g. a
+    crosswalk edit was reverted and the auto-mapper recreated the link).
+    Audited per row. Never raises; never commits."""
+    try:
+        from ..models import AuditLog, ControlEffectivenessEvidence
+    except Exception:
+        return 0
+    ref = {k: v for k, v in control_ref.items() if k in _CONTROL_REF_FIELDS}
+    if not any(ref.values()):
+        return 0
+    restored = 0
+    try:
+        rows = db.query(ControlEffectivenessEvidence).filter_by(
+            tenant_id=tenant_id,
+            vulnerability_id=vulnerability_id,
+            **ref,
+        ).filter(ControlEffectivenessEvidence.retracted_at.isnot(None)).all()
+        for row in rows:
+            try:
+                db.add(AuditLog(
+                    tenant_id=tenant_id,
+                    user_id=actor_user_id,
+                    action="control_evidence.reinstated",
+                    resource_type="control_effectiveness_evidence",
+                    resource_id=row.id,
+                    changes={
+                        "reason": reason,
+                        "result": row.result,
+                        "tested_at": row.tested_at.isoformat() if row.tested_at else None,
+                        "was_retracted_at": row.retracted_at.isoformat() if row.retracted_at else None,
+                        "vulnerability_id": vulnerability_id,
+                        "control_ref": {k: v for k, v in ref.items() if v is not None},
+                    },
+                ))
+            except Exception:
+                logger.exception("control_assurance: reinstatement audit failed (non-fatal)")
+            row.retracted_at = None
+            row.updated_at = datetime.utcnow()
+            restored += 1
+        if restored:
+            db.flush()
+    except Exception:
+        logger.exception("control_assurance: evidence reinstatement failed (non-fatal)")
+        return 0
+    return restored
 
 
 # ── read-side rollups ───────────────────────────────────────────────────────
@@ -333,6 +407,7 @@ def tier_for_ref(db: Session, tenant_id: int, kind: str, control_id: int) -> Dic
     ).filter(
         ControlEffectivenessEvidence.tenant_id == tenant_id,
         getattr(ControlEffectivenessEvidence, field) == control_id,
+        ControlEffectivenessEvidence.retracted_at.is_(None),
     ).all()
     return derive_tier([
         {"source_type": r[0], "result": r[1], "tested_at": r[2]} for r in rows
@@ -351,6 +426,7 @@ def evidence_for_control(db: Session, tenant_id: int, kind: str, control_id: int
     rows = db.query(ControlEffectivenessEvidence).filter(
         ControlEffectivenessEvidence.tenant_id == tenant_id,
         getattr(ControlEffectivenessEvidence, field) == control_id,
+        ControlEffectivenessEvidence.retracted_at.is_(None),
     ).order_by(ControlEffectivenessEvidence.tested_at.desc()).all()
 
     facts = [{"source_type": r.source_type, "result": r.result, "tested_at": r.tested_at}
@@ -386,13 +462,20 @@ def assurance_summary(db: Session, tenant_id: int) -> Dict[str, Any]:
             linked_controls.add(k)
 
     by_control: Dict[Tuple[str, int], List[Dict[str, Any]]] = {}
+    basis_rows: Dict[str, int] = {}
+    bases_by_control: Dict[Tuple[str, int], List[List[str]]] = {}
     for r in db.query(ControlEffectivenessEvidence).filter(
         ControlEffectivenessEvidence.tenant_id == tenant_id,
+        ControlEffectivenessEvidence.retracted_at.is_(None),
     ).all():
         k = _ref_key(r)
         if k:
             by_control.setdefault(k, []).append(
                 {"source_type": r.source_type, "result": r.result, "tested_at": r.tested_at})
+            row_bases = list((r.details or {}).get("link_basis") or ["unknown"])
+            bases_by_control.setdefault(k, []).append(row_bases)
+            for b in row_bases:
+                basis_rows[b] = basis_rows.get(b, 0) + 1
 
     tiers: Dict[str, int] = {}
     for k in linked_controls | set(by_control.keys()):
@@ -403,7 +486,19 @@ def assurance_summary(db: Session, tenant_id: int) -> Dict[str, Any]:
     total_parsed = db.query(func.count(ParsedFrameworkControl.id)).scalar() or 0
     total_internal = db.query(func.count(InternalControl.id)).scalar() or 0
 
+    # Register-level auditor question: what share of badges rests SOLELY on
+    # KEV-rule links (weakest basis — the chip answers per control, this
+    # answers for the register).
+    kev_only_controls = sum(
+        1 for k, rows_bases in bases_by_control.items()
+        if rows_bases and all(set(b) <= {"kev_rule", "auto", "unknown"} and "kev_rule" in b
+                              for b in rows_bases)
+    )
     return {
+        "evidence_basis": {
+            "rows_by_basis": basis_rows,
+            "controls_resting_solely_on_kev_rule": kev_only_controls,
+        },
         "coverage": {
             "controls_with_linked_findings": len(linked_controls),
             "controls_with_evidence": len(by_control),

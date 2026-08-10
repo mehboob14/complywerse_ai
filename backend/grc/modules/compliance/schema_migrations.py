@@ -811,6 +811,9 @@ _COLUMN_ADDS = [
     # new tables may already exist on tenants that ran the first CRQM build).
     ("grc_risk_simulation_runs", "trigger", "VARCHAR(30) DEFAULT 'manual'", None),
     ("grc_risk_loss_models", "pos_evidence", "JSON", None),
+    # CTEM Phase 2 follow-up: soft retraction for rule-driven link removal.
+    ("grc_control_effectiveness_evidence", "retracted_at", "TIMESTAMP",
+     "ix_grc_ctrl_eff_retracted_at"),
 ]
 
 

@@ -539,6 +539,7 @@ def delete_control_link(
             },
             actor_user_id=current_user.id,
             reason="link_removed_manually",
+            mode="hard",  # a human asserted the link (and its evidence) is wrong
         )
     except Exception:
         import logging
@@ -894,6 +895,17 @@ def bulk_automap_accept(
     tenant_id = get_user_primary_tenant(current_user, db)
     findings = _bulk_eligible_findings(db, tenant_id)
 
+    # The preview is zero-write and time passes before accept — state can
+    # drift in between (another accept, a sync). Capture coverage BEFORE so
+    # the response can state the ACTUAL delta; the UI compares it against
+    # the projection and says so when they differ.
+    coverage_before = None
+    try:
+        from ....services.control_assurance import assurance_summary
+        coverage_before = assurance_summary(db, tenant_id).get("coverage")
+    except Exception:
+        pass
+
     totals = {"findings_processed": 0, "links_added": 0, "links_kept": 0,
               "stale_removed": 0, "errors": 0}
     for v in findings:
@@ -910,9 +922,15 @@ def bulk_automap_accept(
     db.commit()
 
     coverage_after = None
+    actual_newly_eligible = None
     try:
         from ....services.control_assurance import assurance_summary
         coverage_after = assurance_summary(db, tenant_id).get("coverage")
+        if coverage_before and coverage_after:
+            actual_newly_eligible = (
+                coverage_after.get("controls_with_linked_findings", 0)
+                - coverage_before.get("controls_with_linked_findings", 0)
+            )
     except Exception:
         pass
 
@@ -930,4 +948,5 @@ def bulk_automap_accept(
     except Exception:
         db.rollback()
 
-    return {**totals, "coverage_after": coverage_after}
+    return {**totals, "coverage_before": coverage_before, "coverage_after": coverage_after,
+            "actual_controls_newly_eligible": actual_newly_eligible}

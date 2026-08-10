@@ -522,6 +522,18 @@ def auto_map_compliance_controls(
             )
             db.add(link)
             summary["added"] += 1
+            # A recreated link reinstates any soft-retracted evidence it
+            # previously produced (crosswalk-edit round-trips must not
+            # permanently degrade badges).
+            try:
+                from ....services.control_assurance import reinstate_link_evidence
+                reinstate_link_evidence(
+                    db, tenant_id=vuln.tenant_id, vulnerability_id=vuln.id,
+                    control_ref={"parsed_framework_control_id": pfc_id},
+                    actor_user_id=user_id, reason="auto_link_recreated",
+                )
+            except Exception:
+                logger.exception("evidence reinstatement failed (non-fatal)")
 
         if delete_stale:
             for pfc_id, row in existing_auto_by_pfc_id.items():
@@ -537,6 +549,10 @@ def auto_map_compliance_controls(
                             control_ref={"parsed_framework_control_id": pfc_id},
                             actor_user_id=user_id,
                             reason="auto_link_stale_removed",
+                            # Rule-driven removal is SOFT: rules fluctuate and
+                            # closures never replay — reverting a crosswalk
+                            # edit reinstates this evidence.
+                            mode="soft",
                         )
                     except Exception:
                         logger.exception("stale-link evidence retraction failed (non-fatal)")
