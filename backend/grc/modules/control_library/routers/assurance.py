@@ -213,3 +213,42 @@ def reset_assurance_scorecard_config(
     if tenants:
         sc_cfg.reset_config(db, tenants[0], "assurance", section=section)
     return {"ok": True}
+
+
+# ═══ CTEM Phase 2 — automated effectiveness evidence (scanner closures,     ═══
+# ═══ retests) with read-time tier derivation. Complements the human CT&A    ═══
+# ═══ scorecard above; blending these tiers into the scorecard weights is a  ═══
+# ═══ documented follow-up, not done implicitly.                             ═══
+
+@router.get("/evidence-summary")
+def get_evidence_summary(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Tenant-wide automated-evidence rollup: link coverage (surfaced
+    honestly — controls without linked findings can never earn evidence),
+    tier distribution, and the staleness window in force."""
+    from ....routers.auth_router import get_user_primary_tenant
+    from ....services.control_assurance import assurance_summary
+    tenant_id = get_user_primary_tenant(current_user, db)
+    return assurance_summary(db, tenant_id)
+
+
+@router.get("/controls/{kind}/{control_id}/evidence")
+def get_control_evidence(
+    kind: str,
+    control_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Evidence rows + derived tier for one control. kind:
+    parsed_framework_control | internal_control | framework_control |
+    normalized_control."""
+    from fastapi import HTTPException
+    from ....routers.auth_router import get_user_primary_tenant
+    from ....services.control_assurance import evidence_for_control
+    tenant_id = get_user_primary_tenant(current_user, db)
+    try:
+        return evidence_for_control(db, tenant_id, kind, control_id)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))

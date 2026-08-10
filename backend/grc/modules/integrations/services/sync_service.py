@@ -690,6 +690,22 @@ class SyncService:
                                 )
                                 stats["vulns_reopened"] = stats.get("vulns_reopened", 0) + 1
                                 changed = True
+                                # CTEM Phase 2: re-detection after a claimed fix
+                                # is a FAIL signal on the linked controls — a
+                                # recent fail dominates older passes in the
+                                # assurance tier.
+                                try:
+                                    from grc.services.control_assurance import record_vuln_evidence
+                                    record_vuln_evidence(
+                                        db, existing, source_type="scanner_closure",
+                                        result="fail", tested_at=new_seen,
+                                        details={"event": "reopened",
+                                                 "scan_id": mapped_vuln.get("last_seen_scan_id"),
+                                                 "was_status": prior_status,
+                                                 "vuln_id": existing.vuln_id},
+                                    )
+                                except Exception:
+                                    logger.exception("reopen evidence write failed (non-fatal)")
 
                         if changed:
                             existing.updated_at = datetime.utcnow()
@@ -1044,6 +1060,21 @@ class SyncService:
                     "scan_id": evidence["scan_id"],
                     "basis": basis,
                 })
+                # CTEM Phase 2: a verified closure is dated remediation
+                # evidence for every control this finding is linked to
+                # (capped at the remediation-verified tier — it proves the
+                # fix landed, not that the control works).
+                try:
+                    from grc.services.control_assurance import record_vuln_evidence
+                    record_vuln_evidence(
+                        db, v, source_type="scanner_closure", result="pass",
+                        tested_at=evidence["ended_at"],
+                        details={"scan_id": evidence["scan_id"],
+                                 "scan_name": evidence["scan_name"],
+                                 "basis": basis, "vuln_id": v.vuln_id},
+                    )
+                except Exception:
+                    logger.exception("closure evidence write failed (non-fatal)")
 
         if closed_summaries:
             logger.info(

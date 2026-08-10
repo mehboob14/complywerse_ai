@@ -196,7 +196,33 @@ def list_control_links(
     pfc_ids = [link.parsed_framework_control_id for link in links if link.parsed_framework_control_id is not None]
     parsed_meta = _parsed_metadata_for_links(db, pfc_ids)
 
-    return [_build_response(link, short_codes, parsed_meta) for link in links]
+    responses = [_build_response(link, short_codes, parsed_meta) for link in links]
+
+    # CTEM Phase 2 — stamp each linked control's automated-assurance tier,
+    # derived at read time from effectiveness evidence. Best-effort: a tier
+    # failure must never break the links panel.
+    try:
+        from ....services.control_assurance import tier_for_ref
+        _kind_fields = (
+            ("parsed_framework_control", "parsed_framework_control_id"),
+            ("internal_control", "internal_control_id"),
+            ("framework_control", "framework_control_id"),
+            ("normalized_control", "normalized_control_id"),
+        )
+        for link, resp in zip(links, responses):
+            for kind, field in _kind_fields:
+                ref_id = getattr(link, field, None)
+                if ref_id is not None:
+                    tier = tier_for_ref(db, link.vulnerability.tenant_id, kind, ref_id)
+                    resp.assurance_tier = tier["tier"]
+                    resp.assurance_last_tested_at = tier["last_tested_at"]
+                    resp.assurance_basis = tier["basis"]
+                    break
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception("assurance tier stamp failed (non-fatal)")
+
+    return responses
 
 
 @router.post("/vulnerabilities/{vuln_id}/controls", response_model=VulnerabilityControlLinkResponse, status_code=status.HTTP_201_CREATED)

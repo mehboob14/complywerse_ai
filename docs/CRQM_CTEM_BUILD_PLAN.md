@@ -146,15 +146,22 @@ evidence trail. The user confirms — the model never silently self-updates.
 
 ## Phase 2 — Validation → control effectiveness (assurance layer)
 
-- New table `grc_control_effectiveness_evidence`: control ref, source type
-  (`scanner_closure` / `retest` / `reachability` / later `bas`), source record
-  id, pass/fail/partial, tested-at, details JSON.
-- Producers wired into what already runs: the scanner closure engine (a
-  verified-fixed finding exercises its linked controls via the existing
-  `VulnerabilityControlLink`), the retest router, reachability snapshot writes.
-- Rollup on the control record: `tested_status` + `last_tested_at` — additive
-  columns — with **explicit precedence semantics** (auditors will challenge
-  anything looser):
+- New table `grc_control_effectiveness_evidence`: polymorphic control ref
+  (mirrors `VulnerabilityControlLink`'s four FKs), vulnerability, source type
+  (`scanner_closure` / `retest`; `bas` later), pass/fail, tested-at, details
+  JSON. **Bounded volume by construction**: identity is control × finding ×
+  source, upserted in place — a noisy scanner closing 400 findings updates
+  rows, never floods them.
+- Producers wired into what already runs: the scanner closure engine (pass on
+  verified close, fail on reopen) and the retest endpoint (pass / fail, with
+  "partial" mapped to fail and the original preserved in details).
+  Reachability snapshots are a documented extension, not a v1 producer — a
+  verdict is context, not a defensible effectiveness claim.
+- **No stored badge or rollup columns.** Staleness has no event — nothing
+  fires at month 18 — so the tier is DERIVED AT READ TIME from the evidence
+  facts (`services/control_assurance.derive_tier`, pure function, unit-tested
+  precedence). A stored badge would need a sweeper and would lie between
+  sweeps. Precedence semantics (auditors will challenge anything looser):
   - A recent fail dominates older passes.
   - Scanner-verified closures alone can only reach `remediation-verified` —
     they prove remediation happened, not that the control works. The full
@@ -163,8 +170,15 @@ evidence trail. The user confirms — the model never silently self-updates.
   - Staleness window: `tested-effective` decays to stale/attested-only after
     a configurable window (default 18 months) — an old pass must not wear a
     fresh badge.
-- UI: evidence panel + badge tiers (Tested / Remediation-verified / Attested
-  only / Stale) on control detail; filter in the control register.
+- Surfaces: an Assurance tier column (badge + basis tooltip) on the
+  vulnerability detail "Linked Controls" panel; `/control-library/assurance/
+  evidence-summary` (tier distribution + **link coverage surfaced honestly**
+  — dev tenant at build time: 22/215 findings linked, 37 controls with links
+  out of 3,529 parsed — a roadmap number, not a hidden gap) and
+  `/controls/{kind}/{id}/evidence` for the per-control panel.
+- Named follow-ups, deliberately not implicit: an evidence panel inside the
+  CT&A workbench's control view, and blending automated tiers into the
+  existing assurance scorecard weights.
 - Acceptance: a scanner-verified closure visibly upgrades its control to
   remediation-verified with a dated evidence row; a failed retest flags it; a
   pass older than the window shows as stale.

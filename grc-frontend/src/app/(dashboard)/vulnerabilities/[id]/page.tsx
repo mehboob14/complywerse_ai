@@ -206,7 +206,21 @@ interface ControlLink {
   source?: 'manual' | 'auto_cwe' | string;
   auto_cwe?: string | null;
   framework_short_code?: string | null;
+  // CTEM Phase 2 — automated assurance tier for the linked control, derived
+  // server-side from effectiveness evidence (closures, retests).
+  assurance_tier?: 'tested_effective' | 'tested_failed' | 'remediation_verified' | 'stale' | 'attested_only' | string | null;
+  assurance_last_tested_at?: string | null;
+  assurance_basis?: string | null;
 }
+
+// Badge styling per assurance tier — tooltip carries the full basis sentence.
+const ASSURANCE_TIER_PILL: Record<string, { cls: string; label: string }> = {
+  tested_effective: { cls: 'border-emerald-300 bg-emerald-50 text-emerald-700', label: 'Tested' },
+  tested_failed: { cls: 'border-rose-300 bg-rose-50 text-rose-700', label: 'Test failed' },
+  remediation_verified: { cls: 'border-sky-300 bg-sky-50 text-sky-700', label: 'Remediation verified' },
+  stale: { cls: 'border-amber-300 bg-amber-50 text-amber-700', label: 'Stale' },
+  attested_only: { cls: 'border-slate-200 bg-slate-50 text-slate-500', label: 'Attested only' },
+};
 
 interface DepartmentAssignment {
   id: number;
@@ -1689,6 +1703,7 @@ export default function VulnerabilityDetailPage() {
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">Framework</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">ID</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">Source</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">Assurance</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600"></th>
                   </tr>
                 </thead>
@@ -1768,6 +1783,22 @@ export default function VulnerabilityDetailPage() {
                             Manual
                           </span>
                         )}
+                      </td>
+                      <td className="px-4 py-3 text-xs">
+                        {(() => {
+                          const pill = ASSURANCE_TIER_PILL[link.assurance_tier || 'attested_only'] || ASSURANCE_TIER_PILL.attested_only;
+                          const dateSuffix = link.assurance_last_tested_at
+                            ? ` · ${new Date(link.assurance_last_tested_at).toLocaleDateString()}`
+                            : '';
+                          return (
+                            <span
+                              className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${pill.cls}`}
+                              title={link.assurance_basis || 'No automated evidence for this control yet.'}
+                            >
+                              {pill.label}{dateSuffix}
+                            </span>
+                          );
+                        })()}
                       </td>
                       <td className="px-4 py-3">
                         {canDelete && (
