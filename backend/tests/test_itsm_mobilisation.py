@@ -89,10 +89,51 @@ def test_resolved_ticket_advances_plan_to_applied_not_verified(db):
     FakeAdapter.next_status = "resolved"
     counts = itsm.sync_ticket_statuses(db, conn); db.commit()
     assert counts["resolved"] == 1 and counts["plans_advanced"] == 1
-    plan = db.query(VulnRemediationPlan).one()
+    plan = db.query(VulnRemediationPlan).filter_by(vulnerability_id=1).one()
     assert plan.status == "applied"          # engineering did the work
     assert plan.status != "verified"         # NOT verified — scanner's job
     assert plan.applied_at is not None
+
+
+def test_closed_ticket_does_NOT_advance_plan(db):
+    # ServiceNow `closed` conflates fixed / won't-fix / not-reproducible, so
+    # advancing on it would record undone work as done. Resolved-only.
+    v, conn = _seed(db)
+    itsm.push_finding(db, v, conn, user_id=7); db.commit()
+    FakeAdapter.next_status = "closed"
+    counts = itsm.sync_ticket_statuses(db, conn); db.commit()
+    assert counts["plans_advanced"] == 0
+    assert db.query(VulnRemediationPlan).filter_by(vulnerability_id=1).one().status == "approved"
+
+
+def test_push_creates_plan_when_none_exists(db):
+    # so mobilisation is visible to the mobilized counter (reads
+    # VulnRemediationPlan). Seed a finding with NO plan.
+    db.add(IntegrationConnection(id=2, tenant_id=TENANT, integration_type="servicenow",
+                                 category="ticketing", connection_name="SN2",
+                                 console_url="https://y", is_active=True))
+    v = Vulnerability(id=2, tenant_id=TENANT, vuln_id="V-2", title="t2", severity="low", status="open")
+    db.add(v); db.commit()
+    assert db.query(VulnRemediationPlan).filter_by(vulnerability_id=2).count() == 0
+    r = itsm.push_finding(db, v, db.query(IntegrationConnection).get(2), user_id=7)
+    db.commit()
+    assert r["plan_created"] is True
+    assert db.query(VulnRemediationPlan).filter_by(vulnerability_id=2).count() == 1
+
+
+def test_reopened_finding_can_reticket(db):
+    v, conn = _seed(db)
+    itsm.push_finding(db, v, conn, user_id=7); db.commit()
+    FakeAdapter.next_status = "resolved"
+    itsm.sync_ticket_statuses(db, conn); db.commit()  # link now resolved
+    # finding reopens → a NEW push must be allowed (partial-live constraint)
+    r = itsm.push_finding(db, v, conn, user_id=7); db.commit()
+    assert r["created"] is True
+    assert len(FakeAdapter.created) == 2                      # a second ticket
+    links = db.query(VulnTicketLink).filter_by(vulnerability_id=1).all()
+    assert len(links) == 2
+    live = [l for l in links if l.resolved_at is None]
+    assert len(live) == 1                                     # exactly one live
 
 
 def test_status_sync_is_idempotent_on_plan(db):

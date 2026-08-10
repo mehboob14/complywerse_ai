@@ -54,8 +54,15 @@ class VulnTicketLink(Base):
     connection = relationship("IntegrationConnection")
 
     __table_args__ = (
-        UniqueConstraint("tenant_id", "vulnerability_id", "connection_id",
-                         name="uq_vuln_ticket_link"),
+        # PARTIAL unique — one LIVE ticket per (vuln, connection), but a
+        # resolved-then-reopened finding CAN push again (reopens are
+        # first-class in this codebase). An absolute constraint would forbid
+        # re-ticketing forever, and additive-only migrations make a wrong
+        # constraint expensive to undo — so it must be partial from day one.
+        Index("uq_vuln_ticket_link_live", "tenant_id", "vulnerability_id", "connection_id",
+              unique=True,
+              postgresql_where=text("resolved_at IS NULL"),
+              sqlite_where=text("resolved_at IS NULL")),
         Index("ix_vuln_ticket_link_conn", "connection_id", "normalised_status"),
         Index("ix_vuln_ticket_link_ext", "tenant_id", "external_ticket_id"),
     )

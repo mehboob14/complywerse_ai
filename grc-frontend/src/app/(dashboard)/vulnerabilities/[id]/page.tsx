@@ -43,6 +43,7 @@ import {
 } from './_components/RiskAnalysisPanel';
 import { NotesPanel, HistoryPanel } from '@/components/shared/EntityExtras';
 import RemediationPlanCard from './_components/RemediationPlanCard';
+import ItsmPanel from './_components/ItsmPanel';
 import ExploitAssessment from './_components/ExploitAssessment';
 import TraceFlow from './_components/TraceFlow';
 import Link from 'next/link';
@@ -1137,6 +1138,9 @@ export default function VulnerabilityDetailPage() {
                 vulnId={vulnerability.id}
                 hasOwner={!!vulnerability.assigned_to || (departmentAssignments?.length ?? 0) > 0}
               />
+              {/* CTEM Phase 5 — push to ITSM + ticket status (renders only
+                  when a ticketing connector exists or a ticket was pushed). */}
+              <ItsmPanel vulnId={vulnerability.id} />
               {/* Vendor patch guidance lives here, not on Analysis — it is the
                   fix, not the diagnosis. */}
               <div className="mt-4">

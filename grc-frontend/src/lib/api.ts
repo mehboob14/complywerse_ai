@@ -2702,6 +2702,13 @@ export const vulnManagementApi = {
     chokePoints: () => apiClient.get('/vuln-management/choke-points'),
     recomputeChokePoints: () => apiClient.post('/vuln-management/choke-points/recompute'),
     chokePointFinding: (id: number) => apiClient.get(`/vuln-management/choke-points/findings/${id}`),
+    // CTEM Phase 5 — ITSM mobilisation (push a finding to a ticketing connector,
+    // list its tickets). Live sync advances the plan to applied on resolution.
+    itsmTickets: (id: number) => apiClient.get(`/vuln-management/vulnerabilities/${id}/itsm-tickets`),
+    pushToItsm: (id: number, connectionId: number) =>
+      apiClient.post(`/vuln-management/vulnerabilities/${id}/push-to-itsm?connection_id=${connectionId}`),
+    syncItsmStatuses: (connectionId: number) =>
+      apiClient.post(`/vuln-management/itsm/connections/${connectionId}/sync-statuses`),
     // AI attacker-walkthrough for the same (finding × asset): a runtime narration
     // of the computed chain — what an attacker does at each stage. Separate call
     // so the chain paints instantly and this (an LLM call) loads progressively.

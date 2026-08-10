@@ -21,8 +21,15 @@ from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 
-# Normalised ticket statuses that mean "engineering completed the work".
-_RESOLVED_STATUSES = ("resolved", "closed")
+# The advance predicate is RESOLVED-ONLY. ServiceNow `closed` conflates a real
+# fix with won't-fix / not-reproducible / too-costly closures (and cancelled
+# maps separately to "cancelled"), so advancing a plan on `closed` alone would
+# record work that explicitly did NOT happen as done — the KEV-chip class of
+# "event read as proving something it doesn't". `resolved` is the unambiguous
+# "engineering completed the work" signal. A closed-WITH-a-fix-resolution-code
+# refinement is a documented Open Item; until then, a ticket that jumps
+# straight to closed simply under-advances (safe), never over-advances.
+_ADVANCE_STATUSES = ("resolved",)
 
 
 def _build_adapter(connection):
@@ -54,26 +61,57 @@ def _ticket_request(vuln):
     )
 
 
+def _ensure_remediation_plan(db: Session, vuln, *, user_id: Optional[int] = None) -> bool:
+    """Pushing to ITSM IS mobilisation, and the `mobilized` cycle counter reads
+    `VulnRemediationPlan` — so a ticketed finding MUST carry a plan or its
+    mobilisation is invisible to the counter. Create a minimal one if none
+    exists (idempotent — one plan per finding). Returns True if it created one."""
+    from ..models import VulnRemediationPlan
+    existing = db.query(VulnRemediationPlan).filter(
+        VulnRemediationPlan.tenant_id == vuln.tenant_id,
+        VulnRemediationPlan.vulnerability_id == vuln.id,
+    ).first()
+    if existing:
+        return False
+    db.add(VulnRemediationPlan(
+        tenant_id=vuln.tenant_id, vulnerability_id=vuln.id,
+        fix_type="patch",
+        title=f"Remediate {vuln.vuln_id}",
+        summary="Mobilised via ITSM — tracked in the linked ticket.",
+        fix_artifact="See the linked ITSM ticket for remediation steps and status.",
+        rationale="Finding pushed to ITSM for remediation.",
+        source="itsm",
+        status="approved",  # pushing to ITSM is a decision to fix
+    ))
+    db.flush()
+    return True
+
+
 def push_finding(db: Session, vuln, connection, *, user_id: Optional[int] = None) -> Dict[str, Any]:
-    """Push a finding to ITSM as a ticket (idempotent). Returns the link
-    summary. Never commits — caller owns the transaction."""
+    """Push a finding to ITSM as a ticket (idempotent among LIVE tickets).
+    Ensures a remediation plan exists so the mobilisation is counter-visible.
+    Never commits — caller owns the transaction."""
     from ..models import VulnTicketLink
 
-    link = db.query(VulnTicketLink).filter(
+    # Only a LIVE (unresolved) link blocks a new push — a resolved-then-reopened
+    # finding must be re-ticketable (reopens are first-class in this codebase).
+    live = db.query(VulnTicketLink).filter(
         VulnTicketLink.tenant_id == vuln.tenant_id,
         VulnTicketLink.vulnerability_id == vuln.id,
         VulnTicketLink.connection_id == connection.id,
+        VulnTicketLink.resolved_at.is_(None),
     ).first()
-    if link and link.external_ticket_id:
-        # Already pushed — idempotent no-op, return the existing ticket.
-        return {"external_ticket_id": link.external_ticket_id, "created": False,
-                "status": link.normalised_status}
+    if live and live.external_ticket_id:
+        # Already have a live ticket — idempotent no-op.
+        _ensure_remediation_plan(db, vuln, user_id=user_id)
+        return {"external_ticket_id": live.external_ticket_id, "created": False,
+                "status": live.normalised_status}
 
-    if link is None:
-        link = VulnTicketLink(
-            tenant_id=vuln.tenant_id, vulnerability_id=vuln.id,
-            connection_id=connection.id, kind="vulnerability",
-        )
+    link = live or VulnTicketLink(
+        tenant_id=vuln.tenant_id, vulnerability_id=vuln.id,
+        connection_id=connection.id, kind="vulnerability",
+    )
+    if link.id is None:
         db.add(link)
 
     try:
@@ -83,12 +121,17 @@ def push_finding(db: Session, vuln, connection, *, user_id: Optional[int] = None
         link.pushed_by_user_id = user_id
         link.pushed_at = datetime.utcnow()
         link.normalised_status = "new"
+        link.resolved_at = None
+        link.plan_advanced_at = None
         link.push_error = None
         link.updated_at = datetime.utcnow()
+        plan_created = _ensure_remediation_plan(db, vuln, user_id=user_id)
         db.flush()
         _audit(db, vuln.tenant_id, connection.id, user_id, "itsm.ticket_pushed",
-               link.id, {"vulnerability_id": vuln.id, "external_ticket_id": ext_id})
-        return {"external_ticket_id": ext_id, "created": True, "status": "new"}
+               link.id, {"vulnerability_id": vuln.id, "external_ticket_id": ext_id,
+                         "plan_created": plan_created})
+        return {"external_ticket_id": ext_id, "created": True, "status": "new",
+                "plan_created": plan_created}
     except Exception as e:
         link.push_error = str(e)[:500]
         link.updated_at = datetime.utcnow()
@@ -129,7 +172,7 @@ def sync_ticket_statuses(db: Session, connection, *, limit: int = 500) -> Dict[s
         link.last_synced_at = now
         counts["synced"] += 1
 
-        if st.normalised_status in _RESOLVED_STATUSES:
+        if st.normalised_status in _ADVANCE_STATUSES:
             if link.resolved_at is None:
                 link.resolved_at = st.resolved_at or now
                 counts["resolved"] += 1

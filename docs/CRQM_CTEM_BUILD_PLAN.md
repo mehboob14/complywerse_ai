@@ -3,6 +3,24 @@
 Complyverse GRC platform. Written 2026-08-10, grounded in the actual codebase
 (entities, patterns, and dependencies verified — not assumed).
 
+## Open Items — the single ledger (doc-tracks-obligations)
+
+At six phases this arc has outgrown memory-based tracking, so obligations live
+HERE, one line each: an item enters when raised, and either LANDS (with where),
+gets DECLINED (with why), or stays OPEN with its blocker. Nothing evaporates
+between review rounds.
+
+| Item | Status | Where / blocker |
+|---|---|---|
+| Enrich the 4 reachability gap-findings (no CWE/CVSS → unlikely) | OPEN | Was sequenced "before Phase 5"; not a blocker for shipped work — raises Phase 4 viability coverage. Needs an enrichment pass over those 4 findings. |
+| Prioritized-counter non-vacuity fixture (hermetic, N>0 in-window) | OPEN | Wiring proven live 3/3, but the permanent hermetic test asserts an inaugural-backfill split only; add an in-window (non-inaugural) fixture. |
+| Verdict-engine: concluded-severed vs defaulted-on-missing-data note | LANDED | Diagnosed in Phase 4 doc: 11 genuinely severed + 4 enrichment-gaps; surfaced on the choke-point view's two-lever copy. |
+| ITSM closed-with-fix-resolution-code advance (beyond resolved-only) | OPEN | Deliberately resolved-only now (safe); a close_code check could add legitimate closed-fix advances. |
+| ITSM live end-to-end (push → resolve → plan applied) | OPEN | Blocked on a configured ServiceNow PDI. Two-stage plan recorded in Phase 5. |
+| Prod role-catalogue check (do the gates bite in production?) | OPEN — yours | Needs production access; gates every decision endpoint across six capabilities. Highest-leverage half-hour. |
+| Viewer-login UI hide check (buttons hidden, not just API-403) | OPEN — yours | Needs a real viewer login; API-403 boundary already proven 9/9. |
+| Push local commits / add a private remote | OPEN — yours | 24+ unpushed commits; bundle covers loss, but a private remote earns its keep now. Your rule to keep or lift. |
+
 ## Ground rules for every phase
 
 These come from how the codebase actually works:
@@ -378,16 +396,41 @@ configured via the connectors UI, never through the vuln endpoints.
   registry's `build_adapter` → create_ticket → link, same construction path as
   the connectors router) and `sync_ticket_statuses` (fetch_statuses → roll
   resolution onto the plan).
-- **Safety boundary (mirrors scanner auto-close):** a resolved ServiceNow
-  ticket advances the linked remediation plan to `applied` (engineering did
-  the work), NEVER to `verified` — a ticket close is not proof the finding is
-  gone; verification stays the scanner/retest path. Advance-once (idempotent
-  re-sync), audited.
+- **Safety boundary — the Phase 2 epistemology, third event family.** Each
+  event advances exactly as far as what it PROVES: scanner closure → the fix
+  landed; retest → the control worked; ITSM resolution → engineering did the
+  work. So a resolved ServiceNow ticket advances the plan to `applied`, NEVER
+  `verified` (verification stays the scanner/retest path). Advance-once
+  (idempotent re-sync), audited.
+- **Advance predicate is RESOLVED-ONLY.** ServiceNow `closed` conflates a real
+  fix with won't-fix / not-reproducible / too-costly; advancing on it would
+  record undone work as done. `resolved` is unambiguous. A ticket jumping
+  straight to closed under-advances (safe), never over-advances. Closed-with-
+  a-fix-resolution-code is an Open Item.
+- **Push ensures a remediation plan exists** (creates a minimal `approved` one
+  if none). The `mobilized` counter reads `VulnRemediationPlan`, so pushing IS
+  mobilising and the counter can see it — a ticketed-but-planless finding
+  would otherwise be invisible mobilisation.
+- **Idempotency is partial, keyed on LIVE tickets** (partial unique index
+  `WHERE resolved_at IS NULL`). One live ticket per (vuln, connection), but a
+  resolved-then-reopened finding CAN re-ticket — reopens are first-class here,
+  and an absolute constraint would forbid re-ticketing forever.
 - Endpoints: `POST /vulnerabilities/{id}/push-to-itsm`, `POST /itsm/
   connections/{id}/sync-statuses`, `GET /vulnerabilities/{id}/itsm-tickets` —
-  edit-gated. Hermetic tests (fake adapter) lock idempotent push + the
-  applied-not-verified boundary; LIVE end-to-end pends a configured ServiceNow
-  connection.
+  edit/view-gated. UI: an ITSM panel on the finding's Remediation tab (push +
+  connector picker + ticket status "as of last sync", the computed_at honesty
+  pattern since there is no scheduler).
+- **8 hermetic tests** (fake adapter) lock idempotent push, applied-not-
+  verified, closed-does-NOT-advance, plan-creation, and reopen-re-ticketing.
+
+**Dormant-adapter finding (checked before relying on it):** the ServiceNow
+adapter was bulk-added in ONE commit and never touched since; zero ticketing
+connectors have ever been created; zero ticket audit rows. So it has NEVER run
+live — its first live run is its first real test. The fake adapter proves the
+WIRING conforms to the interface, not that the real adapter conforms to
+ServiceNow's API. Two-stage live plan when a PDI exists: (1) exercise the
+dormant adapter alone via the existing `/connectors` test + sync endpoints;
+(2) then the full push → resolve → plan-applied loop.
 
 ### Still ahead (gated on a live instance each)
 
