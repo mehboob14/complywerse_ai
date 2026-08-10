@@ -16,7 +16,7 @@ guarantees); **C** = user decision; **D** = inventory-gated connectors;
 
 | Item | Status | Where / blocker |
 |---|---|---|
-| A1 Auto-created plan shape + provenance | LANDED | `itsm_service._ensure_remediation_plan` stamps system approver + self-declared source; hermetic test asserts fields; counter-attribution nuance in Phase 5 doc. |
+| A1 Auto-created plan shape + provenance | LANDED | `itsm_service._ensure_remediation_plan` stamps system approver + self-declared source; hermetic test asserts fields; counter-attribution nuance in Phase 5 doc. Reuse/dedup half also pinned: `test_push_reuses_existing_plan_no_second_plan` asserts a push onto a finding with an existing plan reuses it (no second plan). |
 | A2 Prioritized-counter non-vacuity fixture | LANDED | `test_ctem_stage_counters.py`: out-of-scope `first_seen` asserted EXCLUDED + backfill split + absent-when-none. |
 | A3 Enrich the 4 reachability gap-findings | DECLINED | The 4 (ids 273/127/131/134) are CVE-less Nessus info findings — no CVE/CWE to enrich FROM (enrichment is CVE→NVD→CWE). Their "unlikely" is genuine un-derivability, not a fixable gap. Real issue is E4 (engine defaulting). |
 | A4 Remaining rule dimensions in the harness | LANDED | Resolver supports exactly asset_ids / departments / asset_types / name_contains (no tag/subnet). All four + AND-narrowing already tested in `test_ctem_scope_membership.py`. |
@@ -31,7 +31,7 @@ guarantees); **C** = user decision; **D** = inventory-gated connectors;
 | E1 Workbench evidence panel | OPEN | Surface Phase 2 evidence rows inside the CT&A workbench control view. |
 | E2 Scorecard blend | OPEN | Factor automated tiers into the assurance scorecard weights. |
 | E3 ITSM closed-with-fix-code advance | OPEN | Resolved-only now (safe); close_code check could add legit closed-fix advances. |
-| E4 Verdict-engine concluded-vs-defaulted (structural) | OPEN | Distinguish concluded severance from enrichment-pending so a default isn't read as posture. |
+| **E4 Verdict-engine: three states rendered as two** (FIRST among electives) | OPEN | Two independent threads route here, which makes it the top elective. (a) The engine defaults BOTH concluded-severed and UNDETERMINABLE (no CVE/CWE to derive from) chains to `unlikely` — three states shown as two; a default must not read as posture. (b) A3's decline makes this surface in COPY: the reach view's empty-state frames enrichment as a lever for all "chained-but-unviable", but for the 4 CVE-less findings enrichment is impossible — so E4's scope includes the VIEW TEXT (add an "undeterminable — nothing to enrich from" state), not just the engine, to avoid patching copy twice. |
 | E5 Portfolio correlation term | OPEN | Shared-factor extension; independence assumption stamped + on-card today. |
 | E6 Approve-tier permission | OPEN | Activation/material-flag sit at edit level; no approve-level string platform-wide. |
 | E7 Seed default roles on tenant creation | OPEN | Conditional on B2 outcome. |
