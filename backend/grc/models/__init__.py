@@ -25,3 +25,4 @@ from ._50_risk_quantification_models import *  # noqa: F401,F403 - CRQM loss mod
 from ._51_control_effectiveness_models import *  # noqa: F401,F403 - control effectiveness evidence (CTEM Phase 2)
 from ._52_ctem_scope_models import *  # noqa: F401,F403 - CTEM scopes + cycles (Phase 3)
 from ._53_choke_point_models import *  # noqa: F401,F403 - CTEM choke-point analysis (Phase 4)
+from ._54_itsm_ticket_link_models import *  # noqa: F401,F403 - ITSM ticket links (Phase 5)

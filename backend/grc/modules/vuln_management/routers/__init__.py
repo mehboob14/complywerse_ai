@@ -14,9 +14,11 @@ from .escalations import router as escalations_router
 from .remediation_plans import router as remediation_plans_router
 from .exploitability import router as exploitability_router
 from .choke_points import router as choke_points_router
+from .itsm import router as itsm_router
 
 __all__ = [
     "choke_points_router",
+    "itsm_router",
     "reports_router",
     "vulnerabilities_router",
     "mitigations_router",

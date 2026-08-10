@@ -355,19 +355,50 @@ whose write path a test exercises needs a no-write mode, not just cleanup.
 
 ## Phase 5 — External connectors (EASM · BAS · ITSM)
 
-Each is an adapter on the existing `IntegrationConnection` framework (the
-`category` field already supports new connector families), built one at a
-time, verified against a live instance like the Nessus two-way sync was:
+**Operational discovery (read-before-build, like the CT&A router and CWE
+mapper):** a complete `grc/modules/connectors/` module already exists —
+mounted at `/connectors`, with a `TicketingAdapter` base (create_ticket /
+fetch_statuses / two-way status sync), a self-registering provider registry,
+full connector CRUD + OAuth, and WORKING ServiceNow + BMC Remedy adapters.
+The Phase 5 plan's "build adapters fresh on IntegrationConnection" framing was
+wrong; most of the ticketing machinery is already there. The real gap was the
+WIRING: nothing in the vuln lifecycle called `create_ticket`, and no ticket
+resolution rolled back onto a remediation plan. (No Jira provider exists —
+that would be net-new on the same framework.)
 
-- **EASM** (outside-in discovery): exposed domains, certs, leaked credentials,
-  forgotten dev environments → feeds the identity resolver and asset register
-  with `source_system` provenance; aggregated exposure classes with
-  drill-through to the source tool.
-- **BAS** (breach and attack simulation): "did the control fire?" results →
-  Phase 2 evidence rows.
-- **ITSM** (ServiceNow/Jira): bidirectional remediation sync — push validated
-  exposures as tickets, pull status into remediation plans; SLA rollup stays
-  in Complyverse.
+### ITSM (ServiceNow) — built: wire the existing adapter into the vuln flow
+
+Verified against a ServiceNow instance (user has one); credentials are
+configured via the connectors UI, never through the vuln endpoints.
+
+- `grc_vuln_ticket_links` — one live ticket per (vuln, connection). Idempotent
+  by construction: a repeat push returns the existing link, never a duplicate
+  incident.
+- `services/itsm_service.py` — `push_finding` (build TicketRequest → the
+  registry's `build_adapter` → create_ticket → link, same construction path as
+  the connectors router) and `sync_ticket_statuses` (fetch_statuses → roll
+  resolution onto the plan).
+- **Safety boundary (mirrors scanner auto-close):** a resolved ServiceNow
+  ticket advances the linked remediation plan to `applied` (engineering did
+  the work), NEVER to `verified` — a ticket close is not proof the finding is
+  gone; verification stays the scanner/retest path. Advance-once (idempotent
+  re-sync), audited.
+- Endpoints: `POST /vulnerabilities/{id}/push-to-itsm`, `POST /itsm/
+  connections/{id}/sync-statuses`, `GET /vulnerabilities/{id}/itsm-tickets` —
+  edit-gated. Hermetic tests (fake adapter) lock idempotent push + the
+  applied-not-verified boundary; LIVE end-to-end pends a configured ServiceNow
+  connection.
+
+### Still ahead (gated on a live instance each)
+
+- **EASM** (outside-in discovery): exposed domains, certs, leaked credentials
+  → feeds the identity resolver + asset register with `source_system`
+  provenance; also raises the chain-generation coverage Phase 4 needs. Gated
+  on an EASM account.
+- **BAS** (breach and attack simulation): "did the control fire?" → Phase 2
+  evidence rows at the `tested-effective` tier. Gated on a BAS license.
+- **Jira** (ITSM alt): net-new provider on the connectors framework if a Jira
+  instance is the target instead of ServiceNow.
 
 ---
 
