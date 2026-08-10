@@ -481,6 +481,11 @@ def auto_map_compliance_controls(
         target_pfc_ids = {c.parsed_control_id for c in controls}
 
         # Existing auto rows for this vuln, scoped to the parsed-FK column.
+        # PROVENANCE GATE (load-bearing): the notes.like(auto:cwe:%) filter is
+        # what confines stale pruning below to links this mapper created. A
+        # manual link (the link row IS a human's assertion) must never be a
+        # pruning candidate — soft-retraction protects the evidence, not the
+        # human's statement. Do not widen this query.
         existing_auto = (
             db.query(VulnerabilityControlLink)
             .filter(

@@ -194,14 +194,17 @@ Three semantics settled BEFORE code (review front-load):
    deliberately not v1. Drill-down is honestly limited to OPEN cycles — a
    closed cycle's counts are verifiable against the frozen rule + hash, not
    re-explorable, and the UI says so.
-2. **Stage counters only from real tables.** v1 ships THREE honest counters,
-   not five decorative ones:
-   - discovered — findings created in-window on member assets
-     (`grc_vulnerabilities` × asset links);
-   - validated — retest / reachability-snapshot / scanner-closure events
-     in-window on member assets (the Phase 2 evidence stream);
-   - mobilized — remediation plans + approved exceptions created in-window
-     for member-asset findings.
+2. **Stage counters only from real tables** (as built —
+   `services/ctem_scopes.compute_stage_counts`). v1 ships THREE honest
+   counters, each a named table + timestamp:
+   - discovered — `Vulnerability.first_detected` (falling back to
+     `discovered_at`) in-window on member assets. first_detected specifically,
+     so a RE-SCAN never re-discovers an existing finding.
+   - validated — `ControlEffectivenessEvidence.tested_at` in-window
+     (retracted rows excluded) — the Phase 2 evidence stream (retest /
+     closure).
+   - mobilized — `VulnRemediationPlan.created_at` in-window for member-asset
+     findings.
    "Prioritized" has no event table until Phase 4's choke points land and is
    OMITTED rather than faked.
 3. **Cadence is advisory metadata only.** No scheduler exists in this
@@ -221,17 +224,44 @@ Three semantics settled BEFORE code (review front-load):
 
 ## Phase 4 — Choke-point analysis
 
+Five decisions settled BEFORE code (review front-load):
+
+1. **"Path" is a STORED artifact, never an enumeration.** Count existing
+   reachability chains and technique chains (bounded, explainable, already
+   persisted) — NOT simple paths enumerated through an exposure→technique→
+   asset graph, which is exponential and yields astronomical, meaningless
+   counts on a modest estate. A choke point's "paths broken" = the count of
+   stored chains whose steps include the remediated node.
+2. **Ranking is MARGINAL, not additive.** Chains share steps, so fixing #1
+   and #2 does NOT break the sum of their counts. No totals row, no summing
+   affordance anywhere — the same law as scope overlap. The ranking reshuffles
+   after each sync as fixes land; that is correctness, not instability, and
+   the UI should frame it that way.
+3. **Snapshot honesty: `computed_at` rendered on the view itself.** A list
+   computed before the latest scan must show its age, like the CRQM run
+   timestamps.
+4. **`prioritized` counter: decide the EVENT or keep the seam.** Choke-point
+   rank is a STATE; counters count events in windows. The only clean event is
+   "finding first appears in a choke-point snapshot during the cycle window."
+   Decide that explicitly when wiring, or leave the counter omitted one more
+   phase — do NOT pour a state into an event counter.
+5. **Explainability is the whole feature.** Every rank entry decomposes into
+   the exact stored chains it claims to break — that is the entire difference
+   between this and a black-box score. Acceptance is unchanged: click a choke
+   point → see the precise paths.
+
 - Aggregation service over data already stored (reachability steps, technique
-  chains, asset links): build the exposure→technique→asset graph, rank single
-  remediations by number of viable attack paths broken.
+  chains, asset links): rank single remediations by number of stored viable
+  attack chains they interrupt.
 - Computed on demand with a cached result table
-  (`grc_choke_point_snapshots`), recomputed after each sync — same trigger
-  point as enrichment.
+  (`grc_choke_point_snapshots`, carrying `computed_at`), recomputed after each
+  sync — same trigger point as enrichment.
 - UI: "Choke points" view in the vulnerabilities module (ranked list: fix X →
-  breaks N paths across M assets) + a sort option on the register; feeds
-  Phase 3 cycle prioritization.
+  breaks N chains across M assets, no total) with its `computed_at` shown +
+  a sort option on the register; feeds Phase 3's (still-omitted) prioritized
+  counter once its event is decided.
 - Acceptance: ranking is explainable — clicking a choke point lists the exact
-  paths it breaks.
+  stored chains it breaks.
 
 ## Phase 5 — External connectors (EASM · BAS · ITSM)
 
@@ -290,12 +320,22 @@ reversible.
   roadmap to near-term. The UI-side hiding of decision buttons still needs
   one human check with a real viewer login.
 - **Evidence follows links, both directions**: removing a vuln↔control link
-  (manual unlink or auto-map stale removal) retracts the evidence that link
-  produced, with a per-row audit entry carrying the old values — a pruned
-  wrong link must not keep feeding the badge. Evidence rows also carry
-  `link_basis` (cwe_crosswalk / vuln_mgmt_rule / kev_rule / manual) so a
-  KEV-rule-routed closure on an incident-response control is visibly
-  discountable in the tooltip.
+  retracts the evidence that link produced, with a per-row audit entry. Two
+  modes by WHO removed it: manual unlink HARD-deletes (a human asserted the
+  link was wrong); rule-driven removal (auto-map stale pruning) SOFT-retracts
+  (`retracted_at`, excluded from derivation) and REINSTATES on relink, since
+  rules fluctuate and producers fire on events that never replay. Evidence
+  rows carry `link_basis` (cwe_crosswalk / vuln_mgmt_rule / kev_rule /
+  manual) so a KEV-rule-routed closure is visibly discountable.
+  - **Stale pruning is provenance-gated**: the auto-mapper only prunes links
+    IT created (`notes LIKE 'auto:cwe:%'`) — a manual link (the link row is
+    itself a human's assertion) is never a pruning candidate. Soft-retraction
+    protects the evidence; the provenance gate protects the human's statement.
+  - **Known cosmetic**: evidence reinstated when a link is MANUALLY recreated
+    still carries its rule-era `link_basis`, so the chip may read "via KEV
+    rule" on a now-manual link. Acceptable provenance (that IS how the
+    evidence originally arose), but it reads as a bug cold — documented so it
+    isn't mistaken for one.
 - **Evidence upsert + audit**: result transitions (pass→fail, fail→pass) on
   effectiveness evidence write an AuditLog row carrying the old result and
   old tested-at before the overwrite, so failure/recovery timelines survive
