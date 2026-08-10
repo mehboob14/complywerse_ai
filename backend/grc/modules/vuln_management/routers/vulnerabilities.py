@@ -294,21 +294,20 @@ def list_vulnerabilities(
         elif not include_closed:
             query = query.filter(Vulnerability.status.notin_(_LIST_CLOSED_STATUSES))
     if ctem_scope_id:
-        # Same resolver the cycle counters use — no second in-scope
-        # definition can drift from the counts shown next to this register.
+        # THE shared scope→findings helper — the SAME function the cycle
+        # counters call, so this register and the counts beside it cannot
+        # drift apart (one definition, structural not incidental).
         try:
-            from ....models import CtemScope, VulnerabilityAssetLink as _VAL
-            from ....services.ctem_scopes import resolve_scope_assets
+            from ....models import CtemScope
+            from ....services.ctem_scopes import scope_vulnerability_ids
             _scope = db.query(CtemScope).filter(
                 CtemScope.id == ctem_scope_id,
                 CtemScope.tenant_id.in_(user_tenants),
             ).first()
             if not _scope:
                 raise HTTPException(status_code=404, detail="CTEM scope not found")
-            _asset_ids = resolve_scope_assets(db, _scope.tenant_id, _scope.membership_rule)
-            if _asset_ids:
-                _scoped_vuln_ids = db.query(_VAL.vulnerability_id).filter(
-                    _VAL.asset_id.in_(_asset_ids)).distinct().subquery()
+            _scoped_vuln_ids = scope_vulnerability_ids(db, _scope.tenant_id, _scope.membership_rule)
+            if _scoped_vuln_ids:
                 query = query.filter(Vulnerability.id.in_(_scoped_vuln_ids))
             else:
                 query = query.filter(False)  # empty scope → no rows, honestly

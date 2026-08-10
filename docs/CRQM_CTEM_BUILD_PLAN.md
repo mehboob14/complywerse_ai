@@ -393,6 +393,20 @@ reversible.
     any evidence has no visible family until it does. Acceptable (family only
     matters once evidence exists to discount), documented so it isn't
     discovered as a surprise.
+  - **`link_basis` is EVIDENCE-TIME classification, not creation provenance**:
+    it is computed against the rule sets CURRENT at the moment the evidence
+    row is written, so the "via KEV rule" chip asserts "this link matches the
+    KEV rule NOW," not "the KEV rule created this link." Creation-time family
+    is unrecoverable under the uniform marker, so evidence-time is the only
+    possible semantics — named here so the chip is never misread as creation
+    provenance.
+  - **One-resolver invariant is now STRUCTURAL**: both the register scope
+    filter and the cycle counters call the single
+    `services/ctem_scopes.scope_vulnerability_ids` — there is one function, not
+    two agreeing implementations. Locked by a hermetic pytest suite
+    (`test_ctem_scope_membership.py`) that checks every membership mode against
+    independent ground truth, so a future refactor breaks a test rather than
+    drifting silently.
   - **Known cosmetic**: evidence reinstated when a link is MANUALLY recreated
     still carries its rule-era `link_basis`, so the chip may read "via KEV
     rule" on a now-manual link. Acceptable provenance (that IS how the

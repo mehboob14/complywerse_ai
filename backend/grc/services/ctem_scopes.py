@@ -88,6 +88,17 @@ def _vuln_ids_for_assets(db: Session, tenant_id: int, asset_ids: List[int]) -> L
     return [r[0] for r in rows]
 
 
+def scope_vulnerability_ids(db: Session, tenant_id: int, membership_rule: Optional[Dict[str, Any]]) -> List[int]:
+    """THE scope→findings function. The register filter AND the cycle counters
+    both call this, so "in scope" has exactly one definition — a future
+    refactor of either cannot silently drift them apart (the invariant proven
+    by the register==resolver identity checks, now structural not incidental).
+    Distinct by construction (via _vuln_ids_for_assets), so a mixed scope
+    whose explicit list and rule both match an asset counts its findings
+    once."""
+    return _vuln_ids_for_assets(db, tenant_id, resolve_scope_assets(db, tenant_id, membership_rule))
+
+
 def compute_stage_counts(
     db: Session,
     tenant_id: int,
@@ -114,6 +125,8 @@ def compute_stage_counts(
     )
 
     out = {"member_assets": len(asset_ids), "discovered": 0, "validated": 0, "mobilized": 0}
+    # Same asset→findings mapping the register filter uses (via
+    # scope_vulnerability_ids, which wraps this) — one definition of "in scope".
     vuln_ids = _vuln_ids_for_assets(db, tenant_id, asset_ids)
     if not vuln_ids:
         return out
