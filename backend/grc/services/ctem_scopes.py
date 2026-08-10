@@ -158,6 +158,37 @@ def compute_stage_counts(
     )
     out["mobilized"] = _window(mq, VulnRemediationPlan.created_at).scalar() or 0
 
+    # PRIORITIZED (Phase 4 filled the seam Phase 3 left open): a finding's
+    # event is "first became a rankable choke point in-window", read from the
+    # durable first_seen fact (never the replaceable snapshot). Decomposed:
+    # in_window is real workflow; launch_backfill is the one-time inaugural
+    # stamp, surfaced separately so a cycle spanning launch doesn't read a
+    # backfill spike as prioritization. Only present once a snapshot exists.
+    try:
+        from ..models import ChokePointFirstSeen
+        fq = db.query(
+            func.count(ChokePointFirstSeen.id),
+            func.count(ChokePointFirstSeen.id).filter(
+                ChokePointFirstSeen.is_inaugural_backfill.is_(True)),
+        ).filter(
+            ChokePointFirstSeen.tenant_id == tenant_id,
+            ChokePointFirstSeen.vulnerability_id.in_(vuln_ids),
+        )
+        if since is not None:
+            fq = fq.filter(ChokePointFirstSeen.first_in_snapshot_at >= since)
+        if until is not None:
+            fq = fq.filter(ChokePointFirstSeen.first_in_snapshot_at < until)
+        total_prio, backfill = fq.one()
+        total_prio = total_prio or 0
+        backfill = backfill or 0
+        out["prioritized"] = total_prio
+        out["prioritized_in_window"] = total_prio - backfill
+        out["prioritized_launch_backfill"] = backfill
+    except Exception:
+        # No choke-point snapshot yet → the counter stays absent (the honest
+        # "seam still open" state), never a fake zero that reads as measured.
+        logger.debug("prioritized counter unavailable (no choke-point data yet)")
+
     return out
 
 

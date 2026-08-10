@@ -205,8 +205,14 @@ Three semantics settled BEFORE code (review front-load):
      closure).
    - mobilized — `VulnRemediationPlan.created_at` in-window for member-asset
      findings.
-   "Prioritized" has no event table until Phase 4's choke points land and is
-   OMITTED rather than faked.
+   "Prioritized" was OMITTED at Phase 3 (no event table) — **now WIRED**, once
+   Phase 4 gave it one: the event is "a finding first became a rankable choke
+   point in-window", read from the durable `ChokePointFirstSeen` fact (never
+   the replaceable snapshot), intersected with scope member findings. Reported
+   decomposed — `prioritized_in_window` (real workflow) vs
+   `prioritized_launch_backfill` (the one-time inaugural stamp) — so a cycle
+   spanning launch never reads backfill as prioritization. Absent (not a fake
+   zero) until a first choke-point snapshot exists.
 3. **Cadence is advisory metadata only.** No scheduler exists in this
    architecture; cycles open and close by explicit human action, and the UI
    never implies one will open itself.
@@ -224,19 +230,35 @@ Three semantics settled BEFORE code (review front-load):
 
 ## Phase 4 — Choke-point analysis
 
-Five decisions settled BEFORE code (review front-load):
+**Definition — re-settled after an empirical discovery** (assumption → check →
+correction, per doc-tracks-code; the front-loaded decisions 1–2 below assumed
+a shared-step graph the schema does not have):
 
-1. **"Path" is a STORED artifact, never an enumeration.** Count existing
-   reachability chains and technique chains (bounded, explainable, already
-   persisted) — NOT simple paths enumerated through an exposure→technique→
-   asset graph, which is exponential and yields astronomical, meaningless
-   counts on a modest estate. A choke point's "paths broken" = the count of
-   stored chains whose steps include the remediated node.
-2. **Ranking is MARGINAL, not additive.** Chains share steps, so fixing #1
-   and #2 does NOT break the sum of their counts. No totals row, no summing
-   affordance anywhere — the same law as scope overlap. The ranking reshuffles
-   after each sync as fixes land; that is correctness, not instability, and
-   the UI should frame it that way.
+- ASSUMED: a choke point is a convergence node many paths route through;
+  "paths broken" = stored chains whose steps include the remediated node;
+  ranking is MARGINAL because chains share steps.
+- CHECKED (before writing the test): a `ReachabilitySnapshot` is one finding
+  on one asset; steps are ATT&CK techniques. Each chain belongs to exactly ONE
+  finding, so finding A's chains and B's are DISJOINT — "fixing A severs B's
+  chain" never happens; the shared-step/marginal model describes a graph this
+  data isn't. (Confirmed: vuln 300 spans 5 assets, 299 two, the rest one each.)
+- RE-SETTLED (user decision): **a finding's score = the number of distinct
+  VIABLE (asset) chains it participates in** — latest snapshot per (vuln,asset)
+  with a viable verdict (likely/possible). One remediation severs all of them,
+  so a widespread finding is the choke point. This is breadth/reach, NOT
+  convergence — the view says so on its face rather than borrowing the vendor
+  term unqualified.
+
+1. **"Chain" is a STORED artifact, never an enumeration.** Score = count of a
+   finding's stored viable chains — never paths enumerated through a graph
+   (exponential, meaningless at estate scale).
+2. **Summing rules, corrected for the real model.** Chains are DISJOINT per
+   finding, so `total_viable_chains` across findings sums TRUE and is shown.
+   What must NEVER be summed is ASSETS PROTECTED — assets overlap across
+   findings, so a protection total double-counts; no per-finding "assets
+   protected" total exists anywhere. The ranking still reshuffles as fixes land
+   (correctness); the deterministic tie-break keeps identical recomputes
+   byte-identical so only real change moves the list.
 3. **Snapshot honesty: `computed_at` rendered on the view itself.** A list
    computed before the latest scan must show its age, like the CRQM run
    timestamps.
@@ -293,12 +315,30 @@ synthetic-but-realistic chains verify SCALE and TIE-BREAK only, marked and
 cleaned up.
 
 Dev-tenant chain inventory (run before building, per the Phase 2 lesson):
-**15 reachability snapshots across 9 findings and 5 assets, 72 steps** — the
-ranking spans 9 of 215 findings. Non-vacuous but shallow, so carry the
-Phase 2 honesty pattern onto the VIEW ITSELF ("ranks remediations across 9 of
-215 findings with stored chains") — a short list must read as coverage-limited,
-not broken — and give chain-GENERATION coverage its roadmap number the way
-link coverage got one at Phase 2.5.
+**15 reachability snapshots across 9 findings and 5 assets, 72 steps** — but
+ALL 15 have verdict `unlikely`, so the real-data ranking is EMPTY (0 viable).
+A real-data correctness check is therefore vacuous (empty==empty, the 0==0
+trap one layer down); fixtures with viable chains are the only non-vacuous
+proof, and real data is used only to confirm the honest empty state.
+
+**Why all 15 are unlikely (the diagnostic, run for empty-state honesty):**
+two distinct causes — 11 genuinely severed ("every way in blocked at the door"
+= real posture) and 4 enrichment-gaps ("no CWE/CVSS recorded, assumed not
+derived, unlikely until enriched" = fixable, not real severance). So the empty
+state has THREE levers, surfaced precisely on the view: chain GENERATION
+(findings with no chain), VIABILITY-by-severance, and VIABILITY-by-enrichment.
+Chain-generation coverage gets its roadmap number the way link coverage did at
+Phase 2.5.
+
+**Operational finding — append-only tables and test writes** (the
+unlink-retraction class, one layer on): the live verification injected a
+synthetic viable chain, which drove the REAL `persist_snapshot` path and wrote
+`first_seen` — a first-write-wins, never-updated fact. A blanket delete cleaned
+it this time, but the correct rule is structural: `persist_snapshot` takes
+`stamp_first_seen=False` so synthetic verification computes/persists a snapshot
+WITHOUT ever touching the append-only fact table. Production paths (sync,
+recompute endpoint) always stamp. General rule: any append-only fact table
+whose write path a test exercises needs a no-write mode, not just cleanup.
 
 - Aggregation service over data already stored (reachability steps, technique
   chains, asset links): rank single remediations by number of stored viable

@@ -55,10 +55,13 @@ def get_choke_points(
         "coverage": cov,
         "coverage_note": (
             f"Ranks remediations across {cov['findings_ranked']} of "
-            f"{cov['total_findings']} findings that currently have a VIABLE stored "
-            f"attack chain ({cov['findings_with_stored_chains']} findings carry any "
-            f"chain). A short list means limited reachability coverage, not a broken "
-            f"feature — chain generation is the lever."
+            f"{cov['total_findings']} findings ({cov['total_viable_chains']} viable "
+            f"chains total). Two levers move this, not one: chain GENERATION — "
+            f"{cov['findings_chainless']} findings carry no stored chain at all — and "
+            f"VIABILITY — {cov['findings_chained_but_unviable']} carry a chain but none "
+            f"is currently viable (severed, or awaiting enrichment). A short list is "
+            f"coverage-limited, not broken. 'Viable' means a latest verdict of likely "
+            f"or possible; a severed chain is already broken and does not count."
         ),
         "no_total_reason": (
             "Chain counts are per-finding and are NOT summed: the assets they "

@@ -13,6 +13,7 @@
  */
 
 import { useMemo, useState } from 'react';
+import Link from 'next/link';
 import {
   Bug, AlertOctagon, Zap, Crosshair, Globe,
   Download, Upload, Plus, Search, Loader2, List, LayoutGrid,
@@ -423,14 +424,14 @@ export function VulnsWorkspace({
 
         <div className="ml-auto flex shrink-0 items-center gap-2">
           {/* CTEM Phase 4 — choke points: fix-one-break-many ranking */}
-          <a
+          <Link
             href="/vulnerabilities/choke-points"
             className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
             title="Findings ranked by how many viable attack chains their fix severs"
           >
             <Crosshair strokeWidth={1.75} className="h-4 w-4" />
             <span className="hidden md:inline">Choke points</span>
-          </a>
+          </Link>
 
           {/* Register-type selector (Standard ⇄ NCA) */}
           <select

@@ -61,8 +61,11 @@ export default function ChokePointsPage() {
             Choke points
           </h1>
           <p className="text-sm text-slate-500 max-w-2xl mt-0.5">
-            Findings whose remediation severs the most viable attack chains at once — fix one,
-            break many. Click a row to see the exact chains it breaks.
+            Findings ranked by the reach of a single fix: how many <em>viable</em> attack chains
+            (a latest verdict of likely or possible) their remediation severs at once — widest
+            reach first. Not a convergence node in the classic sense; this schema stores one
+            chain per finding-on-asset, so a widespread finding is the lever. Click a row for the
+            exact chains it breaks.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -102,8 +105,14 @@ export default function ChokePointsPage() {
         </div>
       ) : entries.length === 0 ? (
         <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-8 text-center text-sm text-slate-500">
-          No ranked choke points — no finding currently has a viable stored attack chain.
-          {cov && ` (${cov.findings_with_stored_chains} findings carry any chain; none are viable yet.)`}
+          No ranked choke points — no finding currently has a <em>viable</em> stored attack chain.
+          {cov && (
+            <span className="block mt-1 text-xs text-slate-400">
+              Two levers: {cov.findings_chainless} of {cov.total_findings} findings carry no chain
+              at all (generation), and {cov.findings_chained_but_unviable} carry a chain that is
+              currently severed or awaiting enrichment (viability).
+            </span>
+          )}
         </div>
       ) : (
         <div className="rounded-xl border border-slate-200 bg-white divide-y divide-slate-100">

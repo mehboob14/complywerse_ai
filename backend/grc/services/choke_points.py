@@ -94,8 +94,11 @@ def rank_choke_points(db: Session, tenant_id: int) -> List[Dict[str, Any]]:
 
 
 def coverage(db: Session, tenant_id: int) -> Dict[str, int]:
-    """Honesty numbers for the view: how many findings the ranking spans out
-    of the whole register, and how many carry ANY stored chain at all."""
+    """Honesty numbers for the view. Names BOTH levers on the empty/short
+    state: chain GENERATION (findings with no chain at all) and VIABILITY
+    (findings that carry a chain but none currently viable). total_viable_chains
+    is a legitimate sum — chains are disjoint per finding here — while asset
+    counts still must never be summed."""
     from ..models import Vulnerability, ReachabilitySnapshot
 
     total_findings = db.query(func.count(Vulnerability.id)).filter(
@@ -103,15 +106,20 @@ def coverage(db: Session, tenant_id: int) -> Dict[str, int]:
     findings_with_chains = db.query(
         func.count(func.distinct(ReachabilitySnapshot.vulnerability_id))).filter(
         ReachabilitySnapshot.tenant_id == tenant_id).scalar() or 0
-    ranked = len(rank_choke_points(db, tenant_id))
+    ranking = rank_choke_points(db, tenant_id)
+    total_viable_chains = sum(c["chain_count"] for c in ranking)  # disjoint → sums true
     return {
         "total_findings": total_findings,
         "findings_with_stored_chains": findings_with_chains,
-        "findings_ranked": ranked,
+        "findings_chainless": max(total_findings - findings_with_chains, 0),
+        "findings_ranked": len(ranking),
+        "findings_chained_but_unviable": max(findings_with_chains - len(ranking), 0),
+        "total_viable_chains": total_viable_chains,
     }
 
 
-def persist_snapshot(db: Session, tenant_id: int, *, triggered_by_user_id: Optional[int] = None) -> Dict[str, Any]:
+def persist_snapshot(db: Session, tenant_id: int, *, triggered_by_user_id: Optional[int] = None,
+                     stamp_first_seen: bool = True) -> Dict[str, Any]:
     """Compute + persist a choke-point snapshot, and stamp first-appearance.
 
     Snapshot rows are replace-friendly; the `first_seen` side table is NOT —
@@ -119,7 +127,14 @@ def persist_snapshot(db: Session, tenant_id: int, *, triggered_by_user_id: Optio
     rankable, marked with the snapshot that first saw it (the structural
     inaugural marker, not a timestamp heuristic). That fact must outlive any
     snapshot pruning, because the prioritized counter is derived from it.
-    Caller commits."""
+    Caller commits.
+
+    `stamp_first_seen=False` computes + persists the snapshot WITHOUT touching
+    the append-only first_seen table — the mandatory setting for synthetic
+    verification, so a live check that injects fake chains can never leave a
+    permanent false first-appearance behind (the day a real chain makes that
+    finding rankable, its prioritized event would predate reality). Production
+    paths (sync, recompute endpoint) always stamp."""
     from ..models import ChokePointSnapshot, ChokePointEntry, ChokePointFirstSeen
 
     ranking = rank_choke_points(db, tenant_id)
@@ -144,6 +159,8 @@ def persist_snapshot(db: Session, tenant_id: int, *, triggered_by_user_id: Optio
             vulnerability_id=c["vulnerability_id"], chain_count=c["chain_count"],
             rank=c["rank"], chains=c["chains"],
         ))
+        if not stamp_first_seen:
+            continue
         # first-appearance: first write wins, never updated.
         existing = db.query(ChokePointFirstSeen).filter(
             ChokePointFirstSeen.tenant_id == tenant_id,
