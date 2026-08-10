@@ -299,6 +299,7 @@ def auto_map_controls(
 RESOLVED_STATUSES = {
     "resolved", "remediated", "verified", "closed",
     "accepted", "false_positive", "auto_closed_decommissioned",
+    "auto_closed_fixed",
 }
 
 

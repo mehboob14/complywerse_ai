@@ -160,6 +160,8 @@ const STATUS_ITEMS = [
   { value: 'verified', label: 'Verified' },
   { value: 'closed', label: 'Closed' },
   { value: 'accepted', label: 'Risk Accepted' },
+  { value: 'false_positive', label: 'False Positive' },
+  { value: 'auto_closed_fixed', label: 'Closed — Verified by Re-scan' },
 ];
 const SEVERITY_ITEMS = [
   { value: 'critical', label: 'Critical' },

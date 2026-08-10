@@ -345,7 +345,19 @@ class NessusTransformer:
         exploit_count = 1 if exploit_available else 0
 
         first_detected = _epoch_to_dt(vuln_data.get("_host_start"))
-        last_seen = _epoch_to_dt(vuln_data.get("_host_end"))
+        # last_seen is stamped from the REPORTING RUN's end time (attached by
+        # the adapter as _scan_ended_at) so closure logic compares scans to
+        # scans. _host_end kept as fallback for payloads that carry it.
+        last_seen = _epoch_to_dt(vuln_data.get("_scan_ended_at")) or _epoch_to_dt(vuln_data.get("_host_end"))
+        # Which scan last reported this finding. "workbench" marks Tenable.io
+        # workbench data, which has no per-scan attribution — those findings
+        # are never auto-closed by the scan-coverage engine.
+        if vuln_data.get("_scan_id"):
+            last_seen_scan_id = str(vuln_data.get("_scan_id"))
+        elif vuln_data.get("_source") == "workbench":
+            last_seen_scan_id = "workbench"
+        else:
+            last_seen_scan_id = None
 
         generated_id = NessusTransformer.generate_vuln_id(plugin_id, host_key, tenant_id)
 
@@ -409,6 +421,7 @@ class NessusTransformer:
             "result_key": f"nessus:{plugin_id}",
             "first_detected": first_detected,
             "last_seen": last_seen,
+            "last_seen_scan_id": last_seen_scan_id,
             "times_detected": vuln_data.get("count", 1),
             "affected_host": host_key,
             "source": "nessus",

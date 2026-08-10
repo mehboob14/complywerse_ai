@@ -96,6 +96,7 @@ def bulk_sync_msrc(self, tenant_slug: str, force: bool = False, db: Session = No
     terminal = (
         "resolved", "remediated", "verified", "closed",
         "accepted", "false_positive", "auto_closed_decommissioned",
+        "auto_closed_fixed",
     )
     query = (
         db.query(Vulnerability)

@@ -122,6 +122,26 @@ interface VulnerabilityDetail {
   exception_revoked_at?: string | null;
   exception_revocation_reason?: string | null;
   exception_metadata?: Record<string, unknown> | null;
+  // Scanner closure loop — provenance + verified-close evidence. The
+  // "Scanner Verification" panel renders only when these are populated.
+  connection_id?: number | null;
+  source?: string | null;
+  external_vuln_id?: string | null;
+  scanner_status?: string | null;
+  first_detected?: string | null;
+  last_seen?: string | null;
+  last_seen_scan_id?: string | null;
+  closed_at?: string | null;
+  closed_by?: string | null;
+  closure_evidence?: {
+    scan_id?: string;
+    scan_name?: string;
+    scan_ended_at?: string;
+    host?: string;
+    basis?: string;
+  } | null;
+  reopened_at?: string | null;
+  reopen_count?: number | null;
 }
 
 interface Mitigation {
@@ -293,6 +313,8 @@ const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }>
   closed: { bg: 'bg-slate-50', text: 'text-slate-600', label: 'Closed' },
   accepted: { bg: 'bg-primary-50', text: 'text-primary-600', label: 'Risk Accepted' },
   false_positive: { bg: 'bg-slate-50', text: 'text-slate-600', label: 'False Positive' },
+  auto_closed_decommissioned: { bg: 'bg-slate-50', text: 'text-slate-600', label: 'Closed — Asset Retired' },
+  auto_closed_fixed: { bg: 'bg-green-50', text: 'text-green-600', label: 'Closed — Verified by Re-scan' },
 };
 
 function getStatusStyle(status: string) {
@@ -858,7 +880,7 @@ export default function VulnerabilityDetailPage() {
                   ? { label: 'Mark Remediated', next: 'remediated', cls: 'bg-emerald-600 hover:bg-emerald-700' }
                   : st === 'remediated'
                   ? { label: 'Verify Fix', next: 'verified', cls: 'bg-emerald-700 hover:bg-emerald-800' }
-                  : ['verified', 'closed', 'resolved', 'accepted', 'false_positive'].includes(st)
+                  : ['verified', 'closed', 'resolved', 'accepted', 'false_positive', 'auto_closed_fixed', 'auto_closed_decommissioned'].includes(st)
                   // bg-[#475569]/hover:bg-[#334155] not bg-slate-600/700: globals.css
                   // flattens every bg-slate-* utility to --color-surface with
                   // !important under .platform-ui, which turned this button into
@@ -1217,6 +1239,78 @@ export default function VulnerabilityDetailPage() {
               }}
             />
           </section>
+
+          {/* (1b) Scanner Verification — the closure-loop evidence panel.
+              Renders only for scanner-sourced findings (connection/source set).
+              Answers "is the scanner still seeing this?" and, for findings the
+              engine verified closed, shows the exact confirming scan. */}
+          {(vulnerability.scanner_status || vulnerability.source || vulnerability.closure_evidence) && (
+            <section className="cw-card rounded-xl p-4 sm:p-5 scroll-mt-4">
+              <h2 className="text-sm font-semibold text-slate-900 flex items-center gap-1.5 mb-3">
+                <FileCheck className="h-3.5 w-3.5 text-slate-500" strokeWidth={1.75} />
+                Scanner Verification
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                <div className="rounded-md border border-slate-200 bg-white px-2.5 py-2">
+                  <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-0.5">Scanner status</p>
+                  <p className={`text-sm font-medium ${vulnerability.scanner_status === 'not-detected' ? 'text-emerald-700' : 'text-slate-800'}`}>
+                    {vulnerability.scanner_status === 'not-detected'
+                      ? 'No longer detected'
+                      : vulnerability.scanner_status === 'present'
+                      ? 'Still detected by scanner'
+                      : '—'}
+                  </p>
+                </div>
+                <div className="rounded-md border border-slate-200 bg-white px-2.5 py-2">
+                  <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-0.5">Last seen by scanner</p>
+                  <p className="text-sm text-slate-800">
+                    {vulnerability.last_seen ? new Date(vulnerability.last_seen).toLocaleString() : '—'}
+                    {vulnerability.last_seen_scan_id && vulnerability.last_seen_scan_id !== 'workbench' && (
+                      <span className="text-slate-500"> · scan #{vulnerability.last_seen_scan_id}</span>
+                    )}
+                  </p>
+                </div>
+              </div>
+              {vulnerability.status === 'auto_closed_fixed' && vulnerability.closure_evidence && (
+                <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50/60 p-3">
+                  <p className="text-sm font-medium text-emerald-800 flex items-center gap-1.5">
+                    <CheckCircle className="h-4 w-4" strokeWidth={1.75} />
+                    Remediation verified by re-scan
+                  </p>
+                  <p className="mt-1 text-xs text-emerald-900/80 leading-relaxed">
+                    Scan{' '}
+                    <span className="font-medium">
+                      {vulnerability.closure_evidence.scan_name || `#${vulnerability.closure_evidence.scan_id}`}
+                    </span>
+                    {vulnerability.closure_evidence.scan_ended_at && (
+                      <> completed {new Date(vulnerability.closure_evidence.scan_ended_at).toLocaleString()}</>
+                    )}{' '}
+                    covered this host and no longer reports this finding.
+                    {vulnerability.closure_evidence.basis === 'same_scan'
+                      ? ' The confirming scan is the same scan that originally reported it.'
+                      : ' Confirmed via host coverage by a completed scan.'}
+                    {vulnerability.closed_at && (
+                      <> Closed {new Date(vulnerability.closed_at).toLocaleString()} by {vulnerability.closed_by || 'scanner'}.</>
+                    )}
+                  </p>
+                </div>
+              )}
+              {(vulnerability.reopen_count ?? 0) > 0 && (
+                <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50/60 p-3">
+                  <p className="text-sm font-medium text-amber-800 flex items-center gap-1.5">
+                    <RefreshCw className="h-4 w-4" strokeWidth={1.75} />
+                    Reopened by scanner {vulnerability.reopen_count === 1 ? 'once' : `${vulnerability.reopen_count} times`}
+                  </p>
+                  {vulnerability.reopened_at && (
+                    <p className="mt-1 text-xs text-amber-900/80">
+                      Last re-detected {new Date(vulnerability.reopened_at).toLocaleString()} — the scanner found this
+                      finding again after it had been closed.
+                    </p>
+                  )}
+                </div>
+              )}
+            </section>
+          )}
 
           {/* (2) Description + affected component */}
           <section hidden={secHidden("sec-description")} id="sec-description" className="cw-card rounded-xl p-4 sm:p-5 scroll-mt-4">

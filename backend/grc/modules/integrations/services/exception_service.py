@@ -186,7 +186,40 @@ class ExceptionService:
                 db.commit()
                 return {"success": False, "error": "Connection not found"}
 
+            # Same gate as the outbox path: write-back is opt-in per connection,
+            # and an action the scanner's API can't represent is recorded as
+            # skipped with the adapter's reason — not attempted blind.
+            from .writeback_service import connection_writeback_enabled
+            if not connection_writeback_enabled(conn):
+                request.push_status = "skipped_disabled"
+                request.push_error = (
+                    "Scanner write-back is disabled for this connection "
+                    "(provider_config.scanner_writeback). Exception recorded in ComplyVerse only."
+                )
+                request.updated_at = datetime.utcnow()
+                db.commit()
+                return {"success": False, "push_status": "skipped_disabled"}
+
             adapter = SyncService.build_adapter(conn)
+
+            _cap_key = {
+                "false_positive": "false_positive",
+                "risk_accepted": "risk_accepted",
+                "deferred": "exception",
+            }.get(request.exception_type, "exception")
+            try:
+                _cap = (adapter.writeback_capabilities() or {}).get(_cap_key, {})
+            except Exception:
+                _cap = {}
+            if not _cap.get("supported"):
+                request.push_status = "skipped_unsupported"
+                request.push_error = _cap.get("reason") or (
+                    "This scanner's API cannot represent this decision."
+                )
+                request.updated_at = datetime.utcnow()
+                db.commit()
+                return {"success": False, "push_status": "skipped_unsupported",
+                        "reason": request.push_error}
 
             vuln = db.query(Vulnerability).filter(
                 Vulnerability.id == request.vulnerability_id,

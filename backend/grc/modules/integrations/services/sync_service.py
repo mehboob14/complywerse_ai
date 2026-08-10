@@ -116,6 +116,17 @@ class SyncService:
             "status": transformed.get("status") or "open",
             "discovered_at": discovered_at,
             "updated_at": datetime.utcnow(),
+            # Scanner closure loop — provenance + observation window. These
+            # feed the auto-close/reopen engine; on updates they are handled
+            # specially in the sync loop (last_seen only advances, status is
+            # never blanket-overwritten).
+            "connection_id": transformed.get("connection_id"),
+            "source": transformed.get("source"),
+            "external_vuln_id": transformed.get("external_vuln_id"),
+            "scanner_status": transformed.get("scanner_status") or "present",
+            "first_detected": transformed.get("first_detected"),
+            "last_seen": transformed.get("last_seen"),
+            "last_seen_scan_id": transformed.get("last_seen_scan_id"),
         }
 
     @staticmethod
@@ -174,7 +185,8 @@ class SyncService:
         adapter = SyncService.build_adapter(connection)
         stats = {
             "assets_new": 0, "assets_updated": 0, "assets_unchanged": 0,
-            "vulns_new": 0, "vulns_updated": 0, "vulns_closed": 0, "vulns_enriched": 0,
+            "vulns_new": 0, "vulns_updated": 0, "vulns_closed": 0, "vulns_reopened": 0,
+            "vulns_enriched": 0,
             "solutions_synced": 0, "scans_synced": 0, "errors_count": 0,
             "error_details": [],
         }
@@ -243,6 +255,17 @@ class SyncService:
             except Exception:
                 logger.exception("post-sync composite scoring failed (non-fatal)")
 
+            # ── Outbound write-back retry ─────────────────────────────────────
+            # Push (or record-as-skipped) any pending/failed GRC→scanner
+            # decision actions for this connection. Runs in this background
+            # thread, same self-healing discipline as enrichment: a broken
+            # push never fails the sync and is retried next sync.
+            try:
+                from .writeback_service import WritebackService
+                WritebackService.process_pending(db, connection, tenant_id)
+            except Exception:
+                logger.exception("post-sync scanner write-back processing failed (non-fatal)")
+
             history.status = "completed"
             connection.last_sync_status = "success"
             connection.consecutive_failures = 0
@@ -273,6 +296,8 @@ class SyncService:
             history.vulns_new = stats["vulns_new"]
             history.vulns_updated = stats["vulns_updated"]
             history.vulns_closed = stats["vulns_closed"]
+            if hasattr(history, "vulns_reopened"):
+                history.vulns_reopened = stats.get("vulns_reopened", 0)
             history.errors_count = stats["errors_count"]
             history.error_details = stats["error_details"] if stats["error_details"] else None
 
@@ -509,22 +534,41 @@ class SyncService:
 
         seen_vuln_ids = set()
         vuln_detail_cache: Dict[str, Dict] = {}
+        # Per-host bookkeeping for the closure engine: which finding ids this
+        # sync actually saw for each host, and whether the host's pull was
+        # clean. A host whose fetch failed (or was degraded by a per-instance
+        # error) is EXCLUDED from closure — "we couldn't read it" must never
+        # become "it's fixed".
+        host_contexts: List[Dict[str, Any]] = []
 
         for asset_ref in synced_assets:
+            asset = asset_ref.get("asset")
+            external_asset_id = asset_ref.get("external_asset_id") or getattr(asset, "host_name", "") or getattr(asset, "ip_address", "") or getattr(asset, "name", "")
+            host_ctx: Dict[str, Any] = {
+                "ext_id": external_asset_id,
+                "host_name": asset_ref.get("host_name", "") or (getattr(asset, "host_name", "") or ""),
+                "ip_address": asset_ref.get("ip_address", "") or (getattr(asset, "ip_address", "") or ""),
+                "seen_ids": set(),
+                # Scanner-native plugin ids seen for this host — the second,
+                # identity-drift-proof absence check for closure.
+                "seen_plugins": set(),
+                "fetch_failed": False,
+                "degraded": False,
+            }
+            host_contexts.append(host_ctx)
             try:
-                asset = asset_ref["asset"]
-                external_asset_id = asset_ref.get("external_asset_id") or getattr(asset, "host_name", "") or getattr(asset, "ip_address", "") or getattr(asset, "name", "")
                 if is_nessus:
                     instances = adapter.get_asset_vulnerabilities(
                         external_asset_id,
-                        hostname=asset_ref.get("host_name", "") or getattr(asset, "host_name", "") or "",
-                        ip_address=asset_ref.get("ip_address", "") or getattr(asset, "ip_address", "") or "",
+                        hostname=host_ctx["host_name"],
+                        ip_address=host_ctx["ip_address"],
                     )
                 else:
                     instances = adapter.get_asset_vulnerabilities(external_asset_id)
                 SyncService._debug_shape(f"sync_vulns.instances.asset_{getattr(asset, 'id', None)}", instances)
             except Exception as e:
                 logger.error(f"Error fetching vulns for asset {getattr(asset, 'id', None)}: {e}")
+                host_ctx["fetch_failed"] = True
                 stats["errors_count"] += 1
                 continue
 
@@ -576,6 +620,8 @@ class SyncService:
                     mapped_vuln = SyncService._map_vulnerability_fields(transformed)
                     gen_vuln_id = mapped_vuln["vuln_id"]
                     seen_vuln_ids.add(gen_vuln_id)
+                    host_ctx["seen_ids"].add(gen_vuln_id)
+                    host_ctx["seen_plugins"].add(str(ext_vuln_id))
 
                     existing = db.query(Vulnerability).filter(
                         Vulnerability.tenant_id == tenant_id,
@@ -584,7 +630,15 @@ class SyncService:
 
                     if existing:
                         changed = False
-                        skip_fields = {"tenant_id", "vuln_id", "created_at"}
+                        # status and the observation-window fields are OWNED by
+                        # the closure/reopen engine below, not blanket-copied.
+                        # (The old loop wrote status="open" over accepted/
+                        # false_positive on every sync — a live clobber bug.)
+                        skip_fields = {
+                            "tenant_id", "vuln_id", "created_at", "status",
+                            "discovered_at", "first_detected", "last_seen",
+                            "last_seen_scan_id", "scanner_status",
+                        }
                         for key, val in mapped_vuln.items():
                             if key in skip_fields or val is None:
                                 continue
@@ -592,6 +646,51 @@ class SyncService:
                             if current != val:
                                 setattr(existing, key, val)
                                 changed = True
+
+                        # Observation window: first_detected backfills once,
+                        # last_seen only ADVANCES (re-syncing the same scan
+                        # data is a no-op, so closure math stays idempotent),
+                        # and the advancing run's scan id rides along.
+                        new_seen = mapped_vuln.get("last_seen")
+                        if getattr(existing, "first_detected", None) is None and mapped_vuln.get("first_detected"):
+                            existing.first_detected = mapped_vuln["first_detected"]
+                        prev_seen = getattr(existing, "last_seen", None)
+                        if new_seen and (prev_seen is None or new_seen > prev_seen):
+                            existing.last_seen = new_seen
+                            if mapped_vuln.get("last_seen_scan_id"):
+                                existing.last_seen_scan_id = mapped_vuln["last_seen_scan_id"]
+                        elif getattr(existing, "last_seen_scan_id", None) is None and mapped_vuln.get("last_seen_scan_id"):
+                            existing.last_seen_scan_id = mapped_vuln["last_seen_scan_id"]
+                        if getattr(existing, "scanner_status", None) != "present":
+                            existing.scanner_status = "present"
+
+                        # Reopen: the scanner re-detected a finding we hold as
+                        # fixed/closed — but only when the sighting is NEWER
+                        # than the close/resolve decision. Without that guard a
+                        # sync running minutes after an engineer marks a fix
+                        # "remediated" would reopen it off STALE scan data from
+                        # before the fix. Decision states (accepted / FP /
+                        # decommission-closed) are never scanner-overridden.
+                        _reopenable = {"auto_closed_fixed", "remediated", "resolved", "verified", "closed"}
+                        if existing.status in _reopenable:
+                            decision_time = getattr(existing, "closed_at", None) or existing.resolved_at
+                            if new_seen is not None and (decision_time is None or new_seen > decision_time):
+                                prior_status = existing.status
+                                existing.status = "open"
+                                existing.reopened_at = datetime.utcnow()
+                                existing.reopen_count = (getattr(existing, "reopen_count", 0) or 0) + 1
+                                _stamp = (
+                                    f"[{datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}] Reopened: "
+                                    f"scan {mapped_vuln.get('last_seen_scan_id') or '?'} re-detected this "
+                                    f"finding (was '{prior_status}')."
+                                )
+                                existing.resolution_notes = (
+                                    f"{existing.resolution_notes}\n\n{_stamp}"
+                                    if existing.resolution_notes else _stamp
+                                )
+                                stats["vulns_reopened"] = stats.get("vulns_reopened", 0) + 1
+                                changed = True
+
                         if changed:
                             existing.updated_at = datetime.utcnow()
                             stats["vulns_updated"] += 1
@@ -670,10 +769,16 @@ class SyncService:
 
                 except Exception as e:
                     logger.error(f"Error syncing vuln instance: {e}")
+                    # One unprocessed instance means this host's "seen" set is
+                    # incomplete — closure for the whole host is off this sync
+                    # (it self-heals next sync). Presence updates above stand.
+                    host_ctx["degraded"] = True
                     stats["errors_count"] += 1
 
         source = "nessus" if is_nessus else "nexpose"
-        SyncService._close_resolved_vulns(db, connection.id, tenant_id, seen_vuln_ids, stats, source=source)
+        SyncService._apply_scanner_closures(
+            db, adapter, connection, tenant_id, stats, host_contexts, source=source,
+        )
         db.flush()
 
     @staticmethod
@@ -755,36 +860,208 @@ class SyncService:
             except Exception as e:
                 logger.error(f"Error syncing solution for vuln {db_vuln.vuln_id}: {e}")
 
+    # Statuses the scanner may never close on its own: decision states (a
+    # human accepted the risk / called it a false positive / the asset was
+    # decommissioned) and already-terminal states. Everything else — open,
+    # in_progress, and the human "we fixed it" claims (remediated/resolved) —
+    # is closable by verified re-scan evidence; closing a "remediated" row is
+    # precisely the verified-remediation loop this feature exists for.
+    _SCANNER_CLOSE_PROTECTED = (
+        "accepted", "false_positive", "auto_closed_decommissioned",
+        "auto_closed_fixed", "verified", "closed",
+    )
+
     @staticmethod
-    def _close_resolved_vulns(
+    def _apply_scanner_closures(
         db: Session,
-        connection_id: int,
+        adapter: BaseAdapter,
+        connection: IntegrationConnection,
         tenant_id: int,
-        seen_vuln_ids: set,
         stats: Dict[str, Any],
+        host_contexts: List[Dict[str, Any]],
         source: Optional[str] = None,
     ):
-        if not hasattr(Vulnerability, "connection_id"):
-            logger.info("Skipping scanner auto-close because Vulnerability.connection_id is not available in current schema")
-            return
-        open_statuses = ("open", "under_review", "in_remediation")
-        query = db.query(Vulnerability).filter(
-            Vulnerability.tenant_id == tenant_id,
-            Vulnerability.connection_id == connection_id,
-            Vulnerability.status.in_(open_statuses),
-        )
-        if source:
-            query = query.filter(Vulnerability.source == source)
-        open_vulns = query.all()
+        """Inbound half of the closure loop: auto-close findings a successful
+        re-scan no longer reports.
 
-        for vuln in open_vulns:
-            if vuln.vuln_id not in seen_vuln_ids:
-                vuln.status = "closed_scanner"
-                vuln.scanner_status = "not-vulnerable"
-                vuln.closed_at = datetime.utcnow()
-                vuln.closed_by = "SCANNER_AUTO_CLOSE"
-                vuln.updated_at = datetime.utcnow()
+        Safety contract (each condition is load-bearing):
+          * evidence comes ONLY from scan runs with status "completed" that
+            explicitly list the host (`get_scan_coverage`) — partial/failed
+            runs and hosts that merely aged out of the scanner close nothing;
+          * the confirming run must have ended AFTER the finding's last_seen —
+            re-reading the same old scan can never close anything (idempotent);
+          * preferentially the confirming run is the SAME scan that last
+            reported the finding (same policy → absence is meaningful); rows
+            without attribution (pre-feature legacy) fall back to any covering
+            completed run, with the weaker basis recorded in the evidence;
+          * hosts whose pull failed or was degraded this sync are skipped;
+          * decision states are never overridden (`_SCANNER_CLOSE_PROTECTED`,
+            active exceptions).
+        """
+        if not host_contexts:
+            return
+        try:
+            coverage = adapter.get_scan_coverage()
+        except Exception:
+            logger.exception("get_scan_coverage failed — skipping auto-close for connection %s", connection.id)
+            return
+        if not coverage:
+            logger.info("No completed-scan coverage available for connection %s — auto-close skipped", connection.id)
+            return
+
+        # Distinguish "originating scan was deleted" (fallback allowed) from
+        # "originating scan exists but has no new completed run" (absence
+        # unproven — it may be mid-run or simply not re-run yet; leave open).
+        try:
+            existing_scan_ids = {str(s.get("id")) for s in adapter.get_scans() if s.get("id")}
+        except Exception:
+            existing_scan_ids = {str(c.get("scan_id")) for c in coverage}
+
+        def _to_dt(epoch) -> Optional[datetime]:
+            try:
+                return datetime.utcfromtimestamp(int(epoch)) if epoch else None
+            except (ValueError, TypeError, OSError):
+                return None
+
+        cov_entries = []
+        for entry in coverage:
+            ended_dt = _to_dt(entry.get("ended_at"))
+            if ended_dt is None:
+                continue
+            cov_entries.append({
+                "scan_id": str(entry.get("scan_id")),
+                "scan_name": entry.get("scan_name", ""),
+                "ended_at": ended_dt,
+                "host_variants": SyncService._host_variants(*entry.get("hosts", [])),
+            })
+
+        now = datetime.utcnow()
+        closed_summaries: List[Dict[str, Any]] = []
+
+        for ctx in host_contexts:
+            if ctx.get("fetch_failed") or ctx.get("degraded"):
+                logger.info("Auto-close skipped for host %s (pull incomplete this sync)", ctx.get("ext_id"))
+                continue
+            variants = SyncService._host_variants(ctx.get("host_name"), ctx.get("ip_address"), ctx.get("ext_id"))
+            runs = [c for c in cov_entries if variants & c["host_variants"]]
+            if not runs:
+                continue
+
+            q = db.query(Vulnerability).filter(
+                Vulnerability.tenant_id == tenant_id,
+                Vulnerability.affected_host == ctx["ext_id"],
+                ~Vulnerability.status.in_(SyncService._SCANNER_CLOSE_PROTECTED),
+            )
+            if source == "nessus":
+                # This connection's rows, plus pre-feature legacy rows (no
+                # connection_id yet) that this same pipeline created — their
+                # deterministic NS- id + affected_host prove provenance.
+                q = q.filter(or_(
+                    Vulnerability.connection_id == connection.id,
+                    Vulnerability.connection_id.is_(None) & Vulnerability.vuln_id.like("NS-%"),
+                ))
+            else:
+                q = q.filter(Vulnerability.connection_id == connection.id)
+
+            for v in q.all():
+                if v.vuln_id in ctx["seen_ids"]:
+                    continue
+                if getattr(v, "is_exception", False):
+                    continue
+                if (getattr(v, "exception_status", None) or "none") in ("requested", "approved"):
+                    continue
+
+                # Absence must be verifiable by the SCANNER-NATIVE id, not just
+                # our row identity. Verified in the wild: two import pipelines
+                # generated different vuln_ids for the same (host, plugin), so
+                # an orphaned duplicate row looked "absent" while its plugin
+                # was still being reported — closing it would stamp false
+                # "verified fixed" evidence. A row with no external_vuln_id
+                # can't be checked → never auto-closed; one whose plugin is
+                # still reported for the host → still present, never closed.
+                ext_pid = getattr(v, "external_vuln_id", None)
+                if not ext_pid:
+                    continue
+                if str(ext_pid) in ctx["seen_plugins"]:
+                    continue
+
+                baseline = getattr(v, "last_seen", None) or v.discovered_at or v.created_at
+                if baseline is None:
+                    continue
+
+                evidence = None
+                basis = None
+                seen_scan = getattr(v, "last_seen_scan_id", None)
+                if seen_scan == "workbench":
+                    # Workbench (Tenable.io) data has no per-scan attribution —
+                    # never auto-close from it.
+                    continue
+                if seen_scan:
+                    same = [r for r in runs if r["scan_id"] == str(seen_scan) and r["ended_at"] > baseline]
+                    if same:
+                        evidence = max(same, key=lambda r: r["ended_at"])
+                        basis = "same_scan"
+                    elif str(seen_scan) in existing_scan_ids:
+                        continue
+                    else:
+                        later = [r for r in runs if r["ended_at"] > baseline]
+                        if later:
+                            evidence = max(later, key=lambda r: r["ended_at"])
+                            basis = "host_coverage_origin_scan_deleted"
+                else:
+                    later = [r for r in runs if r["ended_at"] > baseline]
+                    if later:
+                        evidence = max(later, key=lambda r: r["ended_at"])
+                        basis = "host_coverage"
+                if evidence is None:
+                    continue
+
+                v.status = "auto_closed_fixed"
+                v.scanner_status = "not-detected"
+                v.closed_at = now
+                v.closed_by = "SCANNER_VERIFIED"
+                v.resolved_at = now
+                v.closure_evidence = {
+                    "scan_id": evidence["scan_id"],
+                    "scan_name": evidence["scan_name"],
+                    "scan_ended_at": evidence["ended_at"].isoformat() + "Z",
+                    "host": ctx.get("host_name") or ctx.get("ip_address") or ctx["ext_id"],
+                    "basis": basis,
+                    "connection_id": connection.id,
+                }
+                stamp = (
+                    f"[{now.strftime('%Y-%m-%d %H:%M UTC')}] Auto-closed: scan "
+                    f"'{evidence['scan_name'] or evidence['scan_id']}' completed "
+                    f"{evidence['ended_at'].strftime('%Y-%m-%d %H:%M UTC')} covering this host and "
+                    f"no longer reports this finding (basis: {basis})."
+                )
+                v.resolution_notes = f"{v.resolution_notes}\n\n{stamp}" if v.resolution_notes else stamp
+                v.updated_at = now
                 stats["vulns_closed"] += 1
+                closed_summaries.append({
+                    "vulnerability_id": v.id,
+                    "vuln_id": v.vuln_id,
+                    "scan_id": evidence["scan_id"],
+                    "basis": basis,
+                })
+
+        if closed_summaries:
+            logger.info(
+                "Scanner auto-close: %d finding(s) verified closed for connection %s",
+                len(closed_summaries), connection.id,
+            )
+            # Persisted with the sync's final commit — never its own commit,
+            # so a failed sync doesn't leave an audit row for closes that
+            # rolled back.
+            db.add(IntegrationAuditLog(
+                tenant_id=tenant_id,
+                connection_id=connection.id,
+                entity_type="connection",
+                entity_id=connection.id,
+                action="scanner_auto_close",
+                performed_by="SCANNER_VERIFIED",
+                metadata_info={"closed": closed_summaries[:200], "count": len(closed_summaries)},
+            ))
 
     @staticmethod
     def _sync_scans(

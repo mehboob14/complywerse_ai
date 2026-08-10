@@ -104,7 +104,11 @@ RISK_SCORE_CAP = 50.0
 # which silently dropped real signal (e.g. a risk being mitigated is still
 # pending, a vuln in_progress is still a problem).
 TERMINAL_RISK_STATUSES = {"closed", "resolved", "accepted", "transferred"}
-TERMINAL_VULN_STATUSES = {"resolved", "accepted", "false_positive", "closed"}
+TERMINAL_VULN_STATUSES = {
+    "resolved", "remediated", "verified", "closed",
+    "accepted", "false_positive", "auto_closed_decommissioned",
+    "auto_closed_fixed",
+}
 
 
 def _is_active_risk(status: Optional[str]) -> bool:

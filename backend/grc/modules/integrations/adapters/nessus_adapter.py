@@ -25,6 +25,11 @@ class NessusAdapter(BaseAdapter):
         super().__init__(console_url, console_port, credentials, verify_ssl)
         self.session = self._build_session()
         self._debug_payloads = os.environ.get("INTEGRATIONS_DEBUG_PAYLOADS", "true").lower() == "true"
+        # One adapter instance serves one sync run, and the per-host vuln
+        # lookup walks EVERY scan for EVERY host — cache scan details so the
+        # host loop and the coverage pass hit each /scans/{id} once, not
+        # O(hosts × scans) times.
+        self._scan_detail_cache: Dict[str, Dict[str, Any]] = {}
 
     def _debug_shape(self, label: str, payload: Any):
         if not self._debug_payloads:
@@ -125,7 +130,9 @@ class NessusAdapter(BaseAdapter):
                 resp = self.session.request(method, url, params=params, json=json_body, timeout=timeout)
 
             resp.raise_for_status()
-            if resp.status_code == 204:
+            # Nessus returns 200 with an EMPTY body on several write endpoints
+            # (verified live on POST /plugin-rules) — not just 204.
+            if resp.status_code == 204 or not (resp.text or "").strip():
                 return {}
             data = resp.json()
             if self._debug_payloads:
@@ -203,9 +210,61 @@ class NessusAdapter(BaseAdapter):
         return scans
 
     def get_scan_detail(self, scan_id: str) -> Dict[str, Any]:
+        key = str(scan_id)
+        if key in self._scan_detail_cache:
+            return self._scan_detail_cache[key]
         detail = self._get(f"/scans/{scan_id}")
         self._debug_shape(f"get_scan_detail.{scan_id}", detail)
+        self._scan_detail_cache[key] = detail
         return detail
+
+    def get_scan_coverage(self) -> List[Dict[str, Any]]:
+        """Coverage evidence for inbound closure: hosts per COMPLETED scan run.
+
+        Only scans whose latest run status is "completed" count — a running,
+        canceled or aborted run has partial host data, and "the partial data
+        doesn't mention the finding" is not evidence it's fixed. File imports
+        ("imported") and empty scans are likewise excluded, matching the pull
+        path. `ended_at` is the run's last-modification epoch — the timestamp
+        closure compares against the finding's last_seen.
+        """
+        coverage: List[Dict[str, Any]] = []
+        try:
+            scans = self.get_scans()
+        except Exception as e:
+            logger.error(f"get_scan_coverage: could not list scans: {e}")
+            return []
+
+        for scan in scans:
+            scan_id = scan.get("id")
+            if not scan_id:
+                continue
+            if scan.get("status") != "completed":
+                continue
+            try:
+                detail = self.get_scan_detail(str(scan_id))
+            except Exception as e:
+                logger.warning(f"get_scan_coverage: scan {scan_id} detail failed: {e}")
+                continue
+            # The listing status can lag the detail; trust the detail when it
+            # disagrees — it reflects the run we are actually reading hosts from.
+            info_status = ((detail.get("info") or {}).get("status") or "completed")
+            if info_status != "completed":
+                continue
+            hosts = []
+            for host in (detail.get("hosts") or []):
+                host_key = host.get("hostname") or host.get("host-ip") or ""
+                if host_key:
+                    hosts.append(str(host_key))
+            coverage.append({
+                "scan_id": str(scan_id),
+                "scan_name": scan.get("name", ""),
+                "status": "completed",
+                "ended_at": scan.get("last_modification_date"),
+                "hosts": hosts,
+            })
+        self._debug_shape("get_scan_coverage", coverage)
+        return coverage
 
     def _get_workbench_assets(self, page: int, page_size: int) -> Optional[PagedResponse]:
         try:
@@ -363,8 +422,12 @@ class NessusAdapter(BaseAdapter):
         return []
 
     def _get_vulns_by_host_lookup(self, host_key: str) -> List[Dict[str, Any]]:
-        all_vulns = []
-        seen_plugins: set = set()
+        # Dedup across scans keyed by plugin, keeping the sighting from the
+        # MOST RECENT run (was first-scan-wins, i.e. arbitrary). The winning
+        # sighting's _scan_id/_scan_ended_at become the finding's last-seen
+        # attribution — the closure engine compares re-scan evidence against
+        # exactly these.
+        best_by_plugin: Dict[str, Dict[str, Any]] = {}
         scans = self.get_scans()
 
         for scan in scans:
@@ -374,6 +437,7 @@ class NessusAdapter(BaseAdapter):
             status = scan.get("status", "")
             if status in ("empty", "imported"):
                 continue
+            scan_ended_at = scan.get("last_modification_date") or 0
             try:
                 detail = self.get_scan_detail(str(scan_id))
                 for host in (detail.get("hosts") or []):
@@ -387,19 +451,21 @@ class NessusAdapter(BaseAdapter):
                         host_detail = self._get(f"/scans/{scan_id}/hosts/{host_id}")
                         for v in (host_detail.get("vulnerabilities") or []):
                             pid = str(v.get("plugin_id", ""))
-                            if pid in seen_plugins:
+                            prev = best_by_plugin.get(pid)
+                            if prev is not None and (prev.get("_scan_ended_at") or 0) >= scan_ended_at:
                                 continue
-                            seen_plugins.add(pid)
                             v["_scan_id"] = scan_id
                             v["_host_id"] = host_id
                             v["_host_ip"] = h_name
-                            all_vulns.append(v)
+                            v["_scan_ended_at"] = scan_ended_at
+                            v["_scan_status"] = status
+                            best_by_plugin[pid] = v
                     except Exception as e:
                         logger.warning(f"Error getting host {host_id} vulns in scan {scan_id}: {e}")
             except Exception as e:
                 logger.warning(f"Error getting scan {scan_id} detail: {e}")
 
-        return all_vulns
+        return list(best_by_plugin.values())
 
     def _get_vulns_from_scan_contexts(self, scan_contexts: List[Dict]) -> List[Dict[str, Any]]:
         all_vulns = []
@@ -419,6 +485,11 @@ class NessusAdapter(BaseAdapter):
 
             vulns = host_detail.get("vulnerabilities") or []
             self._debug_shape(f"scan_contexts.scan_{scan_id}.host_{host_id}.vulns", vulns)
+            scan_meta = {}
+            try:
+                scan_meta = (self.get_scan_detail(str(scan_id)).get("info") or {})
+            except Exception:
+                pass
             for v in vulns:
                 plugin_id = v.get("plugin_id")
                 if str(plugin_id) in seen_plugins:
@@ -427,6 +498,8 @@ class NessusAdapter(BaseAdapter):
                 v["_scan_id"] = scan_id
                 v["_host_id"] = host_id
                 v["_host_ip"] = ctx.get("hostname", "")
+                v["_scan_ended_at"] = scan_meta.get("scan_end") or scan_meta.get("timestamp")
+                v["_scan_status"] = scan_meta.get("status", "")
                 all_vulns.append(v)
 
         return all_vulns
@@ -562,6 +635,42 @@ class NessusAdapter(BaseAdapter):
             "see_also": see_also,
         }]
 
+    def writeback_capabilities(self) -> Dict[str, Dict[str, Any]]:
+        """Local Nessus (Professional/Essentials/Manager) write-back surface.
+
+        Verified against the live scanner: the only decision-shaped API is
+        /plugin-rules (hide or recast a plugin's findings, host-scopable, with
+        an optional expiry date). There is no accept-risk/recast-risk-rules
+        API (that's Tenable.io VM), no per-finding note, and no way to mark a
+        finding remediated — remediation is proven by the next re-scan, which
+        the INBOUND closure path turns into a verified close.
+        """
+        return {
+            "false_positive": {
+                "supported": True,
+                "method": "plugin_rule:exclude",
+                "reason": "Represented as a host-scoped plugin rule that hides the finding.",
+            },
+            "exception": {
+                "supported": True,
+                "method": "plugin_rule:exclude",
+                "reason": "Represented as a host-scoped plugin rule with the exception's expiry date.",
+            },
+            "risk_accepted": {
+                "supported": False,
+                "method": None,
+                "reason": "Local Nessus has no accept-risk API (Tenable.io only). "
+                          "Decision recorded in ComplyVerse; the finding stays visible "
+                          "in Nessus at its true severity.",
+            },
+            "remediated": {
+                "supported": False,
+                "method": None,
+                "reason": "Nessus has no remediation write-back; closure is verified by "
+                          "the next re-scan via the inbound auto-close path.",
+            },
+        }
+
     def create_exception(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         plugin_id = payload.get("scope", {}).get("vulnerability", "")
         host = payload.get("scope", {}).get("host", "")
@@ -572,15 +681,31 @@ class NessusAdapter(BaseAdapter):
         rule_payload: Dict[str, Any] = {
             "plugin_id": int(plugin_id) if plugin_id and str(plugin_id).isdigit() else 0,
             "type": "exclude",
+            # Verified against a live Nessus Professional: the "host" field is
+            # REQUIRED (omitting it → 400 "Invalid 'host' field: missing") but
+            # may be an empty string, which means the rule applies to all hosts.
+            "host": host or "",
         }
-        if host:
-            rule_payload["host"] = host
         if expires:
             rule_payload["date"] = expires
 
         try:
             result = self._post("/plugin-rules", json_body=rule_payload)
             rule_id = result.get("id") or result.get("rule_id", "")
+            if not rule_id:
+                # The create response body is empty (verified live) — recover
+                # the id from the rules list so the rule can be deleted later.
+                try:
+                    rules = (self._get("/plugin-rules") or {}).get("plugin_rules") or []
+                    matches = [
+                        r for r in rules
+                        if str(r.get("plugin_id")) == str(rule_payload["plugin_id"])
+                        and (r.get("host") or "") == (rule_payload.get("host") or "")
+                    ]
+                    if matches:
+                        rule_id = str(max(int(m.get("id") or 0) for m in matches))
+                except Exception:
+                    logger.warning("Could not recover plugin-rule id for plugin %s", plugin_id)
             logger.info(f"Created Nessus plugin rule {rule_id} for plugin {plugin_id}: {reason} - {comment}")
             return {
                 "id": str(rule_id),

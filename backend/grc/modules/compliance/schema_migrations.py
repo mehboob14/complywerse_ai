@@ -768,6 +768,49 @@ _COLUMN_ADDS = [
     # breakdown), derived from detected_software_json by the security_classifier
     # on every inventory refresh. Drives the asset's Security Posture card.
     ("grc_it_assets", "security_posture", "JSON", None),
+    # ── Scanner closure loop (two-way vulnerability sync) ─────────────────────
+    # Provenance + observation window + closure evidence on findings, and the
+    # reopen counter on sync history. All nullable/additive — legacy rows are
+    # adopted by the next sync (matched by their deterministic vuln_id) and
+    # only then become eligible for scanner-verified closure.
+    ("grc_vulnerabilities", "connection_id", "INTEGER",
+     "ix_grc_vulnerabilities_connection_id"),
+    ("grc_vulnerabilities", "source", "VARCHAR(50)", None),
+    ("grc_vulnerabilities", "external_vuln_id", "VARCHAR(100)", None),
+    ("grc_vulnerabilities", "scanner_status", "VARCHAR(30)", None),
+    ("grc_vulnerabilities", "first_detected", "TIMESTAMP", None),
+    ("grc_vulnerabilities", "last_seen", "TIMESTAMP", None),
+    ("grc_vulnerabilities", "last_seen_scan_id", "VARCHAR(64)", None),
+    ("grc_vulnerabilities", "closed_at", "TIMESTAMP", None),
+    ("grc_vulnerabilities", "closed_by", "VARCHAR(100)", None),
+    ("grc_vulnerabilities", "closure_evidence", "JSON", None),
+    ("grc_vulnerabilities", "reopened_at", "TIMESTAMP", None),
+    ("grc_vulnerabilities", "reopen_count", "INTEGER DEFAULT 0", None),
+    ("grc_sync_history", "vulns_reopened", "INTEGER DEFAULT 0", None),
+    # ── CRQM (FAIR risk quantification) — Phase 1 ─────────────────────────────
+    # Structured scenario + material flag on the register, and FAIR control
+    # effects on the risk↔control link. All nullable/additive; the new
+    # grc_risk_loss_models / grc_risk_simulation_runs tables are created by
+    # safe_metadata_create_all.
+    ("grc_risks", "is_material", "BOOLEAN DEFAULT FALSE",
+     "ix_grc_risks_is_material"),
+    ("grc_risks", "scenario_actor", "VARCHAR(200)", None),
+    ("grc_risks", "scenario_method", "TEXT", None),
+    ("grc_risks", "scenario_effect", "JSON", None),
+    ("grc_risks", "scenario_statement", "TEXT", None),
+    ("grc_risk_control_links", "freq_reduction_min_pct", "DOUBLE PRECISION", None),
+    ("grc_risk_control_links", "freq_reduction_ml_pct", "DOUBLE PRECISION", None),
+    ("grc_risk_control_links", "freq_reduction_max_pct", "DOUBLE PRECISION", None),
+    ("grc_risk_control_links", "mag_reduction_min_pct", "DOUBLE PRECISION", None),
+    ("grc_risk_control_links", "mag_reduction_ml_pct", "DOUBLE PRECISION", None),
+    ("grc_risk_control_links", "mag_reduction_max_pct", "DOUBLE PRECISION", None),
+    ("grc_risk_control_links", "effect_rationale", "TEXT", None),
+    ("grc_risk_control_links", "effect_updated_by", "INTEGER", None),
+    ("grc_risk_control_links", "effect_updated_at", "TIMESTAMP", None),
+    # CRQM follow-up: run provenance + frozen PoS evidence snapshot (the two
+    # new tables may already exist on tenants that ran the first CRQM build).
+    ("grc_risk_simulation_runs", "trigger", "VARCHAR(30) DEFAULT 'manual'", None),
+    ("grc_risk_loss_models", "pos_evidence", "JSON", None),
 ]
 
 

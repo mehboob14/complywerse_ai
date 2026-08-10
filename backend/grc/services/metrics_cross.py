@@ -31,6 +31,7 @@ logger = logging.getLogger(__name__)
 _VULN_RESOLVED = (
     "resolved", "remediated", "verified", "closed",
     "accepted", "false_positive", "auto_closed_decommissioned",
+    "auto_closed_fixed",
 )
 
 

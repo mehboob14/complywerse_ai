@@ -34,6 +34,10 @@ interface Connection {
   sync_schedule: string;
   is_active: boolean;
   status: string;
+  auto_link_assets?: boolean;
+  // Push GRC decisions (false positives, exceptions) to the scanner via its
+  // API. Default OFF — opt-in per connection because it modifies the scanner.
+  scanner_writeback?: boolean;
   last_sync_at: string | null;
   last_sync_status: string | null;
   last_sync_stats: Record<string, number> | null;
@@ -53,6 +57,7 @@ interface SyncHistoryRecord {
   vulns_new: number;
   vulns_updated: number;
   vulns_closed: number;
+  vulns_reopened?: number;
   errors_count: number;
 }
 
@@ -179,6 +184,14 @@ export default function ConnectionsPage() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => integrationsApi.deleteConnection(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['connections'] }),
+  });
+
+  // Two-way sync toggle: push GRC decisions (false positives, exceptions)
+  // back to the scanner. Persisted in the connection's provider_config.
+  const writebackMutation = useMutation({
+    mutationFn: ({ id, enabled }: { id: number; enabled: boolean }) =>
+      integrationsApi.updateConnection(id, { scanner_writeback: enabled }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['connections'] }),
   });
 
@@ -594,6 +607,25 @@ export default function ConnectionsPage() {
                     )}
                   </div>
 
+                  <label className="flex items-start gap-2.5 p-3 rounded-lg border border-slate-200 bg-slate-50/60 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={!!conn.scanner_writeback}
+                      disabled={writebackMutation.isPending}
+                      onChange={(e) => writebackMutation.mutate({ id: conn.id, enabled: e.target.checked })}
+                      className="mt-0.5 h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                    />
+                    <span className="text-xs leading-relaxed">
+                      <span className="font-medium text-slate-800">Push decisions to scanner (two-way sync)</span>
+                      <span className="block text-slate-500 mt-0.5">
+                        When a finding is marked false positive or granted an exception in ComplyVerse, mirror that
+                        decision in the scanner (e.g. a host-scoped Nessus plugin rule). Actions the scanner&apos;s API
+                        can&apos;t represent are recorded as skipped with the reason. Auto-close on verified re-scan is
+                        always on and doesn&apos;t modify the scanner.
+                      </span>
+                    </span>
+                  </label>
+
                   {testResult?.id === conn.id && (
                     <div className={`flex items-center gap-2 p-3 rounded-lg text-sm ${testResult.success ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
                       {testResult.success ? <CheckCircle size={15} /> : <XCircle size={15} />}
@@ -612,6 +644,7 @@ export default function ConnectionsPage() {
                     <div className={`p-3 rounded-lg text-sm ${syncResult.data?.status === 'completed' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
                       {syncResult.data?.status === 'completed' ? (
                         <>Sync complete · Assets: +{syncResult.data?.assets_new || 0} new, {syncResult.data?.assets_updated || 0} updated · Vulns: +{syncResult.data?.vulns_new || 0} new, {syncResult.data?.vulns_updated || 0} updated, {syncResult.data?.vulns_closed || 0} closed
+                        {syncResult.data?.vulns_reopened > 0 ? `, ${syncResult.data.vulns_reopened} reopened` : ''}
                         {syncResult.data?.errors_count > 0 ? ` · ${syncResult.data.errors_count} errors` : ''}</>
                       ) : (
                         <>Sync failed{syncResult.data?.error ? ` · ${syncResult.data.error}` : ''}</>

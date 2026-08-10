@@ -122,6 +122,10 @@ const STATUS_PILL: Record<string, { tone: string; label: string }> = {
   closed: { tone: 'bg-slate-100 text-slate-600', label: 'Closed' },
   accepted: { tone: 'bg-primary-50 text-primary-700', label: 'Risk Accepted' },
   false_positive: { tone: 'bg-slate-100 text-slate-600', label: 'False Positive' },
+  auto_closed_decommissioned: { tone: 'bg-slate-100 text-slate-600', label: 'Closed — Asset Retired' },
+  // Set by the scanner closure engine when a completed re-scan covering the
+  // host no longer reports the finding (evidence on the detail page).
+  auto_closed_fixed: { tone: 'bg-emerald-50 text-emerald-700', label: 'Closed — Verified by Re-scan' },
 };
 
 export function statusLabel(status: string | null | undefined): string {
@@ -140,7 +144,10 @@ export function StatusPill({ status }: { status: string }) {
 }
 
 // Closed / mitigated statuses that no longer carry an SLA obligation.
-const RESOLVED_STATUSES = new Set(['remediated', 'verified', 'closed', 'accepted', 'false_positive']);
+const RESOLVED_STATUSES = new Set([
+  'remediated', 'verified', 'closed', 'accepted', 'false_positive',
+  'auto_closed_decommissioned', 'auto_closed_fixed',
+]);
 
 // ─── SLA / Due cell (the load-bearing overdue signal) ────────────────────────
 /**

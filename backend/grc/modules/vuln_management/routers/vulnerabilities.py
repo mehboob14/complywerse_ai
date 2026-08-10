@@ -160,6 +160,19 @@ def _build_vulnerability_response(v: Vulnerability, solution_count=None) -> Vuln
         exception_revoked_at=getattr(v, "exception_revoked_at", None),
         exception_revocation_reason=getattr(v, "exception_revocation_reason", None),
         exception_metadata=dict(getattr(v, "exception_metadata", None) or {}) or None,
+        # Scanner closure loop — provenance + verified-close evidence.
+        connection_id=getattr(v, "connection_id", None),
+        source=getattr(v, "source", None),
+        external_vuln_id=getattr(v, "external_vuln_id", None),
+        scanner_status=getattr(v, "scanner_status", None),
+        first_detected=getattr(v, "first_detected", None),
+        last_seen=getattr(v, "last_seen", None),
+        last_seen_scan_id=getattr(v, "last_seen_scan_id", None),
+        closed_at=getattr(v, "closed_at", None),
+        closed_by=getattr(v, "closed_by", None),
+        closure_evidence=dict(getattr(v, "closure_evidence", None) or {}) or None,
+        reopened_at=getattr(v, "reopened_at", None),
+        reopen_count=getattr(v, "reopen_count", None),
     )
 
 
@@ -174,6 +187,9 @@ def _build_vulnerability_response(v: Vulnerability, solution_count=None) -> Vuln
 _LIST_CLOSED_STATUSES = [
     "resolved", "remediated", "verified", "closed",
     "accepted", "false_positive", "auto_closed_decommissioned",
+    # Set by the scanner closure engine when a completed re-scan covering the
+    # host no longer reports the finding (evidence in closure_evidence).
+    "auto_closed_fixed",
 ]
 
 
@@ -293,7 +309,7 @@ def list_vulnerabilities(
     if is_overdue:
         query = query.filter(
             Vulnerability.due_date < datetime.utcnow(),
-            Vulnerability.status.notin_(["resolved", "accepted", "false_positive"])
+            Vulnerability.status.notin_(_LIST_CLOSED_STATUSES)
         )
     if search:
         query = query.filter(
@@ -959,9 +975,30 @@ def change_vulnerability_status(
     if request.status in ["verified", "resolved", "closed"]:
         vuln.verified_by = current_user.id
         vuln.verified_at = datetime.utcnow()
-    
+
+    # Scanner write-back: translate the decision into outbox actions for the
+    # finding's scanner connection (no-op for manual/report findings). The
+    # push itself is best-effort after commit; unsupported/disabled actions
+    # are recorded as skipped with the reason — never silently dropped.
+    try:
+        from ....modules.integrations.services.writeback_service import WritebackService
+        WritebackService.on_status_change(
+            db, vuln, previous_status, request.status, user_id=current_user.id,
+        )
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception(
+            "Writeback enqueue failed for vuln %s (non-fatal)", vuln.id
+        )
+
     db.commit()
     db.refresh(vuln)
+
+    try:
+        from ....modules.integrations.services.writeback_service import WritebackService
+        WritebackService.try_process_now(db, vuln)
+    except Exception:
+        pass
 
     vuln = db.query(Vulnerability).options(
         joinedload(Vulnerability.assignee),

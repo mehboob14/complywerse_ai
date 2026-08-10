@@ -57,9 +57,27 @@ def create_exception(
     vuln.exception_expiry = request.exception_expiry
     vuln.status = "accepted"
     vuln.updated_at = datetime.utcnow()
-    
+
+    # Scanner write-back: represent the exception in the scanner where its API
+    # allows (host-scoped plugin rule with expiry on Nessus); no-op for manual
+    # findings, recorded-as-skipped when unsupported or disabled.
+    try:
+        from ....modules.integrations.services.writeback_service import WritebackService
+        WritebackService.on_exception_change(db, vuln, active=True, user_id=current_user.id)
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception(
+            "Writeback enqueue failed for exception on vuln %s (non-fatal)", vuln.id
+        )
+
     db.commit()
     db.refresh(vuln)
+
+    try:
+        from ....modules.integrations.services.writeback_service import WritebackService
+        WritebackService.try_process_now(db, vuln)
+    except Exception:
+        pass
     
     days_until_expiry = None
     if vuln.exception_expiry:
@@ -98,6 +116,15 @@ def update_exception(
         vuln.exception_approved_by = None
         vuln.exception_expiry = None
         vuln.status = "open"
+        # Exception withdrawn — remove its scanner-side rule (if one was pushed).
+        try:
+            from ....modules.integrations.services.writeback_service import WritebackService
+            WritebackService.on_exception_change(db, vuln, active=False, user_id=current_user.id)
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception(
+                "Writeback revert failed for exception on vuln %s (non-fatal)", vuln.id
+            )
     else:
         if request.exception_reason is not None:
             vuln.exception_reason = request.exception_reason
@@ -107,10 +134,24 @@ def update_exception(
             vuln.is_exception = True
             vuln.exception_approved_by = current_user.id
             vuln.status = "accepted"
-    
+            try:
+                from ....modules.integrations.services.writeback_service import WritebackService
+                WritebackService.on_exception_change(db, vuln, active=True, user_id=current_user.id)
+            except Exception:
+                import logging
+                logging.getLogger(__name__).exception(
+                    "Writeback enqueue failed for exception on vuln %s (non-fatal)", vuln.id
+                )
+
     vuln.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(vuln)
+
+    try:
+        from ....modules.integrations.services.writeback_service import WritebackService
+        WritebackService.try_process_now(db, vuln)
+    except Exception:
+        pass
     
     approver = db.query(GRCUser).filter(GRCUser.id == vuln.exception_approved_by).first() if vuln.exception_approved_by else None
     
