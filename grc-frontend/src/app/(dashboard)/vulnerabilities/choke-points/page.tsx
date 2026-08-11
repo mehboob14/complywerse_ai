@@ -107,10 +107,23 @@ export default function ChokePointsPage() {
         <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-8 text-center text-sm text-slate-500">
           No ranked choke points — no finding currently has a <em>viable</em> stored attack chain.
           {cov && (
-            <span className="block mt-1 text-xs text-slate-400">
-              Two levers: {cov.findings_chainless} of {cov.total_findings} findings carry no chain
-              at all (generation), and {cov.findings_chained_but_unviable} carry a chain that is
-              currently severed or awaiting enrichment (viability).
+            <span className="block mt-2 text-xs text-slate-400 text-left max-w-xl mx-auto space-y-1">
+              <span className="block">
+                Three levers move this list, and they are not one:
+              </span>
+              <span className="block">
+                • <strong className="text-slate-500">{cov.findings_chainless}</strong> of {cov.total_findings} findings
+                carry no attack chain at all <span className="text-slate-400">(generation)</span>.
+              </span>
+              <span className="block">
+                • <strong className="text-slate-500">{cov.findings_severed}</strong> carry a chain we derived as
+                <em> severed</em> — every way in is blocked on the asset. Real posture; enrichment won&apos;t revive it.
+              </span>
+              <span className="block">
+                • <strong className="text-slate-500">{cov.findings_undeterminable}</strong> carry a chain we
+                <em> can&apos;t derive</em> — no CWE or CVSS recorded to reason from. A data gap, not a conclusion;
+                only enrichable when the finding has a CVE to enrich from.
+              </span>
             </span>
           )}
         </div>

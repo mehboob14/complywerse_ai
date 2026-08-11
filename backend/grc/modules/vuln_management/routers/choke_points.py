@@ -56,12 +56,16 @@ def get_choke_points(
         "coverage_note": (
             f"Ranks remediations across {cov['findings_ranked']} of "
             f"{cov['total_findings']} findings ({cov['total_viable_chains']} viable "
-            f"chains total). Two levers move this, not one: chain GENERATION — "
-            f"{cov['findings_chainless']} findings carry no stored chain at all — and "
-            f"VIABILITY — {cov['findings_chained_but_unviable']} carry a chain but none "
-            f"is currently viable (severed, or awaiting enrichment). A short list is "
-            f"coverage-limited, not broken. 'Viable' means a latest verdict of likely "
-            f"or possible; a severed chain is already broken and does not count."
+            f"chains total). THREE levers move this, not one: chain GENERATION — "
+            f"{cov['findings_chainless']} findings carry no stored chain at all; "
+            f"SEVERANCE — {cov['findings_severed']} carry a chain we derived as "
+            f"severed (every way in blocked on the asset — real posture, not a fixable "
+            f"gap); and DERIVABILITY — {cov['findings_undeterminable']} carry a chain we "
+            f"cannot derive at all (no CWE/CVSS to reason from), where 'unlikely' is a "
+            f"data-gap default and enrichment is the only lever, and only when the "
+            f"finding has a CVE to enrich from. A short list is coverage-limited, not "
+            f"broken. 'Viable' means a latest verdict of likely or possible; a severed "
+            f"chain is already broken and does not count."
         ),
         "no_total_reason": (
             "Chain counts are per-finding and are NOT summed: the assets they "

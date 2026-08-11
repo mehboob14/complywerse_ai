@@ -39,7 +39,38 @@ VERDICT_LIKELY = "likely"
 VERDICT_POSSIBLE = "possible"
 VERDICT_UNLIKELY = "unlikely"
 
+# ── viability — the THREE-way exposure classification the single `verdict` field
+# cannot carry. `unlikely` collapses two categorically different situations, and
+# reading them as one is the "default dressed up as posture" trap:
+#   * SEVERED        — we HAD the derivation basis (a CWE and/or CVSS vector),
+#                      derived the path, and every way in is blocked on this asset.
+#                      Real posture; enrichment cannot revive it.
+#   * UNDETERMINABLE — no CWE/CVSS to derive from, so the chain is the assumed
+#                      no-data fallback and `unlikely` is a DATA-GAP DEFAULT, not a
+#                      conclusion. Only enrichment could move it — and only when the
+#                      finding has a CVE to enrich FROM (a CVE-less info finding can't,
+#                      the A3 case). Naming this state is what stops "we know nothing"
+#                      from rendering identically to "we looked, it's safe".
+# viable ⟺ verdict is likely/possible (open entry never rolls up unlikely, and a
+# walled finding stays possible), so the split is exhaustive and never overlaps.
+VIABILITY_VIABLE = "viable"
+VIABILITY_SEVERED = "severed"
+VIABILITY_UNDETERMINABLE = "undeterminable"
+
 ENTRY_TACTICS = {"initial-access", "execution"}
+
+
+def derive_viability(verdict: str, entry_state: Optional[str]) -> str:
+    """The three-state viability from the verdict + its entry_state — the single
+    definition every consumer reads (the view payload, the choke coverage split,
+    a narrator) so none re-implements the collapse. Pure and total."""
+    if verdict in (VERDICT_LIKELY, VERDICT_POSSIBLE):
+        return VIABILITY_VIABLE
+    # verdict is unlikely: an assumed no-data chain is a data-gap default
+    # (undeterminable); a derived block / no-network-entry is a real conclusion.
+    if entry_state == "assumed_insufficient":
+        return VIABILITY_UNDETERMINABLE
+    return VIABILITY_SEVERED
 
 # The fixed set the signal-% is measured over — positive exploitability signals.
 _EPSS_HOT = 0.10
@@ -170,7 +201,11 @@ def roll_up(chain: List[dict], signals) -> dict:
     return {
         "verdict": verdict,
         "verdict_reason": reason,
-        "entry_state": entry_state,                 # open | severed | none
+        "entry_state": entry_state,                 # open | severed | none | assumed_insufficient
+        # viable | severed | undeterminable — the third state named, so a data-gap
+        # `unlikely` is never read as a safety conclusion. Derived (never stored):
+        # a pure function of verdict + entry_state, both already in the material hash.
+        "viability": derive_viability(verdict, entry_state),
         "entry_technique_count": len(entry),
         "signal_pct": signal_pct,
         "signals_on": [k for k, v in positive.items() if v],
@@ -214,6 +249,10 @@ def apply_wall_to_rollup(rollup: dict, wall_shortname: str) -> dict:
         return rollup
     clamp = _CLAMP_BY_VERDICT[out["verdict"]]
     out["exploit_probability"] = {"recommendation": clamp[0], "rationale": clamp[1]}
+    # Re-derive viability from the weakened verdict too — same "must never disagree"
+    # rule as the clamp. A wall only weakens likely→possible (both viable), so this
+    # is "viable" today; re-deriving keeps it honest if the weakening ever deepens.
+    out["viability"] = derive_viability(out["verdict"], out.get("entry_state"))
     out["walled_at"] = wall_shortname
     out["walled_at_name"] = wall_name
     return out

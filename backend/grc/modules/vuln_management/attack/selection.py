@@ -278,6 +278,27 @@ def select_techniques(cwe_ids=None, cvss_vector: Optional[str] = None) -> List[d
     )
 
 
+def is_undeterminable(cwe_ids=None, cvss_vector: Optional[str] = None) -> bool:
+    """True iff a finding has NO derivation basis — its entire selected chain is
+    the assumed no-data fallback: no CWE that maps to a technique AND no CVSS
+    vector to derive entry steps from.
+
+    This is the finding-level twin of the verdict engine's `assumed_insufficient`
+    entry_state (verdict.derive_viability → 'undeterminable'). It is asset-
+    independent by construction (CWE + vector are properties of the vuln, not the
+    host), so it is the right predicate for a per-finding coverage split. Defined
+    HERE, beside the `assumed` flag it reads, so the engine and choke coverage()
+    can never drift on what 'undeterminable' means.
+
+    Applied to UNVIABLE findings it isolates exactly the assumed_insufficient
+    case: a fully-assumed chain that were corroborated (KEV / public exploit)
+    would have rolled up viable, so among the unviable it is always the honest
+    data-gap default — the only state where enrichment is even a coherent lever.
+    """
+    techs = select_techniques(cwe_ids, cvss_vector)
+    return bool(techs) and all(t.get("assumed") for t in techs)
+
+
 def selection_summary(cwe_ids=None, cvss_vector: Optional[str] = None) -> dict:
     """Convenience wrapper: the technique list plus a compact provenance tally,
     for an endpoint or a debug view.

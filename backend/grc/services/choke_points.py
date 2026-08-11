@@ -94,26 +94,52 @@ def rank_choke_points(db: Session, tenant_id: int) -> List[Dict[str, Any]]:
 
 
 def coverage(db: Session, tenant_id: int) -> Dict[str, int]:
-    """Honesty numbers for the view. Names BOTH levers on the empty/short
-    state: chain GENERATION (findings with no chain at all) and VIABILITY
-    (findings that carry a chain but none currently viable). total_viable_chains
-    is a legitimate sum — chains are disjoint per finding here — while asset
-    counts still must never be summed."""
+    """Honesty numbers for the view. Names THREE levers on the empty/short state:
+    chain GENERATION (findings with no chain at all), and — among findings that
+    carry a chain but none currently viable — the TWO reasons that are not one
+    lever: SEVERED (we derived the path and every door is blocked — real posture)
+    vs UNDETERMINABLE (no CWE/CVSS to derive from — `unlikely` is a data-gap
+    default, and enrichment is a lever only when the finding has a CVE to enrich
+    from). Collapsing those two frames enrichment as a fix for the severed ones,
+    which it is not. total_viable_chains is a legitimate sum — chains are disjoint
+    per finding here — while asset counts still must never be summed."""
     from ..models import Vulnerability, ReachabilitySnapshot
+    from ..modules.vuln_management.attack.selection import is_undeterminable
 
     total_findings = db.query(func.count(Vulnerability.id)).filter(
         Vulnerability.tenant_id == tenant_id).scalar() or 0
-    findings_with_chains = db.query(
-        func.count(func.distinct(ReachabilitySnapshot.vulnerability_id))).filter(
-        ReachabilitySnapshot.tenant_id == tenant_id).scalar() or 0
+    chained_ids = {
+        r[0] for r in db.query(func.distinct(ReachabilitySnapshot.vulnerability_id)).filter(
+            ReachabilitySnapshot.tenant_id == tenant_id).all()
+    }
+    findings_with_chains = len(chained_ids)
     ranking = rank_choke_points(db, tenant_id)
+    ranked_ids = {c["vulnerability_id"] for c in ranking}
     total_viable_chains = sum(c["chain_count"] for c in ranking)  # disjoint → sums true
+
+    # Split the unviable set (has a chain, none viable) by WHY, using the SAME
+    # predicate the live engine uses for assumed_insufficient — no drift. The set
+    # is bounded by findings_with_chains (small), so the per-finding re-selection
+    # is cheap; is_undeterminable is pure/DB-free.
+    unviable_ids = chained_ids - ranked_ids
+    findings_undeterminable = 0
+    if unviable_ids:
+        for v in db.query(Vulnerability).filter(
+                Vulnerability.tenant_id == tenant_id,
+                Vulnerability.id.in_(unviable_ids)).all():
+            if is_undeterminable(getattr(v, "cwe_ids", None) or getattr(v, "cwe_id", None),
+                                 getattr(v, "cvss_vector", None)):
+                findings_undeterminable += 1
+    findings_unviable = len(unviable_ids)
     return {
         "total_findings": total_findings,
         "findings_with_stored_chains": findings_with_chains,
         "findings_chainless": max(total_findings - findings_with_chains, 0),
         "findings_ranked": len(ranking),
-        "findings_chained_but_unviable": max(findings_with_chains - len(ranking), 0),
+        # kept for back-compat (any older consumer); now decomposed by the two below.
+        "findings_chained_but_unviable": findings_unviable,
+        "findings_severed": findings_unviable - findings_undeterminable,
+        "findings_undeterminable": findings_undeterminable,
         "total_viable_chains": total_viable_chains,
     }
 
