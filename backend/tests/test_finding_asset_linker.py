@@ -99,6 +99,26 @@ def test_backfill_is_idempotent(db):
     assert db.query(VulnerabilityAssetLink).count() == first   # no duplicates
 
 
+def test_assign_unmatched_to_chosen_asset(db):
+    # the orphaned finding (13, host unknown-host-99) can't match — but an
+    # operator assigns all unmatched to asset 1. It links there with the
+    # manual_bulk provenance; the auto-matched ones keep their own asset.
+    r = backfill_host_links(db, TENANT, commit=True, assign_unmatched_to_asset_id=1)
+    assert r["assigned_unmatched"] == 1
+    orphan = db.query(VulnerabilityAssetLink).filter_by(vulnerability_id=13).one()
+    assert orphan.asset_id == 1
+    assert orphan.link_source == "manual_bulk"
+    # a host-matched finding is untouched by the override — keeps its real asset
+    assert db.query(VulnerabilityAssetLink).filter_by(vulnerability_id=11).one().asset_id == 3
+
+
+def test_assign_unmatched_ignores_foreign_asset(db):
+    # an asset id that isn't in this tenant must NEVER receive links.
+    r = backfill_host_links(db, TENANT, commit=True, assign_unmatched_to_asset_id=999)
+    assert r["assigned_unmatched"] == 0
+    assert db.query(VulnerabilityAssetLink).filter_by(vulnerability_id=13).first() is None
+
+
 def test_dry_run_writes_nothing(db):
     r = backfill_host_links(db, TENANT, commit=False)
     # nothing committed; the staged adds are rolled back by not committing
