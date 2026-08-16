@@ -200,9 +200,25 @@ def freeze_cycle(db: Session, cycle) -> None:
     scope = db.query(CtemScope).filter(CtemScope.id == cycle.scope_id).first()
     rule = (scope.membership_rule if scope else None) or {}
     asset_ids = resolve_scope_assets(db, cycle.tenant_id, rule)
-    cycle.counts = compute_stage_counts(
+    counts = compute_stage_counts(
         db, cycle.tenant_id, asset_ids, since=cycle.opened_at, until=datetime.utcnow(),
     )
+    # ALSO freeze the STATE totals (not just the since-opened activity), so a
+    # later cycle can be compared honestly: "we had N findings / M ticketed at
+    # close". Additive keys — older freezes without them are simply skipped by
+    # the trend builder, never read as 0.
+    try:
+        from ..models import VulnTicketLink
+        vuln_ids = _vuln_ids_for_assets(db, cycle.tenant_id, asset_ids)
+        counts["discovered_total"] = len(vuln_ids)
+        counts["mobilized_total"] = (db.query(func.count(VulnTicketLink.id)).filter(
+            VulnTicketLink.tenant_id == cycle.tenant_id,
+            VulnTicketLink.vulnerability_id.in_(vuln_ids),
+            VulnTicketLink.external_ticket_id.isnot(None),
+        ).scalar() or 0) if vuln_ids else 0
+    except Exception:
+        logger.exception("freeze_cycle: total counters failed (non-fatal)")
+    cycle.counts = counts
     cycle.membership_rule_frozen = rule
     cycle.membership_hash = membership_hash(asset_ids)
     cycle.hash_algorithm = HASH_ALGORITHM
@@ -236,6 +252,144 @@ def command_center(db: Session, tenant_id: int, scope) -> Dict[str, Any]:
         "mobilise": _cc_mobilise(db, tenant_id, vuln_ids),
         "quantify": _cc_quantify(db, tenant_id),
     }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Portfolio view — the redesigned page's data contract, for ALL scopes in one
+# call (no N+1 from the browser). Shape mirrors the design handoff's `Scope`
+# interface exactly, built ONLY from the proven services above. Where the
+# design assumes data that has no real source (per-scope FAIR money, scope
+# owner name), the field is returned null/empty and the UI renders an honest
+# empty state — never an invented number.
+# ─────────────────────────────────────────────────────────────────────────────
+def _membership_label(rule: Optional[Dict[str, Any]]) -> str:
+    rule = rule or {}
+    parts = []
+    if rule.get("name_contains"):
+        parts.append(f'name contains "{rule["name_contains"]}"')
+    if rule.get("departments"):
+        parts.append("dept in " + ", ".join(rule["departments"]))
+    if rule.get("asset_types"):
+        parts.append("type in " + ", ".join(rule["asset_types"]))
+    if rule.get("asset_ids"):
+        parts.append(f'{len(rule["asset_ids"])} named asset(s)')
+    return " AND ".join(parts) or "no rule"
+
+
+def portfolio(db: Session, tenant_id: int) -> Dict[str, Any]:
+    from ..models import CtemScope, CtemCycle, GRCUser, Vulnerability, ITAsset, VulnerabilityAssetLink
+    from .choke_points import rank_choke_points
+
+    scopes = db.query(CtemScope).filter(CtemScope.tenant_id == tenant_id).order_by(CtemScope.created_at.asc()).all()
+    now = datetime.utcnow()
+    out: List[Dict[str, Any]] = []
+    for s in scopes:
+        cc = command_center(db, tenant_id, s)
+        asset_ids = [m["id"] for m in cc["machines"]]
+        vuln_ids = _vuln_ids_for_assets(db, tenant_id, asset_ids)
+        cov = cc["prioritise"]["coverage"]
+        tiers = cc["validate"]["tiers"]
+        mob = cc["mobilise"]
+
+        # cycles: open one + closed history (frozen counts drive trend/deltas)
+        cycles = sorted(s.cycles, key=lambda c: c.opened_at or datetime.min)
+        open_c = next((c for c in cycles if c.status == "open"), None)
+        closed = [c for c in cycles if c.status == "closed" and c.counts]
+        cycle_no = len(cycles)
+        cycle_day = (now - open_c.opened_at).days if open_c and open_c.opened_at else None
+        last_closed = closed[-1].closed_at.strftime("%d %b %Y") if closed and closed[-1].closed_at else None
+        # trend + deltas from CLOSED cycles' frozen counts, then the live point.
+        # HONESTY: `discovered`/`validated`/`mobilized` in a frozen payload are
+        # "since the cycle opened" ACTIVITY counters, not totals — using them as
+        # a trend point painted a false 0 (found live). Only `prioritized` is a
+        # true state count. So the dangerous trend uses frozen `prioritized`
+        # (real); the findings trend uses `discovered_total` only if a freeze
+        # recorded it, else that point is OMITTED rather than faked. prev_*
+        # deltas follow the same rule (None = "no comparable freeze").
+        def _tot(c, key):
+            v = (c.counts or {}).get(key)
+            return int(v) if v is not None else None
+        t_find = [x for x in (_tot(c, "discovered_total") for c in closed[-4:]) if x is not None] + [cc["scope_findings"]]
+        t_dang = [x for x in (_tot(c, "prioritized") for c in closed[-4:]) if x is not None] + [cov["findings_ranked"]]
+        last = closed[-1] if closed else None
+        prev_find = _tot(last, "discovered_total") if last else None
+        prev_dang = _tot(last, "prioritized") if last else None
+        prev_mob = _tot(last, "mobilized_total") if last else None
+
+        # owner (real user if set; else null → UI shows "unassigned")
+        owner = None
+        if s.business_owner_id:
+            u = db.query(GRCUser).get(s.business_owner_id)
+            if u:
+                owner = getattr(u, "full_name", None) or getattr(u, "name", None) or getattr(u, "email", None)
+
+        # top dangerous findings: choke ranking hydrated with finding meta (+ real owner/SLA)
+        rank = rank_choke_points(db, tenant_id, vulnerability_ids=vuln_ids)[:5]
+        top: List[Dict[str, Any]] = []
+        if rank:
+            meta = {v.id: v for v in db.query(Vulnerability).filter(Vulnerability.id.in_([r["vulnerability_id"] for r in rank])).all()}
+            uid = {v.assigned_to for v in meta.values() if v.assigned_to}
+            users = {u.id: u for u in db.query(GRCUser).filter(GRCUser.id.in_(uid)).all()} if uid else {}
+            for r in rank:
+                v = meta.get(r["vulnerability_id"])
+                if not v:
+                    continue
+                sla = None
+                if v.due_date:
+                    d = (v.due_date - now).days
+                    sla = f"overdue {abs(d)}d" if d < 0 else f"{d}d left"
+                ou = users.get(v.assigned_to) if v.assigned_to else None
+                top.append({
+                    "id": v.id, "rank": r["rank"], "title": v.title,
+                    "meta": " · ".join(x for x in [v.cve_id or v.cwe_id, (cc["machines"][0]["name"] if cc["machines"] else None)] if x),
+                    "breaks": f'{r["chain_count"]} path{"s" if r["chain_count"] != 1 else ""}',
+                    "owner": (getattr(ou, "full_name", None) or getattr(ou, "email", None)) if ou else None,
+                    "sla": sla, "sev": (v.severity or "low").lower(),
+                })
+
+        # machines with findings count + worst reachable verdict as the risk dot
+        per_asset_findings: Dict[int, int] = {}
+        if asset_ids:
+            for aid, n in db.query(VulnerabilityAssetLink.asset_id, func.count(VulnerabilityAssetLink.id)).filter(
+                    VulnerabilityAssetLink.asset_id.in_(asset_ids)).group_by(VulnerabilityAssetLink.asset_id).all():
+                per_asset_findings[aid] = n
+        machines = [{"id": m["id"], "name": m["name"], "type": m.get("asset_type") or "asset",
+                     "findings": per_asset_findings.get(m["id"], 0), "risk": None} for m in cc["machines"]]
+
+        # frameworks with tested count from the crosswalk items
+        fw: Dict[str, Dict[str, int]] = {}
+        for it in cc["validate"].get("items", []):
+            f = fw.setdefault(it["framework"], {"controls": 0, "tested": 0})
+            f["controls"] += 1
+            if it["tier"] in ("tested_effective", "tested_failed", "remediation_verified"):
+                f["tested"] += 1
+        tier_map = {"tested_effective": "tested", "tested_failed": "failed", "remediation_verified": "verified"}
+        cw = [{"fw": it["framework"], "code": it["code"], "title": it["title"], "findings": it["findings_covered"],
+               "tier": tier_map.get(it["tier"], "claimed"), "control_id": it["id"], "kind": it["kind"]}
+              for it in cc["validate"].get("items", [])]
+
+        out.append({
+            "id": s.id, "name": s.name, "owner": owner, "cadence": s.cadence or "—",
+            "membership": _membership_label(s.membership_rule),
+            "cycleOpen": open_c is not None, "cycleId": open_c.id if open_c else None,
+            "cycleNo": cycle_no, "cycleDay": cycle_day, "lastClosed": last_closed,
+            "assets": len(asset_ids), "findings": cc["scope_findings"],
+            "dangerous": cov["findings_ranked"], "chains": cov["total_viable_chains"],
+            "controls": cc["validate"]["controls"],
+            "tested": tiers.get("tested_effective", 0), "failed": tiers.get("tested_failed", 0),
+            "verified": tiers.get("remediation_verified", 0), "claimed": tiers.get("attested_only", 0) + tiers.get("stale", 0),
+            "fixes": mob.get("tickets", 0), "fixesOpen": mob.get("open", 0), "fixesResolved": mob.get("resolved", 0),
+            # per-scope FAIR has no real source (risks aren't scope-linked) → null, honestly
+            "ale": None, "aleMin": None, "p95": None, "aleAfter": None,
+            "buckets": {"ranked": cov["findings_ranked"], "undeterminable": cov["findings_undeterminable"],
+                        "chainless": cov["findings_chainless"], "severed": cov["findings_severed"]},
+            "analysable": cc["prioritise"].get("analysable"),
+            "frameworks": [{"name": k, **v} for k, v in fw.items()],
+            "machines": machines, "top": top,
+            "tFind": t_find, "tDang": t_dang, "prevFind": prev_find, "prevDang": prev_dang, "prevMob": prev_mob,
+            "cw": cw,
+        })
+    return {"scopes": out, "quantify": _cc_quantify(db, tenant_id)}
 
 
 def _cc_prioritise(db: Session, tenant_id: int, vuln_ids: List[int]) -> Dict[str, Any]:

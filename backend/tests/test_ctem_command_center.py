@@ -178,3 +178,32 @@ def test_coverage_scope_filter_vs_tenant_wide(db):
     assert scoped["findings_ranked"] == 1
     # empty scope is a real "no findings", never silently the whole tenant
     assert coverage(db, TENANT, vulnerability_ids=[])["total_findings"] == 0
+
+
+def test_portfolio_shape_matches_design_contract(db):
+    """The redesign's Scope[] contract, one call for all scopes. Built from the
+    same services; fields with no real source (per-scope FAIR, owner) are NULL,
+    never invented."""
+    from grc.models import CtemScope, CtemCycle
+    CtemScope.__table__.create(db.get_bind()); CtemCycle.__table__.create(db.get_bind())
+    sc = CtemScope(id=1, tenant_id=TENANT, name="Payments", cadence="quarterly",
+                   membership_rule={"departments": ["Payments"]})
+    db.add(sc); db.commit()
+    db.add(CtemCycle(id=1, tenant_id=TENANT, scope_id=1, status="open")); db.commit()
+    p = svc.portfolio(db, TENANT)
+    assert len(p["scopes"]) == 1
+    s = p["scopes"][0]
+    # direct maps
+    assert s["name"] == "Payments" and s["membership"] == "dept in Payments"
+    assert s["assets"] == 1 and s["findings"] == 3 and s["dangerous"] == 1
+    assert s["buckets"] == {"ranked": 1, "undeterminable": 1, "chainless": 1, "severed": 0}
+    assert s["controls"] == 2 and s["tested"] == 1 and s["claimed"] == 1
+    assert s["fixes"] == 1 and s["fixesOpen"] == 1
+    assert s["cycleOpen"] is True and s["cycleNo"] == 1 and s["cycleId"] == 1
+    # crosswalk rows carry the REAL framework name; top[] is the ranked finding
+    assert any(c["fw"] == "ISO/IEC 27001:2022" and c["code"] == "A.8.8" for c in s["cw"])
+    assert s["top"][0]["id"] == 10 and s["top"][0]["breaks"] == "1 path"
+    # honest nulls — no real source
+    assert s["owner"] is None and s["ale"] is None and s["p95"] is None
+    # trend: no closed cycles yet → just the live point (real, short)
+    assert s["tFind"] == [3] and s["tDang"] == [1] and s["prevFind"] is None

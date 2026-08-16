@@ -145,6 +145,20 @@ def create_scope(
     return {"scope": _scope_dict(db, scope, live_counts=True)}
 
 
+@router.get("/portfolio")
+def get_portfolio(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """The redesigned page's data contract — every scope's full command-center
+    numbers in ONE call (portfolio band + rail + focused scope), built only from
+    the proven services. Fields with no real source (per-scope FAIR, unset owner)
+    come back null so the UI shows an honest empty state, never a fake number.
+    Declared BEFORE /{scope_id} so 'portfolio' isn't parsed as an id."""
+    tenant_id = get_user_primary_tenant(current_user, db)
+    return svc.portfolio(db, tenant_id)
+
+
 @router.get("/{scope_id}")
 def get_scope(
     scope_id: int,
