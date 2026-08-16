@@ -57,6 +57,36 @@ controls can move past "attested only" without waiting on an external BAS feed.
 - **Per-scope CRQM** — needs a risk↔scope (or risk↔asset) link in the
   quantification model: a real modelling decision, your call.
 
+## AUDIT RULE — no green without a shown trace (user-directed, 16 Aug)
+
+My earlier audits produced FALSE GREEN FLAGS (stage 3 called "MET"/"engine
+fine" twice, then a real logic flaw found in it). Root cause, three habits:
+(1) I audited COUNTS (205 linked, 0 orphans) not DECISIONS (is this finding
+dangerous? which controls?); (2) I marked stages "met" when the code existed
+but had NEVER RUN on real data ("green before the beef"); (3) I declared then
+verified, instead of: pick a real case → predict the correct answer → check
+the system → then a verdict.
+
+Rule now: a stage is **shown-correct** only with a real traced case where the
+decision matches an engineer's answer; **built-not-exercised** when code exists
+but hasn't run on real data; **unverified** when it can't be tested yet. Only
+the first is green.
+
+Decision-level audit result (16 Aug):
+- Scope: shown-correct (name rule → 142/144, not 143). Caveat: only the name
+  rule exercised on real data.
+- Discover: shown-correct (205 real findings, each on its machine, per user).
+- Prioritise: shown-correct on 3 traced cases — (A) PG 8.8 net-only/no
+  exploit/internal → unlikely-blocked; (B) WinVerifyTrust KEV+UI:R/internal →
+  likely (user opens file); (C) TLS 1.1 no CVE/vector → was possible (BUG,
+  fixed f722db8) → now can't-tell, flip auditable in history. 3 of 6
+  "dangerous" hand-traced; other 3 follow rule B, not individually traced.
+- Validate: LINKING shown-correct (VULN-289 → A.8.8/RA-5/SI-2/6.3.3/11.3.1;
+  every CVE finding linked, none missed). JUDGING half (tier from evidence)
+  built-not-exercised — 0 evidence rows ever. NOT green.
+- Mobilise: unverified — no ServiceNow. NOT green.
+- Cycle: open shown-correct; CLOSE built-not-exercised on real data. NOT green.
+
 ## HARD RULE — no fake data, no demo data (user-directed)
 
 The app must never show invented or sample data as if real. Real frameworks
