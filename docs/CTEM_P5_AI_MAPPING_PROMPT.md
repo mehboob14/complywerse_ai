@@ -1,6 +1,34 @@
 # P5 — AI control mapping: the exact prompt (design of record)
 
-**Status: for user confirmation before build. Nothing here runs yet.**
+**Status: FINALIZED (prompt v1.4) after a 3-iteration battery against REAL
+findings + the REAL control library, per user direction ("check it against
+many scenarios yourself, iterate, then finalize"). Service:
+`backend/grc/services/ai_control_mapping.py`. Tests:
+`backend/tests/test_ai_control_mapping.py` (10, hermetic, fake model client).**
+
+## Battery record (real findings, real gpt-4o calls, 16 Aug)
+
+| Iter | Scenario | Result | Root cause / fix |
+|---|---|---|---|
+| 1 | S1 PostgreSQL CWE-1287 | ✔ Input Data Validation | — |
+| 1 | S3 WinRAR heap overflow | ✔ Memory Protection + Secure Coding | — |
+| 1 | S4 TLS 1.1 (no CVE) | ✔ Review Cipher Suites + Approve Protocols | — |
+| 1 | S6 OS Identification | ✔ never sent (inventory) | — |
+| 1 | S8 WordPad History (misbucketed) | ✔ model returned empty + "informational" | safety net works |
+| 1 | **S2 WinVerifyTrust CWE-347** | ✗ NONE | shortlist built from title words → no code-signing controls offered |
+| 1 | **S5 SMB Registry / S7 Print Spooler** | ✗ "informational" | prompt too conservative on hardening findings |
+| 2 | S5, S7 | ✔ access-control / least-functionality | prompt: hardening ≠ inventory (rule added) |
+| 2 | **S2** | ✗ still NONE | expander fired "authentication" from DESCRIPTION → MFA/password decoys flooded top-40 |
+| 3 | **S2** | ✔ "Ensure authenticity and integrity of application messages" | CWE/title concepts PRIMARY, description concepts SECONDARY in ranking; CWE name (MITRE) fed to model |
+| 3 | S12 Unquoted Service Path CWE-428 | ✔ System Hardening Standards | — |
+| 3 | S13 Logged On Users | ✔ never sent | — |
+| 3 | all regressions (S1,S4,S5,S7,S8) | ✔ | — |
+
+**Zero invalid control ids across every iteration** — the shortlist guard held.
+Classifier over all 205 real findings: 23 CVE / 52 sent / 130 inventory; the
+test battery pins that no real weakness ("Unquoted Service Path", "Cannot Be
+Trusted", "Cached Password"…) is ever filed as inventory. Deliberately generous
+toward "send" — a spare model call is cheaper than a hidden weakness.
 
 ## Guarantees the prompt rests on (verified in code, 16 Aug)
 
@@ -68,8 +96,20 @@ Hard rules:
 - Every suggestion must have: the candidate control id, a confidence
   (high|medium|low), a one-sentence reason that names the weakness, and
   which input drove it (cve_description | cwe | finding_description).
-- Be conservative. A wrong link is worse than a missing one.
-- Output strict JSON only, matching the schema. No prose.
+- Be conservative. A wrong link is worse than a missing one. Prefer 1-4 strong
+  suggestions over many weak ones.
+- Distinguish two kinds of no-CVE findings:
+  (a) A pure INVENTORY note — a fact about the machine with nothing wrong
+      (software installed, OS identified, users listed, hardware info). Return
+      an empty list and say so in no_specific_control_reason.
+  (b) A HARDENING weakness — something enabled, exposed, reachable, or
+      configured that increases attack surface: an unnecessary service running,
+      a registry/share/interface remotely accessible, a legacy protocol or weak
+      cipher allowed, anonymous/null access, signing not required, a default
+      left on. These ARE weaknesses. Map them to secure-configuration /
+      least-functionality / hardening / access-control controls. Do NOT call
+      them informational.
+- Output STRICT JSON only, matching the schema. No prose, no markdown.
 
 USER
 FINDING
@@ -85,6 +125,9 @@ FINDING
 
 CANDIDATE CONTROLS (choose only from these ids)
   {for each candidate: id | framework | code | title | short_description}
+
+(Verbatim SYSTEM_PROMPT + build_user_prompt live in ai_control_mapping.py;
+the user prompt also carries the MITRE CWE name.)
 
 Return JSON:
 {
