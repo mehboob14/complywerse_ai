@@ -6,8 +6,9 @@
  * A scope is a named, business-owned slice of the attack surface; a cycle is
  * one human-driven run of the loop over it. Semantics on the surface:
  *  - cadence is advisory only (the UI never implies a cycle self-opens);
- *  - three honest stage counters (discovered / validated / mobilized) — no
- *    "prioritized" until Phase 4 gives it a real event to count;
+ *  - the loop shown left-to-right as five stages (scope → discover →
+ *    prioritise → validate → mobilise); `prioritised` shows "—" when the
+ *    scope has no choke-point history yet (an honest seam, not a fake 0);
  *  - closing freezes counts + rule + membership hash, and a closed cycle
  *    shows those frozen numbers, not a re-explorable drill-down.
  */
@@ -26,7 +27,7 @@ interface Cycle {
   status: 'open' | 'closed' | string;
   opened_at?: string | null;
   closed_at?: string | null;
-  counts?: { member_assets: number; discovered: number; validated: number; mobilized: number } | null;
+  counts?: { member_assets: number; discovered: number; prioritized?: number; validated: number; mobilized: number } | null;
   membership_hash?: string | null;
   hash_algorithm?: string | null;
   drilldown_available?: boolean;
@@ -40,21 +41,26 @@ interface Scope {
   open_cycle_id?: number | null;
   cycle_count: number;
   member_assets?: number;
-  live_counts?: { member_assets: number; discovered: number; validated: number; mobilized: number };
+  live_counts?: { member_assets: number; discovered: number; prioritized?: number; validated: number; mobilized: number };
 }
 
-function Counters({ c }: { c: { member_assets: number; discovered: number; validated: number; mobilized: number } }) {
+// The CTEM loop, left to right. Scope = the assets in the slice; the middle
+// three are the cycle's own counters; prioritised shows "—" when the scope has
+// no choke-point history yet (the backend omits it — an honest seam, not a 0).
+function Counters({ c }: { c: { member_assets: number; discovered: number; prioritized?: number; validated: number; mobilized: number } }) {
+  const stages: [string, string, number | undefined][] = [
+    ['1', 'Scope', c.member_assets],
+    ['2', 'Discover', c.discovered],
+    ['3', 'Prioritise', c.prioritized],
+    ['4', 'Validate', c.validated],
+    ['5', 'Mobilise', c.mobilized],
+  ];
   return (
-    <div className="grid grid-cols-4 gap-2">
-      {[
-        ['Member assets', c.member_assets],
-        ['Discovered', c.discovered],
-        ['Validated', c.validated],
-        ['Mobilized', c.mobilized],
-      ].map(([label, v]) => (
-        <div key={label as string} className="rounded-lg border border-slate-200 bg-slate-50/60 p-2 text-center">
-          <p className="text-base font-bold text-slate-900 tabular-nums">{v as number}</p>
-          <p className="text-[10px] text-slate-500 mt-0.5">{label}</p>
+    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+      {stages.map(([n, label, v]) => (
+        <div key={label} className="rounded-lg border border-slate-200 bg-slate-50/60 p-2 text-center">
+          <p className="text-[9px] font-medium text-slate-400 mb-0.5 uppercase tracking-wide">{n} · {label}</p>
+          <p className="text-base font-bold text-slate-900 tabular-nums">{v === undefined ? '—' : v}</p>
         </div>
       ))}
     </div>
