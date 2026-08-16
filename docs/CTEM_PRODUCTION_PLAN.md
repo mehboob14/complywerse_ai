@@ -87,6 +87,33 @@ Decision-level audit result (16 Aug):
 - Mobilise: unverified — no ServiceNow. NOT green.
 - Cycle: open shown-correct; CLOSE built-not-exercised on real data. NOT green.
 
+### Audit completed to the bottom (16 Aug, later) — every stage EXERCISED on real data
+
+- **Scope A→Z: shown-correct.** All 4 rule types + AND-ing tested against real
+  assets, each prediction matched (name case-insensitive; types; ids;
+  departments→none since none set; AND narrows correctly). Empty rule → NONE
+  (safe: can't swallow the estate). Hash deterministic (same rule → same hash).
+- **Cycle close: EXERCISED for real.** Closed cycle 3: frozen counts ==
+  live counts captured a moment before; frozen hash == the independently
+  computed scope hash (f8aa271eb1…); rule frozen; status closed. Reopened as
+  cycle 4. `prioritized 7 = launch_backfill 7 / in_window 0` — the freeze
+  correctly labels first-ever computation as backfill, not workflow. Green.
+- **Validate judging half: EXERCISED for real.** One `fail` retest on VULN-289
+  (fail chosen so no finding status changes) → evidence rows for its 7 linked
+  controls → A.8.8 flipped attested_only→tested_failed → command center shows
+  tested_failed 7 / attested_only 42. Event→evidence→tier→card path works
+  end-to-end. Green. Discrepancy found + explained: 42+7=49 not 60 — the "60"
+  was measured BEFORE deleting the 10 seeded findings (their 157 links reached
+  11 controls no real finding uses). 49 is the true number; no dangling rows.
+- **Mobilise: wiring verified sound; ONE real gap.** Panel, connectors UI and
+  push all read/write ONE table (IntegrationConnection); `/connectors` returned
+  [] only because category=ticketing has no rows yet — consistent. When
+  ServiceNow is added via the UI, panel will list it and push will find it.
+  GAP: `ItsmPanel` returns null when no ticketing connector exists, so a user
+  cannot discover that Mobilise needs one → replace with an honest empty state
+  ("No ticketing connector yet — connect ServiceNow to push"). Still unverified
+  live (needs the user's ServiceNow), but no longer a hidden dead end.
+
 ## HARD RULE — no fake data, no demo data (user-directed)
 
 The app must never show invented or sample data as if real. Real frameworks

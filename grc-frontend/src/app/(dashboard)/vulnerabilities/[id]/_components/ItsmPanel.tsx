@@ -11,6 +11,7 @@
  */
 
 import { useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { vulnManagementApi, connectorsApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -68,9 +69,28 @@ export default function ItsmPanel({ vulnId }: { vulnId: number }) {
     onError: (e: any) => setError(e?.response?.data?.detail || 'Sync failed'),
   });
 
-  // Nothing to show and nothing to do → render nothing (tenants without a
-  // ticketing connector see no dead panel).
-  if (ticketingConns.length === 0 && tickets.length === 0) return null;
+  // No ticketing connector and nothing pushed yet: render an HONEST empty state,
+  // not nothing. Returning null hid the whole Mobilise stage — a user could not
+  // discover that pushing needs a connector (found in the 16 Aug CTEM audit).
+  if (ticketingConns.length === 0 && tickets.length === 0) {
+    return (
+      <section className="cw-card rounded-xl p-4 sm:p-5">
+        <h2 className="text-sm font-semibold text-slate-900 flex items-center gap-1.5 mb-1">
+          <Ticket className="h-3.5 w-3.5 text-slate-500" strokeWidth={1.75} />
+          ITSM mobilisation
+        </h2>
+        <p className="text-xs text-slate-600">
+          No ticketing connector is configured yet, so this finding can&apos;t be pushed to a ticket system.
+          Connect ServiceNow (or another ITSM) and this panel becomes the &ldquo;push to ticket → track resolution&rdquo; step of the CTEM loop.
+        </p>
+        {canEdit && (
+          <Link href="/admin/connectors" className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary-600 hover:underline">
+            <ExternalLink className="h-3.5 w-3.5" /> Add a ticketing connector →
+          </Link>
+        )}
+      </section>
+    );
+  }
 
   return (
     <section className="cw-card rounded-xl p-4 sm:p-5">
