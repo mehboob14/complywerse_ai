@@ -21,7 +21,7 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ctemScopesApi } from '@/lib/api';
+import { ctemScopesApi, vulnManagementApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import { AiControlProposalsPanel } from './_components/AiControlProposalsPanel';
 import {
@@ -185,6 +185,12 @@ export default function CtemScopesRedesign() {
     onSuccess: () => { setError(null); invalidate(); },
     onError: (e: any) => setError(e?.response?.data?.detail || 'Failed to close cycle'),
   });
+  // Re-run the attack-path engine over the scope (fills "not calculated", refreshes the ranking).
+  const computePaths = useMutation({
+    mutationFn: async (scopeId: number) => (await vulnManagementApi.vulnerabilities.computeAttackPaths(scopeId, false)).data,   // full recompute, not only-missing
+    onSuccess: () => { setError(null); invalidate(); qc.invalidateQueries({ queryKey: ['choke-points'] }); },
+    onError: (e: any) => setError(e?.response?.data?.detail || 'Attack-path calculation failed'),
+  });
 
   const portfolio = useMemo(() => {
     const sum = (f: (s: Scope) => number) => SCOPES.reduce((a, s) => a + f(s), 0);
@@ -209,7 +215,6 @@ export default function CtemScopesRedesign() {
     };
   }, [SCOPES, quantify]);
 
-  const maxDang = Math.max(...SCOPES.map((s) => s.dangerous), 0) || 1;
   const s: Scope | undefined = SCOPES.find((x) => x.id === selId) ?? SCOPES[0];
   const view: 'program' | 'empty' = SCOPES.length === 0 && !isLoading ? 'empty' : 'program';
 
@@ -222,7 +227,9 @@ export default function CtemScopesRedesign() {
         {error && <p className="flex items-start gap-1.5 rounded-md border border-rose-200 bg-rose-50 p-2 text-xs text-rose-700"><AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {error}</p>}
         <EmptyState onCreate={() => setShowCreate(true)} canEdit={canEdit} />
         {showCreate && (
-          <CreateScopeForm form={form} setForm={setForm} onSubmit={() => createMutation.mutate()} onCancel={() => setShowCreate(false)} pending={createMutation.isPending} />
+          <Modal onClose={() => setShowCreate(false)}>
+            <CreateScopeForm form={form} setForm={setForm} onSubmit={() => createMutation.mutate()} onCancel={() => setShowCreate(false)} pending={createMutation.isPending} />
+          </Modal>
         )}
       </div>
     );
@@ -258,7 +265,9 @@ export default function CtemScopesRedesign() {
         </p>
       )}
       {showCreate && (
-        <CreateScopeForm form={form} setForm={setForm} onSubmit={() => createMutation.mutate()} onCancel={() => setShowCreate(false)} pending={createMutation.isPending} />
+        <Modal onClose={() => setShowCreate(false)}>
+          <CreateScopeForm form={form} setForm={setForm} onSubmit={() => createMutation.mutate()} onCancel={() => setShowCreate(false)} pending={createMutation.isPending} />
+        </Modal>
       )}
 
       {view === 'program' ? (
@@ -304,102 +313,38 @@ export default function CtemScopesRedesign() {
             </div>
           </Card>
 
-          {/* ── rail + command centre ── */}
-          <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">
-            {/* rail (sticky) */}
-            <div className="space-y-2 lg:sticky lg:top-0">
-              <div className="flex items-center justify-between px-0.5">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Scopes</p>
-                <span className="text-[11px] text-slate-400">{portfolio.scopes}</span>
-              </div>
-              {SCOPES.map((sc) => {
-                const active = sc.id === s.id;
-                const dot = sc.dangerous >= 10 ? '#be123c' : sc.dangerous >= 5 ? '#f59e0b' : '#10b981';
-                return (
-                  <button
-                    key={sc.id}
-                    onClick={() => setSelId(sc.id)}
-                    className={`w-full rounded-xl border bg-white p-3 text-left transition ${
-                      active ? 'border-primary-600 ring-[3px] ring-primary-600/10' : 'border-slate-200 hover:border-slate-300'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="truncate text-[13.5px] font-semibold text-slate-900">{sc.name}</p>
-                        <p className="mt-0.5 text-[11px] text-slate-500">{sc.assets} assets · {sc.cadence.toLowerCase()}</p>
-                      </div>
-                      <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
-                        sc.cycleOpen ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-slate-100 text-slate-500'
-                      }`}>
-                        {sc.cycleOpen ? `#${sc.cycleNo} open` : 'idle'}
-                      </span>
-                    </div>
-                    <div className="mt-2.5 flex items-center gap-2.5 text-[11px] text-slate-500">
-                      <span className="inline-flex items-center gap-1">
-                        <span className="h-1.5 w-1.5 rounded-full" style={{ background: dot }} />
-                        <b className="font-semibold tabular-nums text-slate-700">{sc.dangerous}</b> dangerous
-                      </span>
-                      <span className="text-slate-300">·</span>
-                      <span><b className="font-semibold tabular-nums text-slate-700">{sc.findings}</b> findings</span>
-                    </div>
-                  </button>
-                );
-              })}
-              {canEdit && (
-                <button onClick={() => setShowCreate(true)} className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-slate-300 p-2.5 text-[12.5px] font-medium text-slate-500 transition hover:border-slate-400 hover:text-slate-700">
-                  <Plus className="h-4 w-4" /> New scope
+          {/* ── scope switcher (one row; replaces the old sticky rail) ── */}
+          <div className="flex flex-wrap items-center gap-2">
+            {SCOPES.map((sc) => {
+              const active = sc.id === s.id;
+              const dot = sc.dangerous >= 10 ? '#be123c' : sc.dangerous >= 5 ? '#f59e0b' : '#10b981';
+              return (
+                <button key={sc.id} onClick={() => setSelId(sc.id)}
+                  className={`inline-flex items-center gap-2.5 rounded-xl border bg-white px-3 py-2 text-left transition ${
+                    active ? 'border-primary-600 ring-[3px] ring-primary-600/10' : 'border-slate-200 hover:border-slate-300'
+                  }`}>
+                  <span className="text-[13px] font-semibold text-slate-900">{sc.name}</span>
+                  <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+                    sc.cycleOpen ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-slate-100 text-slate-500'
+                  }`}>{sc.cycleOpen ? `#${sc.cycleNo} open` : 'idle'}</span>
+                  <span className="inline-flex items-center gap-1 text-[11px] text-slate-500">
+                    <span className="h-1.5 w-1.5 rounded-full" style={{ background: dot }} />
+                    <b className="font-semibold tabular-nums text-slate-700">{sc.dangerous}</b> dangerous
+                    <span className="text-slate-300">·</span>
+                    <b className="font-semibold tabular-nums text-slate-700">{sc.findings}</b> findings
+                  </span>
                 </button>
-              )}
+              );
+            })}
+            {canEdit && (
+              <button onClick={() => setShowCreate(true)} className="inline-flex items-center gap-1.5 rounded-xl border border-dashed border-slate-300 px-3 py-2 text-[12.5px] font-medium text-slate-500 transition hover:border-slate-400 hover:text-slate-700">
+                <Plus className="h-4 w-4" /> New scope
+              </button>
+            )}
+          </div>
 
-              {/* dangerous by scope */}
-              <Card className="p-3.5">
-                <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Dangerous by scope</p>
-                <div className="space-y-2.5">
-                  {SCOPES.map((sc) => {
-                    const w = Math.max(6, Math.round((sc.dangerous / maxDang) * 100));
-                    const c = sc.dangerous >= 10 ? '#be123c' : sc.dangerous >= 5 ? '#f59e0b' : '#10b981';
-                    return (
-                      <div key={sc.id}>
-                        <div className="mb-1 flex items-center justify-between gap-2">
-                          <span className="truncate text-[11.5px] text-slate-600">{sc.name}</span>
-                          <span className="shrink-0 text-[11.5px] font-bold tabular-nums text-slate-900">{sc.dangerous}</span>
-                        </div>
-                        <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
-                          <div className="h-full rounded-full" style={{ width: `${w}%`, background: c }} />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2.5">
-                  <span className="text-[11px] text-slate-500">Total reachable now</span>
-                  <span className="text-[13px] font-bold tabular-nums text-rose-700">{portfolio.dangerous}</span>
-                </div>
-              </Card>
-
-              {/* cycle cadence */}
-              <Card className="p-3.5">
-                <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Cycle cadence</p>
-                <div className="space-y-2.5">
-                  {SCOPES.map((sc) => (
-                    <div key={sc.id} className="flex items-center justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="truncate text-[12px] font-medium text-slate-700">{sc.name}</p>
-                        <p className="mt-px text-[10.5px] text-slate-400">{sc.cycleOpen ? `${sc.cadence} · running` : `${sc.cadence} cadence`}</p>
-                      </div>
-                      <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
-                        sc.cycleOpen ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700'
-                      }`}>
-                        {sc.cycleOpen ? 'Open' : 'Idle'}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </Card>
-            </div>
-
-            {/* command centre */}
-            <div className="min-w-0 space-y-3.5">
+          {/* ── command centre (full width) ── */}
+          <div className="space-y-3.5">
               {/* detail header */}
               <Card className="p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3.5">
@@ -521,10 +466,26 @@ export default function CtemScopesRedesign() {
               {/* what to fix first + exposure */}
               <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
                 <Card className="p-4">
-                  <div className="mb-3 flex items-center justify-between gap-2">
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                     <SectionTitle icon={<Crosshair className="h-[15px] w-[15px] text-rose-700" />}>What to fix first</SectionTitle>
-                    <Link href="/vulnerabilities/choke-points" className="text-[12px] font-medium text-primary-700 hover:underline">Ranked list →</Link>
+                    <div className="flex items-center gap-3">
+                      {canEdit && (
+                        <button onClick={() => computePaths.mutate(s.id)} disabled={computePaths.isPending}
+                          title="Re-run the attack-path engine over every (finding x machine) pair in this scope - the same engine as the Exploit Test tab, batched."
+                          className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2 py-1 text-[11.5px] font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                          {computePaths.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                          {computePaths.isPending ? 'Calculating…' : 'Recalculate attack paths'}
+                        </button>
+                      )}
+                      <Link href="/vulnerabilities/choke-points" className="text-[12px] font-medium text-primary-700 hover:underline">Ranked list →</Link>
+                    </div>
                   </div>
+                  {computePaths.isSuccess && computePaths.data && (
+                    <p className="mb-2 text-[11px] text-emerald-700">
+                      Done — {computePaths.data.evaluated ?? 0} of {computePaths.data.pairs ?? 0} finding×machine pairs re-run through the engine:
+                      {' '}{computePaths.data.snapshots_written ?? 0} verdict(s) changed, {computePaths.data.unchanged ?? 0} unchanged. Numbers below are refreshed.
+                    </p>
+                  )}
                   <div className="mb-1.5 flex h-2 overflow-hidden rounded-full bg-slate-100" title={`How this scope's ${s.findings} findings split by attack-path status.`}>
                     <div style={{ width: `${(s.buckets.ranked / fb) * 100}%`, background: '#be123c' }} />
                     <div style={{ width: `${(s.buckets.undeterminable / fb) * 100}%`, background: '#f59e0b' }} />
@@ -759,7 +720,6 @@ export default function CtemScopesRedesign() {
 
               {/* P5: AI-suggested SPECIFIC controls — human-approved */}
               <AiControlProposalsPanel scopeId={s.id} />
-            </div>
           </div>
         </div>
       ) : (
@@ -770,6 +730,16 @@ export default function CtemScopesRedesign() {
 }
 
 /* ─────────────────────── sub-components ─────────────────────── */
+
+/** Minimal modal: backdrop click / Esc closes. Fixed overlay, no portal needed. */
+function Modal({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 pt-[8vh]" onKeyDown={(e) => e.key === 'Escape' && onClose()}>
+      <div className="fixed inset-0" style={{ background: 'rgba(15,23,42,0.45)' }} onClick={onClose} />
+      <div className="relative w-full max-w-2xl">{children}</div>
+    </div>
+  );
+}
 
 function KpiCell({ label, value, sub, valueClass = 'text-slate-900', title }: { label: string; value: React.ReactNode; sub: string; valueClass?: string; title?: string }) {
   return (

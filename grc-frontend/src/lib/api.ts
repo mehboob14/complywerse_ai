@@ -2703,9 +2703,9 @@ export const vulnManagementApi = {
     // chains their remediation severs. computed_at + coverage travel with it.
     chokePoints: () => apiClient.get('/vuln-management/choke-points'),
     recomputeChokePoints: () => apiClient.post('/vuln-management/choke-points/recompute'),
-    computeAttackPaths: (ctemScopeId?: number) =>
+    computeAttackPaths: (ctemScopeId?: number, onlyMissing: boolean = true) =>
       apiClient.post('/vuln-management/choke-points/compute-paths', null,
-        { params: ctemScopeId ? { ctem_scope_id: ctemScopeId } : {} }),
+        { params: { ...(ctemScopeId ? { ctem_scope_id: ctemScopeId } : {}), only_missing: onlyMissing } }),
     // P5 — AI-suggested specific control links (suggest → human accept/reject)
     aiProposalsGenerate: (ctemScopeId?: number) =>
       apiClient.post('/vuln-management/ai-control-proposals/generate', null,

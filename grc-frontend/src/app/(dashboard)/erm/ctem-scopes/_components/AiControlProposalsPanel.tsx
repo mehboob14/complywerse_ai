@@ -41,6 +41,7 @@ export function AiControlProposalsPanel({ scopeId }: { scopeId: number }) {
   const canEdit = hasPermission('vulnerabilities:vulnerability_register:edit');
   const [tab, setTab] = useState<'proposed' | 'accepted' | 'rejected'>('proposed');
   const [error, setError] = useState<string | null>(null);
+  const [showAll, setShowAll] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ['ai-control-proposals', scopeId, tab],
@@ -119,9 +120,9 @@ export function AiControlProposalsPanel({ scopeId }: { scopeId: number }) {
             : `No ${tab} suggestions.`}
         </p>
       ) : (
-        <div className="max-h-72 overflow-y-auto overflow-x-hidden rounded border border-slate-100">
+        <div className="overflow-hidden rounded border border-slate-100">
           <table className="w-full table-fixed text-[11px]">
-            <thead className="sticky top-0 bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500">
+            <thead className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="px-2 py-1 text-left font-medium w-[21%]">Finding</th>
                 <th className="px-2 py-1 text-left font-medium w-[23%]">Suggested control</th>
@@ -131,7 +132,7 @@ export function AiControlProposalsPanel({ scopeId }: { scopeId: number }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {items.map((p) => (
+              {(showAll ? items : items.slice(0, 10)).map((p) => (
                 <tr key={p.id} className="align-top hover:bg-slate-50/70">
                   <td className="px-2 py-1.5">
                     <Link href={`/vulnerabilities/${p.vulnerability.id}`} className="text-primary-600 hover:underline">
@@ -168,6 +169,11 @@ export function AiControlProposalsPanel({ scopeId }: { scopeId: number }) {
               ))}
             </tbody>
           </table>
+          {items.length > 10 && (
+            <button onClick={() => setShowAll((v) => !v)} className="w-full border-t border-slate-100 py-1.5 text-[11px] font-medium text-primary-700 hover:bg-slate-50">
+              {showAll ? 'Show fewer' : `Show all ${items.length}`}
+            </button>
+          )}
         </div>
       )}
       <p className="mt-1.5 text-[10px] text-slate-500">
