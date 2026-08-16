@@ -239,11 +239,27 @@ def command_center(db: Session, tenant_id: int, scope) -> Dict[str, Any]:
 
 
 def _cc_prioritise(db: Session, tenant_id: int, vuln_ids: List[int]) -> Dict[str, Any]:
+    """Prioritise for the scope — plus the HONEST split the engine's inputs
+    force: a finding with no CVE/CWE/vector (a Nessus "info" item — a banner,
+    a service detection) carries nothing an attack-path engine can reason
+    from. Reporting "215 analysed" when 181 are informational would overclaim;
+    the card must say "N real vulnerabilities, M informational"."""
+    from ..models import Vulnerability
     from .choke_points import coverage, rank_choke_points
     cov = coverage(db, tenant_id, vulnerability_ids=vuln_ids)
     top = [{"vulnerability_id": c["vulnerability_id"], "chain_count": c["chain_count"]}
            for c in rank_choke_points(db, tenant_id, vulnerability_ids=vuln_ids)[:3]]
-    return {"coverage": cov, "top": top}
+    real = informational = 0
+    if vuln_ids:
+        for cve, cwe, vec in db.query(
+                Vulnerability.cve_id, Vulnerability.cwe_id, Vulnerability.cvss_vector).filter(
+                Vulnerability.id.in_(vuln_ids)).all():
+            if (cve or "").strip() or (cwe or "").strip() or (vec or "").strip():
+                real += 1
+            else:
+                informational += 1
+    return {"coverage": cov, "top": top,
+            "analysable": {"real_vulnerabilities": real, "informational": informational}}
 
 
 def _cc_validate(db: Session, tenant_id: int, vuln_ids: List[int]) -> Dict[str, Any]:

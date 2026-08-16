@@ -16,7 +16,7 @@
 import { Fragment, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { ctemScopesApi } from '@/lib/api';
+import { ctemScopesApi, vulnManagementApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
   Crosshair, Plus, Play, Square, Loader2, AlertTriangle, Lock, ExternalLink,
@@ -327,6 +327,19 @@ function CommandCenter({ scope }: { scope: Scope }) {
     queryKey: ['ctem-scope-detail', scopeId],
     queryFn: async () => (await ctemScopesApi.get(scopeId)).data,
   });
+  const queryClient = useQueryClient();
+  const { hasPermission } = usePermissions();
+  const canCompute = hasPermission('vulnerabilities:vulnerability_register:edit');
+  // Run the attack-path engine over this scope's (finding × machine) pairs —
+  // the SAME engine as the Exploit Test tab, batched. Fills "not calculated yet".
+  const computePaths = useMutation({
+    mutationFn: async () => (await vulnManagementApi.vulnerabilities.computeAttackPaths(scopeId)).data,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ctem-command-center', scopeId] });
+      queryClient.invalidateQueries({ queryKey: ['ctem-scopes'] });
+      queryClient.invalidateQueries({ queryKey: ['choke-points'] });
+    },
+  });
   if (isLoading) return <p className="mt-3 text-[11px] text-slate-400">Loading command center…</p>;
   if (!data) return null;
 
@@ -346,6 +359,7 @@ function CommandCenter({ scope }: { scope: Scope }) {
   const chains = p.total_viable_chains ?? 0;
   const controlItems: ControlItem[] = data.validate?.items || [];
   const byFramework: Record<string, number> = data.validate?.by_framework || {};
+  const analysable = data.prioritise?.analysable || { real_vulnerabilities: 0, informational: 0 };
 
   // The 5-stage loop with the CURRENT state of each stage — the flow the whole
   // program is built on. Restored after a redesign dropped it (visibility loss).
@@ -419,11 +433,29 @@ function CommandCenter({ scope }: { scope: Scope }) {
       {/* ── what to fix first — explained, not just counted ────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-2">
         <div className="lg:col-span-2 rounded-lg border border-slate-200 bg-white p-3">
-          <p className="text-[11px] font-medium text-slate-700 flex items-center gap-1 mb-2"><Crosshair className="h-3.5 w-3.5 text-primary-600" /> What to fix first — where the {totalFindings} findings stand</p>
+          <p className="text-[11px] font-medium text-slate-700 flex items-center gap-1 mb-1"><Crosshair className="h-3.5 w-3.5 text-primary-600" /> What to fix first — where the {totalFindings} findings stand</p>
+          {/* HONEST split: the engine can only reason about findings that carry a
+              CVE / CWE / vector. Nessus "info" items (banners, detections) carry
+              none — say so, instead of implying N analyses. */}
+          <p className="mb-2 text-[10.5px] text-slate-500">
+            <span className="font-medium text-slate-700">{analysable.real_vulnerabilities} real vulnerabilities</span> (have a CVE / weakness type the engine can reason about)
+            {' · '}<span className="font-medium text-slate-700">{analysable.informational} informational</span> (scanner notes with no CVE — can only ever be &ldquo;can&apos;t tell&rdquo;).
+          </p>
           <div className="space-y-1.5 text-[11px]">
             <div className="flex items-start gap-2">
               <span className="w-10 shrink-0 text-right font-bold tabular-nums text-slate-900">{p.findings_chainless ?? 0}</span>
-              <span className="text-slate-600"><span className="font-medium text-slate-800">path not calculated yet</span> — the attack-path engine hasn&apos;t run on these. Until it does, we can&apos;t say if they&apos;re reachable.</span>
+              <span className="text-slate-600 flex-1"><span className="font-medium text-slate-800">path not calculated yet</span> — the attack-path engine hasn&apos;t run on these.
+                {canCompute && (p.findings_chainless ?? 0) > 0 && (
+                  <button onClick={() => computePaths.mutate()} disabled={computePaths.isPending}
+                    className="ml-2 inline-flex items-center gap-1 rounded-md bg-primary-600 px-2 py-0.5 text-[10px] font-medium text-white hover:bg-primary-700 disabled:opacity-50">
+                    {computePaths.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
+                    {computePaths.isPending ? 'Calculating…' : 'Calculate attack paths now'}
+                  </button>
+                )}
+                {computePaths.isSuccess && computePaths.data && (
+                  <span className="ml-2 text-emerald-700">done — {computePaths.data.snapshots_written} path(s) computed.</span>
+                )}
+              </span>
             </div>
             <div className="flex items-start gap-2">
               <span className="w-10 shrink-0 text-right font-bold tabular-nums text-emerald-700">{p.findings_severed ?? 0}</span>

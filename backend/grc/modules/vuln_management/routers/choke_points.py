@@ -93,6 +93,42 @@ def recompute_choke_points(
     return result
 
 
+@router.post("/compute-paths")
+def compute_attack_paths(
+    ctem_scope_id: Optional[int] = None,
+    only_missing: bool = True,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(require_tenant_permission("vulnerabilities:vulnerability_register:edit")),
+):
+    """Run the attack-path engine over every linked (finding × asset) pair —
+    tenant-wide, or one CTEM scope — writing a reachability snapshot per pair via
+    the same change-aware writer the Exploit Test tab uses. Then recompute the
+    choke-point ranking so Prioritise reflects the new verdicts. Fills the
+    "path not calculated yet" bucket honestly (info findings land as
+    undeterminable, never invented as dangerous)."""
+    from ....services.reachability_batch import compute_paths
+    tenant_id = get_user_primary_tenant(current_user, db)
+    vuln_ids = None
+    if ctem_scope_id:
+        from ....models import CtemScope
+        from ....services.ctem_scopes import scope_vulnerability_ids
+        scope = db.query(CtemScope).filter(CtemScope.id == ctem_scope_id,
+                                           CtemScope.tenant_id == tenant_id).first()
+        if not scope:
+            raise HTTPException(status_code=404, detail="CTEM scope not found")
+        vuln_ids = scope_vulnerability_ids(db, tenant_id, scope.membership_rule)
+    report = compute_paths(db, tenant_id, vulnerability_ids=vuln_ids, only_missing=only_missing)
+    try:
+        report["choke_snapshot"] = svc.persist_snapshot(db, tenant_id, triggered_by_user_id=current_user.id)
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception("choke-point recompute after compute-paths failed")
+        report["choke_snapshot"] = None
+    return report
+
+
 @router.get("/findings/{vuln_id}")
 def get_finding_choke_detail(
     vuln_id: int,

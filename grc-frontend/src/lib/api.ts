@@ -2702,6 +2702,9 @@ export const vulnManagementApi = {
     // chains their remediation severs. computed_at + coverage travel with it.
     chokePoints: () => apiClient.get('/vuln-management/choke-points'),
     recomputeChokePoints: () => apiClient.post('/vuln-management/choke-points/recompute'),
+    computeAttackPaths: (ctemScopeId?: number) =>
+      apiClient.post('/vuln-management/choke-points/compute-paths', null,
+        { params: ctemScopeId ? { ctem_scope_id: ctemScopeId } : {} }),
     chokePointFinding: (id: number) => apiClient.get(`/vuln-management/choke-points/findings/${id}`),
     // CTEM Phase 5 — ITSM mobilisation (push a finding to a ticketing connector,
     // list its tickets). Live sync advances the plan to applied on resolution.
