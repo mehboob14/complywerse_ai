@@ -112,6 +112,44 @@ def test_local_only_finding_is_severed_not_undeterminable():
     assert rollup["viability"] == VIABILITY_SEVERED
 
 
+def test_mixed_chain_with_assumed_entry_is_undeterminable_not_possible():
+    """The live-audit bug (16 Aug): a CVE-less info item ("TLS 1.1 detected",
+    CWE-327, NO CVSS vector) on a NON-internet-facing box read 'possible' and
+    topped the choke ranking. Cause: the assumed-chain guard keyed on ALL
+    techniques being assumed, but CWE-327 derives real post-foothold techniques
+    → mixed chain → guard skipped → the assumed entry (T1203) leaked 'possible'.
+    The verdict is a claim about the DOOR: assumed entry + no exploit evidence
+    must cap at unlikely / undeterminable, whatever the CWE derives downstream."""
+    # Exploit intel NEVER CHECKED (None) — the real shape of a Nessus info item.
+    # (With counts == 0, T1203's "no public exploit" precondition blocks the
+    # door outright → 'severed'; also correct, but a different path.)
+    v = _vuln(cve_id=None, cwe_id="CWE-327", cwe_ids=["CWE-327"], cvss_vector=None,
+              public_exploit_count=None, exploitdb_count=None, kev_flag=False)
+    a = _asset(is_internet_facing=False, internet_facing=False)
+    out = evaluate(v, a)
+    chain = out["chain"]
+    entry = [t for t in chain if (t.get("tactics") or [None])[0] in ("initial-access", "execution")]
+    assert entry and all(t.get("assumed") for t in entry)          # entry IS assumed…
+    assert any(not t.get("assumed") for t in chain)                 # …but chain is MIXED (CWE-derived steps)
+    rollup = out["rollup"]
+    assert rollup["verdict"] == "unlikely"                          # not 'possible'
+    assert rollup["entry_state"] == "assumed_insufficient"
+    assert rollup["viability"] == VIABILITY_UNDETERMINABLE
+
+
+def test_ui_required_flaw_on_internal_box_stays_possible():
+    """The legit sibling: a REAL vector with UI:R (user must open a file) is a
+    genuine phishing-style entry that internet exposure does not gate. Must stay
+    'possible' — the fix above must not over-correct into this."""
+    v = _vuln(cve_id="CVE-2026-50015", cwe_id="CWE-22",
+              cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H",
+              public_exploit_count=0, exploitdb_count=0, kev_flag=False)
+    a = _asset(is_internet_facing=False, internet_facing=False)
+    rollup = evaluate(v, a)["rollup"]
+    assert rollup["verdict"] == "possible"
+    assert rollup["viability"] == VIABILITY_VIABLE
+
+
 def test_open_entry_finding_is_viable():
     """Internet-exposed + network vector + a public exploit → a way in is open and
     confirmed. Viable, and the field says so plainly."""

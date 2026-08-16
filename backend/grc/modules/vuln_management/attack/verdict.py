@@ -162,7 +162,17 @@ def roll_up(chain: List[dict], signals) -> dict:
     # insufficient-data reason, UNLESS real exploit evidence (KEV or a public exploit)
     # corroborates it — in which case that evidence, not the assumed mapping, carries
     # the verdict and will already have escalated the entry step to LIKELY above.
-    if (chain and all(t.get("assumed") for t in chain)
+    # Key on the ENTRY techniques being assumed, not the whole chain. A finding
+    # with no CVSS vector but a CWE gets a MIXED chain: entry steps assumed (the
+    # no-vector fallback) + post-foothold steps derived from the CWE. `all(chain)`
+    # then reads False and the guard is skipped — so a CVE-less "TLS 1.1 detected"
+    # info item on a NON-internet-facing box read 'possible' and topped the choke
+    # ranking (live audit, 16 Aug). But the verdict is a claim about the DOOR: if
+    # every entry technique is a guess, "a way in is open" is a guess, whatever
+    # the CWE says happens after a foothold. Derived downstream steps cannot
+    # corroborate an assumed entry — only real exploit evidence can.
+    _entry_assumed = bool(entry) and all(t.get("assumed") for t in entry)
+    if (chain and _entry_assumed
             and verdict == VERDICT_POSSIBLE
             and not (signals.in_kev is True or signals.has_public_exploit is True)):
         verdict = VERDICT_UNLIKELY
