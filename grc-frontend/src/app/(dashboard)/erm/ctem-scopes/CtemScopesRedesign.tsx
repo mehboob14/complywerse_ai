@@ -249,13 +249,14 @@ export default function CtemScopesRedesign() {
   const findingsHref = `/vulnerabilities?ctem_scope_id=${s.id}&ctem_scope_name=${encodeURIComponent(s.name)}`;
 
   const stages = [
-    { n: 1, label: 'Scope', value: s.assets, sub: `${s.machines.length} machines in scope`, accent: 'plain' as const },
-    { n: 2, label: 'Discover', value: s.findings, sub: 'found on them', accent: 'plain' as const },
-    { n: 3, label: 'Prioritise', value: s.dangerous, sub: `reachable, of ${s.findings}`, accent: 'rose' as const },
-    { n: 4, label: 'Validate', value: s.controls, sub: 'cover these findings', accent: 'plain' as const },
-    { n: 5, label: 'Mobilise', value: s.fixes, sub: `${s.fixesOpen} open · ${s.fixesResolved} done`, accent: 'emerald' as const },
+    { n: 1, label: 'Scope', value: s.assets, sub: 'machines this scope owns', accent: 'plain' as const },
+    { n: 2, label: 'Discover', value: s.findings, sub: `open findings on those ${s.assets}`, accent: 'plain' as const },
+    { n: 3, label: 'Prioritise', value: s.dangerous, sub: `of the ${s.findings} have a reachable attack path`, accent: 'rose' as const },
+    { n: 4, label: 'Validate', value: s.controls, sub: `controls cover them · ${s.tested + (s.verified ?? 0)} proven, ${s.failed} failed`, accent: 'plain' as const },
+    { n: 5, label: 'Mobilise', value: s.fixes, sub: `tickets raised · ${s.fixesOpen} open · ${s.fixesResolved} done`, accent: 'emerald' as const },
   ];
-  const convs = ['scanned', `${s.dangerous} reachable`, 'covered by', `${s.fixes} shipped`];
+  // what happens on each arrow (the hand-off between stages)
+  const convs = ['scanner runs on them', 'attack-path engine checks each', 'CWE → control crosswalk', 'push to ITSM'];
 
   return (
     <div className="space-y-4">
@@ -405,8 +406,8 @@ export default function CtemScopesRedesign() {
                   <div className="flex items-start gap-2">
                     <RefreshCw className="mt-0.5 h-4 w-4 shrink-0 text-primary-700" />
                     <div>
-                      <p className="text-[13px] font-semibold text-slate-900">The CTEM loop</p>
-                      <p className="mt-0.5 text-[11px] text-slate-400">Each stage runs on the output of the one before it — found → reachable → covered → shipped.</p>
+                      <p className="text-[13px] font-semibold text-slate-900">The CTEM loop — each stage feeds the next</p>
+                      <p className="mt-0.5 text-[11px] text-slate-400">Machines → findings on them → the dangerous ones → the controls that should stop them → the fixes raised. The result line below is what this cycle has produced.</p>
                     </div>
                   </div>
                 </div>
@@ -435,13 +436,26 @@ export default function CtemScopesRedesign() {
                         <p className={`mt-1 text-[10.5px] leading-tight 2xl:text-[11px] ${st.accent === 'rose' ? 'text-rose-800' : st.accent === 'emerald' ? 'text-emerald-700' : 'text-slate-500'}`}>{st.sub}</p>
                       </Link>
                       {i < stages.length - 1 && (
-                        <div className="flex w-6 2xl:w-14 shrink-0 flex-col items-center justify-center gap-1">
-                          <span className="hidden 2xl:block text-center text-[9px] font-semibold uppercase leading-tight tracking-wide text-slate-400">{convs[i]}</span>
+                        <div className="flex w-[74px] 2xl:w-[92px] shrink-0 flex-col items-center justify-center gap-1 px-1">
                           <ArrowRight className="h-4 w-4 text-slate-300" />
+                          <span className="text-center text-[9.5px] leading-tight text-slate-400">{convs[i]}</span>
                         </div>
                       )}
                     </div>
                   ))}
+                </div>
+
+                {/* RESULT of the cycle — the loop's output, in one line */}
+                <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-[12px] text-slate-600">
+                  <span className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-500">
+                    {s.cycleOpen ? `Result of cycle #${s.cycleNo} so far` : s.cycleNo > 0 ? `Result of the last cycle (#${s.cycleNo}, frozen)` : 'Result'}
+                  </span>
+                  <span><b className="tabular-nums text-rose-700">{s.dangerous}</b> still reachable</span>
+                  <span><b className="tabular-nums text-slate-900">{s.fixesResolved}</b> fixed</span>
+                  <span><b className="tabular-nums text-slate-900">{s.verified ?? 0}</b> fix verified by re-scan</span>
+                  <span><b className="tabular-nums text-slate-900">{s.tested + (s.verified ?? 0)}</b>/{s.controls} controls proven effective</span>
+                  <span>vs last cycle: <b className={`tabular-nums ${dD.color}`}>{dD.text}</b> dangerous</span>
+                  {s.cycleOpen && <span className="ml-auto text-[11px] text-slate-400">Closing the cycle freezes this line as the record.</span>}
                 </div>
               </Card>
 
