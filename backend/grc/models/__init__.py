@@ -26,3 +26,4 @@ from ._51_control_effectiveness_models import *  # noqa: F401,F403 - control eff
 from ._52_ctem_scope_models import *  # noqa: F401,F403 - CTEM scopes + cycles (Phase 3)
 from ._53_choke_point_models import *  # noqa: F401,F403 - CTEM choke-point analysis (Phase 4)
 from ._54_itsm_ticket_link_models import *  # noqa: F401,F403 - ITSM ticket links (Phase 5)
+from ._55_ai_control_proposal_models import *  # noqa: F401,F403 - AI control proposals (P5)

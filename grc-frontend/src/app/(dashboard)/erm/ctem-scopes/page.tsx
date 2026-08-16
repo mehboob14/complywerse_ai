@@ -17,6 +17,7 @@ import { Fragment, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { ctemScopesApi, vulnManagementApi } from '@/lib/api';
+import { AiControlProposalsPanel } from './_components/AiControlProposalsPanel';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
   Crosshair, Plus, Play, Square, Loader2, AlertTriangle, Lock, ExternalLink,
@@ -549,6 +550,9 @@ function CommandCenter({ scope }: { scope: Scope }) {
           &ldquo;Only claimed&rdquo; becomes &ldquo;tested&rdquo; when real evidence lands: a re-scan that no longer sees the finding, or a retest recorded on the finding.
         </p>
       </div>
+
+      {/* ── P5: AI-suggested SPECIFIC controls, human-approved ─────────────── */}
+      <AiControlProposalsPanel scopeId={scopeId} />
     </div>
   );
 }

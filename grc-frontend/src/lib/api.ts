@@ -2705,6 +2705,16 @@ export const vulnManagementApi = {
     computeAttackPaths: (ctemScopeId?: number) =>
       apiClient.post('/vuln-management/choke-points/compute-paths', null,
         { params: ctemScopeId ? { ctem_scope_id: ctemScopeId } : {} }),
+    // P5 — AI-suggested specific control links (suggest → human accept/reject)
+    aiProposalsGenerate: (ctemScopeId?: number) =>
+      apiClient.post('/vuln-management/ai-control-proposals/generate', null,
+        { params: ctemScopeId ? { ctem_scope_id: ctemScopeId } : {} }),
+    aiProposalsList: (params?: { status?: string; ctem_scope_id?: number }) =>
+      apiClient.get('/vuln-management/ai-control-proposals', { params }),
+    aiProposalAccept: (id: number, note?: string) =>
+      apiClient.post(`/vuln-management/ai-control-proposals/${id}/accept`, { note }),
+    aiProposalReject: (id: number, note?: string) =>
+      apiClient.post(`/vuln-management/ai-control-proposals/${id}/reject`, { note }),
     chokePointFinding: (id: number) => apiClient.get(`/vuln-management/choke-points/findings/${id}`),
     // CTEM Phase 5 — ITSM mobilisation (push a finding to a ticketing connector,
     // list its tickets). Live sync advances the plan to applied on resolution.
