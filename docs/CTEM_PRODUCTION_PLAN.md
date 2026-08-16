@@ -69,6 +69,31 @@ bare dollar figure. Hermetic unit tests may seed rows in a throwaway in-memory
 SQLite (never the tenant DB) — and when they do, they use the tenant's REAL
 values (e.g. "ISO/IEC 27001:2022 · A.8.8") so they prove the real data shape.
 
+## Validation gap identified (user-directed, 17 Aug)
+
+**How a finding is linked to controls today is a hand-written lookup, not
+computed understanding.** `cwe_control_map.py` = two row types: (1) GENERAL —
+"any open CVE" → the fixed patch/vuln-mgmt set (PCI 6.3.3/11.3, ISO A.8.8,
+NIST RA-5/SI-2, CSF DE.CM, NIS2 Art.21, DORA Art.9), matched by EXACT control
+code in the tenant's uploaded frameworks; (2) SPECIFIC — per-CWE rows (e.g.
+CWE-89 → PCI 6.5.1) — but the specific table has almost no rows, and e.g.
+CWE-1287 has none. Result: every finding links to the SAME general set (the
+user's 60, 48 of them PCI). Correct but shallow — it can't say "this weakness
+needs input-validation controls."
+
+**User's direction (right):** use the **Unified Control Library** (5,290
+normalized controls, `grc_normalized_controls`) + the platform's existing
+OpenAI mapping (`control_library/services/normalization.py`) to propose the
+SPECIFIC controls per finding — AI reads CVE + CWE + description, ranks
+candidates from the library with a stated reason, human approves. Keeps the
+general rows as the floor; adds real intelligence on top. **Proposed as P5
+(needs go-ahead; touches OpenAI cost + an approval UI).**
+
+Also clarified: validation = TWO halves — (a) which controls a finding falls
+under (linking, above) and (b) is each control PROVEN to work (tier from
+evidence: retest / breach-sim / scanner-closure). (b) is downstream and only
+matters once (a) is meaningful; the user asked to defer explaining (b).
+
 ## Decisions from the visibility review (user-directed)
 
 - **Frozen-cycle history stays OUT of the live view.** No "compare with last
