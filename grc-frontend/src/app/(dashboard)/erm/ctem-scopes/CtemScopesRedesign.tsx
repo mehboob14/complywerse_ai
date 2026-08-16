@@ -313,7 +313,8 @@ export default function CtemScopesRedesign() {
             </div>
           </Card>
 
-          {/* ── scope switcher (one row; replaces the old sticky rail) ── */}
+          {/* ── scope switcher — only when there is more than one scope to switch between ── */}
+          {SCOPES.length > 1 && (
           <div className="flex flex-wrap items-center gap-2">
             {SCOPES.map((sc) => {
               const active = sc.id === s.id;
@@ -336,12 +337,8 @@ export default function CtemScopesRedesign() {
                 </button>
               );
             })}
-            {canEdit && (
-              <button onClick={() => setShowCreate(true)} className="inline-flex items-center gap-1.5 rounded-xl border border-dashed border-slate-300 px-3 py-2 text-[12.5px] font-medium text-slate-500 transition hover:border-slate-400 hover:text-slate-700">
-                <Plus className="h-4 w-4" /> New scope
-              </button>
-            )}
           </div>
+          )}
 
           {/* ── command centre (full width) ── */}
           <div className="space-y-3.5">
@@ -385,32 +382,22 @@ export default function CtemScopesRedesign() {
                     ))}
                   </div>
                 </div>
-              </Card>
-
-              {/* cycle status banner */}
-              <div className={`flex items-center gap-3 rounded-2xl border p-[13px_18px] shadow-sm ${
-                s.cycleOpen ? 'border-emerald-200 bg-gradient-to-r from-emerald-50 to-white' : 'border-slate-200 bg-white'
-              }`}>
-                <span className="relative flex h-2.5 w-2.5 shrink-0">
-                  {s.cycleOpen && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-70" />}
-                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full" style={{ background: s.cycleOpen ? '#10b981' : '#94a3b8' }} />
-                </span>
-                <div className="min-w-0">
-                  <p className={`text-[13.5px] font-semibold ${s.cycleOpen ? 'text-emerald-800' : 'text-slate-700'}`}>
-                    {s.cycleOpen ? `Cycle #${s.cycleNo} is open — the loop is running` : 'No open cycle — the loop is paused'}
-                  </p>
-                  <p className="mt-0.5 text-[11.5px] text-slate-500">
+                {/* cycle status — one line, in the same card (was a separate banner repeating "open") */}
+                <div className="mt-3 flex items-center gap-2.5 border-t border-slate-100 pt-2.5">
+                  <span className="relative flex h-2.5 w-2.5 shrink-0">
+                    {s.cycleOpen && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-70" />}
+                    <span className="relative inline-flex h-2.5 w-2.5 rounded-full" style={{ background: s.cycleOpen ? '#10b981' : '#94a3b8' }} />
+                  </span>
+                  <p className="min-w-0 text-[12px] text-slate-600">
                     {s.cycleOpen
-                      ? `Opened this round · day ${s.cycleDay ?? 0}. Nothing opens itself — you close it by hand.`
-                      : s.cycleNo > 0 ? `Last cycle (#${s.cycleNo}) closed ${s.lastClosed ?? ''}. Those numbers are frozen.` : 'No cycle has been run on this scope yet.'}
+                      ? <>The loop is running · day {s.cycleDay ?? 0} of this cycle. Nothing opens itself — you close it by hand.</>
+                      : s.cycleNo > 0 ? <>The loop is paused — last cycle (#{s.cycleNo}) closed {s.lastClosed ?? ''}; those numbers are frozen.</> : <>No cycle has been run on this scope yet.</>}
+                  </p>
+                  <p className="ml-auto hidden max-w-[320px] shrink-0 text-right text-[11px] leading-snug text-slate-400 md:block">
+                    {s.cycleOpen ? "Closing freezes today's counts with the membership rule as a hash-verified record." : 'Open a cycle to run discover → prioritise → validate → mobilise again.'}
                   </p>
                 </div>
-                <p className="ml-auto hidden max-w-[300px] text-right text-[11px] leading-snug text-slate-400 md:block">
-                  {s.cycleOpen
-                    ? "Closing freezes today's counts with the membership rule as a hash-verified record."
-                    : 'Open a cycle to run discover → prioritise → validate → mobilise again.'}
-                </p>
-              </div>
+              </Card>
 
               {/* the CTEM loop */}
               <Card className="p-4">
@@ -422,11 +409,6 @@ export default function CtemScopesRedesign() {
                       <p className="mt-0.5 text-[11px] text-slate-400">Each stage runs on the output of the one before it — found → reachable → covered → shipped.</p>
                     </div>
                   </div>
-                  <span className={`rounded-full border px-2.5 py-[3px] text-[11px] ${
-                    s.cycleOpen ? 'border-emerald-100 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-slate-50 text-slate-500'
-                  }`}>
-                    {s.cycleOpen ? `Day ${s.cycleDay ?? 0} · opened this cycle` : s.lastClosed ? `Last closed ${s.lastClosed} — frozen` : 'No cycle yet'}
-                  </span>
                 </div>
 
                 <div className="flex items-stretch">
