@@ -218,10 +218,18 @@ def freeze_cycle(db: Session, cycle) -> None:
 # as such, rather than faking a scoped number.
 # ─────────────────────────────────────────────────────────────────────────────
 def command_center(db: Session, tenant_id: int, scope) -> Dict[str, Any]:
+    from ..models import ITAsset
     asset_ids = resolve_scope_assets(db, tenant_id, scope.membership_rule)
     vuln_ids = _vuln_ids_for_assets(db, tenant_id, asset_ids)
+    # The machines themselves — named, so the scope is never a faceless count.
+    machines = [
+        {"id": a.id, "name": a.name, "host_name": a.host_name, "asset_type": a.asset_type}
+        for a in db.query(ITAsset.id, ITAsset.name, ITAsset.host_name, ITAsset.asset_type)
+        .filter(ITAsset.id.in_(asset_ids)).order_by(ITAsset.name.asc()).all()
+    ] if asset_ids else []
     return {
         "member_assets": len(asset_ids),
+        "machines": machines,
         "scope_findings": len(vuln_ids),
         "prioritise": _cc_prioritise(db, tenant_id, vuln_ids),
         "validate": _cc_validate(db, tenant_id, vuln_ids),

@@ -1,7 +1,7 @@
 ﻿'use client';
 
 import { useState, useMemo, useRef, useEffect, Fragment } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import * as XLSX from 'xlsx';
 import { vulnManagementApi } from '@/lib/api';
@@ -289,6 +289,12 @@ export default function VulnerabilitiesPage() {
 
   const queryClient = useQueryClient();
   const router = useRouter();
+  // CTEM: `?ctem_scope_id=N` scopes the register to that scope's member assets
+  // (the SAME resolver the scope's counters use, so the two never disagree).
+  // The command center's "Findings →" lands here scoped, not on the whole tenant.
+  const searchParams = useSearchParams();
+  const ctemScopeId = Number(searchParams?.get('ctem_scope_id')) || null;
+  const ctemScopeName = searchParams?.get('ctem_scope_name') || null;
 
   // When user toggles into the NCA template view, backfill bridges for any
   // legacy NCA entries that pre-date the bridge column. Without this, those
@@ -323,9 +329,10 @@ export default function VulnerabilitiesPage() {
   const serverSearch = /CVE-\d{4}-\d+/i.test(searchTerm.trim()) ? searchTerm.trim() : '';
 
   const { data: vulnerabilities, isLoading, error } = useQuery({
-    queryKey: ['vulnerabilities', statusFilter, severityFilter, showClosed, registerType, exploitFilter, tacticsFilter, serverSearch],
+    queryKey: ['vulnerabilities', statusFilter, severityFilter, showClosed, registerType, exploitFilter, tacticsFilter, serverSearch, ctemScopeId],
     queryFn: async () => {
       const params: Record<string, unknown> = {};
+      if (ctemScopeId) { params.ctem_scope_id = ctemScopeId; params.limit = 500; }
       if (statusFilter !== 'all') params.status = statusFilter;
       if (severityFilter !== 'all') params.severity = severityFilter;
       // Only forward the closed-toggle when no explicit status filter is set;
@@ -356,6 +363,7 @@ export default function VulnerabilitiesPage() {
         params as {
           status?: string; severity?: string; include_closed?: boolean; template_type?: string;
           search?: string; limit?: number; has_exploit?: boolean; high_tactics?: boolean;
+          ctem_scope_id?: number;
         }
       );
       return response.data as Vulnerability[];
@@ -1008,6 +1016,21 @@ export default function VulnerabilitiesPage() {
       {activeTab === 'vulnerabilities' && (
       <>
       <div className="px-3 sm:px-6 py-3 bg-[var(--color-subtle)]">
+        {/* CTEM scope banner — this list is filtered to ONE scope's machines.
+            Names the scope, counts the rows, and offers the way back. */}
+        {ctemScopeId && (
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-primary-200 bg-primary-50/70 px-3 py-2 text-xs">
+            <span className="text-primary-800">
+              <span className="font-semibold">Scoped to CTEM scope{ctemScopeName ? ` “${ctemScopeName}”` : ''}</span>
+              {' '}— showing only findings on that scope&apos;s machines
+              {vulnerabilities ? ` (${vulnerabilities.length})` : ''}.
+            </span>
+            <span className="flex items-center gap-3">
+              <Link href="/erm/ctem-scopes" className="font-medium text-primary-700 hover:underline">← Back to CTEM scopes</Link>
+              <Link href="/vulnerabilities" className="text-primary-600 hover:underline">Show all findings</Link>
+            </span>
+          </div>
+        )}
         {/* Hidden bulk-upload file input — driven by the workspace toolbar's
             "Bulk Upload" button via the template chooser (bulkFileRef.click()). */}
         <input

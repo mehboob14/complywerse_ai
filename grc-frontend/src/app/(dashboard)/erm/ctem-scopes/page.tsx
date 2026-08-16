@@ -20,7 +20,7 @@ import { ctemScopesApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
   Crosshair, Plus, Play, Square, Loader2, AlertTriangle, Lock, ExternalLink,
-  ShieldCheck, Ticket, Coins,
+  Coins,
 } from 'lucide-react';
 
 interface Cycle {
@@ -229,13 +229,7 @@ export default function CtemScopesPage() {
               </div>
 
               {s.open_cycle_id && s.live_counts && (
-                <div className="mt-3">
-                  <p className="text-[11px] font-medium text-emerald-700 mb-1 flex items-center gap-1">
-                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" /> Open cycle — live counts
-                  </p>
-                  <Counters c={s.live_counts} scopeId={s.id} />
-                  <CommandCenter scopeId={s.id} />
-                </div>
+                <CommandCenter scope={s} />
               )}
               {!s.open_cycle_id && s.cycle_count > 0 && (
                 <ScopeCycleHistory scopeId={s.id} />
@@ -277,75 +271,161 @@ function money(v?: number | null, ccy?: string | null) {
   }).format(v);
 }
 
-// The four downstream cards of the loop, pulled per-scope from the command-center
-// endpoint. Each links to the screen that owns the detail. The cost card is
-// portfolio-wide by necessity — risk quantification isn't scope-linked — and says so.
-function CommandCenter({ scopeId }: { scopeId: number }) {
+// ─────────────────────────────────────────────────────────────────────────────
+// The command center — ONE self-explaining view of the CTEM loop for a scope.
+//
+// Reads live from /command-center. Design rules (from the review that rebuilt
+// this): (1) ONE clock — the big numbers are the STATE NOW ("balance"); change
+// since the cycle opened is a small "+N this cycle" tag, never a second row of
+// zeros; (2) the machines are NAMED and clickable, never a faceless count;
+// (3) the cycle's lifecycle is visible (what open/close mean); (4) every link
+// lands on THIS scope's data, not a generic page; (5) "what to fix first" is
+// explained (what each bucket means, and what unlocks it).
+// ─────────────────────────────────────────────────────────────────────────────
+type Machine = { id: number; name: string; host_name?: string | null; asset_type?: string | null };
+
+function Delta({ n }: { n?: number }) {
+  // "+N this cycle" — the ACTIVITY tag. 0 renders quietly so it never reads
+  // as a contradiction with a non-zero balance.
+  const v = n ?? 0;
+  return (
+    <span className={`text-[10px] tabular-nums ${v > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
+      {v > 0 ? `+${v}` : '0'} this cycle
+    </span>
+  );
+}
+
+function Stat({ label, value, sub, delta, href, hrefLabel }: {
+  label: string; value: number | string; sub?: string; delta?: number; href: string; hrefLabel: string;
+}) {
+  return (
+    <Link href={href} className="group rounded-lg border border-slate-200 bg-white p-3 hover:border-primary-300 hover:bg-primary-50/40 transition-colors block">
+      <p className="text-[10px] font-medium uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="mt-0.5 text-2xl font-bold text-slate-900 tabular-nums leading-none">{value}</p>
+      {sub && <p className="mt-1 text-[11px] text-slate-500">{sub}</p>}
+      <div className="mt-1.5 flex items-center justify-between">
+        {delta !== undefined ? <Delta n={delta} /> : <span />}
+        <span className="text-[10px] text-primary-600 group-hover:underline">{hrefLabel} →</span>
+      </div>
+    </Link>
+  );
+}
+
+function CommandCenter({ scope }: { scope: Scope }) {
+  const scopeId = scope.id;
+  const live = scope.live_counts;
   const { data, isLoading } = useQuery({
     queryKey: ['ctem-command-center', scopeId],
     queryFn: async () => (await ctemScopesApi.commandCenter(scopeId)).data,
   });
-  if (isLoading) return <p className="mt-2 text-[11px] text-slate-400">Loading command center…</p>;
+  const { data: detail } = useQuery({
+    queryKey: ['ctem-scope-detail', scopeId],
+    queryFn: async () => (await ctemScopesApi.get(scopeId)).data,
+  });
+  if (isLoading) return <p className="mt-3 text-[11px] text-slate-400">Loading command center…</p>;
   if (!data) return null;
+
+  const machines: Machine[] = data.machines || [];
   const p = data.prioritise?.coverage || {};
   const tiers = data.validate?.tiers || {};
   const m = data.mobilise || {};
   const q = data.quantify;
-
-  const row = (label: string, val: number | undefined) => (
-    <div className="flex justify-between"><span>{label}</span><span className="tabular-nums">{val ?? 0}</span></div>
-  );
+  const cycles: Cycle[] = detail?.scope?.cycles || [];
+  const openCycle = cycles.find((c) => c.status === 'open');
+  const cycleNo = cycles.length; // cycles are newest-first; the open one is #N
+  const openedAt = openCycle?.opened_at ? new Date(openCycle.opened_at) : null;
+  const days = openedAt ? Math.max(0, Math.floor((Date.now() - openedAt.getTime()) / 86400000)) : 0;
+  const findingsHref = `/vulnerabilities?ctem_scope_id=${scopeId}&ctem_scope_name=${encodeURIComponent(scope.name)}`;
+  const totalFindings = data.scope_findings ?? 0;
+  const tested = (tiers.tested_effective ?? 0) + (tiers.tested_failed ?? 0);
+  const chains = p.total_viable_chains ?? 0;
 
   return (
-    <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-      <div className="rounded-lg border border-slate-200 bg-white p-3">
-        <p className="text-[11px] font-medium text-slate-500 flex items-center gap-1 mb-1"><Crosshair className="h-3 w-3" /> What to fix first</p>
-        <p className="text-xl font-bold text-slate-900 tabular-nums">{p.findings_ranked ?? 0}</p>
-        <p className="text-[10px] text-slate-400 mb-2">viable now · {p.total_viable_chains ?? 0} chain(s)</p>
-        <div className="space-y-0.5 text-[10px] text-slate-500">
-          {row('No chain yet', p.findings_chainless)}
-          {row('Blocked (safe)', p.findings_severed)}
-          {row("Can't tell yet", p.findings_undeterminable)}
-        </div>
-        <Link href="/vulnerabilities/choke-points" className="mt-2 inline-block text-[11px] text-primary-600 hover:underline">Choke points →</Link>
+    <div className="mt-3 space-y-3">
+      {/* ── the machines — named, not counted ─────────────────────────────── */}
+      <div className="flex flex-wrap items-center gap-1.5 text-xs">
+        <span className="text-slate-500">Watching {machines.length} machine{machines.length === 1 ? '' : 's'}:</span>
+        {machines.map((a) => (
+          <Link key={a.id} href={`/assets/${a.id}`}
+            className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] text-slate-700 hover:border-primary-300 hover:text-primary-700">
+            <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />{a.name}
+          </Link>
+        ))}
+        {machines.length === 0 && <span className="text-slate-400">no machine matches this scope&apos;s rule yet</span>}
       </div>
 
-      <div className="rounded-lg border border-slate-200 bg-white p-3">
-        <p className="text-[11px] font-medium text-slate-500 flex items-center gap-1 mb-1"><ShieldCheck className="h-3 w-3" /> Controls working?</p>
-        <p className="text-xl font-bold text-slate-900 tabular-nums">{data.validate?.controls ?? 0}</p>
-        <p className="text-[10px] text-slate-400 mb-2">cover these findings</p>
-        <div className="space-y-0.5 text-[10px] text-slate-500">
-          {row('Tested effective', tiers.tested_effective)}
-          {row('Tested — failed', tiers.tested_failed)}
-          {row('Attested only', tiers.attested_only)}
+      {/* ── the cycle strip — lifecycle made visible ───────────────────────── */}
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-200 bg-emerald-50/60 px-3 py-2">
+        <div className="flex items-center gap-2 text-xs">
+          <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
+          <span className="font-semibold text-emerald-800">Cycle #{cycleNo || 1} · OPEN</span>
+          {openedAt && <span className="text-emerald-700">· started {openedAt.toLocaleDateString()} · {days} day{days === 1 ? '' : 's'} running</span>}
         </div>
-        <Link href="/control-library/assurance" className="mt-2 inline-block text-[11px] text-primary-600 hover:underline">Assurance →</Link>
+        <p className="text-[11px] text-emerald-800/80">
+          A cycle is one round of the loop. <span className="font-medium">Close</span> freezes today&apos;s numbers as a permanent record, so the next round can be compared against it.
+        </p>
       </div>
 
-      <div className="rounded-lg border border-slate-200 bg-white p-3">
-        <p className="text-[11px] font-medium text-slate-500 flex items-center gap-1 mb-1"><Ticket className="h-3 w-3" /> Fixes in flight</p>
-        <p className="text-xl font-bold text-slate-900 tabular-nums">{m.tickets ?? 0}</p>
-        <p className="text-[10px] text-slate-400 mb-2">ticketed to ITSM</p>
-        <div className="space-y-0.5 text-[10px] text-slate-500">
-          {row('Open', m.open)}
-          {row('Resolved', m.resolved)}
-          {row('Plan marked done', m.plans_applied)}
-        </div>
-        <Link href="/vulnerabilities" className="mt-2 inline-block text-[11px] text-primary-600 hover:underline">Register →</Link>
+      {/* ── ONE clock: the state now, with "+N this cycle" tags ────────────── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+        <Stat label="Findings on these machines" value={totalFindings}
+          sub="weaknesses the scanner found" delta={live?.discovered}
+          href={findingsHref} hrefLabel="See these findings" />
+        <Stat label="Dangerous right now" value={p.findings_ranked ?? 0}
+          sub={`with a reachable attack path (${chains} chain${chains === 1 ? '' : 's'})`}
+          delta={live?.prioritized}
+          href="/vulnerabilities/choke-points" hrefLabel="Choke points" />
+        <Stat label="Controls covering them" value={data.validate?.controls ?? 0}
+          sub={`${tested} tested · ${tiers.attested_only ?? 0} only claimed`}
+          delta={live?.validated}
+          href="/control-library/assurance" hrefLabel="Assurance" />
+        <Stat label="Fixes ticketed" value={m.tickets ?? 0}
+          sub={m.tickets ? `${m.open ?? 0} open · ${m.resolved ?? 0} resolved` : 'none — connect ServiceNow to push'}
+          delta={live?.mobilized}
+          href={findingsHref} hrefLabel="Push from a finding" />
       </div>
 
-      <div className="rounded-lg border border-slate-200 bg-white p-3">
-        <p className="text-[11px] font-medium text-slate-500 flex items-center gap-1 mb-1"><Coins className="h-3 w-3" /> Cost <span className="text-slate-300">· portfolio</span></p>
-        {q ? (
-          <>
-            <p className="text-xl font-bold text-slate-900 tabular-nums">{money(q.ale, q.currency)}</p>
-            <p className="text-[10px] text-slate-400 mb-1">likely / yr · worst {money(q.p95, q.currency)}</p>
-            <p className="text-[10px] text-amber-600">All risks — not scope-filtered.</p>
-          </>
-        ) : (
-          <p className="text-[11px] text-slate-400 mt-1">No simulation run yet.</p>
-        )}
-        <Link href="/erm/risks/list" className="mt-2 inline-block text-[11px] text-primary-600 hover:underline">Quantify →</Link>
+      {/* ── what to fix first — explained, not just counted ────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-2">
+        <div className="lg:col-span-2 rounded-lg border border-slate-200 bg-white p-3">
+          <p className="text-[11px] font-medium text-slate-700 flex items-center gap-1 mb-2"><Crosshair className="h-3.5 w-3.5 text-primary-600" /> What to fix first — where the {totalFindings} findings stand</p>
+          <div className="space-y-1.5 text-[11px]">
+            <div className="flex items-start gap-2">
+              <span className="w-10 shrink-0 text-right font-bold tabular-nums text-slate-900">{p.findings_chainless ?? 0}</span>
+              <span className="text-slate-600"><span className="font-medium text-slate-800">path not calculated yet</span> — the attack-path engine hasn&apos;t run on these. Until it does, we can&apos;t say if they&apos;re reachable.</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="w-10 shrink-0 text-right font-bold tabular-nums text-emerald-700">{p.findings_severed ?? 0}</span>
+              <span className="text-slate-600"><span className="font-medium text-slate-800">checked — blocked</span>. Every way in is shut on this machine. Safe for now; not a priority.</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="w-10 shrink-0 text-right font-bold tabular-nums text-amber-700">{p.findings_undeterminable ?? 0}</span>
+              <span className="text-slate-600"><span className="font-medium text-slate-800">can&apos;t tell</span> — no CVE/CWE data to reason from. Not safe, not dangerous: unknown.</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="w-10 shrink-0 text-right font-bold tabular-nums text-rose-700">{p.findings_ranked ?? 0}</span>
+              <span className="text-slate-600"><span className="font-medium text-slate-800">dangerous</span> — a real, reachable attack path. These are the ones to fix first, ranked by how many attacks one fix breaks.</span>
+            </div>
+          </div>
+          <div className="mt-2 flex items-center gap-3">
+            <Link href="/vulnerabilities/choke-points" className="text-[11px] font-medium text-primary-600 hover:underline">Open the ranked list →</Link>
+            <Link href={findingsHref} className="text-[11px] text-slate-500 hover:underline">All {totalFindings} findings →</Link>
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-slate-200 bg-white p-3">
+          <p className="text-[11px] font-medium text-slate-700 flex items-center gap-1 mb-1"><Coins className="h-3.5 w-3.5 text-emerald-600" /> What it could cost</p>
+          {q ? (
+            <>
+              <p className="text-2xl font-bold text-slate-900 tabular-nums leading-none">{money(q.ale, q.currency)}</p>
+              <p className="mt-1 text-[11px] text-slate-500">likely loss per year · worst case {money(q.p95, q.currency)}</p>
+              <p className="mt-1.5 text-[10px] text-amber-700 bg-amber-50 rounded px-1.5 py-1">For ALL your risks, not just these machines — risks aren&apos;t tied to a scope yet.</p>
+            </>
+          ) : (
+            <p className="text-[11px] text-slate-400 mt-1">No simulation run yet.</p>
+          )}
+          <Link href="/erm/risks/list" className="mt-2 inline-block text-[11px] text-primary-600 hover:underline">Risk quantification →</Link>
+        </div>
       </div>
     </div>
   );
