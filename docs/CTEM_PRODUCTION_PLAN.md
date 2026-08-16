@@ -72,4 +72,13 @@ controls can move past "attested only" without waiting on an external BAS feed.
   one-click "assign N orphaned findings → asset X" (endpoint param
   `assign_unmatched_to_asset_id`) and content jumps 10 → 215. Until confirmed,
   no fabricated links.
-- P2 (dashboard aggregator): starting in parallel — independent of P1's decision.
+- **P1 — DONE & verified live.** Operator confirmed all orphans are on
+  `DESKTOP-CE3EFJB`. Ran the backfill against the tenant DB with
+  `assign_unmatched_to_asset_id=142`: `newly_linked=205`, links 20 → 225. Impact
+  proven via `command_center` on the "Desktop estate" scope:
+  `scope_findings 10 → 215`, controls `35 → 60`. The content-is-thin problem is
+  fixed at the spine. (Follow-on for full richness: generate reachability
+  snapshots for the 206 now-linked-but-chainless findings so Prioritisation /
+  choke-points light up — currently `findings_ranked=0` because only 9 have
+  stored chains. Tracked into P2/P3.)
+- P2 (dashboard aggregator): next.
