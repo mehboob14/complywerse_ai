@@ -102,7 +102,8 @@ export function AiControlProposalsPanel({ scopeId }: { scopeId: number }) {
       <div className="flex gap-1 mb-2 text-[10.5px]">
         {(['proposed', 'accepted', 'rejected'] as const).map((t) => (
           <button key={t} onClick={() => setTab(t)}
-            className={`rounded-full px-2 py-0.5 ${tab === t ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+            style={tab === t ? { backgroundColor: '#0f172a' } : undefined}
+            className={`rounded-full px-2 py-0.5 ${tab === t ? 'text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
             {t === 'proposed' ? 'To review' : t === 'accepted' ? 'Accepted' : 'Rejected'}
           </button>
         ))}

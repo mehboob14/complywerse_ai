@@ -486,9 +486,9 @@ export default function CtemScopesRedesign() {
                         title={st.sub}
                       >
                         <div className="flex items-center gap-1.5">
-                          <span className={`inline-flex h-[19px] w-[19px] items-center justify-center rounded-full text-[10px] font-bold text-white ${
-                            st.accent === 'rose' ? 'bg-rose-700' : st.accent === 'emerald' ? 'bg-emerald-600' : 'bg-slate-900'
-                          }`}>{st.n}</span>
+                          {/* bg set inline: .platform-ui forces bg-slate-900 → white surface (globals.css), which hid these */}
+                          <span className="inline-flex h-[19px] w-[19px] shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white"
+                            style={{ backgroundColor: st.accent === 'rose' ? '#be123c' : st.accent === 'emerald' ? '#047857' : '#0f172a' }}>{st.n}</span>
                           <span className={`text-[11px] font-semibold uppercase tracking-wide ${
                             st.accent === 'rose' ? 'text-rose-800' : st.accent === 'emerald' ? 'text-emerald-700' : 'text-slate-600'
                           }`}>{st.label}</span>
@@ -496,7 +496,7 @@ export default function CtemScopesRedesign() {
                         <p className={`mt-1.5 text-[22px] 2xl:text-[28px] font-bold leading-none tabular-nums ${
                           st.accent === 'rose' ? 'text-rose-700' : st.accent === 'emerald' ? 'text-emerald-700' : 'text-slate-900'
                         }`}>{st.value}</p>
-                        <p className={`mt-1 truncate text-[10.5px] 2xl:text-[11px] ${st.accent === 'rose' ? 'text-rose-800' : st.accent === 'emerald' ? 'text-emerald-700' : 'text-slate-500'}`} title={st.sub}>{st.sub}</p>
+                        <p className={`mt-1 text-[10.5px] leading-tight 2xl:text-[11px] ${st.accent === 'rose' ? 'text-rose-800' : st.accent === 'emerald' ? 'text-emerald-700' : 'text-slate-500'}`}>{st.sub}</p>
                       </Link>
                       {i < stages.length - 1 && (
                         <div className="flex w-6 2xl:w-14 shrink-0 flex-col items-center justify-center gap-1">
@@ -574,7 +574,7 @@ export default function CtemScopesRedesign() {
                   <p className="mt-1.5 text-[11.5px] text-slate-500">annualised loss (ALE)</p>
                   <div className="mt-4">
                     <div className="relative h-2 rounded-full bg-gradient-to-r from-emerald-200 via-amber-200 to-rose-200">
-                      <span className="absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-slate-900 shadow" style={{ left: `${alePos}%` }} title="Most likely annual loss on the range from best to worst case." />
+                      <span className="absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow" style={{ left: `${alePos}%`, backgroundColor: '#0f172a' }} title="Most likely annual loss on the range from best to worst case." />
                     </div>
                     <div className="mt-1.5 flex justify-between">
                       <span className="text-[10.5px] text-slate-500">min {money(s.aleMin)}</span>
