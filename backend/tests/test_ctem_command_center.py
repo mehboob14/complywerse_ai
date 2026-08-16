@@ -14,7 +14,7 @@ from sqlalchemy.orm import sessionmaker
 from grc.models import (
     ITAsset, Vulnerability, VulnerabilityAssetLink, ReachabilitySnapshot,
     VulnerabilityControlLink, ControlEffectivenessEvidence, VulnTicketLink,
-    RiskSimulationRun,
+    RiskSimulationRun, ParsedFrameworkControl, UploadedFramework, Risk,
 )
 from grc.services import ctem_scopes as svc
 from grc.services.choke_points import coverage
@@ -33,7 +33,7 @@ def db():
     engine = create_engine("sqlite://")
     for m in (ITAsset, Vulnerability, VulnerabilityAssetLink, ReachabilitySnapshot,
               VulnerabilityControlLink, ControlEffectivenessEvidence, VulnTicketLink,
-              RiskSimulationRun):
+              RiskSimulationRun, UploadedFramework, ParsedFrameworkControl, Risk):
         m.__table__.create(engine)
     s = sessionmaker(bind=engine)()
     _seed(s)
@@ -81,6 +81,16 @@ def _seed(db):
     # validate: control linked to in-scope vuln 10, with a genuine passing test
     db.add(VulnerabilityControlLink(vulnerability_id=10, framework_control_id=5))
     db.add(VulnerabilityControlLink(vulnerability_id=20, framework_control_id=9))  # out
+    # …and a NAMED parsed-framework control (the path the CWE crosswalk writes),
+    # covering BOTH in-scope findings 10 and 11 — asserted listed with its
+    # framework name + findings_covered=2, and only-claimed (no evidence).
+    db.add(UploadedFramework(id=1, tenant_id=TENANT, name="ISO/IEC 27001:2022",
+                             file_name="iso.pdf", file_path="/x/iso.pdf", file_type="pdf",
+                             uploaded_by=1))
+    db.add(ParsedFrameworkControl(id=1010, uploaded_framework_id=1, control_id="A.8.8",
+                                  title="Management of Technical Vulnerabilities"))
+    db.add(VulnerabilityControlLink(vulnerability_id=10, parsed_framework_control_id=1010))
+    db.add(VulnerabilityControlLink(vulnerability_id=11, parsed_framework_control_id=1010))
     now = datetime.utcnow()
     db.add(ControlEffectivenessEvidence(
         tenant_id=TENANT, framework_control_id=5, vulnerability_id=10,
@@ -115,17 +125,46 @@ def test_command_center_is_scope_isolated(db):
     assert pcov["findings_severed"] == 0
     assert cc["prioritise"]["top"] == [{"vulnerability_id": 10, "chain_count": 1}]
 
-    # validate: only the in-scope control counts, and its genuine pass = effective
-    assert cc["validate"]["controls"] == 1
+    # validate: the in-scope controls (framework_control 5 + parsed 1010; the
+    # out-of-scope 9 excluded). The genuine pass on 5 = effective; 1010 has no
+    # evidence = only claimed. And the parsed one is LISTED with its real
+    # framework name + how many scope findings it covers (10 and 11 → 2).
+    assert cc["validate"]["controls"] == 2
     assert cc["validate"]["tiers"].get("tested_effective") == 1
+    assert cc["validate"]["tiers"].get("attested_only") == 1
+    listed = {i["code"]: i for i in cc["validate"]["items"]}
+    assert listed["A.8.8"]["framework"] == "ISO/IEC 27001:2022"
+    assert listed["A.8.8"]["title"] == "Management of Technical Vulnerabilities"
+    assert listed["A.8.8"]["findings_covered"] == 2
+    assert listed["A.8.8"]["tier"] == "attested_only"
+    assert cc["validate"]["by_framework"]["ISO/IEC 27001:2022"] == 1
 
     # mobilise: only the in-scope ticket
     assert cc["mobilise"] == {"tickets": 1, "open": 1, "resolved": 0, "plans_applied": 0}
 
-    # quantify: the portfolio run, labelled portfolio — NOT a faked scope figure
+    # quantify: the portfolio run, labelled portfolio — NOT a faked scope figure.
+    # No Risk rows seeded → not demo-only (there is simply nothing to flag).
     assert cc["quantify"]["scope"] == "portfolio"
     assert cc["quantify"]["ale"] == 1_200_000.0
     assert cc["quantify"]["p95"] == 4_800_000.0
+    assert cc["quantify"]["demo_only"] is False
+
+
+def test_quantify_flags_demo_only_inputs(db):
+    """HARD RULE: a simulation whose inputs are ALL [DEMO] risks must be flagged
+    demo_only so the UI never shows its dollar figure as the user's real cost."""
+    db.add_all([
+        Risk(tenant_id=TENANT, title="[DEMO] Ransomware attack on core systems", category="technology"),
+        Risk(tenant_id=TENANT, title="[DEMO] Cloud provider outage", category="technology"),
+    ])
+    db.commit()
+    q = svc.command_center(db, TENANT, _Scope())["quantify"]
+    assert q["risks_total"] == 2 and q["risks_demo"] == 2
+    assert q["demo_only"] is True
+    # one REAL risk alongside the demos → no longer demo-only
+    db.add(Risk(tenant_id=TENANT, title="Unpatched PostgreSQL on payment host", category="technology"))
+    db.commit()
+    assert svc.command_center(db, TENANT, _Scope())["quantify"]["demo_only"] is False
 
 
 def test_coverage_scope_filter_vs_tenant_wide(db):

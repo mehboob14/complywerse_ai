@@ -13,7 +13,7 @@
  *    shows those frozen numbers, not a re-explorable drill-down.
  */
 
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { ctemScopesApi } from '@/lib/api';
@@ -283,6 +283,11 @@ function money(v?: number | null, ccy?: string | null) {
 // explained (what each bucket means, and what unlocks it).
 // ─────────────────────────────────────────────────────────────────────────────
 type Machine = { id: number; name: string; host_name?: string | null; asset_type?: string | null };
+type ControlItem = { id: number; kind: string; code: string; title: string; framework: string; tier: string; findings_covered: number };
+const TIER_LABEL: Record<string, string> = {
+  tested_effective: 'tested ✓', tested_failed: 'tested ✗', remediation_verified: 'fix verified',
+  stale: 'stale test', attested_only: 'only claimed',
+};
 
 function Delta({ n }: { n?: number }) {
   // "+N this cycle" — the ACTIVITY tag. 0 renders quietly so it never reads
@@ -339,9 +344,35 @@ function CommandCenter({ scope }: { scope: Scope }) {
   const totalFindings = data.scope_findings ?? 0;
   const tested = (tiers.tested_effective ?? 0) + (tiers.tested_failed ?? 0);
   const chains = p.total_viable_chains ?? 0;
+  const controlItems: ControlItem[] = data.validate?.items || [];
+  const byFramework: Record<string, number> = data.validate?.by_framework || {};
+
+  // The 5-stage loop with the CURRENT state of each stage — the flow the whole
+  // program is built on. Restored after a redesign dropped it (visibility loss).
+  const loop: Array<{ n: string; label: string; value: number; href: string }> = [
+    { n: '1', label: 'Scope', value: machines.length, href: '/assets' },
+    { n: '2', label: 'Discover', value: totalFindings, href: findingsHref },
+    { n: '3', label: 'Prioritise', value: p.findings_ranked ?? 0, href: '/vulnerabilities/choke-points' },
+    { n: '4', label: 'Validate', value: tested, href: '/control-library/assurance' },
+    { n: '5', label: 'Mobilise', value: m.tickets ?? 0, href: findingsHref },
+  ];
 
   return (
     <div className="mt-3 space-y-3">
+      {/* ── the loop — the flow, with each stage's current state ───────────── */}
+      <div className="flex items-stretch gap-1 overflow-x-auto">
+        {loop.map((st, i) => (
+          <Fragment key={st.label}>
+            <Link href={st.href}
+              className="group flex-1 min-w-[96px] rounded-lg border border-slate-200 bg-slate-50/60 px-2 py-1.5 text-center hover:border-primary-300 hover:bg-primary-50/50 transition-colors">
+              <p className="text-[9px] font-medium uppercase tracking-wide text-slate-400 group-hover:text-primary-600">{st.n} · {st.label}</p>
+              <p className="text-base font-bold text-slate-900 tabular-nums leading-tight">{st.value}</p>
+            </Link>
+            {i < loop.length - 1 && <span className="self-center text-slate-300 text-sm">›</span>}
+          </Fragment>
+        ))}
+      </div>
+
       {/* ── the machines — named, not counted ─────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-1.5 text-xs">
         <span className="text-slate-500">Watching {machines.length} machine{machines.length === 1 ? '' : 's'}:</span>
@@ -415,17 +446,76 @@ function CommandCenter({ scope }: { scope: Scope }) {
 
         <div className="rounded-lg border border-slate-200 bg-white p-3">
           <p className="text-[11px] font-medium text-slate-700 flex items-center gap-1 mb-1"><Coins className="h-3.5 w-3.5 text-emerald-600" /> What it could cost</p>
-          {q ? (
+          {!q ? (
+            <p className="text-[11px] text-slate-400 mt-1">No simulation run yet.</p>
+          ) : q.demo_only ? (
+            // HARD RULE: never show a number computed from sample data as real.
+            <>
+              <p className="text-base font-semibold text-slate-700 leading-tight">Not quantified yet</p>
+              <p className="mt-1 text-[11px] text-slate-500">
+                The only simulation on file was run on <span className="font-medium">{q.risks_demo} sample risks</span> (marked [DEMO]) — no real risks are in the register, so there is no real cost figure to show.
+              </p>
+              <p className="mt-1.5 text-[10px] text-amber-700 bg-amber-50 rounded px-1.5 py-1">Add your real risks and re-run the portfolio to get a genuine number.</p>
+            </>
+          ) : (
             <>
               <p className="text-2xl font-bold text-slate-900 tabular-nums leading-none">{money(q.ale, q.currency)}</p>
               <p className="mt-1 text-[11px] text-slate-500">likely loss per year · worst case {money(q.p95, q.currency)}</p>
               <p className="mt-1.5 text-[10px] text-amber-700 bg-amber-50 rounded px-1.5 py-1">For ALL your risks, not just these machines — risks aren&apos;t tied to a scope yet.</p>
             </>
-          ) : (
-            <p className="text-[11px] text-slate-400 mt-1">No simulation run yet.</p>
           )}
-          <Link href="/erm/risks/list" className="mt-2 inline-block text-[11px] text-primary-600 hover:underline">Risk quantification →</Link>
+          <Link href="/erm/risks" className="mt-2 inline-block text-[11px] text-primary-600 hover:underline">See the FAIR panel on the Risk dashboard →</Link>
         </div>
+      </div>
+
+      {/* ── the controls, LISTED by framework — the crosswalk made visible ─── */}
+      <div className="rounded-lg border border-slate-200 bg-white p-3">
+        <div className="flex flex-wrap items-baseline justify-between gap-2 mb-2">
+          <p className="text-[11px] font-medium text-slate-700">
+            The {controlItems.length} controls these findings fall under
+            <span className="ml-1 font-normal text-slate-500">— matched from each finding&apos;s weakness type (CWE) to your uploaded frameworks by exact control code. Not AI, not keyword guessing.</span>
+          </p>
+          <p className="text-[10px] text-slate-500">
+            {Object.entries(byFramework).map(([fw, n]) => `${fw}: ${n}`).join(' · ')}
+          </p>
+        </div>
+        {controlItems.length === 0 ? (
+          <p className="text-[11px] text-slate-400">No controls linked yet — run the CWE auto-map on the register.</p>
+        ) : (
+          <div className="max-h-56 overflow-y-auto rounded border border-slate-100">
+            <table className="w-full text-[11px]">
+              <thead className="sticky top-0 bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="px-2 py-1 text-left font-medium">Framework</th>
+                  <th className="px-2 py-1 text-left font-medium">Control</th>
+                  <th className="px-2 py-1 text-right font-medium">Findings</th>
+                  <th className="px-2 py-1 text-left font-medium">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {controlItems.map((c) => (
+                  <tr key={`${c.kind}-${c.id}`} className="hover:bg-slate-50/70">
+                    <td className="px-2 py-1 text-slate-500 whitespace-nowrap">{c.framework}</td>
+                    <td className="px-2 py-1 text-slate-800"><span className="font-mono text-slate-900">{c.code}</span> <span className="text-slate-600">{c.title}</span></td>
+                    <td className="px-2 py-1 text-right tabular-nums text-slate-700">{c.findings_covered}</td>
+                    <td className="px-2 py-1">
+                      <span className={`rounded-full px-1.5 py-0 text-[10px] font-medium ${
+                        c.tier === 'tested_effective' ? 'bg-emerald-50 text-emerald-700'
+                        : c.tier === 'tested_failed' ? 'bg-rose-50 text-rose-700'
+                        : c.tier === 'remediation_verified' ? 'bg-sky-50 text-sky-700'
+                        : 'bg-slate-100 text-slate-600'}`}>
+                        {TIER_LABEL[c.tier] || c.tier}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <p className="mt-1.5 text-[10px] text-slate-500">
+          &ldquo;Only claimed&rdquo; becomes &ldquo;tested&rdquo; when real evidence lands: a re-scan that no longer sees the finding, or a retest recorded on the finding.
+        </p>
       </div>
     </div>
   );

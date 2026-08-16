@@ -249,22 +249,54 @@ def _cc_prioritise(db: Session, tenant_id: int, vuln_ids: List[int]) -> Dict[str
 def _cc_validate(db: Session, tenant_id: int, vuln_ids: List[int]) -> Dict[str, Any]:
     """Controls covering THIS scope's findings, and how many are actually tested.
     Scope→control map = scope findings → their control links; tiers come from the
-    same read-time deriver the assurance page uses (no stored badge)."""
-    from ..models import VulnerabilityControlLink
+    same read-time deriver the assurance page uses (no stored badge).
+
+    Returns the controls LISTED (code, title, framework, tier, how many of the
+    scope's findings each covers), not just counted — the user must be able to
+    see the crosswalk ("ISO 27001 A.8.8, NIST RA-5 …"), not a bare "60"."""
+    from ..models import VulnerabilityControlLink, ParsedFrameworkControl, UploadedFramework
     from .control_assurance import _ref_key, tier_for_ref
     if not vuln_ids:
-        return {"controls": 0, "tiers": {}}
-    refs = set()
+        return {"controls": 0, "tiers": {}, "items": [], "by_framework": {}}
+    refs: Dict[tuple, int] = {}          # (kind, id) → number of scope findings it covers
     for link in db.query(VulnerabilityControlLink).filter(
             VulnerabilityControlLink.vulnerability_id.in_(vuln_ids)).all():
         k = _ref_key(link)
         if k:
-            refs.add(k)
+            refs[k] = refs.get(k, 0) + 1
     tiers: Dict[str, int] = {}
+    tier_of: Dict[tuple, str] = {}
     for kind, cid in refs:
         t = tier_for_ref(db, tenant_id, kind, cid)["tier"]
         tiers[t] = tiers.get(t, 0) + 1
-    return {"controls": len(refs), "tiers": tiers}
+        tier_of[(kind, cid)] = t
+
+    # Name the parsed-framework controls (the path the CWE crosswalk writes to).
+    parsed_ids = [cid for (kind, cid) in refs if kind == "parsed_framework_control"]
+    items: List[Dict[str, Any]] = []
+    if parsed_ids:
+        rows = db.query(
+            ParsedFrameworkControl.id, ParsedFrameworkControl.control_id,
+            ParsedFrameworkControl.title, UploadedFramework.name,
+        ).outerjoin(UploadedFramework, UploadedFramework.id == ParsedFrameworkControl.uploaded_framework_id
+        ).filter(ParsedFrameworkControl.id.in_(parsed_ids)).all()
+        for r in rows:
+            k = ("parsed_framework_control", r.id)
+            items.append({
+                "id": r.id, "kind": "parsed_framework_control", "code": r.control_id,
+                "title": r.title, "framework": r.name or "—",
+                "tier": tier_of.get(k, "attested_only"), "findings_covered": refs.get(k, 0),
+            })
+    # Any non-parsed refs (internal/framework/normalized) still count; name them minimally.
+    for (kind, cid), n in refs.items():
+        if kind != "parsed_framework_control":
+            items.append({"id": cid, "kind": kind, "code": f"#{cid}", "title": kind.replace("_", " "),
+                          "framework": "—", "tier": tier_of[(kind, cid)], "findings_covered": n})
+    items.sort(key=lambda i: (-i["findings_covered"], i["framework"], i["code"]))
+    by_framework: Dict[str, int] = {}
+    for i in items:
+        by_framework[i["framework"]] = by_framework.get(i["framework"], 0) + 1
+    return {"controls": len(refs), "tiers": tiers, "items": items, "by_framework": by_framework}
 
 
 def _cc_mobilise(db: Session, tenant_id: int, vuln_ids: List[int]) -> Dict[str, Any]:
@@ -290,7 +322,7 @@ def _cc_quantify(db: Session, tenant_id: int) -> Optional[Dict[str, Any]]:
     Risk quantification links to risks, never to a CTEM scope or asset, so there
     is no honest per-scope dollar figure; the portfolio number, clearly labelled,
     is the closest true thing."""
-    from ..models import RiskSimulationRun
+    from ..models import RiskSimulationRun, Risk
     run = db.query(RiskSimulationRun).filter(
         RiskSimulationRun.tenant_id == tenant_id,
         RiskSimulationRun.scope == "portfolio",
@@ -298,6 +330,15 @@ def _cc_quantify(db: Session, tenant_id: int) -> Optional[Dict[str, Any]]:
     ).order_by(RiskSimulationRun.created_at.desc()).first()
     if run is None:
         return None
+    # HARD RULE: never present a figure computed from sample data as the user's
+    # own. If every risk in the register is a [DEMO] seed, the run is a real
+    # Monte Carlo on fake inputs — say so, and don't hand the UI a headline
+    # number to display as real.
+    total = db.query(func.count(Risk.id)).filter(Risk.tenant_id == tenant_id).scalar() or 0
+    demo = db.query(func.count(Risk.id)).filter(
+        Risk.tenant_id == tenant_id, Risk.title.like("[DEMO]%")).scalar() or 0
+    demo_only = total > 0 and demo == total
     return {"scope": "portfolio", "ale": run.ale_mean, "p95": run.p95,
             "currency": run.currency,
-            "computed_at": run.created_at.isoformat() if run.created_at else None}
+            "computed_at": run.created_at.isoformat() if run.created_at else None,
+            "risks_total": total, "risks_demo": demo, "demo_only": demo_only}

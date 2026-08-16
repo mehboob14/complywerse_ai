@@ -57,6 +57,42 @@ controls can move past "attested only" without waiting on an external BAS feed.
 - **Per-scope CRQM** — needs a risk↔scope (or risk↔asset) link in the
   quantification model: a real modelling decision, your call.
 
+## HARD RULE — no fake data, no demo data (user-directed)
+
+The app must never show invented or sample data as if real. Real frameworks
+and real controls exist in the system — use them. Audit finding on 16 Aug:
+**all 12 risks in the register are `[DEMO]` seeds (0 real), so the FAIR
+$495.5K figure is a real Monte Carlo on fake inputs.** The command center must
+NOT present it as the user's cost. Fix: detect demo-only inputs and say so
+plainly ("computed on sample risks — add real risks to quantify"), never a
+bare dollar figure. Hermetic unit tests may seed rows in a throwaway in-memory
+SQLite (never the tenant DB) — and when they do, they use the tenant's REAL
+values (e.g. "ISO/IEC 27001:2022 · A.8.8") so they prove the real data shape.
+
+## Decisions from the visibility review (user-directed)
+
+- **Frozen-cycle history stays OUT of the live view.** No "compare with last
+  quarter" charts forced on the user. Open = live; close = save a record; history
+  is a separate, quiet section. (User: the previous cycle has no place in the
+  live session.)
+- **Restore the 5-stage loop strip** above the cards — the loop is the whole
+  idea, and removing it lost visibility. Show it as a flow (scope → discover →
+  prioritise → validate → mobilise) with the CURRENT state numbers, not the
+  confusing "since opened" zeros.
+- **List the controls, don't just count them.** The "60 controls" card must
+  show which controls (grouped by framework: ISO 27001 A.8.8, NIST RA-5/SI-2,
+  PCI 6.3.3/11.3.1 …) so the user can see the crosswalk, not a bare number.
+- **Cost link → the Risk Register DASHBOARD** (`/erm/risks`), where the FAIR
+  panel actually shows $495.5K / p95 $2M / p99 $3M — not `/erm/risks/list`.
+- **Mobilisation must run officially** — needs a ServiceNow connection; the
+  user will provide the instance/credentials via the connectors UI (agent never
+  types credentials). Adapter + push + resolve-sync already built.
+- **Control-matching technique (for the record):** deterministic, hand-curated
+  CWE → framework-control-code crosswalk (`cwe_control_map.py`) + two
+  always-applicable rules (open CVE → vuln-mgmt controls; KEV → IR controls),
+  matched by EXACT control code against the tenant's uploaded frameworks. Not
+  AI, not fuzzy keyword matching. Auditable and reproducible.
+
 ## Execution log
 
 - **P1 — root cause found, linker shipped, one decision pending.**
