@@ -28,18 +28,24 @@ auto-linker (match a finding's affected host to an asset's host_name/name),
 backfill existing findings, and stamp provenance. Makes Discovery/Prioritisation
 light up with real numbers. Hermetic test on the matcher.
 
-**P2 — CTEM program dashboard (backend aggregator).** New tenant-level
-`program_dashboard()` + read-only endpoint: exposure funnel (findings → chained
-→ viable → ticketed), the 3-lever coverage, top choke points, assurance tier
-distribution + by framework, mobilisation status, cost + loss-exceedance curve,
-scope/cycle counts, and honest gap metrics. Reuses coverage / assurance_summary
-/ rank_choke_points / ITSM / sim. Hermetic test.
+**P1.5 — Generate reachability chains (content lever).** The 206 now-linked
+findings still read "no chain yet" because no reachability snapshot exists for
+them. Run the attack engine over the scope's (vuln × asset) pairs and persist
+snapshots so Prioritisation / choke-points fill with real viable/severed/
+undeterminable verdicts. This is what makes the redesigned card meaningful.
 
-**P3 — CTEM dashboard frontend (production UI).** A dedicated, polished page
-(not the thin per-scope cards): KPI funnel, the loop with real counts, a
-ranked choke-point table with drill-down, an assurance donut + framework
-breakdown, mobilisation panel, the cost curve, and an honest "gaps to close"
-banner. Proper design system, charts, loading/empty states.
+**P2 — Enrich the EXISTING command-center payload (backend).** NOT a new
+dashboard — the user's direction is to modify/redesign the command center
+already on the scopes page. Enrich `command_center()`: add the exposure funnel
+(findings → chained → viable → ticketed), a real top-choke-points list with
+drill-down data, assurance framework breakdown, cost LEC points, and honest gap
+flags — feeding the redesigned cards. Reuse existing services. Extend the test.
+
+**P3 — Redesign the command-center cards (production UI).** Rework the cards
+in-place on `erm/ctem-scopes` (`CommandCenter` component): stronger visual
+hierarchy, the loop as a funnel, a ranked choke-point mini-table, an assurance
+tier bar, the cost curve, honest empty/gaps states — a real design pass on what
+exists, not a second page.
 
 **P4 — Validation evidence path (make "tested" reachable).** A UI action to
 record a retest / manual test result on a control, flowing into the tier so
