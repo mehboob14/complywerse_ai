@@ -53,4 +53,23 @@ controls can move past "attested only" without waiting on an external BAS feed.
 
 ## Execution log
 
-- P1: _in progress_
+- **P1 — root cause found, linker shipped, one decision pending.**
+  Built + tested + committed `finding_asset_linker.backfill_host_links` +
+  endpoint (`7ebf4e9`). Ran it LIVE on the tenant. Result:
+  `{assets:3, findings_with_host:215, matched:10, already_linked:10,
+  unmatched:205}`. The real cause is deeper than a name mismatch: 205 of 215
+  findings carry `affected_host = "nessus-<sha256>"` — an **opaque Nessus
+  host-key**, not a hostname — and none of the 3 inventoried assets regenerate
+  that hash (verified by recomputing `_stable_asset_id`). So those findings were
+  scanned against a host that isn't cleanly represented in the asset inventory;
+  there is no stored external-id column on ITAsset to match against either.
+  The host-name linker correctly handles the clean cases (the 10) and correctly
+  refuses to guess the 205 — linking them to the wrong box would be worse than
+  leaving them honest-unmatched.
+  **Decision needed (real-world fact I can't derive):** the 205 are all desktop
+  software (Node.js, PostgreSQL 18, pnpm, WinRAR, Windows bulletins) — almost
+  certainly all on the one `DESKTOP-CE3EFJB` machine. If confirmed, add a
+  one-click "assign N orphaned findings → asset X" (endpoint param
+  `assign_unmatched_to_asset_id`) and content jumps 10 → 215. Until confirmed,
+  no fabricated links.
+- P2 (dashboard aggregator): starting in parallel — independent of P1's decision.
