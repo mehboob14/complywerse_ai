@@ -45,25 +45,33 @@ interface Scope {
   live_counts?: { member_assets: number; discovered: number; prioritized?: number; validated: number; mobilized: number };
 }
 
-// The CTEM loop, left to right. Scope = the assets in the slice; the middle
-// three are the cycle's own counters; prioritised shows "—" when the scope has
-// no choke-point history yet (the backend omits it — an honest seam, not a 0).
-function Counters({ c }: { c: { member_assets: number; discovered: number; prioritized?: number; validated: number; mobilized: number } }) {
-  const stages: [string, string, number | undefined][] = [
-    ['1', 'Scope', c.member_assets],
-    ['2', 'Discover', c.discovered],
-    ['3', 'Prioritise', c.prioritized],
-    ['4', 'Validate', c.validated],
-    ['5', 'Mobilise', c.mobilized],
-  ];
+// The CTEM loop, left to right. Each box links to the page the number comes
+// from, so a reviewer can see the source (and the sidebar "CTEM Scopes" tab
+// brings them straight back). `src` names the destination on the box itself so
+// "where does this come from?" is answered without clicking.
+type Counts = { member_assets: number; discovered: number; prioritized?: number; validated: number; mobilized: number };
+const LOOP_STAGES: Array<{ n: string; label: string; get: (c: Counts) => number | undefined; href: (id: number) => string; src: string }> = [
+  { n: '1', label: 'Scope', get: (c) => c.member_assets, href: () => '/assets', src: 'Assets' },
+  { n: '2', label: 'Discover', get: (c) => c.discovered, href: (id) => `/erm/risks/list?ctem_scope_id=${id}`, src: 'Findings' },
+  { n: '3', label: 'Prioritise', get: (c) => c.prioritized, href: () => '/vulnerabilities/choke-points', src: 'Choke points' },
+  { n: '4', label: 'Validate', get: (c) => c.validated, href: () => '/control-library/assurance', src: 'Assurance' },
+  { n: '5', label: 'Mobilise', get: (c) => c.mobilized, href: () => '/vulnerabilities', src: 'Register' },
+];
+
+function Counters({ c, scopeId }: { c: Counts; scopeId: number }) {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-      {stages.map(([n, label, v]) => (
-        <div key={label} className="rounded-lg border border-slate-200 bg-slate-50/60 p-2 text-center">
-          <p className="text-[9px] font-medium text-slate-400 mb-0.5 uppercase tracking-wide">{n} · {label}</p>
-          <p className="text-base font-bold text-slate-900 tabular-nums">{v === undefined ? '—' : v}</p>
-        </div>
-      ))}
+      {LOOP_STAGES.map((s) => {
+        const v = s.get(c);
+        return (
+          <Link key={s.label} href={s.href(scopeId)}
+            className="group rounded-lg border border-slate-200 bg-slate-50/60 p-2 text-center hover:border-primary-300 hover:bg-primary-50/50 transition-colors">
+            <p className="text-[9px] font-medium text-slate-400 mb-0.5 uppercase tracking-wide group-hover:text-primary-600">{s.n} · {s.label}</p>
+            <p className="text-base font-bold text-slate-900 tabular-nums">{v === undefined ? '—' : v}</p>
+            <p className="text-[8px] text-slate-400 group-hover:text-primary-600">{s.src} →</p>
+          </Link>
+        );
+      })}
     </div>
   );
 }
@@ -225,7 +233,7 @@ export default function CtemScopesPage() {
                   <p className="text-[11px] font-medium text-emerald-700 mb-1 flex items-center gap-1">
                     <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" /> Open cycle — live counts
                   </p>
-                  <Counters c={s.live_counts} />
+                  <Counters c={s.live_counts} scopeId={s.id} />
                   <CommandCenter scopeId={s.id} />
                 </div>
               )}
@@ -254,7 +262,7 @@ function ScopeCycleHistory({ scopeId }: { scopeId: number }) {
       <p className="text-[11px] font-medium text-slate-500 mb-1 flex items-center gap-1">
         <Lock className="h-3 w-3" /> Last closed cycle — frozen{latest.closed_at ? ` ${new Date(latest.closed_at).toLocaleDateString()}` : ''}
       </p>
-      {latest.counts && <Counters c={latest.counts} />}
+      {latest.counts && <Counters c={latest.counts} scopeId={scopeId} />}
       <p className="mt-1 text-[10px] text-slate-400 font-mono break-all">
         membership {latest.hash_algorithm}: {latest.membership_hash?.slice(0, 16)}… — counts verifiable against this hash, not re-explorable.
       </p>
@@ -323,6 +331,7 @@ function CommandCenter({ scopeId }: { scopeId: number }) {
           {row('Resolved', m.resolved)}
           {row('Plan marked done', m.plans_applied)}
         </div>
+        <Link href="/vulnerabilities" className="mt-2 inline-block text-[11px] text-primary-600 hover:underline">Register →</Link>
       </div>
 
       <div className="rounded-lg border border-slate-200 bg-white p-3">
