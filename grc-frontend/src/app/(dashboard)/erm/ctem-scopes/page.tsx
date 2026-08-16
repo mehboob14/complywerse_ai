@@ -20,6 +20,7 @@ import { ctemScopesApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
   Crosshair, Plus, Play, Square, Loader2, AlertTriangle, Lock, ExternalLink,
+  ShieldCheck, Ticket, Coins,
 } from 'lucide-react';
 
 interface Cycle {
@@ -225,6 +226,7 @@ export default function CtemScopesPage() {
                     <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" /> Open cycle — live counts
                   </p>
                   <Counters c={s.live_counts} />
+                  <CommandCenter scopeId={s.id} />
                 </div>
               )}
               {!s.open_cycle_id && s.cycle_count > 0 && (
@@ -256,6 +258,86 @@ function ScopeCycleHistory({ scopeId }: { scopeId: number }) {
       <p className="mt-1 text-[10px] text-slate-400 font-mono break-all">
         membership {latest.hash_algorithm}: {latest.membership_hash?.slice(0, 16)}… — counts verifiable against this hash, not re-explorable.
       </p>
+    </div>
+  );
+}
+
+function money(v?: number | null, ccy?: string | null) {
+  if (v == null) return '—';
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency', currency: ccy || 'USD', notation: 'compact', maximumFractionDigits: 1,
+  }).format(v);
+}
+
+// The four downstream cards of the loop, pulled per-scope from the command-center
+// endpoint. Each links to the screen that owns the detail. The cost card is
+// portfolio-wide by necessity — risk quantification isn't scope-linked — and says so.
+function CommandCenter({ scopeId }: { scopeId: number }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ['ctem-command-center', scopeId],
+    queryFn: async () => (await ctemScopesApi.commandCenter(scopeId)).data,
+  });
+  if (isLoading) return <p className="mt-2 text-[11px] text-slate-400">Loading command center…</p>;
+  if (!data) return null;
+  const p = data.prioritise?.coverage || {};
+  const tiers = data.validate?.tiers || {};
+  const m = data.mobilise || {};
+  const q = data.quantify;
+
+  const row = (label: string, val: number | undefined) => (
+    <div className="flex justify-between"><span>{label}</span><span className="tabular-nums">{val ?? 0}</span></div>
+  );
+
+  return (
+    <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+      <div className="rounded-lg border border-slate-200 bg-white p-3">
+        <p className="text-[11px] font-medium text-slate-500 flex items-center gap-1 mb-1"><Crosshair className="h-3 w-3" /> What to fix first</p>
+        <p className="text-xl font-bold text-slate-900 tabular-nums">{p.findings_ranked ?? 0}</p>
+        <p className="text-[10px] text-slate-400 mb-2">viable now · {p.total_viable_chains ?? 0} chain(s)</p>
+        <div className="space-y-0.5 text-[10px] text-slate-500">
+          {row('No chain yet', p.findings_chainless)}
+          {row('Blocked (safe)', p.findings_severed)}
+          {row("Can't tell yet", p.findings_undeterminable)}
+        </div>
+        <Link href="/vulnerabilities/choke-points" className="mt-2 inline-block text-[11px] text-primary-600 hover:underline">Choke points →</Link>
+      </div>
+
+      <div className="rounded-lg border border-slate-200 bg-white p-3">
+        <p className="text-[11px] font-medium text-slate-500 flex items-center gap-1 mb-1"><ShieldCheck className="h-3 w-3" /> Controls working?</p>
+        <p className="text-xl font-bold text-slate-900 tabular-nums">{data.validate?.controls ?? 0}</p>
+        <p className="text-[10px] text-slate-400 mb-2">cover these findings</p>
+        <div className="space-y-0.5 text-[10px] text-slate-500">
+          {row('Tested effective', tiers.tested_effective)}
+          {row('Tested — failed', tiers.tested_failed)}
+          {row('Attested only', tiers.attested_only)}
+        </div>
+        <Link href="/control-library/assurance" className="mt-2 inline-block text-[11px] text-primary-600 hover:underline">Assurance →</Link>
+      </div>
+
+      <div className="rounded-lg border border-slate-200 bg-white p-3">
+        <p className="text-[11px] font-medium text-slate-500 flex items-center gap-1 mb-1"><Ticket className="h-3 w-3" /> Fixes in flight</p>
+        <p className="text-xl font-bold text-slate-900 tabular-nums">{m.tickets ?? 0}</p>
+        <p className="text-[10px] text-slate-400 mb-2">ticketed to ITSM</p>
+        <div className="space-y-0.5 text-[10px] text-slate-500">
+          {row('Open', m.open)}
+          {row('Resolved', m.resolved)}
+          {row('Plan marked done', m.plans_applied)}
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-slate-200 bg-white p-3">
+        <p className="text-[11px] font-medium text-slate-500 flex items-center gap-1 mb-1"><Coins className="h-3 w-3" /> Cost <span className="text-slate-300">· portfolio</span></p>
+        {q ? (
+          <>
+            <p className="text-xl font-bold text-slate-900 tabular-nums">{money(q.ale, q.currency)}</p>
+            <p className="text-[10px] text-slate-400 mb-1">likely / yr · worst {money(q.p95, q.currency)}</p>
+            <p className="text-[10px] text-amber-600">All risks — not scope-filtered.</p>
+          </>
+        ) : (
+          <p className="text-[11px] text-slate-400 mt-1">No simulation run yet.</p>
+        )}
+        <Link href="/erm/risks/list" className="mt-2 inline-block text-[11px] text-primary-600 hover:underline">Quantify →</Link>
+      </div>
     </div>
   );
 }

@@ -157,6 +157,20 @@ def get_scope(
     return {"scope": out}
 
 
+@router.get("/{scope_id}/command-center")
+def scope_command_center(
+    scope_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Per-scope rollup of the loop's downstream signals — prioritise / validate /
+    mobilise / quantify. Read-only; open to any authed tenant member, like the
+    scope list. Each card reuses the owning service filtered to this scope's
+    findings (the money card is portfolio-wide by necessity — see the service)."""
+    s = _scope_or_404(db, scope_id, current_user)
+    return svc.command_center(db, s.tenant_id, s)
+
+
 @router.put("/{scope_id}")
 def update_scope(
     scope_id: int,

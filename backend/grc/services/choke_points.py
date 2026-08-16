@@ -41,24 +41,35 @@ def is_rankable(chain_count: int) -> bool:
     return chain_count >= 1
 
 
-def rank_choke_points(db: Session, tenant_id: int) -> List[Dict[str, Any]]:
+def rank_choke_points(db: Session, tenant_id: int,
+                      vulnerability_ids: Optional[Any] = None) -> List[Dict[str, Any]]:
     """Pure compute (no writes): the deterministic choke-point ranking for a
     tenant from the latest reachability snapshot per (vuln, asset).
+
+    `vulnerability_ids` (None = whole tenant) restricts the ranking to a slice
+    of findings — the CTEM-scope filter. An EMPTY collection means "a scope with
+    no findings" → empty ranking (never silently the whole tenant).
 
     Returns [{vulnerability_id, chain_count, rank,
               chains: [{asset_id, snapshot_id, verdict}]}], rank 1 = highest.
     """
     from ..models import ReachabilitySnapshot
 
+    if vulnerability_ids is not None and not vulnerability_ids:
+        return []
+
     # Latest snapshot per (vuln, asset): max assessed_at, tie-broken by id so
     # it's deterministic even if two share a timestamp.
-    rows = db.query(
+    q = db.query(
         ReachabilitySnapshot.id,
         ReachabilitySnapshot.vulnerability_id,
         ReachabilitySnapshot.asset_id,
         ReachabilitySnapshot.verdict,
         ReachabilitySnapshot.assessed_at,
-    ).filter(ReachabilitySnapshot.tenant_id == tenant_id).all()
+    ).filter(ReachabilitySnapshot.tenant_id == tenant_id)
+    if vulnerability_ids is not None:
+        q = q.filter(ReachabilitySnapshot.vulnerability_id.in_(list(vulnerability_ids)))
+    rows = q.all()
 
     latest: Dict[tuple, Any] = {}
     for r in rows:
@@ -93,7 +104,8 @@ def rank_choke_points(db: Session, tenant_id: int) -> List[Dict[str, Any]]:
     return ranking
 
 
-def coverage(db: Session, tenant_id: int) -> Dict[str, int]:
+def coverage(db: Session, tenant_id: int,
+             vulnerability_ids: Optional[Any] = None) -> Dict[str, int]:
     """Honesty numbers for the view. Names THREE levers on the empty/short state:
     chain GENERATION (findings with no chain at all), and — among findings that
     carry a chain but none currently viable — the TWO reasons that are not one
@@ -102,18 +114,35 @@ def coverage(db: Session, tenant_id: int) -> Dict[str, int]:
     default, and enrichment is a lever only when the finding has a CVE to enrich
     from). Collapsing those two frames enrichment as a fix for the severed ones,
     which it is not. total_viable_chains is a legitimate sum — chains are disjoint
-    per finding here — while asset counts still must never be summed."""
+    per finding here — while asset counts still must never be summed.
+
+    `vulnerability_ids` (None = whole tenant) restricts every count to a slice of
+    findings — the CTEM-scope filter, so a scope card shows only its own numbers.
+    An empty collection is a real scope with no findings → all-zero coverage."""
     from ..models import Vulnerability, ReachabilitySnapshot
     from ..modules.vuln_management.attack.selection import is_undeterminable
 
-    total_findings = db.query(func.count(Vulnerability.id)).filter(
-        Vulnerability.tenant_id == tenant_id).scalar() or 0
-    chained_ids = {
-        r[0] for r in db.query(func.distinct(ReachabilitySnapshot.vulnerability_id)).filter(
-            ReachabilitySnapshot.tenant_id == tenant_id).all()
-    }
+    scoped = vulnerability_ids is not None
+    vset = set(vulnerability_ids) if scoped else None
+    if scoped and not vset:
+        return {"total_findings": 0, "findings_with_stored_chains": 0,
+                "findings_chainless": 0, "findings_ranked": 0,
+                "findings_chained_but_unviable": 0, "findings_severed": 0,
+                "findings_undeterminable": 0, "total_viable_chains": 0}
+
+    if scoped:
+        total_findings = len(vset)
+    else:
+        total_findings = db.query(func.count(Vulnerability.id)).filter(
+            Vulnerability.tenant_id == tenant_id).scalar() or 0
+
+    chain_q = db.query(func.distinct(ReachabilitySnapshot.vulnerability_id)).filter(
+        ReachabilitySnapshot.tenant_id == tenant_id)
+    if scoped:
+        chain_q = chain_q.filter(ReachabilitySnapshot.vulnerability_id.in_(list(vset)))
+    chained_ids = {r[0] for r in chain_q.all()}
     findings_with_chains = len(chained_ids)
-    ranking = rank_choke_points(db, tenant_id)
+    ranking = rank_choke_points(db, tenant_id, vulnerability_ids=vset)
     ranked_ids = {c["vulnerability_id"] for c in ranking}
     total_viable_chains = sum(c["chain_count"] for c in ranking)  # disjoint → sums true
 

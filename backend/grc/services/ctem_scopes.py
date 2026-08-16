@@ -206,3 +206,90 @@ def freeze_cycle(db: Session, cycle) -> None:
     cycle.membership_rule_frozen = rule
     cycle.membership_hash = membership_hash(asset_ids)
     cycle.hash_algorithm = HASH_ALGORITHM
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CTEM command center — one per-scope rollup of the whole loop's downstream
+# signals (the four cards below the counters). Each card REUSES the service that
+# owns that stage, filtered to this scope's findings via the one resolver — no
+# number is re-derived here. The money card is the honest exception: risk
+# quantification links to risks (risk_id), never to a CTEM scope or asset, so a
+# per-scope dollar figure is not derivable — it shows the PORTFOLIO run, labelled
+# as such, rather than faking a scoped number.
+# ─────────────────────────────────────────────────────────────────────────────
+def command_center(db: Session, tenant_id: int, scope) -> Dict[str, Any]:
+    asset_ids = resolve_scope_assets(db, tenant_id, scope.membership_rule)
+    vuln_ids = _vuln_ids_for_assets(db, tenant_id, asset_ids)
+    return {
+        "member_assets": len(asset_ids),
+        "scope_findings": len(vuln_ids),
+        "prioritise": _cc_prioritise(db, tenant_id, vuln_ids),
+        "validate": _cc_validate(db, tenant_id, vuln_ids),
+        "mobilise": _cc_mobilise(db, tenant_id, vuln_ids),
+        "quantify": _cc_quantify(db, tenant_id),
+    }
+
+
+def _cc_prioritise(db: Session, tenant_id: int, vuln_ids: List[int]) -> Dict[str, Any]:
+    from .choke_points import coverage, rank_choke_points
+    cov = coverage(db, tenant_id, vulnerability_ids=vuln_ids)
+    top = [{"vulnerability_id": c["vulnerability_id"], "chain_count": c["chain_count"]}
+           for c in rank_choke_points(db, tenant_id, vulnerability_ids=vuln_ids)[:3]]
+    return {"coverage": cov, "top": top}
+
+
+def _cc_validate(db: Session, tenant_id: int, vuln_ids: List[int]) -> Dict[str, Any]:
+    """Controls covering THIS scope's findings, and how many are actually tested.
+    Scope→control map = scope findings → their control links; tiers come from the
+    same read-time deriver the assurance page uses (no stored badge)."""
+    from ..models import VulnerabilityControlLink
+    from .control_assurance import _ref_key, tier_for_ref
+    if not vuln_ids:
+        return {"controls": 0, "tiers": {}}
+    refs = set()
+    for link in db.query(VulnerabilityControlLink).filter(
+            VulnerabilityControlLink.vulnerability_id.in_(vuln_ids)).all():
+        k = _ref_key(link)
+        if k:
+            refs.add(k)
+    tiers: Dict[str, int] = {}
+    for kind, cid in refs:
+        t = tier_for_ref(db, tenant_id, kind, cid)["tier"]
+        tiers[t] = tiers.get(t, 0) + 1
+    return {"controls": len(refs), "tiers": tiers}
+
+
+def _cc_mobilise(db: Session, tenant_id: int, vuln_ids: List[int]) -> Dict[str, Any]:
+    from ..models import VulnTicketLink
+    if not vuln_ids:
+        return {"tickets": 0, "open": 0, "resolved": 0, "plans_applied": 0}
+    links = db.query(VulnTicketLink).filter(
+        VulnTicketLink.tenant_id == tenant_id,
+        VulnTicketLink.vulnerability_id.in_(vuln_ids),
+        VulnTicketLink.external_ticket_id.isnot(None),
+    ).all()
+    resolved = sum(1 for l in links if l.resolved_at is not None)
+    return {
+        "tickets": len(links),
+        "open": len(links) - resolved,
+        "resolved": resolved,
+        "plans_applied": sum(1 for l in links if l.plan_advanced_at is not None),
+    }
+
+
+def _cc_quantify(db: Session, tenant_id: int) -> Optional[Dict[str, Any]]:
+    """Latest COMPLETED portfolio simulation — labelled portfolio, NOT scope.
+    Risk quantification links to risks, never to a CTEM scope or asset, so there
+    is no honest per-scope dollar figure; the portfolio number, clearly labelled,
+    is the closest true thing."""
+    from ..models import RiskSimulationRun
+    run = db.query(RiskSimulationRun).filter(
+        RiskSimulationRun.tenant_id == tenant_id,
+        RiskSimulationRun.scope == "portfolio",
+        RiskSimulationRun.status == "completed",
+    ).order_by(RiskSimulationRun.created_at.desc()).first()
+    if run is None:
+        return None
+    return {"scope": "portfolio", "ale": run.ale_mean, "p95": run.p95,
+            "currency": run.currency,
+            "computed_at": run.created_at.isoformat() if run.created_at else None}

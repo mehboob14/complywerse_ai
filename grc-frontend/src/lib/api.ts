@@ -1123,6 +1123,7 @@ export const ctemScopesApi = {
   update: (id: number, data: Record<string, unknown>) => apiClient.put(`/erm/ctem/scopes/${id}`, data),
   openCycle: (scopeId: number) => apiClient.post(`/erm/ctem/scopes/${scopeId}/cycles/open`),
   closeCycle: (cycleId: number) => apiClient.post(`/erm/ctem/scopes/cycles/${cycleId}/close`),
+  commandCenter: (scopeId: number) => apiClient.get(`/erm/ctem/scopes/${scopeId}/command-center`),
 };
 
 // CTEM Phase 2/2.5 — automated control-effectiveness evidence + bulk link coverage.
