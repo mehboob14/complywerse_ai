@@ -117,15 +117,15 @@ export function AiControlProposalsPanel({ scopeId }: { scopeId: number }) {
             : `No ${tab} suggestions.`}
         </p>
       ) : (
-        <div className="max-h-72 overflow-y-auto rounded border border-slate-100">
-          <table className="w-full text-[11px]">
+        <div className="max-h-72 overflow-y-auto overflow-x-hidden rounded border border-slate-100">
+          <table className="w-full table-fixed text-[11px]">
             <thead className="sticky top-0 bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500">
               <tr>
-                <th className="px-2 py-1 text-left font-medium">Finding</th>
-                <th className="px-2 py-1 text-left font-medium">Suggested control</th>
+                <th className="px-2 py-1 text-left font-medium w-[26%]">Finding</th>
+                <th className="px-2 py-1 text-left font-medium w-[28%]">Suggested control</th>
                 <th className="px-2 py-1 text-left font-medium">Why</th>
-                <th className="px-2 py-1 text-left font-medium">Conf.</th>
-                {tab === 'proposed' && canEdit && <th className="px-2 py-1 text-right font-medium">Decide</th>}
+                <th className="px-2 py-1 text-left font-medium w-[64px]">Conf.</th>
+                {tab === 'proposed' && canEdit && <th className="px-2 py-1 text-right font-medium w-[128px]">Decide</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -143,7 +143,7 @@ export function AiControlProposalsPanel({ scopeId }: { scopeId: number }) {
                     <div className="text-slate-700">{p.control.name}</div>
                     {p.control.domain && <div className="text-[10px] text-slate-400">{p.control.domain}</div>}
                   </td>
-                  <td className="px-2 py-1.5 text-slate-600 max-w-[280px]">
+                  <td className="px-2 py-1.5 text-slate-600 break-words">
                     {p.reason}
                     {p.driven_by && <div className="text-[10px] text-slate-400">driven by: {p.driven_by.replace(/_/g, ' ')}</div>}
                   </td>
@@ -151,7 +151,7 @@ export function AiControlProposalsPanel({ scopeId }: { scopeId: number }) {
                     <span className={`rounded-full px-1.5 py-0 text-[10px] font-medium ${CONF[p.confidence] || CONF.low}`}>{p.confidence}</span>
                   </td>
                   {tab === 'proposed' && canEdit && (
-                    <td className="px-2 py-1.5 text-right whitespace-nowrap">
+                    <td className="px-2 py-1.5 text-right whitespace-nowrap w-[128px]">
                       <button onClick={() => accept.mutate(p.id)} disabled={accept.isPending}
                         className="inline-flex items-center gap-0.5 rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] font-medium text-white hover:bg-emerald-700 disabled:opacity-50 mr-1">
                         <Check className="h-3 w-3" /> Accept

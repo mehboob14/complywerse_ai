@@ -296,7 +296,7 @@ export default function CtemScopesRedesign() {
           </Card>
 
           {/* ── rail + command centre ── */}
-          <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[300px_1fr]">
+          <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">
             {/* rail (sticky) */}
             <div className="space-y-2 lg:sticky lg:top-0">
               <div className="flex items-center justify-between px-0.5">
@@ -390,7 +390,7 @@ export default function CtemScopesRedesign() {
             </div>
 
             {/* command centre */}
-            <div className="space-y-3.5">
+            <div className="min-w-0 space-y-3.5">
               {/* detail header */}
               <Card className="p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3.5">
@@ -475,12 +475,12 @@ export default function CtemScopesRedesign() {
                   </span>
                 </div>
 
-                <div className="flex items-stretch overflow-x-auto">
+                <div className="flex items-stretch">
                   {stages.map((st, i) => (
                     <div key={st.label} className="contents">
                       <Link
                         href={[ '/assets', findingsHref, '/vulnerabilities/choke-points', '/control-library/assurance', findingsHref ][i]}
-                        className={`block min-w-0 flex-1 rounded-xl border p-3 transition hover:border-primary-300 ${
+                        className={`block min-w-0 flex-1 rounded-xl border p-2 2xl:p-3 transition hover:border-primary-300 ${
                           st.accent === 'rose' ? 'border-rose-200 bg-rose-50/60' : st.accent === 'emerald' ? 'border-emerald-200 bg-emerald-50/50' : 'border-slate-200 bg-slate-50'
                         }`}
                         title={st.sub}
@@ -493,14 +493,14 @@ export default function CtemScopesRedesign() {
                             st.accent === 'rose' ? 'text-rose-800' : st.accent === 'emerald' ? 'text-emerald-700' : 'text-slate-600'
                           }`}>{st.label}</span>
                         </div>
-                        <p className={`mt-2 text-[28px] font-bold leading-none tabular-nums ${
+                        <p className={`mt-1.5 text-[22px] 2xl:text-[28px] font-bold leading-none tabular-nums ${
                           st.accent === 'rose' ? 'text-rose-700' : st.accent === 'emerald' ? 'text-emerald-700' : 'text-slate-900'
                         }`}>{st.value}</p>
-                        <p className={`mt-1 text-[11px] ${st.accent === 'rose' ? 'text-rose-800' : st.accent === 'emerald' ? 'text-emerald-700' : 'text-slate-500'}`}>{st.sub}</p>
+                        <p className={`mt-1 truncate text-[10.5px] 2xl:text-[11px] ${st.accent === 'rose' ? 'text-rose-800' : st.accent === 'emerald' ? 'text-emerald-700' : 'text-slate-500'}`} title={st.sub}>{st.sub}</p>
                       </Link>
                       {i < stages.length - 1 && (
-                        <div className="flex w-14 shrink-0 flex-col items-center justify-center gap-1">
-                          <span className="text-center text-[9px] font-semibold uppercase leading-tight tracking-wide text-slate-400">{convs[i]}</span>
+                        <div className="flex w-6 2xl:w-14 shrink-0 flex-col items-center justify-center gap-1">
+                          <span className="hidden 2xl:block text-center text-[9px] font-semibold uppercase leading-tight tracking-wide text-slate-400">{convs[i]}</span>
                           <ArrowRight className="h-4 w-4 text-slate-300" />
                         </div>
                       )}
@@ -510,7 +510,7 @@ export default function CtemScopesRedesign() {
               </Card>
 
               {/* what to fix first + exposure */}
-              <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-[1.7fr_1fr]">
+              <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
                 <Card className="p-4">
                   <div className="mb-3 flex items-center justify-between gap-2">
                     <SectionTitle icon={<Crosshair className="h-[15px] w-[15px] text-rose-700" />}>What to fix first</SectionTitle>
@@ -590,7 +590,7 @@ export default function CtemScopesRedesign() {
               </div>
 
               {/* coverage + cycle progress + machines */}
-              <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-3">
+              <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-3 [&>*]:min-w-0">
                 {/* control coverage */}
                 <Card className="p-4">
                   <SectionTitle icon={<ShieldCheck className="h-[15px] w-[15px] text-primary-700" />} className="mb-3.5">Control coverage</SectionTitle>
