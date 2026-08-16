@@ -76,7 +76,12 @@ def membership_hash(asset_ids: List[int]) -> str:
 
 
 def _vuln_ids_for_assets(db: Session, tenant_id: int, asset_ids: List[int]) -> List[int]:
+    """OPEN findings on the scope's assets. Closed/terminal statuses are excluded
+    using the SAME list the vulnerability register hides by default, so the
+    command centre's "205" and the scoped register's list can never disagree
+    (found live: 205 vs 201 — the 4 were closed/auto-closed findings)."""
     from ..models import Vulnerability, VulnerabilityAssetLink
+    from ..modules.vuln_management.routers.vulnerabilities import _LIST_CLOSED_STATUSES  # lazy: avoids a circular import
     if not asset_ids:
         return []
     rows = db.query(VulnerabilityAssetLink.vulnerability_id).join(
@@ -84,6 +89,7 @@ def _vuln_ids_for_assets(db: Session, tenant_id: int, asset_ids: List[int]) -> L
     ).filter(
         Vulnerability.tenant_id == tenant_id,
         VulnerabilityAssetLink.asset_id.in_(asset_ids),
+        or_(Vulnerability.status.is_(None), ~Vulnerability.status.in_(_LIST_CLOSED_STATUSES)),
     ).distinct().all()
     return [r[0] for r in rows]
 
@@ -349,19 +355,22 @@ def portfolio(db: Session, tenant_id: int) -> Dict[str, Any]:
 
         # machines with findings count + worst reachable verdict as the risk dot
         per_asset_findings: Dict[int, int] = {}
-        if asset_ids:
+        if asset_ids and vuln_ids:   # same OPEN set as every other number on the page
             for aid, n in db.query(VulnerabilityAssetLink.asset_id, func.count(VulnerabilityAssetLink.id)).filter(
-                    VulnerabilityAssetLink.asset_id.in_(asset_ids)).group_by(VulnerabilityAssetLink.asset_id).all():
+                    VulnerabilityAssetLink.asset_id.in_(asset_ids),
+                    VulnerabilityAssetLink.vulnerability_id.in_(vuln_ids)).group_by(VulnerabilityAssetLink.asset_id).all():
                 per_asset_findings[aid] = n
         machines = [{"id": m["id"], "name": m["name"], "type": m.get("asset_type") or "asset",
                      "findings": per_asset_findings.get(m["id"], 0), "risk": None} for m in cc["machines"]]
 
-        # frameworks with tested count from the crosswalk items
+        # frameworks with tested-EFFECTIVE count from the crosswalk items.
+        # (Was counting tested_failed too — the per-framework bar then said "1/3"
+        # while the header said "0 tested · 7 failed" on the same card.)
         fw: Dict[str, Dict[str, int]] = {}
         for it in cc["validate"].get("items", []):
             f = fw.setdefault(it["framework"], {"controls": 0, "tested": 0})
             f["controls"] += 1
-            if it["tier"] in ("tested_effective", "tested_failed", "remediation_verified"):
+            if it["tier"] in ("tested_effective", "remediation_verified"):
                 f["tested"] += 1
         tier_map = {"tested_effective": "tested", "tested_failed": "failed", "remediation_verified": "verified"}
         cw = [{"fw": it["framework"], "code": it["code"], "title": it["title"], "findings": it["findings_covered"],
@@ -457,11 +466,23 @@ def _cc_validate(db: Session, tenant_id: int, vuln_ids: List[int]) -> Dict[str, 
                 "title": r.title, "framework": r.name or "—",
                 "tier": tier_of.get(k, "attested_only"), "findings_covered": refs.get(k, 0),
             })
-    # Any non-parsed refs (internal/framework/normalized) still count; name them minimally.
+    # Unified Control Library controls (the path AI-accepted proposals write to):
+    # name them by their real code/name, sourced "Unified Control Library".
+    from ..models import NormalizedControl
+    norm_ids = [cid for (kind, cid) in refs if kind == "normalized_control"]
+    if norm_ids:
+        for r in db.query(NormalizedControl.id, NormalizedControl.code, NormalizedControl.name).filter(
+                NormalizedControl.id.in_(norm_ids)).all():
+            k = ("normalized_control", r.id)
+            items.append({"id": r.id, "kind": "normalized_control", "code": r.code, "title": r.name,
+                          "framework": "Unified Control Library",
+                          "tier": tier_of.get(k, "attested_only"), "findings_covered": refs.get(k, 0)})
+    # Anything else (internal/framework refs) still counts; name it minimally, never hide it.
+    named = {(i["kind"], i["id"]) for i in items}
     for (kind, cid), n in refs.items():
-        if kind != "parsed_framework_control":
+        if (kind, cid) not in named:
             items.append({"id": cid, "kind": kind, "code": f"#{cid}", "title": kind.replace("_", " "),
-                          "framework": "—", "tier": tier_of[(kind, cid)], "findings_covered": n})
+                          "framework": "Other", "tier": tier_of[(kind, cid)], "findings_covered": n})
     items.sort(key=lambda i: (-i["findings_covered"], i["framework"], i["code"]))
     by_framework: Dict[str, int] = {}
     for i in items:

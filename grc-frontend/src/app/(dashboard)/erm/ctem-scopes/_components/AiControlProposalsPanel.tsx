@@ -55,6 +55,7 @@ export function AiControlProposalsPanel({ scopeId }: { scopeId: number }) {
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['ai-control-proposals'] });
     qc.invalidateQueries({ queryKey: ['ctem-command-center', scopeId] });
+    qc.invalidateQueries({ queryKey: ['ctem-portfolio'] });   // the redesign page reads this
   };
   const gen = useMutation({
     mutationFn: async () => (await vulnManagementApi.vulnerabilities.aiProposalsGenerate(scopeId)).data,
@@ -122,11 +123,11 @@ export function AiControlProposalsPanel({ scopeId }: { scopeId: number }) {
           <table className="w-full table-fixed text-[11px]">
             <thead className="sticky top-0 bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500">
               <tr>
-                <th className="px-2 py-1 text-left font-medium w-[26%]">Finding</th>
-                <th className="px-2 py-1 text-left font-medium w-[28%]">Suggested control</th>
+                <th className="px-2 py-1 text-left font-medium w-[21%]">Finding</th>
+                <th className="px-2 py-1 text-left font-medium w-[23%]">Suggested control</th>
                 <th className="px-2 py-1 text-left font-medium">Why</th>
-                <th className="px-2 py-1 text-left font-medium w-[64px]">Conf.</th>
-                {tab === 'proposed' && canEdit && <th className="px-2 py-1 text-right font-medium w-[128px]">Decide</th>}
+                <th className="px-2 py-1 text-left font-medium w-[56px]">Conf.</th>
+                {tab === 'proposed' && canEdit && <th className="px-2 py-1 text-right font-medium w-[124px]">Decide</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -152,7 +153,7 @@ export function AiControlProposalsPanel({ scopeId }: { scopeId: number }) {
                     <span className={`rounded-full px-1.5 py-0 text-[10px] font-medium ${CONF[p.confidence] || CONF.low}`}>{p.confidence}</span>
                   </td>
                   {tab === 'proposed' && canEdit && (
-                    <td className="px-2 py-1.5 text-right whitespace-nowrap w-[128px]">
+                    <td className="px-2 py-1.5 text-right whitespace-nowrap w-[124px]">
                       <button onClick={() => accept.mutate(p.id)} disabled={accept.isPending}
                         className="inline-flex items-center gap-0.5 rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] font-medium text-white hover:bg-emerald-700 disabled:opacity-50 mr-1">
                         <Check className="h-3 w-3" /> Accept

@@ -19,6 +19,7 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ctemScopesApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -96,19 +97,24 @@ function spark(vals: number[], w: number, h: number, pad: number) {
   return { line, area };
 }
 
-/** Two series on one shared scale (findings + dangerous). */
+/** Two series on one shared scale (findings + dangerous). Series may be
+ *  different lengths (a freeze may lack one total) — each is RIGHT-aligned to
+ *  the live point; a 1-point series draws a dot, never a faked line. */
 function sparkPair(a: number[], b: number[], w: number, h: number, pad: number) {
-  const all = [...a, ...b], max = Math.max(...all), min = Math.min(...all), range = max - min || 1, n = a.length;
+  const all = [...a, ...b], max = Math.max(...all), min = Math.min(...all), range = max - min || 1;
+  const n = Math.max(2, a.length, b.length);          // x-slots; ≥2 so the axis has width
   const map = (vals: number[]) => vals.map((v, i) => {
-    const x = pad + (i / (n - 1)) * (w - 2 * pad);
+    const slot = n - vals.length + i;                  // right-align
+    const x = pad + (slot / (n - 1)) * (w - 2 * pad);
     const y = pad + (1 - (v - min) / range) * (h - 2 * pad);
     return [Math.round(x * 10) / 10, Math.round(y * 10) / 10] as const;
   });
   const pa = map(a), pb = map(b);
-  const line = (p: readonly (readonly [number, number])[]) => p.map((q) => q.join(',')).join(' ');
-  const area = (p: readonly (readonly [number, number])[]) =>
-    `M ${p[0][0]},${h} ` + p.map((q) => `L ${q[0]},${q[1]}`).join(' ') + ` L ${p[n - 1][0]},${h} Z`;
-  return { aLine: line(pa), aArea: area(pa), bLine: line(pb) };
+  const line = (p: readonly (readonly [number, number])[]) => p.length > 1 ? p.map((q) => q.join(',')).join(' ') : '';
+  const area = (p: readonly (readonly [number, number])[]) => p.length > 1
+    ? `M ${p[0][0]},${h} ` + p.map((q) => `L ${q[0]},${q[1]}`).join(' ') + ` L ${p[p.length - 1][0]},${h} Z` : '';
+  const dot = (p: readonly (readonly [number, number])[]) => p.length === 1 ? { cx: p[0][0], cy: p[0][1] } : null;
+  return { aLine: line(pa), aArea: area(pa), bLine: line(pb), aDot: dot(pa), bDot: dot(pb) };
 }
 
 function delta(cur: number, prev: number | null | undefined, goodDown: boolean) {
@@ -136,9 +142,11 @@ const SectionTitle = ({ icon, children, className = '' }: { icon: React.ReactNod
 
 export default function CtemScopesRedesign() {
   const qc = useQueryClient();
+  const router = useRouter();
   const { hasPermission } = usePermissions();
   const canEdit = hasPermission('risks:risk_register:edit');
   const [selId, setSelId] = useState<number | null>(null);
+  const [showAllCw, setShowAllCw] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({ name: '', cadence: 'quarterly', name_contains: '', departments: '' });
@@ -230,6 +238,7 @@ export default function CtemScopesRedesign() {
   const fb = s.findings || 1;
   const alePos = s.ale != null && s.aleMin != null && s.p95 != null ? Math.max(6, Math.min(94, Math.round(((s.ale - s.aleMin) / Math.max(1, s.p95 - s.aleMin)) * 100))) : 50;
   const cwByFramework = s.frameworks.map((f) => `${f.name} ${f.controls}`).join(' · ');
+  // NOTE: frameworks[].tested = tested EFFECTIVE (matches the header's "tested"), fixed server-side
   const findingsHref = `/vulnerabilities?ctem_scope_id=${s.id}&ctem_scope_name=${encodeURIComponent(s.name)}`;
 
   const stages = [
@@ -630,7 +639,7 @@ export default function CtemScopesRedesign() {
                     <div className="relative h-[74px] w-[74px] shrink-0">
                       <svg width="74" height="74" viewBox="0 0 74 74">
                         <circle cx="37" cy="37" r="30" fill="none" stroke="#eef1f4" strokeWidth="8" />
-                        <circle cx="37" cy="37" r="30" fill="none" stroke={progressColor} strokeWidth="8" strokeLinecap="round" strokeDasharray={`${(progressPct / 100) * CIRC} ${CIRC}`} transform="rotate(-90 37 37)" />
+                        {progressPct > 0 && <circle cx="37" cy="37" r="30" fill="none" stroke={progressColor} strokeWidth="8" strokeLinecap="round" strokeDasharray={`${(progressPct / 100) * CIRC} ${CIRC}`} transform="rotate(-90 37 37)" />}
                       </svg>
                       <div className="absolute inset-0 flex items-center justify-center">
                         <span className="text-[17px] font-bold tabular-nums text-slate-900">{progressPct}%</span>
@@ -646,9 +655,11 @@ export default function CtemScopesRedesign() {
                   <div className="mt-3.5 border-t border-slate-100 pt-3">
                     <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Findings over cycles</p>
                     <svg viewBox="0 0 240 56" preserveAspectRatio="none" className="h-11 w-full">
-                      <path d={pair.aArea} fill="rgba(30,212,176,0.12)" />
-                      <polyline points={pair.aLine} fill="none" stroke="#1ed4b0" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-                      <polyline points={pair.bLine} fill="none" stroke="#e11d48" strokeWidth={2} strokeDasharray="3 3" strokeLinecap="round" strokeLinejoin="round" />
+                      {pair.aArea && <path d={pair.aArea} fill="rgba(30,212,176,0.12)" />}
+                      {pair.aLine && <polyline points={pair.aLine} fill="none" stroke="#1ed4b0" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />}
+                      {pair.aDot && <circle cx={pair.aDot.cx} cy={pair.aDot.cy} r={3} fill="#1ed4b0" />}
+                      {pair.bLine && <polyline points={pair.bLine} fill="none" stroke="#e11d48" strokeWidth={2} strokeDasharray="3 3" strokeLinecap="round" strokeLinejoin="round" />}
+                      {pair.bDot && <circle cx={pair.bDot.cx} cy={pair.bDot.cy} r={3} fill="#e11d48" />}
                     </svg>
                     <div className="mt-1.5 flex gap-3.5">
                       <LineKey color="#1ed4b0" label="findings" />
@@ -676,7 +687,7 @@ export default function CtemScopesRedesign() {
                       <Link key={m.id} href={`/assets/${m.id}`} className="flex items-center gap-2.5 rounded-lg border border-transparent p-2 transition hover:border-slate-200 hover:bg-slate-50">
                         <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: riskColor(m.risk) }} />
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-[12.5px] font-medium text-slate-900">{m.name}</p>
+                          <p className="truncate text-[12.5px] font-medium text-slate-900" title={m.name}>{m.name}</p>
                           <p className="mt-px text-[10.5px] text-slate-400">{m.type}</p>
                         </div>
                         <span className="shrink-0 text-right">
@@ -713,20 +724,34 @@ export default function CtemScopesRedesign() {
                       </tr>
                     </thead>
                     <tbody>
-                      {s.cw.map((c) => {
+                      {(showAllCw ? s.cw : s.cw.slice(0, 8)).map((c) => {
                         const ts = tierStyle(c.tier);
+                        // parsed-framework controls have a real evidence page; Unified-Library controls open the library
+                        const href = c.kind === 'parsed_framework_control' && c.control_id ? `/erm/framework-controls/${c.control_id}`
+                          : c.kind === 'normalized_control' ? '/control-library' : null;
                         return (
-                          <tr key={`${c.fw}-${c.code}`} className="cursor-pointer border-t border-slate-100 hover:bg-slate-50">
+                          <tr key={`${c.kind}-${c.control_id ?? c.code}`} onClick={() => href && router.push(href)}
+                            className={`border-t border-slate-100 ${href ? 'cursor-pointer hover:bg-slate-50' : ''}`}
+                            title={href ? (c.kind === 'normalized_control' ? 'Open the Unified Control Library' : 'Open this control — evidence & test history') : undefined}>
                             <td className="whitespace-nowrap px-3 py-2 text-slate-500">{c.fw}</td>
-                            <td className="px-3 py-2 text-slate-700"><span className="font-mono font-medium text-slate-900">{c.code}</span>&nbsp;&nbsp;{c.title}</td>
+                            <td className="px-3 py-2 text-slate-700">
+                              {href ? <Link href={href} onClick={(e) => e.stopPropagation()} className="font-mono font-medium text-primary-700 hover:underline">{c.code}</Link>
+                                    : <span className="font-mono font-medium text-slate-900">{c.code}</span>}
+                              &nbsp;&nbsp;{c.title}
+                            </td>
                             <td className="px-3 py-2 text-right font-semibold tabular-nums text-slate-900">{c.findings}</td>
-                            <td className="px-3 py-2"><span className={`rounded-full px-2.5 py-0.5 text-[10.5px] font-semibold ${ts.className}`}>{ts.label}</span></td>
+                            <td className="px-3 py-2"><span className={`whitespace-nowrap rounded-full px-2.5 py-0.5 text-[10.5px] font-semibold ${ts.className}`}>{ts.label}</span></td>
                           </tr>
                         );
                       })}
                     </tbody>
                   </table>
                 </div>
+                {s.cw.length > 8 && (
+                  <button onClick={() => setShowAllCw((v) => !v)} className="mt-2 text-[12px] font-medium text-primary-700 hover:underline">
+                    {showAllCw ? 'Show fewer' : `Show all ${s.cw.length} controls`}
+                  </button>
+                )}
                 <p className="mt-2.5 text-[10.5px] text-slate-400">
                   &ldquo;Only claimed&rdquo; becomes &ldquo;tested&rdquo; when real evidence lands — a re-scan that no longer sees the finding, or a retest recorded against the control.
                 </p>
