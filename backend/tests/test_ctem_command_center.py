@@ -14,7 +14,7 @@ from sqlalchemy.orm import sessionmaker
 from grc.models import (
     ITAsset, Vulnerability, VulnerabilityAssetLink, ReachabilitySnapshot,
     VulnerabilityControlLink, ControlEffectivenessEvidence, VulnTicketLink,
-    RiskSimulationRun, ParsedFrameworkControl, UploadedFramework, Risk,
+    RiskSimulationRun, ParsedFrameworkControl, UploadedFramework, Risk, RiskAssetLink,
 )
 from grc.services import ctem_scopes as svc
 from grc.services.choke_points import coverage
@@ -33,7 +33,7 @@ def db():
     engine = create_engine("sqlite://")
     for m in (ITAsset, Vulnerability, VulnerabilityAssetLink, ReachabilitySnapshot,
               VulnerabilityControlLink, ControlEffectivenessEvidence, VulnTicketLink,
-              RiskSimulationRun, UploadedFramework, ParsedFrameworkControl, Risk):
+              RiskSimulationRun, UploadedFramework, ParsedFrameworkControl, Risk, RiskAssetLink):
         m.__table__.create(engine)
     s = sessionmaker(bind=engine)()
     _seed(s)
@@ -205,5 +205,7 @@ def test_portfolio_shape_matches_design_contract(db):
     assert s["top"][0]["id"] == 10 and s["top"][0]["breaks"] == "1 path"
     # honest nulls — no real source
     assert s["owner"] is None and s["ale"] is None and s["p95"] is None
+    # per-scope FAIR: nothing real linked → null figure, and the UI is told WHY (0 linked, 0 run)
+    assert s["fair"] == {"risks_linked": 0, "risks_quantified": 0, "currency": None}
     # trend: no closed cycles yet → just the live point (real, short)
     assert s["tFind"] == [3] and s["tDang"] == [1] and s["prevFind"] is None

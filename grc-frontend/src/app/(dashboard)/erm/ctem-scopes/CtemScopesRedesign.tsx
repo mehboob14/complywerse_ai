@@ -50,6 +50,7 @@ interface Scope {
   fixes: number; fixesOpen: number; fixesResolved: number;
   // per-scope FAIR has NO real source (risks aren't scope-linked) → null, rendered honestly
   ale: number | null; aleMin: number | null; p95: number | null; aleAfter: number | null;
+  fair?: { risks_linked: number; risks_quantified: number; currency?: string | null } | null;
   buckets: { ranked: number; undeterminable: number; chainless: number; severed: number };
   analysable?: { real_vulnerabilities: number; informational: number } | null;
   frameworks: Framework[]; machines: Machine[]; top: Finding[];
@@ -542,12 +543,34 @@ export default function CtemScopesRedesign() {
                 <Card className="flex flex-col p-4">
                   <SectionTitle icon={<Coins className="h-[15px] w-[15px] text-emerald-600" />} className="mb-3">Financial exposure</SectionTitle>
                   {s.ale == null ? (
-                    <div className="rounded-xl bg-amber-50 p-3">
-                      <p className="text-[13px] font-semibold text-slate-800">Not quantified for this scope</p>
-                      <p className="mt-1 text-[11.5px] leading-snug text-slate-600">
-                        Risk quantification (FAIR) is portfolio-level and risks aren&apos;t linked to a scope yet, so a per-scope figure would be invented.
-                        {quantify?.demo_only && ' The only portfolio run on file used [DEMO] sample risks — add real risks to quantify.'}
-                      </p>
+                    <div className="flex flex-1 flex-col gap-3">
+                      <div className="rounded-xl bg-amber-50 p-3">
+                        <p className="text-[13px] font-semibold text-slate-800">Not quantified yet — no invented number</p>
+                        <p className="mt-1 text-[11.5px] leading-snug text-slate-600">
+                          A dollar figure needs a real risk, tied to this scope&apos;s machines, with loss estimates and a FAIR run.
+                          {quantify?.demo_only && ' The only risks on file are [DEMO] samples, which are excluded.'}
+                        </p>
+                      </div>
+                      {/* what would drive the number — all real, already on this page */}
+                      <div>
+                        <p className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">What would drive it</p>
+                        <ul className="mt-1.5 space-y-1 text-[11.5px] text-slate-600">
+                          <li><b className="tabular-nums text-rose-700">{s.dangerous}</b> findings with a reachable attack path on <b className="text-slate-800">{s.machines.filter((m) => m.findings > 0).length}</b> machine{s.machines.filter((m) => m.findings > 0).length === 1 ? '' : 's'}</li>
+                          {s.top.slice(0, 3).map((f) => (
+                            <li key={f.id} className="truncate" title={f.title}>· {f.title}</li>
+                          ))}
+                          <li><b className="tabular-nums text-slate-800">{s.fixes}</b> ticket{s.fixes === 1 ? '' : 's'} raised · <b className="tabular-nums text-slate-800">{s.tested + (s.verified ?? 0)}</b>/{s.controls} controls proven</li>
+                        </ul>
+                      </div>
+                      {/* live checklist — ticks come from real state */}
+                      <div>
+                        <p className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">To quantify this scope</p>
+                        <ol className="mt-1.5 space-y-1 text-[11.5px] text-slate-600">
+                          <li className="flex items-start gap-1.5"><span className={`mt-[3px] h-2 w-2 shrink-0 rounded-full ${(s.fair?.risks_linked ?? 0) > 0 ? 'bg-emerald-500' : 'bg-slate-300'}`} />1. Create a real risk in the register and link it to {s.machines[0]?.name ?? 'a machine in this scope'} <span className="text-slate-400">({s.fair?.risks_linked ?? 0} linked)</span></li>
+                          <li className="flex items-start gap-1.5"><span className={`mt-[3px] h-2 w-2 shrink-0 rounded-full ${(s.fair?.risks_quantified ?? 0) > 0 ? 'bg-emerald-500' : 'bg-slate-300'}`} />2. Give it loss estimates and run its FAIR simulation <span className="text-slate-400">({s.fair?.risks_quantified ?? 0} run)</span></li>
+                          <li className="flex items-start gap-1.5"><span className="mt-[3px] h-2 w-2 shrink-0 rounded-full bg-slate-300" />3. The annualised loss appears here, summed across linked risks</li>
+                        </ol>
+                      </div>
                     </div>
                   ) : (<>
                   <p className="text-[32px] font-bold leading-none tabular-nums text-slate-900">{money(s.ale)}</p>
@@ -564,7 +587,7 @@ export default function CtemScopesRedesign() {
                   </>)}
                   <div className="mt-auto border-t border-slate-100 pt-3.5">
                     {s.aleAfter != null && <p className="text-[11px] text-slate-500">If the {s.dangerous} dangerous findings are fixed, modelled loss drops to <b className="text-emerald-700">{money(s.aleAfter)}</b>.</p>}
-                    <Link href="/erm/risks" className="mt-2 inline-block text-[12px] font-medium text-primary-700 hover:underline">Open the risk dashboard →</Link>
+                    <Link href={s.ale == null ? '/erm/risks/list' : '/erm/risks'} className="mt-2 inline-block text-[12px] font-medium text-primary-700 hover:underline">{s.ale == null ? 'Open the risk register →' : 'Open the risk dashboard →'}</Link>
                   </div>
                 </Card>
               </div>

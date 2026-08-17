@@ -388,8 +388,9 @@ def portfolio(db: Session, tenant_id: int) -> Dict[str, Any]:
             "tested": tiers.get("tested_effective", 0), "failed": tiers.get("tested_failed", 0),
             "verified": tiers.get("remediation_verified", 0), "claimed": tiers.get("attested_only", 0) + tiers.get("stale", 0),
             "fixes": mob.get("tickets", 0), "fixesOpen": mob.get("open", 0), "fixesResolved": mob.get("resolved", 0),
-            # per-scope FAIR has no real source (risks aren't scope-linked) → null, honestly
-            "ale": None, "aleMin": None, "p95": None, "aleAfter": None,
+            # per-scope FAIR: REAL (non-[DEMO]) risks linked to the scope's assets, summed
+            # over each risk's latest completed FAIR run. Null when nothing real is linked.
+            **_scope_fair(db, tenant_id, asset_ids),
             "buckets": {"ranked": cov["findings_ranked"], "undeterminable": cov["findings_undeterminable"],
                         "chainless": cov["findings_chainless"], "severed": cov["findings_severed"]},
             "analysable": cc["prioritise"].get("analysable"),
@@ -399,6 +400,45 @@ def portfolio(db: Session, tenant_id: int) -> Dict[str, Any]:
             "cw": cw,
         })
     return {"scopes": out, "quantify": _cc_quantify(db, tenant_id)}
+
+
+def _scope_fair(db: Session, tenant_id: int, asset_ids: List[int]) -> Dict[str, Any]:
+    """Per-scope FAIR from REAL data only: risks linked (grc_risk_asset_links) to
+    the scope's assets, excluding [DEMO] samples, each contributing its latest
+    COMPLETED risk-scoped simulation. Sums are honest (independent-risk upper
+    bound; no correlation modelled). Also reports how many linked risks lack a
+    run, so the UI can say precisely what unlocks the number instead of inventing it."""
+    from ..models import Risk, RiskAssetLink, RiskSimulationRun
+    out = {"ale": None, "aleMin": None, "p95": None, "aleAfter": None,
+           "fair": {"risks_linked": 0, "risks_quantified": 0, "currency": None}}
+    if not asset_ids:
+        return out
+    # DISTINCT on ids only — Risk carries json columns, and Postgres has no
+    # equality operator for json, so DISTINCT over the whole row 500s.
+    risk_ids = [rid for (rid,) in db.query(Risk.id).join(RiskAssetLink, RiskAssetLink.risk_id == Risk.id).filter(
+        Risk.tenant_id == tenant_id, RiskAssetLink.asset_id.in_(asset_ids),
+        ~Risk.title.like("[DEMO]%")).distinct().all()]
+    out["fair"]["risks_linked"] = len(risk_ids)
+    if not risk_ids:
+        return out
+    ale = amin = p95 = 0.0
+    n = 0
+    ccy = None
+    for rid in risk_ids:
+        run = db.query(RiskSimulationRun).filter(
+            RiskSimulationRun.risk_id == rid, RiskSimulationRun.scope == "risk",
+            RiskSimulationRun.status == "completed", RiskSimulationRun.ale_mean.isnot(None),
+        ).order_by(RiskSimulationRun.completed_at.desc().nullslast(), RiskSimulationRun.id.desc()).first()
+        if not run:
+            continue
+        n += 1
+        ale += float(run.ale_mean or 0); amin += float(run.p5 or 0); p95 += float(run.p95 or 0)
+        ccy = ccy or run.currency
+    out["fair"]["risks_quantified"] = n
+    out["fair"]["currency"] = ccy
+    if n:
+        out.update({"ale": round(ale), "aleMin": round(amin), "p95": round(p95)})
+    return out
 
 
 def _cc_prioritise(db: Session, tenant_id: int, vuln_ids: List[int]) -> Dict[str, Any]:
