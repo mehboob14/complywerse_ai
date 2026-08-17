@@ -127,8 +127,6 @@ function delta(cur: number, prev: number | null | undefined, goodDown: boolean) 
   return { text, color };
 }
 
-const CIRC = 2 * Math.PI * 30;
-
 /* ───────────────────────── small UI atoms ───────────────────────── */
 
 const Card = ({ className = '', ...props }: React.HTMLAttributes<HTMLDivElement>) => (
@@ -252,15 +250,11 @@ export default function CtemScopesRedesign() {
 
   const covTotal = Math.max(1, s.tested + s.failed + (s.verified ?? 0) + s.claimed);
   const pair = sparkPair(s.tFind, s.tDang, 240, 56, 6);
-  const progressPct = s.cycleOpen ? Math.round((s.fixes / Math.max(1, s.dangerous)) * 100) : 100;
-  const progressColor = progressPct >= 66 ? '#10b981' : progressPct >= 34 ? '#f59e0b' : '#e11d48';
   const dF = delta(s.findings, s.prevFind, false);
   const dD = delta(s.dangerous, s.prevDang, true);
   const dM = delta(s.fixes, s.prevMob, false);
   const fb = s.findings || 1;
   const alePos = s.ale != null && s.aleMin != null && s.p95 != null ? Math.max(6, Math.min(94, Math.round(((s.ale - s.aleMin) / Math.max(1, s.p95 - s.aleMin)) * 100))) : 50;
-  const cwByFramework = s.frameworks.map((f) => `${f.name} ${f.controls}`).join(' · ');
-  // NOTE: frameworks[].tested = tested EFFECTIVE (matches the header's "tested"), fixed server-side
   const findingsHref = `/vulnerabilities?ctem_scope_id=${s.id}&ctem_scope_name=${encodeURIComponent(s.name)}`;
 
   const stages = [
@@ -304,7 +298,8 @@ export default function CtemScopesRedesign() {
             )}
           </div>
 
-          {/* ── portfolio KPI band ── */}
+          {/* ── portfolio KPI band — only when there is more than one scope to roll up ── */}
+          {SCOPES.length > 1 && (
           <Card className="flex items-stretch divide-x divide-slate-100 overflow-hidden">
             <KpiCell label="Scopes" value={portfolio.scopes} sub={`${portfolio.openCycles} cycles open`} title="Named slices of the attack surface you run the loop over." />
             <KpiCell label="Attack surface" value={portfolio.assets} sub="assets monitored" title="Distinct assets matching at least one scope's membership rule." />
@@ -328,6 +323,7 @@ export default function CtemScopesRedesign() {
               </div>
             </div>
           </Card>
+          )}
 
           {/* ── scope switcher — only when there is more than one scope to switch between ── */}
           {SCOPES.length > 1 && (
@@ -469,7 +465,6 @@ export default function CtemScopesRedesign() {
                   <span><b className="tabular-nums text-slate-900">{s.fixesResolved}</b> fixed</span>
                   <span><b className="tabular-nums text-slate-900">{s.verified ?? 0}</b> fix verified by re-scan</span>
                   <span><b className="tabular-nums text-slate-900">{s.tested + (s.verified ?? 0)}</b>/{s.controls} controls proven effective</span>
-                  <span>vs last cycle: <b className={`tabular-nums ${dD.color}`}>{dD.text}</b> dangerous</span>
                   {s.cycleOpen && <span className="ml-auto text-[11px] text-slate-400">Closing the cycle freezes this line as the record.</span>}
                 </div>
               </Card>
@@ -551,17 +546,6 @@ export default function CtemScopesRedesign() {
                           {quantify?.demo_only && ' The only risks on file are [DEMO] samples, which are excluded.'}
                         </p>
                       </div>
-                      {/* what would drive the number — all real, already on this page */}
-                      <div>
-                        <p className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">What would drive it</p>
-                        <ul className="mt-1.5 space-y-1 text-[11.5px] text-slate-600">
-                          <li><b className="tabular-nums text-rose-700">{s.dangerous}</b> findings with a reachable attack path on <b className="text-slate-800">{s.machines.filter((m) => m.findings > 0).length}</b> machine{s.machines.filter((m) => m.findings > 0).length === 1 ? '' : 's'}</li>
-                          {s.top.slice(0, 3).map((f) => (
-                            <li key={f.id} className="truncate" title={f.title}>· {f.title}</li>
-                          ))}
-                          <li><b className="tabular-nums text-slate-800">{s.fixes}</b> ticket{s.fixes === 1 ? '' : 's'} raised · <b className="tabular-nums text-slate-800">{s.tested + (s.verified ?? 0)}</b>/{s.controls} controls proven</li>
-                        </ul>
-                      </div>
                       {/* live checklist — ticks come from real state */}
                       <div>
                         <p className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">To quantify this scope</p>
@@ -628,25 +612,8 @@ export default function CtemScopesRedesign() {
 
                 {/* cycle progress + trend */}
                 <Card className="p-4">
-                  <SectionTitle icon={<BarChart3 className="h-[15px] w-[15px] text-primary-700" />} className="mb-3">Cycle progress</SectionTitle>
-                  <div className="flex items-center gap-3.5">
-                    <div className="relative h-[74px] w-[74px] shrink-0">
-                      <svg width="74" height="74" viewBox="0 0 74 74">
-                        <circle cx="37" cy="37" r="30" fill="none" stroke="#eef1f4" strokeWidth="8" />
-                        {progressPct > 0 && <circle cx="37" cy="37" r="30" fill="none" stroke={progressColor} strokeWidth="8" strokeLinecap="round" strokeDasharray={`${(progressPct / 100) * CIRC} ${CIRC}`} transform="rotate(-90 37 37)" />}
-                      </svg>
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <span className="text-[17px] font-bold tabular-nums text-slate-900">{progressPct}%</span>
-                      </div>
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-[12px] leading-snug text-slate-600">
-                        {s.cycleOpen ? `${s.fixes} of ${s.dangerous} dangerous findings mobilised into fixes` : `Cycle closed — ${s.fixes} of ${s.dangerous} were mobilised`}
-                      </p>
-                      <p className="mt-1.5 text-[11px] text-slate-400">{s.cycleOpen ? `Cycle #${s.cycleNo} · day ${s.cycleDay ?? 0}` : s.lastClosed ? `Frozen ${s.lastClosed}` : 'No cycle yet'}</p>
-                    </div>
-                  </div>
-                  <div className="mt-3.5 border-t border-slate-100 pt-3">
+                  <SectionTitle icon={<BarChart3 className="h-[15px] w-[15px] text-primary-700" />} className="mb-3">Trend across cycles</SectionTitle>
+                  <div>
                     <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Findings over cycles</p>
                     <svg viewBox="0 0 240 56" preserveAspectRatio="none" className="h-11 w-full">
                       {pair.aArea && <path d={pair.aArea} fill="rgba(30,212,176,0.12)" />}
@@ -701,7 +668,6 @@ export default function CtemScopesRedesign() {
               <Card className="p-4">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <SectionTitle icon={<ShieldCheck className="h-[15px] w-[15px] text-primary-700" />}>Where these controls come from</SectionTitle>
-                  <span className="text-[11px] text-slate-400">{cwByFramework}</span>
                 </div>
                 <p className="mb-3 mt-1.5 max-w-3xl text-[11.5px] text-slate-500">
                   Matched from each finding&apos;s weakness type (CWE) to your uploaded frameworks by exact control code — not AI,
