@@ -152,7 +152,7 @@ export default function CtemScopesRedesign() {
   const [form, setForm] = useState({ name: '', cadence: 'quarterly', name_contains: '', departments: '' });
 
   // ONE call for the whole portfolio — every scope's command-center numbers.
-  const { data, isLoading } = useQuery<Portfolio>({
+  const { data, isLoading, isError, error: loadError, refetch } = useQuery<Portfolio>({
     queryKey: ['ctem-portfolio'],
     queryFn: async () => (await ctemScopesApi.portfolio()).data,
   });
@@ -220,6 +220,20 @@ export default function CtemScopesRedesign() {
 
   if (isLoading) {
     return <div className="flex items-center gap-2 py-16 justify-center text-slate-500"><Loader2 className="h-5 w-5 animate-spin" /> Loading exposure program…</div>;
+  }
+  if (isError) {
+    // A failed load is NOT "no scopes" — never show the create-your-first-scope state on an error.
+    const status = (loadError as any)?.response?.status;
+    return (
+      <div className="mx-auto max-w-lg rounded-2xl border border-rose-200 bg-rose-50 p-5 text-center">
+        <AlertTriangle className="mx-auto mb-2 h-6 w-6 text-rose-600" />
+        <p className="text-[13.5px] font-semibold text-slate-900">Couldn&apos;t load the exposure program</p>
+        <p className="mt-1 text-[12px] text-slate-600">
+          {status === 401 || status === 403 ? 'Your session has expired or you lack permission — sign in again and reload.' : `The server returned an error${status ? ` (${status})` : ''}.`}
+        </p>
+        <button onClick={() => refetch()} className="mt-3 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-[12px] font-medium text-slate-700 hover:bg-slate-50">Retry</button>
+      </div>
+    );
   }
   if (!s) {
     return (
