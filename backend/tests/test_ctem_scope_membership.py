@@ -129,6 +129,26 @@ def test_empty_rule_is_empty_scope_not_all(db):
     assert scope_vulnerability_ids(db, TENANT, {}) == []
 
 
+def test_include_closed_toggle(db):
+    # Audit divergence #2: the register's closed toggle was silently defeated
+    # because the resolver forced open-only. Now include_closed is explicit:
+    # default excludes closed (what the live-cycle counters want); True returns
+    # the FULL membership so a scoped register CAN ask for its closed findings.
+    db.add_all([
+        Vulnerability(id=10, tenant_id=TENANT, vuln_id="V-10", title="closed one",
+                      severity="high", status="resolved"),  # a terminal status
+        VulnerabilityAssetLink(vulnerability_id=10, asset_id=1),
+    ])
+    db.commit()
+    rule = {"asset_ids": [1]}                      # asset 1 carries vulns 1,2 (open) + 10 (closed)
+    open_only = set(scope_vulnerability_ids(db, TENANT, rule))
+    full = set(scope_vulnerability_ids(db, TENANT, rule, include_closed=True))
+    assert 10 not in open_only, "default must stay open-only (counters rely on it)"
+    assert open_only == {1, 2}
+    assert 10 in full, "include_closed=True must surface the closed member finding"
+    assert full == {1, 2, 10}
+
+
 # ── membership hash: determinism AND sensitivity ─────────────────────────────
 
 def test_hash_deterministic(db):

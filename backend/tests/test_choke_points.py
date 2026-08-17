@@ -22,7 +22,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from grc.models import ReachabilitySnapshot, ReachabilityStep
-from grc.services.choke_points import rank_choke_points, is_rankable, VIABLE_VERDICTS
+from grc.services.choke_points import rank_choke_points, is_rankable
+from grc.modules.vuln_management.attack.verdict import is_viable_verdict
 
 TENANT = 1
 T0 = datetime(2026, 8, 1, 12, 0, 0)
@@ -114,7 +115,7 @@ def test_decomposition_is_self_contained(db):
     assert len(top["chains"]) == top["chain_count"] == 3
     for ch in top["chains"]:
         assert {"asset_id", "snapshot_id", "verdict"} <= set(ch)
-        assert ch["verdict"] in VIABLE_VERDICTS
+        assert is_viable_verdict(ch["verdict"])
 
 
 def test_empty_when_no_viable_chains(db):

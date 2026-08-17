@@ -121,6 +121,14 @@ Resolve INC0010001 → sync → plan `applied` → reopen re-ticket.
 **CWE list (18):** CWE-20, 22, 94, 122, 129, 200, 289, 327, 346, 347, 359, 400,
 428, 441, 862, 918, 1287, 1321.
 
+**Coverage gap (the L2 business-case number).** Of the 18 CWEs in the finding
+set, only **6 are in the 25-row hand table** (CWE-22, 94, 200, 327, 862, 918);
+**12 are outside** it (CWE-20, 122, 129, 289, 346, 347, 359, 400, 428, 441,
+1287, 1321). So **findings carrying two-thirds of the distinct weakness types
+get only the generic vuln-mgmt/KEV controls — no specific control mapping
+today.** That is the measured case for building L0/L1/L2 (or, as an interim,
+hand-adding those 12 rows). Decision deferred to the product owner.
+
 Interpretation: "~60 controls" was pre-matcher-fix inflation (already corrected
 in ledger A5 → 33+1). "~40 keys" assumed described-weakness classes would ~2×
 the 18 real CWEs; raw CWE count is 18. Phase 4 is no longer starving — viable
@@ -155,4 +163,26 @@ chains exist (6 dangerous findings).
 
 ---
 
-*Generated 17 Aug 2026. No code, schema, or data was modified during this audit.*
+## Resolution (17 Aug 2026, same day — after audit sign-off)
+
+The two leak-class bugs and their siblings were fixed in priority order. Full
+suite after fixes: **438 passed, 3 skipped, 0 failed** (+6 tests vs the audit's
+432).
+
+| # | Sev | Status | What changed |
+|---|---|---|---|
+| 1 | 🔴 | **FIXED** | Scope filter no longer fails open. Resolver error → HTTP 500 ("refusing to return unscoped findings"); 404 for missing scope preserved. `vulnerabilities.py:296-322`. |
+| 2 | 🟠 | **FIXED** | `include_closed` threaded through `_vuln_ids_for_assets`/`scope_vulnerability_ids` (default open-only; register passes True). `ctem_scope_id` + `closed_only` now works. Test `test_include_closed_toggle`. |
+| 3 | 🟠 | **FIXED** | `tests/test_link_retraction.py` (5 tests) pins the soft/hard/reinstate invariant that lived only in live inspection. |
+| 5 | 🟡 | **FIXED** | `choke_points.VIABLE_VERDICTS` deleted; ranking uses `verdict.is_viable_verdict()` (defined through `derive_viability`) — one definition. |
+| 4 | 🟡 | **CORRECTED** | Ledger §1.6 CRQM-API-tests claim marked NOT BUILT (left visible as a tracked gap). |
+| 6 | 🟡 | **CORRECTED** | `viability` is derived, not a stored column — noted in ledger operational findings. |
+| 7 | ⚪ | **CORRECTED** | `link_basis` is a `details` JSON key not a column; freeze partial-commit noted. |
+
+Ledger rows **A7** (fixes #1/#2) and **A8** (fixes #3/#5) added.
+**Not changed:** the two human residuals (prod role-catalogue, viewer UI) —
+still user-owned. The L2/reasoning build remains OPEN, now with a measured
+coverage gap (12/18 CWEs outside the hand table) to justify the go/no-go.
+
+*Audit generated 17 Aug 2026. Resolution applied same day; every fix has a
+runnable test.*

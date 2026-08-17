@@ -72,6 +72,15 @@ def derive_viability(verdict: str, entry_state: Optional[str]) -> str:
         return VIABILITY_UNDETERMINABLE
     return VIABILITY_SEVERED
 
+
+def is_viable_verdict(verdict: str) -> bool:
+    """Does this verdict alone make a chain viable (likely/possible)? THE single
+    definition — expressed through derive_viability so the choke-point ranking
+    reads the same rule as the coverage split and the view payload, instead of a
+    private copy of the tuple that can drift (audit divergence #5). entry_state
+    is irrelevant to the viable branch, so None is safe here."""
+    return derive_viability(verdict, None) == VIABILITY_VIABLE
+
 # The fixed set the signal-% is measured over — positive exploitability signals.
 _EPSS_HOT = 0.10
 

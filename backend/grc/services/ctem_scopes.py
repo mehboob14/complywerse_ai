@@ -75,34 +75,46 @@ def membership_hash(asset_ids: List[int]) -> str:
     return hashlib.sha256(payload.encode()).hexdigest()
 
 
-def _vuln_ids_for_assets(db: Session, tenant_id: int, asset_ids: List[int]) -> List[int]:
-    """OPEN findings on the scope's assets. Closed/terminal statuses are excluded
-    using the SAME list the vulnerability register hides by default, so the
-    command centre's "205" and the scoped register's list can never disagree
-    (found live: 205 vs 201 — the 4 were closed/auto-closed findings)."""
+def _vuln_ids_for_assets(db: Session, tenant_id: int, asset_ids: List[int],
+                         include_closed: bool = False) -> List[int]:
+    """Findings on the scope's assets. By DEFAULT open-only — closed/terminal
+    statuses are excluded using the SAME list the vulnerability register hides by
+    default, so the command centre's "201" and the scoped register's list can
+    never disagree (found live: 205 vs 201 — the 4 were closed/auto-closed).
+
+    ``include_closed=True`` returns the FULL membership set (open + closed). The
+    register uses that so ``ctem_scope_id`` is pure membership and the open/closed
+    policy is the register's own status toggle — otherwise a scoped view could not
+    ask for its closed findings (was silently forced open-only). The counters keep
+    the default, so "in scope" for a live cycle still means open findings."""
     from ..models import Vulnerability, VulnerabilityAssetLink
     from ..modules.vuln_management.routers.vulnerabilities import _LIST_CLOSED_STATUSES  # lazy: avoids a circular import
     if not asset_ids:
         return []
-    rows = db.query(VulnerabilityAssetLink.vulnerability_id).join(
-        Vulnerability, Vulnerability.id == VulnerabilityAssetLink.vulnerability_id,
-    ).filter(
+    filters = [
         Vulnerability.tenant_id == tenant_id,
         VulnerabilityAssetLink.asset_id.in_(asset_ids),
-        or_(Vulnerability.status.is_(None), ~Vulnerability.status.in_(_LIST_CLOSED_STATUSES)),
-    ).distinct().all()
+    ]
+    if not include_closed:
+        filters.append(or_(Vulnerability.status.is_(None), ~Vulnerability.status.in_(_LIST_CLOSED_STATUSES)))
+    rows = db.query(VulnerabilityAssetLink.vulnerability_id).join(
+        Vulnerability, Vulnerability.id == VulnerabilityAssetLink.vulnerability_id,
+    ).filter(*filters).distinct().all()
     return [r[0] for r in rows]
 
 
-def scope_vulnerability_ids(db: Session, tenant_id: int, membership_rule: Optional[Dict[str, Any]]) -> List[int]:
+def scope_vulnerability_ids(db: Session, tenant_id: int, membership_rule: Optional[Dict[str, Any]],
+                            include_closed: bool = False) -> List[int]:
     """THE scope→findings function. The register filter AND the cycle counters
     both call this, so "in scope" has exactly one definition — a future
     refactor of either cannot silently drift them apart (the invariant proven
     by the register==resolver identity checks, now structural not incidental).
     Distinct by construction (via _vuln_ids_for_assets), so a mixed scope
     whose explicit list and rule both match an asset counts its findings
-    once."""
-    return _vuln_ids_for_assets(db, tenant_id, resolve_scope_assets(db, tenant_id, membership_rule))
+    once. ``include_closed`` is threaded through: default open-only (counters);
+    the register passes True for membership and applies its own status toggle."""
+    return _vuln_ids_for_assets(db, tenant_id, resolve_scope_assets(db, tenant_id, membership_rule),
+                                include_closed=include_closed)
 
 
 def compute_stage_counts(

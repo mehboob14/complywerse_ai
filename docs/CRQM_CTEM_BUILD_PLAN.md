@@ -20,6 +20,8 @@ guarantees); **C** = user decision; **D** = inventory-gated connectors;
 | A2 Prioritized-counter non-vacuity fixture | LANDED | `test_ctem_stage_counters.py`: out-of-scope `first_seen` asserted EXCLUDED + backfill split + absent-when-none. |
 | A3 Enrich the 4 reachability gap-findings | DECLINED | The 4 (ids 273/127/131/134) are CVE-less Nessus info findings — no CVE/CWE to enrich FROM (enrichment is CVE→NVD→CWE). Their "unlikely" is genuine un-derivability, not a fixable gap. Real issue is E4 (engine defaulting). |
 | A5 Crosswalk matcher: substring → hierarchical; real CSF rule | LANDED (`becf5ea`, 17 Aug) | Found by the user's "how do you get 50" challenge, not by review: `_control_matches` was a bare substring match — PCI `4.1` linked 1.4.1/9.4.1/11.4.1…, `3.4` linked 9.3.4, `7.1` linked 12.7.1; 16 of the scope's 38 PCI links were noise. CSF links (ID.RA-5, PR.AC-3) were accidents of the loose `NIST` prefix; the real CSF rule never fired (prefix mismatch). Fixed: hierarchical match (34-case self-check), CSF alias, CSF rule → ID.RA-1 + DE.CM-8. Re-map routed through the SOFT-retraction path (confirmed: evidence #128 on ID.RA-5 has `retracted_at`, row preserved; 6 live). **Coverage restated (correction, not supersession)**: build-time claim was 22/215 findings linked, 37 controls; the "60 controls" card was pre-fix and inflated; TRUE now: 23/205 findings linked → 33 parsed controls (+1 Unified Library) with links, 177 auto links. Known residual: PCI patterns are v3.2.1 numbering on a v4.0 upload (6.5.x/4.1.x/7.1.x meaning drift) — cured structurally by A6, not patched here. |
+| A7 Audit divergence #1/#2 — scope filter fail-open + closed-toggle | LANDED (17 Aug) | #1: `vulnerabilities.py:296-322` no longer swallows a resolver error into an UNFILTERED tenant register — the `except` now raises HTTP 500 ("refusing to return unscoped findings"); the 404 for a missing scope moved out of the try so it stays a clean not-found. #2: `_vuln_ids_for_assets`/`scope_vulnerability_ids` gained `include_closed` (default False → counters unchanged); the register passes True so `ctem_scope_id` is pure membership and its own status toggle handles open/closed (`closed_only` now works). Test: `test_ctem_scope_membership.test_include_closed_toggle`. |
+| A8 Audit divergence #3/#5 — retraction test + DRY viable predicate | LANDED (17 Aug) | #3: `tests/test_link_retraction.py` (5) pins soft-keeps-row-and-hides-from-derivation / hard-deletes / reinstate-restores / soft-idempotent / hard-cannot-reinstate — the invariant that lived only in live inspection is now a failing-if-inverted test. #5: `choke_points.VIABLE_VERDICTS` tuple deleted; ranking calls `verdict.is_viable_verdict()` (defined THROUGH `derive_viability`), so the ranking predicate and the coverage split read one definition. |
 | A6 Reasoned, re-runnable control mapping (P1–P5) | OPEN — awaiting go | Plan of record: `docs/CTEM_VALIDATE_REASONING_PLAN.md`. Reason once per (weakness key × corpus version), store decision+rationale+provenance, apply deterministically, re-reason on change (completeness sweep weekly; re-ask only on version bump). Absorbs E4's engine half for no-CVE findings (the L1 described-weakness classifier) and the reach-view copy that was widened into E4 — ONE obligation, not two ledger rows. Reasoned links get their own marker `auto:reasoned:<decision_id>` + a new `link_basis` value flowing into evidence-summary; the `existing_auto` prune filter is widened deliberately, with tests. Retrieval = hybrid keyword (pgvector 0.8.0 is available on the server but NOT installed in the tenant DB; no infra change). |
 | A4 Remaining rule dimensions in the harness | LANDED | Resolver supports exactly asset_ids / departments / asset_types / name_contains (no tag/subnet). All four + AND-narrowing already tested in `test_ctem_scope_membership.py`. |
 | Verdict-engine concluded-vs-defaulted diagnostic | LANDED | Phase 4 doc: 11 genuinely severed + 4 enrichment-un-derivable. Structural distinction now shipped as E4 (`viability` field + three-lever copy). |
@@ -178,6 +180,10 @@ evidence trail. The user confirms — the model never silently self-updates.
   monotonicity (adding a control never increases loss); reproducibility
   (same seed → identical output).
 - API tests: tenant isolation, draft/active lifecycle, immutability of runs.
+  **NOT BUILT (audit 17 Aug, divergence #4).** Only the 13 engine unit tests in
+  `test_crqm_engine.py` exist; there is no API-level test for tenant isolation,
+  lifecycle, or run immutability. This line was an overclaim — corrected here,
+  left visible rather than deleted so the gap is tracked (candidate follow-up).
 - Acceptance: create scenario → build model → simulate → read curve → compare
   two control options → every number traceable to stored assumptions; existing
   risk screens/reports unchanged for non-quantified risks except the new
@@ -503,6 +509,15 @@ nothing. Matches FAIR's 10–30 well-formed-scenarios guidance and is fully
 reversible.
 
 ## Operational findings (recorded, not silently fixed)
+
+- **Audit wording corrections (17 Aug, divergences #6/#7)**: (#6) chain
+  `viability` is DERIVED at read time via `derive_viability`, never a stored
+  column on `grc_reachability_snapshots` — earlier phrasing implying a stored
+  field is wrong. (#7) `link_basis` is a KEY inside the evidence `details` JSON
+  (`control_assurance.py:198`), not a table column; and `freeze_cycle` writes
+  `discovered_total`/`mobilized_total` inside a swallow-all `try/except`
+  (`ctem_scopes.py`), so a mid-freeze failure commits a partially-populated
+  freeze — acceptable (the freeze's core counts+hash are set first) but noted.
 
 - **Consented bulk-accept carried matcher noise (assumed → checked → re-settled)**:
   ASSUMED — the Phase 2.5 round verified consent mechanics, counting

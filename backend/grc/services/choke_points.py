@@ -29,7 +29,6 @@ from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 
-VIABLE_VERDICTS = ("likely", "possible")
 ALGORITHM_VERSION = "chokepoint-1.0.0:finding-x-viable-chains"
 
 
@@ -54,6 +53,7 @@ def rank_choke_points(db: Session, tenant_id: int,
               chains: [{asset_id, snapshot_id, verdict}]}], rank 1 = highest.
     """
     from ..models import ReachabilitySnapshot
+    from ..modules.vuln_management.attack.verdict import is_viable_verdict  # one definition, lazily (circular-safe)
 
     if vulnerability_ids is not None and not vulnerability_ids:
         return []
@@ -81,7 +81,7 @@ def rank_choke_points(db: Session, tenant_id: int,
 
     by_finding: Dict[int, List[Dict[str, Any]]] = {}
     for (vuln_id, asset_id), r in latest.items():
-        if r.verdict not in VIABLE_VERDICTS:
+        if not is_viable_verdict(r.verdict):
             continue
         by_finding.setdefault(vuln_id, []).append(
             {"asset_id": asset_id, "snapshot_id": r.id, "verdict": r.verdict})

@@ -294,28 +294,37 @@ def list_vulnerabilities(
         elif not include_closed:
             query = query.filter(Vulnerability.status.notin_(_LIST_CLOSED_STATUSES))
     if ctem_scope_id:
-        # THE shared scope→findings helper — the SAME function the cycle
-        # counters call, so this register and the counts beside it cannot
-        # drift apart (one definition, structural not incidental).
+        # THE shared scope→findings helper — the SAME function the cycle counters
+        # call, so this register and the counts beside it cannot drift apart (one
+        # definition, structural not incidental). include_closed=True → this is
+        # pure MEMBERSHIP; the open/closed policy is the status toggle above, so
+        # `ctem_scope_id` composes with include_closed / closed_only instead of
+        # being silently forced open-only.
+        from ....models import CtemScope
+        from ....services.ctem_scopes import scope_vulnerability_ids
+        _scope = db.query(CtemScope).filter(
+            CtemScope.id == ctem_scope_id,
+            CtemScope.tenant_id.in_(user_tenants),
+        ).first()
+        if not _scope:
+            raise HTTPException(status_code=404, detail="CTEM scope not found")
         try:
-            from ....models import CtemScope
-            from ....services.ctem_scopes import scope_vulnerability_ids
-            _scope = db.query(CtemScope).filter(
-                CtemScope.id == ctem_scope_id,
-                CtemScope.tenant_id.in_(user_tenants),
-            ).first()
-            if not _scope:
-                raise HTTPException(status_code=404, detail="CTEM scope not found")
-            _scoped_vuln_ids = scope_vulnerability_ids(db, _scope.tenant_id, _scope.membership_rule)
-            if _scoped_vuln_ids:
-                query = query.filter(Vulnerability.id.in_(_scoped_vuln_ids))
-            else:
-                query = query.filter(False)  # empty scope → no rows, honestly
-        except HTTPException:
-            raise
-        except Exception:
+            _scoped_vuln_ids = scope_vulnerability_ids(
+                db, _scope.tenant_id, _scope.membership_rule, include_closed=True)
+        except Exception as exc:
+            # FAIL LOUD, never WIDE. A scope that cannot resolve must NOT fall
+            # through to an unfiltered tenant-wide register — that would silently
+            # show every finding in the tenant. Surface 500 instead of swallowing.
             import logging
-            logging.getLogger(__name__).exception("ctem scope filter failed (non-fatal)")
+            logging.getLogger(__name__).exception("ctem scope filter failed")
+            raise HTTPException(
+                status_code=500,
+                detail="Could not resolve the CTEM scope filter; refusing to return unscoped findings.",
+            ) from exc
+        if _scoped_vuln_ids:
+            query = query.filter(Vulnerability.id.in_(_scoped_vuln_ids))
+        else:
+            query = query.filter(False)  # empty scope → no rows, honestly
     if assigned_to:
         query = query.filter(Vulnerability.assigned_to == assigned_to)
     if cve_id:
