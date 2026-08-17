@@ -19,10 +19,12 @@ guarantees); **C** = user decision; **D** = inventory-gated connectors;
 | A1 Auto-created plan shape + provenance | LANDED | `itsm_service._ensure_remediation_plan` stamps system approver + self-declared source; hermetic test asserts fields; counter-attribution nuance in Phase 5 doc. Reuse/dedup half also pinned: `test_push_reuses_existing_plan_no_second_plan` asserts a push onto a finding with an existing plan reuses it (no second plan). |
 | A2 Prioritized-counter non-vacuity fixture | LANDED | `test_ctem_stage_counters.py`: out-of-scope `first_seen` asserted EXCLUDED + backfill split + absent-when-none. |
 | A3 Enrich the 4 reachability gap-findings | DECLINED | The 4 (ids 273/127/131/134) are CVE-less Nessus info findings — no CVE/CWE to enrich FROM (enrichment is CVE→NVD→CWE). Their "unlikely" is genuine un-derivability, not a fixable gap. Real issue is E4 (engine defaulting). |
+| A5 Crosswalk matcher: substring → hierarchical; real CSF rule | LANDED (`becf5ea`, 17 Aug) | Found by the user's "how do you get 50" challenge, not by review: `_control_matches` was a bare substring match — PCI `4.1` linked 1.4.1/9.4.1/11.4.1…, `3.4` linked 9.3.4, `7.1` linked 12.7.1; 16 of the scope's 38 PCI links were noise. CSF links (ID.RA-5, PR.AC-3) were accidents of the loose `NIST` prefix; the real CSF rule never fired (prefix mismatch). Fixed: hierarchical match (34-case self-check), CSF alias, CSF rule → ID.RA-1 + DE.CM-8. Re-map routed through the SOFT-retraction path (confirmed: evidence #128 on ID.RA-5 has `retracted_at`, row preserved; 6 live). **Coverage restated (correction, not supersession)**: build-time claim was 22/215 findings linked, 37 controls; the "60 controls" card was pre-fix and inflated; TRUE now: 23/205 findings linked → 33 parsed controls (+1 Unified Library) with links, 177 auto links. Known residual: PCI patterns are v3.2.1 numbering on a v4.0 upload (6.5.x/4.1.x/7.1.x meaning drift) — cured structurally by A6, not patched here. |
+| A6 Reasoned, re-runnable control mapping (P1–P5) | OPEN — awaiting go | Plan of record: `docs/CTEM_VALIDATE_REASONING_PLAN.md`. Reason once per (weakness key × corpus version), store decision+rationale+provenance, apply deterministically, re-reason on change (completeness sweep weekly; re-ask only on version bump). Absorbs E4's engine half for no-CVE findings (the L1 described-weakness classifier) and the reach-view copy that was widened into E4 — ONE obligation, not two ledger rows. Reasoned links get their own marker `auto:reasoned:<decision_id>` + a new `link_basis` value flowing into evidence-summary; the `existing_auto` prune filter is widened deliberately, with tests. Retrieval = hybrid keyword (pgvector 0.8.0 is available on the server but NOT installed in the tenant DB; no infra change). |
 | A4 Remaining rule dimensions in the harness | LANDED | Resolver supports exactly asset_ids / departments / asset_types / name_contains (no tag/subnet). All four + AND-narrowing already tested in `test_ctem_scope_membership.py`. |
 | Verdict-engine concluded-vs-defaulted diagnostic | LANDED | Phase 4 doc: 11 genuinely severed + 4 enrichment-un-derivable. Structural distinction now shipped as E4 (`viability` field + three-lever copy). |
 | CTEM command center (per-scope loop overview) | LANDED | Answered the visibility gap by GROWING `erm/ctem-scopes` — not a new module. Counter row → 5-stage loop strip (added the `prioritise` counter the API already returned); below it, 4 downstream cards from a new `ctem_scopes.command_center` aggregator that REUSES each stage's own service, scope-filtered via `scope_vulnerability_ids`: prioritise (`choke_points.coverage/rank` gained a `vulnerability_ids` filter), validate (control links → `tier_for_ref`), mobilise (`VulnTicketLink`), quantify (latest PORTFOLIO run — risks aren't scope-linked, so labelled portfolio, never a faked per-scope $). Read-only endpoint `GET /erm/ctem/scopes/{id}/command-center`. Tests: `test_ctem_command_center.py` (scope isolation on all four cards + coverage filter). |
-| B1 ServiceNow PDI + two-stage live verification | OPEN — yours | The one item between Phase 5 and unqualified done. Provision a PDI, configure creds in the connectors UI, then: (1) dormant adapter alone via `/connectors` test+sync; (2) full push→resolve(-only, not closed)→applied loop + reopen re-ticket. |
+| B1 ServiceNow PDI + two-stage live verification | IN PROGRESS — yours (17 Aug) | PDI `dev396862` provisioned by the user; connector #16 (`servicenow`, ticketing) saved via the connectors UI, status connected; `CONNECTOR_MASTER_KEY` set so creds are Fernet-encrypted at rest. Stage (1) test+save passed. Stage (2) push PROVEN live: VULN-284 (node-tar, rank #1) → `INC0010001` (link row #1, 09:56:45); Mobilise tile 0→1 on the command centre. REMAINING (yours): set INC0010001 to Resolved in the PDI → sync → plan `applied` (not verified) → Mobilise "0 open · 1 done"; then reopen → re-ticket check. |
 | B2 Prod role-catalogue check | OPEN — yours | Empty catalogue fails closed = everyone-admin, so no gate bites. Needs prod inspection; empty → E7 becomes next build. Highest-leverage half-hour. |
 | B3 Viewer-login UI hide check | OPEN — yours | ~2 min; API-403 proven 9/9. Creating the viewer role populates the catalogue (overlaps B2). |
 | C1 no-push rule / private remote | OPEN — yours | 25+ commits, one working tree; bundle covers loss but not history/CI/2nd-machine. Decide consciously. |
@@ -213,7 +215,10 @@ evidence trail. The user confirms — the model never silently self-updates.
   vulnerability detail "Linked Controls" panel; `/control-library/assurance/
   evidence-summary` (tier distribution + **link coverage surfaced honestly**
   — dev tenant at build time: 22/215 findings linked, 37 controls with links
-  out of 3,529 parsed — a roadmap number, not a hidden gap) and
+  out of 3,529 parsed — a roadmap number, not a hidden gap. **Correction
+  17 Aug 2026 (A5)**: after the matcher fix and re-map, 23/205 findings
+  linked → 33 parsed controls (+1 Unified Library); the interim "50/60
+  controls" figures included substring-match noise and are withdrawn) and
   `/controls/{kind}/{id}/evidence` for the per-control panel.
 - Named follow-ups, deliberately not implicit: an evidence panel inside the
   CT&A workbench's control view, and blending automated tiers into the
@@ -498,6 +503,21 @@ nothing. Matches FAIR's 10–30 well-formed-scenarios guidance and is fully
 reversible.
 
 ## Operational findings (recorded, not silently fixed)
+
+- **Consented bulk-accept carried matcher noise (assumed → checked → re-settled)**:
+  ASSUMED — the Phase 2.5 round verified consent mechanics, counting
+  reconciliation, retraction and provenance, and the user's bulk auto-map
+  accept was taken as a correct projection. CHECKED (17 Aug, prompted by the
+  user asking how "50 controls" were chosen) — ten links read against their
+  control statements: `4.1`→9.4.1 physical media, `3.4`→9.3.4 visitor logs,
+  `7.1`→12.7.1 staff screening; 16 of 38 PCI links and both CSF links were
+  substring/prefix accidents, so the accepted projection contained noise the
+  review never looked at — mechanical reconciliation is not semantic
+  validation. RE-SETTLED — matcher made hierarchical, CSF rule made real,
+  scope re-mapped through soft-retraction (evidence preserved, one row
+  retracted), coverage restated in A5. Institutional fix: semantic checking
+  (rationale-per-link + a battery on a WITHHELD holdout) is part of the
+  definition of done in A6, not a role nobody holds.
 
 - **RBAC catalogue is lazily populated**: Permission rows are created from the
   static matrix only when an admin saves a role (`admin_router.
