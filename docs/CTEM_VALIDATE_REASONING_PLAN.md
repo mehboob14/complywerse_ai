@@ -55,7 +55,8 @@ Same coverage, ~3k judgments instead of 700k, stable answers, citeable "why".
 L0 Control corpus index   all controls the tenant has: ParsedFrameworkControl (+framework, version),
                           NormalizedControl (Unified Control Library), InternalControl.
                           → normalised text (code, title, statement, domain, framework, version)
-                          → embeddings + keyword index. Rebuilt on upload/edit (corpus_version bump).
+                          → hybrid keyword index (embeddings optional later; see Retrieval note).
+                          Rebuilt on upload/edit (corpus_version bump).
 
 L1 Weakness key           per finding: CWE id (+ parents via cwe_hierarchy), CVE description, CVSS
                           vector, product/component, scanner plugin family, KEV/EPSS.
@@ -79,8 +80,10 @@ L2 Reasoned mapping       per (weakness_key × corpus_version × prompt_version)
                           provenance=legacy, confidence=medium, and are re-judged like everything
                           else (one of them produced the noise this plan exists to fix).
 
-L3 Governance             review queue (generalised AI panel). Tenant policy: auto-accept when
-                          published-backed or ≥high confidence; else human. Rejections remembered.
+L3 Governance             review queue (generalised AI panel). Tenant policy at launch: auto-accept
+                          ONLY published-backed decisions; every reasoned decision (any confidence)
+                          goes to a human until P5's withheld-holdout battery clears ≥0.9, after which
+                          widening is a recorded policy change. Rejections remembered.
                           Re-reasoning writes a NEW version and shows a diff; never silently flips
                           an accepted decision.
 
