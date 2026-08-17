@@ -46,7 +46,13 @@ ALWAYS_APPLICABLE_VULN_MGMT: List[ControlIdentifier] = [
     ("ISO27002", "8.8"),             # ISO 27002 control 8.8
     ("NIST", "RA-5"),                # NIST 800-53 RA-5 — vuln monitoring and scanning
     ("NIST", "SI-2"),                # NIST 800-53 SI-2 — flaw remediation
-    ("NIST-CSF", "DE.CM"),           # NIST CSF Detect / Continuous Monitoring
+    # NIST CSF — precise, publisher-backed (CSF 1.1 informative refs → 800-53 RA-5):
+    # ID.RA-1 "asset vulnerabilities are identified and documented" and DE.CM-8
+    # "vulnerability scans are performed". Was the DE.CM family, which on an
+    # upload lacking DE.CM-8 pulled in DE.CM-1/4/7 (network / malware /
+    # unauthorised-activity monitoring) — not vulnerability management.
+    ("NIST-CSF", "ID.RA-1"),
+    ("NIST-CSF", "DE.CM-8"),
     ("NIS2", "Art.21"),              # NIS2 Article 21 — risk management measures
     ("DORA", "Art.9"),               # DORA Article 9 — protection and prevention
 ]

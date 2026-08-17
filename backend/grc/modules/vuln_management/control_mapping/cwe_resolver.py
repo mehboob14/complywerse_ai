@@ -161,9 +161,14 @@ def _framework_matches(haystacks: List[str], prefix: str) -> bool:
     needle = _normalise_short_code(prefix)
     if not needle:
         return False
+    # Alias: the map says "NIST-CSF" but tenants upload it as "NIST Cybersecurity
+    # Framework" (normalises to NISTCYBERSECURITYFRAMEWORK, which does not contain
+    # NISTCSF). Without this the CSF rules never fired; CSF only got links by
+    # accident via the bare "NIST" prefix + substring code matching.
+    needles = [needle] + (["CYBERSECURITYFRAMEWORK", "CSF"] if needle == "NISTCSF" else [])
     for h in haystacks:
         normalised = _normalise_short_code(h)
-        if needle in normalised:
+        if any(n in normalised for n in needles):
             return True
         # ISO/IEC handling: try with the "IEC" infix removed.
         if "IEC" in normalised:
@@ -173,16 +178,40 @@ def _framework_matches(haystacks: List[str], prefix: str) -> bool:
 
 
 def _control_matches(haystacks: List[str], pattern: str) -> bool:
-    """Case-insensitive substring match on any of the control's identifying
-    strings (control_id, original_reference)."""
+    """HIERARCHICAL match on the control's identifying strings (control_id,
+    original_reference): the code equals the pattern, or is a child of it
+    (pattern followed by a separator). "4.1" matches 4.1 / 4.1.1 / 4.1.2 —
+    and NOT 1.4.1, 9.4.1, 11.4.1.
+
+    Was a bare substring match. Audited live against a PCI DSS v4 upload:
+    CWE-327 → "4.1" leaked into 1.4.1, 5.4.1 … 12.4.1 (physical media, MFA,
+    log review); CWE-200 → "3.4" into 9.3.4 (visitor logs); CWE-862 → "7.1"
+    into 12.7.1 (staff screening). ~17 of 38 PCI links on one scope were that
+    noise — exactly the audit noise the map's docstring warns against.
+    Ambiguity from a leading token is also closed: "A.8.8" no longer matches
+    "A.8.8x" or "AA.8.8"; a code must start at a token boundary."""
     if not pattern:
         return False
     needle = _normalise_code(pattern)
     if not needle:
         return False
+    # Before the match: start of string, or a NAMESPACE separator ("req 4.1",
+    # "pci-dss-4.1"). A "." is NOT allowed there — "1.4.1" contains ".4.1" and
+    # that is precisely the leak. After the match: end, or a CHILD separator.
+    before_seps = " -_/:("
+    after_seps = ".-_/ :()"
     for h in haystacks:
-        if needle in _normalise_code(h):
-            return True
+        code = _normalise_code(h)
+        if not code:
+            continue
+        idx = code.find(needle)
+        while idx != -1:
+            before_ok = idx == 0 or code[idx - 1] in before_seps
+            end = idx + len(needle)
+            after_ok = end == len(code) or code[end] in after_seps
+            if before_ok and after_ok:
+                return True
+            idx = code.find(needle, idx + 1)
     return False
 
 
