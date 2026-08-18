@@ -294,6 +294,12 @@ def _membership_label(rule: Optional[Dict[str, Any]]) -> str:
     return " AND ".join(parts) or "no rule"
 
 
+# Severity → remediation-target days. Mirrors DEFAULT_SLA in the vulnerability
+# register (grc-frontend .../vulnerabilities/page.tsx) so the CTEM ranked list
+# and the register agree on the target when a finding has no explicit due date.
+_DEFAULT_SLA_DAYS = {"critical": 7, "high": 30, "medium": 90, "low": 180, "info": 365}
+
+
 def portfolio(db: Session, tenant_id: int) -> Dict[str, Any]:
     from ..models import CtemScope, CtemCycle, GRCUser, Vulnerability, ITAsset, VulnerabilityAssetLink
     from .choke_points import rank_choke_points
@@ -356,17 +362,26 @@ def portfolio(db: Session, tenant_id: int) -> Dict[str, Any]:
                 v = meta.get(r["vulnerability_id"])
                 if not v:
                     continue
-                sla = None
+                sev = (v.severity or "low").lower()
+                # SLA: the real due date if set; else the severity-default TARGET
+                # (mirrors the register's DEFAULT_SLA) so the most-urgent list never
+                # shows a blank commitment on every row.
                 if v.due_date:
                     d = (v.due_date - now).days
                     sla = f"overdue {abs(d)}d" if d < 0 else f"{d}d left"
+                else:
+                    sla = f"target {_DEFAULT_SLA_DAYS.get(sev, 90)}d"
                 ou = users.get(v.assigned_to) if v.assigned_to else None
                 top.append({
                     "id": v.id, "rank": r["rank"], "title": v.title,
                     "meta": " · ".join(x for x in [v.cve_id or v.cwe_id, (cc["machines"][0]["name"] if cc["machines"] else None)] if x),
                     "breaks": f'{r["chain_count"]} path{"s" if r["chain_count"] != 1 else ""}',
                     "owner": (getattr(ou, "full_name", None) or getattr(ou, "email", None)) if ou else None,
-                    "sla": sla, "sev": (v.severity or "low").lower(),
+                    "sla": sla, "sev": sev,
+                    # WHY this rank: the signals the tie-break ordered on, so the row
+                    # explains itself (a Medium can't sit above a KEV with no reason shown).
+                    "kev": bool(getattr(v, "kev_flag", False)),
+                    "epss": round(float(getattr(v, "epss_score", None) or 0.0), 3) or None,
                 })
 
         # machines with findings count + worst reachable verdict as the risk dot

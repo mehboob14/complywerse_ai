@@ -38,7 +38,7 @@ type Sev = 'critical' | 'high' | 'medium' | 'low';
 
 interface Machine { id: number; name: string; type: string; findings: number; risk: Risk | null }
 interface Framework { name: string; controls: number; tested: number }
-interface Finding { id: number; rank: number; title: string; meta: string; breaks: string; owner: string | null; sla: string | null; sev: Sev }
+interface Finding { id: number; rank: number; title: string; meta: string; breaks: string; owner: string | null; sla: string | null; sev: Sev; kev?: boolean; epss?: number | null }
 interface ControlItem { fw: string; code: string; title: string; findings: number; tier: Tier; control_id?: number; kind?: string; basis?: 'rule' | 'ai' | 'reused' | 'manual' | string; reason?: string }
 
 interface Scope {
@@ -521,17 +521,26 @@ export default function CtemScopesRedesign() {
                       const sv = sevStyle((['critical','high','medium','low'].includes(f.sev) ? f.sev : 'low') as Sev);
                       const overdue = /overdue/.test(f.sla || '');
                       return (
-                        <Link key={f.id} href={`/vulnerabilities/${f.id}`} className="flex items-center gap-3 rounded-lg border border-transparent p-2 transition hover:border-slate-200 hover:bg-slate-50">
+                        <Link key={f.id} href={`/vulnerabilities/${f.id}`} title={f.title} className="flex items-center gap-3 rounded-lg border border-transparent p-2 transition hover:border-slate-200 hover:bg-slate-50">
                           <span className="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md bg-slate-100 text-[11px] font-bold tabular-nums text-slate-500">{f.rank}</span>
                           <div className="min-w-0 flex-1">
                             <p className="truncate text-[12.5px] font-medium text-slate-900">{f.title}</p>
-                            <p className="mt-px truncate text-[11px] text-slate-400">{f.meta} · breaks {f.breaks}</p>
+                            <p className="mt-px truncate text-[11px] text-slate-400">
+                              {f.meta} · breaks {f.breaks}
+                              {f.kev && <span className="ml-1.5 rounded bg-rose-50 px-1 py-0 font-semibold text-rose-700" title="On CISA KEV — actively exploited in the wild. This is why it ranks above findings that break the same number of paths.">actively exploited</span>}
+                              {!f.kev && f.epss != null && f.epss >= 0.1 && <span className="ml-1.5 text-amber-700" title="EPSS — probability of exploitation in the next 30 days. Higher EPSS breaks ties above lower.">EPSS {Math.round(f.epss * 100)}%</span>}
+                            </p>
                           </div>
                           <span className={`shrink-0 text-[10.5px] font-medium ${overdue ? 'text-rose-600' : 'text-slate-500'}`}>{f.sla ?? 'no SLA'}</span>
                           <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${sv.className}`}>{sv.label}</span>
                         </Link>
                       );
                     })}
+                    {s.dangerous > s.top.length && (
+                      <Link href="/vulnerabilities/choke-points" className="block px-2 pt-1 text-[11px] font-medium text-primary-700 hover:underline">
+                        Showing top {s.top.length} of {s.dangerous} dangerous — see the full ranked list →
+                      </Link>
+                    )}
                   </div>
                 </Card>
 
