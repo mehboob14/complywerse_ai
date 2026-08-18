@@ -105,6 +105,8 @@ export interface VulnsWorkspaceProps {
   vulns: Vulnerability[];           // full (unfiltered) list — for KPI fallbacks
   filteredVulns: Vulnerability[];   // already filtered + sorted by the page
   dashboard: VulnDashboard | undefined;
+  scoped?: boolean;   // a CTEM-scope filter is active — tally the band from the scoped rows
+
   /** Runtime domains (scanner plugin-family) for the "By domain" panel — fetched by
       the page (VulnsWorkspace is props-only) since the register's `vulns` is capped. */
   domains?: { family: string; total: number; worst_severity: string }[];
@@ -180,6 +182,7 @@ const TACTICS_ITEMS = [
 ];
 
 export function VulnsWorkspace({
+  scoped = false,
   vulns,
   filteredVulns,
   dashboard,
@@ -240,6 +243,31 @@ export function VulnsWorkspace({
 
   // ─── Aggregates for the KPI strip, the raw→contextual panel and threat band ──
   const agg = useMemo(() => {
+    // SCOPED (a CTEM scope filter is active): the tenant-wide `dashboard`
+    // aggregate would disagree with the scoped list — it showed "205 Total"
+    // over a "(201)" scoped banner on the same screen (caught by the UI
+    // walkthrough 18 Aug). When scoped, tally the band from the scoped rows so
+    // every tile describes the scope, not the tenant.
+    if (scoped) {
+      const rows = vulns ?? [];
+      const sevOf = (v: Vulnerability) => (v.severity || '').toLowerCase();
+      const isUrgent = (v: Vulnerability) => !!v.kev_flag || (v.epss_score ?? 0) >= 0.1 || sevOf(v) === 'critical';
+      const cnt = (f: (v: Vulnerability) => boolean) => rows.filter(f).length;
+      const critical = cnt((v) => sevOf(v) === 'critical');
+      const high = cnt((v) => sevOf(v) === 'high');
+      const medium = cnt((v) => sevOf(v) === 'medium');
+      const kev = cnt((v) => !!v.kev_flag);
+      const exploit = cnt((v) => !!v.kev_flag || (v.epss_score ?? 0) > 0);
+      const urgent = cnt(isUrgent);
+      return {
+        total: rows.length, critical, high, medium,
+        urgent, moderate: cnt((v) => !isUrgent(v) && (sevOf(v) === 'high' || sevOf(v) === 'medium')),
+        low: cnt((v) => !isUrgent(v) && sevOf(v) !== 'high' && sevOf(v) !== 'medium'),
+        kev, exploit, noExploit: rows.length - exploit,
+        withCve: cnt((v) => !!v.cve_id), highTactics: 0, highTacticsWithExploit: 0,
+        highEpss: cnt((v) => (v.epss_score ?? 0) >= 0.1), internetExposed: 0, patch: 0,
+      };
+    }
     const d = dashboard ?? {};
     const sev = d.by_severity ?? {};
     const ctx = d.contextual_priority ?? {};
@@ -271,7 +299,7 @@ export function VulnsWorkspace({
       internetExposed: d.internet_exposed_count ?? 0,
       patch: d.patch_count ?? 0,
     };
-  }, [dashboard, vulns]);
+  }, [dashboard, vulns, scoped]);
 
   // ─── KPI strip — raw severity kept, exploitability/exposure added ──────────
   const STATS = [

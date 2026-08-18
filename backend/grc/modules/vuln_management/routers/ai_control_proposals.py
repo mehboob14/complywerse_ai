@@ -100,10 +100,21 @@ def list_proposals(
     tenant_id = get_user_primary_tenant(current_user, db)
     vuln_ids = _scope_vuln_ids(db, tenant_id, ctem_scope_id)
     items = svc.list_proposals(db, tenant_id, status=status, vulnerability_ids=vuln_ids)
-    from ....models import AiControlProposalRun
+    from ....models import AiControlProposalRun, AiControlProposal
+    from sqlalchemy import func as _f
     last = db.query(AiControlProposalRun).filter(AiControlProposalRun.tenant_id == tenant_id).order_by(
         AiControlProposalRun.started_at.desc()).first()
-    return {"items": items, "count": len(items),
+    # per-status counts for the tab badges — same scope filter, ALL statuses so
+    # the "To review" tab shows its true size (the status-filtered `items` only
+    # holds one tab's rows). Guards the misleading "1 of 1" run line vs 69 queued.
+    cq = db.query(AiControlProposal.status, _f.count(AiControlProposal.id)).filter(
+        AiControlProposal.tenant_id == tenant_id)
+    if vuln_ids is not None:
+        cq = cq.filter(AiControlProposal.vulnerability_id.in_(vuln_ids)) if vuln_ids else cq.filter(False)
+    counts = {"proposed": 0, "accepted": 0, "rejected": 0}
+    for st, n in cq.group_by(AiControlProposal.status).all():
+        counts[st] = n
+    return {"items": items, "count": len(items), "counts": counts,
             "last_run": svc._summary(last) if last else None}
 
 

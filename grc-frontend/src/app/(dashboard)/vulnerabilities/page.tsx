@@ -1048,6 +1048,7 @@ export default function VulnerabilitiesPage() {
           vulns={vulnerabilities ?? []}
           filteredVulns={filteredVulnerabilities}
           dashboard={dashboard}
+          scoped={!!ctemScopeId}
           domains={domainsResp?.domains ?? []}
           loading={isLoading}
           registerType={registerType}

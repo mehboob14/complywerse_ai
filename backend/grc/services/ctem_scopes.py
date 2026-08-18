@@ -314,7 +314,11 @@ def portfolio(db: Session, tenant_id: int) -> Dict[str, Any]:
         open_c = next((c for c in cycles if c.status == "open"), None)
         closed = [c for c in cycles if c.status == "closed" and c.counts]
         cycle_no = len(cycles)
-        cycle_day = (now - open_c.opened_at).days if open_c and open_c.opened_at else None
+        # Calendar-day count, not 24h-rolling: opened today = day 0, tomorrow = day 1.
+        # `(now - opened).days` floors elapsed 24h windows, so it flipped "day 1 → day 2"
+        # mid-morning (at the hour the cycle opened) — confusing for a "day N" label
+        # (caught by the UI walkthrough 18 Aug). Date difference increments at midnight.
+        cycle_day = (now.date() - open_c.opened_at.date()).days if open_c and open_c.opened_at else None
         last_closed = closed[-1].closed_at.strftime("%d %b %Y") if closed and closed[-1].closed_at else None
         # trend + deltas from CLOSED cycles' frozen counts, then the live point.
         # HONESTY: `discovered`/`validated`/`mobilized` in a frozen payload are

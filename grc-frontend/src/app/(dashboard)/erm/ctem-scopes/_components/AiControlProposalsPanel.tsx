@@ -51,6 +51,7 @@ export function AiControlProposalsPanel({ scopeId }: { scopeId: number }) {
     refetchInterval: (q) => ((q.state.data as any)?.last_run?.running ? 3000 : false),
   });
   const items: Proposal[] = data?.items || [];
+  const counts: { proposed?: number; accepted?: number; rejected?: number } = data?.counts || {};
   const last: RunSummary | null = data?.last_run || null;
   const running = !!last?.running;
 
@@ -109,6 +110,7 @@ export function AiControlProposalsPanel({ scopeId }: { scopeId: number }) {
             style={tab === t ? { backgroundColor: '#0f172a' } : undefined}
             className={`rounded-full px-2 py-0.5 ${tab === t ? 'text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
             {t === 'proposed' ? 'To review' : t === 'accepted' ? 'Accepted' : 'Rejected'}
+            {counts[t] != null && <span className="ml-1 tabular-nums opacity-70">{counts[t]}</span>}
           </button>
         ))}
       </div>

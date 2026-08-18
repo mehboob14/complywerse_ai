@@ -97,8 +97,32 @@ def rank_choke_points(db: Session, tenant_id: int,
             "chains": sorted(chains, key=lambda c: c["asset_id"]),
         })
 
-    # count desc, then finding id asc — deterministic, no tie jitter.
-    ranking.sort(key=lambda c: (-c["chain_count"], c["vulnerability_id"]))
+    # Primary sort = leverage (how many viable paths fixing this breaks). BUT when
+    # several findings break the same number of paths (e.g. all "1 path"), a bare
+    # id tie-break is arbitrary — it put a Medium node-tar above a CISA-KEV,
+    # actively-exploited High purely because of a lower row id (caught by the UI
+    # walkthrough 18 Aug). Break equal leverage by REAL risk signal, most urgent
+    # first: KEV (actively exploited) → EPSS (exploit probability) → CVSS/severity
+    # → id (only to stay deterministic).
+    from ..models import Vulnerability
+    _SEV = {"critical": 4, "high": 3, "medium": 2, "low": 1, "info": 0, "informational": 0}
+    sig: Dict[int, tuple] = {}
+    if ranking:
+        try:
+            for v in db.query(Vulnerability.id, Vulnerability.kev_flag, Vulnerability.epss_score,
+                              Vulnerability.cvss_score, Vulnerability.severity).filter(
+                              Vulnerability.id.in_([c["vulnerability_id"] for c in ranking])).all():
+                sig[v.id] = (1 if v.kev_flag else 0, float(v.epss_score or 0.0),
+                             float(v.cvss_score or 0.0), _SEV.get((v.severity or "").lower(), 0))
+        except Exception:
+            # No signal source available (e.g. a snapshot-only test DB) — fall back
+            # to the pure leverage + id order. Never fail ranking over a tie-break.
+            logger.debug("choke ranking: risk-signal lookup unavailable; id tie-break only")
+    def _key(c):
+        kev, epss, cvss, sev = sig.get(c["vulnerability_id"], (0, 0.0, 0.0, 0))
+        # negate the descending dimensions; id ascending last for a stable order.
+        return (-c["chain_count"], -kev, -epss, -cvss, -sev, c["vulnerability_id"])
+    ranking.sort(key=_key)
     for i, c in enumerate(ranking, start=1):
         c["rank"] = i
     return ranking
