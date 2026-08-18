@@ -79,10 +79,10 @@ const sevStyle = (sev: Sev): { label: string; className: string } => ({
 }[sev]);
 
 const tierStyle = (t: Tier): { label: string; className: string } => ({
-  tested: { label: 'tested ✓', className: 'bg-emerald-50 text-emerald-700' },
-  failed: { label: 'tested ✗', className: 'bg-rose-50 text-rose-700' },
+  tested: { label: 'effective ✓', className: 'bg-emerald-50 text-emerald-700' },
+  failed: { label: 'failed ✗', className: 'bg-rose-50 text-rose-700' },
   verified: { label: 'fix verified', className: 'bg-sky-50 text-sky-700' },
-  claimed: { label: 'only claimed', className: 'bg-slate-100 text-slate-600' },
+  claimed: { label: 'claimed', className: 'bg-slate-100 text-slate-600' },
 }[t]);
 
 /** Build a polyline + area path for a sparkline scaled to [w,h]. */
@@ -261,7 +261,7 @@ export default function CtemScopesRedesign() {
     { n: 1, label: 'Scope', value: s.assets, sub: 'machines this scope owns', accent: 'plain' as const },
     { n: 2, label: 'Discover', value: s.findings, sub: `open findings on those ${s.assets}`, accent: 'plain' as const },
     { n: 3, label: 'Prioritise', value: s.dangerous, sub: `of the ${s.findings} have a reachable attack path`, accent: 'rose' as const },
-    { n: 4, label: 'Validate', value: s.controls, sub: `controls cover them · ${s.tested + (s.verified ?? 0)} proven, ${s.failed} failed`, accent: 'plain' as const },
+    { n: 4, label: 'Validate', value: s.controls, sub: `controls cover them · ${s.tested + (s.verified ?? 0)} effective, ${s.failed} failed`, accent: 'plain' as const },
     { n: 5, label: 'Mobilise', value: s.fixes, sub: `tickets raised · ${s.fixesOpen} open · ${s.fixesResolved} done`, accent: 'emerald' as const },
   ];
   // what happens on each arrow (the hand-off between stages)
@@ -315,7 +315,7 @@ export default function CtemScopesRedesign() {
             </div>
             <KpiCell label="Dangerous now" value={portfolio.dangerous} sub="reachable attack paths" valueClass="text-rose-700" title="Findings with a confirmed, reachable attack path." />
             <KpiCell label="Annual exposure" value={portfolio.exposure ?? <span className="text-[15px] font-semibold text-slate-400">not quantified</span>} sub={portfolio.exposure ? `worst case ${portfolio.worst}` : (quantify?.demo_only ? 'only [DEMO] risks on file' : 'no real risks quantified')} title="Portfolio FAIR run. Shown only when computed from real risks." />
-            <div className="flex-[1.05] p-[14px_18px]" title="Share of mapped controls tested effective, across all scopes.">
+            <div className="flex-[1.05] p-[14px_18px]" title="Share of mapped controls tested and effective, across all scopes.">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Control coverage</p>
               <p className="mt-1 text-[26px] font-bold leading-none tabular-nums text-slate-900">{portfolio.coverage}%</p>
               <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-slate-100">
@@ -464,7 +464,7 @@ export default function CtemScopesRedesign() {
                   <span><b className="tabular-nums text-rose-700">{s.dangerous}</b> still reachable</span>
                   <span><b className="tabular-nums text-slate-900">{s.fixesResolved}</b> fixed</span>
                   <span><b className="tabular-nums text-slate-900">{s.verified ?? 0}</b> fix verified by re-scan</span>
-                  <span><b className="tabular-nums text-slate-900">{s.tested + (s.verified ?? 0)}</b>/{s.controls} controls proven effective</span>
+                  <span><b className="tabular-nums text-slate-900">{s.tested + (s.verified ?? 0)}</b>/{s.controls} controls effective</span>
                   {s.cycleOpen && <span className="ml-auto text-[11px] text-slate-400">Closing the cycle freezes this line as the record.</span>}
                 </div>
               </Card>
@@ -510,6 +510,12 @@ export default function CtemScopesRedesign() {
                     <Legend color="#cbd5e1" value={s.buckets.chainless} label="not calculated" />
                     <Legend color="#10b981" value={s.buckets.severed} label="blocked" />
                   </div>
+                  {(() => { const ownerless = s.top.filter((f) => !f.owner).length; return ownerless > 0 ? (
+                    <p className="mb-2 flex items-start gap-1.5 rounded-lg bg-amber-50 px-2.5 py-1.5 text-[10.5px] leading-snug text-amber-800">
+                      <AlertTriangle className="mt-px h-3 w-3 shrink-0" />
+                      <span><b>{ownerless} of these have no owner.</b> A finding must be assigned before its remediation can be approved — assign an owner on the finding page to unblock the fix.</span>
+                    </p>
+                  ) : null; })()}
                   <div className="space-y-0.5">
                     {s.top.length === 0 && (
                       <p className="rounded-lg bg-slate-50 p-3 text-[11.5px] text-slate-500">
@@ -592,7 +598,7 @@ export default function CtemScopesRedesign() {
                   <SectionTitle icon={<ShieldCheck className="h-[15px] w-[15px] text-primary-700" />} className="mb-3.5">Control coverage</SectionTitle>
                   <div className="flex items-baseline gap-2">
                     <span className="text-[30px] font-bold leading-none tabular-nums text-slate-900">{Math.round((s.tested / covTotal) * 100)}%</span>
-                    <span className="text-[11.5px] text-slate-500">tested effective</span>
+                    <span className="text-[11.5px] text-slate-500">effective</span>
                   </div>
                   <div className="my-3 flex h-[9px] overflow-hidden rounded-full bg-slate-100">
                     <div style={{ width: `${(s.tested / covTotal) * 100}%`, background: '#10b981' }} />
@@ -600,7 +606,7 @@ export default function CtemScopesRedesign() {
                     <div style={{ width: `${(s.claimed / covTotal) * 100}%`, background: '#cbd5e1' }} />
                   </div>
                   <div className="flex flex-wrap gap-x-3.5 gap-y-2 text-[11px] text-slate-500">
-                    <Legend color="#10b981" value={s.tested} label="tested" />
+                    <Legend color="#10b981" value={s.tested} label="effective" />
                     <Legend color="#f43f5e" value={s.failed} label="failed" />
                     <Legend color="#cbd5e1" value={s.claimed} label="claimed" />
                   </div>
@@ -729,7 +735,7 @@ export default function CtemScopesRedesign() {
                   </button>
                 )}
                 <p className="mt-2.5 text-[10.5px] text-slate-400">
-                  &ldquo;Only claimed&rdquo; becomes &ldquo;tested&rdquo; when real evidence lands — a re-scan that no longer sees the finding, or a retest recorded against the control.
+                  &ldquo;Claimed&rdquo; becomes &ldquo;effective&rdquo; when real evidence lands — a re-scan that no longer sees the finding, or a retest recorded against the control. &ldquo;Failed&rdquo; means a test ran and the control did not hold.
                 </p>
               </Card>
 

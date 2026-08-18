@@ -316,12 +316,20 @@ export default function VulnerabilitiesPage() {
     return () => { cancelled = true; };
   }, [registerType, queryClient]);
 
-  const tabs = [
+  const tabs = (ctemScopeId ? [
+    // Scoped to a CTEM scope: only the register respects the scope; the other
+    // tabs are tenant-wide analytics, so hide them rather than show numbers that
+    // silently ignore the scope (the "page half-remembers it's scoped" issue).
+    { id: 'vulnerabilities', label: 'Vulnerabilities', icon: Bug },
+  ] : [
     { id: 'overview', label: 'Overview', icon: BarChart3 },
     { id: 'vulnerabilities', label: 'Vulnerabilities', icon: Bug },
     { id: 'departments', label: 'Departments', icon: Building2 },
     { id: 'sla', label: 'SLA Config', icon: Clock },
-  ];
+  ]);
+  // When scoped, only the register tab exists — coerce a stale ?tab= param
+  // (e.g. 'overview') so tenant-wide content/queries never render in scoped mode.
+  const shownTab = ctemScopeId ? 'vulnerabilities' : activeTab;
 
   // CVE-shaped searches must see closed rows too (e.g. auto_closed_decommissioned),
   // otherwise a known CVE like CVE-2025-55130 silently returns 0. Title search stays
@@ -406,7 +414,7 @@ export default function VulnerabilitiesPage() {
       const response = await vulnManagementApi.departments.getAll();
       return response.data as Department[];
     },
-    enabled: activeTab === 'departments',
+    enabled: shownTab === 'departments',
   });
 
   const { data: departmentMembers } = useQuery({
@@ -446,7 +454,7 @@ export default function VulnerabilitiesPage() {
       const response = await vulnManagementApi.sla.get();
       return response.data as SLAConfig[];
     },
-    enabled: activeTab === 'sla',
+    enabled: shownTab === 'sla',
   });
 
   // Departments mutations
@@ -999,7 +1007,7 @@ export default function VulnerabilitiesPage() {
         {/* Overview tab — reuses the standalone Dashboard page component
             verbatim. Conditional mount means its useQuery hooks (with their
             60s refetchInterval) only run while this tab is active. */}
-        {activeTab === 'overview' && (
+        {shownTab === 'overview' && (
           <div className="mt-3">
             <VulnerabilityDashboardPage />
           </div>
@@ -1013,7 +1021,7 @@ export default function VulnerabilitiesPage() {
       </div>
 
       {/* Tab Content */}
-      {activeTab === 'vulnerabilities' && (
+      {shownTab === 'vulnerabilities' && (
       <>
       <div className="px-3 sm:px-6 py-3 bg-[var(--color-subtle)]">
         {/* CTEM scope banner — this list is filtered to ONE scope's machines.
@@ -1404,7 +1412,7 @@ export default function VulnerabilitiesPage() {
       )}
 
       {/* Departments Tab */}
-      {activeTab === 'departments' && (
+      {shownTab === 'departments' && (
         <div className="space-y-3 px-3 sm:px-6 py-3 bg-[var(--color-subtle)]">
           <div className="flex items-center justify-between gap-3">
             <div className="flex-1 max-w-md">
@@ -1639,7 +1647,7 @@ export default function VulnerabilitiesPage() {
       )}
 
       {/* SLA Tab */}
-      {activeTab === 'sla' && (
+      {shownTab === 'sla' && (
         <div className="space-y-3 px-3 sm:px-6 py-3 bg-[var(--color-subtle)]">
           {slaLoading ? (
             <div className="flex h-64 items-center justify-center"><PageLoader size="md" /></div>
