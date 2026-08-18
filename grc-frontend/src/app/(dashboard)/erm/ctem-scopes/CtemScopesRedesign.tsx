@@ -429,22 +429,22 @@ export default function CtemScopesRedesign() {
                       <Link
                         href={[ '/assets', findingsHref, '/vulnerabilities/choke-points', '/control-library/assurance', findingsHref ][i]}
                         className={`block min-w-0 flex-1 rounded-xl border p-2 2xl:p-3 transition hover:border-primary-300 ${
-                          st.accent === 'rose' ? 'border-rose-200 bg-rose-50/60' : st.accent === 'emerald' ? 'border-emerald-200 bg-emerald-50/50' : 'border-slate-200 bg-slate-50'
+                          'border-slate-200 bg-white'
                         }`}
                         title={st.sub}
                       >
                         <div className="flex items-center gap-1.5">
                           {/* bg set inline: .platform-ui forces bg-slate-900 → white surface (globals.css), which hid these */}
                           <span className="inline-flex h-[19px] w-[19px] shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white"
-                            style={{ backgroundColor: st.accent === 'rose' ? '#be123c' : st.accent === 'emerald' ? '#047857' : '#0f172a' }}>{st.n}</span>
+                            style={{ backgroundColor: '#0f172a' }}>{st.n}</span>
                           <span className={`text-[11px] font-semibold uppercase tracking-wide ${
-                            st.accent === 'rose' ? 'text-rose-800' : st.accent === 'emerald' ? 'text-emerald-700' : 'text-slate-600'
+                            'text-slate-500'
                           }`}>{st.label}</span>
                         </div>
                         <p className={`mt-1.5 text-[22px] 2xl:text-[28px] font-bold leading-none tabular-nums ${
                           st.accent === 'rose' ? 'text-rose-700' : st.accent === 'emerald' ? 'text-emerald-700' : 'text-slate-900'
                         }`}>{st.value}</p>
-                        <p className={`mt-1 text-[10.5px] leading-tight 2xl:text-[11px] ${st.accent === 'rose' ? 'text-rose-800' : st.accent === 'emerald' ? 'text-emerald-700' : 'text-slate-500'}`}>{st.sub}</p>
+                        <p className="mt-1 text-[10.5px] leading-tight text-slate-500 2xl:text-[11px]">{st.sub}</p>
                       </Link>
                       {i < stages.length - 1 && (
                         <div className="flex w-[74px] 2xl:w-[92px] shrink-0 flex-col items-center justify-center gap-1 px-1">

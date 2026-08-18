@@ -377,28 +377,28 @@
     color: var(--color-text-inverse);
   }
 
-  .cw-dashboard h1,
-  .governance-light h1 {
+  /* Dashboard typography DEFAULTS. Wrapped in :where() so the element part
+     adds no specificity — a bare <p> still gets 11.5px, but any explicit
+     Tailwind class on the element (text-[22px], font-bold, text-rose-700…)
+     WINS. Before this, `.cw-dashboard p` (0,1,1) silently beat every utility
+     (0,1,0): CTEM loop numbers rendered 11.5px/400/default despite
+     text-[22px] font-bold text-rose-700 — found live 18 Aug. */
+  .cw-dashboard :where(h1),
+  .governance-light :where(h1) {
     font-size: 16px;
     font-weight: 600;
     color: var(--color-text);
   }
 
-  .cw-dashboard h2,
-  .cw-dashboard h3,
-  .governance-light h2,
-  .governance-light h3 {
+  .cw-dashboard :where(h2, h3),
+  .governance-light :where(h2, h3) {
     font-size: 12.5px;
     font-weight: 600;
     color: var(--color-text);
   }
 
-  .cw-dashboard p,
-  .cw-dashboard td,
-  .cw-dashboard th,
-  .governance-light p,
-  .governance-light td,
-  .governance-light th {
+  .cw-dashboard :where(p, td, th),
+  .governance-light :where(p, td, th) {
     font-size: 11.5px;
     font-weight: 400;
     color: var(--color-text);
