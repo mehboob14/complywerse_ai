@@ -11,16 +11,20 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+import re
 from grc.models import (Vulnerability, ITAsset, VulnerabilityAssetLink, NormalizedControl,
-                        VulnerabilityControlLink, AiControlProposal, AiControlProposalRun)
+                        VulnerabilityControlLink, AiControlProposal, AiControlProposalRun,
+                        ParsedFrameworkControl, UploadedFramework)
 from grc.services import ai_control_proposals as svc
 
 TENANT = 1
 
 
 class _Fake:
-    """Scripted model: maps by title keyword → control ids we seeded."""
-    def __init__(self, table): self.t = table
+    """Scripted model: maps by title keyword → control CODES we seeded. Answers with
+    the PROMPT-LOCAL id of each code (parsed from the candidate line), exactly as
+    the real model must. Counts calls so tests can prove reason-once."""
+    def __init__(self, table): self.t = table; self.calls = 0
     @property
     def chat(self):
         outer = self
@@ -28,11 +32,17 @@ class _Fake:
             class completions:
                 @staticmethod
                 def create(**kw):
+                    outer.calls += 1
                     user = kw["messages"][1]["content"]
-                    for key, ids in outer.t.items():
+                    def local_id(code):
+                        m = re.search(r"^\s*(\d+) \| [^|]* \| " + re.escape(code) + r" \|", user, re.M)
+                        return int(m.group(1)) if m else None
+                    for key, codes in outer.t.items():
                         if key in user:
+                            ids = [local_id(c) for c in codes]
                             payload = {"suggestions": [{"control_id": i, "confidence": "high",
-                                                        "reason": f"addresses {key}", "driven_by": "cwe"} for i in ids]}
+                                                        "reason": f"addresses {key}", "driven_by": "cwe"}
+                                                       for i in ids if i is not None]}
                             break
                     else:
                         payload = {"suggestions": [], "no_specific_control_reason": "informational"}
@@ -46,7 +56,8 @@ class _Fake:
 def db():
     e = create_engine("sqlite://")
     for m in (Vulnerability, ITAsset, VulnerabilityAssetLink, NormalizedControl,
-              VulnerabilityControlLink, AiControlProposal, AiControlProposalRun):
+              VulnerabilityControlLink, AiControlProposal, AiControlProposalRun,
+              UploadedFramework, ParsedFrameworkControl):
         m.__table__.create(e)
     s = sessionmaker(bind=e)()
     s.add(ITAsset(id=1, tenant_id=TENANT, name="DESKTOP-CE3EFJB", host_name="DESKTOP-CE3EFJB",
@@ -70,7 +81,7 @@ def db():
     s.close()
 
 
-FAKE = _Fake({"TLS Version 1.1": [7370]})
+FAKE = _Fake({"TLS Version 1.1": ["ULV2-00906"]})
 
 
 def test_generate_writes_proposals_only_never_links(db):
@@ -138,3 +149,55 @@ def test_list_proposals_shape(db):
     it = items[0]
     assert it["control"]["code"] == "ULV2-00906" and it["vulnerability"]["vuln_id"] == "NS-A"
     assert it["status"] == "proposed" and it["confidence"] == "high"
+
+
+# ── reason once, apply many ──────────────────────────────────────────────────
+
+def test_human_accept_on_a_cwe_is_reused_for_later_findings_without_a_model_call(db):
+    fake = _Fake({"TLS Version 1.1": ["ULV2-00906"]})
+    svc.generate_proposals(db, TENANT, client=fake, model="fake"); db.commit()
+    p = db.query(AiControlProposal).one()
+    svc.accept_proposal(db, TENANT, p.id, user_id=42); db.commit()
+    calls_before = fake.calls
+    # a NEW finding arrives with the SAME weakness key (CWE-327)
+    db.add(Vulnerability(id=12, tenant_id=TENANT, vuln_id="NS-C", title="TLS Version 1.0 Protocol Detection",
+                         severity="info", status="open", cwe_id="CWE-327"))
+    db.add(VulnerabilityAssetLink(vulnerability_id=12, asset_id=1)); db.commit()
+    r = svc.generate_proposals(db, TENANT, vulnerability_ids=[12], client=fake, model="fake"); db.commit()
+    assert fake.calls == calls_before, "a human-decided CWE must NOT be re-asked to the model"
+    assert r["findings_reused"] == 1 and r["proposals_reused"] == 1 and r["findings_sent"] == 0
+    q = db.query(AiControlProposal).filter(AiControlProposal.vulnerability_id == 12).one()
+    assert q.status == "accepted" and q.provenance == "reused" and q.decided_by == 42   # the ORIGINAL approver
+    link = db.query(VulnerabilityControlLink).filter(VulnerabilityControlLink.vulnerability_id == 12).one()
+    assert link.normalized_control_id == 7370 and (link.notes or "").startswith("ai_reused:")
+    assert q.control_link_id == link.id
+
+
+def test_human_reject_on_a_cwe_is_never_reproposed_for_later_findings(db):
+    fake = _Fake({"TLS Version 1.1": ["ULV2-00906"]})
+    svc.generate_proposals(db, TENANT, client=fake, model="fake"); db.commit()
+    p = db.query(AiControlProposal).one()
+    svc.reject_proposal(db, TENANT, p.id, user_id=42); db.commit()
+    db.add(Vulnerability(id=12, tenant_id=TENANT, vuln_id="NS-C", title="TLS Version 1.1 Protocol Detection (again)",
+                         severity="info", status="open", cwe_id="CWE-327"))
+    db.add(VulnerabilityAssetLink(vulnerability_id=12, asset_id=1)); db.commit()
+    calls_before = fake.calls
+    r = svc.generate_proposals(db, TENANT, vulnerability_ids=[12], client=fake, model="fake"); db.commit()
+    assert fake.calls == calls_before and r["findings_sent"] == 0       # decided key → no model call
+    assert db.query(AiControlProposal).filter(AiControlProposal.vulnerability_id == 12).count() == 0
+    assert db.query(VulnerabilityControlLink).filter(VulnerabilityControlLink.vulnerability_id == 12).count() == 0
+
+
+def test_reject_a_reused_proposal_unwinds_its_link(db):
+    fake = _Fake({"TLS Version 1.1": ["ULV2-00906"]})
+    svc.generate_proposals(db, TENANT, client=fake, model="fake"); db.commit()
+    p = db.query(AiControlProposal).one()
+    svc.accept_proposal(db, TENANT, p.id, user_id=42); db.commit()
+    db.add(Vulnerability(id=12, tenant_id=TENANT, vuln_id="NS-C", title="TLS Version 1.0 Protocol Detection",
+                         severity="info", status="open", cwe_id="CWE-327"))
+    db.add(VulnerabilityAssetLink(vulnerability_id=12, asset_id=1)); db.commit()
+    svc.generate_proposals(db, TENANT, vulnerability_ids=[12], client=fake, model="fake"); db.commit()
+    q = db.query(AiControlProposal).filter(AiControlProposal.vulnerability_id == 12).one()
+    out = svc.reject_proposal(db, TENANT, q.id, user_id=43, note="not on this box"); db.commit()
+    assert out["unlinked"] is True
+    assert db.query(VulnerabilityControlLink).filter(VulnerabilityControlLink.vulnerability_id == 12).count() == 0

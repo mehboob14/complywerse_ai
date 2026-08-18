@@ -10,8 +10,16 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from grc.models import Vulnerability, NormalizedControl
+from grc.models import Vulnerability, NormalizedControl, ParsedFrameworkControl, UploadedFramework
 from grc.services import ai_control_mapping as m
+
+
+def _pid(cands, ref_id, kind="normalized_control"):
+    """The prompt-local id the model must answer with for a real control row."""
+    for c in cands:
+        if c["kind"] == kind and c["ref_id"] == ref_id:
+            return c["id"]
+    raise AssertionError(f"{kind}:{ref_id} not in shortlist {[(c['kind'], c['ref_id']) for c in cands]}")
 
 TENANT = 1
 
@@ -52,9 +60,24 @@ def test_classifier_never_hides_a_real_weakness_as_inventory():
 @pytest.fixture
 def db():
     engine = create_engine("sqlite://")
-    for mm in (Vulnerability, NormalizedControl):
+    for mm in (Vulnerability, NormalizedControl, UploadedFramework, ParsedFrameworkControl):
         mm.__table__.create(engine)
     s = sessionmaker(bind=engine)()
+    # an uploaded framework (ISO 27001:2022 shape) — the SECOND retrieval source
+    s.add(UploadedFramework(id=100, tenant_id=TENANT, name="ISO/IEC 27001:2022", file_name="iso.xlsx",
+                            file_path="/tmp/iso.xlsx", file_type="xlsx",
+                            uploaded_by=1, is_active=True, is_shared=False))
+    s.add_all([
+        ParsedFrameworkControl(id=1001, uploaded_framework_id=100, control_id="A.8.24", original_reference="A.8.24",
+                               title="Use of cryptography", domain="Technological",
+                               description="Rules for the effective use of cryptography, including cryptographic key management, shall be defined and implemented."),
+        ParsedFrameworkControl(id=1002, uploaded_framework_id=100, control_id="A.8.9", original_reference="A.8.9",
+                               title="Configuration management", domain="Technological",
+                               description="Configurations, including security configurations, of hardware, software, services and networks shall be established, documented, implemented, monitored and reviewed."),
+        ParsedFrameworkControl(id=1003, uploaded_framework_id=100, control_id="A.5.1", original_reference="A.5.1",
+                               title="Policies for information security", domain="Organizational",
+                               description="Information security policy and topic-specific policies shall be defined."),
+    ])
     # REAL control names/codes from the tenant library (see DB), plus decoys
     s.add_all([
         NormalizedControl(id=7551, code="ULV2-01097", name="Ensure authenticity and integrity of application messages",
@@ -85,17 +108,20 @@ def test_shortlist_surfaces_signature_control_over_auth_decoys(db):
            cve_id="CVE-2013-3900", cwe_id="CWE-347",
            description="WinVerifyTrust does not properly validate signatures; authentication of the binary can be bypassed.")
     cands = m.build_candidates(db, v, cwe_name="Improper Verification of Cryptographic Signature", max_candidates=3)
-    ids = [c["id"] for c in cands]
+    ids = [c["ref_id"] for c in cands if c["kind"] == "normalized_control"]
     assert 7551 in ids, ids                       # the integrity control makes the top-3
-    assert ids[0] in (7551, 4915)                 # ranked above the password/MFA decoys
+    assert cands[0]["ref_id"] in (7551, 4915)     # ranked above the password/MFA decoys
 
 
 def test_shortlist_for_tls_and_spooler(db):
     tls = m.build_candidates(db, _v(title="TLS Version 1.1 Protocol Detection", cwe_id="CWE-327"),
-                             cwe_name="Use of a Broken or Risky Cryptographic Algorithm", max_candidates=2)
-    assert tls[0]["id"] == 7370
+                             cwe_name="Use of a Broken or Risky Cryptographic Algorithm", max_candidates=3)
+    kinds_refs = [(c["kind"], c["ref_id"]) for c in tls]
+    assert ("normalized_control", 7370) in kinds_refs, kinds_refs
+    # the FRAMEWORK source is live: ISO A.8.24 "Use of cryptography" competes for the same weakness
+    assert ("parsed_framework_control", 1001) in kinds_refs, kinds_refs
     sp = m.build_candidates(db, _v(title="Microsoft Windows Print Spooler Service Enabled"), max_candidates=2)
-    assert sp[0]["id"] in (7660, 4862)
+    assert sp[0]["ref_id"] in (7660, 4862, 1002)
 
 
 # ── the model boundary: fake client, real validation ─────────────────────────
@@ -120,12 +146,19 @@ def test_unlisted_control_id_is_dropped_never_trusted(db):
     """THE guard: the model names an id we never offered → dropped + recorded,
     never returned as a suggestion."""
     v = _v(title="TLS Version 1.1 Protocol Detection", cwe_id="CWE-327")
+    cands = m.build_candidates(db, v, cwe_name="Use of a Broken or Risky Cryptographic Algorithm", tenant_id=TENANT)
+    ok_ucl = _pid(cands, 7370)                                # a real UCL control, by its PROMPT-LOCAL id
+    ok_fw = _pid(cands, 1001, "parsed_framework_control")     # a real ISO control, ditto
     payload = json.dumps({"suggestions": [
-        {"control_id": 7370, "confidence": "high", "reason": "TLS review", "driven_by": "cwe"},
+        {"control_id": ok_ucl, "confidence": "high", "reason": "TLS review", "driven_by": "cwe"},
+        {"control_id": ok_fw, "confidence": "high", "reason": "ISO crypto rules", "driven_by": "cwe"},
         {"control_id": 999999, "confidence": "high", "reason": "made up", "driven_by": "cwe"},
     ]})
-    r = m.suggest_controls(db, v, client=_FakeClient(payload), model="fake")
-    assert [s["control_id"] for s in r["suggestions"]] == [7370]
+    r = m.suggest_controls(db, v, cwe_name="Use of a Broken or Risky Cryptographic Algorithm",
+                           client=_FakeClient(payload), model="fake")
+    got = {(x["kind"], x["control_id"]) for x in r["suggestions"]}
+    # prompt-local ids are mapped BACK to the real row of the right kind — never leak, never collide
+    assert got == {("normalized_control", 7370), ("parsed_framework_control", 1001)}, got
     assert r["dropped_invalid_ids"] == [999999]
 
 
@@ -169,7 +202,45 @@ def test_prompt_contains_only_offered_candidates_and_the_rules(db):
     v = _v(title="TLS Version 1.1 Protocol Detection", cwe_id="CWE-327")
     r = m.suggest_controls(db, v, client=_FakeClient('{"suggestions":[]}'), model="fake")
     p = r["prompt"]["user"]
-    assert "CANDIDATE CONTROLS" in p and "7370" in p
+    assert "CANDIDATE CONTROLS" in p and "ULV2-00906" in p and "A.8.24" in p   # both sources are offered
     assert "Do NOT suggest them" in r["prompt"]["system"]        # patch-mgmt exclusion
     assert "HARDENING weakness" in r["prompt"]["system"]         # iteration-2 hardening rule
     assert r["prompt_version"] == m.PROMPT_VERSION
+
+
+# ── the coverage gap the audit measured: 12 of the tenant's 18 CWEs are outside
+# the 25-row hand table. For each, with the REAL finding title from the DB, the
+# corpus retrieval must offer candidates (else the model is never asked and the
+# finding stays generic-only forever). Titles are real; expectations are only
+# "non-empty and id-valid" — the semantic pick is the model's, verified in the
+# live battery, not here.
+_UNCOVERED = [
+    ("CWE-20",   "Improper Input Validation",                 "pnpm < 10.34.2 / 11.x < 11.5.3 Multiple Vulnerabilities"),
+    ("CWE-122",  "Heap-based Buffer Overflow",                "RARLAB WinRAR < 7.23 Heap-Based Buffer Overflow (CVE-2026-14191)"),
+    ("CWE-129",  "Improper Validation of Array Index",        "Node.js module vulnerability (array index)"),
+    ("CWE-289",  "Authentication Bypass by Alternate Name",   "Node.js Module node-tar Authentication Bypass"),
+    ("CWE-346",  "Origin Validation Error",                   "Node.js Module Origin Validation"),
+    ("CWE-347",  "Improper Verification of Cryptographic Signature", "WinVerifyTrust Signature Validation CVE-2013-3900 Mitigation"),
+    ("CWE-359",  "Exposure of Private Personal Information",  "Node.js Module Information Exposure"),
+    ("CWE-400",  "Uncontrolled Resource Consumption",         "Node.js Module Denial of Service"),
+    ("CWE-428",  "Unquoted Search Path or Element",           "Microsoft Windows Unquoted Service Path Enumeration"),
+    ("CWE-441",  "Unintended Proxy or Intermediary",          "Node.js Module Proxy Vulnerability"),
+    ("CWE-1287", "Improper Validation of Specified Type of Input", "Node.js Module Type Confusion"),
+    ("CWE-1321", "Improperly Controlled Modification of Object Prototype Attributes", "Node.js Module Prototype Pollution"),
+]
+
+
+@pytest.mark.parametrize("cwe,cwe_name,title", _UNCOVERED, ids=[u[0] for u in _UNCOVERED])
+def test_uncovered_cwe_reaches_the_model_with_valid_candidates(db, cwe, cwe_name, title):
+    v = _v(title=title, cwe_id=cwe, cve_id="CVE-2026-0001")
+    cands = m.build_candidates(db, v, cwe_name=cwe_name, tenant_id=TENANT)
+    assert cands, f"{cwe} produced NO candidates — it would never reach the model"
+    # every candidate is a real row of a known kind, with a prompt-local id 1..N
+    assert all(c["kind"] in ("normalized_control", "parsed_framework_control") for c in cands)
+    assert [c["id"] for c in cands] == list(range(1, len(cands) + 1))
+    # a fake model choosing the top candidate must map back to a real ref of the same kind
+    top = cands[0]
+    r = m.suggest_controls(db, v, cwe_name=cwe_name, model="fake",
+                           client=_FakeClient(json.dumps({"suggestions": [
+                               {"control_id": top["id"], "confidence": "medium", "reason": "x", "driven_by": "cwe"}]})))
+    assert r["suggestions"] and (r["suggestions"][0]["kind"], r["suggestions"][0]["control_id"]) == (top["kind"], top["ref_id"])

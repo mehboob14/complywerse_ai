@@ -20,14 +20,15 @@ import { Sparkles, Loader2, Check, X, RefreshCw } from 'lucide-react';
 interface Proposal {
   id: number; status: 'proposed' | 'accepted' | 'rejected' | string;
   confidence: 'high' | 'medium' | 'low' | string; reason?: string | null; driven_by?: string | null;
-  bucket?: string | null; prompt_version?: string;
+  bucket?: string | null; prompt_version?: string; provenance?: 'model' | 'reused' | string;
   vulnerability: { id: number; vuln_id?: string; title?: string; cve_id?: string | null; cwe_id?: string | null; severity?: string };
-  control: { id: number; code: string; name: string; domain?: string | null };
+  control: { id: number; code: string; name: string; domain?: string | null; kind?: string; framework?: string | null };
   decided_at?: string | null;
 }
 interface RunSummary {
   run_id: string; findings_total: number; findings_inventory: number; findings_sent: number;
   proposals_created: number; proposals_updated: number; model_errors: number; invalid_ids_dropped: number;
+  findings_reused?: number; proposals_reused?: number;
   started_at?: string | null; finished_at?: string | null; running?: boolean; prompt_version: string;
 }
 
@@ -78,7 +79,7 @@ export function AiControlProposalsPanel({ scopeId }: { scopeId: number }) {
         <div>
           <p className="text-[11px] font-medium text-slate-700 flex items-center gap-1">
             <Sparkles className="h-3.5 w-3.5 text-violet-600" /> AI-suggested specific controls
-            <span className="ml-1 font-normal text-slate-500">— from your Unified Control Library. Suggestions only: nothing links until you accept.</span>
+            <span className="ml-1 font-normal text-slate-500">— from your uploaded frameworks and Unified Control Library. Suggestions only: nothing links until you accept; a decision you make on one weakness type is reused for later findings of that type.</span>
           </p>
           {last && (
             <p className="mt-0.5 text-[10px] text-slate-500 flex items-center gap-1">
@@ -86,6 +87,7 @@ export function AiControlProposalsPanel({ scopeId }: { scopeId: number }) {
               {running ? 'Running now' : `Last run${last.finished_at ? ` ${new Date(last.finished_at).toLocaleString()}` : ''}`}:
               {' '}{last.findings_sent} of {last.findings_total - last.findings_inventory} findings analysed,
               {' '}{last.findings_inventory} skipped as informational, {last.proposals_created} new suggestion{last.proposals_created === 1 ? '' : 's'}
+              {last.findings_reused ? ` · ${last.findings_reused} finding${last.findings_reused === 1 ? '' : 's'} settled by reusing your earlier decisions (${last.proposals_reused ?? 0} link${(last.proposals_reused ?? 0) === 1 ? '' : 's'}, no model call)` : ''}
               {last.model_errors ? ` · ${last.model_errors} model error(s)` : ''}{last.invalid_ids_dropped ? ` · ${last.invalid_ids_dropped} invalid id(s) dropped` : ''} · {last.prompt_version}
             </p>
           )}
@@ -143,8 +145,11 @@ export function AiControlProposalsPanel({ scopeId }: { scopeId: number }) {
                   </td>
                   <td className="px-2 py-1.5">
                     <span className="font-mono text-slate-900">{p.control.code}</span>
+                    {p.provenance === 'reused' && (
+                      <span className="ml-1 rounded-full bg-sky-50 px-1.5 py-0 text-[9.5px] font-semibold text-sky-700" title="Applied from a human's earlier decision on the same weakness type — no new model call">reused</span>
+                    )}
                     <div className="text-slate-700">{p.control.name}</div>
-                    {p.control.domain && <div className="text-[10px] text-slate-400">{p.control.domain}</div>}
+                    <div className="text-[10px] text-slate-400">{p.control.framework || p.control.domain}</div>
                   </td>
                   <td className="px-2 py-1.5 text-slate-600 break-words">
                     {p.reason}

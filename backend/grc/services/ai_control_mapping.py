@@ -28,12 +28,12 @@ import logging
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
-from sqlalchemy import or_
+from sqlalchemy import or_, func
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 
-PROMPT_VERSION = "p5-map-1.4"
+PROMPT_VERSION = "p5-map-1.5"
 
 # ── bucket classifier ─────────────────────────────────────────────────────────
 # Titles that are pure inventory / detection notes: facts about the machine, not
@@ -122,9 +122,18 @@ _CONCEPTS: List[Tuple[re.Pattern, List[str]]] = [
     (re.compile(r"cwe-?(119|120|121|122|125|787|416|190)\b|buffer overflow|heap|out.of.bounds|memory corruption|use.after.free"), ["memory protection", "secure coding", "application whitelisting", "endpoint protection", "exploit mitigation"]),
     (re.compile(r"cwe-?(347|295|296|297|345|494|506)\b|signature|code.?sign|winverifytrust|authenticode|integrity of (application|software|message)|tamper"), ["code signing", "software integrity", "authenticity and integrity", "digital signature", "trusted software", "application whitelisting"]),
     (re.compile(r"cwe-?(326|327|328|310|311|319|321|798)\b|weak (cipher|encryption|crypto)|tls\b|ssl\b|rc4|md5|sha-?1|cleartext|plaintext|cipher"), ["cryptograph", "cipher suite", "encryption in transit", "tls", "protocol", "key management"]),
+    # auth BYPASS family (CWE-287's logic-flaw children): the weakness is that a check can be
+    # SKIPPED via an alternate name / path / channel — MFA and password controls do not
+    # address that; canonicalisation, input validation and access-control ENFORCEMENT do.
+    # Placed before the generic auth row so these terms lead the shortlist (live battery
+    # 18 Aug: CWE-289 was mapped to MFA at "high" — the iteration-2 decoy pattern again).
+    (re.compile(r"cwe-?(288|289|290|302|305|294|1390)\b|authentication bypass|bypass by|alternate (name|path|channel)"), ["access control", "authorization", "input validation", "data validation", "canonical", "session management", "secure coding"]),
     (re.compile(r"cwe-?(287|306|287|307|308|522|521|1391)\b|authentication|null session|anonymous|unauthenticated|password"), ["authentication", "multi-factor", "password", "credential", "account"]),
     (re.compile(r"cwe-?(269|250|266|284|285|732|276)\b|privilege|permission|access control|authorization|remotely accessible|share access|log ?in possible"), ["least privilege", "access control", "authorization", "privileged access", "hardening", "remote access"]),
-    (re.compile(r"cwe-?(1321|915|502)\b|prototype pollution|deserializ"), ["input validation", "secure coding", "dependency", "third-party component"]),
+    (re.compile(r"cwe-?(1321|915|502)\b|prototype pollution|deserializ"), ["input validation", "data validation", "validation", "secure coding", "dependency", "third-party component"]),
+    # CWE-441/918/601: the app is made to talk to somewhere it shouldn't (SSRF / open proxy /
+    # redirect) — the 12-uncovered-CWE battery had NO row for it → zero candidates → never judged
+    (re.compile(r"cwe-?(441|918|601)\b|ssrf|server.side request|open proxy|unintended proxy|intermediary|open redirect"), ["input validation", "data validation", "network security", "egress", "access control", "web application", "secure coding"]),
     (re.compile(r"cwe-?(400|770|1333)\b|denial of service|dos\b|rapid reset|resource exhaustion"), ["availability", "resource limit", "denial of service", "capacity", "rate limit"]),
     (re.compile(r"cwe-?(1104|937|1035|1395)\b|outdated|unsupported|end.of.life|obsolete|deprecated"), ["end of life", "unsupported software", "software lifecycle", "asset lifecycle", "secure configuration"]),
     (re.compile(r"service enabled|spooler|unnecessary|listening|open port|remotely accessible|smb|netbios|rdp|telnet|ftp\b"), ["hardening", "least functionality", "unnecessary services", "secure configuration", "baseline configuration", "network security"]),
@@ -159,35 +168,69 @@ def _concept_terms(cwe_id: Optional[str], cwe_name: Optional[str], title: Option
     return primary, secondary
 
 
-def build_candidates(db: Session, vuln, *, cwe_name: Optional[str] = None, max_candidates: int = 40) -> List[Dict[str, Any]]:
-    """Relevance-filtered shortlist from the tenant's normalized controls. Bounded
-    so the prompt stays small and the model cannot pick outside it.
+def build_candidates(db: Session, vuln, *, cwe_name: Optional[str] = None, max_candidates: int = 40,
+                     tenant_id: Optional[int] = None) -> List[Dict[str, Any]]:
+    """Relevance-filtered shortlist from the tenant's WHOLE control corpus —
+    the Unified Control Library AND the uploaded frameworks (ISO/NIST/PCI/CSF
+    parsed controls) — merged and ranked by the same concept scoring. Bounded so
+    the prompt stays small and the model cannot pick outside it.
 
     Built from BOTH weakness-concept synonyms (what the weakness MEANS — the
     fix for iteration 1, where title words missed code-signing controls) AND
-    literal title/description keywords, concept terms ranked first."""
-    from ..models import NormalizedControl
+    literal title/description keywords, concept terms ranked first.
+
+    Each candidate carries `kind` ('normalized_control' | 'parsed_framework_control')
+    and, for framework controls, `framework`; the model sees code+title+statement
+    and picks by a prompt-local `id` (1..N) so the two id-spaces cannot collide.
+    # ponytail: ILIKE over ~3.5k rows is the index; add pgvector when a tenant's
+    # corpus outgrows it or keyword recall measurably misses."""
+    from ..models import NormalizedControl, ParsedFrameworkControl, UploadedFramework
     primary, secondary = _concept_terms(getattr(vuln, "cwe_id", None), cwe_name,
                                         getattr(vuln, "title", None), getattr(vuln, "description", None))
     concepts = primary + secondary
     literal = _keywords(cwe_name, getattr(vuln, "title", None), getattr(vuln, "description", None))
     kws = concepts + [k for k in literal if k not in concepts]
+    if tenant_id is None:
+        tenant_id = getattr(vuln, "tenant_id", None)
+
+    def _like_clauses(*cols):
+        cl = []
+        for k in kws:
+            like = f"%{k}%"
+            cl += [c.ilike(like) for c in cols]
+        return cl
+
+    # ── source 1: Unified Control Library ──
     q = db.query(NormalizedControl.id, NormalizedControl.code, NormalizedControl.name,
                  NormalizedControl.domain, NormalizedControl.statement)
     if kws:
-        clauses = []
-        for k in kws:
-            like = f"%{k}%"
-            clauses += [NormalizedControl.name.ilike(like), NormalizedControl.statement.ilike(like),
-                        NormalizedControl.domain.ilike(like)]
-        q = q.filter(or_(*clauses))
-    rows = q.limit(max_candidates * 6).all()
-    # Rank: a concept-term hit in the NAME weighs most (that's the control's own
+        q = q.filter(or_(*_like_clauses(NormalizedControl.name, NormalizedControl.statement, NormalizedControl.domain)))
+    pool = [{"kind": "normalized_control", "ref_id": r.id, "code": r.code, "title": r.name,
+             "domain": r.domain or "", "framework": "Unified Control Library",
+             "statement": (r.statement or "")} for r in q.limit(max_candidates * 6).all()]
+
+    # ── source 2: uploaded frameworks visible to this tenant (own + shared, active) ──
+    if tenant_id is not None:
+        code_col = func.coalesce(ParsedFrameworkControl.original_reference, ParsedFrameworkControl.control_id)
+        q2 = db.query(ParsedFrameworkControl.id, code_col.label("code"), ParsedFrameworkControl.title,
+                      ParsedFrameworkControl.domain, ParsedFrameworkControl.description,
+                      ParsedFrameworkControl.full_text, UploadedFramework.name.label("fw")
+                      ).join(UploadedFramework, UploadedFramework.id == ParsedFrameworkControl.uploaded_framework_id
+                      ).filter(UploadedFramework.is_active == True,  # noqa: E712
+                               or_(UploadedFramework.tenant_id == tenant_id, UploadedFramework.is_shared == True))  # noqa: E712
+        if kws:
+            q2 = q2.filter(or_(*_like_clauses(ParsedFrameworkControl.title, ParsedFrameworkControl.description,
+                                              ParsedFrameworkControl.full_text, ParsedFrameworkControl.domain)))
+        pool += [{"kind": "parsed_framework_control", "ref_id": r.id, "code": r.code or "", "title": r.title,
+                  "domain": r.domain or "", "framework": r.fw or "",
+                  "statement": (r.description or r.full_text or "")} for r in q2.limit(max_candidates * 6).all()]
+
+    # Rank: a concept-term hit in the TITLE weighs most (that's the control's own
     # words for the weakness), then concept hits anywhere, then literal keyword
-    # hits. Deterministic tie-break on id so the shortlist is reproducible.
-    def score(r):
-        name = (r.name or "").lower()
-        hay = f"{name} {r.statement or ''} {r.domain or ''}".lower()
+    # hits. Deterministic tie-break on (kind, ref_id) so the shortlist is reproducible.
+    def score(c):
+        name = (c["title"] or "").lower()
+        hay = f"{name} {c['statement']} {c['domain']}".lower()
         s = 0
         for k in primary:               # the CWE/title's own concept — dominant
             if k in name: s += 10
@@ -198,9 +241,12 @@ def build_candidates(db: Session, vuln, *, cwe_name: Optional[str] = None, max_c
         for k in literal:
             if k in hay: s += 1
         return s
-    rows = sorted(rows, key=lambda r: (-score(r), r.id))[:max_candidates]
-    return [{"id": r.id, "code": r.code, "title": r.name, "domain": r.domain or "",
-             "statement": (r.statement or "")[:220]} for r in rows]
+    pool.sort(key=lambda c: (-score(c), c["kind"], c["ref_id"]))
+    out = []
+    for i, c in enumerate(pool[:max_candidates], start=1):
+        c = dict(c); c["id"] = i; c["statement"] = c["statement"][:220]
+        out.append(c)
+    return out
 
 
 # ── the prompt ────────────────────────────────────────────────────────────────
@@ -211,6 +257,8 @@ Hard rules:
 - The generic patch-management / vulnerability-management / vulnerability-scanning controls are ALREADY linked by rule. Do NOT suggest them. Suggest only controls that address the SPECIFIC weakness class (e.g. input validation, cryptographic configuration, least privilege, service/protocol hardening, secure configuration baselines, logging/detection of this class of attack).
 - Every suggestion must have: control_id (int, from the candidates), confidence (high|medium|low), reason (ONE sentence that names the weakness and why this control addresses it), driven_by (cve_description|cwe|finding_description).
 - Be conservative. A wrong link is worse than a missing one. Prefer 1-4 strong suggestions over many weak ones.
+- Authentication BYPASS weaknesses (CWE-288/289/290/302/305 — a check skipped via an alternate name, path or channel) are logic/validation flaws: multi-factor authentication and password-policy controls do NOT address them. Map them to input validation / canonicalisation, access-control ENFORCEMENT, session management or secure-coding controls instead.
+- Match the control to the WEAKNESS CLASS, not to a word shared with the finding title. Read the control's statement column: if it does not describe something that would prevent, detect or limit this specific weakness, do not choose it.
 - Distinguish two kinds of no-CVE findings:
   (a) A pure INVENTORY note — a fact about the machine with nothing wrong (software installed, OS identified, users listed, hardware info). Return an empty list and say so in no_specific_control_reason.
   (b) A HARDENING weakness — something enabled, exposed, reachable, or configured that increases attack surface: an unnecessary service running, a registry/share/interface remotely accessible, a legacy protocol or weak cipher allowed, anonymous/null access, signing not required, a default left on. These ARE weaknesses. Map them to secure-configuration / least-functionality / hardening / access-control controls. Do NOT call them informational.
@@ -221,7 +269,7 @@ def build_user_prompt(vuln, candidates: List[Dict[str, Any]], *, cwe_name: Optio
                       nvd_description: Optional[str], asset_type: Optional[str],
                       internet_facing: Optional[bool]) -> str:
     cand_lines = "\n".join(
-        f"  {c['id']} | {c['code']} | {c['title']} | {c['domain']} | {c['statement']}" for c in candidates
+        f"  {c['id']} | {c.get('framework', '')} | {c['code']} | {c['title']} | {c['domain']} | {c['statement']}" for c in candidates
     ) or "  (none)"
     return f"""FINDING
   title: {getattr(vuln, 'title', '') or ''}
@@ -234,7 +282,7 @@ def build_user_prompt(vuln, candidates: List[Dict[str, Any]], *, cwe_name: Optio
   epss: {getattr(vuln, 'epss_score', None) if getattr(vuln, 'epss_score', None) is not None else 'n/a'}   in_kev: {bool(getattr(vuln, 'kev_flag', False))}
   asset_context: {asset_type or 'unknown'}, internet_facing={internet_facing if internet_facing is not None else 'unknown'}
 
-CANDIDATE CONTROLS (choose only from these ids)
+CANDIDATE CONTROLS (choose only from these ids; columns: id | framework | code | title | domain | statement)
 {cand_lines}
 
 Return JSON:
@@ -263,7 +311,8 @@ def suggest_controls(db: Session, vuln, *, asset=None, cwe_name: Optional[str] =
         out["no_specific_control_reason"] = why
         return out
 
-    candidates = build_candidates(db, vuln, cwe_name=cwe_name, max_candidates=max_candidates)
+    candidates = build_candidates(db, vuln, cwe_name=cwe_name, max_candidates=max_candidates,
+                                  tenant_id=getattr(vuln, "tenant_id", None))
     out["candidates"] = len(candidates)
     if not candidates:
         out["no_specific_control_reason"] = "no relevant candidates found in the control library"
@@ -316,9 +365,12 @@ def suggest_controls(db: Session, vuln, *, asset=None, cwe_name: Optional[str] =
         conf = str(s.get("confidence", "low")).lower()
         if conf not in ("high", "medium", "low"):
             conf = "low"
+        c = cand_by_id[cid]
         out["suggestions"].append({
-            "control_id": cid, "code": cand_by_id[cid]["code"], "title": cand_by_id[cid]["title"],
-            "domain": cand_by_id[cid]["domain"], "confidence": conf,
+            # `control_id` = the REAL row id of the chosen kind (name kept for callers/tests);
+            # `kind` says which table it lives in. The prompt-local id never leaves here.
+            "control_id": c["ref_id"], "kind": c["kind"], "framework": c.get("framework", ""),
+            "code": c["code"], "title": c["title"], "domain": c["domain"], "confidence": conf,
             "reason": str(s.get("reason", ""))[:400],
             "driven_by": str(s.get("driven_by", ""))[:40],
         })

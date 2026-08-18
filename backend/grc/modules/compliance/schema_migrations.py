@@ -155,6 +155,12 @@ def _ensure_index(engine: Engine, table: str, column: str, index_name: str) -> N
 # Postgres types. ddl_type may include defaults (e.g. "TIMESTAMP DEFAULT NOW()")
 # for columns we want backfilled on existing rows.
 _COLUMN_ADDS = [
+    # CTEM Validate — proposals may target an uploaded-framework control, and carry provenance
+    ("grc_ai_control_proposals", "parsed_framework_control_id", "INTEGER",
+     "ix_grc_ai_control_proposals_parsed_framework_control_id"),
+    ("grc_ai_control_proposals", "provenance", "VARCHAR(12) DEFAULT 'model' NOT NULL", None),
+    ("grc_ai_control_proposal_runs", "findings_reused", "INTEGER DEFAULT 0", None),
+    ("grc_ai_control_proposal_runs", "proposals_reused", "INTEGER DEFAULT 0", None),
     ("grc_policy_statements", "assigned_to_user_id", "INTEGER",
      "ix_grc_policy_statements_assigned_to_user_id"),
     ("grc_roles", "created_at", "TIMESTAMP DEFAULT NOW()", None),
@@ -972,6 +978,9 @@ def _ensure_for_engine(engine: Engine) -> None:
         # Relax NOT NULL on columns the connector framework needs to leave
         # empty for non-scanner providers. Idempotent.
         _ensure_column_nullable(engine, "grc_integration_connections", "credential_env_prefix")
+        # CTEM Validate: a proposal now targets EITHER a Unified-Library control OR an
+        # uploaded-framework control, so the UCL ref must be nullable.
+        _ensure_column_nullable(engine, "grc_ai_control_proposals", "normalized_control_id")
 
         # One-shot data backfill: re-tag legacy "Framework Assessment #<id>"
         # risks with their actual framework short_code/name so the Risk

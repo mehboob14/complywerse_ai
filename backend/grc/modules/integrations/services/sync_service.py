@@ -268,6 +268,32 @@ class SyncService:
                 logger.exception("post-sync choke-point recompute failed (non-fatal)")
                 db.rollback()
 
+            # ── CTEM Validate: reason over NEW findings ───────────────────────
+            # "Reasoning happens again and again" without a button: every sync,
+            # findings that carry no AI-mapping proposal yet are sent through the
+            # mapper (reason-once/apply-many — a CWE a human already decided is
+            # applied without a model call). Same non-fatal discipline as the
+            # blocks above; the run row records what happened. Only after the
+            # enrichment block so CWE/EPSS/KEV are on the row before it's judged.
+            try:
+                from grc.models import Vulnerability as _V, AiControlProposal as _P
+                _todo = [vid for (vid,) in db.query(_V.id).filter(
+                    _V.tenant_id == tenant_id,
+                    ~_V.id.in_(db.query(_P.vulnerability_id).filter(_P.tenant_id == tenant_id))
+                ).all()]
+                if _todo:
+                    from grc.services.ai_control_proposals import generate_proposals
+                    _s = generate_proposals(db, tenant_id, vulnerability_ids=_todo,
+                                            triggered_by=triggered_by_user_id)
+                    db.commit()
+                    stats["ai_mapping"] = {k: _s.get(k) for k in ("findings_sent", "findings_reused",
+                                                                   "proposals_created", "proposals_reused",
+                                                                   "model_errors")}
+                    logger.info("post-sync AI control mapping: %s (conn=%s)", stats["ai_mapping"], connection_id)
+            except Exception:
+                logger.exception("post-sync AI control mapping failed (non-fatal)")
+                db.rollback()
+
             # ── Outbound write-back retry ─────────────────────────────────────
             # Push (or record-as-skipped) any pending/failed GRC→scanner
             # decision actions for this connection. Runs in this background

@@ -386,7 +386,8 @@ def portfolio(db: Session, tenant_id: int) -> Dict[str, Any]:
                 f["tested"] += 1
         tier_map = {"tested_effective": "tested", "tested_failed": "failed", "remediation_verified": "verified"}
         cw = [{"fw": it["framework"], "code": it["code"], "title": it["title"], "findings": it["findings_covered"],
-               "tier": tier_map.get(it["tier"], "claimed"), "control_id": it["id"], "kind": it["kind"]}
+               "tier": tier_map.get(it["tier"], "claimed"), "control_id": it["id"], "kind": it["kind"],
+               "basis": it.get("basis", "manual"), "reason": it.get("reason", "")}
               for it in cc["validate"].get("items", [])]
 
         out.append({
@@ -490,11 +491,28 @@ def _cc_validate(db: Session, tenant_id: int, vuln_ids: List[int]) -> Dict[str, 
     if not vuln_ids:
         return {"controls": 0, "tiers": {}, "items": [], "by_framework": {}}
     refs: Dict[tuple, int] = {}          # (kind, id) → number of scope findings it covers
+    # provenance per control: how did this control get onto the crosswalk?
+    #   rule   — CWE/vuln-mgmt/KEV crosswalk (auto:cwe:…)      ai — human accepted an AI proposal
+    #   reused — a human's earlier decision on the same CWE, applied    manual — a person linked it
+    basis_of: Dict[tuple, str] = {}
+    reason_of: Dict[tuple, str] = {}
+    _rank = {"manual": 0, "ai": 1, "reused": 2, "rule": 3}   # if a control has several bases, show the most human one
     for link in db.query(VulnerabilityControlLink).filter(
             VulnerabilityControlLink.vulnerability_id.in_(vuln_ids)).all():
         k = _ref_key(link)
         if k:
             refs[k] = refs.get(k, 0) + 1
+            n = link.notes or ""
+            if n.startswith("auto:cwe:"):
+                b, why = "rule", f"crosswalk rule · {n[len('auto:cwe:'):].split()[0] or 'vuln-mgmt'}" 
+            elif n.startswith("ai_suggested:"):
+                b, why = "ai", n.split(" · ", 2)[-1] if " · " in n else "accepted AI proposal"
+            elif n.startswith("ai_reused:"):
+                b, why = "reused", n.split(" · ", 2)[-1] if " · " in n else "reused human decision"
+            else:
+                b, why = "manual", n or "linked by a person"
+            if k not in basis_of or _rank[b] < _rank[basis_of[k]]:
+                basis_of[k], reason_of[k] = b, why
     tiers: Dict[str, int] = {}
     tier_of: Dict[tuple, str] = {}
     for kind, cid in refs:
@@ -517,6 +535,7 @@ def _cc_validate(db: Session, tenant_id: int, vuln_ids: List[int]) -> Dict[str, 
                 "id": r.id, "kind": "parsed_framework_control", "code": r.control_id,
                 "title": r.title, "framework": r.name or "—",
                 "tier": tier_of.get(k, "attested_only"), "findings_covered": refs.get(k, 0),
+                "basis": basis_of.get(k, "manual"), "reason": reason_of.get(k, ""),
             })
     # Unified Control Library controls (the path AI-accepted proposals write to):
     # name them by their real code/name, sourced "Unified Control Library".
@@ -528,13 +547,15 @@ def _cc_validate(db: Session, tenant_id: int, vuln_ids: List[int]) -> Dict[str, 
             k = ("normalized_control", r.id)
             items.append({"id": r.id, "kind": "normalized_control", "code": r.code, "title": r.name,
                           "framework": "Unified Control Library",
-                          "tier": tier_of.get(k, "attested_only"), "findings_covered": refs.get(k, 0)})
+                          "tier": tier_of.get(k, "attested_only"), "findings_covered": refs.get(k, 0),
+                          "basis": basis_of.get(k, "manual"), "reason": reason_of.get(k, "")})
     # Anything else (internal/framework refs) still counts; name it minimally, never hide it.
     named = {(i["kind"], i["id"]) for i in items}
     for (kind, cid), n in refs.items():
         if (kind, cid) not in named:
             items.append({"id": cid, "kind": kind, "code": f"#{cid}", "title": kind.replace("_", " "),
-                          "framework": "Other", "tier": tier_of[(kind, cid)], "findings_covered": n})
+                          "framework": "Other", "tier": tier_of[(kind, cid)], "findings_covered": n,
+                          "basis": basis_of.get((kind, cid), "manual"), "reason": reason_of.get((kind, cid), "")})
     items.sort(key=lambda i: (-i["findings_covered"], i["framework"], i["code"]))
     by_framework: Dict[str, int] = {}
     for i in items:

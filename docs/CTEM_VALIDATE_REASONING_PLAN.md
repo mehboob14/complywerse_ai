@@ -174,5 +174,24 @@ Estimated effort ~2 weeks. Depends on: OpenAI (existing), an embedding index
 
 ## Status
 
-* P0 — done 17 Aug 2026.
-* P1–P5 — not started; awaiting go.
+* P0 — done 17 Aug 2026 (`becf5ea`).
+* **P1–P5 — LANDED 18 Aug 2026 in the ponytail form** (`/ponytail` ladder run
+  over every layer; P5 was already 60% of this plan, so it was EXTENDED, not
+  rebuilt). What landed vs what the plan drew:
+
+| Layer | Plan drew | What shipped | Skipped, and when to add |
+|---|---|---|---|
+| L0 corpus index | new index table + embeddings + `corpus_version` | `build_candidates` now searches BOTH the Unified Control Library AND every uploaded framework visible to the tenant (own + shared, active), merged and ranked by the same concept scoring; candidates carry `kind` + `framework`; the model answers with a prompt-local id 1..N so the two id-spaces cannot collide | index table / pgvector / `corpus_version` — add when a tenant's corpus outgrows ILIKE-over-3.5k or keyword recall measurably misses (`# ponytail:` marked) |
+| L1 weakness key | new derivation | `cwe_id` (+ `classify_finding` for no-CVE) — already existed | described-weakness CLASS keys for no-CVE findings — add when reuse across no-CVE findings is wanted (today each is judged individually) |
+| L2 decisions | new `ControlMappingDecision` table | `AiControlProposal` already had reason/confidence/prompt_version/status/decided_by/prompt_inputs/raw_output; ADDED `parsed_framework_control_id` (nullable, unique per finding), `provenance` (`model`\|`reused`), `normalized_control_id` relaxed to nullable; run gained `findings_reused`/`proposals_reused` — all additive via `_COLUMN_ADDS` + `_ensure_column_nullable` | — |
+| L2 published priors | load NIST CSF↔800-53 etc. | none loaded → auto-accept policy is published-only → NOTHING auto-accepts → every model proposal is human-reviewed | load when a licensed/authoritative crosswalk is procured; until then human review IS the policy |
+| L3 governance | review queue, reject-remembered, never flip | existed; reject memory now spans the weakness key: a (CWE, control) a human rejected is never re-proposed for ANY finding of that CWE | — |
+| **L4 apply-per-key** | the core idea | **built**: before calling the model for a finding, humans' ACCEPTED (CWE, control) pairs are applied as `provenance=reused` accepted proposals + links (decided_by = the original approver, no model call); a key with any human decision is not re-asked. Tests prove: no model call, original approver carried, reject-of-reused unwinds its link | — |
+| L5 triggers | hooks + weekly sweep + drift sample | ONE hook: post-scanner-sync block (after enrichment, same non-fatal discipline as the choke recompute) sends findings that have no proposal yet through the mapper — "reasoning happens again and again" without a button; the run row records `ai_mapping` stats | weekly completeness sweep / monthly drift sample — add if a tenant reports stale keys; the button + idempotent re-run cover it today |
+| L6 effectiveness | unchanged | unchanged | — |
+| UI provenance | chip + why drawer | crosswalk rows carry `basis` (`rule`\|`ai`\|`reused`\|`manual`) + `reason` from the link notes; a "Why linked" column with a chip and hover reason; the proposals panel shows the control's framework and a `reused` badge; run line shows reused counts | drawer with versions/decided-by — add if the hover proves insufficient |
+| Battery | precision on withheld holdout | `test_ai_control_mapping.py` gained the **12-uncovered-CWE** battery (real finding titles) — it CAUGHT two retrieval holes (CWE-441 had no concept row; CWE-1321 terms missed "Input Data Validation"), fixed in the concept table; `test_ai_control_proposals.py` gained the reason-once/apply-many properties. LIVE semantic pass 18 Aug over the 12 uncovered CWEs (23 proposals, 11 framework + 12 UCL): ~9/12 sound, CWE-289→MFA WRONG, 346/359 loose → prompt **v1.5** (auth-bypass rule + concept row); re-judged live: CWE-289 → Input Data Validation ✓ | a withheld PUBLISHED holdout precision number — add when priors are loaded (there is nothing to withhold yet) |
+
+Coverage after: every one of the tenant's 18 CWEs reaches the model with valid
+candidates from the whole corpus (was 6/18 hand-table only). Auto-accept: none.
+Human queue: 23 model proposals + the earlier ones.

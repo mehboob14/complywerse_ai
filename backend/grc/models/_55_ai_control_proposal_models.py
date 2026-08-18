@@ -7,9 +7,17 @@ from ._54_itsm_ticket_link_models import *  # noqa: F401,F403
 # The rule crosswalk links every open CVE to the GENERAL patch/vuln-mgmt
 # controls. This table holds the AI's proposals for the SPECIFIC controls
 # (input validation, crypto config, hardening…) drawn from the tenant's
-# Unified Control Library — as PROPOSALS, never links. A human accepts or
-# rejects each one; only an accept creates a VulnerabilityControlLink
-# (link_source="ai_suggested", auto_linked=False, with the approver's id).
+# control corpus — the Unified Control Library AND the uploaded frameworks
+# (ISO/NIST/PCI/CSF parsed controls) — as PROPOSALS, never links. A human
+# accepts or rejects each one; only an accept creates a VulnerabilityControlLink
+# (notes "ai_suggested:", with the approver's id).
+#
+# REASON ONCE, APPLY MANY (the L4 rule from CTEM_VALIDATE_REASONING_PLAN):
+# a (weakness key = CWE, control) pair a human has already ACCEPTED is applied
+# to every later finding with that CWE without another model call — provenance
+# "reused", decided_by = the original approver, link created. A pair a human
+# REJECTED is never re-proposed for that CWE. The model is called only for
+# keys nobody has decided yet.
 #
 # Auditability: every proposal stores the prompt version, the full prompt
 # inputs and the model's raw output, so "why did the AI suggest this?" is
@@ -23,8 +31,14 @@ class AiControlProposal(Base):
     tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
     vulnerability_id = Column(Integer, ForeignKey("grc_vulnerabilities.id", ondelete="CASCADE"),
                               nullable=False, index=True)
+    # exactly ONE of the two control refs is set (Unified Library OR uploaded framework)
     normalized_control_id = Column(Integer, ForeignKey("grc_normalized_controls.id", ondelete="CASCADE"),
-                                   nullable=False, index=True)
+                                   nullable=True, index=True)
+    parsed_framework_control_id = Column(Integer, ForeignKey("grc_parsed_framework_controls.id", ondelete="CASCADE"),
+                                         nullable=True, index=True)
+    # model = the LLM proposed it for this finding; reused = applied from a human's
+    # earlier decision on the same (CWE, control) pair, no model call
+    provenance = Column(String(12), nullable=False, default="model", server_default="model")
 
     # what the model said
     confidence = Column(String(10), nullable=False)          # high | medium | low
@@ -52,13 +66,22 @@ class AiControlProposal(Base):
 
     vulnerability = relationship("Vulnerability")
     control = relationship("NormalizedControl")
+    parsed_control = relationship("ParsedFrameworkControl")
     decider = relationship("GRCUser", foreign_keys=[decided_by])
 
     __table_args__ = (
-        # one proposal per (finding, control) — a re-run refreshes it, never duplicates
+        # one proposal per (finding, control) per control kind — a re-run refreshes it, never duplicates
         UniqueConstraint("vulnerability_id", "normalized_control_id", name="uq_ai_control_proposal_pair"),
+        UniqueConstraint("vulnerability_id", "parsed_framework_control_id", name="uq_ai_control_proposal_pfc_pair"),
         Index("ix_ai_control_proposal_status", "tenant_id", "status"),
     )
+
+    @property
+    def control_ref(self):
+        """('normalized_control'|'parsed_framework_control', id) — the one ref that is set."""
+        if self.parsed_framework_control_id is not None:
+            return ("parsed_framework_control", self.parsed_framework_control_id)
+        return ("normalized_control", self.normalized_control_id)
 
 
 class AiControlProposalRun(Base):
@@ -78,6 +101,8 @@ class AiControlProposalRun(Base):
     findings_sent = Column(Integer, default=0)               # model called
     proposals_created = Column(Integer, default=0)
     proposals_updated = Column(Integer, default=0)
+    findings_reused = Column(Integer, default=0)             # key already human-decided → no model call
+    proposals_reused = Column(Integer, default=0)            # links applied from those decisions
     model_errors = Column(Integer, default=0)
     invalid_ids_dropped = Column(Integer, default=0)
 

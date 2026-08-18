@@ -39,7 +39,7 @@ type Sev = 'critical' | 'high' | 'medium' | 'low';
 interface Machine { id: number; name: string; type: string; findings: number; risk: Risk | null }
 interface Framework { name: string; controls: number; tested: number }
 interface Finding { id: number; rank: number; title: string; meta: string; breaks: string; owner: string | null; sla: string | null; sev: Sev }
-interface ControlItem { fw: string; code: string; title: string; findings: number; tier: Tier; control_id?: number; kind?: string }
+interface ControlItem { fw: string; code: string; title: string; findings: number; tier: Tier; control_id?: number; kind?: string; basis?: 'rule' | 'ai' | 'reused' | 'manual' | string; reason?: string }
 
 interface Scope {
   id: number; name: string; owner: string | null;
@@ -670,8 +670,7 @@ export default function CtemScopesRedesign() {
                   <SectionTitle icon={<ShieldCheck className="h-[15px] w-[15px] text-primary-700" />}>Where these controls come from</SectionTitle>
                 </div>
                 <p className="mb-3 mt-1.5 max-w-3xl text-[11.5px] text-slate-500">
-                  Matched from each finding&apos;s weakness type (CWE) to your uploaded frameworks by exact control code — not AI,
-                  not keyword guessing. Opening a control shows its evidence and test history.
+                  Each row says <b>why</b> it is here: <b>crosswalk rule</b> = the finding&apos;s weakness type (CWE) mapped to this control by a published rule; <b>AI · accepted</b> = the mapper proposed it from your frameworks and Unified Control Library and a person accepted; <b>reused decision</b> = a person&apos;s earlier accept on the same weakness type, applied automatically. Hover for the reason. Opening a control shows its evidence and test history.
                 </p>
                 <div className="overflow-hidden rounded-xl border border-slate-100">
                   <table className="w-full text-[12px]">
@@ -680,6 +679,7 @@ export default function CtemScopesRedesign() {
                         <th className="px-3 py-2 text-left font-semibold">Framework</th>
                         <th className="px-3 py-2 text-left font-semibold">Control</th>
                         <th className="px-3 py-2 text-right font-semibold">Findings covered</th>
+                        <th className="px-3 py-2 text-left font-semibold">Why linked</th>
                         <th className="px-3 py-2 text-left font-semibold">Assurance status</th>
                       </tr>
                     </thead>
@@ -700,6 +700,13 @@ export default function CtemScopesRedesign() {
                               &nbsp;&nbsp;{c.title}
                             </td>
                             <td className="px-3 py-2 text-right font-semibold tabular-nums text-slate-900">{c.findings}</td>
+                            <td className="px-3 py-2" title={c.reason || undefined}>
+                              <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                                c.basis === 'ai' ? 'bg-violet-50 text-violet-700' : c.basis === 'reused' ? 'bg-sky-50 text-sky-700'
+                                : c.basis === 'manual' ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-600'}`}>
+                                {c.basis === 'ai' ? 'AI · accepted' : c.basis === 'reused' ? 'reused decision' : c.basis === 'manual' ? 'manual' : 'crosswalk rule'}
+                              </span>
+                            </td>
                             <td className="px-3 py-2"><span className={`whitespace-nowrap rounded-full px-2.5 py-0.5 text-[10.5px] font-semibold ${ts.className}`}>{ts.label}</span></td>
                           </tr>
                         );
