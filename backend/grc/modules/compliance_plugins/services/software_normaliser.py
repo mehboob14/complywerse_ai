@@ -189,7 +189,11 @@ _BARE_FAMILY_TOKENS = frozenset({
 
 # Trailing segment that is a version (18, 9.0, 2012, 19c, 23ai) — the only
 # kind of suffix we strip when walking postgresql-18 → postgresql.
-_VERSION_SEGMENT = re.compile(r"^\d+(?:\.\d+)*[a-z]*$", re.I)
+# Matches plain versions (18, 9.0, 2022, 18a) AND Windows feature-release IDs
+# (22H2, 23H2, 24H2, 25H2 — digits+H+digit). Without the latter,
+# windows-11-25H2 never walked up to windows-11 and every modern Windows
+# 10/11 asset showed 0 CIS rules whenever the operator mapping was absent.
+_VERSION_SEGMENT = re.compile(r"^\d+(?:\.\d+)*[a-z]*$|^\d{2}h\d$", re.I)
 
 
 def _version_parent(software_key: str) -> Optional[str]:
