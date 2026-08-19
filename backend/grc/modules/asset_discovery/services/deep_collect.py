@@ -362,15 +362,33 @@ def select_credential(db: Session, tenant_id: int, ip: Optional[str],
     return None
 
 
+def winrm_port_for(ip: Optional[str], explicit: Optional[int] = None) -> int:
+    """The WinRM port that is actually open on `ip`. An explicit port always
+    wins; otherwise prefer HTTPS 5986, fall back to HTTP 5985 when only that
+    answers (Enable-PSRemoting alone opens 5985 only). Hardwiring 5986 made
+    every such host report "service not reachable"."""
+    if explicit:
+        return int(explicit)
+    if live_port_open(ip, [5986]):
+        return 5986
+    if live_port_open(ip, [5985]):
+        return 5985
+    return 5986
+
+
+def winrm_endpoint_for(ip: str, port: int) -> str:
+    return f"{'http' if port == 5985 else 'https'}://{ip}:{port}/wsman"
+
+
 def _credentials_dict(profile: CredentialProfile, ip: str, transport: str) -> Dict[str, Any]:
     """Build the dict shape collect_windows / collect_linux expect from a stored
     profile. The secret is decrypted here and nowhere else."""
     secret = decrypt_secret(profile.secret_encrypted)
     if transport == "windows":
         user = f"{profile.domain}\\{profile.username}" if profile.domain else profile.username
-        port = profile.port or 5986
+        port = winrm_port_for(ip, profile.port)
         return {
-            "winrm_endpoint": f"https://{ip}:{port}/wsman",
+            "winrm_endpoint": winrm_endpoint_for(ip, port),
             "winrm_username": user,
             "winrm_password": secret,
             "winrm_transport": profile.winrm_transport or "ntlm",
@@ -408,7 +426,7 @@ def _ensure_integration_connection(db: Session, asset: ITAsset,
     itype = "windows_winrm" if transport == "windows" else "linux_ssh"
     if transport == "windows":
         user = f"{profile.domain}\\{profile.username}" if profile.domain else profile.username
-        port = profile.port or 5986
+        port = winrm_port_for(asset.ip_address, profile.port)
     else:
         user = profile.username
         port = profile.port or 22

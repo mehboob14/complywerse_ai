@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from grc.crypto import encrypt_secret
+from grc.modules.asset_discovery.services.deep_collect import winrm_endpoint_for
 from grc.models import (
     GRCUser,
     IntegrationConnection,
@@ -144,7 +145,7 @@ def bulk_import(
         detect_creds: dict
         if body.runner_type == "windows_winrm":
             detect_creds = {
-                "winrm_endpoint": f"https://{h.hostname or h.ip}:{port}/wsman",
+                "winrm_endpoint": winrm_endpoint_for(h.hostname or h.ip, int(port)),
                 "winrm_username": body.username,
                 "winrm_password": body.password,
                 "winrm_transport": "ntlm",
@@ -541,7 +542,7 @@ def ad_onboard(
                 console_url=host,
                 service_account=body.winrm_username,
                 encrypted_credentials=encrypted_password,
-                endpoint_url=f"https://{host}:{body.winrm_port or 5986}/wsman",
+                endpoint_url=winrm_endpoint_for(host, int(body.winrm_port or 5986)),
                 is_active=True,
                 status="pending_verification",
             )
