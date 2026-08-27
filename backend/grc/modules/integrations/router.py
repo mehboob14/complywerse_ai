@@ -28,9 +28,15 @@ class ConnectionCreate(BaseModel):
     console_url: str = Field(..., min_length=1, max_length=500)
     console_port: int = Field(default=3780)
     auth_method: str = Field(default="api_key", max_length=20)
-    credential_env_prefix: str = Field(..., min_length=1, max_length=100)
+    # Optional now: a form user provides the keys directly (below) and needs no
+    # env-var prefix. Kept for the "dev" path that reads keys from server env.
+    credential_env_prefix: Optional[str] = Field(default=None, max_length=100)
     username: Optional[str] = Field(default=None, max_length=255)
     password: Optional[str] = Field(default=None, max_length=500)
+    # Keys typed straight into the form — stored ENCRYPTED, no shell/env needed.
+    access_key: Optional[str] = Field(default=None, max_length=500)
+    secret_key: Optional[str] = Field(default=None, max_length=500)
+    api_key: Optional[str] = Field(default=None, max_length=500)
     sync_schedule: str = Field(default="0 */4 * * *", max_length=50)
     # Auto-link scanner findings to matching inventory assets. Stored in
     # provider_config; None here means "use the default" (ON for a scanner feed).
@@ -49,6 +55,9 @@ class ConnectionUpdate(BaseModel):
     credential_env_prefix: Optional[str] = None
     username: Optional[str] = None
     password: Optional[str] = None
+    access_key: Optional[str] = None
+    secret_key: Optional[str] = None
+    api_key: Optional[str] = None
     sync_schedule: Optional[str] = None
     is_active: Optional[bool] = None
     auto_link_assets: Optional[bool] = None
@@ -80,6 +89,7 @@ def _connection_to_dict(c: IntegrationConnection) -> dict:
         "credential_env_prefix": c.credential_env_prefix,
         "username": c.username,
         "has_password": bool(c.password),
+        "has_stored_credentials": bool(c.encrypted_credentials),
         "sync_schedule": c.sync_schedule,
         "is_active": c.is_active,
         # Auto-link scanner findings to matching assets — default ON when unset.
@@ -147,6 +157,16 @@ def create_connection(
         sync_schedule=body.sync_schedule,
         created_by_user_id=user_id,
     )
+    # Keys typed into the form are stored ENCRYPTED on the connection (no env
+    # vars, no shell). The adapter reads them back at build time.
+    _creds = {k: v for k, v in (
+        ("access_key", body.access_key),
+        ("secret_key", body.secret_key),
+        ("api_key", body.api_key),
+    ) if v}
+    if _creds:
+        from grc.services.connector_credentials import encrypt_credentials
+        connection.encrypted_credentials = encrypt_credentials(_creds)
     _cfg = {}
     if body.auto_link_assets is not None:
         _cfg["auto_link_assets"] = bool(body.auto_link_assets)
@@ -204,6 +224,11 @@ def update_connection(
     # the generic setattr loop (which would raise on a non-attribute) and merge.
     auto_link = payload.pop("auto_link_assets", None)
     writeback = payload.pop("scanner_writeback", None)
+    # Credential keys are not columns — pull them out of the setattr loop and
+    # merge them into the encrypted blob (only overwriting keys actually sent).
+    _ak = payload.pop("access_key", None)
+    _sk = payload.pop("secret_key", None)
+    _apik = payload.pop("api_key", None)
 
     changes = {}
     for field_name, val in payload.items():
@@ -225,6 +250,17 @@ def update_connection(
             changes["scanner_writeback"] = {"old": str(cfg.get("scanner_writeback")), "new": str(bool(writeback))}
             cfg["scanner_writeback"] = bool(writeback)
             connection.provider_config = cfg
+
+    if any(v is not None for v in (_ak, _sk, _apik)):
+        from grc.services.connector_credentials import encrypt_credentials, decrypt_credentials
+        existing_creds = decrypt_credentials(connection.encrypted_credentials)
+        if not isinstance(existing_creds, dict):
+            existing_creds = {}
+        for k, v in (("access_key", _ak), ("secret_key", _sk), ("api_key", _apik)):
+            if v:  # only overwrite a key when a non-empty value is submitted
+                existing_creds[k] = v
+        connection.encrypted_credentials = encrypt_credentials(existing_creds)
+        changes["credentials"] = {"old": "***", "new": "***"}
 
     connection.updated_at = datetime.utcnow()
     db.commit()
