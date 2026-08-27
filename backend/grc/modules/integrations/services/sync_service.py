@@ -887,6 +887,21 @@ class SyncService:
         SyncService._apply_scanner_closures(
             db, adapter, connection, tenant_id, stats, host_contexts, source=source,
         )
+        # Catch-all auto-link. The inline linking above only attaches a finding
+        # when its host resolved to an asset in THIS same pass; anything that
+        # missed inline resolution sits unlinked. Running the full host-identity
+        # / apex matcher here means "Sync Now" in the UI (and the scheduled sync)
+        # links everything by itself — no manual terminal backfill, ever. Same
+        # per-connection toggle, idempotent, and best-effort: a linker hiccup
+        # must never fail the sync.
+        if link_assets:
+            try:
+                from grc.services.finding_asset_linker import backfill_host_links
+                link_report = backfill_host_links(db, tenant_id, commit=False)
+                stats["auto_linked_total"] = link_report.get("newly_linked", 0)
+                logger.info("post-sync auto-link (tenant=%s): %s", tenant_id, link_report)
+            except Exception:
+                logger.exception("post-sync auto-link failed (non-fatal)")
         db.flush()
 
     @staticmethod
