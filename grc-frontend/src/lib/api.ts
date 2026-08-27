@@ -732,6 +732,8 @@ export const assetsApi = {
     location?: string;
     cde_environment?: boolean;
     pci_dss?: Record<string, unknown> | null;
+    ephi_environment?: boolean;
+    hipaa?: Record<string, unknown> | null;
   }) => apiClient.post<ITAsset>('/assets', data),
   update: (id: number, data: Partial<ITAsset>) => apiClient.put<ITAsset>(`/assets/${id}`, data),
   delete: (id: number) => apiClient.delete(`/assets/${id}`),
@@ -1075,6 +1077,9 @@ export const certificationsApi = {
   getCDESystems: () => apiClient.get('/certifications/cde-systems'),
   updateCDESystemScope: (assetId: number, data: { cde_environment: boolean }) =>
     apiClient.put(`/certifications/cde-systems/${assetId}/scope`, data),
+  getEPHISystems: () => apiClient.get('/certifications/ephi-systems'),
+  updateEPHISystemScope: (assetId: number, data: { ephi_environment: boolean }) =>
+    apiClient.put(`/certifications/ephi-systems/${assetId}/scope`, data),
 
   assignControl: (journeyId: number, controlId: number, userIds: number[]) =>
     apiClient.patch(`/certifications/${journeyId}/controls/${controlId}/assign`, {
@@ -4861,6 +4866,30 @@ export const compliancePluginsApi = {
   /** Classification stats (passed/failed/skipped counts per OS family). */
   classificationStats: () =>
     apiClient.get('/compliance-plugins/classification-stats'),
+};
+
+/** SOC 2 quantitative controls + AWS automated checks (additive). */
+export const automationApi = {
+  seed: () => apiClient.post('/automation/soc2/seed'),
+  listControls: () => apiClient.get('/automation/soc2/controls'),
+  listCriteria: () => apiClient.get('/automation/soc2/criteria'),
+  listChecks: (params?: { control_id?: string }) =>
+    apiClient.get('/automation/soc2/checks', { params }),
+  getCheck: (pluginId: number) => apiClient.get(`/automation/soc2/checks/${pluginId}`),
+  listConnections: () => apiClient.get('/automation/soc2/connections'),
+  runCheck: (pluginId: number, connectionId?: number) =>
+    apiClient.post(`/automation/soc2/checks/${pluginId}/run`, { connection_id: connectionId ?? null }),
+  runAll: (connectionId: number, controlId?: string) =>
+    apiClient.post('/automation/soc2/run-all', {
+      connection_id: connectionId,
+      ...(controlId ? { control_id: controlId } : {}),
+    }),
+  // Evidence Collectors — 39 SaaS API connectors (github/okta/slack/…)
+  listCollectors: () => apiClient.get('/automation/soc2/collectors'),
+  connectCollector: (provider: string, body: { token: string; domain?: string; email?: string }) =>
+    apiClient.post(`/automation/soc2/collectors/${provider}/connect`, body),
+  testCollector: (provider: string) => apiClient.post(`/automation/soc2/collectors/${provider}/test`),
+  runCollector: (provider: string) => apiClient.post(`/automation/soc2/collectors/${provider}/run`),
 };
 
 // ─── CIS Phase 3 agent installer + scan-push helpers ─────────────────────

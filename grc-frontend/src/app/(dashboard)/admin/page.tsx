@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Building2, Users as UsersIcon, ShieldCheck, ScrollText, Bot, GitPullRequest, KeyRound, Lock, Cloud, UsersRound, Plug } from 'lucide-react';
+import { Building2, Users as UsersIcon, ShieldCheck, ScrollText, Bot, GitPullRequest, KeyRound, Lock, Cloud, UsersRound, Plug, PlugZap } from 'lucide-react';
 import OrganizationProfilePage from './organization/page';
 import UsersManagementPage from './users/page';
 import RolesManagementPage from './roles/page';
@@ -11,15 +11,16 @@ import AuditLogsPage from './audit-logs/page';
 import PasswordPolicyPage from './password-policy/page';
 import CloudConnectorsAdminPage from './cloud-connectors/page';
 import ConnectorsAdminPage from './connectors/page';
+import EvidenceCollectorsPage from './evidence-collectors/page';
 import IntegrationsConnectionsPage from '../integrations/connections/page';
 import WorkflowEnginePage from '../workflow-engine/page';
 import { IdentityProvidersCard } from '@/components/integrations/IdentityProvidersCard';
 
-type AdminTab = 'company' | 'users' | 'roles' | 'teams' | 'password-policy' | 'integrations' | 'cloud-connectors' | 'connectors' | 'identity' | 'workflow' | 'audit';
+type AdminTab = 'company' | 'users' | 'roles' | 'teams' | 'password-policy' | 'integrations' | 'cloud-connectors' | 'connectors' | 'evidence-collectors' | 'identity' | 'workflow' | 'audit';
 
 const VALID_ADMIN_TABS = new Set<AdminTab>([
   'company','users','roles','teams','password-policy','integrations',
-  'cloud-connectors','connectors','identity','workflow','audit',
+  'cloud-connectors','connectors','evidence-collectors','identity','workflow','audit',
 ]);
 
 export default function AdminPage() {
@@ -47,6 +48,8 @@ export default function AdminPage() {
     { id: 'cloud-connectors', label: 'Cloud Connectors', icon: Cloud },
     // External connector framework — ServiceNow, Splunk, MS Teams, Fireflies, …
     { id: 'connectors', label: 'Connectors', icon: Plug },
+    // SOC 2 SaaS evidence collectors — github/okta/slack/… → live evidence.
+    { id: 'evidence-collectors', label: 'Connections', icon: PlugZap },
     { id: 'identity', label: 'Identity Providers', icon: KeyRound },
     { id: 'workflow', label: 'Workflow Engine', icon: GitPullRequest },
     { id: 'audit', label: 'Audit Logs', icon: ScrollText },
@@ -86,6 +89,7 @@ export default function AdminPage() {
         {activeTab === 'integrations' && <IntegrationsConnectionsPage />}
         {activeTab === 'cloud-connectors' && <CloudConnectorsAdminPage />}
         {activeTab === 'connectors' && <ConnectorsAdminPage />}
+        {activeTab === 'evidence-collectors' && <EvidenceCollectorsPage />}
         {activeTab === 'identity' && <IdentityProvidersCard />}
         {activeTab === 'workflow' && <WorkflowEnginePage />}
         {activeTab === 'audit' && <AuditLogsPage />}

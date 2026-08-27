@@ -36,6 +36,7 @@ type Detail = Record<string, unknown> & {
   criticality?: string;
   status?: string;
   cde_environment?: boolean;
+  ephi_environment?: boolean;
   internet_facing?: boolean;
   network_segment?: string | null;
   data_classification?: string | null;
@@ -215,6 +216,9 @@ export function DetailPreview({
             <h3 className="truncate text-sm font-semibold text-slate-900">{name}</h3>
             {detail.cde_environment && (
               <span className="shrink-0 rounded bg-rose-50 px-1.5 py-0.5 text-[9px] font-bold tracking-wide text-rose-700">CDE</span>
+            )}
+            {detail.ephi_environment && (
+              <span className="shrink-0 rounded bg-indigo-50 px-1.5 py-0.5 text-[9px] font-bold tracking-wide text-indigo-700">ePHI</span>
             )}
           </div>
           {metaParts.length > 0 && (

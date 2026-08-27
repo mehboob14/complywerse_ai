@@ -384,6 +384,9 @@ _COLUMN_ADDS = [
     ("grc_certification_journeys", "stage_owners", "JSON", None),
     # PCI DSS cardholder-data-inventory attributes on CDE assets.
     ("grc_it_assets", "pci_dss", "JSON", None),
+    # HIPAA ePHI scope flag + inventory attributes on ePHI assets (mirror CDE).
+    ("grc_it_assets", "ephi_environment", "BOOLEAN", None),
+    ("grc_it_assets", "hipaa", "JSON", None),
     ("grc_framework_risk_questions", "source_quote", "TEXT", None),
     # Vulnerability enrichment columns — NVD / EPSS / CISA KEV. All nullable
     # with conservative defaults so existing rows stay valid; populated on

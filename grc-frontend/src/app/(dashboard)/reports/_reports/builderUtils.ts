@@ -1,5 +1,6 @@
 import type { ChartKind, ColumnDef, ReportSpec, Row } from './types';
 import { fieldDomain } from './pivot';
+import { fmtDate } from './grid-utils';
 
 /** Empty-first: never auto-pick columns. Users add exactly what they want. */
 export function defaultVisibleColumns(_cols: ColumnDef[]): string[] {
@@ -129,6 +130,10 @@ export function cellAlign(col: ColumnDef, overrides?: Record<string, 'left' | 'r
 export function cellDisplay(col: ColumnDef, row: Row): string {
   const raw = col.accessor ? col.accessor(row) : row[col.key];
   if (col.format) return col.format(raw, row);
+  // Dates are ISO strings — render them human-readably instead of printing the
+  // raw "2026-08-27T00:00:00". Matches grid-utils.displayText (used for
+  // filtering/grouping/export), so the table now shows the same value.
+  if (col.type === 'date') return fmtDate(raw) || '—';
   if (raw == null || raw === '') return '—';
   return String(raw);
 }

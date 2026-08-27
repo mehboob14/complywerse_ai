@@ -105,6 +105,7 @@ CIS_Benchmarks/
 # ---------------------------------------------------------------------------
 # Scratch, logs, one-off scripts, and generated dumps (not source of record)
 # ---------------------------------------------------------------------------
+.dev-logs/
 *.log
 *.bak
 backend/_*

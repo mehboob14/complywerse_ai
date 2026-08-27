@@ -549,12 +549,20 @@ def create_asset(
         valuation=asset.valuation,
         cde_environment=asset.cde_environment,
         pci_dss=asset.pci_dss,
+        ephi_environment=asset.ephi_environment,
+        hipaa=asset.hipaa,
         # Phase 5.1 — Exposure metadata. None values are stored as NULL.
         internet_facing=bool(asset.internet_facing) if asset.internet_facing is not None else False,
         network_segment=asset.network_segment,
         data_classification=asset.data_classification,
         business_function=asset.business_function,
-        compliance_scope=asset.compliance_scope if asset.compliance_scope is not None else [],
+        # ePHI assets are auto-scoped to HIPAA so they appear in the HIPAA
+        # framework's in-scope views (mirrors the CDE→PCI intent). Add-only.
+        compliance_scope=(
+            (list(asset.compliance_scope) if asset.compliance_scope is not None else [])
+            + (["HIPAA"] if asset.ephi_environment
+               and "HIPAA" not in (asset.compliance_scope or []) else [])
+        ),
         # Phase 5.2 — Ownership chain.
         primary_owner_id=asset.primary_owner_id,
         secondary_owner_id=asset.secondary_owner_id,
@@ -1207,6 +1215,7 @@ def get_asset(
         "location": asset.location,
         "status": asset.status,
         "cde_environment": asset.cde_environment or False,
+        "ephi_environment": asset.ephi_environment or False,
         "created_at": asset.created_at.isoformat(),
         # Phase 5 operational context fields.
         "internet_facing": bool(asset.internet_facing) if asset.internet_facing is not None else False,
@@ -1298,6 +1307,13 @@ def update_asset(
             setattr(asset, "internet_facing", value)
             continue
         setattr(asset, field, value)
+
+    # ePHI assets are auto-scoped to HIPAA so they surface in the HIPAA
+    # framework's in-scope views. Add-only: never strips a manual scope.
+    if getattr(asset, "ephi_environment", False):
+        _scope = list(asset.compliance_scope or [])
+        if "HIPAA" not in _scope:
+            asset.compliance_scope = _scope + ["HIPAA"]
 
     # Auto-derive os_normalized from os_family when the caller set the
     # family but didn't supply a normalized key. Lets the operator pick
@@ -1950,6 +1966,8 @@ def get_asset_detail(
         cloud_resource_id=_g("cloud_resource_id"),
         cde_environment=_g("cde_environment"),
         pci_dss=_g("pci_dss"),
+        ephi_environment=_g("ephi_environment"),
+        hipaa=_g("hipaa"),
         manufacturer=_g("manufacturer"),
         model=_g("model"),
         serial_number=_g("serial_number"),

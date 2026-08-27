@@ -58,3 +58,4 @@ from . import winrm_runner  # noqa: E402,F401
 from . import extended_runners  # noqa: E402,F401  (MSSQL, Postgres, MySQL, LDAP/AD, Azure, K8s)
 from . import mock_runner  # noqa: E402,F401  (mock_pass / mock_fail for demo seeding)
 from . import manual_runner  # noqa: E402,F401  (operator attestation for text-only CIS rules)
+from . import live_api_runner  # noqa: E402,F401  (SaaS API evidence collectors: github/okta/slack/…)

@@ -38,6 +38,8 @@ import {
   ShieldAlert,
   LifeBuoy,
   CalendarClock,
+  Zap,
+  PlayCircle,
   Bookmark,
   Building2,
   type LucideIcon,
@@ -191,6 +193,15 @@ const navigation: NavEntry[] = [
       { name: 'Assurance Overview', href: '/control-library/assurance', icon: LayoutDashboard, requiredPermissions: ['controls:control_library:*'] },
       { name: 'Controls Overview', href: '/controls/overview', icon: Shield, requiredPermissions: ['controls:control_library:*'] },
       { name: 'Control Catalog', href: '/controls', icon: Layers, requiredPermissions: ['controls:control_library:*'] },
+    ],
+  },
+  {
+    name: 'Automation',
+    icon: Zap,
+    requiredModules: ['controls'],
+    items: [
+      { name: 'SOC 2 Controls', href: '/automation/soc2-controls', icon: Layers, requiredPermissions: ['controls:control_library:*', 'compliance:frameworks:*'] },
+      { name: 'Automated Checks', href: '/automation/checks', icon: PlayCircle, requiredPermissions: ['controls:control_library:*', 'compliance:scan:execute', 'compliance:frameworks:*'] },
     ],
   },
   {
@@ -496,6 +507,7 @@ const ADMIN_POPOVER_ITEMS: Array<{ id: string; label: string; icon: LucideIcon; 
   { id: 'integrations',     label: 'Integrations',       icon: Bot },
   { id: 'cloud-connectors', label: 'Cloud Connectors',   icon: Globe },
   { id: 'connectors',       label: 'Connectors',         icon: Layers },
+  { id: 'evidence-collectors', label: 'Connections', icon: Radar },
   { id: 'identity',         label: 'Identity Providers', icon: Shield },
   { id: 'workflow',         label: 'Workflow Engine',    icon: GitPullRequest },
   { id: 'usage',            label: 'Usage Monitoring',   icon: Activity, href: '/admin/usage' },

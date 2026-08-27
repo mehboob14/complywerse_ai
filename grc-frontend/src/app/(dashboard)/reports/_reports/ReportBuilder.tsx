@@ -246,11 +246,12 @@ export default function ReportBuilder({
       .filter((c): c is ColumnDef => !!c),
     [visibleKeys, lookupCols],
   );
+  // Clean field name only — never a "Module · " prefix or "(Module)" suffix. When
+  // two visible columns collide on the same name, the data table surfaces the
+  // source module as a small eyebrow ABOVE the header instead (see ReportDataTable).
   const labelFor = (key: string) => {
     const col = allCols.find((c) => c.key === key);
-    if (!col) return key;
-    if (col.linkageModule) return `${col.linkageModule} · ${col.label}`;
-    return col.label;
+    return col ? col.label : key;
   };
 
   const appliedFieldKeys = useMemo(() => {
@@ -1608,7 +1609,19 @@ export default function ReportBuilder({
           dimensions={dimensions}
           measures={spec.measures}
           onDimensionsChange={(keys) => patch({ rows: keys })}
-          onMeasuresChange={(measures) => patch({ measures })}
+          onMeasuresChange={(measures) => {
+            // Adding the FIRST calculation must not wipe the columns the user
+            // already set up. Carry those columns in as the group-by so the
+            // summary is ADDED to the existing layout (their columns stay + a new
+            // metric column) instead of collapsing to a single overall total.
+            // They can then remove group-by fields to roll rows up. Later measure
+            // edits don't re-seed, so a deliberate grand-total setup is respected.
+            if (spec.measures.length === 0 && measures.length > 0 && dimensions.length === 0 && visibleKeys.length > 0) {
+              patch({ measures, rows: visibleKeys.slice() });
+            } else {
+              patch({ measures });
+            }
+          }}
           onClose={() => setPanel(null)}
           onClear={() => patch({ rows: [], measures: [] })}
         />

@@ -43,6 +43,9 @@ export function AssetRow({
           {asset.cde_environment && (
             <span className="shrink-0 rounded bg-rose-50 px-1.5 py-0.5 text-[9px] font-bold tracking-wide text-rose-700">CDE</span>
           )}
+          {asset.ephi_environment && (
+            <span className="shrink-0 rounded bg-indigo-50 px-1.5 py-0.5 text-[9px] font-bold tracking-wide text-indigo-700">ePHI</span>
+          )}
         </span>
         <span className="block truncate text-xs text-slate-400">{meta}</span>
       </span>

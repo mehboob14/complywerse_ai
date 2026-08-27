@@ -77,6 +77,7 @@ from .modules.risk_posture import risk_posture_router
 from .modules.onboarding import onboarding_router
 from .modules.asset_discovery import asset_discovery_router
 from .modules.compliance_plugins import compliance_plugins_router
+from .modules.automation import automation_soc2_router
 from .routers.connect_wizard_router import router as connect_wizard_router
 from .routers.access_review_router import router as access_review_router
 from .routers.admin_ai_usage_router import router as admin_ai_usage_router
@@ -263,6 +264,7 @@ app.include_router(risk_posture_router)
 app.include_router(onboarding_router)
 app.include_router(asset_discovery_router)
 app.include_router(compliance_plugins_router)
+app.include_router(automation_soc2_router)
 app.include_router(connect_wizard_router)
 app.include_router(access_review_router)
 app.include_router(admin_ai_usage_router)

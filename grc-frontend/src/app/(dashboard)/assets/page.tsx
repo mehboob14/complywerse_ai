@@ -8,6 +8,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { assetsApi } from '@/lib/api';
 import { CriticalityCoverageWidget } from '@/components/assets/CriticalityCoverageWidget';
 import PciAttributesFields from '@/components/assets/PciAttributesFields';
+import HipaaAttributesFields from '@/components/assets/HipaaAttributesFields';
 import { ITAsset, AssetType } from '@/types';
 import { PageLoader, ComboBoxInput, type ComboBoxOption } from '@/components/ui';
 import { AssetsWorkspace } from './_workspace/AssetsWorkspace';
@@ -602,6 +603,7 @@ export function AssetModal({
   isLoading,
   initialData,
   forceCde,
+  forceEphi,
 }: {
   onClose: () => void;
   onSave: (data: Parameters<typeof assetsApi.create>[0]) => void;
@@ -610,6 +612,9 @@ export function AssetModal({
   /** Default the "CDE Environment" toggle on (used by the PCI Cardholder Data
    *  Inventory, which only ever creates CDE assets). */
   forceCde?: boolean;
+  /** Default the "ePHI Environment" toggle on (used by the HIPAA ePHI
+   *  Inventory, which only ever creates ePHI assets). */
+  forceEphi?: boolean;
 }) {
   const parseSubComponents = (value?: string) =>
     value
@@ -637,6 +642,8 @@ export function AssetModal({
     status: (initialData?.status || 'active') as 'active' | 'inactive' | 'decommissioned',
     cde_environment: (initialData as any)?.cde_environment || forceCde || false,
     pci_dss: (((initialData as any)?.pci_dss) || {}) as Record<string, string>,
+    ephi_environment: (initialData as any)?.ephi_environment || forceEphi || false,
+    hipaa: (((initialData as any)?.hipaa) || {}) as Record<string, string>,
     // Exposure metadata — drive the ISO 27005 derived criticality.
     data_classification: ((initialData as any)?.data_classification || '') as '' | 'public' | 'internal' | 'confidential' | 'restricted',
     internet_facing: Boolean((initialData as any)?.internet_facing),
@@ -757,6 +764,8 @@ export function AssetModal({
       ip_address: formData.ip_address || undefined,
       cde_environment: formData.cde_environment,
       pci_dss: formData.cde_environment ? formData.pci_dss : null,
+      ephi_environment: formData.ephi_environment,
+      hipaa: formData.ephi_environment ? formData.hipaa : null,
       // Exposure metadata — feeds the derived criticality.
       data_classification: formData.data_classification || undefined,
       internet_facing: formData.internet_facing,
@@ -1171,6 +1180,41 @@ export function AssetModal({
                   <PciAttributesFields
                     value={formData.pci_dss}
                     onChange={(patch) => setFormData({ ...formData, pci_dss: { ...formData.pci_dss, ...patch } as Record<string, string> })}
+                  />
+                </div>
+              )}
+
+              {/* Row: HIPAA ePHI scope — mirror of the PCI CDE toggle above. */}
+              <div className="grid grid-cols-2 gap-x-4 gap-y-3 mb-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">HIPAA Scope</label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, ephi_environment: !formData.ephi_environment })}
+                      className={`relative inline-flex h-5 w-9 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
+                        formData.ephi_environment ? 'bg-indigo-500' : 'bg-slate-200'
+                      }`}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ${
+                          formData.ephi_environment ? 'translate-x-4' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                    <span className="text-xs text-slate-700">ePHI Environment</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* HIPAA ePHI attributes — revealed when the asset holds ePHI.
+                  Shared component so the IT Assets form and the HIPAA ePHI
+                  Inventory show identical fields. */}
+              {formData.ephi_environment && (
+                <div className="mb-3">
+                  <HipaaAttributesFields
+                    value={formData.hipaa}
+                    onChange={(patch) => setFormData({ ...formData, hipaa: { ...formData.hipaa, ...patch } as Record<string, string> })}
                   />
                 </div>
               )}

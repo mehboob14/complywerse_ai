@@ -135,6 +135,7 @@
       "type": "hipaa__hipaa_ephi_inventory_template_1",
       "label": "Ephi Inventory",
       "description": "HIPAA — Ephi Inventory (from the template).",
+      "assetSource": "ephi",
       "columns": [
         {
           "key": "ref",

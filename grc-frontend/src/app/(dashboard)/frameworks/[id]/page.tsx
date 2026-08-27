@@ -72,6 +72,7 @@ import FrameworkRegisterTab from './_tabs/FrameworkRegisterTab';
 import FrameworkDocumentTab from './_tabs/FrameworkDocumentTab';
 import FrameworkDynamicRegisterTab from './_tabs/FrameworkDynamicRegisterTab';
 import PciCdeInventoryTab from './_tabs/_PciCdeInventoryTab';
+import HipaaEphiInventoryTab from './_tabs/_HipaaEphiInventoryTab';
 import FrameworkJourney from './_tabs/FrameworkJourney';
 import TabDropdown from './_tabs/TabDropdown';
 import { orderRegisters, orderDocuments } from './_tabs/templateSequence';
@@ -4418,6 +4419,7 @@ export default function CertificationJourneyPage() {
     if (dynReg) {
       // Asset-backed inventory (PCI CDE) → dedicated Assets CRUD tab (synced with
       // the Assets module); everything else → the generic dynamic register table.
+      if (dynReg.assetSource === 'ephi') return <HipaaEphiInventoryTab journeyId={journeyId} frameworkName={templateFrameworkName} tenantUsers={templateTenantUsers as any} />;
       if (dynReg.assetSource === 'cde') return <PciCdeInventoryTab journeyId={journeyId} frameworkName={templateFrameworkName} tenantUsers={templateTenantUsers as any} />;
       return <FrameworkDynamicRegisterTab config={dynReg} journeyId={journeyId} frameworkId={appFwId} frameworkName={templateFrameworkName} tenantUsers={templateTenantUsers} frameworkControls={templateFrameworkControls} />;
     }

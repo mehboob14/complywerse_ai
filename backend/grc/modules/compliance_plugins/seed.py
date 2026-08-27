@@ -769,6 +769,14 @@ def seed_compliance_plugins(db: Session | None = None) -> int:
             touched += 1
         db.commit()
         logger.info("seed_compliance_plugins: upserted %d built-in plugins", touched)
+        # Additive SOC 2 quantitative AWS catalog (does not alter CIS payloads).
+        try:
+            from .seed_soc2_quantitative import seed_soc2_quantitative_plugins
+
+            touched += seed_soc2_quantitative_plugins(db)
+        except Exception:
+            logger.exception("seed_soc2_quantitative_plugins failed after CIS seed")
+            raise
     except Exception as exc:
         db.rollback()
         logger.exception("seed_compliance_plugins failed: %s", exc)

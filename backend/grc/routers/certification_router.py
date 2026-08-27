@@ -623,6 +623,110 @@ def update_cde_system_scope(
     }
 
 
+@router.get("/ephi-systems")
+def get_ephi_systems(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """ePHI assets (ephi_environment on) — the HIPAA framework's ePHI inventory.
+    Mirrors /cde-systems for PCI so the HIPAA tab and the Assets module stay in
+    sync."""
+    user_tenants = get_user_tenants(current_user, db)
+    tenant_assets = db.query(ITAsset).options(
+        joinedload(ITAsset.owner)
+    ).filter(
+        ITAsset.tenant_id.in_(user_tenants)
+    ).order_by(ITAsset.asset_type, ITAsset.name).all()
+
+    def _is_ephi_enabled(value) -> bool:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)):
+            return value == 1
+        if isinstance(value, str):
+            return value.strip().lower() in {"true", "1", "yes", "y", "on"}
+        return False
+
+    assets = [a for a in tenant_assets if _is_ephi_enabled(a.ephi_environment)]
+
+    total = len(assets)
+    type_breakdown: dict = {}
+    criticality_breakdown: dict = {}
+    for asset in assets:
+        t = asset.asset_type or "other"
+        type_breakdown[t] = type_breakdown.get(t, 0) + 1
+        c = asset.criticality or "medium"
+        criticality_breakdown[c] = criticality_breakdown.get(c, 0) + 1
+
+    return {
+        "systems": [
+            {
+                "id": asset.id,
+                "name": asset.name,
+                "asset_type": asset.asset_type,
+                "description": asset.description,
+                "location": asset.location,
+                "owner_name": (
+                    asset.owner.display_name
+                    or asset.owner.username
+                    or asset.owner.email
+                ) if asset.owner else None,
+                "owner_id": asset.owner_id,
+                "vendor": asset.vendor,
+                "criticality": asset.criticality,
+                "status": asset.status,
+                "ephi_environment": asset.ephi_environment,
+                "hipaa": asset.hipaa or {},
+                "created_at": asset.created_at.isoformat() if asset.created_at else None,
+            }
+            for asset in assets
+        ],
+        "summary": {
+            "total": total,
+            "type_breakdown": type_breakdown,
+            "criticality_breakdown": criticality_breakdown,
+        },
+    }
+
+
+@router.put("/ephi-systems/{asset_id}/scope")
+def update_ephi_system_scope(
+    asset_id: int,
+    data: dict,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    user_tenants = get_user_tenants(current_user, db)
+    asset = db.query(ITAsset).filter(
+        ITAsset.id == asset_id,
+        ITAsset.tenant_id.in_(user_tenants)
+    ).first()
+    if not asset:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="IT Asset not found")
+
+    if "ephi_environment" in data:
+        asset.ephi_environment = data["ephi_environment"]
+    elif "in_scope" in data:
+        asset.ephi_environment = data["in_scope"]
+
+    # Keep HIPAA in the asset's compliance scope while it is an ePHI system
+    # (add-only; never strips a manually-set scope).
+    if asset.ephi_environment:
+        scope = list(asset.compliance_scope or [])
+        if "HIPAA" not in scope:
+            asset.compliance_scope = scope + ["HIPAA"]
+
+    db.commit()
+    db.refresh(asset)
+
+    return {
+        "id": asset.id,
+        "name": asset.name,
+        "asset_type": asset.asset_type,
+        "ephi_environment": asset.ephi_environment,
+    }
+
+
 @router.get("/{journey_id}", response_model=dict)
 def get_certification(
     journey_id: int,

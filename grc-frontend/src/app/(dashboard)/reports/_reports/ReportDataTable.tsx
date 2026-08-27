@@ -9,6 +9,22 @@ import type { ColumnDef, Row, SortSpec } from './types';
 import { cellAlign, cellDisplay } from './builderUtils';
 import { aggregate, groupRows, numericValue, rawValue } from './grid-utils';
 
+/** A cell value that is really a list — an array, or the server's "; "-joined
+ *  multi-value string (linkage / cross-module fields only) — split into atomic
+ *  parts. Returns null for a genuine single value so plain text is untouched. */
+function toValueList(c: ColumnDef, raw: unknown, text: string): string[] | null {
+  if (Array.isArray(raw)) {
+    const items = raw.map((x) => String(x).trim()).filter(Boolean);
+    return items.length ? items : null;
+  }
+  const multiField = c.key.includes('_names') || !!c.linkageModule;
+  const s = typeof raw === 'string' ? raw : text;
+  if (multiField && typeof s === 'string' && s.includes('; ')) {
+    return s.split(';').map((x) => x.trim()).filter(Boolean);
+  }
+  return null;
+}
+
 /** Production flat table — resize, reorder, pin, sort, group, totals. */
 export default function ReportDataTable({
   cols,
@@ -55,6 +71,17 @@ export default function ReportDataTable({
     const rest = shown.filter((c) => !pinned.includes(c.key));
     return [...pin, ...rest];
   }, [visibleKeys, cols, pinned]);
+
+  // Header field name (clean — no module prefix). When two visible columns share
+  // the same name (a cross-module combine), the source module is shown as a small
+  // eyebrow ABOVE only those colliding headers — nothing ambiguous, no "(Module)"
+  // suffix cluttering every header.
+  const headerLabel = (c: ColumnDef) => labelFor?.(c.key) ?? c.label;
+  const labelCounts = new Map<string, number>();
+  for (const c of ordered) {
+    const l = headerLabel(c);
+    labelCounts.set(l, (labelCounts.get(l) ?? 0) + 1);
+  }
 
   const groupCol = groupByKey ? cols.find((c) => c.key === groupByKey) ?? null : null;
   const groups = useMemo(
@@ -159,9 +186,40 @@ export default function ReportDataTable({
       );
     }
 
-    if (href) {
+    // Atomic display: a multi-value cell (array or "; "-joined linkage list)
+    // becomes one chip per value instead of a single mashed string.
+    const list = toValueList(c, raw, text);
+    if (list && list.length > 1) {
       return (
-        <Link href={href} className="font-medium text-primary-700 hover:underline">
+        <div className="flex flex-wrap gap-1">
+          {list.map((v, i) => (
+            <span
+              key={i}
+              title={v}
+              className={`inline-block max-w-[180px] truncate rounded-full border px-2 py-0.5 text-[11px] ${
+                /^\+\d+/.test(v)
+                  ? 'border-slate-200 bg-slate-100 text-slate-500'
+                  : 'border-slate-200 bg-slate-50 text-slate-700'
+              }`}
+            >
+              {v}
+            </span>
+          ))}
+        </div>
+      );
+    }
+
+    if (href) {
+      // Open the record in a new tab so the built report stays intact — closing
+      // the tab (or switching back) returns you to Reports with the report as-is.
+      return (
+        <Link
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          title="Open in a new tab"
+          className="font-medium text-primary-700 hover:underline"
+        >
           {text}
         </Link>
       );
@@ -258,10 +316,20 @@ export default function ReportDataTable({
                       <button
                         type="button"
                         onClick={(e) => onSort?.(c.key, e.shiftKey)}
-                        className={`flex min-w-0 flex-1 items-center gap-1 truncate ${a === 'right' ? 'justify-end' : ''}`}
+                        className={`flex min-w-0 flex-1 items-center gap-1 ${a === 'right' ? 'justify-end' : ''}`}
                         title={onSort ? 'Click to sort · Shift+click for multi-sort' : undefined}
                       >
-                        <span className="truncate">{labelFor?.(c.key) ?? c.label}</span>
+                        <span className={`flex min-w-0 flex-col leading-tight ${a === 'right' ? 'items-end' : ''}`}>
+                          {c.linkageModule && (labelCounts.get(headerLabel(c)) ?? 0) > 1 && (
+                            <span
+                              className="truncate text-[9px] font-semibold uppercase tracking-wide text-slate-400"
+                              title={c.linkageModule}
+                            >
+                              {c.linkageModule}
+                            </span>
+                          )}
+                          <span className="truncate">{headerLabel(c)}</span>
+                        </span>
                         {onSort && sortIcon(c.key)}
                       </button>
                       {pinnedCol && <Pin className="h-3 w-3 shrink-0 text-primary-500" />}

@@ -180,6 +180,16 @@ def _extract_pdf_bytes(
     except Exception as exc:  # noqa: BLE001
         log.warning("PyPDF2 extract failed: %s", exc)
 
+    # 5) Last resort for scanned/image PDFs when local OCR (Tesseract) gave
+    #    nothing: OpenAI vision OCR — needs an API key, no server install.
+    if allow_ocr:
+        try:
+            vtext = _openai_vision_ocr_pdf(pdf_bytes, max_pages=max_pages)
+            if vtext.strip():
+                return vtext
+        except Exception as exc:  # noqa: BLE001
+            log.warning("OpenAI vision OCR failed: %s", exc)
+
     return ""
 
 
@@ -267,6 +277,148 @@ def _extract_spreadsheet_bytes(contents: bytes, filename: str = "") -> str:
     )
 
 
+# ── OpenAI vision OCR (last-resort; needs an API key, NOT a local Tesseract) ──
+# When a document is a scanned/image PDF (or an image) and no local OCR engine
+# is installed, we rasterise the pages and ask an OpenAI vision model to
+# transcribe them. This lets any scanned circular be read without a server
+# Tesseract install. All functions degrade to "" when no key / deps are present.
+
+_VISION_OCR_MAX_PAGES = 20
+
+
+def _openai_client():
+    try:
+        from openai import OpenAI
+        return OpenAI()
+    except Exception:
+        return None
+
+
+def _vision_models() -> List[str]:
+    """Vision-capable model candidates: the configured model first, then known
+    vision defaults (so it still works if the configured model is text-only)."""
+    out: List[str] = []
+    try:
+        from ....config import get_openai_model
+        cfg = get_openai_model()
+        if cfg:
+            out.append(cfg)
+    except Exception:
+        pass
+    for m in ("gpt-4o-mini", "gpt-4o"):
+        if m not in out:
+            out.append(m)
+    return out
+
+
+def _vision_transcribe_png(client, b64_png: str) -> str:
+    """Transcribe one page image (base64 PNG) to plain text via OpenAI vision."""
+    import logging
+    log = logging.getLogger(__name__)
+    prompt = (
+        "Transcribe ALL text from this document page verbatim, preserving reading "
+        "order, headings, numbers and tables as plain text. Output only the "
+        "transcribed text with no commentary. If the page has no readable text, "
+        "output nothing."
+    )
+    for model in _vision_models():
+        try:
+            resp = client.chat.completions.create(
+                model=model,
+                temperature=0,
+                max_tokens=4096,
+                messages=[{
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "image_url",
+                         "image_url": {"url": f"data:image/png;base64,{b64_png}"}},
+                    ],
+                }],
+            )
+            return (resp.choices[0].message.content or "").strip()
+        except Exception as exc:  # noqa: BLE001
+            log.warning("vision OCR model %s failed: %s", model, exc)
+            continue
+    return ""
+
+
+def _openai_vision_ocr_pdf(pdf_bytes: bytes, max_pages: int | None = None) -> str:
+    """Last-resort OCR for scanned PDFs via OpenAI vision. Returns '' if no key."""
+    import base64
+    import logging
+    log = logging.getLogger(__name__)
+    client = _openai_client()
+    if client is None:
+        return ""
+    try:
+        import fitz
+    except Exception:
+        return ""
+    try:
+        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    except Exception as exc:  # noqa: BLE001
+        log.warning("vision OCR: could not open PDF: %s", exc)
+        return ""
+    cap = _VISION_OCR_MAX_PAGES if max_pages is None else min(_VISION_OCR_MAX_PAGES, max(1, int(max_pages)))
+    parts: List[str] = []
+    try:
+        for i in range(min(doc.page_count, cap)):
+            try:
+                page = doc.load_page(i)
+                pix = page.get_pixmap(matrix=fitz.Matrix(200 / 72, 200 / 72), alpha=False)
+                b64 = base64.b64encode(pix.tobytes("png")).decode()
+                t = _vision_transcribe_png(client, b64)
+                if t:
+                    parts.append(t)
+            except Exception as exc:  # noqa: BLE001
+                log.warning("vision OCR failed on page %s: %s", i, exc)
+    finally:
+        doc.close()
+    return "\n\n".join(parts).strip()
+
+
+def _extract_image_bytes(contents: bytes, *, allow_ocr: bool = True) -> str:
+    """OCR an image (png/jpg/tiff/…): local Tesseract if installed, else OpenAI
+    vision. Returns '' when neither is available."""
+    if not allow_ocr:
+        return ""
+    import io
+    import logging
+    log = logging.getLogger(__name__)
+    png_bytes = contents
+    img = None
+    try:
+        from PIL import Image
+        img = Image.open(io.BytesIO(contents)).convert("RGB")
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        png_bytes = buf.getvalue()
+    except Exception:
+        img = None
+    # 1) Local Tesseract when present (offline, free).
+    try:
+        from ...compliance_plugins.pdf_ingest.extract_pages import _resolve_tesseract_cmd
+        cmd = _resolve_tesseract_cmd()
+        if cmd and img is not None:
+            import pytesseract
+            pytesseract.pytesseract.tesseract_cmd = cmd
+            t = (pytesseract.image_to_string(img) or "").strip()
+            if t:
+                return t
+    except Exception as exc:  # noqa: BLE001
+        log.warning("image tesseract OCR failed: %s", exc)
+    # 2) OpenAI vision fallback (no local install needed).
+    try:
+        import base64
+        client = _openai_client()
+        if client is not None:
+            return _vision_transcribe_png(client, base64.b64encode(png_bytes).decode())
+    except Exception as exc:  # noqa: BLE001
+        log.warning("image vision OCR failed: %s", exc)
+    return ""
+
+
 def extract_text_from_bytes(
     contents: bytes,
     file_type: str,
@@ -324,7 +476,12 @@ def extract_text_from_bytes(
                 continue
         return _sanitize_policy_text(contents.decode("utf-8", errors="ignore"))
 
-    # Unknown type: try PDF magic, OOXML zip (xlsx), then text decode.
+    if ft in ("png", "jpg", "jpeg", "tiff", "tif", "bmp", "webp", "gif") or name.endswith(
+        (".png", ".jpg", ".jpeg", ".tiff", ".tif", ".bmp", ".webp", ".gif")
+    ):
+        return _sanitize_policy_text(_extract_image_bytes(contents, allow_ocr=allow_ocr))
+
+    # Unknown type: try PDF magic, OOXML zip (xlsx), image magic, then text.
     if contents[:4] == b"%PDF":
         return _sanitize_policy_text(
             _extract_pdf_bytes(contents, max_pages=max_pages, allow_ocr=allow_ocr)
@@ -335,6 +492,13 @@ def extract_text_from_bytes(
             return _sanitize_policy_text(_extract_spreadsheet_bytes(contents, filename or "book.xlsx"))
         except Exception:
             pass
+    # Image magic bytes (PNG / JPEG / GIF / BMP / TIFF) → OCR.
+    if (contents[:8] == b"\x89PNG\r\n\x1a\n" or contents[:3] == b"\xff\xd8\xff"
+            or contents[:6] in (b"GIF87a", b"GIF89a") or contents[:2] == b"BM"
+            or contents[:4] in (b"II*\x00", b"MM\x00*")):
+        t = _extract_image_bytes(contents, allow_ocr=allow_ocr)
+        if t.strip():
+            return _sanitize_policy_text(t)
     try:
         return _sanitize_policy_text(contents.decode("utf-8", errors="ignore"))
     except Exception:

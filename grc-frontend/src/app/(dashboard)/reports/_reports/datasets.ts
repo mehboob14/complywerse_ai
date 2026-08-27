@@ -42,6 +42,15 @@ const scoreTone = (v: unknown): string => {
   if (n > 0) return TONE.green;
   return TONE.slate;
 };
+// RAG health (green / amber / red) — KRIs report status this way, which the
+// generic statusTone doesn't recognise (it would render every value slate).
+const ragTone = (v: unknown): string => {
+  const s = String(v ?? '').toLowerCase();
+  if (/(green|ok|on[_ ]?track|healthy)/.test(s)) return TONE.green;
+  if (/(amber|warn|at[_ ]?risk|caution)/.test(s)) return TONE.amber;
+  if (/(red|breach|off[_ ]?track|critical)/.test(s)) return TONE.red;
+  return TONE.slate;
+};
 const titleCase = (v: unknown) => String(v ?? '').replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 // Robust truthiness — the API may serialise a boolean as a real bool OR the
 // string "false"/"0", both of which are truthy in JS; treat them as false.
@@ -91,8 +100,12 @@ export const DATASETS: ReportDataset[] = [
       { key: 'inherent_score', label: 'Inherent', type: 'number', width: 100, align: 'right', badgeTone: scoreTone, agg: 'avg' },
       { key: 'residual_score', label: 'Residual', type: 'number', width: 100, align: 'right', badgeTone: scoreTone, agg: 'avg' },
       { key: 'risk_appetite', label: 'Appetite', type: 'text', width: 120, format: titleCase },
-      { key: 'closure_status', label: 'Status', type: 'badge', width: 130, badgeTone: statusTone, format: titleCase },
-      { key: 'closed_at', label: 'Closed', type: 'date', width: 120 },
+      // Real lifecycle status is `status` (open/active/…); `closure_status` is
+      // only set during the closure workflow (null for most risks), so it
+      // rendered "—". Fall back to it for older rows.
+      { key: 'status', label: 'Status', type: 'badge', width: 130, badgeTone: statusTone, format: titleCase, accessor: (r) => r.status ?? r.closure_status },
+      { key: 'closed', label: 'Closed?', type: 'badge', width: 90, accessor: (r) => r.closed_at != null, format: boolFmt, badgeTone: (v) => (boolTrue(v) ? TONE.green : TONE.slate) },
+      { key: 'closed_at', label: 'Closed date', type: 'date', width: 120 },
     ],
   },
   {
@@ -141,8 +154,10 @@ export const DATASETS: ReportDataset[] = [
     fetch: async () => asRows((await certificationsApi.getAll()).data),
     columns: [
       { key: 'id', label: 'ID', type: 'number', width: 70, href: (r) => `/frameworks/${r.id}` },
-      { key: 'framework_name', label: 'Framework', type: 'text', width: 300, href: (r) => `/frameworks/${r.id}` },
-      { key: 'framework_type', label: 'Type', type: 'badge', width: 140, badgeTone: () => TONE.slate, format: titleCase },
+      // The list response (CertificationJourneyResponse) has no framework_name/
+      // framework_type — only the journey's own `name` — so the label falls back
+      // to it, and the (unresolvable) Type column is dropped.
+      { key: 'framework_name', label: 'Framework', type: 'text', width: 300, href: (r) => `/frameworks/${r.id}`, accessor: (r) => r.framework_name ?? r.name },
       { key: 'status', label: 'Status', type: 'badge', width: 140, badgeTone: statusTone, format: titleCase },
       { key: 'current_phase', label: 'Phase', type: 'number', width: 90, align: 'right' },
       { key: 'target_date', label: 'Target', type: 'date', width: 120 },
@@ -291,11 +306,14 @@ export const DATASETS: ReportDataset[] = [
       { key: 'id', label: 'ID', type: 'number', width: 70, href: (r) => `/erm/kris` },
       { key: 'name', label: 'KRI', type: 'text', width: 280, accessor: (r) => r.name ?? r.title },
       { key: 'category', label: 'Category', type: 'badge', width: 140, badgeTone: () => TONE.slate, format: titleCase },
-      { key: 'status', label: 'Status', type: 'badge', width: 130, badgeTone: statusTone, format: titleCase },
+      // RAG health lives on `current_status` (green/amber/red); `threshold` isn't
+      // a real field (amber/green thresholds are); `next_due_date` is the real
+      // next-measurement field. Owner is not resolvable on the KRI list response
+      // (only owner_id, no name) so the column is omitted rather than shown blank.
+      { key: 'status', label: 'Status', type: 'badge', width: 130, badgeTone: ragTone, format: titleCase, accessor: (r) => r.current_status ?? r.status },
       { key: 'current_value', label: 'Current', type: 'number', width: 100, align: 'right', accessor: (r) => r.current_value ?? r.last_value },
-      { key: 'threshold', label: 'Threshold', type: 'number', width: 100, align: 'right' },
-      { key: 'owner_name', label: 'Owner', type: 'text', width: 150 },
-      { key: 'next_measurement_date', label: 'Next measure', type: 'date', width: 130 },
+      { key: 'threshold', label: 'Threshold', type: 'number', width: 100, align: 'right', accessor: (r) => r.amber_threshold ?? r.green_threshold ?? r.threshold },
+      { key: 'next_measurement_date', label: 'Next measure', type: 'date', width: 130, accessor: (r) => r.next_due_date ?? r.next_measurement_date },
     ],
   },
   {
@@ -399,7 +417,7 @@ export const DATASETS: ReportDataset[] = [
   {
     key: 'discovery_campaigns', permissions: ['assets:asset_inventory:*'], module: 'Cybersecurity Assurance', label: 'Discovery campaigns',
     description: 'IT asset discovery campaigns and schedules.',
-    fetch: async () => asRows((await discoveryApi.listCampaigns()).data),
+    fetch: async () => asRows((await discoveryApi.listCampaigns()).data?.campaigns),
     columns: [
       { key: 'id', label: 'ID', type: 'number', width: 70, href: (r) => `/asset-discovery` },
       { key: 'name', label: 'Campaign', type: 'text', width: 260 },
@@ -420,11 +438,13 @@ export const DATASETS: ReportDataset[] = [
       { key: 'id', label: 'ID', type: 'number', width: 70, href: (r) => `/governance/regulatory-changes/${r.id}` },
       { key: 'title', label: 'Change', type: 'text', width: 280, href: (r) => `/governance/regulatory-changes/${r.id}` },
       { key: 'source', label: 'Source', type: 'badge', width: 120, badgeTone: () => TONE.teal, format: titleCase },
-      { key: 'regulatory_body', label: 'Regulator', type: 'badge', width: 140, badgeTone: () => TONE.slate, format: titleCase },
+      // (Regulator dropped — the serializer hardcodes regulatory_body=None.)
       { key: 'priority', label: 'Priority', type: 'badge', width: 110, badgeTone: sevTone, format: titleCase },
       { key: 'status', label: 'Status', type: 'badge', width: 130, badgeTone: statusTone, format: titleCase },
       { key: 'assignee_name', label: 'Owner', type: 'text', width: 150 },
-      { key: 'impact_summary', label: 'Impact', type: 'text', width: 260 },
+      // impact_summary is hardcoded None in the serializer — fall back to the
+      // change's description (the only populated free-text) so it isn't blank.
+      { key: 'impact_summary', label: 'Impact', type: 'text', width: 260, accessor: (r) => r.impact_summary ?? r.description },
       { key: 'gap_count', label: 'Gaps', type: 'number', width: 80, align: 'right', agg: 'sum' },
       { key: 'task_count', label: 'Tasks', type: 'number', width: 80, align: 'right', agg: 'sum' },
       { key: 'completed_task_count', label: 'Tasks done', type: 'number', width: 100, align: 'right', agg: 'sum' },
@@ -440,9 +460,11 @@ export const DATASETS: ReportDataset[] = [
       { key: 'id', label: 'ID', type: 'number', width: 70, href: (r) => `/governance/exceptions` },
       { key: 'title', label: 'Exception', type: 'text', width: 280, accessor: (r) => r.title ?? r.name },
       { key: 'status', label: 'Status', type: 'badge', width: 130, badgeTone: statusTone, format: titleCase },
-      { key: 'risk_level', label: 'Risk', type: 'badge', width: 110, badgeTone: sevTone, format: titleCase, accessor: (r) => r.risk_level ?? r.severity },
+      // Exception severity proxy is `priority`; owner proxy is `requester_name`
+      // (neither risk_level/severity nor owner_name exist on the list response).
+      { key: 'risk_level', label: 'Risk', type: 'badge', width: 110, badgeTone: sevTone, format: titleCase, accessor: (r) => r.priority ?? r.risk_level ?? r.severity },
       { key: 'expires_at', label: 'Expires', type: 'date', width: 120, accessor: (r) => r.expires_at ?? r.expiry_date },
-      { key: 'owner_name', label: 'Owner', type: 'text', width: 150 },
+      { key: 'owner_name', label: 'Owner', type: 'text', width: 150, accessor: (r) => r.requester_name ?? r.owner_name },
       { key: 'created_at', label: 'Created', type: 'date', width: 120 },
     ],
   },

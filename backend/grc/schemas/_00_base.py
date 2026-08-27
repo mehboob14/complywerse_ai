@@ -861,6 +861,8 @@ class ITAssetBase(BaseModel):
     location: Optional[str] = None
     cde_environment: bool = False
     pci_dss: Optional[dict] = None
+    ephi_environment: bool = False
+    hipaa: Optional[dict] = None
     # Phase 5.1 — Exposure metadata. All optional; writers may supply.
     internet_facing: Optional[bool] = None
     network_segment: Optional[str] = None
@@ -951,6 +953,8 @@ class ITAssetUpdate(BaseModel):
     status: Optional[str] = None
     cde_environment: Optional[bool] = None
     pci_dss: Optional[dict] = None
+    ephi_environment: Optional[bool] = None
+    hipaa: Optional[dict] = None
     # Phase 5 — Operational context fields. Lifecycle state is intentionally
     # NOT updatable through this generic endpoint; clients must use
     # POST /assets/{id}/lifecycle-transition so the state machine runs.
@@ -1007,6 +1011,8 @@ class ITAssetResponse(BaseModel):
     status: str
     cde_environment: bool = False
     pci_dss: Optional[dict] = None
+    ephi_environment: bool = False
+    hipaa: Optional[dict] = None
     created_at: datetime
     # Phase 5 fields — all optional on the response so older rows that
     # haven't been touched since the migration still serialize cleanly.
@@ -1191,6 +1197,8 @@ class AssetDetailResponse(BaseModel):
     cloud_resource_id: Optional[str] = None
     cde_environment: Optional[bool] = None
     pci_dss: Optional[Any] = None
+    ephi_environment: Optional[bool] = None
+    hipaa: Optional[Any] = None
 
     class Config:
         from_attributes = True

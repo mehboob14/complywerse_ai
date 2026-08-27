@@ -101,6 +101,9 @@ SERVER_DATASETS: Dict[str, DatasetSpec] = {
             "vuln_id": "text", "cwe_id": "text", "affected_component": "text",
         },
         default_order=("discovered_at", "desc"),
+        # `assigned_to` is a user FK — resolve it to a display name so the report's
+        # Owner column shows a name in server mode, not a raw id.
+        user_fields={"assigned_to": "assignee_name"},
     ),
     "risks": DatasetSpec(
         Risk,
@@ -109,19 +112,22 @@ SERVER_DATASETS: Dict[str, DatasetSpec] = {
         # business_owner_id — so the Owner column was dropped rather than shipped blank.
         # `risk_category` is a real column; the frontend accessor also falls back to
         # `category` (the field RiskResponse exposes) for client mode.
+        # `status` is the real lifecycle field (open/active/…), always populated;
+        # `closure_status` is only set during the closure workflow (null for most).
+        # Both are projected so the report's Status column has real data.
         fields=[
             "id", "title", "risk_category", "register_type",
-            "inherent_score", "residual_score", "risk_appetite", "closure_status", "closed_at", "created_at",
+            "inherent_score", "residual_score", "risk_appetite", "status", "closure_status", "closed_at", "created_at",
         ],
         search=["title", "risk_category"],
         sortable=[
             "id", "title", "risk_category", "register_type",
-            "inherent_score", "residual_score", "risk_appetite", "closure_status", "closed_at", "created_at",
+            "inherent_score", "residual_score", "risk_appetite", "status", "closure_status", "closed_at", "created_at",
         ],
         filterable={
             "risk_category": "badge", "register_type": "text",
             "inherent_score": "number", "residual_score": "number", "risk_appetite": "text",
-            "closure_status": "badge", "closed_at": "date", "created_at": "date", "title": "text",
+            "status": "badge", "closure_status": "badge", "closed_at": "date", "created_at": "date", "title": "text",
         },
         default_order=("id", "desc"),
     ),

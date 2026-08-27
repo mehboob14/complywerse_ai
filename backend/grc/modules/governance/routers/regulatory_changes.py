@@ -439,11 +439,14 @@ def upload_regulatory_change_document(
         file_type = "doc"
     elif ext in {"txt", "md", "csv", "json", "log", "rtf"}:
         file_type = "txt"
+    elif ext in {"xlsx", "xls"}:
+        file_type = ext
+    elif ext in {"png", "jpg", "jpeg", "tiff", "tif", "bmp", "webp", "gif"}:
+        file_type = ext
     else:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Unsupported file type. Use PDF, Word (.doc/.docx), or plain text.",
-        )
+        # Accept anything else too — the extractor auto-detects by content
+        # (magic bytes) and OCRs scans/images, so users can upload any document.
+        file_type = ext or "bin"
 
     try:
         from .policy_parser import extract_text_from_bytes
@@ -467,9 +470,10 @@ def upload_regulatory_change_document(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=(
-                "Could not extract text from the uploaded document. "
-                "If this is a scanned PDF, ensure Tesseract OCR is installed on the server, "
-                "or upload a text-based PDF / Word file."
+                "We couldn't read any text from this document — even after OCR. "
+                "It may be empty, password-protected/corrupt, or a very low-quality "
+                "scan. For scanned files, configure OpenAI (used for AI OCR) or "
+                "install Tesseract on the server, then try again."
             ),
         )
 

@@ -32,6 +32,7 @@ from typing import Any, Dict
 
 from grc.crypto import decrypt_secret
 from grc.models import IntegrationConnection
+from ..runners.live_api_catalog import LIVE_API_PROVIDERS
 
 
 def resolve_credentials_for_connection(connection: IntegrationConnection) -> Dict[str, Any]:
@@ -42,6 +43,19 @@ def resolve_credentials_for_connection(connection: IntegrationConnection) -> Dic
         if not prefix:
             return default
         return os.environ.get(f"{prefix}_{key}", default)
+
+    # SaaS API evidence collectors (github/okta/slack/…): integration_type IS the
+    # provider key. Creds live in credentials_extra_json (token/domain/email),
+    # encrypted; token also accepted from the legacy `password` column.
+    if integration_type in LIVE_API_PROVIDERS:
+        extra = getattr(connection, "credentials_extra_json", None) or {}
+        token = extra.get("token")
+        return {
+            "provider": integration_type,
+            "token": (decrypt_secret(token) if token else decrypt_secret(connection.password)) or "",
+            "domain": (extra.get("domain") or connection.console_url or "").strip(),
+            "email": (extra.get("email") or connection.username or "").strip(),
+        }
 
     if integration_type == "aws_readonly":
         # The connection form labels `console_url` as "AWS Region" for this type;

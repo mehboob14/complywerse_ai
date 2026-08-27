@@ -33,6 +33,11 @@ class ITAsset(Base):
     # PCI DSS cardholder-data-inventory attributes for CDE assets:
     # { pci_requirement, cardholder_data, encrypted, retention, assessment }.
     pci_dss = Column(JSON, nullable=True)
+    # HIPAA ePHI scope flag + inventory attributes for ePHI assets (mirrors the
+    # PCI CDE columns above): { ephi_data, encrypted, retention,
+    # hipaa_safeguard, assessment }.
+    ephi_environment = Column(Boolean, default=False)
+    hipaa = Column(JSON, nullable=True)
 
     # ── Phase 5.1: Exposure metadata ───────────────────────────────────────
     # Operational context that the existing `criticality`/`status` columns
