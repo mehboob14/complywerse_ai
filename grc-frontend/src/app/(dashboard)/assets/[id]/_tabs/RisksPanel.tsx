@@ -118,6 +118,43 @@ function DimBar({ label, sub, pct, known, tone, guideId, guideN }: { label: stri
   );
 }
 
+/* ─── Exposure Health — dedicated breakdown for the health score (external) ── */
+// The health grade (e.g. F · 52) is the SAME five EASM signals as the residual
+// risk below, read the other way: higher = healthier. Shown for external assets
+// so the health number gets its own breakdown, not just a tile.
+function HealthScoreCard({ assetId }: { assetId: number }) {
+  const q = useQuery({
+    queryKey: ['asset-risk-posture', assetId],
+    queryFn: async () => (await riskPostureApi.asset(assetId)).data as any,
+  });
+  const d = q.data;
+  if (!d || d.mode !== 'easm' || !d.health?.grade) return null;
+  const grade = d.health.grade as string;
+  const hscore = d.health.score as number;
+  const comps = Object.entries(d.components || {}) as [string, any][];
+  const gc = ({ A: '#1a7f5a', B: '#3b7d2f', C: '#b8860b', D: '#c26a1b', F: '#b3261e' } as Record<string, string>)[grade] || '#8a948b';
+  return (
+    <BigCard icon={<Gauge size={15} />} title="Exposure health" subtitle="The same outside-in signals as residual risk, read the other way — higher = healthier.">
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="text-[34px] font-semibold leading-none" style={{ color: gc }}>{grade}</span>
+        <span className="text-[15px] font-semibold text-[#1a2b24]">{hscore}<span className="text-[13px] text-[#aab2a8]"> / 100</span></span>
+        <span className="rounded-full px-2.5 py-1 text-[11.5px] font-bold uppercase tracking-wider" style={{ color: gc, background: `${gc}1a` }}>outside-in health</span>
+      </div>
+      <div className="mt-5 space-y-2.5">
+        {comps.map(([k, c]) => {
+          const hp = Math.round((1 - (c.score ?? 0)) * 100);
+          const t = hp >= 60 ? '#1a7f5a' : hp >= 40 ? '#b8860b' : '#b3261e';
+          return <DimBar key={k} label={c.label} sub={c.detail} pct={hp} known tone={t} />;
+        })}
+      </div>
+      <div className="mt-4 flex items-center justify-between border-t border-[#f2f4ef] pt-3 text-[12px] text-[#8a948b]">
+        <span>Weighted composite of {comps.length} exposure signals · higher = healthier.</span>
+      </div>
+    </BigCard>
+  );
+}
+
+
 /* ─── Card 1: Residual Risk (single source: /risk-posture/asset/{id}) ───── */
 
 function ResidualRiskCard({ assetId, asset }: { assetId: number; asset: any }) {
@@ -128,9 +165,28 @@ function ResidualRiskCard({ assetId, asset }: { assetId: number; asset: any }) {
   const d = q.data;
   const score = d?.score ?? null;
   const tone = score != null ? bandTone(score) : null;
-  const known: string[] = d?.known_dimensions ?? [];
-  const total = DIMS.length;
-  const knownCount = DIMS.filter((x) => known.includes(x.key)).length;
+  const isEasm = d?.mode === 'easm';
+  // External (EASM) assets return exposure dimensions (tls/headers/transport/
+  // email/vuln) with their own labels; internal assets use the fixed 5 signals.
+  // Build one row list from whichever the posture returned so the bars match.
+  const rows: { key: string; concept: string; dim: string; pct: number; known: boolean; positive: string | null; guideId?: string; guideN?: number }[] = isEasm
+    // Show each signal's CONTRIBUTION to the composite (the bars sum to the score)
+    // rather than its raw 0-100 severity — so "0/6 present" pairs with the points
+    // it ADDS to the risk, not a 100 that reads like a coverage score.
+    ? Object.entries(d.components || {}).map(([key, c]: [string, any]) => ({
+        key, concept: c.label || key, dim: c.detail || '', pct: Math.round(d.contributions?.[key] ?? (c.score ?? 0) * 100), known: true, positive: null,
+      }))
+    : DIMS.map((x) => {
+        const c = d?.components?.[x.key];
+        return {
+          key: x.key, concept: x.concept, dim: x.dim, pct: (c?.score ?? 0) * 100, known: !!c?.known,
+          positive: c?.coverage_pct != null ? `${Math.round(c.coverage_pct)}% of controls cover it`
+            : c?.pass_rate != null ? `${c.pass_rate}% of checks pass` : null,
+          guideId: x.guideId, guideN: x.guideN,
+        };
+      });
+  const total = rows.length;
+  const knownCount = rows.filter((r) => r.known).length;
 
   return (
     <BigCard
@@ -164,27 +220,18 @@ function ResidualRiskCard({ assetId, asset }: { assetId: number; asset: any }) {
           </div>
 
           <div className="mt-5 space-y-2.5">
-            {DIMS.map((x) => {
-              const c = d.components?.[x.key];
-              const isKnown = !!c?.known;
-              const pct = (c?.score ?? 0) * 100;
-              const positive =
-                c?.coverage_pct != null ? `${Math.round(c.coverage_pct)}% of controls cover it`
-                : c?.pass_rate != null ? `${c.pass_rate}% of checks pass`
-                : null;
-              return (
-                <DimBar
-                  key={x.key}
-                  label={x.concept}
-                  sub={positive ? `${x.dim} · ${positive}` : x.dim}
-                  pct={pct}
-                  known={isKnown}
-                  tone={tone.fg}
-                  guideId={x.guideId}
-                  guideN={x.guideN}
-                />
-              );
-            })}
+            {rows.map((r) => (
+              <DimBar
+                key={r.key}
+                label={r.concept}
+                sub={r.positive ? `${r.dim} · ${r.positive}` : r.dim}
+                pct={r.pct}
+                known={r.known}
+                tone={tone.fg}
+                guideId={r.guideId}
+                guideN={r.guideN}
+              />
+            ))}
           </div>
 
           <div className="mt-4 flex items-center justify-between border-t border-[#f2f4ef] pt-3 text-[12px] text-[#8a948b]">
@@ -855,15 +902,22 @@ export default function RisksPanel({
   allControls, controlsLoading, onLinkControl, isLinkingControl,
   onUnlinkInternalControl, onUnlinkFrameworkControl, isUnlinkingInternal, isUnlinkingFramework,
 }: RisksPanelProps) {
+  // External (EASM) assets have no CIA ratings or CIS baseline — those two
+  // editable cards don't apply; the Residual Risk card shows the exposure
+  // dimensions that do.
+  const isExternal = !!(asset?.platform_properties?.external_probe) || asset?.last_seen_source === 'external';
   return (
     <div className="space-y-4 font-['Public_Sans',system-ui,sans-serif] text-[#1a2b24]">
       {/* The three cards mirror the reference product exactly, from OUR single
           source of truth (/risk-posture/asset/{id}). */}
+      {isExternal && <HealthScoreCard assetId={assetId} />}
       <ResidualRiskCard assetId={assetId} asset={asset} />
-      <div className="grid gap-4 lg:grid-cols-2">
-        <CIACard assetId={assetId} asset={asset} />
-        <CISCard assetId={assetId} onOpenCompliance={onOpenCompliance} />
-      </div>
+      {!isExternal && (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <CIACard assetId={assetId} asset={asset} />
+          <CISCard assetId={assetId} onOpenCompliance={onOpenCompliance} />
+        </div>
+      )}
 
       {/* Below the fold: management the reference cannot do — link controls and
           risks, accept mapping suggestions. Subordinate, never restates a

@@ -7,6 +7,19 @@
  */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+
+// Outside-only host: born from EASM and never logged into. Checking
+// last_seen_source === 'external' alone is WRONG for the hide-gates below —
+// a Nessus sync bumps last_seen_source to 'nessus' and the inside-only
+// Hardware/AV/Software cards leak back onto a host we have never been inside
+// (caught live 24 Aug on liztek.ca). origin_source is stamped once at birth
+// and discovery_state stays "unmanaged" until a credential actually profiles
+// the box — so this stays true across any number of scanner syncs, and
+// correctly flips false the day the host gets a real login.
+const isOutsideOnly = (a: any): boolean =>
+  a?.last_seen_source === 'external' ||
+  (a?.origin_source === 'easm' && (a?.discovery_state ?? 'unmanaged') === 'unmanaged');
+
 const MONO_HINT = /(serial|sid|part_number|mac|ipv4|ipv6|version|path|key|uuid|gateway|subnet|dns|arn|_id$|^id$)/i;
 
 export function humanize(key: string): string {
@@ -257,6 +270,9 @@ function buildMachineCards(asset: any, pp: any, kind: string, linux = false): an
   const gpu1 = Array.isArray(gpuD) ? gpuD[0] : gpuD;
   const idn = dataOf(pp.identity) || {};
   const pkg = dataOf(pp.packages) || dataOf(pp.pkg) || {};
+  // External (EASM) assets were reached from the public internet, not swept with
+  // an agentless credential — one label reused on every provenance card below.
+  const scanNote = isOutsideOnly(asset) ? 'Outside-in probe' : 'Agentless scan';
 
   // ── Application (a piece of software promoted to its own child asset) ──
   // It has NO hardware/OS of its own — those belong to the host it runs on. Show
@@ -267,7 +283,7 @@ function buildMachineCards(asset: any, pp: any, kind: string, linux = false): an
     const running = /run|active|listen/i.test(String(app.service_state || ''));
     return [
       {
-        title: 'Application', note: 'Agentless scan',
+        title: 'Application', note: scanNote,
         fields: [
           { label: 'Product', value: dash(asset.name) },
           { label: 'Version', value: dash(asset.os_version) },
@@ -296,7 +312,7 @@ function buildMachineCards(asset: any, pp: any, kind: string, linux = false): an
   }
 
   const netPlatform = {
-    title: 'Network & Platform', note: 'Agentless scan',
+    title: 'Network & Platform', note: scanNote,
     fields: [
       { label: 'IP Address', value: dash(asset?.ip_address), mono: true },
       { label: 'Network Segment', value: dash(asset?.network_segment), mono: true },
@@ -306,6 +322,34 @@ function buildMachineCards(asset: any, pp: any, kind: string, linux = false): an
       { label: 'Internet Exposed', value: asset?.internet_facing ? 'Yes' : 'No', tone: asset?.internet_facing ? 'bad' : 'ok' },
     ],
   };
+
+  // ── External (EASM) host: reached from the public internet, never logged into ──
+  // Cards are driven by what was ACTUALLY collected. An outside-in probe can only
+  // see the public face (IP, DNS name, HTTP, TLS) — it can never read vCPU, RAM,
+  // disk, MAC, serial, OS build, AV/EDR or installed packages. Rendering the
+  // inside-only Hardware card for these hosts produced a wall of "Not set" and a
+  // misleading red "Antivirus: None detected" (caught live 23 Aug — that reads as a
+  // finding, when it really means "no way to see inside"). So: only the cards whose
+  // data can exist. The Internet-exposure card (real HTTP/TLS facts) is added by
+  // buildOverviewData after this returns.
+  if (isOutsideOnly(asset)) {
+    const sourceName = asset?.discovery_source || 'Certificate Transparency';
+    return [{
+      title: 'Public identity', note: 'Outside-in probe',
+      fields: [
+        { label: 'FQDN', value: dash(asset?.fqdn || asset?.host_name) },
+        ...(Array.isArray(asset?.dns_aliases) && asset.dns_aliases.length
+          ? [{ label: 'Also Known As', value: asset.dns_aliases.join(', '), mono: true }]
+          : []),
+        { label: 'Resolves To', value: dash(asset?.ip_address), mono: true },
+        { label: 'Internet Exposed', value: asset?.internet_facing ? 'Yes' : 'No', tone: asset?.internet_facing ? 'bad' : 'ok' },
+        { label: 'Found Via', value: sourceName },
+        { label: 'First Seen', value: date(asset?.first_seen_at || asset?.created_at) },
+        { label: 'Last Seen', value: date(asset?.last_seen_at) },
+        { label: 'Inside View', value: 'Not available — no login (external host). Scan with Nessus to find weak spots.', tone: 'muted' },
+      ],
+    }];
+  }
 
   // ── Linux host: two BALANCED hero cards curated for a Linux admin ──
   // Left = network + OS identity; right = hardware + telemetry. Field counts are
@@ -322,7 +366,7 @@ function buildMachineCards(asset: any, pp: any, kind: string, linux = false): an
         ],
       },
       {
-        title: 'Hardware & Telemetry', note: 'Agentless scan',
+        title: 'Hardware & Telemetry', note: scanNote,
         tiles: [
           { num: asset?.cpu_cores ?? '—', label: 'vCPU' },
           { num: asset?.memory_gb ?? '—', label: 'GB RAM' },
@@ -355,7 +399,7 @@ function buildMachineCards(asset: any, pp: any, kind: string, linux = false): an
         { label: 'Serial Number', value: dash(asset?.serial_number), mono: true },
       ] },
       {
-        title: 'Hardware & Telemetry', note: 'Agentless scan',
+        title: 'Hardware & Telemetry', note: scanNote,
         tiles: [
           { num: asset?.cpu_cores ?? '—', label: 'vCPU' },
           { num: asset?.memory_gb ?? '—', label: 'GB RAM' },
@@ -398,10 +442,48 @@ function buildMachineCards(asset: any, pp: any, kind: string, linux = false): an
     return n != null ? { label: humanize(k), value: n.toLocaleString() } : null;
   }).filter(Boolean) as any[];
   const title: Record<string, string> = { database: 'Database Engine', network: 'Network Device', cloud: 'Cloud Account', cluster: 'Cluster', identity: 'Directory' };
-  const summary = { title: title[kind] || 'Platform', note: 'Agentless scan',
+  const summary = { title: title[kind] || 'Platform', note: scanNote,
     fields: [...flat, ...counts].length ? [...flat, ...counts] : [{ label: 'Details', value: 'See sections below' }] };
   // Cloud accounts have no LAN identity — skip the IP/MAC card entirely.
   return kind === 'cloud' ? [summary] : [netPlatform, summary];
+}
+
+
+// ── Layer 2: AI-planned cards ─────────────────────────────────────────────────
+// The plan carries ONLY headings + card grouping per field KEY (the model never
+// saw a value). This walks the asset with the SAME key paths the backend
+// enumerated (services/asset_layout_ai.collect_field_keys) and places the REAL
+// collected value under the planned heading. Any key the plan names that the
+// asset no longer has is simply skipped; any card that ends up empty is dropped.
+// Returns null if nothing could be placed, so the caller falls back to Layer 1.
+function readPlannedValue(asset: any, pp: any, key: string): any {
+  const dot = key.indexOf('.');
+  if (dot < 0) return pp?.[key];
+  const head = key.slice(0, dot), tail = key.slice(dot + 1);
+  if (head === 'external_probe') return pp?.external_probe?.[tail];
+  if (head === 'app') return asset?.app_attributes_json?.[tail];
+  const s = pp?.[head];
+  return sec(s) ? s.data?.[tail] : undefined;
+}
+
+function buildPlannedCards(asset: any, pp: any, plan: NonNullable<OverviewOpts['plan']>, note: string): any[] | null {
+  if (!plan || !Array.isArray(plan.fields) || !Array.isArray(plan.cards)) return null;
+  const byCard: Record<string, any[]> = {};
+  for (const f of plan.fields) {
+    const raw = readPlannedValue(asset, pp, f.key);
+    if (isEmpty(raw) || (typeof raw === 'object' && !Array.isArray(raw))) continue;
+    const leaf = f.key.slice(f.key.lastIndexOf('.') + 1);
+    (byCard[f.card] ||= []).push({
+      label: f.heading,                       // the AI heading
+      value: fmtValue(leaf, raw),             // the REAL value, formatted only for units/booleans
+      mono: MONO_HINT.test(leaf) || undefined,
+    });
+  }
+  const cards = [...plan.cards]
+    .sort((a, b) => a.order - b.order)
+    .filter((c) => (byCard[c.name] || []).length > 0)
+    .map((c) => ({ title: c.name, note, fields: byCard[c.name], full: c.size === 'full' }));
+  return cards.length ? cards : null;
 }
 
 export interface OverviewOpts {
@@ -412,6 +494,8 @@ export interface OverviewOpts {
   actions?: { label: string; primary?: boolean; danger?: boolean; onClick?: () => void }[];
   onEdit?: () => void;
   onSoftwareClick?: (s: any) => void;
+  // AI layout plan (Layer 2). null/undefined → generic cards exactly as before.
+  plan?: { fields: Array<{ key: string; heading: string; card: string }>; cards: Array<{ name: string; size: 'half' | 'full'; order: number }> } | null;
 }
 
 export function buildOverviewData(asset: any, o: OverviewOpts = {}): any {
@@ -433,32 +517,107 @@ export function buildOverviewData(asset: any, o: OverviewOpts = {}): any {
     deep.notes = { denied: [], absent: [] };
   }
 
+  // External (EASM) assets carry outside-in probe facts (HTTP/TLS) in
+  // platform_properties.external_probe. buildMachineCards returns via several
+  // kind-specific branches, so append the exposure card HERE — after whichever
+  // branch ran — not inside one branch that other asset types skip.
+  // Layer 2 first: if an AI layout plan is present and places at least one real
+  // value, it REPLACES the hardcoded machine cards. Otherwise Layer 1 (the
+  // existing kind-specific / generic cards) renders exactly as before.
+  const scanNoteTop = isOutsideOnly(asset) ? 'Outside-in probe' : 'Agentless scan';
+  const planned = o.plan ? buildPlannedCards(asset, pp, o.plan, scanNoteTop) : null;
+  const machineCards = planned ?? buildMachineCards(asset, pp, kind, isLinux(asset));
+  const probe = pp?.external_probe;
+  // EASM health grade + outside-in hygiene parameters. Built once so BOTH render
+  // paths surface them — the generic exposure card AND an AI layout plan's
+  // Exposure card (which only enumerates raw probe keys, not the derived health).
+  const probeFields = (pr: any) => {
+    const h = pr.health || {};
+    const gradeTone = !h.grade ? 'muted' : (['A', 'B'].includes(h.grade) ? 'ok' : h.grade === 'C' ? 'warn' : 'bad');
+    const secN = Object.keys(pr.security_headers || {}).length;
+    const hasMx = Array.isArray(pr.dns_mx) && pr.dns_mx.length > 0;
+    return [
+      { label: 'Health score', value: h.grade ? `${h.grade} · ${h.score}/100` : (h.reason || 'not graded'), tone: gradeTone },
+      { label: 'Response time', value: pr.response_time_ms != null ? `${pr.response_time_ms} ms` : '—' },
+      { label: 'HTTPS / TLS', value: pr.https_available ? (pr.tls_version || 'Yes') : 'No', tone: pr.https_available ? 'ok' : 'bad' },
+      { label: 'Cert expires', value: pr.tls_not_after ? `${String(pr.tls_not_after).slice(0, 10)}${pr.tls_days_to_expiry != null ? ` (${pr.tls_days_to_expiry}d)` : ''}` : '—', tone: pr.tls_expired ? 'bad' : (pr.tls_not_after ? 'ok' : 'muted') },
+      { label: 'Security headers', value: `${secN}/6 set`, tone: secN >= 5 ? 'ok' : secN >= 2 ? 'warn' : 'bad' },
+      { label: 'Email (SPF/DMARC)', value: hasMx ? `${pr.spf ? 'SPF ✓' : 'SPF ✗'} · ${pr.dmarc ? 'DMARC ✓' : 'DMARC ✗'}` : 'no MX', tone: !hasMx ? 'muted' : (pr.spf && pr.dmarc ? 'ok' : 'warn') },
+    ];
+  };
+  let machine = machineCards;
+  if (probe && planned) {
+    // AI plan drives the cards — inject the derived health fields at the top of
+    // its Exposure card so the grade isn't lost among the raw probe keys.
+    const expo = planned.find((c: any) => /exposure|internet/i.test(c.title || '')) || planned[0];
+    if (expo) expo.fields = [...probeFields(probe), ...(expo.fields || [])];
+  } else if (probe) {
+    machine = [...machineCards, {
+      title: 'Internet exposure',
+      note: `outside-in probe${probe.probed_at ? ' · ' + String(probe.probed_at).slice(0, 10) : ''}`,
+      fields: [
+        ...probeFields(probe),
+        { label: 'Reachable', value: probe.live ? 'Yes' : 'No', tone: probe.live ? 'ok' : 'muted' },
+        { label: 'HTTP status', value: probe.status_code != null ? String(probe.status_code) : '—' },
+        { label: 'Server', value: probe.server || '—' },
+        { label: 'Cert issuer', value: probe.tls_issuer || '—' },
+        { label: 'Page title', value: probe.title || '—' },
+      ],
+    }];
+  }
+
+  // Health-score breakdown — how the F·52 is composed, dimension by dimension.
+  // Same signals as the Risk & Controls / posture breakdown, shown here as HEALTH
+  // (higher = better) so the operator sees what pulls the grade down.
+  const _hc = probe?.health?.components;
+  if (probe && _hc && Object.keys(_hc).length) {
+    const _LBL: Record<string, string> = { tls: 'TLS / encryption', headers: 'Security headers', transport: 'Transport (HTTPS)', email: 'Email auth (SPF/DMARC)', vuln: 'Vulnerabilities & exposure' };
+    machine = [...machine, {
+      title: 'Exposure health breakdown',
+      note: probe.health.grade ? `${probe.health.grade} · ${probe.health.score}/100` : 'health',
+      fields: Object.entries(_hc).map(([k, c]: [string, any]) => {
+        const pct = Math.round((c.score ?? 0) * 100);
+        return { label: _LBL[k] || k, value: `${pct}/100 · ${c.detail || ''}`, tone: pct >= 75 ? 'ok' : pct >= 40 ? 'warn' : 'bad' };
+      }),
+    }];
+  }
+
   return {
     legend: { machine: `${asset?.last_seen_source || 'agentless'} scan · ${date(asset?.last_seen_at)}` },
+    // External (EASM) assets aren't agentless-collected — let the design relabel.
+    external: isOutsideOnly(asset),
     header: {
       name: asset?.name || asset?.host_name || `Asset #${asset?.id}`,
       avatar: (asset?.name || 'A').charAt(0).toUpperCase(),
       tags: [
         { label: asset?.asset_type || 'Asset' },
         { label: asset?.status || 'active', tone: (asset?.status || 'active') === 'active' ? 'ok' : undefined },
+        // Mirror the register's Internet-facing pill on the detail header so the
+        // exposure signal doesn't vanish when you open the asset.
+        ...(asset?.internet_facing ? [{ label: 'Internet-facing', tone: 'bad' }] : []),
       ],
       description: asset?.description || 'No description',
       idline: isApp
         ? ['application', asset?.os_version || asset?.name,
           asset?.parent_asset_id ? `runs on ${asset?.host_name || `#${asset.parent_asset_id}`}` : null].filter(Boolean).join(' · ')
         : [asset?.asset_type, KIND_LABEL[kind], asset?.os_version || asset?.os_family,
-          asset?.source_system === 'discovery' ? 'discovered on network' : null].filter(Boolean).join(' · '),
+          isOutsideOnly(asset) ? 'discovered externally · internet-facing'
+            : asset?.source_system === 'discovery' ? 'discovered on network' : null].filter(Boolean).join(' · '),
     },
     actions: o.actions || [],
     tabs: o.tabs || [],
     kpis: [
-      { label: 'Risk Score', value: dash(K.riskScore), sub: K.riskScore ? 'Assessed' : 'Not assessed', tone: K.riskScore ? undefined : 'muted' },
+      // External (EASM) assets are graded on exposure health, not a CIA risk
+      // score — surface the health grade here so the tile isn't "Not assessed".
+      probe?.health?.grade
+        ? { label: 'Exposure health', value: `${probe.health.grade} · ${probe.health.score}`, sub: 'Outside-in risk', tone: ['A', 'B'].includes(probe.health.grade) ? 'ok' : probe.health.grade === 'C' ? 'warn' : 'bad' }
+        : { label: 'Risk Score', value: dash(K.riskScore), sub: K.riskScore ? 'Assessed' : 'Not assessed', tone: K.riskScore ? undefined : 'muted' },
       { label: 'Open Findings', value: String(K.openFindings ?? 0), sub: (K.openFindings ?? 0) ? 'Needs attention' : 'None open', tone: (K.openFindings ?? 0) ? 'bad' : 'ok' },
       { label: 'Blast Radius', value: String(K.blastRadius ?? 0), sub: (K.blastRadius ?? 0) ? 'Dependents mapped' : 'No dependents mapped', tone: 'muted' },
       { label: 'Control Coverage', value: `${Math.round(K.controlCoverage ?? 0)}%`, sub: (K.controlCoverage ?? 0) ? 'Controls mapped' : 'No controls mapped', tone: (K.controlCoverage ?? 0) >= 50 ? 'ok' : 'warn', bar: Math.round(K.controlCoverage ?? 0) },
       { label: 'Refresh Due', value: dash(K.refreshDue), sub: K.refreshDue ? 'Scheduled' : 'Not scheduled', tone: 'muted' },
     ],
-    machine: buildMachineCards(asset, pp, kind, isLinux(asset)),
+    machine,
     manual: [
       {
         title: 'Identity & Ownership', note: 'Manual entry', onEdit: o.onEdit,
@@ -493,7 +652,15 @@ export function buildOverviewData(asset: any, o: OverviewOpts = {}): any {
       },
     ],
     security: {
-      signals: [
+      // An external (EASM) host was never logged into, so AV / EDR / packages are
+      // UNKNOWN — not "none". Rendering "None detected" in red for these was a
+      // false alarm (it reads as a finding). Show the honest state in a neutral tone.
+      signals: isOutsideOnly(asset) ? [
+        { label: 'Antivirus', value: 'Not observable from outside', tone: 'muted' },
+        { label: 'EDR', value: 'Not observable from outside', tone: 'muted' },
+        { label: 'Endpoint Protected', value: 'Unknown — no login', tone: 'muted' },
+        { label: 'Weak Spots', value: 'Run a Nessus scan on this host to find them', tone: 'muted' },
+      ] : [
         { label: 'Antivirus', value: posture?.has_antivirus ? (posture.antivirus_products?.join(', ') || 'Present') : 'None detected', tone: posture?.has_antivirus ? 'ok' : 'bad' },
         { label: 'EDR', value: posture?.has_edr ? (posture.edr_products?.join(', ') || 'Present') : 'None detected', tone: posture?.has_edr ? 'ok' : 'bad' },
         { label: 'Endpoint Protected', value: posture?.endpoint_protected ? 'Yes' : 'No', tone: posture?.endpoint_protected ? 'ok' : 'bad' },

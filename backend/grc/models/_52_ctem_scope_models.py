@@ -90,6 +90,12 @@ class CtemCycle(Base):
     membership_hash = Column(String(64), nullable=True)
     hash_algorithm = Column(String(40), nullable=True)
 
+    # Gated loop: {"discover": iso_ts, "prioritise": iso_ts, "validate": iso_ts}.
+    # Presence of a key = that stage was RUN for this cycle; each stage's numbers
+    # and the next stage's action unlock only once the previous key exists.
+    # Validate is stamped server-side when its AI mapping run finishes.
+    stage_progress = Column(JSON, nullable=True)
+
     notes = Column(Text, nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)

@@ -177,3 +177,33 @@ def test_hash_stable_when_world_unchanged(db):
     db.commit()
     h2 = membership_hash(resolve_scope_assets(db, TENANT, rule))
     assert h1 == h2, "membership unchanged → hash must not move"
+
+
+# ── exposure membership: the EASM → CTEM seam ────────────────────────────────
+
+def test_rule_internet_facing(db):
+    # A scope rule {internet_facing: True} must select ONLY internet-facing
+    # assets — this is how an EASM-discovered server enters a CTEM scope.
+    db.query(ITAsset).filter(ITAsset.id == 1).update({"internet_facing": True})
+    db.commit()
+    rule = {"internet_facing": True}
+    assert resolve_scope_assets(db, TENANT, rule) == [1]
+    assert set(scope_vulnerability_ids(db, TENANT, rule)) == {1, 2}  # asset 1's findings
+
+
+def test_rule_internet_facing_ANDs_with_other_criteria(db):
+    # internet_facing is AND-ed like every other criterion, not a bypass.
+    db.query(ITAsset).filter(ITAsset.id.in_([1, 3])).update(
+        {"internet_facing": True}, synchronize_session=False)
+    db.commit()
+    # internet-facing AND Payments → only asset 1 (asset 3 is HR).
+    rule = {"internet_facing": True, "departments": ["Payments"]}
+    assert resolve_scope_assets(db, TENANT, rule) == [1]
+
+
+def test_membership_rule_api_accepts_internet_facing():
+    # The API schema must carry internet_facing through to the stored rule; it was
+    # silently dropped before (the resolver honoured it, but no client could set it).
+    from grc.modules.erm.routers.ctem_scopes import MembershipRule
+    assert "internet_facing" in MembershipRule.model_fields
+    assert MembershipRule(internet_facing=True).dict(exclude_none=True) == {"internet_facing": True}

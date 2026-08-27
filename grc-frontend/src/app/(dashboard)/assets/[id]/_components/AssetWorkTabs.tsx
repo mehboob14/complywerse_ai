@@ -220,7 +220,7 @@ export function SoftwarePanel({
       <PanelHead
         icon={Package}
         title="Installed software"
-        note="Services found on this machine by the agent or agentless scan. Click a row to set it up as its own asset (credentials when needed)."
+        note="Software detected on this asset. Click a row to set it up as its own asset (credentials when needed)."
         right={<>
           <span className="as-pill" style={{ background: 'var(--as-track)', color: 'var(--as-muted)' }}>{items.length} detected</span>
           <GuideMarker id="asset.swIntro" n={1} />

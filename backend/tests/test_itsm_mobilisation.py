@@ -106,9 +106,12 @@ def test_closed_ticket_does_NOT_advance_plan(db):
     assert db.query(VulnRemediationPlan).filter_by(vulnerability_id=1).one().status == "approved"
 
 
-def test_push_creates_plan_when_none_exists(db):
-    # so mobilisation is visible to the mobilized counter (reads
-    # VulnRemediationPlan). Seed a finding with NO plan.
+def test_push_no_owner_creates_recommended_plan_not_approved(db):
+    # Owner gate (mirrors the manual approve endpoint): a finding with no owner
+    # must NOT be auto-approved by the push — "an approved plan with no owner is
+    # work nobody has been asked to do". The plan is still CREATED (so
+    # mobilisation stays visible to the counter) but as `recommended`; approval
+    # routes through the gate once an owner is assigned. Finding 2 has no owner.
     db.add(IntegrationConnection(id=2, tenant_id=TENANT, integration_type="servicenow",
                                  category="ticketing", connection_name="SN2",
                                  console_url="https://y", is_active=True))
@@ -119,13 +122,32 @@ def test_push_creates_plan_when_none_exists(db):
     db.commit()
     assert r["plan_created"] is True
     plan = db.query(VulnRemediationPlan).filter_by(vulnerability_id=2).one()
-    # A1: shape + provenance — no headless approval, self-declared source.
+    # created + counter-visible, but NOT approved (and no headless approver stamp)
+    assert plan.status == "recommended"
+    assert plan.approved_by_name is None
+    assert plan.approved_at is None
+    assert plan.source == "itsm"
+    assert plan.title and plan.summary and plan.fix_artifact and plan.rationale  # no empty fields
+    assert "SN2" in plan.summary  # still names the connector
+
+
+def test_push_owned_finding_creates_approved_plan(db):
+    # With an owner (an assignee here), pushing IS an accountable decision to fix
+    # → the plan is auto-approved, system-attributed (never headless).
+    db.add(IntegrationConnection(id=3, tenant_id=TENANT, integration_type="servicenow",
+                                 category="ticketing", connection_name="SN3",
+                                 console_url="https://z", is_active=True))
+    v = Vulnerability(id=3, tenant_id=TENANT, vuln_id="V-3", title="t3", severity="high",
+                      status="open", assigned_to=7)  # has an owner
+    db.add(v); db.commit()
+    r = itsm.push_finding(db, v, db.query(IntegrationConnection).get(3), user_id=7)
+    db.commit()
+    assert r["plan_created"] is True
+    plan = db.query(VulnRemediationPlan).filter_by(vulnerability_id=3).one()
     assert plan.status == "approved"
     assert plan.approved_by_name and "ITSM push" in plan.approved_by_name  # not blank
     assert plan.approved_at is not None
-    assert plan.source == "itsm"
-    assert plan.title and plan.summary and plan.fix_artifact and plan.rationale  # no empty fields
-    assert "SN2" in plan.summary  # names the connector
+    assert "SN3" in plan.summary  # names the connector
 
 
 def test_push_reuses_existing_plan_no_second_plan(db):

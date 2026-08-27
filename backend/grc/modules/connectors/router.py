@@ -145,7 +145,7 @@ def get_providers(
 ):
     return {
         "encryption_enabled": has_master_key(),
-        "categories": ["ticketing", "siem", "pentest", "collab", "transcribe"],
+        "categories": ["ticketing", "siem", "pentest", "collab", "transcribe", "easm_source"],
         "providers": [_serialise_provider(p) for p in list_providers(category)],
     }
 
@@ -167,7 +167,7 @@ def list_connectors(
         .filter(
             IntegrationConnection.tenant_id == tenant_id,
             IntegrationConnection.category.in_(
-                ["ticketing", "siem", "pentest", "collab", "transcribe"]
+                ["ticketing", "siem", "pentest", "collab", "transcribe", "easm_source"]
             ),
         )
         .order_by(IntegrationConnection.created_at.desc())

@@ -67,11 +67,17 @@ def _ensure_remediation_plan(db: Session, vuln, connection, *, user_id: Optional
     mobilisation is invisible to the counter. Create a minimal one if none
     exists (idempotent — one plan per finding). Returns True if it created one.
 
-    Provenance is SELF-DECLARED and SYSTEM-ATTRIBUTED: the plan says it was
-    created by an ITSM push (with the connector name) and its `approved` status
-    carries a system approver name + timestamp — an `approved` plan with a
-    blank approver is an audit-shape trap that reads as a human decision that
-    never happened."""
+    OWNER GATE (mirrors the manual approve endpoint): an `approved` plan with no
+    owner is "work nobody has been asked to do" — it can breach its SLA with no
+    person or team ever named. So the push auto-APPROVES the plan (system-
+    attributed) ONLY when the finding already has an owner (an assignee or a
+    department); with no owner it creates the plan as `recommended`, so the
+    ticket + mobilisation are still recorded but approval must route through the
+    same gate the manual path enforces. Either way the plan EXISTS, so the
+    mobilised counter (ticket count + plan existence) is unaffected. When it does
+    approve, the `approved` status carries a system approver name + timestamp —
+    an `approved` plan with a blank approver reads as a human decision that never
+    happened."""
     from ..models import VulnRemediationPlan
     existing = db.query(VulnRemediationPlan).filter(
         VulnRemediationPlan.tenant_id == vuln.tenant_id,
@@ -79,6 +85,19 @@ def _ensure_remediation_plan(db: Session, vuln, connection, *, user_id: Optional
     ).first()
     if existing:
         return False
+
+    # Same owner test as remediation_plans.approve(): an assignee OR a department
+    # satisfies it. No owner: create the plan but DO NOT auto-approve it.
+    has_owner = bool(getattr(vuln, "assigned_to", None))
+    if not has_owner:
+        try:
+            from ..models import GRCVulnerabilityDepartmentAssignment
+            has_owner = db.query(GRCVulnerabilityDepartmentAssignment).filter(
+                GRCVulnerabilityDepartmentAssignment.vulnerability_id == vuln.id
+            ).first() is not None
+        except Exception:  # noqa: BLE001 — absence of the model/table must not block the push
+            logger.exception("department-assignment lookup failed for vuln_id=%s", vuln.id)
+
     now = datetime.utcnow()
     approver = f"ITSM push · {connection.connection_name}"
     db.add(VulnRemediationPlan(
@@ -92,9 +111,10 @@ def _ensure_remediation_plan(db: Session, vuln, connection, *, user_id: Optional
         fix_artifact="See the linked ITSM ticket for remediation steps and status.",
         rationale="Finding mobilised to ITSM for remediation.",
         source="itsm",
-        status="approved",  # pushing to ITSM is a decision to fix …
-        approved_by_name=approver,  # … stamped so the approval isn't headless
-        approved_at=now,
+        # Auto-approve only with an owner; otherwise leave it for the gate.
+        status="approved" if has_owner else "recommended",
+        approved_by_name=approver if has_owner else None,
+        approved_at=now if has_owner else None,
     ))
     db.flush()
     return True

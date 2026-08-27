@@ -312,18 +312,22 @@ export default function AssetOverview({ A }: { A: any }) {
 
         {/* PROVENANCE CARDS */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
-          {A.machine.map((c: any, i: number) => <ProvenanceCard key={i} card={c} accent="border-l-[#0f9d78]" kind="machine" />)}
+          {A.machine.map((c: any, i: number) => <ProvenanceCard key={i} card={c} accent="border-l-[#0f9d78]" kind="machine" full={!!c.full} />)}
           {A.manual.map((c: any, i: number) => <ProvenanceCard key={i} card={c} accent="border-l-[#d9a441]" kind="manual" full />)}
         </div>
 
-        {/* SOFTWARE & SECURITY POSTURE */}
+        {/* SOFTWARE & SECURITY POSTURE — an INSIDE view (AV/EDR/installed packages
+            come from logging into the box). Shown only when there is inside data:
+            an outside-in (EASM) host has none, so the card is irrelevant for it and
+            is dropped instead of rendered as "Not observable" placeholders. */}
+        {(!A.external || A.security.software.length > 0) && (
         <div className={CARD + ' mt-4'}>
           <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-[#eceee8]">
             <div>
               <div className="text-[15px] font-extrabold tracking-[-0.01em]">Software &amp; Security Posture</div>
-              <div className="text-[11.5px] text-[#aab2a8] mt-px">Auto-collected · agentless scan</div>
+              <div className="text-[11.5px] text-[#aab2a8] mt-px">{A.external ? 'Outside-in probe · HTTP/TLS' : 'Auto-collected · agentless scan'}</div>
             </div>
-            <span className="inline-flex items-center gap-1.5 text-[10.5px] font-bold tracking-[0.03em] uppercase text-[#0f7a5c] bg-[#e7f6ee] border border-[#c3ead2] px-2.5 py-[3px] rounded-full">Agentless scan</span>
+            <span className="inline-flex items-center gap-1.5 text-[10.5px] font-bold tracking-[0.03em] uppercase text-[#0f7a5c] bg-[#e7f6ee] border border-[#c3ead2] px-2.5 py-[3px] rounded-full">{A.external ? 'Outside-in probe' : 'Agentless scan'}</span>
           </div>
           <div className="px-5 py-[18px]">
             <div className="flex flex-wrap gap-2.5 mb-[18px]">
@@ -367,9 +371,10 @@ export default function AssetOverview({ A }: { A: any }) {
             </div>
           </div>
         </div>
+        )}
 
         {/* DEEP INVENTORY */}
-        {(A.deep.length > 0 || A.deepNote?.denied?.length || A.deepNote?.absent?.length) && (
+        {(A.deep.length > 0 || !!A.deepNote?.denied?.length || !!A.deepNote?.absent?.length) && (
         <div className={CARD + ' mt-4'}>
           <div className="flex items-start justify-between gap-3 px-5 pt-4 pb-3.5 border-b border-[#eceee8]">
             <div>
@@ -454,7 +459,7 @@ export default function AssetOverview({ A }: { A: any }) {
         </div>
         )}
 
-        <div className="text-center text-[#aab2a8] text-[11.5px] mt-6">Overview · {A.header.name} · all figures reflect the latest agentless collection</div>
+        <div className="text-center text-[#aab2a8] text-[11.5px] mt-6">Overview · {A.header.name} · all figures reflect the latest {A.external ? 'outside-in probe' : 'agentless collection'}</div>
       </div>
     </div>
   );

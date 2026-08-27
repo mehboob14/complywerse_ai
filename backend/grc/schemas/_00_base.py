@@ -1041,11 +1041,17 @@ class ITAssetResponse(BaseModel):
     criticality_override_reason: Optional[str] = None
     last_seen_at: Optional[datetime] = None
     last_seen_source: Optional[str] = None
+    origin_source: Optional[str] = None
+    dns_aliases: Optional[List[str]] = None
     # ITAM parity: department, deployment environment + computed open-findings
     # count (open_findings is attached transiently by the list endpoint).
     department: Optional[str] = None
     environment: Optional[str] = None
     open_findings: Optional[int] = None
+    # Provenance — lets the register gate the Connect affordance. An external
+    # (EASM) asset is discovery_state="unmanaged": internet-facing, evidence-only,
+    # and not connectable, so the Connect button must not offer a login for it.
+    discovery_state: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -1152,6 +1158,11 @@ class AssetDetailResponse(BaseModel):
     criticality_score: Optional[float] = None
     last_seen_at: Optional[datetime] = None
     last_seen_source: Optional[str] = None
+    # Birth origin + collapsed DNS names. The outside-only gate on the asset
+    # page keys off origin_source; omitting it here silently stripped it from
+    # the payload (Pydantic response_model) and the gate never fired.
+    origin_source: Optional[str] = None
+    dns_aliases: Optional[List[str]] = None
     # ── ITAM parity: OS, hardware, procurement & identity extras ──────────
     os_family: Optional[str] = None
     os_version: Optional[str] = None

@@ -1,37 +1,25 @@
 from typing import List, Optional
-from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 
 from ....models import (
     VulnerabilityControlLink, Vulnerability, FrameworkControl,
     ControlObjective, FrameworkDomain, Framework,
-    ParsedFrameworkControl, UploadedFramework, CweControlOverride,
+    ParsedFrameworkControl, UploadedFramework,
     NormalizedControl, InternalControl, GRCUser, get_db
 )
-from pydantic import BaseModel, Field
 from ....schemas import (
     VulnerabilityControlLinkCreate, VulnerabilityControlLinkResponse, MessageResponse
 )
 from ....routers.auth_router import (
-    require_auth, get_user_tenants, get_user_primary_tenant, require_tenant_permission,
+    require_auth, get_user_tenants,
 )
 
-# Reused by the response builder + the auto-map endpoint so the "auto" vs
-# "manual" decision lives in one place.
-from ..control_mapping import (
-    AUTO_LINK_NOTES_PREFIX,
-    SENTINEL_KEV,
-    SENTINEL_VULN_MGMT,
-    auto_map_compliance_controls,
-    invalidate_tenant_cache,
-)
-from ..control_mapping.cwe_control_map import (
-    CWE_TO_CONTROL_IDS,
-    ALWAYS_APPLICABLE_VULN_MGMT,
-    ALWAYS_APPLICABLE_ACTIVE_EXPLOITATION,
-    normalise_cwe,
-)
+# Legacy link-note prefix — recognised for DISPLAY only. The CWE rule crosswalk
+# that once wrote these was removed (the AI mapper is the sole control-mapping
+# decision-maker now); no code writes new `auto:cwe:` links, but rows written
+# before removal still render their provenance chip.
+AUTO_LINK_NOTES_PREFIX = "auto:cwe:"
 
 router = APIRouter(tags=["Vulnerability Control Links"])
 
@@ -200,6 +188,29 @@ def list_control_links(
 
     responses = [_build_response(link, short_codes, parsed_meta) for link in links]
 
+    # Unified-Library links carry their ACTUAL standards (the framework editions
+    # the control consolidates) — the internal library name is not a standard.
+    try:
+        from ....models import NormalizedControlLink
+        nc_ids = [l.normalized_control_id for l in links if l.normalized_control_id is not None]
+        if nc_ids:
+            stds: dict[int, list[str]] = {}
+            for nc, ref, cid, fw in db.query(
+                    NormalizedControlLink.normalized_control_id,
+                    ParsedFrameworkControl.original_reference, ParsedFrameworkControl.control_id,
+                    UploadedFramework.name).join(
+                    ParsedFrameworkControl, ParsedFrameworkControl.id == NormalizedControlLink.parsed_control_id).join(
+                    UploadedFramework, UploadedFramework.id == ParsedFrameworkControl.uploaded_framework_id).filter(
+                    NormalizedControlLink.normalized_control_id.in_(nc_ids),
+                    UploadedFramework.is_active == True).all():  # noqa: E712
+                stds.setdefault(nc, []).append(f"{(fw or '?')[:30]} {ref or cid or ''}".strip())
+            for link, resp in zip(links, responses):
+                if link.normalized_control_id is not None:
+                    resp.satisfies = stds.get(link.normalized_control_id, [])[:6]
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception("satisfies attach failed (non-fatal)")
+
     # CTEM Phase 2 — stamp each linked control's automated-assurance tier,
     # derived at read time from effectiveness evidence. Best-effort: a tier
     # failure must never break the links panel.
@@ -298,30 +309,6 @@ def create_control_link(
     ).filter(VulnerabilityControlLink.id == link.id).first()
 
     return _build_response(link, short_codes, parsed_meta)
-
-
-@router.post("/vulnerabilities/{vuln_id}/controls/auto-map")
-def auto_map_controls(
-    vuln_id: int,
-    db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth),
-):
-    """Re-run the CWE → framework-control auto-mapper for this vuln.
-
-    Idempotent. Existing manual links (anything whose `notes` doesn't
-    start with `auto:cwe:`) are never touched. Stale auto rows that no
-    longer match the current CWE are removed; fresh ones are added.
-    Returns a summary the UI surfaces in a toast.
-    """
-    user_tenants = get_user_tenants(current_user, db)
-    if not user_tenants:
-        raise HTTPException(status_code=403, detail="User not associated with any tenant")
-    vuln = get_vuln_or_404(vuln_id, user_tenants, db)
-
-    summary = auto_map_compliance_controls(
-        vuln, db, delete_stale=True, user_id=current_user.id,
-    )
-    return summary
 
 
 RESOLVED_STATUSES = {
@@ -552,401 +539,3 @@ def delete_control_link(
 
     return MessageResponse(message="Control link removed successfully")
 
-
-# ─────────────────────────────────────────────────────────────────────────
-# Tenant CWE-mapping overrides
-# ─────────────────────────────────────────────────────────────────────────
-# Compliance teams override the default CWE → control map per tenant:
-#   - add    a custom link (e.g. CWE-89 → SAMA 4.2.1) that the default
-#            map doesn't include.
-#   - remove a default link they disagree with (e.g. CWE-89 → NIST SI-15).
-# Sentinel CWE-IDs `__vuln_mgmt__` and `__kev__` target the always-
-# applicable rule sets.
-
-
-class CweOverrideCreate(BaseModel):
-    cwe_id: str = Field(..., description="CWE-N, or '__vuln_mgmt__' / '__kev__'")
-    framework_prefix: str = Field(..., min_length=1, max_length=100)
-    control_code_pattern: str = Field(..., min_length=1, max_length=100)
-    action: str = Field("add", description="'add' or 'remove'")
-    notes: Optional[str] = None
-
-
-class CweOverrideResponse(BaseModel):
-    id: int
-    tenant_id: int
-    cwe_id: str
-    framework_prefix: str
-    control_code_pattern: str
-    action: str
-    notes: Optional[str] = None
-    created_at: datetime
-    created_by: Optional[int] = None
-
-    class Config:
-        from_attributes = True
-
-
-def _validate_cwe_key(raw: str) -> str:
-    """Accept `CWE-N` (normalised) or the two sentinel values."""
-    s = (raw or "").strip()
-    if not s:
-        raise HTTPException(status_code=400, detail="cwe_id is required")
-    if s in (SENTINEL_VULN_MGMT, SENTINEL_KEV):
-        return s
-    normalised = normalise_cwe(s)
-    if not normalised:
-        raise HTTPException(
-            status_code=400,
-            detail=f"cwe_id must be 'CWE-N', '{SENTINEL_VULN_MGMT}', or '{SENTINEL_KEV}'.",
-        )
-    return normalised
-
-
-@router.get("/cwe-overrides", response_model=List[CweOverrideResponse])
-def list_cwe_overrides(
-    db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth),
-):
-    """List every CWE-override row for the caller's primary tenant."""
-    tenant_id = get_user_primary_tenant(current_user, db)
-    if not tenant_id:
-        return []
-    rows = (
-        db.query(CweControlOverride)
-        .filter(CweControlOverride.tenant_id == tenant_id)
-        .order_by(CweControlOverride.cwe_id, CweControlOverride.framework_prefix)
-        .all()
-    )
-    return rows
-
-
-@router.post("/cwe-overrides", response_model=CweOverrideResponse, status_code=status.HTTP_201_CREATED)
-def create_cwe_override(
-    payload: CweOverrideCreate,
-    db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth),
-):
-    """Create one override row. Idempotent — uniqueness is enforced by the
-    composite (tenant, cwe, prefix, pattern, action) constraint."""
-    tenant_id = get_user_primary_tenant(current_user, db)
-    if not tenant_id:
-        raise HTTPException(status_code=403, detail="User has no primary tenant.")
-    action = (payload.action or "add").lower()
-    if action not in ("add", "remove"):
-        raise HTTPException(status_code=400, detail="action must be 'add' or 'remove'.")
-    cwe_key = _validate_cwe_key(payload.cwe_id)
-
-    # Reject duplicates with a clear error rather than a 500 from the
-    # unique constraint.
-    existing = (
-        db.query(CweControlOverride)
-        .filter(
-            CweControlOverride.tenant_id == tenant_id,
-            CweControlOverride.cwe_id == cwe_key,
-            CweControlOverride.framework_prefix == payload.framework_prefix.strip(),
-            CweControlOverride.control_code_pattern == payload.control_code_pattern.strip(),
-            CweControlOverride.action == action,
-        )
-        .first()
-    )
-    if existing:
-        raise HTTPException(
-            status_code=400,
-            detail="An identical override already exists for this tenant.",
-        )
-
-    row = CweControlOverride(
-        tenant_id=tenant_id,
-        cwe_id=cwe_key,
-        framework_prefix=payload.framework_prefix.strip(),
-        control_code_pattern=payload.control_code_pattern.strip(),
-        action=action,
-        notes=(payload.notes or None),
-        created_by=current_user.id,
-    )
-    db.add(row)
-    db.commit()
-    db.refresh(row)
-    # Drop cached resolver results so the next vuln enrichment sees this
-    # override immediately.
-    invalidate_tenant_cache(tenant_id)
-    return row
-
-
-@router.delete("/cwe-overrides/{override_id}", response_model=MessageResponse)
-def delete_cwe_override(
-    override_id: int,
-    db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth),
-):
-    tenant_id = get_user_primary_tenant(current_user, db)
-    if not tenant_id:
-        raise HTTPException(status_code=403, detail="User has no primary tenant.")
-    row = (
-        db.query(CweControlOverride)
-        .filter(
-            CweControlOverride.id == override_id,
-            CweControlOverride.tenant_id == tenant_id,
-        )
-        .first()
-    )
-    if not row:
-        raise HTTPException(status_code=404, detail="Override not found.")
-    db.delete(row)
-    db.commit()
-    invalidate_tenant_cache(tenant_id)
-    return MessageResponse(message="Override removed successfully")
-
-
-@router.get("/cwe-overrides/preview")
-def preview_cwe_resolution(
-    cwe_id: Optional[str] = None,
-    has_cve: bool = True,
-    is_kev: bool = False,
-    db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth),
-):
-    """Show the effective identifier list the resolver would use for a
-    given (cwe_id, has_cve, is_kev) combination after applying tenant
-    overrides. Used by the UI to validate an override before saving.
-    """
-    tenant_id = get_user_primary_tenant(current_user, db)
-    if not tenant_id:
-        return {
-            "tenant_id": None, "cwe_id": cwe_id,
-            "default_identifiers": [], "effective_identifiers": [],
-            "overrides_applied": [],
-        }
-
-    cwe_key = normalise_cwe(cwe_id) if cwe_id else ""
-
-    # Default identifier list (no overrides).
-    defaults: List[tuple] = []
-    if cwe_key:
-        defaults.extend(CWE_TO_CONTROL_IDS.get(cwe_key, []))
-    if has_cve:
-        defaults.extend(ALWAYS_APPLICABLE_VULN_MGMT)
-    if is_kev:
-        defaults.extend(ALWAYS_APPLICABLE_ACTIVE_EXPLOITATION)
-
-    # Effective identifier list (defaults + tenant overrides applied).
-    # Reuse the resolver's own helper so the preview matches reality.
-    from ..control_mapping.cwe_resolver import _build_identifier_list  # noqa
-    effective = _build_identifier_list(
-        cwe_key, has_cve, is_kev, db=db, tenant_id=tenant_id,
-    )
-
-    # Overrides that contributed to this view.
-    override_keys = []
-    if cwe_key:
-        override_keys.append(cwe_key)
-    if has_cve:
-        override_keys.append(SENTINEL_VULN_MGMT)
-    if is_kev:
-        override_keys.append(SENTINEL_KEV)
-    overrides = (
-        db.query(CweControlOverride)
-        .filter(
-            CweControlOverride.tenant_id == tenant_id,
-            CweControlOverride.cwe_id.in_(override_keys),
-        )
-        .all()
-        if override_keys else []
-    )
-
-    return {
-        "tenant_id": tenant_id,
-        "cwe_id": cwe_key or None,
-        "has_cve": has_cve,
-        "is_kev": is_kev,
-        "default_identifiers": [{"framework_prefix": p, "control_code_pattern": c} for p, c in defaults],
-        "effective_identifiers": [{"framework_prefix": p, "control_code_pattern": c} for p, c in effective],
-        "overrides_applied": [
-            {
-                "id": o.id, "cwe_id": o.cwe_id,
-                "framework_prefix": o.framework_prefix,
-                "control_code_pattern": o.control_code_pattern,
-                "action": o.action, "notes": o.notes,
-            }
-            for o in overrides
-        ],
-    }
-
-
-# ═══ CTEM Phase 2.5 — bulk link coverage ════════════════════════════════════
-# The per-vuln auto-mapper above runs one finding at a time behind a button,
-# which is why link coverage sat at ~1%. These endpoints drive the SAME
-# mapper (same curated crosswalk, same provenance notes, same idempotency)
-# across every eligible finding, behind an explicit preview → accept flow:
-# nothing is written until a human accepts, and every accepted link carries
-# the auto:cwe provenance an auditor can distinguish from curated links.
-
-def _bulk_eligible_findings(db: Session, tenant_id: int, limit: int = 5000):
-    from sqlalchemy import or_
-    return db.query(Vulnerability).filter(
-        Vulnerability.tenant_id == tenant_id,
-        or_(
-            Vulnerability.cwe_id.isnot(None),
-            Vulnerability.cve_id.ilike("CVE-%"),
-            Vulnerability.kev_flag.is_(True),
-        ),
-    ).limit(limit).all()
-
-
-@router.get("/control-links/bulk-automap-preview")
-def bulk_automap_preview(
-    db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth),
-):
-    """Dry-run: what would bulk auto-mapping create? Computed with the same
-    resolver the writer uses (per-tenant cached), zero writes."""
-    from ..control_mapping.cwe_resolver import resolve_cwe_to_framework_controls
-
-    tenant_id = get_user_primary_tenant(current_user, db)
-    findings = _bulk_eligible_findings(db, tenant_id)
-
-    existing: dict[int, set] = {}
-    for link in db.query(
-        VulnerabilityControlLink.vulnerability_id,
-        VulnerabilityControlLink.parsed_framework_control_id,
-    ).join(Vulnerability, Vulnerability.id == VulnerabilityControlLink.vulnerability_id
-    ).filter(Vulnerability.tenant_id == tenant_id,
-             VulnerabilityControlLink.parsed_framework_control_id.isnot(None)).all():
-        existing.setdefault(link[0], set()).add(link[1])
-
-    projected_new = 0
-    findings_gaining = 0
-    basis = {"cwe_specific": 0, "vuln_mgmt_rule": 0, "kev_rule": 0}
-    frameworks: dict[int, dict] = {}
-    distinct_new_controls: set = set()
-    # Controls with ANY existing link, tenant-wide — needed to split "receives
-    # an additional link" from "newly evidence-eligible". Conflating the two
-    # made a preview promise 48 where the coverage meter could only move 23;
-    # the consent surface must state both numbers.
-    linked_anywhere: set = set()
-    for sets in existing.values():
-        linked_anywhere |= sets
-
-    for v in findings:
-        cwe_key = normalise_cwe(v.cwe_id) if v.cwe_id else ""
-        has_cve = bool(v.cve_id and v.cve_id.strip().upper().startswith("CVE-"))
-        is_kev = bool(v.kev_flag)
-        if cwe_key and cwe_key in CWE_TO_CONTROL_IDS:
-            basis["cwe_specific"] += 1
-        if has_cve:
-            basis["vuln_mgmt_rule"] += 1
-        if is_kev:
-            basis["kev_rule"] += 1
-        try:
-            resolved = resolve_cwe_to_framework_controls(
-                db, tenant_id=tenant_id, cwe_id=cwe_key, has_cve=has_cve, is_kev=is_kev,
-            )
-        except Exception:
-            continue
-        have = existing.get(v.id, set())
-        new_here = [rc for rc in resolved if rc.parsed_control_id not in have]
-        if new_here:
-            findings_gaining += 1
-            projected_new += len(new_here)
-            for rc in new_here:
-                distinct_new_controls.add(rc.parsed_control_id)
-                fw = frameworks.setdefault(rc.uploaded_framework_id, {
-                    "framework": getattr(rc, "framework_short_code", None)
-                                 or getattr(rc, "framework_name", None)
-                                 or f"framework {rc.uploaded_framework_id}",
-                    "projected_links": 0, "controls": set(),
-                })
-                fw["projected_links"] += 1
-                fw["controls"].add(rc.parsed_control_id)
-
-    newly_eligible = distinct_new_controls - linked_anywhere
-    return {
-        "eligible_findings": len(findings),
-        "findings_gaining_links": findings_gaining,
-        "projected_new_links": projected_new,
-        # Two DIFFERENT claims, both stated: how many controls receive at
-        # least one new link, and how many of those had no link at all before
-        # (the number the coverage meter will move by).
-        "controls_receiving_links": len(distinct_new_controls),
-        "controls_newly_evidence_eligible": len(newly_eligible),
-        "basis_counts": basis,
-        "frameworks": [
-            {"framework": f["framework"], "projected_links": f["projected_links"],
-             "controls": len(f["controls"])}
-            for f in frameworks.values()
-        ],
-        "provenance_note": (
-            "Accepted links are stamped auto:cwe:<basis> in notes — auditors can "
-            "always distinguish accepted suggestions from manually curated links."
-        ),
-    }
-
-
-@router.post("/control-links/bulk-automap")
-def bulk_automap_accept(
-    db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth),
-    _perm: bool = Depends(require_tenant_permission("vulnerabilities:vulnerability_register:edit")),
-):
-    """Human-accepted bulk run of the per-vuln auto-mapper across every
-    eligible finding. Idempotent (the mapper keeps/dedupes) and audited as
-    one summarized event."""
-    tenant_id = get_user_primary_tenant(current_user, db)
-    findings = _bulk_eligible_findings(db, tenant_id)
-
-    # The preview is zero-write and time passes before accept — state can
-    # drift in between (another accept, a sync). Capture coverage BEFORE so
-    # the response can state the ACTUAL delta; the UI compares it against
-    # the projection and says so when they differ.
-    coverage_before = None
-    try:
-        from ....services.control_assurance import assurance_summary
-        coverage_before = assurance_summary(db, tenant_id).get("coverage")
-    except Exception:
-        pass
-
-    totals = {"findings_processed": 0, "links_added": 0, "links_kept": 0,
-              "stale_removed": 0, "errors": 0}
-    for v in findings:
-        try:
-            s = auto_map_compliance_controls(v, db, delete_stale=True, user_id=current_user.id)
-            totals["findings_processed"] += 1
-            totals["links_added"] += s.get("added", 0)
-            totals["links_kept"] += s.get("kept", 0)
-            totals["stale_removed"] += s.get("removed_stale", 0)
-            if s.get("errors"):
-                totals["errors"] += len(s["errors"])
-        except Exception:
-            totals["errors"] += 1
-    db.commit()
-
-    coverage_after = None
-    actual_newly_eligible = None
-    try:
-        from ....services.control_assurance import assurance_summary
-        coverage_after = assurance_summary(db, tenant_id).get("coverage")
-        if coverage_before and coverage_after:
-            actual_newly_eligible = (
-                coverage_after.get("controls_with_linked_findings", 0)
-                - coverage_before.get("controls_with_linked_findings", 0)
-            )
-    except Exception:
-        pass
-
-    try:
-        from ....models import AuditLog
-        db.add(AuditLog(
-            tenant_id=tenant_id,
-            user_id=current_user.id,
-            action="vulnerability.bulk_automap_accepted",
-            resource_type="vulnerability_control_link",
-            resource_id=0,
-            changes={**totals, "coverage_after": coverage_after},
-        ))
-        db.commit()
-    except Exception:
-        db.rollback()
-
-    return {**totals, "coverage_before": coverage_before, "coverage_after": coverage_after,
-            "actual_controls_newly_eligible": actual_newly_eligible}

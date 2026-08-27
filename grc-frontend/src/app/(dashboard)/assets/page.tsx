@@ -275,18 +275,12 @@ export default function AssetsPage() {
       const ageDays = (Date.now() - new Date(asset.last_seen_at).getTime()) / (1000 * 60 * 60 * 24);
       return ageDays > 30;
     })();
-    // Phase 7 — source filter. Sources cluster naturally: "aws_inspector",
-    // "azure_defender", "gcp_scc", "nessus", "nexpose", "manual"; we group
-    // the cloud ones into "cloud" for the dropdown to keep the UI simple
-    // while still letting power users pick a specific cloud.
-    const matchesSource = (() => {
-      if (sourceFilter === 'all') return true;
-      const src = (asset.last_seen_source || 'manual').toLowerCase();
-      if (sourceFilter === 'cloud') {
-        return src === 'aws_inspector' || src === 'azure_defender' || src === 'gcp_scc';
-      }
-      return src === sourceFilter;
-    })();
+    // Source filter — TRUE ORIGIN (origin_source, stamped once at creation:
+    // easm | network_sweep | connect | agent | manual), NOT last_seen_source,
+    // which mutates to whichever feed observed the asset most recently.
+    const matchesSource =
+      sourceFilter === 'all' ||
+      ((asset as ITAsset).origin_source || 'manual').toLowerCase() === sourceFilter;
 
     const matchesEnvironment =
       environmentFilter === 'all' ||
@@ -433,6 +427,8 @@ export default function AssetsPage() {
         setCriticalityFilter={(v) => setCriticalityFilter(v as CriticalityFilter)}
         lifecycleFilter={lifecycleFilter}
         setLifecycleFilter={setLifecycleFilter}
+        sourceFilter={sourceFilter}
+        setSourceFilter={setSourceFilter}
         typeFilter={typeFilter}
         setTypeFilter={setTypeFilter}
         environmentFilter={environmentFilter}

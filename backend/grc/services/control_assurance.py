@@ -149,42 +149,22 @@ def record_vuln_evidence(
         logger.exception("control_assurance: models unavailable")
         return 0
 
-    # Classify each link's basis so the evidence row can say WHY the control
-    # was linked ("via KEV rule" etc.) — a closure routed to an
-    # incident-response control via the KEV rule is a weaker claim than one
-    # reaching a patch-management control via the CWE crosswalk, and the
-    # badge tooltip must let an auditor discount it knowingly. Sets are
-    # resolver-cached per tenant; failure just omits the basis.
-    kev_set: set = set()
-    vm_set: set = set()
-    cwe_set: set = set()
-    try:
-        from ..modules.vuln_management.control_mapping.cwe_resolver import (
-            resolve_cwe_to_framework_controls,
-        )
-        kev_set = {rc.parsed_control_id for rc in resolve_cwe_to_framework_controls(
-            db, tenant_id=vuln.tenant_id, cwe_id=None, has_cve=False, is_kev=True)}
-        vm_set = {rc.parsed_control_id for rc in resolve_cwe_to_framework_controls(
-            db, tenant_id=vuln.tenant_id, cwe_id=None, has_cve=True, is_kev=False)}
-        if getattr(vuln, "cwe_id", None):
-            cwe_set = {rc.parsed_control_id for rc in resolve_cwe_to_framework_controls(
-                db, tenant_id=vuln.tenant_id, cwe_id=vuln.cwe_id, has_cve=False, is_kev=False)}
-    except Exception:
-        logger.exception("control_assurance: basis classification unavailable (non-fatal)")
-
+    # Classify each link's basis so the evidence row can say WHY the control was
+    # linked. The CWE rule crosswalk was removed (the AI mapper is the sole
+    # decision-maker), so a link is AI — accepted, gate-auto, or reused — a legacy
+    # `auto:cwe:` row, or a human's manual link. All readable from the note prefix;
+    # no resolver call needed.
     def _link_basis(link) -> List[str]:
         notes = getattr(link, "notes", None) or ""
-        if not notes.startswith("auto:cwe:"):
-            return ["manual"]
-        pfc = getattr(link, "parsed_framework_control_id", None)
-        bases = []
-        if pfc in cwe_set:
-            bases.append("cwe_crosswalk")
-        if pfc in vm_set:
-            bases.append("vuln_mgmt_rule")
-        if pfc in kev_set:
-            bases.append("kev_rule")
-        return bases or ["auto"]
+        if notes.startswith("ai_auto:"):
+            return ["ai_gate"]
+        if notes.startswith("ai_suggested:"):
+            return ["ai_accepted"]
+        if notes.startswith("ai_reused:"):
+            return ["ai_reused"]
+        if notes.startswith("auto:cwe:"):
+            return ["auto"]           # legacy rule-crosswalk row (no longer written)
+        return ["manual"]
 
     written = 0
     try:

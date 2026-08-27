@@ -139,8 +139,11 @@ def test_command_center_is_scope_isolated(db):
     assert listed["A.8.8"]["tier"] == "attested_only"
     assert cc["validate"]["by_framework"]["ISO/IEC 27001:2022"] == 1
 
-    # mobilise: only the in-scope ticket
-    assert cc["mobilise"] == {"tickets": 1, "open": 1, "resolved": 0, "plans_applied": 0}
+    # mobilise: CTEM = in-platform workflow ASSIGNMENTS only. ServiceNow tickets
+    # are a separate, legacy path and are deliberately NOT counted in the CTEM
+    # mobilise number. No workflow task in this hermetic fixture → 0 assignments.
+    assert cc["mobilise"]["assignments"] == 0
+    assert cc["mobilise"]["open"] == 0
 
     # quantify: the portfolio run, labelled portfolio — NOT a faked scope figure.
     # No Risk rows seeded → not demo-only (there is simply nothing to flag).
@@ -198,7 +201,10 @@ def test_portfolio_shape_matches_design_contract(db):
     assert s["assets"] == 1 and s["findings"] == 3 and s["dangerous"] == 1
     assert s["buckets"] == {"ranked": 1, "undeterminable": 1, "chainless": 1, "severed": 0}
     assert s["controls"] == 2 and s["tested"] == 1 and s["claimed"] == 1
-    assert s["fixes"] == 1 and s["fixesOpen"] == 1
+    # CTEM Mobilise KPI = in-platform assignments ONLY. A ServiceNow ticket is
+    # seeded on this finding, but ServiceNow is a separate legacy path — it must
+    # NOT inflate the CTEM mobilise number. No workflow assignment → 0.
+    assert s["fixes"] == 0 and s["fixesOpen"] == 0
     assert s["cycleOpen"] is True and s["cycleNo"] == 1 and s["cycleId"] == 1
     # crosswalk rows carry the REAL framework name; top[] is the ranked finding
     assert any(c["fw"] == "ISO/IEC 27001:2022" and c["code"] == "A.8.8" for c in s["cw"])

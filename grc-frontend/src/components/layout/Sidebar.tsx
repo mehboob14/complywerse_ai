@@ -23,6 +23,7 @@ import {
   Activity,
   AlertCircle,
   Bug,
+  Crosshair,
   Clock,
   Layers,
   Workflow,
@@ -213,6 +214,7 @@ const navigation: NavEntry[] = [
       { name: 'Assets Risk Posture',       href: '/risk-posture',                  icon: Activity,      requiredPermissions: ['erm:risks:*'] },
       { name: 'Criticality Assessments',   href: '/assets/criticality-assessments', icon: ClipboardCheck, requiredPermissions: ['assets:criticality_assessments:view'] },
       { name: 'Vulnerabilities',           href: '/vulnerabilities',               icon: Bug,           requiredPermissions: ['vulnerabilities:vulnerability_register:*'], requiredModules: ['vulnerabilities'] },
+      { name: 'CTEM Scopes',               href: '/vulnerabilities/ctem-scopes',   icon: Crosshair,     requiredPermissions: ['erm:risks:view'] },
     ],
   },
   {

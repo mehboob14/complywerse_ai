@@ -133,6 +133,10 @@ export interface VulnsWorkspaceProps {
   /** ATT&CK high-tactics filter: 'all' | 'high' */
   tacticsFilter: string;
   setTacticsFilter: (v: string) => void;
+  /** "By asset" filter: 'all' | '<assetId>'. Options supplied by the page. */
+  assetFilter?: string;
+  setAssetFilter?: (v: string) => void;
+  assetItems?: { value: string; label: string }[];
 
   // Permissions
   canCreate: boolean;
@@ -203,6 +207,9 @@ export function VulnsWorkspace({
   setExploitFilter,
   tacticsFilter,
   setTacticsFilter,
+  assetFilter = 'all',
+  setAssetFilter,
+  assetItems = [],
   canCreate,
   canEdit,
   canDelete,
@@ -227,19 +234,20 @@ export function VulnsWorkspace({
   // ─── Severity distribution (raw CVSS) for the donut ────────────────────────
   const chartData = useMemo(() => {
     const all = vulns ?? [];
-    // Prefer the server-side aggregate (whole register); fall back to a tally of the
-    // loaded page only until the dashboard payload arrives.
+    const tally = () => {
+      const m: Record<string, number> = {};
+      all.forEach((v) => { const k = (v.severity || 'unknown').toLowerCase(); m[k] = (m[k] || 0) + 1; });
+      return m;
+    };
     const hasDash = (m?: Record<string, number>) => !!m && Object.keys(m).length > 0;
-    const sev = hasDash(dashboard?.by_severity)
-      ? dashboard!.by_severity!
-      : (() => {
-          const m: Record<string, number> = {};
-          all.forEach((v) => { const k = (v.severity || 'unknown').toLowerCase(); m[k] = (m[k] || 0) + 1; });
-          return m;
-        })();
+    // When scoped, the tenant-wide `dashboard` aggregate disagrees with the scoped
+    // list (it showed "205 Total" under a "(201)" banner) — tally the scoped rows
+    // so the donut matches the tiles. Unscoped: prefer the server aggregate, fall
+    // back to a tally of the loaded page until the dashboard payload arrives.
+    const sev = scoped ? tally() : (hasDash(dashboard?.by_severity) ? dashboard!.by_severity! : tally());
     const severity: Slice[] = ['critical', 'high', 'medium', 'low', 'info'].filter((k) => sev[k]).map((k) => ({ name: k, value: sev[k], color: SEV_COLORS[k] }));
     return { severity };
-  }, [vulns, dashboard]);
+  }, [vulns, dashboard, scoped]);
 
   // ─── Aggregates for the KPI strip, the raw→contextual panel and threat band ──
   const agg = useMemo(() => {
@@ -251,18 +259,24 @@ export function VulnsWorkspace({
     if (scoped) {
       const rows = vulns ?? [];
       const sevOf = (v: Vulnerability) => (v.severity || '').toLowerCase();
-      const isUrgent = (v: Vulnerability) => !!v.kev_flag || (v.epss_score ?? 0) >= 0.1 || sevOf(v) === 'critical';
       const cnt = (f: (v: Vulnerability) => boolean) => rows.filter(f).length;
+      // "Urgent / moderate / low" MUST use the SAME rule as the server dashboard's
+      // contextual_priority (backend routers/dashboard.py): composite_priority ×10
+      // banded at 55 / 25. The old client rule (kev || epss≥0.1 || critical)
+      // disagreed with the server, so a scoped SUBSET reported MORE urgent than the
+      // whole tenant (3 vs 1 — impossible; caught 23 Aug). Same bands now, so
+      // scoped ≤ unscoped always holds.
+      const cp = (v: Vulnerability) => (v.composite_priority ?? 0);   // 0–10 scale
       const critical = cnt((v) => sevOf(v) === 'critical');
       const high = cnt((v) => sevOf(v) === 'high');
       const medium = cnt((v) => sevOf(v) === 'medium');
       const kev = cnt((v) => !!v.kev_flag);
       const exploit = cnt((v) => !!v.kev_flag || (v.epss_score ?? 0) > 0);
-      const urgent = cnt(isUrgent);
       return {
         total: rows.length, critical, high, medium,
-        urgent, moderate: cnt((v) => !isUrgent(v) && (sevOf(v) === 'high' || sevOf(v) === 'medium')),
-        low: cnt((v) => !isUrgent(v) && sevOf(v) !== 'high' && sevOf(v) !== 'medium'),
+        urgent: cnt((v) => cp(v) >= 5.5),
+        moderate: cnt((v) => cp(v) >= 2.5 && cp(v) < 5.5),
+        low: cnt((v) => cp(v) < 2.5),
         kev, exploit, noExploit: rows.length - exploit,
         withCve: cnt((v) => !!v.cve_id), highTactics: 0, highTacticsWithExploit: 0,
         highEpss: cnt((v) => (v.epss_score ?? 0) >= 0.1), internetExposed: 0, patch: 0,
@@ -422,6 +436,14 @@ export function VulnsWorkspace({
           onApply={(v) => setSeverityFilter(v[0] || 'all')}
           multiSelect={false} autoApply placeholder="All" size="sm" className="shrink-0"
         />
+        {setAssetFilter && assetItems.length > 0 && (
+          <MultiSelectDropdown
+            title="Asset" items={assetItems}
+            selectedValues={assetFilter !== 'all' ? [assetFilter] : []}
+            onApply={(v) => setAssetFilter(v[0] || 'all')}
+            multiSelect={false} autoApply placeholder="All" size="sm" className="shrink-0" forceSearch searchPlaceholder="Find asset…"
+          />
+        )}
         <MultiSelectDropdown
           title="Exploit" items={EXPLOIT_ITEMS}
           selectedValues={exploitFilter !== 'all' ? [exploitFilter] : []}

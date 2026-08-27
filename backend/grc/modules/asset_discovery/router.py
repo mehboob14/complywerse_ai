@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import ipaddress
 import logging
+import re
 import threading
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
@@ -163,6 +164,14 @@ class CampaignPatch(BaseModel):
 
 # ── Validation helpers ───────────────────────────────────────────────────────
 
+# A registrable domain or subdomain seed for EASM: >=2 dot-separated labels,
+# each 1-63 chars, no leading/trailing hyphen, total <=253. No scheme, path, or
+# spaces — those are rejected so a pasted URL fails at save, not mid-scan.
+_DOMAIN_RE = re.compile(
+    r"^(?=.{1,253}$)(?!-)[a-z0-9-]{1,63}(?<!-)(\.(?!-)[a-z0-9-]{1,63}(?<!-))+$"
+)
+
+
 def _validate_scope(kind: str, value: str) -> None:
     """Reject a scope the scanner could never act on, at write time rather than
     at scan time — a bad CIDR should fail when the operator saves it, not
@@ -183,6 +192,10 @@ def _validate_scope(kind: str, value: str) -> None:
             ipaddress.ip_address(parts[1].strip())
         except ValueError:
             raise HTTPException(400, f"'{value}' is not a valid IP range.")
+    elif kind == "domain":
+        if not _DOMAIN_RE.match(value.strip().lower()):
+            raise HTTPException(
+                400, f"'{value}' is not a valid domain (e.g. example.com — no https://, no path).")
     # ad_ou: any non-empty string is accepted; AD validates it at scan time.
 
 
@@ -240,6 +253,10 @@ _EVIDENCE_SOURCE = {
     "dhcp:vendor_class": "DHCP", "port:winrm": "WinRM", "port:rdp": "RDP", "port:smb": "SMB",
     "port:ssh": "SSH", "port:jetdirect": "JetDirect", "port:lpd": "LPD", "port:ipp": "IPP",
     "port:rtsp": "RTSP", "port:sip": "SIP", "port:telnet": "Telnet", "port:http": "HTTP",
+    # EASM source tags — external discovery records WHICH intel source surfaced
+    # the host, not a fingerprint protocol, so the UI can show "found via Shodan".
+    "crt.sh": "Certificate Transparency", "certspotter": "Certificate Transparency",
+    "shodan": "Shodan", "censys": "Censys", "securitytrails": "SecurityTrails",
 }
 
 
@@ -686,6 +703,62 @@ class ResolveIn(BaseModel):
     target_asset_id: Optional[int] = None  # required for merge
 
 
+@router.get("/easm-scorecard")
+def easm_scorecard(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Attack-surface health scorecard — the tenant's external (outside-in) assets
+    graded by the EASM probe, aggregated for a fleet dashboard plus a per-asset
+    list ranked worst-first. Each asset also carries its own health on its detail
+    page; this is the inventory-wide view of those scores."""
+    from grc.modules.asset_discovery.services.external_probe import _grade
+    tid = get_user_primary_tenant(current_user, db)
+    assets = db.query(ITAsset).filter(
+        ITAsset.tenant_id == tid,
+        ITAsset.internet_facing.is_(True),
+    ).all()
+    grade_counts: Dict[str, int] = {g: 0 for g in ("A", "B", "C", "D", "F")}
+    scored: List[dict] = []
+    graded = ungraded = 0
+    total_score = 0
+    for a in assets:
+        ep = (a.platform_properties or {}).get("external_probe") or {}
+        h = ep.get("health") or {}
+        grade, score = h.get("grade"), h.get("score")
+        if grade is None or score is None:
+            ungraded += 1
+            continue
+        grade_counts[grade] = grade_counts.get(grade, 0) + 1
+        graded += 1
+        total_score += score
+        comps = h.get("components") or {}
+        weak = sorted(k for k, c in comps.items()
+                      if isinstance(c, dict) and (c.get("score") or 0) < 0.5)
+        scored.append({
+            "asset_id": a.id, "name": a.name, "fqdn": a.fqdn or a.host_name,
+            "grade": grade, "score": score, "live": ep.get("live"),
+            "response_time_ms": ep.get("response_time_ms"),
+            "https": bool(ep.get("https_available") or ep.get("scheme") == "https"),
+            "tls_expired": ep.get("tls_expired"),
+            "tls_days_to_expiry": ep.get("tls_days_to_expiry"),
+            "security_headers": len(ep.get("security_headers") or {}),
+            "server": ep.get("server"), "weak": weak,
+            "probed_at": ep.get("probed_at"),
+        })
+    scored.sort(key=lambda x: x["score"])  # worst health first
+    avg = round(total_score / graded) if graded else None
+    return {
+        "summary": {
+            "graded": graded, "ungraded": ungraded, "total": graded + ungraded,
+            "avg_score": avg,
+            "avg_grade": _grade(avg) if avg is not None else None,
+            "grade_counts": grade_counts,
+        },
+        "assets": scored,
+    }
+
+
 @router.get("/inbox")
 def discovery_inbox(
     status_filter: str = Query(default="open", pattern="^(open|review|pending|all)$"),
@@ -869,6 +942,10 @@ def list_discovered_devices(
             # ports (e.g. 5432 → connect as PostgreSQL with a postgres credential).
             "service_suggestions": _svc_suggest(raw.get("open_ports")),
             "open_ports": raw.get("open_ports") or [],
+            # Where discovery saw this device (ARP/fingerprint protocols for LAN
+            # scans, EASM intel sources for external ones) — same helper the
+            # observation serializer uses, so "found via Shodan" shows here too.
+            "discovery_sources": _discovery_sources(raw.get("evidence"), o.mac_address, raw.get("vendor_source")),
             # In inventory with a real collected profile behind it.
             "profiled": bool(asset and asset.os_family),
             "has_credential": _covered(o.ip_address),

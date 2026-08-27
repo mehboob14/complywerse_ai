@@ -360,6 +360,16 @@ export default function AssetDetailPage() {
     },
   });
 
+  // Layer 2 (hook order: must stay ABOVE the early returns below —
+  // React requires the same hook sequence every render): AI-planned layout (headings + card grouping per field key; values
+  // never leave the server). null → the generic Layer-1 cards render unchanged.
+  const { data: layoutPlan } = useQuery({
+    queryKey: ['asset-layout-plan', assetId],
+    queryFn: async () => (await assetsApi.getLayoutPlan(assetId)).data?.plan ?? null,
+    enabled: !!asset,
+    staleTime: 5 * 60 * 1000,
+  });
+
   const { data: coverage } = useQuery({
     queryKey: ['asset-coverage', assetId],
     queryFn: async () => {
@@ -686,7 +696,15 @@ export default function AssetDetailPage() {
   const isApplication = asset?.asset_role === 'application' || _type === 'application';
   // Hosts (Windows/Linux/servers/endpoints) are the things that report an
   // installed-software inventory and an AV/EDR posture.
-  const showsSoftware = !isNetworkDevice && !isCloud;
+  // Outside-only host (EASM-born, never logged into): an agentless software /
+  // AV-EDR inventory can never exist for it, so the Software tab and posture
+  // panel would only ever show a misleading "None detected" wall. Same predicate
+  // as _overview-map's isOutsideOnly — survives scanner syncs bumping
+  // last_seen_source, flips off the day the host gets a real login.
+  const outsideOnly =
+    asset?.last_seen_source === 'external' ||
+    (asset?.origin_source === 'easm' && (asset?.discovery_state ?? 'unmanaged') === 'unmanaged');
+  const showsSoftware = !isNetworkDevice && !isCloud && !outsideOnly;
   const software = Array.isArray(asset?.detected_software_json) ? asset!.detected_software_json! : [];
   const posture = asset?.security_posture || null;
 
@@ -707,7 +725,9 @@ export default function AssetDetailPage() {
     { id: 'overview', label: 'Overview', icon: Boxes },
     { id: 'risks', label: 'Risk & Controls', icon: Shield },
     { id: 'vulnerabilities', label: 'Vulnerabilities', icon: Bug },
-    { id: 'software', label: 'Software', icon: Package },
+    // No Software tab for hosts we can only see from outside — the inventory
+    // it would show cannot exist without a login.
+    ...(showsSoftware ? [{ id: 'software' as TabType, label: 'Software', icon: Package }] : []),
     { id: 'relationships', label: 'Relationships', icon: Network },
     { id: 'lifecycle', label: 'Lifecycle', icon: GitBranch },
     { id: 'evidence', label: 'Attachments', icon: FileCheck },
@@ -734,6 +754,7 @@ export default function AssetDetailPage() {
   })();
 
   const overviewData = buildOverviewData(asset, {
+    plan: layoutPlan,
     software,
     posture,
     kpis: {
@@ -4006,7 +4027,9 @@ function ComplianceTab({ asset }: { asset: AssetDetailData }) {
           </div>
         );
       })()}
-      {selfIpPeersQ.data && !selfIsConnected && !isBrowserAsset && (
+      {/* Unmanaged assets (e.g. external EASM findings) are evidence-only — you
+          can't log into them from outside, so never offer the Connect CTA. */}
+      {selfIpPeersQ.data && !selfIsConnected && !isBrowserAsset && asset.discovery_state !== 'unmanaged' && (
         <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
           <div className="flex items-start gap-3">
             <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-700">

@@ -719,51 +719,9 @@ export default function VulnerabilityDetailPage() {
     },
   });
 
-  // CWE → framework-control auto-map. The mutation result drives a small
-  // banner on the Controls tab; the banner clears itself after the next
-  // user action (clicking Auto-map again, leaving the tab, etc.).
-  const [autoMapBanner, setAutoMapBanner] = useState<{
-    tone: 'success' | 'info' | 'error';
-    text: string;
-  } | null>(null);
-  const autoMapMutation = useMutation({
-    mutationFn: async () => {
-      const res = await vulnManagementApi.controlLinks.autoMap(vulnId);
-      return res.data as {
-        matched_controls: number;
-        added: number;
-        kept: number;
-        removed_stale: number;
-        errors: string[];
-      };
-    },
-    onSuccess: (summary) => {
-      queryClient.invalidateQueries({ queryKey: ['vuln-controls', vulnId] });
-      const noMatch = summary.matched_controls === 0;
-      if (noMatch) {
-        setAutoMapBanner({
-          tone: 'info',
-          text: 'No framework controls matched this vuln. Either the CWE isn\'t in our mapping table or this tenant hasn\'t seeded a framework that covers it.',
-        });
-      } else {
-        const parts: string[] = [];
-        if (summary.added) parts.push(`${summary.added} added`);
-        if (summary.kept) parts.push(`${summary.kept} already linked`);
-        if (summary.removed_stale) parts.push(`${summary.removed_stale} stale removed`);
-        setAutoMapBanner({
-          tone: 'success',
-          text: `Matched ${summary.matched_controls} framework control${summary.matched_controls === 1 ? '' : 's'}: ${parts.join(' · ')}.`,
-        });
-      }
-    },
-    onError: (err: unknown) => {
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setAutoMapBanner({
-        tone: 'error',
-        text: detail || 'Auto-map failed. Check that the framework data is seeded.',
-      });
-    },
-  });
+  // CWE → framework-control auto-map was REMOVED (the rule crosswalk produced
+  // zero links on live data). Control mapping is now the AI mapper's job, run
+  // from the CTEM Validate stage; this page links controls manually only.
 
   const assignDepartmentMutation = useMutation({
     mutationFn: (data: { department_id: number; priority?: string; sla_override_days?: number; notes?: string }) => 
@@ -1590,27 +1548,11 @@ export default function VulnerabilityDetailPage() {
               </h2>
               <p className="text-xs text-slate-500 mt-0.5 max-w-2xl">
                 Compliance impact — every linked control this vulnerability currently breaks
-                or puts at risk. Auto-mapped rows come from this vuln&apos;s CWE; manual rows
-                are linked by you.
+                or puts at risk. The AI mapper suggests controls from the CTEM Validate stage;
+                manual rows are linked by you here.
               </p>
             </div>
             <div className="flex items-center gap-2">
-              {canEdit && vulnerability.cwe_id && (
-                <button
-                  type="button"
-                  onClick={() => autoMapMutation.mutate()}
-                  disabled={autoMapMutation.isPending}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-primary-300 bg-white px-3 py-1.5 text-sm text-primary-700 hover:bg-primary-50 disabled:opacity-50"
-                  title={`Auto-map framework controls from ${vulnerability.cwe_id}`}
-                >
-                  {autoMapMutation.isPending ? (
-                    <Loader2 size={14} className="animate-spin" />
-                  ) : (
-                    <Sparkles size={14} strokeWidth={1.75} />
-                  )}
-                  Auto-map from CWE
-                </button>
-              )}
               {canEdit && (
                 <InlineLinkPicker
                   triggerLabel="Link Control"
@@ -1631,21 +1573,6 @@ export default function VulnerabilityDetailPage() {
               )}
             </div>
           </div>
-
-          {/* Auto-map result banner */}
-          {autoMapBanner && (
-            <div
-              className={`rounded-md border p-2.5 text-xs ${
-                autoMapBanner.tone === 'success'
-                  ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-                  : autoMapBanner.tone === 'error'
-                  ? 'border-red-200 bg-red-50 text-red-700'
-                  : 'border-blue-200 bg-blue-50 text-blue-800'
-              }`}
-            >
-              {autoMapBanner.text}
-            </div>
-          )}
 
           {/* Compliance Impact summary — visible whenever we have at least one
               auto-mapped row. Counts the unique framework short_codes so the
@@ -1692,11 +1619,9 @@ export default function VulnerabilityDetailPage() {
             {(!controlLinks || controlLinks.length === 0) ? (
               <div className="p-8 text-center text-slate-600">
                 No controls linked yet.
-                {vulnerability.cwe_id && (
-                  <div className="mt-2 text-xs">
-                    Click <strong>Auto-map from CWE</strong> to discover framework controls this vuln affects.
-                  </div>
-                )}
+                <div className="mt-2 text-xs">
+                  Run <strong>AI control mapping</strong> from the CTEM Validate stage to suggest controls, or link one manually above.
+                </div>
               </div>
             ) : (
               <table className="w-full">
@@ -1809,7 +1734,7 @@ export default function VulnerabilityDetailPage() {
                         <button
                           onClick={() => deleteControlLinkMutation.mutate(link.id)}
                           className="text-slate-600 hover:text-red-600"
-                          title={isAuto ? 'Remove this auto-mapped link (it will not be re-created until you click Auto-map again)' : 'Remove this manual link'}
+                          title={isAuto ? 'Remove this auto-mapped link' : 'Remove this manual link'}
                         >
                           <Trash2 size={16} />
                         </button>

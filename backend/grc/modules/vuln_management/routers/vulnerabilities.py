@@ -9,7 +9,7 @@ from sqlalchemy import func
 
 from ....models import (
     Vulnerability, VulnerabilityReport, VulnerabilitySLAConfig,
-    VulnerabilityAssetLink, VulnerabilityDependency, GRCUser, get_db
+    VulnerabilityAssetLink, VulnerabilityControlLink, VulnerabilityDependency, GRCUser, get_db
 )
 from ....schemas import (
     VulnerabilityCreate, VulnerabilityUpdate, VulnerabilityResponse,
@@ -68,6 +68,18 @@ def _build_vulnerability_response(v: Vulnerability, solution_count=None) -> Vuln
             if getattr(link, "asset", None) and getattr(link.asset, "name", None)
         ]
 
+    # The control(s) that CLOSE this finding — so the Mobilise/register rows can
+    # show "closed by X" without an extra round-trip. Codes only; the full link
+    # detail lives on the control-links endpoint.
+    linked_control_codes = []
+    for _cl in (getattr(v, "control_links", None) or []):
+        _code = (getattr(getattr(_cl, "framework_control", None), "code", None)
+                 or getattr(getattr(_cl, "normalized_control", None), "code", None)
+                 or getattr(getattr(_cl, "parsed_framework_control", None), "control_id", None)
+                 or getattr(getattr(_cl, "internal_control", None), "name", None))
+        if _code and _code not in linked_control_codes:
+            linked_control_codes.append(_code)
+
     return VulnerabilityResponse(
         id=v.id,
         tenant_id=v.tenant_id,
@@ -112,6 +124,7 @@ def _build_vulnerability_response(v: Vulnerability, solution_count=None) -> Vuln
         assignee_name=v.assignee.display_name if v.assignee else None,
         verifier_name=v.verifier.display_name if v.verifier else None,
         linked_assets=linked_assets,
+        linked_control_codes=linked_control_codes,
         template_type=getattr(v, "template_type", None),
         template_fields=getattr(v, "template_fields", None) or None,
         # Threat-intelligence enrichment — all None on un-enriched rows. The
@@ -230,6 +243,10 @@ def list_vulnerabilities(
     # resolved by the ONE shared resolver so this register and a scope's
     # cycle counters can never disagree.
     ctem_scope_id: Optional[int] = None,
+    # Filter to findings linked to ONE asset (the register's "by asset" filter).
+    # Matches through grc_vulnerability_asset_links, so it honours the same
+    # auto/manual links shown on the asset's own page.
+    asset_id: Optional[int] = None,
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
@@ -276,6 +293,10 @@ def list_vulnerabilities(
         joinedload(Vulnerability.assignee),
         joinedload(Vulnerability.verifier),
         joinedload(Vulnerability.asset_links).joinedload(VulnerabilityAssetLink.asset),
+        joinedload(Vulnerability.control_links).joinedload(VulnerabilityControlLink.framework_control),
+        joinedload(Vulnerability.control_links).joinedload(VulnerabilityControlLink.normalized_control),
+        joinedload(Vulnerability.control_links).joinedload(VulnerabilityControlLink.internal_control),
+        joinedload(Vulnerability.control_links).joinedload(VulnerabilityControlLink.parsed_framework_control),
     ).filter(Vulnerability.tenant_id.in_(user_tenants))
 
     if tenant_id:
@@ -325,6 +346,14 @@ def list_vulnerabilities(
             query = query.filter(Vulnerability.id.in_(_scoped_vuln_ids))
         else:
             query = query.filter(False)  # empty scope → no rows, honestly
+    if asset_id:
+        query = query.filter(
+            Vulnerability.id.in_(
+                db.query(VulnerabilityAssetLink.vulnerability_id).filter(
+                    VulnerabilityAssetLink.asset_id == asset_id
+                )
+            )
+        )
     if assigned_to:
         query = query.filter(Vulnerability.assigned_to == assigned_to)
     if cve_id:

@@ -588,6 +588,7 @@ def create_asset(
             _os_normalized = _os_normalized or _os_family
 
     db_asset = ITAsset(
+        origin_source="manual",  # stamped once at birth; never mutated
         tenant_id=tenant_id,
         name=asset.name,
         description=asset.description,
@@ -1169,6 +1170,7 @@ async def upload_assets_file(
 
         try:
             asset = ITAsset(
+                origin_source="manual",  # stamped once at birth; never mutated
                 tenant_id=tenant_id,
                 name=name,
                 description=parse_str(row.get("description")),
@@ -1447,6 +1449,8 @@ def get_asset(
         "criticality_score": asset.criticality_score,
         "last_seen_at": asset.last_seen_at.isoformat() if asset.last_seen_at else None,
         "last_seen_source": asset.last_seen_source,
+        "origin_source": asset.origin_source,
+        "dns_aliases": asset.dns_aliases,
         "linked_controls": [link.normalized_control_id for link in asset.control_links],
         "linked_risks": [link.risk_id for link in asset.risk_links],
         "latest_assessment": latest_assessment
@@ -1855,6 +1859,32 @@ def get_latest_assessment(
     return assessment
 
 
+@router.get("/{asset_id}/layout-plan")
+def get_asset_layout_plan(
+    asset_id: int,
+    refresh: bool = Query(False, description="Re-plan even if a cached plan exists"),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """AI-planned detail layout (Layer 2). Returns {plan} or {plan: null}.
+
+    The model sees only the asset's FIELD KEYS, never its values, and returns a
+    heading + card per key and a size per card; the UI places the real collected
+    values into that plan. Cached per asset until its key set changes. A null
+    plan is a legitimate answer (AI not configured / failed / invalid) — the UI
+    then renders its existing generic layout unchanged. See
+    services/asset_layout_ai.py for the contract."""
+    from ..services.asset_layout_ai import get_or_build_plan
+    user_tenants = get_user_tenants(current_user, db)
+    asset = db.query(ITAsset).filter(
+        ITAsset.id == asset_id, ITAsset.tenant_id.in_(user_tenants)
+    ).first()
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    plan = get_or_build_plan(db, asset.tenant_id, asset, force=refresh)
+    return {"plan": plan}
+
+
 @router.get("/{asset_id}/detail", response_model=AssetDetailResponse)
 def get_asset_detail(
     asset_id: int,
@@ -2024,6 +2054,8 @@ def get_asset_detail(
         name=asset.name,
         description=asset.description,
         asset_type=asset.asset_type,
+        origin_source=_g("origin_source"),
+        dns_aliases=_g("dns_aliases"),
         owner_id=asset.owner_id,
         owner_name=asset.owner.display_name if asset.owner else None,
         custodian=asset.custodian,

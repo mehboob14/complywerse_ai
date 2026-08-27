@@ -282,6 +282,11 @@ export default function RiskPostureAssetPage() {
   }
 
   const { asset, score, band, weights, components, contributions, data_quality, known_dimensions } = postureQ.data;
+
+  // External (EASM) assets are scored outside-in (TLS/headers/exposure), not on
+  // CIA/CIS/controls — the internal breakdown + cards below assume cis/cia/ctrl
+  // keys and would crash. Render the dedicated exposure view instead.
+  if ((postureQ.data as any).mode === 'easm') return <EasmRiskView data={postureQ.data as any} />;
   // Sum of the weights that actually count. Dimensions with no evidence are
   // excluded from the score and the rest renormalised over what remains, so the
   // share the legend shows must be the EFFECTIVE one.
@@ -843,6 +848,91 @@ export default function RiskPostureAssetPage() {
 // Type moved to top of file so it can be referenced by the main component too.
 
 type TriageMode = 'scanner' | 'effective' | 'compare';
+
+// ── External (EASM) risk posture — the outside-in exposure model ────────────
+// External assets carry no CIA/CIS/controls; their risk is exposure hygiene,
+// which compute_asset_risk returns as mode:"easm" with EASM dimensions (TLS,
+// headers, transport, email, vulns). This renders that instead of the internal
+// breakdown. Risk is health inverted (higher = worse); each dimension shows its
+// own 0-100 health beside the risk contribution.
+function EasmRiskView({ data }: { data: any }) {
+  const { asset, score, band, components, contributions, health, probe } = data;
+  const comps = Object.entries(components || {}) as [string, any][];
+  const effW = comps.reduce((s, [, c]) => s + (c.weight || 0), 0) || 1;
+  const riskColor = (v: number | null) => v == null ? 'text-slate-400' : v >= 60 ? 'text-rose-600' : v >= 40 ? 'text-orange-600' : v >= 20 ? 'text-amber-600' : 'text-emerald-600';
+  const dimBar = (r: number) => r >= 0.75 ? 'bg-rose-400' : r >= 0.4 ? 'bg-amber-400' : 'bg-emerald-400';
+  const gradeColor = (g: string) => ({ A: 'text-emerald-600', B: 'text-green-600', C: 'text-amber-600', D: 'text-orange-600', F: 'text-rose-600' } as any)[g] || 'text-slate-400';
+  return (
+    <div className="p-4 space-y-4">
+      <div className="bg-white border border-slate-200 rounded-lg shadow-sm px-4 py-3">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div className="flex items-start gap-3 min-w-0">
+            <Link href="/risk-posture" className="mt-0.5 rounded-md p-1.5 text-slate-600 hover:bg-slate-50 hover:text-slate-800" title="Back to Risk Posture"><ArrowLeft className="h-4 w-4" strokeWidth={1.75} /></Link>
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-50 text-primary-600"><ShieldAlert className="h-5 w-5" strokeWidth={1.75} /></div>
+            <div className="min-w-0">
+              <div className="text-[10px] uppercase tracking-wider font-semibold text-slate-500">{asset.asset_type || 'Asset'} · external / outside-in</div>
+              <h1 className="text-lg font-semibold text-slate-900 truncate">{asset.name}</h1>
+              <div className="text-xs text-slate-500 mt-0.5 font-mono">{asset.fqdn || asset.host_name || '—'} · {asset.ip_address || '—'}</div>
+            </div>
+          </div>
+          <div className="text-right">
+            <div className={`text-3xl font-bold ${riskColor(score)}`}>{score ?? '—'}<span className="text-base text-slate-400 font-normal"> /100 risk</span></div>
+            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mt-0.5">{band?.label}</div>
+            <div className="text-[11px] text-slate-500 mt-0.5">Health <span className={`font-bold ${gradeColor(health?.grade)}`}>{health?.grade ?? '—'}</span> · {health?.score ?? '—'}/100</div>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2.5 text-[12.5px] text-amber-800">
+        This is an <b>externally-discovered</b> asset — scored on outside-in exposure hygiene (TLS, security headers, transport, email auth, known vulnerabilities), <b>not</b> CIA / CIS / control coverage, which can&apos;t be measured on an asset you only see from the internet.
+      </div>
+
+      <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-4">
+        <div className="text-sm font-semibold text-slate-800 mb-3">Score breakdown <span className="text-xs font-normal text-slate-400">· higher = more risk</span></div>
+        {comps.length === 0 ? (
+          <div className="text-sm text-slate-500">{health?.reason || 'Not probed yet — run an external scan to grade exposure.'}</div>
+        ) : (
+          <>
+            <div className="flex h-3 rounded overflow-hidden mb-3 bg-slate-100">
+              {comps.map(([k, c]) => <div key={k} className={dimBar(c.score)} style={{ width: `${(c.weight / effW) * 100}%` }} title={`${c.label}: ${contributions?.[k]} pts`} />)}
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-[12.5px]">
+              {comps.map(([k, c]) => (
+                <div key={k} className="flex items-center justify-between gap-2">
+                  <span className="flex items-center gap-1.5 text-slate-700"><span className={`inline-block w-2 h-2 rounded-sm ${dimBar(c.score)}`} />{c.label} <span className="text-slate-400">({Math.round((c.weight / effW) * 100)}%)</span></span>
+                  <span className="text-slate-600 text-right">{contributions?.[k]} pts <span className="text-slate-400">· {c.detail}</span></span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {comps.map(([k, c]) => (
+          <div key={k} className="bg-white border border-slate-200 rounded-lg shadow-sm p-4">
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-sm font-semibold text-slate-800">{c.label}</div>
+              <span className={`text-xs font-bold ${c.score >= 0.75 ? 'text-rose-600' : c.score >= 0.4 ? 'text-amber-600' : 'text-emerald-600'}`}>{Math.round((1 - c.score) * 100)}<span className="text-slate-400 font-normal">/100</span></span>
+            </div>
+            <div className="text-xs text-slate-500 mt-1">{c.detail}</div>
+          </div>
+        ))}
+        <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-4">
+          <div className="text-sm font-semibold text-slate-800 mb-2">Outside-in probe</div>
+          <dl className="text-xs text-slate-600 space-y-1">
+            <div className="flex justify-between"><dt className="text-slate-400">Server</dt><dd>{probe?.server || '—'}</dd></div>
+            <div className="flex justify-between"><dt className="text-slate-400">Response</dt><dd>{probe?.response_time_ms != null ? `${probe.response_time_ms} ms` : '—'}</dd></div>
+            <div className="flex justify-between"><dt className="text-slate-400">Cert expiry</dt><dd>{probe?.tls_not_after ? `${String(probe.tls_not_after).slice(0, 10)}${probe.tls_days_to_expiry != null ? ` (${probe.tls_days_to_expiry}d)` : ''}` : '—'}</dd></div>
+            <div className="flex justify-between"><dt className="text-slate-400">Security headers</dt><dd>{Object.keys(probe?.security_headers || {}).length}/6</dd></div>
+            <div className="flex justify-between"><dt className="text-slate-400">Probed</dt><dd>{probe?.probed_at ? String(probe.probed_at).slice(0, 10) : '—'}</dd></div>
+          </dl>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
 function TriagedVulnSection({ perVuln, asset }: { perVuln: PerVulnRow[]; asset: Posture['asset'] }) {
   const [mode, setMode] = useState<TriageMode>('compare');

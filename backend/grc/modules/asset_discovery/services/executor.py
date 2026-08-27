@@ -40,7 +40,9 @@ from sqlalchemy.orm import Session
 
 from grc.models import (
     DiscoveryCampaign, DiscoveryScope, DiscoveryRun, DiscoveryJob, DiscoveryObservation,
+    IntegrationConnection,
 )
+from grc.services.connector_credentials import decrypt_credentials
 from grc.modules.onboarding.service import _probe_one, MAX_HOSTS
 from .fingerprint import (  # noqa: F401
     FingerprintFn, fingerprint_host, noop_fingerprint, classify as _classify_fp,
@@ -557,6 +559,86 @@ def _run_job(
     return len(findings)
 
 
+def load_easm_source_creds(db: Session, tenant_id: int) -> Dict[str, Dict[str, str]]:
+    """Decrypted creds for every active EASM passive-source connector in this
+    tenant, keyed by provider (shodan / censys / securitytrails) — the shape
+    collect_domain's `sources=` expects. Empty dict when none are configured, so
+    the external collector then runs crt.sh-only, unchanged.
+
+    Best-effort and never fatal: any failure loading or decrypting (a broken
+    connector, a rotated master key, a DB hiccup) is logged and yields {}, so a
+    misconfigured connector can't block the whole external sweep — you still get
+    the keyless crt.sh surface. This mirrors the per-source error isolation in
+    external_collect."""
+    out: Dict[str, Dict[str, str]] = {}
+    try:
+        rows = (
+            db.query(IntegrationConnection)
+            .filter(
+                IntegrationConnection.tenant_id == tenant_id,
+                IntegrationConnection.category == "easm_source",
+                IntegrationConnection.is_active.is_(True),
+            )
+            .all()
+        )
+    except Exception:
+        logger.warning("external_collect: failed to load EASM source connectors for "
+                       "tenant %s; falling back to keyless crt.sh", tenant_id, exc_info=True)
+        return out
+    for conn in rows:
+        creds = decrypt_credentials(conn.encrypted_credentials)
+        if creds:
+            out[conn.integration_type] = creds
+    return out
+
+
+def _run_external_job(
+    db: Session, run: DiscoveryRun, job: DiscoveryJob, scope: DiscoveryScope,
+) -> int:
+    """EASM counterpart to _run_job: enumerate one domain's external attack
+    surface (outside-in, no credentials) and write an observation per name found.
+
+    Mirrors _run_job's job lifecycle exactly so execute_run's counters, status
+    finalisation and per-job savepoint all keep working unchanged. The only
+    differences from the network sweep: source is 'external', fqdn IS populated
+    (the sweep leaves it NULL), and ip_address may be None for a name that no
+    longer resolves — still recorded, because a name in a public cert is itself
+    evidence of the surface."""
+    job.status = "running"
+    job.started_at = datetime.utcnow()
+    job.attempts = (job.attempts or 0) + 1
+    db.flush()
+
+    from .external_collect import collect_domain
+    # Keyed passive sources (Shodan/Censys/SecurityTrails) are pulled from this
+    # tenant's active easm_source connectors; empty → crt.sh-only, unchanged.
+    sources = load_easm_source_creds(db, run.tenant_id)
+    # ponytail: one call per source, no retry. A single source failing is isolated
+    # inside collect_domain and just drops that source; only if EVERY source fails
+    # does collect_domain raise, and the per-job except in execute_run then marks
+    # the job failed (an honest failure, not a silent empty result). Add retry/
+    # backoff here if flakiness bites in production.
+    observations = collect_domain(scope.value, sources=sources)
+
+    now = datetime.utcnow()
+    for d in observations:
+        db.add(DiscoveryObservation(
+            tenant_id=run.tenant_id, run_id=run.id, job_id=job.id,
+            source=d["source"], observed_at=now,
+            host_name=d.get("host_name"), ip_address=d.get("ip_address"),
+            fqdn=d.get("fqdn"),                 # populated here; the sweep omits it
+            mac_address=d.get("mac_address"),
+            raw=d.get("raw"),
+            resolution="pending",
+        ))
+
+    job.hosts_seen = len(observations)
+    job.status = "succeeded"
+    job.finished_at = datetime.utcnow()
+    db.flush()
+    return len(observations)
+
+
 def create_run(
     db: Session, campaign: DiscoveryCampaign, *, trigger: str = "manual", user=None,
 ) -> DiscoveryRun:
@@ -638,7 +720,14 @@ def execute_run(
 
     for scope in include_scopes:
         # ad_ou scopes are accepted by config but have no network executor yet.
-        kind = "ad_enum" if scope.kind == "ad_ou" else "cidr_sweep"
+        # domain scopes are EASM seeds — they run the outside-in collector, not
+        # the network sweep (which would expand a domain to zero IPs).
+        if scope.kind == "domain":
+            kind = "external_collect"
+        elif scope.kind == "ad_ou":
+            kind = "ad_enum"
+        else:
+            kind = "cidr_sweep"
         job = DiscoveryJob(
             tenant_id=run.tenant_id, run_id=run.id, kind=kind,
             target=scope.value, status="queued",
@@ -662,9 +751,12 @@ def execute_run(
             # half-written observations, never a sibling job's. Before this the
             # whole-session rollback wiped every earlier job in the run.
             with db.begin_nested():
-                seen = _run_job(db, run, job, scope, exclusions,
-                                probe=probe, timeout_s=timeout_s, max_workers=max_workers,
-                                rate_limit_per_min=rate_limit, fingerprinter=fp_fn)
+                if kind == "external_collect":
+                    seen = _run_external_job(db, run, job, scope)
+                else:
+                    seen = _run_job(db, run, job, scope, exclusions,
+                                    probe=probe, timeout_s=timeout_s, max_workers=max_workers,
+                                    rate_limit_per_min=rate_limit, fingerprinter=fp_fn)
             db.commit()  # release the savepoint's work to the run
             total_hosts += seen
             # observations for this job = its findings (host_seen == obs written)
@@ -714,6 +806,46 @@ def execute_run(
         resolve_run(db, run.id)
     except Exception:
         logger.exception("discovery: auto-resolve failed for run %s", run.id)
+        # A DB-layer error inside the resolver can leave the session pending-rollback;
+        # clear it so the db.refresh(run) below can't raise PendingRollbackError.
+        # Committed resolve work is durable — rollback only unwinds the failed unit.
+        try:
+            db.rollback()
+        except Exception:
+            logger.exception("discovery: rollback after auto-resolve failure failed for run %s", run.id)
+
+    # Domain hierarchy: link each subdomain asset this run resolved (ftp/www/
+    # mail…) to its apex (liztek.ca) with a `subdomain_of` edge. Purely additive
+    # — touches no asset field or vuln link. Best-effort; a failure never fails
+    # the run.
+    try:
+        from .domain_hierarchy import link_domain_hierarchy
+        link_domain_hierarchy(db, run.tenant_id)
+        db.commit()
+    except Exception:
+        logger.exception("discovery: domain-hierarchy linking failed for run %s", run.id)
+        try:
+            db.rollback()
+        except Exception:
+            logger.exception("discovery: rollback after domain-hierarchy failure failed for run %s", run.id)
+
+    # Host-centric collapse: when several EASM DNS names resolve to ONE machine
+    # (same IP + same apex domain), fold them into a single host asset with the
+    # other names as dns_aliases, so findings live once per machine. Guarded —
+    # only infrastructure rows born from EASM ever fold; hosts with logins,
+    # agents, children, or non-EASM origin are untouched. Best-effort.
+    try:
+        from .host_collapse import collapse_hosts
+        _hc = collapse_hosts(db, run.tenant_id)
+        db.commit()
+        if _hc.get("folded"):
+            logger.info("discovery: host collapse folded %s row(s) for run %s", _hc["folded"], run.id)
+    except Exception:
+        logger.exception("discovery: host collapse failed for run %s", run.id)
+        try:
+            db.rollback()
+        except Exception:
+            logger.exception("discovery: rollback after host-collapse failure failed for run %s", run.id)
 
     # Deep-collect: for each host we just resolved, if a stored credential covers
     # it, authenticate and pull OS / software / antivirus so a network-discovered
@@ -725,6 +857,46 @@ def execute_run(
         deep_collect_run(db, run.id)
     except Exception:
         logger.exception("discovery: deep-collect failed for run %s", run.id)
+        # A DB-layer error inside deep-collect can leave the session pending-rollback;
+        # clear it so the db.refresh(run) below can't raise PendingRollbackError.
+        # Committed deep-collect work is durable — rollback only unwinds the failed unit.
+        try:
+            db.rollback()
+        except Exception:
+            logger.exception("discovery: rollback after deep-collect failure failed for run %s", run.id)
+
+    # External probe (EASM): for the internet-facing assets this run just adopted,
+    # reach back out and record what's actually listening (HTTP status / title /
+    # Server header, TLS cert) and relink already-known CVEs. The outside-in
+    # analogue of deep-collect; a no-op for a run with no external assets.
+    # Best-effort — a probe failure must never fail the run.
+    try:
+        from .external_probe import probe_external_run
+        probe_external_run(db, run.id)
+    except Exception:
+        logger.exception("discovery: external probe failed for run %s", run.id)
+        # A DB-layer error inside the probe can leave the session pending-rollback;
+        # clear it so the db.refresh(run) below can't raise PendingRollbackError.
+        # Committed probe work is durable — rollback only unwinds the failed unit.
+        try:
+            db.rollback()
+        except Exception:
+            logger.exception("discovery: rollback after probe failure failed for run %s", run.id)
+
+    # Reachability: compute attack-path snapshots for the (vuln x asset) pairs this
+    # run just linked, so a newly-adopted internet-facing asset enters the CTEM
+    # choke-point ranking instead of reading "path not calculated yet". only_missing
+    # fills just the gaps (idempotent). Best-effort — a compute failure never fails
+    # the run.
+    try:
+        from grc.services.reachability_batch import compute_paths
+        compute_paths(db, run.tenant_id, only_missing=True)
+    except Exception:
+        logger.exception("discovery: reachability compute failed for run %s", run.id)
+        try:
+            db.rollback()
+        except Exception:
+            logger.exception("discovery: rollback after reachability failure failed for run %s", run.id)
 
     db.refresh(run)
     return run

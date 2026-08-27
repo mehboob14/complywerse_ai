@@ -217,7 +217,7 @@ def link_orphan_vulns_to_asset(db: Session, asset) -> int:
     uses — so the register and inventory converge instead of drifting. Best-effort:
     never raises into the caller (a link failure must not fail asset creation)."""
     import logging
-    from sqlalchemy import or_, func
+    from sqlalchemy import or_, func, String
     from grc.models import Vulnerability, VulnerabilityAssetLink
     try:
         names = {n.lower() for n in (getattr(asset, "host_name", None), getattr(asset, "fqdn", None)) if n}
@@ -227,6 +227,15 @@ def link_orphan_vulns_to_asset(db: Session, asset) -> int:
             conds.append(func.lower(Vulnerability.affected_host).in_(names))
         if ip:
             conds.append(Vulnerability.affected_host == ip)
+        # Nessus findings carry the scanner's internal id in affected_host, so the two
+        # matches above never fire for them. They DO carry the real machine identity in
+        # host_identity ({host_name, ip}) — match on that too, so a finding imported
+        # BEFORE its machine was discovered links itself the moment the machine arrives.
+        # JSON column → compare as text (portable across PG/SQLite).
+        for n in names:
+            conds.append(func.lower(func.cast(Vulnerability.host_identity, String)).like(f'%"host_name": "{n}"%'))
+        if ip:
+            conds.append(func.cast(Vulnerability.host_identity, String).like(f'%"ip": "{ip}"%'))
         if not conds:
             return 0
         vulns = db.query(Vulnerability).filter(

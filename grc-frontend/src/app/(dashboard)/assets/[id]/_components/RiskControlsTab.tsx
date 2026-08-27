@@ -82,9 +82,26 @@ function ResidualRiskCard({ assetId, asset }: { assetId: number; asset: any }) {
   const d = q.data;
   const score = d?.score ?? null;
   const tone = score != null ? bandTone(score) : null;
-  const known: string[] = d?.known_dimensions ?? [];
-  const total = DIMS.length;
-  const knownCount = DIMS.filter((x) => known.includes(x.key)).length;
+  const isEasm = d?.mode === 'easm';
+  // External (EASM) assets return exposure dimensions (tls/headers/transport/
+  // email/vuln) with their own labels; internal assets use the fixed 5 signals.
+  // Build one row list from whichever the posture returned so the bars match the
+  // model — and can never disagree with the Full-posture page.
+  const rows: { key: string; concept: string; dim: string; pct: number; known: boolean; positive: string | null; guideId?: string; guideN?: number }[] = isEasm
+    ? Object.entries(d.components || {}).map(([key, c]: [string, any]) => ({
+        key, concept: c.label || key, dim: c.detail || '', pct: (c.score ?? 0) * 100, known: true, positive: null,
+      }))
+    : DIMS.map((x) => {
+        const c = d?.components?.[x.key];
+        return {
+          key: x.key, concept: x.concept, dim: x.dim, pct: (c?.score ?? 0) * 100, known: !!c?.known,
+          positive: c?.coverage_pct != null ? `${Math.round(c.coverage_pct)}% of controls cover it`
+            : c?.pass_rate != null ? `${c.pass_rate}% of checks pass` : null,
+          guideId: x.guideId, guideN: x.guideN,
+        };
+      });
+  const total = rows.length;
+  const knownCount = rows.filter((r) => r.known).length;
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-5">
@@ -121,30 +138,18 @@ function ResidualRiskCard({ assetId, asset }: { assetId: number; asset: any }) {
           </div>
 
           <div className="mt-5 space-y-2.5">
-            {DIMS.map((x) => {
-              const c = d.components?.[x.key];
-              const isKnown = !!c?.known;
-              // Our scores are 0–1 where higher = worse. Show as 0–100.
-              const pct = (c?.score ?? 0) * 100;
-              // The "good" counterpart, spelled out so the gap can't be misread
-              // as its opposite (a 0% coverage gap-bar is NOT 0% risk).
-              const positive =
-                c?.coverage_pct != null ? `${Math.round(c.coverage_pct)}% of controls cover it`
-                : c?.pass_rate != null ? `${c.pass_rate}% of checks pass`
-                : null;
-              return (
-                <Bar
-                  key={x.key}
-                  label={x.concept}
-                  sub={positive ? `${x.dim} · ${positive}` : x.dim}
-                  pct={pct}
-                  known={isKnown}
-                  tone={tone!.fg}
-                  guideId={x.guideId}
-                  guideN={x.guideN}
-                />
-              );
-            })}
+            {rows.map((r) => (
+              <Bar
+                key={r.key}
+                label={r.concept}
+                sub={r.positive ? `${r.dim} · ${r.positive}` : r.dim}
+                pct={r.pct}
+                known={r.known}
+                tone={tone!.fg}
+                guideId={r.guideId}
+                guideN={r.guideN}
+              />
+            ))}
           </div>
 
           <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 text-[12px] text-slate-500">
@@ -315,13 +320,19 @@ function CISCard({ assetId, onOpenCompliance }: { assetId: number; onOpenComplia
 export default function RiskControlsTab({
   assetId, asset, onOpenCompliance, children,
 }: { assetId: number; asset: any; onOpenCompliance?: () => void; children?: React.ReactNode }) {
+  // External (EASM) assets have no CIA ratings and no CIS baseline — those two
+  // editable cards don't apply; the Residual Risk card already shows the
+  // exposure dimensions that DO.
+  const isExternal = !!(asset?.platform_properties?.external_probe) || asset?.last_seen_source === 'external';
   return (
     <div className="space-y-4">
       <ResidualRiskCard assetId={assetId} asset={asset} />
-      <div className="grid gap-4 lg:grid-cols-2">
-        <CIACard assetId={assetId} asset={asset} />
-        <CISCard assetId={assetId} onOpenCompliance={onOpenCompliance} />
-      </div>
+      {!isExternal && (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <CIACard assetId={assetId} asset={asset} />
+          <CISCard assetId={assetId} onOpenCompliance={onOpenCompliance} />
+        </div>
+      )}
       {/* The three cards above ARE the page — they mirror the reference
           product exactly. Everything below is management the reference simply
           cannot do (it can only READ a control-effectiveness number; it cannot

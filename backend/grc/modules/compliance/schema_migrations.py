@@ -155,6 +155,9 @@ def _ensure_index(engine: Engine, table: str, column: str, index_name: str) -> N
 # Postgres types. ddl_type may include defaults (e.g. "TIMESTAMP DEFAULT NOW()")
 # for columns we want backfilled on existing rows.
 _COLUMN_ADDS = [
+    # CTEM gated loop — per-cycle stage completion stamps ({"discover": ts, ...});
+    # a stage's numbers/actions unlock only after the previous stage is stamped.
+    ("grc_ctem_cycles", "stage_progress", "JSON DEFAULT '{}'::json", None),
     # CTEM Validate — proposals may target an uploaded-framework control, and carry provenance
     ("grc_ai_control_proposals", "parsed_framework_control_id", "INTEGER",
      "ix_grc_ai_control_proposals_parsed_framework_control_id"),

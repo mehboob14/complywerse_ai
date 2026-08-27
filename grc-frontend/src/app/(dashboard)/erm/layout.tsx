@@ -8,13 +8,11 @@ import {
   GitBranch,
   ListTodo,
   Target,
-  Crosshair,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
 const ermNavigation = [
   { name: 'Risk Register', href: '/erm/risks', icon: AlertTriangle },
-  { name: 'CTEM Scopes', href: '/erm/ctem-scopes', icon: Crosshair },
   { name: 'Appetite', href: '/erm/appetite', icon: Target },
   { name: 'Mitigation Actions', href: '/erm/mitigation-actions', icon: ListTodo },
   // 'Internal Controls' moved to Control Testing & Assurance (/controls);

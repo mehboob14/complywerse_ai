@@ -1009,9 +1009,17 @@ def serialize_group(group: CommonControlGroup, db: Session, include_controls: bo
     # not consolidated into a cross-framework set (mapping_source='standalone').
     # These are stored as normalized-control mappings (one NormalizedControl per
     # framework-unique control), so count by normalized_control_id, not parsed.
+    # Standalone controls exist in two shapes: single-member NormalizedControls
+    # (pipeline build — normalized_control_id set) OR parsed mappings (seed loader —
+    # parsed_control_id set). Count by mapping_source so both are covered.
     standalone_count = db.query(CommonControlGroupMapping).filter(
         CommonControlGroupMapping.group_id == group.id,
-        CommonControlGroupMapping.normalized_control_id.isnot(None),
+        CommonControlGroupMapping.mapping_source == "standalone",
+    ).count()
+    # the parsed-mapping shape isn't in normalized_count, so add it to the total
+    standalone_parsed = db.query(CommonControlGroupMapping).filter(
+        CommonControlGroupMapping.group_id == group.id,
+        CommonControlGroupMapping.parsed_control_id.isnot(None),
         CommonControlGroupMapping.mapping_source == "standalone",
     ).count()
 
@@ -1026,11 +1034,11 @@ def serialize_group(group: CommonControlGroup, db: Session, include_controls: bo
         "keywords": group.keywords or [],
         "ai_summary": group.ai_summary,
         "evidence_types": group.evidence_types or [],
-        "normalized_control_count": normalized_count,
+        "normalized_control_count": normalized_count + standalone_parsed,
         "framework_control_count": framework_count,
         "parsed_control_count": parsed_count,
         "standalone_control_count": standalone_count,
-        "total_control_count": normalized_count + framework_count + parsed_count,
+        "total_control_count": normalized_count + standalone_parsed,
         "created_at": group.created_at.isoformat() if group.created_at else None,
         "updated_at": group.updated_at.isoformat() if group.updated_at else None,
         "created_by": group.created_by
@@ -1233,7 +1241,14 @@ def list_groups(
                      .filter(CommonControlGroupMapping.group_id.in_(group_ids_subq),
                              CommonControlGroupMapping.parsed_control_id.isnot(None))
                      .distinct().count())
-    total_mapped = norm_mapped + parsed_mapped
+    # only standalone parsed-mappings are extra controls; set-member parsed mappings
+    # are already represented by their set's normalized_control_id (avoid double count).
+    standalone_parsed_mapped = (db.query(CommonControlGroupMapping.parsed_control_id)
+                     .filter(CommonControlGroupMapping.group_id.in_(group_ids_subq),
+                             CommonControlGroupMapping.parsed_control_id.isnot(None),
+                             CommonControlGroupMapping.mapping_source == "standalone")
+                     .distinct().count())
+    total_mapped = norm_mapped + standalone_parsed_mapped
 
     # RAW framework controls behind the library (one link per original framework
     # control) — lets the UI reconcile "3,419 raw → 2,332 unified" instead of
@@ -1247,11 +1262,32 @@ def list_groups(
                              NormalizedControlLink.parsed_control_id.isnot(None))
                      .distinct().count())
 
+    # Distinct frameworks the library actually covers (30), NOT the tenant's list
+    # of available/uploaded frameworks. Frameworks reach a group two ways:
+    # set members via NormalizedControlLink, standalone via the parsed mapping.
+    library_framework_count = 0
+    if run_id is not None:
+        q1 = (db.query(ParsedFrameworkControl.uploaded_framework_id)
+              .join(NormalizedControlLink,
+                    NormalizedControlLink.parsed_control_id == ParsedFrameworkControl.id)
+              .join(NormalizedControl,
+                    NormalizedControl.id == NormalizedControlLink.normalized_control_id)
+              .filter(NormalizedControl.run_id == run_id,
+                      ParsedFrameworkControl.uploaded_framework_id.isnot(None)).distinct())
+        q2 = (db.query(ParsedFrameworkControl.uploaded_framework_id)
+              .join(CommonControlGroupMapping,
+                    CommonControlGroupMapping.parsed_control_id == ParsedFrameworkControl.id)
+              .filter(CommonControlGroupMapping.group_id.in_(group_ids_subq),
+                      CommonControlGroupMapping.mapping_source == "standalone",
+                      ParsedFrameworkControl.uploaded_framework_id.isnot(None)).distinct())
+        library_framework_count = len({r[0] for r in q1.all()} | {r[0] for r in q2.all()})
+
     return {
         "items": [serialize_group(g, db) for g in groups],
         "total": total,
         "total_mapped_controls": total_mapped,
         "total_raw_controls": total_raw,
+        "library_framework_count": library_framework_count,
         "skip": skip,
         "limit": limit
     }

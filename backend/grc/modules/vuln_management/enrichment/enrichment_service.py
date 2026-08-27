@@ -463,24 +463,9 @@ def enrich_vulnerability(vuln: Vulnerability, db: Session) -> dict:
         logger.exception("Failed to commit enrichment for vuln %s", vuln.id)
         summary["errors"].append("commit_failed")
 
-    # ---- CWE → framework-control auto-mapping ------------------------------
-    # Best-effort: the writer never raises into the caller. We pass
-    # delete_stale=False here so a casual re-enrichment doesn't remove
-    # auto rows mid-investigation; the explicit /controls/auto-map
-    # endpoint passes True for the "clean reset" semantics the UI
-    # button promises.
-    try:
-        from ..control_mapping import auto_map_compliance_controls
-        cm_summary = auto_map_compliance_controls(
-            vuln, db, delete_stale=False, user_id=None,
-        )
-        summary["compliance_mapping"] = cm_summary
-        for err in cm_summary.get("errors") or []:
-            summary["errors"].append(f"compliance_mapping_{err}")
-    except Exception:
-        logger.exception(
-            "compliance_mapping auto-map raised unexpectedly for vuln %s", vuln.id
-        )
-        summary["errors"].append("compliance_mapping_exception")
+    # NOTE: the CWE → framework-control rule crosswalk that used to run here was
+    # removed — it produced zero links on live data. Control mapping is now the AI
+    # mapper's job, run explicitly from the CTEM Validate stage
+    # (grc.services.ai_control_proposals.generate_proposals), not per-ingest.
 
     return summary

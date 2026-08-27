@@ -115,6 +115,7 @@ const REL_LABEL: Record<string, [string, string]> = {
   backs_up:      ['backs up', 'is backed up by'],
   replicates_to: ['replicates to', 'receives replication from'],
   member_of:     ['is a member of', 'has member'],
+  subdomain_of:  ['is a subdomain of', 'has subdomain'],
 };
 const relPhrase = (type: string, dir: 'outgoing' | 'incoming') => {
   const pair = REL_LABEL[type] ?? [type.replace(/_/g, ' '), `is ${type.replace(/_/g, ' ')} by`];

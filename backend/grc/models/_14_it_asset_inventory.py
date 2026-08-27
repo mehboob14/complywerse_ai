@@ -95,6 +95,16 @@ class ITAsset(Base):
     # `last_seen_at < now - 30d`.
     last_seen_at = Column(DateTime, nullable=True)
     last_seen_source = Column(String(50), nullable=True)  # e.g. "nessus", "manual", "azure_defender"
+    # How the asset was BORN: easm | network_sweep | connect | agent | manual.
+    # last_seen_source mutates on every sync ("who saw it LAST"), so it cannot
+    # answer "where did this come from" — this is stamped once and never updated.
+    origin_source = Column(String(30), nullable=True)
+    # Other DNS names that resolve to THIS same host (host-centric model): when
+    # ftp/www/mail.liztek.ca all point at one server, one asset row carries the
+    # primary name and the rest live here as aliases, so a finding on the host
+    # is stored once, not once per name. JSON list of lowercased FQDNs. Never
+    # holds a name that belongs to a different machine (different IP).
+    dns_aliases = Column(JSON, nullable=True)
 
     # ── CIS OS profile ─────────────────────────────────────────────────────
     # Populated by the Connect Wizard handshake (probes via WinRM / SSH /
@@ -380,6 +390,7 @@ ASSET_RELATIONSHIP_TYPES = (
     "backs_up",       # A holds backups of B
     "replicates_to",  # A replicates data to B
     "member_of",      # A belongs to cluster/group B
+    "subdomain_of",   # A (ftp.liztek.ca) is a DNS subdomain of apex B (liztek.ca)
 )
 
 

@@ -1,5 +1,6 @@
 import logging
 import hashlib
+import ipaddress
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -110,6 +111,14 @@ class NessusTransformer:
         return f"NS-{hashlib.md5(raw.encode()).hexdigest()[:12].upper()}"
 
     @staticmethod
+    def _is_ip_literal(value: str) -> bool:
+        try:
+            ipaddress.ip_address(value.strip())
+            return True
+        except (ValueError, AttributeError):
+            return False
+
+    @staticmethod
     def _stable_asset_id(hostname: str, host_ip: str, tenant_id: int, asset_uuid: str = "") -> str:
         if asset_uuid:
             return f"nessus-{asset_uuid[:64]}"
@@ -164,6 +173,17 @@ class NessusTransformer:
 
         hostname = pick_first(raw.get("hostname"), raw.get("host-name"), raw_name)
         host_ip = pick_first(raw.get("host-ip"), raw.get("ipv4"), raw.get("ip"))
+        # Nessus reports a bare IP as the "hostname" when the target has no
+        # resolvable name (the normal case for an uncredentialed scan of an
+        # address) and carries no separate ip field. Treat an IP-literal
+        # hostname as the host's IP too — otherwise ip_address stays empty, the
+        # IP-last asset match in _find_existing_asset never fires, and the
+        # finding's host_identity carries no "ip" for the later-discovery
+        # linker either, so findings on a known IP stay unlinked forever.
+        # `hostname` itself is left untouched: it keys _stable_asset_id, which
+        # must not move between syncs (vuln ids / auto-close depend on it).
+        if not host_ip and hostname and NessusTransformer._is_ip_literal(hostname):
+            host_ip = hostname
 
         asset_uuid = raw.get("_asset_uuid", "")
         source = raw.get("_source", "scan")

@@ -125,3 +125,58 @@ def test_dry_run_writes_nothing(db):
     db.rollback()
     assert db.query(VulnerabilityAssetLink).count() == 0
     assert r["newly_linked"] == 3                    # but the report still says what WOULD link
+
+
+def _nessus_id(host_name, ip=""):
+    from grc.modules.integrations.adapters.nessus_transformer import NessusTransformer
+    return NessusTransformer._stable_asset_id(host_name, ip, TENANT)
+
+
+def test_nessus_hash_relinks_by_recompute(db):
+    # The delete-and-recreate case: a finding stores the Nessus one-way hash of
+    # its host; the asset that minted it is gone; a NEW asset represents the same
+    # host. Recompute the hash from the live asset and re-link — no manual step.
+    db.add(ITAsset(id=50, tenant_id=TENANT, name="MYHOST-1", host_name="MYHOST-1",
+                   asset_type="server", status="active"))
+    db.add(Vulnerability(id=60, tenant_id=TENANT, vuln_id="V-60", title="orphan",
+                         severity="high", status="open",
+                         affected_host=_nessus_id("MYHOST-1")))
+    db.commit()
+    backfill_host_links(db, TENANT, commit=True)
+    link = db.query(VulnerabilityAssetLink).filter_by(vulnerability_id=60).one()
+    assert link.asset_id == 50          # relinked purely by recomputing the hash
+    assert link.link_source == "host_match"
+
+
+def test_same_name_hosts_refuse_to_link(db):
+    # Two real boxes share a host_name — the finding on that name must NOT be
+    # attached to either (that would be a coin-flip). It's reported ambiguous.
+    db.add_all([
+        ITAsset(id=70, tenant_id=TENANT, name="DUP-A", host_name="DUP-HOST",
+                asset_type="server", status="active"),
+        ITAsset(id=71, tenant_id=TENANT, name="DUP-B", host_name="DUP-HOST",
+                asset_type="server", status="active"),
+    ])
+    db.add(Vulnerability(id=72, tenant_id=TENANT, vuln_id="V-72", title="dup",
+                         severity="high", status="open", affected_host="DUP-HOST"))
+    db.commit()
+    r = backfill_host_links(db, TENANT, commit=True)
+    assert r["ambiguous"] >= 1
+    assert db.query(VulnerabilityAssetLink).filter_by(vulnerability_id=72).first() is None
+
+
+def test_ambiguous_is_not_blanket_overridden(db):
+    # Even with an operator override for unmatched findings, an AMBIGUOUS host
+    # (shared by 2+ assets) is left alone — it has real candidates, so it needs a
+    # per-finding decision, not the blanket bucket.
+    db.add_all([
+        ITAsset(id=80, tenant_id=TENANT, name="DUP-A", host_name="DUP-HOST",
+                asset_type="server", status="active"),
+        ITAsset(id=81, tenant_id=TENANT, name="DUP-B", host_name="DUP-HOST",
+                asset_type="server", status="active"),
+    ])
+    db.add(Vulnerability(id=82, tenant_id=TENANT, vuln_id="V-82", title="dup",
+                         severity="high", status="open", affected_host="DUP-HOST"))
+    db.commit()
+    backfill_host_links(db, TENANT, commit=True, assign_unmatched_to_asset_id=1)
+    assert db.query(VulnerabilityAssetLink).filter_by(vulnerability_id=82).first() is None

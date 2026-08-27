@@ -1,3 +1,4 @@
+import ipaddress
 import logging
 import os
 from datetime import datetime
@@ -268,31 +269,14 @@ class SyncService:
                 logger.exception("post-sync choke-point recompute failed (non-fatal)")
                 db.rollback()
 
-            # ── CTEM Validate: reason over NEW findings ───────────────────────
-            # "Reasoning happens again and again" without a button: every sync,
-            # findings that carry no AI-mapping proposal yet are sent through the
-            # mapper (reason-once/apply-many — a CWE a human already decided is
-            # applied without a model call). Same non-fatal discipline as the
-            # blocks above; the run row records what happened. Only after the
-            # enrichment block so CWE/EPSS/KEV are on the row before it's judged.
-            try:
-                from grc.models import Vulnerability as _V, AiControlProposal as _P
-                _todo = [vid for (vid,) in db.query(_V.id).filter(
-                    _V.tenant_id == tenant_id,
-                    ~_V.id.in_(db.query(_P.vulnerability_id).filter(_P.tenant_id == tenant_id))
-                ).all()]
-                if _todo:
-                    from grc.services.ai_control_proposals import generate_proposals
-                    _s = generate_proposals(db, tenant_id, vulnerability_ids=_todo,
-                                            triggered_by=triggered_by_user_id)
-                    db.commit()
-                    stats["ai_mapping"] = {k: _s.get(k) for k in ("findings_sent", "findings_reused",
-                                                                   "proposals_created", "proposals_reused",
-                                                                   "model_errors")}
-                    logger.info("post-sync AI control mapping: %s (conn=%s)", stats["ai_mapping"], connection_id)
-            except Exception:
-                logger.exception("post-sync AI control mapping failed (non-fatal)")
-                db.rollback()
+            # ── CTEM Validate mapping is NO LONGER run here ───────────────────
+            # Control mapping is Validate-stage work, not Discover-stage work.
+            # Running it during the sync made the whole CTEM loop look pre-baked
+            # (every stage "already done" the moment a scope opened). It now runs
+            # ON DEMAND when the operator reaches the Validate stage and clicks
+            # "Map controls" — POST /vuln-management/ai-control-proposals/generate
+            # (scope-aware, background, polled by AiControlProposalsPanel). Sync
+            # is pure Discover: import findings + enrich; nothing maps controls.
 
             # ── Outbound write-back retry ─────────────────────────────────────
             # Push (or record-as-skipped) any pending/failed GRC→scanner
@@ -421,6 +405,25 @@ class SyncService:
         return None
 
     @staticmethod
+    def _ip_alias_assets(db: Session, tenant_id: int, ip_address: str, primary_asset_id: int) -> List[ITAsset]:
+        """Machine-type assets that are the same scanned box under another name.
+
+        Only called for hosts the scanner knew by BARE IP (no resolvable name):
+        every inventory asset carrying exactly that IP that is itself a
+        machine/surface record (infrastructure / cloud) is a DNS alias of the
+        scanned server, so its findings apply to each of them. Application,
+        data and third_party assets are never included — co-located software
+        must not inherit the host's findings. Name-known hosts never fan out
+        at all: a real hostname identifies ONE asset.
+        """
+        return db.query(ITAsset).filter(
+            ITAsset.tenant_id == tenant_id,
+            ITAsset.ip_address == ip_address,
+            ITAsset.id != primary_asset_id,
+            ITAsset.asset_type.in_(("infrastructure", "cloud")),
+        ).all()
+
+    @staticmethod
     def _sync_assets(
         db: Session,
         adapter: BaseAdapter,
@@ -463,8 +466,31 @@ class SyncService:
                         if val is None:
                             continue
                         current = getattr(existing, key, None)
+                        # An IP literal in a name field is an address, not an
+                        # identity. When the scanner knew the host only by its
+                        # IP (so the transformed host_name IS the IP), never
+                        # let it stomp a real host_name/fqdn on the matched
+                        # asset — discovery/EASM owns those fields. The IP
+                        # itself still lands in ip_address as usual.
+                        if key in ("host_name", "fqdn") and current and current != val:
+                            try:
+                                ipaddress.ip_address(str(val).strip())
+                                continue
+                            except ValueError:
+                                pass
                         # Keep manually edited display names for scanner-fetched assets.
                         if key == "name" and current and current != val:
+                            # When the scanner knew the host only by its IP,
+                            # the "name" it reports is just the scan's label
+                            # (e.g. "liztek server"), not a host identity —
+                            # never rename an asset with it.
+                            _scanned_host = mapped_asset.get("host_name")
+                            if _scanned_host:
+                                try:
+                                    ipaddress.ip_address(str(_scanned_host).strip())
+                                    continue
+                                except ValueError:
+                                    pass
                             auto_name_candidates = {
                                 getattr(existing, "ip_address", None),
                                 getattr(existing, "host_name", None),
@@ -488,8 +514,21 @@ class SyncService:
                         stats["assets_updated"] += 1
                     if not changed:
                         stats["assets_unchanged"] += 1
+                    # When the scanner knew this host only by bare IP, its
+                    # findings also belong on every other machine-type asset
+                    # carrying that exact IP (DNS aliases of the same server).
+                    alias_assets: List[ITAsset] = []
+                    if ip_address and host_name:
+                        try:
+                            ipaddress.ip_address(str(host_name).strip())
+                            alias_assets = SyncService._ip_alias_assets(
+                                db, tenant_id, ip_address, existing.id
+                            )
+                        except ValueError:
+                            pass
                     synced_assets.append({
                         "asset": existing,
+                        "alias_assets": alias_assets,
                         "external_asset_id": ext_id,
                         "host_name": host_name or "",
                         "ip_address": ip_address or "",
@@ -657,6 +696,17 @@ class SyncService:
                     SyncService._debug_shape("sync_vulns.transformed", transformed)
 
                     mapped_vuln = SyncService._map_vulnerability_fields(transformed)
+                    # Stamp the scanned machine's REAL identity on the finding so it can
+                    # auto-link to its asset if that asset only enters the inventory
+                    # LATER (deep_collect.link_orphan_vulns_to_asset matches on this).
+                    # affected_host is left alone — it is the scanner's internal id and
+                    # is load-bearing for the stable vuln_id and auto-close.
+                    _hid = {k: v for k, v in (
+                        ("host_name", host_ctx.get("host_name")),
+                        ("ip", host_ctx.get("ip_address")),
+                    ) if v}
+                    if _hid:
+                        mapped_vuln["host_identity"] = _hid
                     gen_vuln_id = mapped_vuln["vuln_id"]
                     seen_vuln_ids.add(gen_vuln_id)
                     host_ctx["seen_ids"].add(gen_vuln_id)
@@ -767,19 +817,22 @@ class SyncService:
                     # Enrichment below runs regardless of linking.
                     if db_vuln and asset is not None:
                         if link_assets:
-                            existing_link = db.query(VulnerabilityAssetLink).filter(
-                                VulnerabilityAssetLink.vulnerability_id == db_vuln.id,
-                                VulnerabilityAssetLink.asset_id == asset.id,
-                            ).first()
-                            if not existing_link:
-                                db.add(VulnerabilityAssetLink(
-                                    vulnerability_id=db_vuln.id,
-                                    asset_id=asset.id,
-                                    impact_on_asset="Detected by scanner on linked asset",
-                                    created_by=None,
-                                    link_source="scanner",
-                                    auto_linked=True,
-                                ))
+                            # Primary match plus its same-IP DNS aliases (only
+                            # populated for hosts the scanner knew by bare IP).
+                            for _target in [asset] + (asset_ref.get("alias_assets") or []):
+                                existing_link = db.query(VulnerabilityAssetLink).filter(
+                                    VulnerabilityAssetLink.vulnerability_id == db_vuln.id,
+                                    VulnerabilityAssetLink.asset_id == _target.id,
+                                ).first()
+                                if not existing_link:
+                                    db.add(VulnerabilityAssetLink(
+                                        vulnerability_id=db_vuln.id,
+                                        asset_id=_target.id,
+                                        impact_on_asset="Detected by scanner on linked asset",
+                                        created_by=None,
+                                        link_source="scanner",
+                                        auto_linked=True,
+                                    ))
 
                         # Fan out enrichment for any vuln that has a CVE-ID.
                         # Wrapped in try/except so a broker/redis issue can

@@ -180,6 +180,8 @@ export default function VulnerabilitiesPage() {
   // Separate axes: public-exploit availability vs ATT&CK tactic richness.
   const [exploitFilter, setExploitFilter] = useState<string>('all');
   const [tacticsFilter, setTacticsFilter] = useState<string>('all');
+  // "By asset" filter — the finding's linked asset. 'all' | '<assetId>'.
+  const [assetFilter, setAssetFilter] = useState<string>('all');
   const [sortBy, setSortBy] = useState<'created_at' | 'severity' | 'due_date' | 'title'>('created_at');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -336,8 +338,18 @@ export default function VulnerabilitiesPage() {
   // client-side over the loaded page to avoid a refetch on every keystroke.
   const serverSearch = /CVE-\d{4}-\d+/i.test(searchTerm.trim()) ? searchTerm.trim() : '';
 
+  // Assets that actually carry findings — the "By asset" dropdown options.
+  // Only assets with ≥1 linked finding, so the list matches the register.
+  const { data: assetOptions } = useQuery({
+    queryKey: ['vuln-asset-options'],
+    queryFn: async () => {
+      const res = await apiClient.get('/assets', { params: { limit: 1000 } });
+      return (res.data as { id: number; name: string }[]) ?? [];
+    },
+  });
+
   const { data: vulnerabilities, isLoading, error } = useQuery({
-    queryKey: ['vulnerabilities', statusFilter, severityFilter, showClosed, registerType, exploitFilter, tacticsFilter, serverSearch, ctemScopeId],
+    queryKey: ['vulnerabilities', statusFilter, severityFilter, showClosed, registerType, exploitFilter, tacticsFilter, assetFilter, serverSearch, ctemScopeId],
     queryFn: async () => {
       const params: Record<string, unknown> = {};
       if (ctemScopeId) { params.ctem_scope_id = ctemScopeId; params.limit = 500; }
@@ -360,6 +372,13 @@ export default function VulnerabilitiesPage() {
       if (exploitFilter === 'yes') params.has_exploit = true;
       if (exploitFilter === 'no') params.has_exploit = false;
       if (tacticsFilter === 'high') params.high_tactics = true;
+      // By-asset filter: scope to one asset's findings and widen the page so
+      // an asset with many findings (e.g. the desktop's 207) loads in full.
+      if (assetFilter !== 'all') {
+        params.asset_id = Number(assetFilter);
+        params.limit = 500;
+        params.include_closed = showClosed;
+      }
       if (serverSearch) {
         params.search = serverSearch;
         params.limit = 500;
@@ -371,7 +390,7 @@ export default function VulnerabilitiesPage() {
         params as {
           status?: string; severity?: string; include_closed?: boolean; template_type?: string;
           search?: string; limit?: number; has_exploit?: boolean; high_tactics?: boolean;
-          ctem_scope_id?: number;
+          ctem_scope_id?: number; asset_id?: number;
         }
       );
       return response.data as Vulnerability[];
@@ -1034,7 +1053,7 @@ export default function VulnerabilitiesPage() {
               {vulnerabilities ? ` (${vulnerabilities.length})` : ''}.
             </span>
             <span className="flex items-center gap-3">
-              <Link href="/erm/ctem-scopes" className="font-medium text-primary-700 hover:underline">← Back to CTEM scopes</Link>
+              <Link href="/vulnerabilities/ctem-scopes" className="font-medium text-primary-700 hover:underline">← Back to CTEM scopes</Link>
               <Link href="/vulnerabilities" className="text-primary-600 hover:underline">Show all findings</Link>
             </span>
           </div>
@@ -1074,6 +1093,9 @@ export default function VulnerabilitiesPage() {
           setExploitFilter={setExploitFilter}
           tacticsFilter={tacticsFilter}
           setTacticsFilter={setTacticsFilter}
+          assetFilter={assetFilter}
+          setAssetFilter={setAssetFilter}
+          assetItems={(assetOptions ?? []).map((a) => ({ value: String(a.id), label: a.name }))}
           canCreate={hasPermission('vulnerabilities:vulnerability_register:create')}
           canEdit={hasPermission('vulnerabilities:vulnerability_register:edit')}
           canDelete={hasPermission('vulnerabilities:vulnerability_register:delete')}

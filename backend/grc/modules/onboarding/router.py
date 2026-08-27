@@ -165,6 +165,7 @@ def bulk_import(
         )
 
         asset = ITAsset(
+            origin_source="manual",  # stamped once at birth; never mutated
             tenant_id=tenant_id,
             name=asset_name,
             description=f"Bulk-imported via CIDR discovery ({body.runner_type})",
@@ -503,6 +504,7 @@ def ad_onboard(
         )
         if asset is None:
             asset = ITAsset(
+                origin_source="manual",  # stamped once at birth; never mutated
                 tenant_id=tenant_id,
                 name=host,
                 description=f"Auto-discovered via Active Directory ({body.integration_type})",

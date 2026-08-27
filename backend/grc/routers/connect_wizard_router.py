@@ -898,6 +898,7 @@ def _handshake_inner(body: "HandshakeIn", db: Session) -> dict:
         ):
             asset_label = f"{body.hostname} ({platform})"
         asset = ITAsset(
+            origin_source="connect",  # stamped once at birth; never mutated
             tenant_id=tenant_id,
             name=asset_label,
             description=f"Auto-discovered via Connect Wizard ({platform})",

@@ -112,6 +112,10 @@ def _bootstrap() -> None:
         "grc.modules.connectors.providers.core_impact",
         "grc.modules.connectors.providers.zoom",
         "grc.modules.connectors.providers.office365",
+        # EASM passive sources — pull-only; read by the asset_discovery collector.
+        "grc.modules.connectors.providers.shodan",
+        "grc.modules.connectors.providers.censys",
+        "grc.modules.connectors.providers.securitytrails",
     ]
     for mod_path in provider_modules:
         try:

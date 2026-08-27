@@ -89,6 +89,11 @@
 .asset-suite .as-btn-secondary:hover { background: var(--as-subtle); }
 .asset-suite .as-btn-danger { background: var(--as-card); color: var(--as-danger); border: 1px solid var(--as-danger-border); padding: 8px 13px; }
 .asset-suite .as-btn-danger:hover { background: var(--as-danger-bg); }
+/* Disabled buttons must READ as disabled — dim + not-allowed, and no hover shift. */
+.asset-suite .as-btn:disabled { opacity: .5; cursor: not-allowed; }
+.asset-suite .as-btn-primary:disabled:hover { background: var(--as-accent); }
+.asset-suite .as-btn-secondary:disabled:hover { background: var(--as-card); }
+.asset-suite .as-btn-danger:disabled:hover { background: var(--as-card); }
 
 /* segmented toggle (Inventory | CIS Benchmark) */
 .asset-suite .as-seg { display: inline-flex; background: var(--as-card); border: 1px solid var(--as-input); border-radius: var(--as-r-control); padding: 2px; gap: 2px; }

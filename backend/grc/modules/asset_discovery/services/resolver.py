@@ -96,6 +96,21 @@ def _candidates(db: Session, tenant_id: int, obs: DiscoveryObservation) -> Tuple
         if hit:
             return "hostname", hit
 
+    # 5b — DNS alias: a name folded into a host-centric asset (dns_aliases).
+    # Without this, the next EASM run would re-create ftp.liztek.ca as its own
+    # row right after the collapse merged it away. JSON-as-text LIKE, same
+    # pattern the orphan-vuln linker uses for host_identity.
+    from sqlalchemy import String as _Str, cast as _cast
+    for candidate in (obs.fqdn, obs.host_name):
+        if not candidate:
+            continue
+        hit = ids(base.filter(
+            ITAsset.dns_aliases.isnot(None),
+            func.lower(_cast(ITAsset.dns_aliases, _Str)).like(f'%"{candidate.lower()}"%'),
+        ))
+        if hit:
+            return "dns_alias", hit
+
     # 6 — bare IP, only when neither the observation nor the asset has a hostname
     if obs.ip_address and not obs.host_name:
         hit = ids(base.filter(ITAsset.ip_address == obs.ip_address,
@@ -248,6 +263,7 @@ def _create_from(db: Session, tenant_id: int, obs: DiscoveryObservation) -> ITAs
     cls = _classification(obs)
     now = datetime.utcnow()
     asset = ITAsset(
+        origin_source="easm" if (obs.source or "") == "external" else "network_sweep",  # stamped once at birth; never mutated
         tenant_id=tenant_id,
         name=_display_name(obs, cls),
         asset_type="infrastructure",
@@ -299,6 +315,28 @@ def _prior_ignored(db: Session, tenant_id: int, obs: DiscoveryObservation) -> bo
     return db.query(q.exists()).scalar()
 
 
+def _mark_internet_facing(asset: ITAsset) -> None:
+    """Assert internet exposure and re-rate criticality so the exposure boost
+    lands. An external (outside-in) sighting is proof of a public face; the
+    recompute inside _create_from ran BEFORE this flag was set, so it must run
+    again here for the internet-facing boost to reach the score.
+
+    BOTH exposure columns are written together — the same contract deep_collect
+    follows — because a consumer that reads is_internet_facing first (e.g.
+    exploitability._other_linked_assets) never falls through to internet_facing
+    (is_internet_facing is NOT NULL, so it's never the sentinel None). Setting
+    one and not the other is how the two scores end up disagreeing about the same
+    fact."""
+    asset.internet_facing = True
+    if hasattr(asset, "is_internet_facing"):
+        asset.is_internet_facing = True
+    try:
+        from grc.services.asset_criticality import recompute_for_asset
+        recompute_for_asset(asset)
+    except Exception:
+        logger.exception("resolver: criticality recompute failed for internet-facing asset")
+
+
 def resolve_observation(db: Session, obs: DiscoveryObservation) -> Dict[str, Any]:
     """Resolve one observation. Mutates the observation (and possibly creates or
     updates an asset). Caller commits. Returns a small decision dict."""
@@ -306,6 +344,9 @@ def resolve_observation(db: Session, obs: DiscoveryObservation) -> Dict[str, Any
         return {"action": "skip", "reason": f"already {obs.resolution}"}
 
     tier, candidate_ids = _candidates(db, obs.tenant_id, obs)
+    # Link any scanner findings already imported for a just-adopted external host
+    # (lazy import avoids a resolver<->deep_collect cycle).
+    from .deep_collect import link_orphan_vulns_to_asset
 
     if len(candidate_ids) == 1:
         asset = db.get(ITAsset, candidate_ids[0])
@@ -316,6 +357,11 @@ def resolve_observation(db: Session, obs: DiscoveryObservation) -> Dict[str, Any
             # host was once ignored — ignore suppresses NEW inventory, not the
             # last-seen update of an asset we already track.
             _merge_into(db, asset, obs)
+            # An external sighting proves internet exposure — assert it on the
+            # matched asset too, even one first discovered on the internal network.
+            if obs.source == "external":
+                _mark_internet_facing(asset)
+                link_orphan_vulns_to_asset(db, asset)
             obs.resolution = "merged"
             obs.resolved_asset_id = asset.id
             obs.resolution_note = f"matched existing asset #{asset.id} by {tier}"
@@ -336,6 +382,22 @@ def resolve_observation(db: Session, obs: DiscoveryObservation) -> Dict[str, Any
             f"({', '.join('#' + str(i) for i in candidate_ids)})"
         )
         return {"action": "review", "candidates": candidate_ids, "tier": tier}
+
+    # EASM carve-out: an external (outside-in) find can never be logged into — we
+    # reached it from the public internet, so there is no credential to wait for.
+    # Adopt it now as an evidence-only, unmanaged, internet-facing asset instead
+    # of parking it in the Connect queue as 'unclaimed' (which asks for a login
+    # that can never come). manual_adopt reuses _create_from — including the
+    # external-identity record (external_id=fqdn) that makes a re-scan idempotent.
+    if obs.source == "external":
+        asset = manual_adopt(db, obs)
+        _mark_internet_facing(asset)
+        # Carry known scanner findings for this host into the new internet-facing
+        # asset, so it isn't stuck at 0 findings when a CTEM scope picks it up.
+        link_orphan_vulns_to_asset(db, asset)
+        obs.resolution_note = (
+            f"external attack surface — evidence-only asset #{asset.id} (internet-facing)")
+        return {"action": "created", "asset_id": asset.id, "external": True}
 
     # No match, nothing ignored. Discovery NEVER writes inventory on its own — a
     # swept device is evidence, not an asset. Everything unmatched lands in the
@@ -435,9 +497,11 @@ def resolve_run(db: Session, run_id: int) -> Dict[str, int]:
         db.flush()  # so same-run duplicates of a host see the row we just created
 
     run = db.get(DiscoveryRun, run_id)
-    # assets_new counts rows that actually entered inventory. A sweep now
-    # creates none, so this stays 0 until credentials promote the devices —
-    # which is the honest number, not a count of things we merely saw.
+    # assets_new counts rows that actually entered inventory. A network sweep
+    # creates none (its unmatched hosts wait for a login), so a CIDR run holds
+    # this at 0 until credentials promote the devices. An external (EASM) run
+    # DOES increment it — an outside-in find is adopted as an evidence-only asset
+    # right here, because there's no login to wait for.
     run.assets_new = (run.assets_new or 0) + created
     run.assets_updated = (run.assets_updated or 0) + updated
     db.commit()

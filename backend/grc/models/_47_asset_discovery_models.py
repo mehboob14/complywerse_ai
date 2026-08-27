@@ -33,8 +33,11 @@ from ._46_ai_budget import *  # noqa: F401,F403 — carries Base + the SQLAlchem
 # need a schema migration — the same choice the rest of the codebase makes with
 # asset_type, lifecycle_state, etc.
 
-DISCOVERY_METHODS = ("network", "active_directory")
-SCOPE_KINDS = ("cidr", "ip_range", "ad_ou")
+DISCOVERY_METHODS = ("network", "active_directory", "external")
+# 'domain' is the EASM seed: an outside-in scan starts from a name you own
+# (example.com) and finds the internet-facing assets under it — the inverse of
+# cidr/ip_range/ad_ou, which all require you to already know your address space.
+SCOPE_KINDS = ("cidr", "ip_range", "ad_ou", "domain")
 RUN_TRIGGERS = ("manual", "scheduled")
 RUN_STATUSES = ("queued", "running", "succeeded", "failed", "cancelled")
 JOB_STATUSES = ("queued", "leased", "running", "succeeded", "failed")

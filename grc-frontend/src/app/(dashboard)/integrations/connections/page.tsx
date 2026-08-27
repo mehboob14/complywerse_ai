@@ -40,7 +40,7 @@ interface Connection {
   scanner_writeback?: boolean;
   last_sync_at: string | null;
   last_sync_status: string | null;
-  last_sync_stats: Record<string, number> | null;
+  last_sync_stats: Record<string, unknown> | null;
   consecutive_failures: number;
   created_at: string;
 }
@@ -59,6 +59,22 @@ interface SyncHistoryRecord {
   vulns_closed: number;
   vulns_reopened?: number;
   errors_count: number;
+}
+
+// last_sync_stats is one level of scalar counters plus optional nested stat
+// groups (e.g. ai_mapping: {findings_sent, ...}). React can't render an object
+// as a child, so flatten nested groups into "group · stat" tiles and stringify
+// anything unexpected instead of crashing the page.
+function flattenSyncStats(stats: Record<string, unknown>): Array<[string, string | number]> {
+  return Object.entries(stats).flatMap(([key, val]): Array<[string, string | number]> => {
+    if (val !== null && typeof val === 'object') {
+      return Object.entries(val as Record<string, unknown>).map(([k, v]): [string, string | number] => [
+        `${key} ${k}`,
+        v === null || v === undefined ? '—' : typeof v === 'object' ? JSON.stringify(v) : (v as string | number),
+      ]);
+    }
+    return [[key, val === null || val === undefined ? '—' : (val as string | number)]];
+  });
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -426,7 +442,7 @@ export default function ConnectionsPage() {
                 <div>
                   <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Last Sync Stats</h3>
                   <div className="grid grid-cols-3 gap-2">
-                    {Object.entries(detailConn.last_sync_stats).map(([key, val]) => (
+                    {flattenSyncStats(detailConn.last_sync_stats).map(([key, val]) => (
                       <div key={key} className="p-2 bg-slate-50 rounded-lg border border-slate-100 text-center">
                         <div className="text-base font-bold text-slate-800">{val}</div>
                         <div className="text-xs text-slate-500 mt-0.5">{key.replace(/_/g, ' ')}</div>
@@ -654,7 +670,7 @@ export default function ConnectionsPage() {
 
                   {conn.last_sync_stats && (
                     <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-                      {Object.entries(conn.last_sync_stats).map(([key, val]) => (
+                      {flattenSyncStats(conn.last_sync_stats).map(([key, val]) => (
                         <div key={key} className="text-center p-2 bg-slate-50 rounded-lg border border-slate-100">
                           <div className="text-sm font-bold text-slate-800">{val}</div>
                           <div className="text-xs text-slate-500 mt-0.5">{key.replace(/_/g, ' ')}</div>

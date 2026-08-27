@@ -666,6 +666,12 @@ export const documentsApi = {
   delete: (id: string) => apiClient.delete(`/documents/${id}`),
 };
 
+export interface LayoutPlan {
+  version: string;
+  fields: Array<{ key: string; heading: string; card: string }>;
+  cards: Array<{ name: string; size: 'half' | 'full'; order: number }>;
+}
+
 export const assetsApi = {
   // Pass filters through query params. Defaults preserved when called with
   // no args, so existing callers (e.g. `assetsApi.getAll()`) are unchanged.
@@ -684,6 +690,11 @@ export const assetsApi = {
   }) => apiClient.get<ITAsset[]>('/assets', { params }),
   getById: (id: number) => apiClient.get<ITAsset>(`/assets/${id}`),
   getDetail: (id: number) => apiClient.get(`/assets/${id}/detail`),
+  // AI-planned detail layout (Layer 2): headings + card grouping per field KEY.
+  // Values are never sent to or produced by the model. `plan` is null when AI
+  // is unavailable/invalid — the page then renders its generic layout unchanged.
+  getLayoutPlan: (id: number, refresh = false) =>
+    apiClient.get<{ plan: LayoutPlan | null }>(`/assets/${id}/layout-plan`, { params: refresh ? { refresh: true } : undefined }),
   // Enrich an existing asset IN PLACE with its typed service inventory (e.g. a
   // Postgres app → its databases/schemas/roles) — no re-discovery needed.
   collectAssetService: (id: number, data: { kind?: string; username?: string; password?: string; host?: string; port?: number; database?: string; connection_id?: number }) =>
@@ -861,6 +872,7 @@ export const assetsApi = {
 // /asset-discovery screen (replaces the former static mock).
 export const discoveryApi = {
   listCampaigns: () => apiClient.get('/discovery/campaigns'),
+  easmScorecard: () => apiClient.get('/discovery/easm-scorecard'),
   getCampaign: (id: number) => apiClient.get(`/discovery/campaigns/${id}`),
   createCampaign: (data: {
     name: string; description?: string; method?: string;
@@ -1121,21 +1133,26 @@ export const ctemScopesApi = {
   get: (id: number) => apiClient.get(`/erm/ctem/scopes/${id}`),
   create: (data: Record<string, unknown>) => apiClient.post('/erm/ctem/scopes', data),
   update: (id: number, data: Record<string, unknown>) => apiClient.put(`/erm/ctem/scopes/${id}`, data),
+  remove: (id: number) => apiClient.delete(`/erm/ctem/scopes/${id}`),
   openCycle: (scopeId: number) => apiClient.post(`/erm/ctem/scopes/${scopeId}/cycles/open`),
   closeCycle: (cycleId: number) => apiClient.post(`/erm/ctem/scopes/cycles/${cycleId}/close`),
+  // Gated loop: stamp a stage done on the open cycle (discover | prioritise).
+  // Validate is stamped server-side when its AI mapping run finishes.
+  completeStage: (scopeId: number, stage: 'discover' | 'prioritise' | 'dispatch') =>
+    apiClient.post(`/erm/ctem/scopes/${scopeId}/stages/${stage}`),
   commandCenter: (scopeId: number) => apiClient.get(`/erm/ctem/scopes/${scopeId}/command-center`),
   portfolio: () => apiClient.get('/erm/ctem/scopes/portfolio'),
+  mobilise: (scopeId: number, data: { vulnerability_id: number; assignee_user_id: number; approver_user_id?: number }) =>
+    apiClient.post(`/erm/ctem/scopes/${scopeId}/mobilise`, data),
+  decideMobilise: (scopeId: number, approvalId: number, data: { decision: 'approve' | 'reject'; comment?: string }) =>
+    apiClient.post(`/erm/ctem/scopes/${scopeId}/mobilise/approvals/${approvalId}/decision`, data),
 };
 
-// CTEM Phase 2/2.5 — automated control-effectiveness evidence + bulk link coverage.
+// CTEM Phase 2 — automated control-effectiveness evidence.
 export const controlAssuranceApi = {
   evidenceSummary: () => apiClient.get('/control-library/assurance/evidence-summary'),
   controlEvidence: (kind: string, controlId: number) =>
     apiClient.get(`/control-library/assurance/controls/${kind}/${controlId}/evidence`),
-  bulkAutomapPreview: () =>
-    apiClient.get('/vuln-management/control-links/bulk-automap-preview'),
-  bulkAutomapAccept: () =>
-    apiClient.post('/vuln-management/control-links/bulk-automap'),
 };
 
 export const ermApi = {
@@ -2672,6 +2689,15 @@ export const vulnManagementApi = {
       has_exploit?: boolean;
       // ATT&CK tactic richness (≥7 distinct tactics in the mapped chain).
       high_tactics?: boolean;
+      // Scope the register to ONE CTEM scope's member assets (same resolver the
+      // scope's counters use). Was silently dropped here, so the scoped register
+      // showed the whole tenant under a "scoped to …" banner — the loop said 0,
+      // the register said 201. Must be forwarded to the backend filter.
+      ctem_scope_id?: number;
+      // Filter the register to findings linked to ONE asset. Same allow-list
+      // trap as ctem_scope_id above — must be forwarded explicitly or it is
+      // silently dropped and the "by asset" filter shows the whole tenant.
+      asset_id?: number;
     }) =>
       apiClient.get('/vuln-management/vulnerabilities', {
         params: params ? {
@@ -2686,6 +2712,8 @@ export const vulnManagementApi = {
           limit: params.limit,
           has_exploit: params.has_exploit,
           high_tactics: params.high_tactics,
+          ctem_scope_id: params.ctem_scope_id,
+          asset_id: params.asset_id,
         } : undefined
       }),
     // Runtime-derived domains (the scanner's plugin family) for the grouped
@@ -2707,10 +2735,10 @@ export const vulnManagementApi = {
       apiClient.post('/vuln-management/choke-points/compute-paths', null,
         { params: { ...(ctemScopeId ? { ctem_scope_id: ctemScopeId } : {}), only_missing: onlyMissing } }),
     // P5 — AI-suggested specific control links (suggest → human accept/reject)
-    aiProposalsGenerate: (ctemScopeId?: number) =>
+    aiProposalsGenerate: (ctemScopeId?: number, autoLink?: boolean) =>
       apiClient.post('/vuln-management/ai-control-proposals/generate', null,
-        { params: ctemScopeId ? { ctem_scope_id: ctemScopeId } : {} }),
-    aiProposalsList: (params?: { status?: string; ctem_scope_id?: number }) =>
+        { params: { ...(ctemScopeId ? { ctem_scope_id: ctemScopeId } : {}), ...(autoLink ? { auto_link: true } : {}) } }),
+    aiProposalsList: (params?: { status?: string; ctem_scope_id?: number; run_id?: string }) =>
       apiClient.get('/vuln-management/ai-control-proposals', { params }),
     aiProposalAccept: (id: number, note?: string) =>
       apiClient.post(`/vuln-management/ai-control-proposals/${id}/accept`, { note }),
@@ -2875,26 +2903,6 @@ export const vulnManagementApi = {
       apiClient.post(`/vuln-management/vulnerabilities/${vulnId}/controls`, data),
     delete: (vulnId: number, linkId: number) =>
       apiClient.delete(`/vuln-management/vulnerabilities/${vulnId}/controls/${linkId}`),
-    // Re-run the CWE → framework-control auto-mapper for one vuln.
-    // Idempotent; only touches rows tagged `auto:cwe:*`. Returns
-    // {matched_controls, added, kept, removed_stale, errors}.
-    autoMap: (vulnId: number) =>
-      apiClient.post(`/vuln-management/vulnerabilities/${vulnId}/controls/auto-map`),
-
-    // Per-tenant CWE → control overrides (compliance team customisation).
-    listOverrides: () =>
-      apiClient.get(`/vuln-management/cwe-overrides`),
-    createOverride: (body: {
-      cwe_id: string;
-      framework_prefix: string;
-      control_code_pattern: string;
-      action: 'add' | 'remove';
-      notes?: string;
-    }) => apiClient.post(`/vuln-management/cwe-overrides`, body),
-    deleteOverride: (id: number) =>
-      apiClient.delete(`/vuln-management/cwe-overrides/${id}`),
-    previewOverrides: (params: { cwe_id?: string; has_cve?: boolean; is_kev?: boolean }) =>
-      apiClient.get(`/vuln-management/cwe-overrides/preview`, { params }),
     // Reverse lookup: which open vulns affect this framework control.
     // Returns {control, summary, items}. `controlType` is "parsed" (the
     // upload-driven seed table, where the 27 active frameworks live) or

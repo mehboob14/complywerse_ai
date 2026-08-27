@@ -12,7 +12,7 @@ import { useState, useEffect, useRef, Fragment } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Radar, Inbox, Network, History, Play, Plus, Trash2, X,
-  ShieldCheck, RefreshCw, Check, Plug,
+  ShieldCheck, RefreshCw, Check, Plug, Gauge,
 } from 'lucide-react';
 import { discoveryApi } from '@/lib/api';
 import { useTabParam } from '@/lib/useTabParam';
@@ -23,13 +23,14 @@ import '../assets/_suite/asset-suite.css';
 // Tabs are kept. Only Campaigns + host logins + Connectors are consolidated
 // into ONE "Discover → Connect" tab, shown as a numbered pipeline inside it.
 // Overview, Inbox and Scan history stay as their own separate tabs.
-type Tab = 'overview' | 'pipeline' | 'inbox' | 'runs';
+type Tab = 'overview' | 'pipeline' | 'inbox' | 'runs' | 'score';
 
 const TABS: { id: Tab; label: string; icon: any }[] = [
   { id: 'overview', label: 'Overview',           icon: Radar },
   { id: 'pipeline', label: 'Discover → Connect',  icon: Plug },
   { id: 'inbox',    label: 'Inbox',              icon: Inbox },
   { id: 'runs',     label: 'Scan history',       icon: History },
+  { id: 'score',    label: 'Attack surface',     icon: Gauge },
 ];
 
 /* ─── shared bits ──────────────────────────────────────────────────── */
@@ -289,7 +290,7 @@ function Campaigns() {
                     <td style={{ ...td, fontWeight: 600, color: 'var(--as-ink)' }}>
                       {c.name}{!c.is_active && <span className="as-pill" style={{ marginLeft: 7, background: 'var(--as-track)', color: 'var(--as-muted)' }}>paused</span>}
                     </td>
-                    <td style={td}>{c.method === 'active_directory' ? 'Active Directory' : 'Network'}</td>
+                    <td style={td}>{c.method === 'active_directory' ? 'Active Directory' : c.method === 'external' ? 'External' : 'Network'}</td>
                     <td style={td}>{everySeconds(c.schedule_seconds)}</td>
                     <td className="as-mono" style={td}>{c.scope_count}</td>
                     <td style={td}>{fmt(c.last_run_at)}</td>
@@ -333,12 +334,20 @@ function NewCampaignForm({ onDone }: { onDone: () => void }) {
   const [method, setMethod] = useState('network');
   const [schedule, setSchedule] = useState('0');
   const [cidr, setCidr] = useState('');
+  const [domain, setDomain] = useState('');
   const [snmp, setSnmp] = useState('');
+  // External (EASM) scans a bare domain, not a CIDR. A bare hostname only —
+  // reject a pasted URL so the server never sees "https://…/path".
+  const isExternal = method === 'external';
+  const domainVal = domain.trim();
+  const domainOk = /^(?!-)[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(domainVal);
   const create = useMutation({
     mutationFn: () => discoveryApi.createCampaign({
       name, method, schedule_seconds: Number(schedule) > 0 ? Number(schedule) : null,
-      snmp_communities: snmp.trim() || null,
-      scopes: cidr.trim() ? [{ kind: 'cidr', value: cidr.trim() }] : [],
+      snmp_communities: isExternal ? null : (snmp.trim() || null),
+      scopes: isExternal
+        ? (domainVal ? [{ kind: 'domain', value: domainVal }] : [])
+        : (cidr.trim() ? [{ kind: 'cidr', value: cidr.trim() }] : []),
     }),
     onSuccess: onDone,
   });
@@ -350,7 +359,13 @@ function NewCampaignForm({ onDone }: { onDone: () => void }) {
         <div><label style={label}>Method</label>
           <select className="as-input" value={method} onChange={(e) => setMethod(e.target.value)}>
             <option value="network">Network sweep</option>
-            <option value="active_directory">Active Directory</option>
+            {/* Active Directory is NOT a discovery method here — it's a Connect
+                login type (Connect → Add connection → Identity → Active Directory /
+                LDAP), run against devices that Discover already found. Listing it as
+                a campaign method duplicated that flow and confused the Discover →
+                Connect story. Hidden, not deleted: restore the option if a standalone
+                directory-import campaign is ever wanted. */}
+            <option value="external">External (domain)</option>
           </select>
         </div>
         <div><label style={label}>Schedule</label>
@@ -361,15 +376,22 @@ function NewCampaignForm({ onDone }: { onDone: () => void }) {
             <option value="86400">Every day</option>
           </select>
         </div>
-        <div><label style={label}>First range (CIDR)</label><input className="as-input" value={cidr} onChange={(e) => setCidr(e.target.value)} placeholder="10.0.0.0/24" /></div>
-        <div><label style={label}>SNMP community <span style={{ color: 'var(--as-faint)', fontWeight: 400 }}>(optional)</span></label><input className="as-input" value={snmp} onChange={(e) => setSnmp(e.target.value)} placeholder="public, private" /></div>
+        {isExternal ? (
+          <div><label style={label}>Domain</label>
+            <input className="as-input" value={domain} onChange={(e) => setDomain(e.target.value)} placeholder="example.com" />
+            {domainVal && !domainOk && <div style={{ fontSize: 11, color: 'var(--as-danger-text)', marginTop: 4 }}>Enter a bare domain like example.com — not a URL.</div>}
+          </div>
+        ) : (
+          <div><label style={label}>First range (CIDR)</label><input className="as-input" value={cidr} onChange={(e) => setCidr(e.target.value)} placeholder="10.0.0.0/24" /></div>
+        )}
+        {!isExternal && <div><label style={label}>SNMP community <span style={{ color: 'var(--as-faint)', fontWeight: 400 }}>(optional)</span></label><input className="as-input" value={snmp} onChange={(e) => setSnmp(e.target.value)} placeholder="public, private" /></div>}
       </div>
       <div style={{ display: 'flex', gap: 8, marginTop: 14, alignItems: 'center', flexWrap: 'wrap' }}>
-        <button className="as-btn as-btn-primary" disabled={!name.trim() || create.isPending} onClick={() => create.mutate()}>
+        <button className="as-btn as-btn-primary" disabled={!name.trim() || create.isPending || (isExternal && !domainOk)} onClick={() => create.mutate()}>
           {create.isPending ? 'Creating…' : 'Create campaign'}
         </button>
         <span style={{ fontSize: 11.5, color: 'var(--as-faint)' }}>A scheduled campaign first runs one interval from now — never at creation.</span>
-        {create.isError && <span style={{ fontSize: 12.5, color: 'var(--as-danger-text)' }}>{(create.error as any)?.response?.data?.detail || 'Could not create the campaign.'}</span>}
+        {create.isError && <span style={{ width: '100%', fontSize: 13, fontWeight: 600, color: 'var(--as-danger-text)', marginTop: 2 }}>{(create.error as any)?.response?.data?.detail || 'Could not create the campaign.'}</span>}
       </div>
     </div>
   );
@@ -645,10 +667,22 @@ function RunDeviceRow({ o, onOpen }: { o: any; onOpen: () => void }) {
       style={{ display: 'grid', gridTemplateColumns: RD_GRID, alignItems: 'center', gap: 16, padding: '15px 18px', borderBottom: `1px solid ${C.bRow}`, cursor: 'pointer', transition: 'background .12s' }}>
       <div style={{ color: C.muted, fontSize: 13 }}>⤢</div>
       <div style={{ font: `500 13px ${MONO}`, color: C.mono }}>{o.ip_address || '—'}</div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-        <span title={tier === 'partial' ? 'Found on the network — device type not yet identified' : tier === 'dark' ? 'Unidentified — IP/MAC only' : 'Identified device type'}
-          style={{ width: 8, height: 8, borderRadius: '50%', background: RD_TIER_DOT[tier], flex: 'none' }} />
-        <span style={{ font: `${dn.real ? 600 : 400} 13.5px ${FONT}`, color: dn.real ? C.ink : C.faint, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{dn.txt}</span>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 5, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+          <span title={tier === 'partial' ? 'Found on the network — device type not yet identified' : tier === 'dark' ? 'Unidentified — IP/MAC only' : 'Identified device type'}
+            style={{ width: 8, height: 8, borderRadius: '50%', background: RD_TIER_DOT[tier], flex: 'none' }} />
+          <span style={{ font: `${dn.real ? 600 : 400} 13.5px ${FONT}`, color: dn.real ? C.ink : C.faint, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{dn.txt}</span>
+        </div>
+        {/* Provenance: WHERE the sweep found this device (Shodan / Censys / CT …).
+            Meaningful for external (EASM) assets; empty for most LAN devices → renders nothing. */}
+        {(o.discovery_sources || []).length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, paddingLeft: 16 }}>
+            {o.discovery_sources.map((src: string) => (
+              <span key={src} title={`Found via ${src}`}
+                style={{ font: `500 10.5px ${FONT}`, color: C.muted, background: C.fillNeutral, padding: '2px 8px', borderRadius: 6, whiteSpace: 'nowrap' }}>{src}</span>
+            ))}
+          </div>
+        )}
       </div>
       <div style={{ font: `500 12.5px ${FONT}`, color: o.vendor ? C.ink : C.faint, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={o.vendor || ''}>{o.vendor || '—'}</div>
       <div>
@@ -803,6 +837,10 @@ function RunDevices({ runId }: { runId: number }) {
 
 function Runs() {
   const runs = useQuery({ queryKey: ['disc-runs-all'], queryFn: async () => (await discoveryApi.listRuns(undefined, 100)).data.runs as any[] });
+  // Campaign names for the scan-history rows (reuses the cached campaigns query,
+  // so no extra fetch) — a run was previously identifiable only by timestamp.
+  const campaigns = useQuery({ queryKey: ['disc-campaigns'], queryFn: async () => (await discoveryApi.listCampaigns()).data.campaigns as any[] });
+  const nameById = new Map((campaigns.data ?? []).map((c: any) => [c.id, c.name]));
   const [open, setOpen] = useState<number | null>(null);
   const rows = runs.data ?? [];
   return (
@@ -813,7 +851,7 @@ function Runs() {
       ) : (
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-            <thead><tr>{['', 'When', 'Trigger', 'Status', 'Hosts seen', 'New', 'Updated', 'Note'].map((h) => <th key={h} style={th}>{h}</th>)}</tr></thead>
+            <thead><tr>{['', 'When', 'Campaign', 'Trigger', 'Status', 'Hosts seen', 'New', 'Updated', 'Note'].map((h) => <th key={h} style={th}>{h}</th>)}</tr></thead>
             <tbody>
               {rows.map((r) => (
                 <Fragment key={r.id}>
@@ -821,6 +859,7 @@ function Runs() {
                     title="Click to see the devices this scan found">
                     <td style={{ ...td, width: 22, color: 'var(--as-muted)' }}>{open === r.id ? '▾' : '▸'}</td>
                     <td style={{ ...td, color: 'var(--as-ink)' }}>{fmt(r.finished_at || r.created_at)}</td>
+                    <td style={td}>{nameById.get(r.campaign_id) || `#${r.campaign_id}`}</td>
                     <td style={td}>{r.trigger}</td>
                     <td style={td}><StatusPill status={r.status} /></td>
                     <td className="as-mono" style={td}>{r.hosts_seen}</td>
@@ -830,7 +869,7 @@ function Runs() {
                   </tr>
                   {open === r.id && (
                     <tr>
-                      <td colSpan={8} style={{ padding: 0, borderBottom: '1px solid var(--as-row)' }}>
+                      <td colSpan={9} style={{ padding: 0, borderBottom: '1px solid var(--as-row)' }}>
                         <RunDevices runId={r.id} />
                       </td>
                     </tr>
@@ -860,6 +899,69 @@ const CRED_CATEGORIES: { key: string; label: string; hint: string }[] = [
   { key: 'identity', label: 'Identity',        hint: 'Active Directory / LDAP' },
   { key: 'cluster',  label: 'Clusters',        hint: 'Kubernetes' },
 ];
+
+/* ─── Attack-surface scorecard ─────────────────────────────────────── */
+
+// Fleet view of the per-asset EASM health grades. Each internet-facing asset is
+// probed + graded automatically at scan time; this rolls those up (avg grade,
+// grade distribution) and ranks assets worst-first so the weakest public
+// surface is the first thing an operator sees.
+function Scorecard() {
+  const q = useQuery({ queryKey: ['easm-scorecard'], queryFn: async () => (await discoveryApi.easmScorecard()).data as any });
+  const data = q.data;
+  const gc: Record<string, string> = { A: '#1a7f5a', B: '#3b7d2f', C: '#b8860b', D: '#c26a1b', F: '#b3261e' };
+  const grade = (g: string) => gc[g] || 'var(--as-muted)';
+  return (
+    <div className="as-card" style={{ padding: '18px 20px' }}>
+      <SectionHead title="Attack surface score" note="Every internet-facing asset graded on its outside-in security hygiene — TLS, security headers, email auth, exposure and known CVEs. Higher is healthier. Click a row to open the asset." />
+      {q.isLoading ? <Empty text="Loading…" /> : !data || !data.summary || data.summary.total === 0 ? (
+        <Empty text="No external assets graded yet." hint="Run an External (domain) campaign — each discovered host is probed and graded automatically." />
+      ) : (
+        <>
+          <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'center', margin: '4px 0 20px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ fontSize: 46, fontWeight: 700, lineHeight: 1, color: grade(data.summary.avg_grade) }}>{data.summary.avg_grade ?? '—'}</span>
+              <span style={{ fontSize: 13, color: 'var(--as-muted)', lineHeight: 1.4 }}>avg {data.summary.avg_score ?? '—'}/100<br />{data.summary.graded} of {data.summary.total} graded</span>
+            </div>
+            <div style={{ display: 'flex', gap: 16, borderLeft: '1px solid var(--as-border)', paddingLeft: 24 }}>
+              {['A', 'B', 'C', 'D', 'F'].map((g) => (
+                <div key={g} style={{ textAlign: 'center', minWidth: 24 }}>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: grade(g) }}>{data.summary.grade_counts?.[g] || 0}</div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: grade(g) }}>{g}</div>
+                </div>
+              ))}
+              {data.summary.ungraded ? (
+                <div style={{ textAlign: 'center', minWidth: 40 }}>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--as-faint)' }}>{data.summary.ungraded}</div>
+                  <div style={{ fontSize: 12, color: 'var(--as-muted)' }}>n/a</div>
+                </div>
+              ) : null}
+            </div>
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead><tr>{['', 'Asset', 'Score', 'Response', 'HTTPS / TLS', 'Headers', 'Weak areas'].map((h) => <th key={h} style={th}>{h}</th>)}</tr></thead>
+              <tbody>
+                {data.assets.map((a: any) => (
+                  <tr key={a.asset_id} style={{ cursor: 'pointer' }} onClick={() => { window.location.href = `/assets/${a.asset_id}`; }} title="Open asset">
+                    <td style={{ ...td, width: 34 }}><span style={{ display: 'inline-block', minWidth: 24, textAlign: 'center', fontWeight: 700, color: '#fff', background: grade(a.grade), borderRadius: 6, padding: '1px 5px', fontSize: 12.5 }}>{a.grade}</span></td>
+                    <td style={{ ...td, color: 'var(--as-ink)' }}>{a.name}</td>
+                    <td className="as-mono" style={td}>{a.score}/100</td>
+                    <td className="as-mono" style={td}>{a.response_time_ms != null ? `${a.response_time_ms} ms` : '—'}</td>
+                    <td style={td}>{a.https ? (a.tls_expired ? 'expired cert' : (a.tls_days_to_expiry != null && a.tls_days_to_expiry < 30 ? `${a.tls_days_to_expiry}d left` : 'valid')) : 'no HTTPS'}</td>
+                    <td className="as-mono" style={{ ...td, color: a.security_headers >= 5 ? 'var(--as-good)' : a.security_headers >= 2 ? undefined : 'var(--as-danger-text)' }}>{a.security_headers}/6</td>
+                    <td style={{ ...td, color: 'var(--as-danger-text)' }}>{(a.weak || []).join(', ') || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 
 function Credentials() {
   const qc = useQueryClient();
@@ -1947,9 +2049,11 @@ function DiscoverConnect() {
       {sub === 'discover' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <p style={{ fontSize: 12.5, color: 'var(--as-faint)', margin: 0, maxWidth: 730 }}>
-            <strong>Find devices on a network.</strong> A Campaign scans an IP range and lists every device on it.
-            Found devices land in <strong>Scan history</strong> and in the <strong>Connect</strong> queue as
-            unprofiled entries — give them a login over there and they are read and populated into IT Asset Inventory.
+            <strong>Find your assets — two ways.</strong>{' '}
+            <strong>Network sweep</strong> scans an IP range you own and lists every device on it; found devices land in{' '}
+            <strong>Scan history</strong> and the <strong>Connect</strong> queue — give them a login there and they are read into IT Asset Inventory.{' '}
+            <strong>External (domain)</strong> starts from a domain you own and finds its public, internet-facing hosts from the outside;
+            those are adopted straight into the Inventory as internet-facing assets — no login needed.
           </p>
           <Campaigns />
         </div>
@@ -2009,6 +2113,7 @@ export default function AssetDiscoveryPage() {
 
       {tab === 'inbox' && <InboxView />}
       {tab === 'runs' && <Runs />}
+      {tab === 'score' && <Scorecard />}
     </div>
   );
 }
