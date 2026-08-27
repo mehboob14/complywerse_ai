@@ -125,6 +125,36 @@ def _match(host: str, exact: Dict[str, Any], names: List[Tuple[str, int]],
     return None, "none"
 
 
+def _match_by_identity(host_identity: Any, exact: Dict[str, Any],
+                       names: List[Tuple[str, int]]) -> Tuple[Optional[int], str]:
+    """Fallback when ``affected_host`` (the scanner's opaque hash id) didn't
+    resolve: match on the finding's REAL ``host_identity`` — the {host_name, ip}
+    the sync stamps alongside the hash (see Vulnerability.host_identity). This is
+    the single biggest reason findings sit unlinked: the hash no longer maps to
+    an asset, but the real host is right there on the finding. Same never-guess
+    rule — an identity claimed by 2+ assets returns (None, 'ambiguous')."""
+    if not isinstance(host_identity, dict):
+        return None, "none"
+    for raw in (host_identity.get("host_name"), host_identity.get("ip"),
+                host_identity.get("ip_address"), host_identity.get("fqdn")):
+        n = _norm(raw)
+        if not n:
+            continue
+        aid = exact.get(n)
+        if aid is _AMBIGUOUS:
+            return None, "ambiguous"
+        if aid is not None:
+            return aid, "identity"
+    hn = _norm(host_identity.get("host_name"))
+    if hn and len(hn) >= _MIN_FALLBACK_LEN:
+        hits = {asset_id for name, asset_id in names if hn in name or name in hn}
+        if len(hits) == 1:
+            return next(iter(hits)), "identity_name"
+        if len(hits) > 1:
+            return None, "ambiguous"
+    return None, "none"
+
+
 def backfill_host_links(db: Session, tenant_id: int, *, commit: bool = False,
                         assign_unmatched_to_asset_id: Optional[int] = None) -> Dict[str, Any]:
     """Link every unlinked finding to the asset its ``affected_host`` names.
@@ -144,8 +174,8 @@ def backfill_host_links(db: Session, tenant_id: int, *, commit: bool = False,
     exact, names, nessus, n_assets = _build_asset_index(db, tenant_id)
     report: Dict[str, Any] = {
         "assets": n_assets, "findings_with_host": 0, "matched": 0,
-        "newly_linked": 0, "already_linked": 0, "unmatched": 0,
-        "ambiguous": 0, "assigned_unmatched": 0,
+        "matched_via_identity": 0, "newly_linked": 0, "already_linked": 0,
+        "unmatched": 0, "ambiguous": 0, "assigned_unmatched": 0,
     }
     if not exact and not nessus:
         return report
@@ -159,16 +189,28 @@ def backfill_host_links(db: Session, tenant_id: int, *, commit: bool = False,
         ).first()
         override_id = assign_unmatched_to_asset_id if ok else None
 
-    findings = db.query(Vulnerability.id, Vulnerability.affected_host).filter(
+    from sqlalchemy import or_
+    findings = db.query(
+        Vulnerability.id, Vulnerability.affected_host, Vulnerability.host_identity
+    ).filter(
         Vulnerability.tenant_id == tenant_id,
-        Vulnerability.affected_host.isnot(None),
+        or_(Vulnerability.affected_host.isnot(None),
+            Vulnerability.host_identity.isnot(None)),
     ).all()
     for f in findings:
         host = _norm(f.affected_host)
-        if not host:
-            continue
-        report["findings_with_host"] += 1
-        asset_id, reason = _match(host, exact, names, nessus)
+        asset_id, reason = None, "none"
+        if host:
+            report["findings_with_host"] += 1
+            asset_id, reason = _match(host, exact, names, nessus)
+        # The scanner's affected_host is often an opaque hash that no longer maps
+        # to an asset — fall back to the finding's REAL host_identity.
+        if asset_id is None and reason != "ambiguous":
+            aid2, reason2 = _match_by_identity(f.host_identity, exact, names)
+            if aid2 is not None:
+                asset_id, reason = aid2, reason2
+            elif reason2 == "ambiguous":
+                reason = "ambiguous"
         if asset_id is None:
             if reason == "ambiguous":
                 report["ambiguous"] += 1
@@ -180,7 +222,9 @@ def backfill_host_links(db: Session, tenant_id: int, *, commit: bool = False,
             report["assigned_unmatched"] += 1
         else:
             report["matched"] += 1
-            source = "host_match"
+            if reason in ("identity", "identity_name"):
+                report["matched_via_identity"] += 1
+            source = "identity_match" if reason in ("identity", "identity_name") else "host_match"
         exists = db.query(VulnerabilityAssetLink.id).filter(
             VulnerabilityAssetLink.vulnerability_id == f.id,
             VulnerabilityAssetLink.asset_id == asset_id,
@@ -190,8 +234,9 @@ def backfill_host_links(db: Session, tenant_id: int, *, commit: bool = False,
             continue
         db.add(VulnerabilityAssetLink(
             vulnerability_id=f.id, asset_id=asset_id,
-            notes=("Auto-linked by host-name match (backfill)" if source == "host_match"
-                   else "Bulk-assigned to this asset by an operator (orphaned scanner host)"),
+            notes=("Bulk-assigned to this asset by an operator (orphaned scanner host)"
+                   if source == "manual_bulk"
+                   else "Auto-linked by host match (backfill)"),
             link_source=source, auto_linked=True,
         ))
         report["newly_linked"] += 1
