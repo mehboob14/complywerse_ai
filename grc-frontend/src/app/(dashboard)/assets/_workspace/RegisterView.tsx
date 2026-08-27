@@ -8,7 +8,8 @@
  * staleness are all visible without expanding a row (Snapshot Test: pass).
  */
 
-import { Eye, Pencil, Trash2, Plug, Server } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Eye, Pencil, Trash2, Plug, Server, ChevronRight, ChevronDown } from 'lucide-react';
 import {
   DataTable,
   type ColumnDef,
@@ -32,6 +33,28 @@ import { RowActionsMenu } from './RowActionsMenu';
 // unmanaged, evidence-only asset (e.g. an external EASM finding you can't log
 // into from outside). Mirrors the Connect gate on the asset-detail page.
 const canConnect = (a: ITAsset): boolean => !!a.host_name && a.discovery_state !== 'unmanaged';
+
+// ── Subdomain nesting ───────────────────────────────────────────────────────
+// Render EASM subdomains directly under their apex domain ("show the subnames
+// under the main domain" — owner). Visual only: ordering + indent, nothing is
+// hidden. Apex = registrable domain; a minimal ccTLD second-level set covers the
+// co.uk / com.pk shapes we actually see (not the full Public Suffix List).
+const TWO_LABEL_SUFFIXES = new Set([
+  'co.uk', 'org.uk', 'gov.uk', 'ac.uk', 'co.pk', 'com.pk', 'org.pk', 'net.pk',
+  'com.au', 'net.au', 'org.au', 'co.nz', 'co.in', 'co.za', 'com.br',
+]);
+function registrableDomain(host: string): string {
+  const h = (host || '').toLowerCase().replace(/\.$/, '').trim();
+  if (!h || !h.includes('.') || h.includes(':') || /^[\d.]+$/.test(h)) return '';
+  const parts = h.split('.');
+  if (parts.length <= 2) return h;
+  return TWO_LABEL_SUFFIXES.has(parts.slice(-2).join('.'))
+    ? parts.slice(-3).join('.') : parts.slice(-2).join('.');
+}
+const dnsName = (a: ITAsset) =>
+  (a.fqdn || a.host_name || a.name || '').toLowerCase().replace(/\.$/, '').trim();
+const isExternalRow = (a: ITAsset) =>
+  !!(a.internet_facing || a.origin_source === 'easm' || a.last_seen_source === 'external');
 
 export interface RegisterViewProps {
   rows: ITAsset[];
@@ -66,30 +89,104 @@ export function RegisterView({
 }: RegisterViewProps) {
   void canCreate;
   const list = rows ?? [];
+  const [openApex, setOpenApex] = useState<Set<string>>(() => new Set());
+
+  // Cluster EASM/internet-facing subdomains under their apex. Internal hosts
+  // are never grouped (a db.corp.local must not nest under an unrelated apex).
+  // Children stay hidden until the apex row is expanded — pagination used to
+  // split a flat indent list so subdomains looked "merged away".
+  const { childrenByApex, childApex, subCount, apexByName, orderedRows } = useMemo(() => {
+    const present = new Map<string, ITAsset>();
+    for (const a of list) {
+      const n = dnsName(a);
+      if (n && isExternalRow(a)) present.set(n, a);
+    }
+    const kids = new Map<string, ITAsset[]>();
+    const childOf = new Map<number, string>();
+    const counts = new Map<string, number>();
+    for (const a of list) {
+      if (!isExternalRow(a)) continue;
+      const name = dnsName(a);
+      const apex = registrableDomain(name);
+      if (!apex || name === apex || !present.has(apex)) continue;
+      const arr = kids.get(apex) ?? [];
+      arr.push(a);
+      kids.set(apex, arr);
+      childOf.set(a.id, apex);
+    }
+    kids.forEach((arr, apex) => {
+      arr.sort((x, y) => dnsName(x).localeCompare(dnsName(y)));
+      counts.set(apex, arr.length);
+    });
+    const display: ITAsset[] = [];
+    const seen = new Set<number>();
+    for (const a of list) {
+      if (childOf.has(a.id)) continue;
+      display.push(a);
+      seen.add(a.id);
+      const apexName = dnsName(a);
+      if (openApex.has(apexName) && kids.has(apexName)) {
+        for (const k of kids.get(apexName)!) {
+          display.push(k);
+          seen.add(k.id);
+        }
+      }
+    }
+    for (const a of list) if (!seen.has(a.id) && !childOf.has(a.id)) display.push(a);
+    return { childrenByApex: kids, childApex: childOf, subCount: counts, apexByName: present, orderedRows: display };
+  }, [list, openApex]);
 
   const columns: ColumnDef<ITAsset>[] = [
     {
       id: 'asset',
       header: 'Asset',
       accessor: (a) => assetDisplayName(a),
-      sortable: true,
+      sortable: childrenByApex.size === 0,
       minWidth: '200px',
       render: (a) => {
         const name = assetDisplayName(a);
         const TT: Record<string, { bg: string; fg: string }> = { application: { bg: '#E7ECF4', fg: '#2E5EAA' }, data: { bg: '#F6E8D4', fg: '#8A4A0F' }, infrastructure: { bg: '#EDECEA', fg: '#55606B' }, cloud: { bg: '#EDE7F4', fg: '#7A5CA8' }, third_party: { bg: '#F6E8D4', fg: '#C2542E' } };
         const tt = TT[(a.asset_type || '').toLowerCase()] || { bg: '#EDECEA', fg: '#55606B' };
         const n = a.open_findings ?? 0;
+        const apexOf = childApex.get(a.id);
+        const kids = subCount.get(dnsName(a)) ?? 0;
+        const expanded = openApex.has(dnsName(a));
+        const parent = apexOf ? apexByName.get(apexOf) : undefined;
+        const sameIp = !!(apexOf && a.ip_address && parent?.ip_address && a.ip_address === parent.ip_address);
         return (
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3" style={apexOf ? { paddingLeft: 28 } : undefined}>
+            {kids > 0 && (
+              <button
+                type="button"
+                aria-label={expanded ? 'Collapse subdomains' : 'Show subdomains'}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setOpenApex((prev) => {
+                    const next = new Set(prev);
+                    const key = dnsName(a);
+                    if (next.has(key)) next.delete(key); else next.add(key);
+                    return next;
+                  });
+                }}
+                style={{ flex: 'none', display: 'grid', placeItems: 'center', width: 18, height: 18, border: 0, background: 'transparent', color: '#2E5EAA', padding: 0, cursor: 'pointer' }}
+              >
+                {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              </button>
+            )}
+            {apexOf && <span title={`Subdomain of ${apexOf}`} style={{ flex: 'none', color: 'var(--as-faint)', fontSize: 14, marginLeft: kids ? 0 : -8, marginRight: -2 }}>↳</span>}
             <span style={{ width: 30, height: 30, borderRadius: 8, background: tt.bg, color: tt.fg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, flex: 'none' }}>{(name.match(/[a-z0-9]/i)?.[0] || '?').toUpperCase()}</span>
             <div className="min-w-0">
               <div className="flex min-w-0 items-center gap-2">
                 <span className="truncate" style={{ fontSize: 13, fontWeight: 600, color: 'var(--as-ink)' }}>{name}</span>
+                {kids > 0 ? <span title={`${kids} subdomain${kids > 1 ? 's' : ''} under this domain — click the arrow to ${expanded ? 'hide' : 'list'} them`} style={{ flex: 'none', fontSize: 9, fontWeight: 700, color: '#2E5EAA', background: '#E7ECF4', borderRadius: 4, padding: '2px 5px' }}>{kids} sub{kids > 1 ? 's' : ''}</span> : null}
+                {sameIp ? <span title={`Shares IP ${a.ip_address} with ${apexOf}`} style={{ flex: 'none', fontSize: 9, fontWeight: 700, color: '#5C4A1A', background: '#F4ECD2', borderRadius: 4, padding: '2px 5px' }}>same IP</span> : null}
                 {n > 0 && <span style={{ flex: 'none', fontSize: 10, fontWeight: 700, color: '#7A2D17', background: '#F7E4DC', borderRadius: 99, padding: '2px 7px' }}>{n} vuln{n > 1 ? 's' : ''}</span>}
                 {a.cde_environment && <span style={{ flex: 'none', fontSize: 9, fontWeight: 700, color: '#7A2D17', background: '#F7E4DC', borderRadius: 4, padding: '2px 5px' }}>CDE</span>}
                 {a.internet_facing && <span style={{ flex: 'none', fontSize: 9, fontWeight: 700, color: '#8A4A0F', background: '#F6E8D4', borderRadius: 4, padding: '2px 5px' }} title="Exposed to the public internet">Internet-facing</span>}
               </div>
-              {a.environment && <div className="capitalize" style={{ fontSize: 11.5, color: 'var(--as-muted)' }}>{a.environment}</div>}
+              {apexOf
+                ? <div style={{ fontSize: 11, color: 'var(--as-muted)' }}>under {apexOf}{a.ip_address ? ` · ${a.ip_address}` : ''}</div>
+                : (a.environment && <div className="capitalize" style={{ fontSize: 11.5, color: 'var(--as-muted)' }}>{a.environment}</div>)}
             </div>
           </div>
         );
@@ -115,7 +212,7 @@ export function RegisterView({
       id: 'criticality',
       header: 'Criticality',
       accessor: 'criticality',
-      sortable: true,
+      sortable: childrenByApex.size === 0,
       minWidth: '92px',
       render: (a) => {
         const k = (a.criticality || '').toLowerCase();
@@ -154,7 +251,7 @@ export function RegisterView({
       id: 'scan',
       header: 'Scan',
       accessor: 'last_seen_at',
-      sortable: true,
+      sortable: childrenByApex.size === 0,
       minWidth: '72px',
       render: (a) => {
         if (!a.last_seen_at) return <span className="as-mono" style={{ fontSize: 12, color: '#C2542E' }}>Never</span>;
@@ -167,7 +264,7 @@ export function RegisterView({
       id: 'value',
       header: 'Value',
       accessor: 'valuation',
-      sortable: true,
+      sortable: childrenByApex.size === 0,
       minWidth: '66px',
       render: (a) => {
         // Only a REAL figure. The previous version fell back to a hardcoded
@@ -234,7 +331,7 @@ export function RegisterView({
       header: 'Risk',
       accessor: 'criticality_score',
       hidden: true,
-      sortable: true,
+      sortable: childrenByApex.size === 0,
       minWidth: '70px',
       render: (a) => a.criticality_score != null
         ? <span className="as-mono" style={{ fontSize: 12, fontWeight: 600, color: a.criticality_score >= 7.5 ? '#C2542E' : a.criticality_score >= 5 ? '#B08420' : '#0E5A46' }}>{a.criticality_score.toFixed(1)}</span>
@@ -292,7 +389,7 @@ export function RegisterView({
 
   return (
     <DataTable<ITAsset>
-      data={list}
+      data={orderedRows}
       columns={columns}
       loading={loading}
       selectable={bulkActions.length > 0}
@@ -301,7 +398,7 @@ export function RegisterView({
       exportable
       exportFilename="asset-inventory"
       searchable={false}
-      pageSize={15}
+      pageSize={50}
       stickyHeader
       onRowClick={(a) => onView(a)}
       emptyMessage="No assets match the current filters."

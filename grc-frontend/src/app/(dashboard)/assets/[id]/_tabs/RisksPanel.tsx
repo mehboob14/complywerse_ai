@@ -98,18 +98,21 @@ function BigCard({
 
 /* ─── residual-risk dimension bar ──────────────────────────────────────── */
 
-function DimBar({ label, sub, pct, known, tone, guideId, guideN }: { label: string; sub: string; pct: number; known: boolean; tone: string; guideId?: string; guideN?: number }) {
+function DimBar({ label, sub, pct, known, tone, guideId, guideN, weightPct }: { label: string; sub: string; pct: number; known: boolean; tone: string; guideId?: string; guideN?: number; weightPct?: number }) {
   return (
     <div className="flex items-center gap-3">
-      <div className="w-44 flex-none">
+      <div className="w-52 flex-none">
         <div className="flex items-center gap-1.5 text-[13px] font-semibold text-[#1a2b24]">
           {label}
+          {weightPct != null && (
+            <span className="rounded bg-[#eef1ec] px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-[#5c6b62]">{weightPct}%</span>
+          )}
           {guideId && guideN != null && <GuideMarker id={guideId} n={guideN} />}
         </div>
         <div className="text-[11px] text-[#aab2a8]">{sub}</div>
       </div>
       <div className="h-2 flex-1 overflow-hidden rounded-full bg-[#eef1ec]">
-        {known && <div className="h-full rounded-full" style={{ width: `${Math.max(2, pct)}%`, background: tone }} />}
+        {known && <div className="h-full rounded-full" style={{ width: `${Math.max(2, Math.min(100, pct))}%`, background: tone }} />}
       </div>
       <div className={'w-16 flex-none text-right text-[12.5px] font-semibold tabular-nums text-[#1a2b24] ' + MONO}>
         {known ? Math.round(pct) : <span className="text-[#c6ccc2]">—</span>}
@@ -118,39 +121,44 @@ function DimBar({ label, sub, pct, known, tone, guideId, guideN }: { label: stri
   );
 }
 
-/* ─── Exposure Health — dedicated breakdown for the health score (external) ── */
-// The health grade (e.g. F · 52) is the SAME five EASM signals as the residual
-// risk below, read the other way: higher = healthier. Shown for external assets
-// so the health number gets its own breakdown, not just a tile.
+/* ─── Exposure Health — hygiene only (external). NOT the inverse of risk. ── */
 function HealthScoreCard({ assetId }: { assetId: number }) {
   const q = useQuery({
     queryKey: ['asset-risk-posture', assetId],
     queryFn: async () => (await riskPostureApi.asset(assetId)).data as any,
   });
   const d = q.data;
-  if (!d || d.mode !== 'easm' || !d.health?.grade) return null;
-  const grade = d.health.grade as string;
-  const hscore = d.health.score as number;
-  const comps = Object.entries(d.components || {}) as [string, any][];
+  const health = d?.health;
+  if (!d || d.mode !== 'easm' || health?.score == null) return null;
+  const grade = (health.grade || '—') as string;
+  const hscore = health.score as number;
+  const comps = Object.entries(health.components || {}).filter(([k]) => k !== 'vuln') as [string, any][];
   const gc = ({ A: '#1a7f5a', B: '#3b7d2f', C: '#b8860b', D: '#c26a1b', F: '#b3261e' } as Record<string, string>)[grade] || '#8a948b';
   return (
-    <BigCard icon={<Gauge size={15} />} title="Exposure health" subtitle="The same outside-in signals as residual risk, read the other way — higher = healthier.">
-      <div className="flex flex-wrap items-center gap-3">
-        <span className="text-[34px] font-semibold leading-none" style={{ color: gc }}>{grade}</span>
-        <span className="text-[15px] font-semibold text-[#1a2b24]">{hscore}<span className="text-[13px] text-[#aab2a8]"> / 100</span></span>
-        <span className="rounded-full px-2.5 py-1 text-[11.5px] font-bold uppercase tracking-wider" style={{ color: gc, background: `${gc}1a` }}>outside-in health</span>
-      </div>
-      <div className="mt-5 space-y-2.5">
-        {comps.map(([k, c]) => {
-          const hp = Math.round((1 - (c.score ?? 0)) * 100);
-          const t = hp >= 60 ? '#1a7f5a' : hp >= 40 ? '#b8860b' : '#b3261e';
-          return <DimBar key={k} label={c.label} sub={c.detail} pct={hp} known tone={t} />;
-        })}
-      </div>
-      <div className="mt-4 flex items-center justify-between border-t border-[#f2f4ef] pt-3 text-[12px] text-[#8a948b]">
-        <span>Weighted composite of {comps.length} exposure signals · higher = healthier.</span>
-      </div>
-    </BigCard>
+    <div className="rounded-2xl border-2 border-[#1d4e89] bg-[#f4f8fc] p-0.5">
+      <BigCard
+        icon={<Gauge size={15} />}
+        title="Attack-surface hygiene"
+        subtitle="How this public host is configured — TLS, headers, HTTPS, cookies, email auth. Higher is healthier. This is not the risk score."
+      >
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-[34px] font-semibold leading-none" style={{ color: gc }}>{grade}</span>
+          <span className="text-[15px] font-semibold text-[#1a2b24]">{hscore}<span className="text-[13px] text-[#aab2a8]"> / 100</span></span>
+          <span className="rounded-full px-2.5 py-1 text-[11.5px] font-bold uppercase tracking-wider" style={{ color: '#1d4e89', background: '#d6e6f5' }}>outside-in health</span>
+        </div>
+        <div className="mt-5 space-y-2.5">
+          {comps.map(([k, c]) => {
+            const hp = Math.round((c.score ?? 0) * 100);
+            const t = hp >= 70 ? '#1a7f5a' : hp >= 40 ? '#b8860b' : '#b3261e';
+            const w = c.weight_pct ?? Math.round((c.weight ?? 0) * 100);
+            return <DimBar key={k} label={c.label || k} sub={c.detail || ''} pct={hp} known tone={t} weightPct={w} />;
+          })}
+        </div>
+        <div className="mt-4 flex items-center justify-between border-t border-[#d6e6f5] pt-3 text-[12px] text-[#5a6f82]">
+          <span>Each row shows its % of this health score. Unknown signals (no cookies, no MX, no CDN fingerprint) drop out instead of scoring 0.</span>
+        </div>
+      </BigCard>
+    </div>
   );
 }
 
@@ -166,15 +174,15 @@ function ResidualRiskCard({ assetId, asset }: { assetId: number; asset: any }) {
   const score = d?.score ?? null;
   const tone = score != null ? bandTone(score) : null;
   const isEasm = d?.mode === 'easm';
-  // External (EASM) assets return exposure dimensions (tls/headers/transport/
-  // email/vuln) with their own labels; internal assets use the fixed 5 signals.
-  // Build one row list from whichever the posture returned so the bars match.
-  const rows: { key: string; concept: string; dim: string; pct: number; known: boolean; positive: string | null; guideId?: string; guideN?: number }[] = isEasm
-    // Show each signal's CONTRIBUTION to the composite (the bars sum to the score)
-    // rather than its raw 0-100 severity — so "0/6 present" pairs with the points
-    // it ADDS to the risk, not a 100 that reads like a coverage score.
+  const rows: { key: string; concept: string; dim: string; pct: number; known: boolean; positive: string | null; guideId?: string; guideN?: number; weightPct?: number }[] = isEasm
     ? Object.entries(d.components || {}).map(([key, c]: [string, any]) => ({
-        key, concept: c.label || key, dim: c.detail || '', pct: Math.round(d.contributions?.[key] ?? (c.score ?? 0) * 100), known: true, positive: null,
+        key,
+        concept: c.label || key,
+        dim: c.detail || '',
+        pct: Math.round((c.score ?? 0) * 100),
+        known: true,
+        positive: null,
+        weightPct: c.weight_pct ?? Math.round((c.weight ?? 0) * 100),
       }))
     : DIMS.map((x) => {
         const c = d?.components?.[x.key];
@@ -187,12 +195,14 @@ function ResidualRiskCard({ assetId, asset }: { assetId: number; asset: any }) {
       });
   const total = rows.length;
   const knownCount = rows.filter((r) => r.known).length;
+  const cve = d?.cve_detection;
 
-  return (
+  const card = (
     <BigCard
-      icon={<Gauge size={15} />}
-      title="Residual Risk"
-      guide={<GuideMarker id="asset.residualRisk" n={1} />}
+      icon={<AlertTriangle size={15} />}
+      title={isEasm ? 'Compromise risk' : 'Residual Risk'}
+      guide={isEasm ? undefined : <GuideMarker id="asset.residualRisk" n={1} />}
+      subtitle={isEasm ? 'Likelihood × impact: hygiene (one factor) + exploitability + exposure + business context. Not 100 minus health.' : undefined}
       right={
         <Link href={`/risk-posture/asset/${assetId}`} className="flex items-center gap-1 text-[12.5px] font-semibold text-[#0d5c48] hover:underline whitespace-nowrap">
           Full posture <ArrowRight size={12} />
@@ -230,6 +240,7 @@ function ResidualRiskCard({ assetId, asset }: { assetId: number; asset: any }) {
                 tone={tone.fg}
                 guideId={r.guideId}
                 guideN={r.guideN}
+                weightPct={r.weightPct}
               />
             ))}
           </div>
@@ -238,9 +249,16 @@ function ResidualRiskCard({ assetId, asset }: { assetId: number; asset: any }) {
             <span>Weighted composite of {total} signals · higher = more risk.</span>
             <span className={'flex items-center gap-1.5 ' + (knownCount < total ? 'text-[#a86a12]' : '')}>
               {knownCount} of {total} signals known{d.data_quality != null ? ` · ${Math.round(d.data_quality)}% data quality` : ''}
-              <GuideMarker id="posture.dataQuality" n={7} />
+              {!isEasm && <GuideMarker id="posture.dataQuality" n={7} />}
             </span>
           </div>
+          {isEasm && cve && (
+            <p className="mt-3 rounded-lg border border-[#f0dcae] bg-[#fdf8ee] px-3 py-2 text-[11.5px] leading-relaxed text-[#5c4a1a]">
+              <b>How CVEs are detected:</b> {cve.limits || 'Banner → CPE heuristic plus findings already linked to this host. Not an active exploit test.'}
+              {cve.banner_cpe ? ` Banner CPE: ${cve.banner_cpe}.` : ''}
+              {` Linked findings: ${cve.linked_findings ?? 0}${cve.kev_findings ? ` · KEV: ${cve.kev_findings}` : ''}.`}
+            </p>
+          )}
           {knownCount < total && (
             <p className="mt-1 text-[11.5px] text-[#aab2a8]">
               Unknown signals (no data yet) are excluded from the score rather than counted as zero, so the number isn’t artificially low.
@@ -250,6 +268,10 @@ function ResidualRiskCard({ assetId, asset }: { assetId: number; asset: any }) {
       )}
     </BigCard>
   );
+  if (isEasm) {
+    return <div className="rounded-2xl border-2 border-[#8A4A0F] bg-[#FBF6EE] p-0.5">{card}</div>;
+  }
+  return card;
 }
 
 /* ─── Card 2: CIA Impact Ratings (editable, single home) ──────────────── */
@@ -874,6 +896,8 @@ export interface RisksPanelAsset {
   availability_rating?: number;
   criticality_manual_override?: boolean;
   internet_facing?: boolean;
+  last_seen_source?: string | null;
+  origin_source?: string | null;
   linked_controls?: CtrlLink[];
   linked_internal_controls?: CtrlLink[];
   linked_framework_controls?: CtrlLink[];
@@ -905,11 +929,17 @@ export default function RisksPanel({
   // External (EASM) assets have no CIA ratings or CIS baseline — those two
   // editable cards don't apply; the Residual Risk card shows the exposure
   // dimensions that do.
-  const isExternal = !!(asset?.platform_properties?.external_probe) || asset?.last_seen_source === 'external';
+  const isExternal = !!(asset?.platform_properties?.external_probe) || asset?.last_seen_source === 'external' || asset?.origin_source === 'easm';
   return (
     <div className="space-y-4 font-['Public_Sans',system-ui,sans-serif] text-[#1a2b24]">
-      {/* The three cards mirror the reference product exactly, from OUR single
-          source of truth (/risk-posture/asset/{id}). */}
+      {isExternal && (
+        <div className="rounded-xl border border-[#1d4e89] bg-[#e8f1fa] px-4 py-3">
+          <div className="text-[11px] font-extrabold tracking-[0.08em] uppercase text-[#1d4e89]">Public attack surface</div>
+          <p className="mt-0.5 text-[12.5px] text-[#3a5470]">
+            This host was found from the internet. The blue card is configuration hygiene. The amber card is compromise risk (hygiene is one input, not the inverse). Internal CIA / CIS scores do not apply.
+          </p>
+        </div>
+      )}
       {isExternal && <HealthScoreCard assetId={assetId} />}
       <ResidualRiskCard assetId={assetId} asset={asset} />
       {!isExternal && (

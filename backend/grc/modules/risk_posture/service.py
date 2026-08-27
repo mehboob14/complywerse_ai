@@ -23,7 +23,7 @@ Weights (default — tunable later via tenant settings):
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
@@ -771,37 +771,103 @@ def _risk_score(db: Session, tenant_id: int, asset_id: int) -> Dict[str, Any]:
 
 
 # ─── EASM (external / outside-in) risk model ────────────────────────────────
-# An asset discovered from the internet has NO CIA ratings, NO CIS baseline and
-# NO mapped controls — 4 of the 5 internal dimensions are structurally blank, so
-# the internal model can't assess it (it collapses to just "vulnerabilities").
-# Its real risk is EXPOSURE HYGIENE, which the EASM probe already grades as a
-# 0-100 HEALTH score with per-dimension components. Risk posture is that health
-# INVERTED (risk_component = 1 - health), same weights, same "drop unmeasured
-# dimensions" rule — so risk ≈ 100 - health, with an actionable breakdown.
+# Health (hygiene) and risk are SEPARATE. Health is how well the host is
+# configured (TLS, headers, HTTPS, cookies, email auth, …). Risk is
+# likelihood × impact: inverted hygiene is ONE input, plus exploitability
+# (linked CVEs / CISA KEV), exposure (live + internet-facing), and business
+# criticality / data sensitivity. Risk is NOT 100 − health.
 _EASM_RISK_LABELS = {
-    "tls": "TLS / encryption",
-    "headers": "Security headers",
-    "transport": "Transport security (HTTPS)",
-    "email": "Email authentication (SPF/DMARC)",
-    "vuln": "Vulnerabilities & exposure",
+    "hygiene": "Exposure hygiene (inverted health)",
+    "exploitability": "Exploitability (CVE / KEV)",
+    "exposure": "Internet exposure",
+    "business": "Business impact",
 }
+_CRIT_RISK = {"critical": 1.0, "high": 0.75, "medium": 0.45, "low": 0.2}
+_CLASS_RISK = {"restricted": 1.0, "confidential": 0.75, "internal": 0.4, "public": 0.15}
 
 
-def _compute_easm_risk(asset: ITAsset, ep: Dict[str, Any]) -> Dict[str, Any]:
-    """Risk posture for an EXTERNAL asset, from the EASM probe's health model."""
+def _easm_cve_counts(asset: ITAsset, ep: Dict[str, Any], db=None) -> Tuple[int, int]:
+    cve = int(ep.get("cve_count") or 0)
+    kev = int(ep.get("kev_count") or 0)
+    if db is None:
+        return cve, kev
+    try:
+        from grc.models import Vulnerability, VulnerabilityAssetLink
+        cve = int(
+            db.query(VulnerabilityAssetLink)
+            .filter(VulnerabilityAssetLink.asset_id == asset.id)
+            .count()
+        )
+        kev = int(
+            db.query(VulnerabilityAssetLink)
+            .join(Vulnerability, Vulnerability.id == VulnerabilityAssetLink.vulnerability_id)
+            .filter(
+                VulnerabilityAssetLink.asset_id == asset.id,
+                Vulnerability.kev_flag.is_(True),
+            )
+            .count()
+        )
+        return cve, kev
+    except Exception:
+        return cve, kev
+
+
+def _compute_easm_risk(asset: ITAsset, ep: Dict[str, Any], db=None) -> Dict[str, Any]:
+    """Risk posture for an EXTERNAL asset. Health is an input, not the inverse."""
     health = ep.get("health") or {}
-    hcomps = health.get("components") or {}
+    hscore = health.get("score")
+    cve_n, kev_n = _easm_cve_counts(asset, ep, db=db)
+
     components: Dict[str, Any] = {}
-    for key, hc in hcomps.items():
-        if not isinstance(hc, dict) or hc.get("weight") is None:
-            continue
-        components[key] = {
-            "score": round(1.0 - float(hc.get("score") or 0.0), 4),  # health → risk
-            "weight": float(hc["weight"]),
-            "known": True,
-            "label": _EASM_RISK_LABELS.get(key, key),
-            "detail": hc.get("detail"),
+
+    if isinstance(hscore, (int, float)):
+        components["hygiene"] = {
+            "score": round(1.0 - (float(hscore) / 100.0), 4),
+            "weight": 0.30, "known": True,
+            "label": _EASM_RISK_LABELS["hygiene"],
+            "detail": f"health {health.get('grade') or '—'} · {int(hscore)}/100",
         }
+
+    if kev_n:
+        expl, expl_d = 1.0, f"{kev_n} CISA KEV finding(s) on this host"
+    elif cve_n:
+        expl, expl_d = min(1.0, 0.2 * cve_n), f"{cve_n} linked finding(s)"
+    else:
+        expl, expl_d = 0.0, "no linked CVEs (banner CPE is a heuristic — see note)"
+    components["exploitability"] = {
+        "score": round(expl, 4), "weight": 0.35, "known": True,
+        "label": _EASM_RISK_LABELS["exploitability"], "detail": expl_d,
+    }
+
+    live = bool(ep.get("live"))
+    https = bool(ep.get("https_available") or ep.get("scheme") == "https")
+    exp = 0.4 if getattr(asset, "internet_facing", None) else 0.15
+    if live:
+        exp += 0.35
+    if live and not https:
+        exp += 0.25
+    components["exposure"] = {
+        "score": round(min(1.0, exp), 4), "weight": 0.20, "known": True,
+        "label": _EASM_RISK_LABELS["exposure"],
+        "detail": (
+            f"{'internet-facing' if getattr(asset, 'internet_facing', None) else 'not marked facing'}"
+            f" · {'live' if live else 'not responding'}"
+            f" · {'HTTPS' if https else 'no HTTPS'}"
+        ),
+    }
+
+    crit = (getattr(asset, "criticality", None) or "").lower()
+    klass = (getattr(asset, "data_classification", None) or "").lower()
+    if crit in _CRIT_RISK or klass in _CLASS_RISK:
+        c_s = _CRIT_RISK.get(crit, 0.45)
+        k_s = _CLASS_RISK.get(klass)
+        biz = c_s if k_s is None else max(c_s, k_s)
+        detail = ", ".join(x for x in (crit or None, klass or None) if x) or "set"
+        components["business"] = {
+            "score": round(biz, 4), "weight": 0.15, "known": True,
+            "label": _EASM_RISK_LABELS["business"], "detail": detail,
+        }
+
     weights = {k: c["weight"] for k, c in components.items()}
     known_keys = list(components.keys())
     wsum = sum(weights.values())
@@ -812,10 +878,14 @@ def _compute_easm_risk(asset: ITAsset, ep: Dict[str, Any]) -> Dict[str, Any]:
         contributions: Dict[str, float] = {}
         data_quality = 0.0
     else:
+        for k, c in components.items():
+            c["weight_pct"] = round(c["weight"] / wsum * 100)
         composite = round(sum(weights[k] * components[k]["score"] for k in known_keys) / wsum * 100, 1)
         band = _band_for(composite)
         contributions = {k: round(weights[k] / wsum * components[k]["score"] * 100, 1) for k in known_keys}
         data_quality = round(wsum * 100, 1)
+
+    hcomps = health.get("components") or {}
     return {
         "mode": "easm",
         "asset": {
@@ -834,13 +904,25 @@ def _compute_easm_risk(asset: ITAsset, ep: Dict[str, Any]) -> Dict[str, Any]:
         "known_dimensions": known_keys,
         "components": components,
         "contributions": contributions,
-        # The health grade drives the headline; the probe facts feed the cards.
-        "health": {"score": health.get("score"), "grade": health.get("grade"),
-                   "reason": health.get("reason")},
+        "health": {
+            "score": health.get("score"), "grade": health.get("grade"),
+            "reason": health.get("reason"),
+            "components": hcomps,
+            "weights": health.get("weights") or {k: c.get("weight") for k, c in hcomps.items()},
+        },
+        "cve_detection": ep.get("cve_detection") or {
+            "method": "banner_cpe_plus_linked_findings",
+            "linked_findings": cve_n, "kev_findings": kev_n,
+            "limits": (
+                "Server-banner → CPE is a heuristic (self-reported, often stripped). "
+                "Linked Nessus findings are counted. This is not an active exploit test."
+            ),
+        },
         "probe": {k: ep.get(k) for k in (
             "live", "server", "response_time_ms", "tls_not_after",
             "tls_days_to_expiry", "tls_expired", "https_available",
-            "security_headers", "spf", "dmarc", "dns_mx", "probed_at")},
+            "security_headers", "spf", "dmarc", "dkim", "dns_mx",
+            "cdn_waf", "set_cookies", "cve_count", "kev_count", "probed_at")},
     }
 
 
@@ -866,7 +948,7 @@ def compute_asset_risk(
     _pp = getattr(asset, "platform_properties", None)
     _ep = _pp.get("external_probe") if isinstance(_pp, dict) else None
     if getattr(asset, "last_seen_source", None) == "external" or (isinstance(_ep, dict) and _ep.get("health")):
-        return _compute_easm_risk(asset, _ep or {})
+        return _compute_easm_risk(asset, _ep or {}, db=db)
 
     components = {
         "cis":  _cis_gap(db, tenant_id, asset.id),

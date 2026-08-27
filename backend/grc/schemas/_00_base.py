@@ -861,7 +861,7 @@ class ITAssetBase(BaseModel):
     location: Optional[str] = None
     cde_environment: bool = False
     pci_dss: Optional[dict] = None
-    ephi_environment: bool = False
+    ephi_environment: Optional[bool] = False
     hipaa: Optional[dict] = None
     # Phase 5.1 — Exposure metadata. All optional; writers may supply.
     internet_facing: Optional[bool] = None
@@ -1021,7 +1021,7 @@ class ITAssetResponse(BaseModel):
     status: str
     cde_environment: bool = False
     pci_dss: Optional[dict] = None
-    ephi_environment: bool = False
+    ephi_environment: Optional[bool] = False
     hipaa: Optional[dict] = None
     created_at: datetime
     # Phase 5 fields — all optional on the response so older rows that

@@ -387,6 +387,7 @@ export interface ITAsset {
   owner_name?: string;
   custodian?: string;
   host_name?: string;
+  fqdn?: string | null;
   ip_address?: string;
   criticality: 'low' | 'medium' | 'high' | 'critical';
   confidentiality_rating?: number;

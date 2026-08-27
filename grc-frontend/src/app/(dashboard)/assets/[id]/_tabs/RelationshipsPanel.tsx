@@ -172,12 +172,38 @@ export default function RelationshipsPanel({ asset, assetId, ipPeers, canEdit }:
   const items = rels.data ?? [];
   const inbound = items.filter((r: any) => r.direction === 'incoming').length;
   const outbound = items.length - inbound;
+  const subdomains = items.filter((r: any) => r.relationship_type === 'subdomain_of' && r.direction === 'incoming');
+  const parentDomain = items.find((r: any) => r.relationship_type === 'subdomain_of' && r.direction === 'outgoing');
   const candidates: any[] = ((Array.isArray(allAssets.data) ? allAssets.data : allAssets.data?.items ?? []) as any[])
     .filter((a: any) => a.id !== assetId)
     .sort((a: any, b: any) => (a.name || '').localeCompare(b.name || ''));
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+      {(subdomains.length > 0 || parentDomain) && (
+        <Card>
+          <CardHead
+            icon={Network}
+            title="DNS subdomains"
+            note={parentDomain ? `This name sits under ${parentDomain.other_asset_name || 'its apex'}.` : 'Names discovered under this apex — each is its own asset. Shared IP is noted in the inventory.'}
+          />
+          {parentDomain && (
+            <div style={{ fontSize: 13, color: 'var(--as-muted)', marginBottom: 8 }}>
+              Subdomain of <b style={{ color: 'var(--as-ink)' }}>{parentDomain.other_asset_name || 'apex'}</b>
+            </div>
+          )}
+          {subdomains.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {subdomains.map((r: any) => (
+                <Link key={r.id} href={`/assets/${r.other_asset_id}`} style={{ fontSize: 13, color: 'var(--as-ink)', padding: '6px 10px', borderRadius: 8, background: 'var(--as-subtle)', border: '1px solid var(--as-border)', textDecoration: 'none' }}>
+                  ↳ {r.other_asset_name || `Asset #${r.other_asset_id}`}
+                </Link>
+              ))}
+            </div>
+          )}
+        </Card>
+      )}
 
       {/* ── Declared relationships ─────────────────────────────────────── */}
       <Card>

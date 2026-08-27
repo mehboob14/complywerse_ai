@@ -36,7 +36,7 @@ class ITAsset(Base):
     # HIPAA ePHI scope flag + inventory attributes for ePHI assets (mirrors the
     # PCI CDE columns above): { ephi_data, encrypted, retention,
     # hipaa_safeguard, assessment }.
-    ephi_environment = Column(Boolean, default=False)
+    ephi_environment = Column(Boolean, default=False, server_default="false", nullable=True)
     hipaa = Column(JSON, nullable=True)
 
     # ── Phase 5.1: Exposure metadata ───────────────────────────────────────

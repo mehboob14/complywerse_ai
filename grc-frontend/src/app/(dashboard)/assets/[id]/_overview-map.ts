@@ -571,13 +571,18 @@ export function buildOverviewData(asset: any, o: OverviewOpts = {}): any {
   // (higher = better) so the operator sees what pulls the grade down.
   const _hc = probe?.health?.components;
   if (probe && _hc && Object.keys(_hc).length) {
-    const _LBL: Record<string, string> = { tls: 'TLS / encryption', headers: 'Security headers', transport: 'Transport (HTTPS)', email: 'Email auth (SPF/DMARC)', vuln: 'Vulnerabilities & exposure' };
+    const _LBL: Record<string, string> = {
+      tls: 'TLS / certificate', headers: 'Security headers', transport: 'HTTPS / redirects',
+      hsts: 'HSTS', cookies: 'Cookie flags', latency: 'Response time',
+      email: 'Email auth (SPF/DMARC/DKIM)', cdn: 'CDN / WAF',
+    };
     machine = [...machine, {
-      title: 'Exposure health breakdown',
-      note: probe.health.grade ? `${probe.health.grade} · ${probe.health.score}/100` : 'health',
+      title: 'Attack-surface hygiene breakdown',
+      note: probe.health.grade ? `${probe.health.grade} · ${probe.health.score}/100 (higher = healthier)` : 'health',
       fields: Object.entries(_hc).map(([k, c]: [string, any]) => {
         const pct = Math.round((c.score ?? 0) * 100);
-        return { label: _LBL[k] || k, value: `${pct}/100 · ${c.detail || ''}`, tone: pct >= 75 ? 'ok' : pct >= 40 ? 'warn' : 'bad' };
+        const w = c.weight_pct ?? Math.round((c.weight ?? 0) * 100);
+        return { label: `${c.label || _LBL[k] || k} (${w}%)`, value: `${pct}/100 · ${c.detail || ''}`, tone: pct >= 75 ? 'ok' : pct >= 40 ? 'warn' : 'bad' };
       }),
     }];
   }
@@ -610,7 +615,7 @@ export function buildOverviewData(asset: any, o: OverviewOpts = {}): any {
       // External (EASM) assets are graded on exposure health, not a CIA risk
       // score — surface the health grade here so the tile isn't "Not assessed".
       probe?.health?.grade
-        ? { label: 'Exposure health', value: `${probe.health.grade} · ${probe.health.score}`, sub: 'Outside-in risk', tone: ['A', 'B'].includes(probe.health.grade) ? 'ok' : probe.health.grade === 'C' ? 'warn' : 'bad' }
+        ? { label: 'Attack-surface hygiene', value: `${probe.health.grade} · ${probe.health.score}`, sub: 'Outside-in health (not risk)', tone: ['A', 'B'].includes(probe.health.grade) ? 'ok' : probe.health.grade === 'C' ? 'warn' : 'bad' }
         : { label: 'Risk Score', value: dash(K.riskScore), sub: K.riskScore ? 'Assessed' : 'Not assessed', tone: K.riskScore ? undefined : 'muted' },
       { label: 'Open Findings', value: String(K.openFindings ?? 0), sub: (K.openFindings ?? 0) ? 'Needs attention' : 'None open', tone: (K.openFindings ?? 0) ? 'bad' : 'ok' },
       { label: 'Blast Radius', value: String(K.blastRadius ?? 0), sub: (K.blastRadius ?? 0) ? 'Dependents mapped' : 'No dependents mapped', tone: 'muted' },

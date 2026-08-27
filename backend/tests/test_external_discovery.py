@@ -208,13 +208,96 @@ def test_external_asset_risk_shape_is_dashboard_safe():
     r = _compute_easm_risk(asset, probe)
 
     assert r["mode"] == "easm"
-    # external components only — the internal model's keys are structurally absent
-    assert set(r["components"]) == {"tls", "headers", "transport", "email", "vuln"}
+    # Risk factors are NOT the inverted health dimensions.
+    assert set(r["components"]) >= {"hygiene", "exploitability", "exposure", "business"}
+    assert "tls" not in r["components"]
+    assert "vuln" not in r["components"]
     # the exact crash the dashboard hit, and the defensive read that neutralises it
     with pytest.raises(KeyError):
         _ = r["components"]["cis"]
     for k in ("cis", "cia", "ctrl", "risk"):
         assert (r["components"].get(k) or {}).get("pass_rate") is None
-    # a real 0..100 risk score falls out (health .40/.00/1.0/.50/.80 → risk 51.5)
     assert isinstance(r["score"], float) and 0.0 <= r["score"] <= 100.0
     assert r["band"]["label"]
+    # Health 52 must NOT imply risk 48 — exploitability/exposure/business move it.
+    assert r["score"] != round(100 - 52, 1)
+    assert r["health"]["score"] == 52
+    assert r["health"]["components"]["tls"]["weight"] == 0.25
+    for c in r["components"].values():
+        assert "weight_pct" in c
+
+
+def test_health_score_is_hygiene_not_cves():
+    from grc.modules.asset_discovery.services.external_probe import compute_health_score, _SEC_HEADERS
+
+    good = {
+        "live": True, "scheme": "https", "https_available": True,
+        "redirected_to_https": True, "tls_not_after": "2027-01-01T00:00:00",
+        "tls_expired": False, "tls_self_signed": False, "tls_version": "TLSv1.3",
+        "tls_days_to_expiry": 300, "response_time_ms": 120,
+        "security_headers": {"hsts": "x", "csp": "x", "x_frame_options": "x",
+                             "x_content_type_options": "x", "referrer_policy": "x",
+                             "permissions_policy": "x"},
+        "set_cookies": ["session=abc; Secure; HttpOnly; SameSite=Lax"],
+        "cdn_waf": "Cloudflare",
+        "dns_mx": ["10 mail"], "spf": "v=spf1 -all", "dmarc": "v=DMARC1; p=reject",
+        "dkim": "v=DKIM1; k=rsa; p=x",
+    }
+    hg = compute_health_score(good, cve_count=9, kev_count=2)
+    assert hg["grade"] == "A" and hg["score"] == 100
+    assert "vuln" not in hg["components"]
+    assert set(hg["components"]) >= {"tls", "headers", "transport", "hsts", "cookies", "latency", "email", "cdn"}
+    wsum = sum(c["weight"] for c in hg["components"].values())
+    assert abs(sum(c["weight_pct"] for c in hg["components"].values()) - 100) <= 1
+    assert abs(wsum - 1.0) < 0.02
+
+    # No MX → email drops; no cookies → cookies drop; no CDN fingerprint → cdn drops.
+    slim = {
+        "live": True, "scheme": "https", "https_available": True,
+        "redirected_to_https": True, "tls_not_after": "2027-01-01T00:00:00",
+        "tls_expired": False, "tls_self_signed": False, "tls_version": "TLSv1.3",
+        "tls_days_to_expiry": 300, "response_time_ms": 80,
+        "security_headers": dict.fromkeys(
+            ["hsts", "csp", "x_frame_options", "x_content_type_options",
+             "referrer_policy", "permissions_policy"], "x"),
+    }
+    hs = compute_health_score(slim)
+    assert "email" not in hs["components"]
+    assert "cookies" not in hs["components"]
+    assert "cdn" not in hs["components"]
+    assert hs["score"] == 100
+
+    bad = {
+        "live": True, "scheme": "http", "https_available": False,
+        "tls_error": "ConnectionRefusedError", "security_headers": {},
+        "missing_security_headers": list(_SEC_HEADERS.values()),
+        "dns_mx": ["10 mail"], "spf": None, "dmarc": None, "dkim": None,
+    }
+    hb = compute_health_score(bad, cve_count=3)
+    assert hb["grade"] in ("D", "F") and hb["score"] < hg["score"]
+    assert "vuln" not in hb["components"]
+
+
+def test_easm_risk_uses_cves_not_health_inverse():
+    from grc.modules.risk_posture.service import _compute_easm_risk
+
+    asset = types.SimpleNamespace(
+        id=1, name="liztek.ca", host_name="liztek.ca", ip_address="1.2.3.4",
+        fqdn="liztek.ca", asset_type="infrastructure", criticality="critical",
+        owner_name=None, internet_facing=True, data_classification="restricted",
+    )
+    clean = {"live": True, "https_available": True, "scheme": "https",
+             "cve_count": 0, "kev_count": 0,
+             "health": {"score": 100, "grade": "A", "components": {}}}
+    dirty = {"live": True, "https_available": True, "scheme": "https",
+             "cve_count": 5, "kev_count": 1,
+             "health": {"score": 100, "grade": "A", "components": {}}}
+    r_clean = _compute_easm_risk(asset, clean)
+    r_dirty = _compute_easm_risk(asset, dirty)
+    # Same health, different CVE/KEV → risk must move. Inverse-of-health would
+    # have given both 0.
+    assert r_clean["health"]["score"] == r_dirty["health"]["score"] == 100
+    assert r_dirty["score"] > r_clean["score"]
+    assert r_dirty["components"]["exploitability"]["score"] == 1.0
+    assert r_clean["cve_detection"]["method"] == "banner_cpe_plus_linked_findings"
+

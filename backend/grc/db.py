@@ -263,6 +263,28 @@ def _ensure_asset_origin_source(engine: Engine) -> None:
         ))
 
 
+def _ensure_asset_ephi_environment(engine: Engine) -> None:
+    """HIPAA ePHI flag: colleague added a non-nullable bool, but existing asset
+    rows hold NULL. Backfill those to false and pin a server default so GET
+    /assets cannot 500 on ResponseValidationError. Schema remains Optional."""
+    if engine.dialect.name != "postgresql":
+        return
+    from sqlalchemy import inspect as sa_inspect
+    inspector = sa_inspect(engine)
+    if not inspector.has_table("grc_it_assets"):
+        return
+    with engine.begin() as conn:
+        conn.execute(text(
+            "ALTER TABLE grc_it_assets ADD COLUMN IF NOT EXISTS ephi_environment BOOLEAN"
+        ))
+        conn.execute(text(
+            "UPDATE grc_it_assets SET ephi_environment = false WHERE ephi_environment IS NULL"
+        ))
+        conn.execute(text(
+            "ALTER TABLE grc_it_assets ALTER COLUMN ephi_environment SET DEFAULT false"
+        ))
+
+
 def _ensure_asset_dns_aliases(engine: Engine) -> None:
     """Additive column holding other DNS names that resolve to the same host, so
     the host-centric model can carry ftp/www/mail as aliases on one asset row."""
@@ -408,6 +430,10 @@ def _init_tenant_schema(engine: Engine, slug: str) -> None:
             _ensure_asset_dns_aliases(engine)
         except Exception:
             logger.exception("asset dns_aliases ensure failed for slug=%s", slug)
+        try:
+            _ensure_asset_ephi_environment(engine)
+        except Exception:
+            logger.exception("asset ephi_environment ensure failed for slug=%s", slug)
         try:
             from .modules.compliance.schema_migrations import _ensure_for_engine
 

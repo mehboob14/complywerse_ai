@@ -116,6 +116,63 @@ def _security_headers(headers) -> Tuple[Dict[str, str], List[str]]:
     return present, missing
 
 
+_CDN_WAF_HINTS = (
+    ("cf-ray", "Cloudflare"),
+    ("cf-cache-status", "Cloudflare"),
+    ("x-akamai-request-id", "Akamai"),
+    ("x-akamai-transformed", "Akamai"),
+    ("x-amz-cf-id", "CloudFront"),
+    ("x-fastly-request-id", "Fastly"),
+    ("x-sucuri-id", "Sucuri"),
+    ("x-iinfo", "Incapsula"),
+    ("x-cdn", "CDN"),
+)
+
+
+def _cdn_waf(headers) -> Optional[str]:
+    """Best-effort CDN/WAF fingerprint from response headers. None = not seen
+    (unknown — absence is not treated as unprotected)."""
+    if headers is None:
+        return None
+    for hdr, name in _CDN_WAF_HINTS:
+        if headers.get(hdr):
+            return name
+    server = str(headers.get("Server") or "").lower()
+    via = str(headers.get("Via") or "").lower()
+    blob = f"{server} {via}"
+    for token, name in (
+        ("cloudflare", "Cloudflare"), ("akamai", "Akamai"), ("fastly", "Fastly"),
+        ("cloudfront", "CloudFront"), ("sucuri", "Sucuri"),
+    ):
+        if token in blob:
+            return name
+    return None
+
+
+def _set_cookies(resp) -> List[str]:
+    """Every Set-Cookie on the winning HTTP response, capped."""
+    try:
+        raw = getattr(resp, "raw", None)
+        if raw is not None and hasattr(raw, "headers"):
+            vals = raw.headers.get_all("Set-Cookie") or []
+            return [str(v)[:300] for v in vals[:20]]
+    except Exception:
+        pass
+    one = resp.headers.get("Set-Cookie") if resp is not None else None
+    return [str(one)[:300]] if one else []
+
+
+def _cookie_flags(cookies: List[str]) -> Dict[str, bool]:
+    if not cookies:
+        return {}
+    blob = " ".join(cookies).lower()
+    return {
+        "secure": "secure" in blob,
+        "httponly": "httponly" in blob,
+        "samesite": "samesite" in blob,
+    }
+
+
 def _probe_tls(fqdn: str, facts: Dict[str, Any]) -> None:
     """Read the 443 certificate + negotiated channel into `facts`, even when the
     cert is self-signed/expired. CERT_NONE captures a bad cert instead of raising;
@@ -200,6 +257,10 @@ def _probe_dns(fqdn: str, facts: Dict[str, Any]) -> None:
     facts["spf"] = next((t for t in txt if "v=spf1" in t.lower()), None)
     dmarc = q("_dmarc." + fqdn, "TXT")
     facts["dmarc"] = next((t for t in dmarc if "v=dmarc1" in t.lower()), None)
+    dkim = q("default._domainkey." + fqdn, "TXT")
+    facts["dkim"] = next(
+        (t for t in dkim if "v=dkim1" in t.lower() or "k=rsa" in t.lower()), None
+    ) or (dkim[0] if dkim else None)
     facts["caa"] = q(fqdn, "CAA")
 
 
@@ -226,7 +287,8 @@ def probe_asset(fqdn: str, ip: Optional[str] = None) -> dict:
         "tls_self_signed": None, "tls_error": None,
         # ── DNS / email auth ──
         "dns_a": None, "dns_mx": None, "dns_ns": None,
-        "spf": None, "dmarc": None, "caa": None,
+        "spf": None, "dmarc": None, "dkim": None, "caa": None,
+        "set_cookies": [], "cdn_waf": None,
         "probed_at": datetime.utcnow().isoformat() + "Z",
     }
     if not fqdn:
@@ -253,6 +315,8 @@ def probe_asset(fqdn: str, ip: Optional[str] = None) -> dict:
         present, missing = _security_headers(resp.headers)
         facts["security_headers"] = present
         facts["missing_security_headers"] = missing
+        facts["set_cookies"] = _set_cookies(resp)
+        facts["cdn_waf"] = _cdn_waf(resp.headers)
         try:
             facts["title"] = _extract_title((resp.text or "")[:MAX_TITLE_SCAN])
         except Exception:
@@ -273,19 +337,32 @@ def _grade(score: int) -> str:
 
 def compute_health_score(facts: Dict[str, Any], *, cve_count: int = 0,
                          kev_count: int = 0) -> Dict[str, Any]:
-    """Grade an external asset's security hygiene from its probe facts.
+    """Grade an external asset's CONFIGURATION HYGIENE from probe facts.
 
-    Returns {score: 0-100 (higher = HEALTHIER), grade: A-F, components: {...}}.
-    Pure — no I/O — so it is unit-testable offline. Each category yields a 0-1
-    sub-score with a weight; categories with no applicable data drop their weight
-    from the denominator (same pattern as risk_posture), so a host we couldn't
-    reach isn't graded on headers it never got to send."""
+    Returns {score: 0-100 (higher = HEALTHIER), grade: A-F, components, weights}.
+    CVEs/KEVs are deliberately NOT part of health — they belong on the risk
+    model (exploitability). ``cve_count``/``kev_count`` are accepted so old
+    callers don't break, then ignored.
+
+    Unknown dimensions drop their weight from the denominator so a host we
+    couldn't reach isn't graded on headers it never sent.
+    """
+    del cve_count, kev_count  # exploitability lives on the risk card
     live = bool(facts.get("live"))
     comps: Dict[str, Dict[str, Any]] = {}
 
-    # 1) TLS hygiene (0.25) — a valid, current, modern cert vs expired/self-signed
-    #    /missing. An http-only host that serves NO https at all is a TLS failure,
-    #    not "unknown".
+    HEALTH_LABELS = {
+        "tls": "TLS / certificate",
+        "headers": "Security headers",
+        "transport": "HTTPS / redirects",
+        "hsts": "HSTS",
+        "cookies": "Cookie flags",
+        "latency": "Response time",
+        "email": "Email auth (SPF/DMARC/DKIM)",
+        "cdn": "CDN / WAF",
+    }
+
+    # 1) TLS (0.20)
     tls_err = facts.get("tls_error")
     if facts.get("tls_not_after") or tls_err:
         s = 1.0
@@ -304,80 +381,117 @@ def compute_health_score(facts: Dict[str, Any], *, cve_count: int = 0,
             if "1.0" in ver or "1.1" in ver:
                 s -= 0.3
                 detail.append("outdated TLS")
+            cipher = str(facts.get("tls_cipher") or "").upper()
+            if any(w in cipher for w in ("RC4", "3DES", "NULL", "EXPORT")):
+                s -= 0.3
+                detail.append("weak cipher")
             d2e = facts.get("tls_days_to_expiry")
             if isinstance(d2e, (int, float)) and 0 <= d2e < 30:
                 s -= 0.2
                 detail.append("expiring <30d")
-        comps["tls"] = {"score": max(0.0, s), "weight": 0.25,
-                        "detail": ", ".join(detail) or "valid, current"}
+        comps["tls"] = {"score": max(0.0, s), "weight": 0.20,
+                        "detail": ", ".join(detail) or (facts.get("tls_version") or "valid, current")}
     elif live and facts.get("scheme") == "http":
-        comps["tls"] = {"score": 0.0, "weight": 0.25, "detail": "no HTTPS"}
+        comps["tls"] = {"score": 0.0, "weight": 0.20, "detail": "no HTTPS"}
 
-    # 2) Security headers (0.25) — fraction of the standard set present.
+    # 2) Security headers (0.14)
     if live:
         n_expected = len(_SEC_HEADERS)
         n_present = len(facts.get("security_headers") or {})
-        comps["headers"] = {"score": n_present / n_expected, "weight": 0.25,
+        comps["headers"] = {"score": n_present / n_expected if n_expected else 0.0,
+                            "weight": 0.14,
                             "detail": f"{n_present}/{n_expected} present"}
 
-    # 3) Transport (0.15) — HTTPS reachable, HTTP redirects to it, HSTS set.
+    # 3) Transport — HTTPS + HTTP→HTTPS redirect (0.12). HSTS is its own row.
     if live:
         s = 0.0
         detail = []
         if facts.get("https_available") or facts.get("scheme") == "https":
-            s += 0.5
+            s += 0.6
         else:
             detail.append("no HTTPS")
         if facts.get("redirected_to_https"):
-            s += 0.3
+            s += 0.4
         elif facts.get("scheme") == "http":
             detail.append("no HTTPS redirect")
-        if (facts.get("security_headers") or {}).get("hsts"):
-            s += 0.2
-        comps["transport"] = {"score": min(1.0, s), "weight": 0.15,
+        comps["transport"] = {"score": min(1.0, s), "weight": 0.12,
                               "detail": ", ".join(detail) or "HTTPS enforced"}
 
-    # 4) Email security (0.15) — only where the name actually receives mail (MX).
+    # 4) HSTS (0.08)
+    if live:
+        has_hsts = bool((facts.get("security_headers") or {}).get("hsts"))
+        comps["hsts"] = {"score": 1.0 if has_hsts else 0.0, "weight": 0.08,
+                         "detail": "HSTS set" if has_hsts else "no HSTS"}
+
+    # 5) Cookie flags (0.08) — only when the host actually sets cookies.
+    cookies = facts.get("set_cookies") or []
+    if live and cookies:
+        flags = _cookie_flags(cookies)
+        n = sum(1 for v in flags.values() if v)
+        missing = [k for k, v in flags.items() if not v]
+        comps["cookies"] = {
+            "score": n / 3.0, "weight": 0.08,
+            "detail": ("missing " + ", ".join(missing)) if missing else "Secure + HttpOnly + SameSite",
+        }
+
+    # 6) Response time (0.08)
+    rt = facts.get("response_time_ms")
+    if live and isinstance(rt, (int, float)):
+        if rt < 300:
+            s, detail = 1.0, f"{int(rt)} ms"
+        elif rt < 800:
+            s, detail = 0.7, f"{int(rt)} ms"
+        elif rt < 2000:
+            s, detail = 0.4, f"{int(rt)} ms (slow)"
+        else:
+            s, detail = 0.15, f"{int(rt)} ms (very slow)"
+        comps["latency"] = {"score": s, "weight": 0.08, "detail": detail}
+
+    # 7) Email auth (0.15) — only where the name receives mail (MX).
     if facts.get("dns_mx"):
         s = 0.0
         detail = []
         if facts.get("spf"):
-            s += 0.5
+            s += 0.4
         else:
             detail.append("no SPF")
         if facts.get("dmarc"):
-            s += 0.5
+            s += 0.4
         else:
             detail.append("no DMARC")
+        if facts.get("dkim"):
+            s += 0.2
+        else:
+            detail.append("no DKIM")
         comps["email"] = {"score": s, "weight": 0.15,
-                          "detail": ", ".join(detail) or "SPF + DMARC set"}
+                          "detail": ", ".join(detail) or "SPF + DMARC + DKIM"}
 
-    # A host we never reached (no HTTP, no TLS attempt, no DNS A) can't be graded
-    # — don't let a "0 CVEs" vuln score alone fake an A for a dead / dangling name.
+    # 8) CDN/WAF (0.15) — known only when a fingerprint is present. Absence is
+    #    unknown (header hiding is common), not a failing grade.
+    cdn = facts.get("cdn_waf")
+    if cdn:
+        comps["cdn"] = {"score": 1.0, "weight": 0.15, "detail": str(cdn)}
+
     reachable = (live or bool(facts.get("tls_not_after")) or bool(facts.get("tls_error"))
                  or bool(facts.get("dns_a")))
     if not reachable:
         return {"score": None, "grade": None, "components": comps,
                 "reason": "unreachable — no signals to grade"}
 
-    # 5) Known vulnerabilities (0.20) — a KEV on an exposed host is worst-case.
-    vuln_s = 1.0
-    detail = []
-    if kev_count:
-        vuln_s = 0.0
-        detail.append(f"{kev_count} KEV")
-    elif cve_count:
-        vuln_s = max(0.0, 1.0 - 0.2 * cve_count)
-        detail.append(f"{cve_count} CVE")
-    comps["vuln"] = {"score": vuln_s, "weight": 0.20,
-                     "detail": ", ".join(detail) or "no known CVEs"}
-
     total_w = sum(c["weight"] for c in comps.values())
     if total_w == 0:
         return {"score": None, "grade": None, "components": comps,
                 "reason": "unreachable — no signals to grade"}
+    for key, c in comps.items():
+        c["label"] = HEALTH_LABELS.get(key, key)
+        c["weight_pct"] = round(c["weight"] / total_w * 100)
     score = round(sum(c["score"] * c["weight"] for c in comps.values()) / total_w * 100)
-    return {"score": score, "grade": _grade(score), "components": comps}
+    return {
+        "score": score,
+        "grade": _grade(score),
+        "components": comps,
+        "weights": {k: c["weight"] for k, c in comps.items()},
+    }
 
 
 def banner_to_cpe(server_header: Optional[str]) -> Optional[str]:
@@ -494,13 +608,29 @@ def _link_known_vulns(db, tenant_id: int, asset_ids: set) -> int:
 
 
 def _asset_cve_count(db, asset_id: int) -> int:
-    """How many vulnerabilities are already linked to this asset — the vuln input
-    to the health score. Best-effort (0 on any error)."""
+    """How many vulnerabilities are already linked to this asset. Best-effort (0 on any error)."""
     try:
         from grc.models import VulnerabilityAssetLink
         return int(
             db.query(VulnerabilityAssetLink)
             .filter(VulnerabilityAssetLink.asset_id == asset_id)
+            .count()
+        )
+    except Exception:
+        return 0
+
+
+def _asset_kev_count(db, asset_id: int) -> int:
+    """Linked findings flagged CISA KEV. Best-effort (0 on any error)."""
+    try:
+        from grc.models import Vulnerability, VulnerabilityAssetLink
+        return int(
+            db.query(VulnerabilityAssetLink)
+            .join(Vulnerability, Vulnerability.id == VulnerabilityAssetLink.vulnerability_id)
+            .filter(
+                VulnerabilityAssetLink.asset_id == asset_id,
+                Vulnerability.kev_flag.is_(True),
+            )
             .count()
         )
     except Exception:
@@ -558,8 +688,23 @@ def probe_external_run(db, run_id: int) -> Dict[str, int]:
                 # linked CVEs. Stored inside the same external_probe block the UI
                 # reads. (Uses existing links; a re-probe after auto-link reflects
                 # any new ones.)
-                facts["health"] = compute_health_score(
-                    facts, cve_count=_asset_cve_count(db, asset.id))
+                cve_n = _asset_cve_count(db, asset.id)
+                kev_n = _asset_kev_count(db, asset.id)
+                facts["cve_count"] = cve_n
+                facts["kev_count"] = kev_n
+                facts["cve_detection"] = {
+                    "method": "banner_cpe_plus_linked_findings",
+                    "banner": facts.get("server"),
+                    "banner_cpe": banner_to_cpe(facts.get("server")),
+                    "linked_findings": cve_n,
+                    "kev_findings": kev_n,
+                    "limits": (
+                        "Server-banner → CPE is a heuristic (the header is self-reported "
+                        "and often stripped). We also count findings already linked to this "
+                        "asset (Nessus import). This is not an active exploit test."
+                    ),
+                }
+                facts["health"] = compute_health_score(facts)
                 pp = dict(asset.platform_properties or {})
                 pp["external_probe"] = facts
                 asset.platform_properties = pp
@@ -604,19 +749,22 @@ if __name__ == "__main__":  # pragma: no cover - runnable offline self-checks
     assert banner_to_cpe(None) is None
     assert banner_to_cpe(b"nginx/1.0") is None  # type: ignore[arg-type]
 
-    # health score — a clean HTTPS host with every header + email auth grades A;
-    # an http-only, header-less, no-cert host with CVEs grades F, and lower.
+    # health score — hygiene only (CVEs are NOT in this grade).
     _good = {
         "live": True, "scheme": "https", "https_available": True,
         "redirected_to_https": True, "tls_not_after": "2027-01-01T00:00:00",
         "tls_expired": False, "tls_self_signed": False, "tls_version": "TLSv1.3",
-        "tls_days_to_expiry": 300,
+        "tls_days_to_expiry": 300, "response_time_ms": 120,
         "security_headers": {"hsts": "x", "csp": "x", "x_frame_options": "x",
                              "x_content_type_options": "x", "referrer_policy": "x",
                              "permissions_policy": "x"},
-        "dns_mx": ["10 mail"], "spf": "v=spf1 -all", "dmarc": "v=DMARC1; p=reject"}
+        "set_cookies": ["session=abc; Secure; HttpOnly; SameSite=Lax"],
+        "cdn_waf": "Cloudflare",
+        "dns_mx": ["10 mail"], "spf": "v=spf1 -all", "dmarc": "v=DMARC1; p=reject",
+        "dkim": "v=DKIM1; k=rsa; p=x"}
     _hg = compute_health_score(_good, cve_count=0)
     assert _hg["grade"] == "A" and _hg["score"] == 100, _hg
+    assert "vuln" not in _hg["components"]
     _bad = {
         "live": True, "scheme": "http", "https_available": False,
         "tls_error": "ConnectionRefusedError", "security_headers": {},
@@ -624,6 +772,7 @@ if __name__ == "__main__":  # pragma: no cover - runnable offline self-checks
         "dns_mx": ["10 mail"], "spf": None, "dmarc": None}
     _hb = compute_health_score(_bad, cve_count=3)
     assert _hb["grade"] in ("D", "F") and _hb["score"] < _hg["score"], _hb
+    assert "vuln" not in _hb["components"]  # CVEs are a risk input, not hygiene
     # A host we never reached and that has no cert/DNS is UNGRADED, not falsely A.
     _hn = compute_health_score({"live": False}, cve_count=0)
     assert _hn["grade"] is None and _hn.get("reason"), _hn
