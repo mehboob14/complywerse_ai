@@ -395,8 +395,12 @@ export function RegisterView({
 
   const extCount = list.filter(isExternalRow).length;
   const intCount = list.length - extCount;
-  const bothKinds = extCount > 0 && intCount > 0;
-  const visibleRows = cat === 'all' || !bothKinds
+  // Show the External/Internal filter whenever the tenant has ANY external
+  // (internet-facing / EASM) asset — the separation is only meaningful then, but
+  // it should NOT require both kinds to be present (it used to, so a tenant of
+  // mostly-external assets saw no filter at all).
+  const showCategoryFilter = extCount > 0;
+  const visibleRows = cat === 'all' || !showCategoryFilter
     ? orderedRows
     : orderedRows.filter((a) => (cat === 'external') === isExternalRow(a));
 
@@ -420,7 +424,7 @@ export function RegisterView({
 
   return (
     <div>
-      {bothKinds && (
+      {showCategoryFilter && (
         <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
           {seg('all', 'All assets', list.length)}
           {seg('internal', 'Internal', intCount)}
