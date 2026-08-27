@@ -574,16 +574,31 @@ export function buildOverviewData(asset: any, o: OverviewOpts = {}): any {
   const _hc = probe?.health?.components;
   let hygieneBreakdown: any[] | null = null;
   if (probe && _hc && Object.keys(_hc).length) {
+    // The full parameter set the health score considers. Any of these with no
+    // data for THIS host (no MX, no cookies, no CDN) is dropped from the maths —
+    // we show it as N/A so the operator sees all params were weighed, not that
+    // some silently vanished ("why 6 not 8").
     const _LBL: Record<string, string> = {
       tls: 'TLS / certificate', headers: 'Security headers', transport: 'HTTPS / redirects',
       hsts: 'HSTS', cookies: 'Cookie flags', latency: 'Response time',
       email: 'Email auth (SPF/DMARC/DKIM)', cdn: 'CDN / WAF',
     };
-    hygieneBreakdown = Object.entries(_hc).map(([k, c]: [string, any]) => {
+    const _NA: Record<string, string> = {
+      tls: 'not probed', headers: 'host not reachable', transport: 'host not reachable',
+      hsts: 'host not reachable', cookies: 'this host sets no cookies',
+      latency: 'response time not measured', email: 'no MX — this host does not receive mail',
+      cdn: 'no CDN / WAF fingerprint (often hidden by design)',
+    };
+    const present = Object.entries(_hc).map(([k, c]: [string, any]) => {
       const pct = Math.round((c.score ?? 0) * 100);
       const w = c.weight_pct ?? Math.round((c.weight ?? 0) * 100);
-      return { label: `${c.label || _LBL[k] || k}`, weightPct: w, value: `${pct}/100 · ${c.detail || ''}`, pct, tone: pct >= 75 ? 'ok' : pct >= 40 ? 'warn' : 'bad' };
+      return { key: k, label: `${c.label || _LBL[k] || k}`, weightPct: w, value: `${pct}/100 · ${c.detail || ''}`, pct, applicable: true, tone: pct >= 75 ? 'ok' : pct >= 40 ? 'warn' : 'bad' };
     });
+    const shown = new Set(Object.keys(_hc));
+    const missing = Object.keys(_LBL).filter((k) => !shown.has(k)).map((k) => ({
+      key: k, label: _LBL[k], weightPct: null, value: `N/A — ${_NA[k] || 'not applicable to this host'}`, pct: null, applicable: false, tone: 'muted',
+    }));
+    hygieneBreakdown = [...present, ...missing];
   }
 
   return {
@@ -614,7 +629,7 @@ export function buildOverviewData(asset: any, o: OverviewOpts = {}): any {
       // External (EASM) assets are graded on exposure health, not a CIA risk
       // score — surface the health grade here so the tile isn't "Not assessed".
       probe?.health?.grade
-        ? { label: 'Attack-surface hygiene', value: `${probe.health.grade} · ${probe.health.score}`, sub: hygieneBreakdown ? 'Outside-in health — click for breakdown' : 'Outside-in health (not risk)', tone: ['A', 'B'].includes(probe.health.grade) ? 'ok' : probe.health.grade === 'C' ? 'warn' : 'bad', breakdown: hygieneBreakdown, breakdownTitle: `Attack-surface hygiene — ${probe.health.grade} · ${probe.health.score}/100`, breakdownNote: 'How this score is composed. Each row = its % weight of the score. Higher is healthier. Unknown signals (no cookies, no MX, no CDN) drop out instead of scoring 0.' }
+        ? { label: 'Attack-surface hygiene', value: `${probe.health.grade} · ${probe.health.score}`, sub: hygieneBreakdown ? 'Outside-in health — click for breakdown' : 'Outside-in health (not risk)', tone: ['A', 'B'].includes(probe.health.grade) ? 'ok' : probe.health.grade === 'C' ? 'warn' : 'bad', breakdown: hygieneBreakdown, breakdownTitle: `Attack-surface hygiene — ${probe.health.grade} · ${probe.health.score}/100`, breakdownNote: 'Formula: score = ( Σ parameter × weight ) ÷ ( Σ weights of the applicable parameters ) × 100. Each row shows its % weight. Higher is healthier. Parameters that don’t apply to this host (no mail, no cookies, no CDN) are marked N/A and left out of the maths — never scored 0.' }
         : { label: 'Risk Score', value: dash(K.riskScore), sub: K.riskScore ? 'Assessed' : 'Not assessed', tone: K.riskScore ? undefined : 'muted' },
       { label: 'Open Findings', value: String(K.openFindings ?? 0), sub: (K.openFindings ?? 0) ? 'Needs attention' : 'None open', tone: (K.openFindings ?? 0) ? 'bad' : 'ok' },
       { label: 'Blast Radius', value: String(K.blastRadius ?? 0), sub: (K.blastRadius ?? 0) ? 'Dependents mapped' : 'No dependents mapped', tone: 'muted' },

@@ -329,21 +329,28 @@ export default function AssetOverview({ A }: { A: any }) {
               </div>
               <div className="mt-4 space-y-2.5">
                 {k.breakdown.map((r: any, i: number) => {
+                  const na = r.applicable === false;
                   const pct = Math.max(0, Math.min(100, r.pct ?? 0));
                   const bar = r.tone === 'ok' ? '#1a7f5a' : r.tone === 'warn' ? '#b8860b' : '#b3261e';
                   return (
-                    <div key={i} className="flex items-center gap-3">
+                    <div key={i} className={'flex items-center gap-3' + (na ? ' opacity-60' : '')}>
                       <div className="w-56 flex-none">
                         <div className="flex items-center gap-1.5 text-[13px] font-semibold text-[#12304f]">
                           {r.label}
-                          {r.weightPct != null && <span className="rounded bg-[#dfeaf6] px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-[#3a5470]">{r.weightPct}%</span>}
+                          {r.weightPct != null
+                            ? <span className="rounded bg-[#dfeaf6] px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-[#3a5470]">{r.weightPct}%</span>
+                            : <span className="rounded bg-[#eceef1] px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#8aa0b6]">N/A</span>}
                         </div>
                         <div className="text-[11px] text-[#8aa0b6]">{r.value}</div>
                       </div>
-                      <div className="h-2 flex-1 overflow-hidden rounded-full bg-[#e3ecf5]">
-                        <div className="h-full rounded-full" style={{ width: Math.max(2, pct) + '%', background: bar }} />
-                      </div>
-                      <div className={'w-12 flex-none text-right text-[12.5px] font-semibold tabular-nums text-[#12304f] ' + MONO}>{pct}</div>
+                      {na ? (
+                        <div className="flex-1 text-[11px] italic text-[#a6b3c2]">not counted in the score</div>
+                      ) : (
+                        <div className="h-2 flex-1 overflow-hidden rounded-full bg-[#e3ecf5]">
+                          <div className="h-full rounded-full" style={{ width: Math.max(2, pct) + '%', background: bar }} />
+                        </div>
+                      )}
+                      <div className={'w-12 flex-none text-right text-[12.5px] font-semibold tabular-nums text-[#12304f] ' + MONO}>{na ? '—' : pct}</div>
                     </div>
                   );
                 })}
