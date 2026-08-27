@@ -155,6 +155,55 @@ def _match_by_identity(host_identity: Any, exact: Dict[str, Any],
     return None, "none"
 
 
+def _build_apex_context(db: Session, tenant_id: int):
+    """(ip -> {asset_ids}, apex_domain -> apex_asset_id, asset_id -> apex_domain).
+    Lets a machine-level (IP-only) finding that is AMBIGUOUS across several
+    subdomains of ONE apex attach to that apex asset (the shared machine) instead
+    of being refused. Degrades to empty maps if the apex helper can't be
+    imported, so this optional path never breaks the backfill."""
+    try:
+        from ..modules.asset_discovery.services.domain_hierarchy import registrable_domain
+    except Exception:  # noqa: BLE001 — optional enrichment
+        return {}, {}, {}
+    from ..models import ITAsset
+    ip_assets: Dict[str, Set[int]] = {}
+    apex_asset: Dict[str, int] = {}
+    asset_apex: Dict[int, str] = {}
+    rows = db.query(
+        ITAsset.id, ITAsset.host_name, ITAsset.name, ITAsset.ip_address, ITAsset.fqdn,
+    ).filter(ITAsset.tenant_id == tenant_id).all()
+    for a in rows:
+        ip = _norm(a.ip_address)
+        if ip:
+            ip_assets.setdefault(ip, set()).add(a.id)
+        dns = _norm(a.fqdn) or _norm(a.host_name) or _norm(a.name)
+        if not dns:
+            continue
+        apex = registrable_domain(dns)
+        if not apex:
+            continue
+        asset_apex[a.id] = apex
+        if apex == dns:                 # this asset IS the apex (registrable domain)
+            apex_asset.setdefault(apex, a.id)
+    return ip_assets, apex_asset, asset_apex
+
+
+def _apex_for_shared_ip(ip: Optional[str], ip_assets: Dict[str, Set[int]],
+                        apex_asset: Dict[str, int], asset_apex: Dict[int, str]) -> Optional[int]:
+    """When ``ip`` is shared by 2+ assets that are ALL subdomains of one apex, and
+    that apex is itself an asset, return the apex asset id — an IP-only finding on
+    that shared machine belongs to the machine (the apex). Returns None when the
+    sharers span different domains (genuinely ambiguous — keep refusing)."""
+    ids = ip_assets.get(ip or "") or set()
+    if len(ids) < 2:
+        return None
+    apexes = {asset_apex.get(i) for i in ids}
+    apexes.discard(None)
+    if len(apexes) == 1:
+        return apex_asset.get(next(iter(apexes)))
+    return None
+
+
 def backfill_host_links(db: Session, tenant_id: int, *, commit: bool = False,
                         assign_unmatched_to_asset_id: Optional[int] = None) -> Dict[str, Any]:
     """Link every unlinked finding to the asset its ``affected_host`` names.
@@ -172,10 +221,11 @@ def backfill_host_links(db: Session, tenant_id: int, *, commit: bool = False,
     tenant or it is ignored (never links to a stranger)."""
     from ..models import Vulnerability, VulnerabilityAssetLink, ITAsset
     exact, names, nessus, n_assets = _build_asset_index(db, tenant_id)
+    ip_assets, apex_asset, asset_apex = _build_apex_context(db, tenant_id)
     report: Dict[str, Any] = {
         "assets": n_assets, "findings_with_host": 0, "matched": 0,
-        "matched_via_identity": 0, "newly_linked": 0, "already_linked": 0,
-        "unmatched": 0, "ambiguous": 0, "assigned_unmatched": 0,
+        "matched_via_identity": 0, "apex_routed": 0, "newly_linked": 0,
+        "already_linked": 0, "unmatched": 0, "ambiguous": 0, "assigned_unmatched": 0,
     }
     if not exact and not nessus:
         return report
@@ -211,6 +261,16 @@ def backfill_host_links(db: Session, tenant_id: int, *, commit: bool = False,
                 asset_id, reason = aid2, reason2
             elif reason2 == "ambiguous":
                 reason = "ambiguous"
+        # #2 — a machine-level (IP-only) finding whose IP is shared by several
+        # subdomains of ONE apex attaches to that apex (the machine), rather than
+        # being refused. Mixed-domain shared IPs stay ambiguous.
+        if asset_id is None and reason == "ambiguous":
+            hi = f.host_identity if isinstance(f.host_identity, dict) else {}
+            for ipc in (host, _norm(hi.get("ip")), _norm(hi.get("ip_address"))):
+                apx = _apex_for_shared_ip(ipc, ip_assets, apex_asset, asset_apex)
+                if apx is not None:
+                    asset_id, reason = apx, "apex_shared_ip"
+                    break
         if asset_id is None:
             if reason == "ambiguous":
                 report["ambiguous"] += 1
@@ -224,7 +284,11 @@ def backfill_host_links(db: Session, tenant_id: int, *, commit: bool = False,
             report["matched"] += 1
             if reason in ("identity", "identity_name"):
                 report["matched_via_identity"] += 1
-            source = "identity_match" if reason in ("identity", "identity_name") else "host_match"
+            if reason == "apex_shared_ip":
+                report["apex_routed"] += 1
+            source = ("apex_shared_ip" if reason == "apex_shared_ip"
+                      else "identity_match" if reason in ("identity", "identity_name")
+                      else "host_match")
         exists = db.query(VulnerabilityAssetLink.id).filter(
             VulnerabilityAssetLink.vulnerability_id == f.id,
             VulnerabilityAssetLink.asset_id == asset_id,
