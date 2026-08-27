@@ -6,7 +6,7 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { ResponsiveContainer, RadialBarChart, RadialBar, PolarAngleAxis } from 'recharts';
-import { ShieldAlert, SlidersHorizontal, Search as SearchIcon, Crown, Eye } from 'lucide-react';
+import { ShieldAlert, SlidersHorizontal, Search as SearchIcon, Crown, Eye, ChevronRight, ChevronDown } from 'lucide-react';
 import { riskPostureApi } from '@/lib/api';
 import EmptyState from '@/components/common/EmptyState';
 import WeightsPanel from './_weights-panel';
@@ -92,6 +92,24 @@ const BAND_META: Array<{ key: 'contained' | 'watch' | 'elevated' | 'severe'; lab
 type SortKey = 'score' | 'name' | 'data_quality' | 'cis' | 'open_vulns';
 type SortDir = 'asc' | 'desc';
 
+// ── Subdomain nesting (owner's shape) ───────────────────────────────────────
+// EASM subdomains collapse under their apex; a ▸ arrow opens them; the apex row
+// shows the family's WORST score as the roll-up so you see the worst exposure of
+// the whole domain without expanding. Registrable-domain = apex; a small ccTLD
+// second-level set covers the co.uk / com.pk shapes (not the full PSL).
+const _TWO_LABEL = new Set([
+  'co.uk', 'org.uk', 'gov.uk', 'ac.uk', 'co.pk', 'com.pk', 'org.pk', 'net.pk',
+  'com.au', 'net.au', 'org.au', 'co.nz', 'co.in', 'co.za', 'com.br',
+]);
+function registrableDomain(host: string): string {
+  const h = (host || '').toLowerCase().replace(/\.$/, '').trim();
+  if (!h || !h.includes('.') || h.includes(':') || /^[\d.]+$/.test(h)) return '';
+  const p = h.split('.');
+  if (p.length <= 2) return h;
+  return _TWO_LABEL.has(p.slice(-2).join('.')) ? p.slice(-3).join('.') : p.slice(-2).join('.');
+}
+const dnsName = (a: AssetRow) => (a.host_name || a.name || '').toLowerCase().replace(/\.$/, '').trim();
+
 export default function RiskPosturePage() {
   const [filterBand, setFilterBand] = useState<string>('');
   const [searchQ, setSearchQ] = useState('');
@@ -136,6 +154,49 @@ export default function RiskPosturePage() {
     });
     return rows;
   }, [q.data, filterBand, searchQ, sortKey, sortDir]);
+
+  // Apex domains whose subdomains are OPEN (empty = collapsed by default).
+  const [openApex, setOpenApex] = useState<Set<string>>(() => new Set());
+
+  // Fold EASM subdomains under their apex row. Apex keeps its own score/columns;
+  // it carries `agg` = the family's worst score (self + children) so the roll-up
+  // is visible while collapsed. Children only appear when the apex is opened.
+  const display = useMemo(() => {
+    const present = new Map<string, AssetRow>();
+    for (const a of filtered) { const n = dnsName(a); if (n) present.set(n, a); }
+    const kids = new Map<string, AssetRow[]>();
+    const childIds = new Set<number>();
+    for (const a of filtered) {
+      const n = dnsName(a); const apex = registrableDomain(n);
+      if (!apex || n === apex || !present.has(apex)) continue;
+      if (!kids.has(apex)) kids.set(apex, []);
+      kids.get(apex)!.push(a); childIds.add(a.id);
+    }
+    const aggOf = (apexName: string) => {
+      const self = present.get(apexName)!;
+      let worst = self;
+      for (const k of (kids.get(apexName) || [])) if ((k.score ?? -1) > (worst.score ?? -1)) worst = k;
+      return { count: (kids.get(apexName) || []).length, worst: worst.score, band: worst.band, own: self.score };
+    };
+    const out: { a: AssetRow; child: boolean; agg?: ReturnType<typeof aggOf> }[] = [];
+    const seen = new Set<number>();
+    for (const a of filtered) {
+      if (childIds.has(a.id)) continue;
+      const n = dnsName(a);
+      const hasKids = kids.has(n);
+      out.push({ a, child: false, agg: hasKids ? aggOf(n) : undefined });
+      seen.add(a.id);
+      if (hasKids && openApex.has(n)) for (const k of kids.get(n)!) { out.push({ a: k, child: true }); seen.add(k.id); }
+    }
+    for (const a of filtered) if (!seen.has(a.id) && !childIds.has(a.id)) out.push({ a, child: false });
+    return out;
+  }, [filtered, openApex]);
+
+  const toggleApex = (key: string) => setOpenApex((prev) => {
+    const next = new Set(prev);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    return next;
+  });
 
   const toggleSort = (k: SortKey) => {
     if (sortKey === k) setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
@@ -348,17 +409,36 @@ export default function RiskPosturePage() {
                   </td>
                 </tr>
               )}
-              {filtered.map((a) => (
-                <tr key={a.id} className="hover:bg-slate-50">
+              {display.map(({ a, child, agg }) => {
+                const isOpen = openApex.has(dnsName(a));
+                return (
+                <tr key={a.id} className={'hover:bg-slate-50' + (child ? ' bg-slate-50/60' : '')}>
                   <td className="px-4 py-3">
-                    <Link
-                      href={`/risk-posture/asset/${a.id}`}
-                      className="font-medium text-primary-700 hover:underline"
-                    >
-                      {a.name}
-                    </Link>
+                    <div className="flex items-center gap-1.5" style={child ? { paddingLeft: 22 } : undefined}>
+                      {agg ? (
+                        <button
+                          type="button"
+                          onClick={() => toggleApex(dnsName(a))}
+                          aria-label={isOpen ? 'Collapse subdomains' : 'Show subdomains'}
+                          className="flex h-4 w-4 flex-none items-center justify-center text-slate-500 hover:text-primary-700"
+                        >
+                          {isOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                        </button>
+                      ) : child ? (
+                        <span className="flex-none text-slate-300">↳</span>
+                      ) : null}
+                      <Link
+                        href={`/risk-posture/asset/${a.id}`}
+                        className="font-medium text-primary-700 hover:underline"
+                      >
+                        {a.name}
+                      </Link>
+                      {agg && (
+                        <span className="flex-none rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">{agg.count} sub{agg.count > 1 ? 's' : ''}</span>
+                      )}
+                    </div>
                     {a.criticality && (
-                      <div className="text-[10px] uppercase tracking-wide text-slate-500 mt-0.5">{a.criticality}</div>
+                      <div className="text-[10px] uppercase tracking-wide text-slate-500 mt-0.5" style={child ? { paddingLeft: 22 } : undefined}>{a.criticality}</div>
                     )}
                   </td>
                   <td className="px-4 py-3 font-mono text-xs text-slate-700">
@@ -379,6 +459,11 @@ export default function RiskPosturePage() {
                         {a.band.label}
                       </span>
                     </div>
+                    {agg && agg.count > 0 && (
+                      <div className="text-[10px] text-slate-500 mt-0.5" title="Worst score across this domain and its subdomains">
+                        family worst <b className="text-slate-700 tabular-nums">{agg.worst ?? '—'}</b> · {agg.count + 1} hosts
+                      </div>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     {a.score == null ? (
@@ -435,7 +520,8 @@ export default function RiskPosturePage() {
                     </Link>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

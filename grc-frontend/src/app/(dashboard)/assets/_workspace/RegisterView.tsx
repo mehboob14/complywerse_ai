@@ -89,11 +89,10 @@ export function RegisterView({
 }: RegisterViewProps) {
   void canCreate;
   const list = rows ?? [];
-  // Apex domains whose subdomains are COLLAPSED. Empty = expanded by default, so
-  // subdomains are visible in the inventory just like they are in the risk view
-  // (consistency — they used to be hidden until you clicked, which read as "the
-  // subdomains aren't in the inventory").
-  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
+  // Apex domains whose subdomains are EXPANDED. Empty = collapsed by default:
+  // each apex shows a ▸ arrow + a "N subs" badge, and opens on click (owner's
+  // preferred shape — clean list, drill in when you want the names).
+  const [openApex, setOpenApex] = useState<Set<string>>(() => new Set());
   // Two-category lens: internal hosts (Ubuntu/Windows/…) vs external /
   // internet-facing assets (EASM). Shown only when both kinds are present.
   const [cat, setCat] = useState<'all' | 'internal' | 'external'>('all');
@@ -132,7 +131,7 @@ export function RegisterView({
       display.push(a);
       seen.add(a.id);
       const apexName = dnsName(a);
-      if (kids.has(apexName) && !collapsed.has(apexName)) {
+      if (openApex.has(apexName) && kids.has(apexName)) {
         for (const k of kids.get(apexName)!) {
           display.push(k);
           seen.add(k.id);
@@ -141,7 +140,7 @@ export function RegisterView({
     }
     for (const a of list) if (!seen.has(a.id) && !childOf.has(a.id)) display.push(a);
     return { childrenByApex: kids, childApex: childOf, subCount: counts, apexByName: present, orderedRows: display };
-  }, [list, collapsed]);
+  }, [list, openApex]);
 
   const columns: ColumnDef<ITAsset>[] = [
     {
@@ -157,7 +156,7 @@ export function RegisterView({
         const n = a.open_findings ?? 0;
         const apexOf = childApex.get(a.id);
         const kids = subCount.get(dnsName(a)) ?? 0;
-        const expanded = !collapsed.has(dnsName(a));
+        const expanded = openApex.has(dnsName(a));
         const parent = apexOf ? apexByName.get(apexOf) : undefined;
         const sameIp = !!(apexOf && a.ip_address && parent?.ip_address && a.ip_address === parent.ip_address);
         return (
@@ -168,7 +167,7 @@ export function RegisterView({
                 aria-label={expanded ? 'Collapse subdomains' : 'Show subdomains'}
                 onClick={(e) => {
                   e.stopPropagation();
-                  setCollapsed((prev) => {
+                  setOpenApex((prev) => {
                     const next = new Set(prev);
                     const key = dnsName(a);
                     if (next.has(key)) next.delete(key); else next.add(key);
