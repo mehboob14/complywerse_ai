@@ -12,7 +12,7 @@ import { useState, useEffect, useRef, Fragment } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Radar, Inbox, Network, History, Play, Plus, Trash2, X,
-  ShieldCheck, RefreshCw, Check, Plug, Gauge,
+  ShieldCheck, RefreshCw, Check, Plug,
 } from 'lucide-react';
 import { discoveryApi } from '@/lib/api';
 import { useTabParam } from '@/lib/useTabParam';
@@ -23,14 +23,16 @@ import '../assets/_suite/asset-suite.css';
 // Tabs are kept. Only Campaigns + host logins + Connectors are consolidated
 // into ONE "Discover → Connect" tab, shown as a numbered pipeline inside it.
 // Overview, Inbox and Scan history stay as their own separate tabs.
-type Tab = 'overview' | 'pipeline' | 'inbox' | 'runs' | 'score';
+// 'score' (the standalone attack-surface scorecard) was removed — external
+// assets and their hygiene grade live in the IT Asset Inventory and on the
+// asset's own Overview, not in a separate Discovery page.
+type Tab = 'overview' | 'pipeline' | 'inbox' | 'runs';
 
 const TABS: { id: Tab; label: string; icon: any }[] = [
   { id: 'overview', label: 'Overview',           icon: Radar },
   { id: 'pipeline', label: 'Discover → Connect',  icon: Plug },
   { id: 'inbox',    label: 'Inbox',              icon: Inbox },
   { id: 'runs',     label: 'Scan history',       icon: History },
-  { id: 'score',    label: 'Attack surface',     icon: Gauge },
 ];
 
 /* ─── shared bits ──────────────────────────────────────────────────── */
@@ -899,69 +901,6 @@ const CRED_CATEGORIES: { key: string; label: string; hint: string }[] = [
   { key: 'identity', label: 'Identity',        hint: 'Active Directory / LDAP' },
   { key: 'cluster',  label: 'Clusters',        hint: 'Kubernetes' },
 ];
-
-/* ─── Attack-surface scorecard ─────────────────────────────────────── */
-
-// Fleet view of the per-asset EASM health grades. Each internet-facing asset is
-// probed + graded automatically at scan time; this rolls those up (avg grade,
-// grade distribution) and ranks assets worst-first so the weakest public
-// surface is the first thing an operator sees.
-function Scorecard() {
-  const q = useQuery({ queryKey: ['easm-scorecard'], queryFn: async () => (await discoveryApi.easmScorecard()).data as any });
-  const data = q.data;
-  const gc: Record<string, string> = { A: '#1a7f5a', B: '#3b7d2f', C: '#b8860b', D: '#c26a1b', F: '#b3261e' };
-  const grade = (g: string) => gc[g] || 'var(--as-muted)';
-  return (
-    <div className="as-card" style={{ padding: '18px 20px' }}>
-      <SectionHead title="Attack surface score" note="Every internet-facing asset graded on its outside-in security hygiene — TLS, security headers, email auth, exposure and known CVEs. Higher is healthier. Click a row to open the asset." />
-      {q.isLoading ? <Empty text="Loading…" /> : !data || !data.summary || data.summary.total === 0 ? (
-        <Empty text="No external assets graded yet." hint="Run an External (domain) campaign — each discovered host is probed and graded automatically." />
-      ) : (
-        <>
-          <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'center', margin: '4px 0 20px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <span style={{ fontSize: 46, fontWeight: 700, lineHeight: 1, color: grade(data.summary.avg_grade) }}>{data.summary.avg_grade ?? '—'}</span>
-              <span style={{ fontSize: 13, color: 'var(--as-muted)', lineHeight: 1.4 }}>avg {data.summary.avg_score ?? '—'}/100<br />{data.summary.graded} of {data.summary.total} graded</span>
-            </div>
-            <div style={{ display: 'flex', gap: 16, borderLeft: '1px solid var(--as-border)', paddingLeft: 24 }}>
-              {['A', 'B', 'C', 'D', 'F'].map((g) => (
-                <div key={g} style={{ textAlign: 'center', minWidth: 24 }}>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: grade(g) }}>{data.summary.grade_counts?.[g] || 0}</div>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: grade(g) }}>{g}</div>
-                </div>
-              ))}
-              {data.summary.ungraded ? (
-                <div style={{ textAlign: 'center', minWidth: 40 }}>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--as-faint)' }}>{data.summary.ungraded}</div>
-                  <div style={{ fontSize: 12, color: 'var(--as-muted)' }}>n/a</div>
-                </div>
-              ) : null}
-            </div>
-          </div>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead><tr>{['', 'Asset', 'Score', 'Response', 'HTTPS / TLS', 'Headers', 'Weak areas'].map((h) => <th key={h} style={th}>{h}</th>)}</tr></thead>
-              <tbody>
-                {data.assets.map((a: any) => (
-                  <tr key={a.asset_id} style={{ cursor: 'pointer' }} onClick={() => { window.location.href = `/assets/${a.asset_id}`; }} title="Open asset">
-                    <td style={{ ...td, width: 34 }}><span style={{ display: 'inline-block', minWidth: 24, textAlign: 'center', fontWeight: 700, color: '#fff', background: grade(a.grade), borderRadius: 6, padding: '1px 5px', fontSize: 12.5 }}>{a.grade}</span></td>
-                    <td style={{ ...td, color: 'var(--as-ink)' }}>{a.name}</td>
-                    <td className="as-mono" style={td}>{a.score}/100</td>
-                    <td className="as-mono" style={td}>{a.response_time_ms != null ? `${a.response_time_ms} ms` : '—'}</td>
-                    <td style={td}>{a.https ? (a.tls_expired ? 'expired cert' : (a.tls_days_to_expiry != null && a.tls_days_to_expiry < 30 ? `${a.tls_days_to_expiry}d left` : 'valid')) : 'no HTTPS'}</td>
-                    <td className="as-mono" style={{ ...td, color: a.security_headers >= 5 ? 'var(--as-good)' : a.security_headers >= 2 ? undefined : 'var(--as-danger-text)' }}>{a.security_headers}/6</td>
-                    <td style={{ ...td, color: 'var(--as-danger-text)' }}>{(a.weak || []).join(', ') || '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
 
 function Credentials() {
   const qc = useQueryClient();
@@ -2113,7 +2052,6 @@ export default function AssetDiscoveryPage() {
 
       {tab === 'inbox' && <InboxView />}
       {tab === 'runs' && <Runs />}
-      {tab === 'score' && <Scorecard />}
     </div>
   );
 }

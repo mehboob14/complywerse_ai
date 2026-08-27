@@ -566,25 +566,24 @@ export function buildOverviewData(asset: any, o: OverviewOpts = {}): any {
     }];
   }
 
-  // Health-score breakdown — how the F·52 is composed, dimension by dimension.
-  // Same signals as the Risk & Controls / posture breakdown, shown here as HEALTH
-  // (higher = better) so the operator sees what pulls the grade down.
+  // Health-score breakdown — how the grade·score is composed, dimension by
+  // dimension. Same signals as the Risk & Controls / posture breakdown, shown
+  // here as HEALTH (higher = better). It is NOT rendered as an always-on card;
+  // it hangs off the "Attack-surface hygiene" KPI tile and is revealed only
+  // when the operator clicks that tile (see _overview-design).
   const _hc = probe?.health?.components;
+  let hygieneBreakdown: any[] | null = null;
   if (probe && _hc && Object.keys(_hc).length) {
     const _LBL: Record<string, string> = {
       tls: 'TLS / certificate', headers: 'Security headers', transport: 'HTTPS / redirects',
       hsts: 'HSTS', cookies: 'Cookie flags', latency: 'Response time',
       email: 'Email auth (SPF/DMARC/DKIM)', cdn: 'CDN / WAF',
     };
-    machine = [...machine, {
-      title: 'Attack-surface hygiene breakdown',
-      note: probe.health.grade ? `${probe.health.grade} · ${probe.health.score}/100 (higher = healthier)` : 'health',
-      fields: Object.entries(_hc).map(([k, c]: [string, any]) => {
-        const pct = Math.round((c.score ?? 0) * 100);
-        const w = c.weight_pct ?? Math.round((c.weight ?? 0) * 100);
-        return { label: `${c.label || _LBL[k] || k} (${w}%)`, value: `${pct}/100 · ${c.detail || ''}`, tone: pct >= 75 ? 'ok' : pct >= 40 ? 'warn' : 'bad' };
-      }),
-    }];
+    hygieneBreakdown = Object.entries(_hc).map(([k, c]: [string, any]) => {
+      const pct = Math.round((c.score ?? 0) * 100);
+      const w = c.weight_pct ?? Math.round((c.weight ?? 0) * 100);
+      return { label: `${c.label || _LBL[k] || k}`, weightPct: w, value: `${pct}/100 · ${c.detail || ''}`, pct, tone: pct >= 75 ? 'ok' : pct >= 40 ? 'warn' : 'bad' };
+    });
   }
 
   return {
@@ -615,7 +614,7 @@ export function buildOverviewData(asset: any, o: OverviewOpts = {}): any {
       // External (EASM) assets are graded on exposure health, not a CIA risk
       // score — surface the health grade here so the tile isn't "Not assessed".
       probe?.health?.grade
-        ? { label: 'Attack-surface hygiene', value: `${probe.health.grade} · ${probe.health.score}`, sub: 'Outside-in health (not risk)', tone: ['A', 'B'].includes(probe.health.grade) ? 'ok' : probe.health.grade === 'C' ? 'warn' : 'bad' }
+        ? { label: 'Attack-surface hygiene', value: `${probe.health.grade} · ${probe.health.score}`, sub: hygieneBreakdown ? 'Outside-in health — click for breakdown' : 'Outside-in health (not risk)', tone: ['A', 'B'].includes(probe.health.grade) ? 'ok' : probe.health.grade === 'C' ? 'warn' : 'bad', breakdown: hygieneBreakdown, breakdownTitle: `Attack-surface hygiene — ${probe.health.grade} · ${probe.health.score}/100`, breakdownNote: 'How this score is composed. Each row = its % weight of the score. Higher is healthier. Unknown signals (no cookies, no MX, no CDN) drop out instead of scoring 0.' }
         : { label: 'Risk Score', value: dash(K.riskScore), sub: K.riskScore ? 'Assessed' : 'Not assessed', tone: K.riskScore ? undefined : 'muted' },
       { label: 'Open Findings', value: String(K.openFindings ?? 0), sub: (K.openFindings ?? 0) ? 'Needs attention' : 'None open', tone: (K.openFindings ?? 0) ? 'bad' : 'ok' },
       { label: 'Blast Radius', value: String(K.blastRadius ?? 0), sub: (K.blastRadius ?? 0) ? 'Dependents mapped' : 'No dependents mapped', tone: 'muted' },

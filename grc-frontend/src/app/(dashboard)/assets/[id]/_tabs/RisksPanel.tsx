@@ -23,7 +23,7 @@ import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Gauge, Lock, Cpu, Sparkles, ArrowRight, ShieldCheck, AlertCircle, Loader2,
+  Lock, Cpu, Sparkles, ArrowRight, ShieldCheck, AlertCircle, Loader2,
   Shield, X, AlertTriangle, Plus, Filter, Layers, ChevronDown, ChevronRight,
 } from 'lucide-react';
 import { assetsApi, riskPostureApi } from '@/lib/api';
@@ -120,48 +120,6 @@ function DimBar({ label, sub, pct, known, tone, guideId, guideN, weightPct }: { 
     </div>
   );
 }
-
-/* ─── Exposure Health — hygiene only (external). NOT the inverse of risk. ── */
-function HealthScoreCard({ assetId }: { assetId: number }) {
-  const q = useQuery({
-    queryKey: ['asset-risk-posture', assetId],
-    queryFn: async () => (await riskPostureApi.asset(assetId)).data as any,
-  });
-  const d = q.data;
-  const health = d?.health;
-  if (!d || d.mode !== 'easm' || health?.score == null) return null;
-  const grade = (health.grade || '—') as string;
-  const hscore = health.score as number;
-  const comps = Object.entries(health.components || {}).filter(([k]) => k !== 'vuln') as [string, any][];
-  const gc = ({ A: '#1a7f5a', B: '#3b7d2f', C: '#b8860b', D: '#c26a1b', F: '#b3261e' } as Record<string, string>)[grade] || '#8a948b';
-  return (
-    <div className="rounded-2xl border-2 border-[#1d4e89] bg-[#f4f8fc] p-0.5">
-      <BigCard
-        icon={<Gauge size={15} />}
-        title="Attack-surface hygiene"
-        subtitle="How this public host is configured — TLS, headers, HTTPS, cookies, email auth. Higher is healthier. This is not the risk score."
-      >
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="text-[34px] font-semibold leading-none" style={{ color: gc }}>{grade}</span>
-          <span className="text-[15px] font-semibold text-[#1a2b24]">{hscore}<span className="text-[13px] text-[#aab2a8]"> / 100</span></span>
-          <span className="rounded-full px-2.5 py-1 text-[11.5px] font-bold uppercase tracking-wider" style={{ color: '#1d4e89', background: '#d6e6f5' }}>outside-in health</span>
-        </div>
-        <div className="mt-5 space-y-2.5">
-          {comps.map(([k, c]) => {
-            const hp = Math.round((c.score ?? 0) * 100);
-            const t = hp >= 70 ? '#1a7f5a' : hp >= 40 ? '#b8860b' : '#b3261e';
-            const w = c.weight_pct ?? Math.round((c.weight ?? 0) * 100);
-            return <DimBar key={k} label={c.label || k} sub={c.detail || ''} pct={hp} known tone={t} weightPct={w} />;
-          })}
-        </div>
-        <div className="mt-4 flex items-center justify-between border-t border-[#d6e6f5] pt-3 text-[12px] text-[#5a6f82]">
-          <span>Each row shows its % of this health score. Unknown signals (no cookies, no MX, no CDN fingerprint) drop out instead of scoring 0.</span>
-        </div>
-      </BigCard>
-    </div>
-  );
-}
-
 
 /* ─── Card 1: Residual Risk (single source: /risk-posture/asset/{id}) ───── */
 
@@ -936,11 +894,10 @@ export default function RisksPanel({
         <div className="rounded-xl border border-[#1d4e89] bg-[#e8f1fa] px-4 py-3">
           <div className="text-[11px] font-extrabold tracking-[0.08em] uppercase text-[#1d4e89]">Public attack surface</div>
           <p className="mt-0.5 text-[12.5px] text-[#3a5470]">
-            This host was found from the internet. The blue card is configuration hygiene. The amber card is compromise risk (hygiene is one input, not the inverse). Internal CIA / CIS scores do not apply.
+            This host was found from the internet. This tab shows its compromise risk. The configuration-hygiene score and its per-parameter breakdown live on the <b>Overview</b> tab — click the hygiene card there. Internal CIA / CIS scores do not apply.
           </p>
         </div>
       )}
-      {isExternal && <HealthScoreCard assetId={assetId} />}
       <ResidualRiskCard assetId={assetId} asset={asset} />
       {!isExternal && (
         <div className="grid gap-4 lg:grid-cols-2">

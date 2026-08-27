@@ -223,6 +223,8 @@ export default function AssetOverview({ A }: { A: any }) {
   const [swQuery, setSwQuery] = useState('');
   const [svcQuery, setSvcQuery] = useState('');
   const [svcState, setSvcState] = useState<'all' | 'running' | 'stopped'>('all');
+  // Which KPI tile has its breakdown open (only the hygiene tile carries one).
+  const [openKpi, setOpenKpi] = useState<number | null>(null);
 
   const software = useMemo(() => {
     const q = swQuery.trim().toLowerCase();
@@ -290,12 +292,21 @@ export default function AssetOverview({ A }: { A: any }) {
         </div>
 
         {/* KPIs */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 my-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mt-4 mb-3">
           {A.kpis.map((k: any, i: number) => {
             const col = k.tone === 'muted' ? '#97a19a' : TONE[k.tone] || '#1a2b24';
+            const openable = Array.isArray(k.breakdown) && k.breakdown.length > 0;
+            const isOpen = openKpi === i;
             return (
-              <div key={i} className="bg-white border border-[#e6e9e3] rounded-xl px-4 py-3.5">
-                <div className="text-[10px] font-bold tracking-[0.06em] uppercase text-[#8a948b]">{k.label}</div>
+              <div
+                key={i}
+                onClick={openable ? () => setOpenKpi(isOpen ? null : i) : undefined}
+                className={'bg-white rounded-xl px-4 py-3.5 border ' + (openable ? 'cursor-pointer ' + (isOpen ? 'border-[#1d4e89] ring-1 ring-[#1d4e89]' : 'border-[#e6e9e3] hover:border-[#bcd0e8]') : 'border-[#e6e9e3]')}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-[10px] font-bold tracking-[0.06em] uppercase text-[#8a948b]">{k.label}</div>
+                  {openable && <span className="text-[11px] font-bold text-[#1d4e89] leading-none">{isOpen ? '▴' : '▾'}</span>}
+                </div>
                 <div className={'text-[26px] font-extrabold leading-none mt-1.5 ' + MONO} style={{ color: k.tone ? col : '#1a2b24' }}>{k.value}</div>
                 {k.bar != null && <div className="h-[5px] bg-[#eef1ec] rounded-full mt-2.5 overflow-hidden"><div className="h-full" style={{ width: (k.bar || 2) + '%', background: k.tone === 'warn' ? '#d9a441' : '#0f9d78' }} /></div>}
                 <div className="text-[11.5px] mt-1.5" style={{ color: k.tone === 'ok' ? '#0f7a5c' : k.tone === 'warn' ? '#a86a12' : '#8a948b' }}>{k.sub}</div>
@@ -303,6 +314,43 @@ export default function AssetOverview({ A }: { A: any }) {
             );
           })}
         </div>
+
+        {/* Hygiene breakdown — revealed only when its KPI tile is clicked. */}
+        {openKpi != null && Array.isArray(A.kpis[openKpi]?.breakdown) && (() => {
+          const k = A.kpis[openKpi];
+          return (
+            <div className="rounded-2xl border-2 border-[#1d4e89] bg-[#f4f8fc] p-[18px] mb-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-[14px] font-bold text-[#12304f]">{k.breakdownTitle || 'Score breakdown'}</div>
+                  {k.breakdownNote && <p className="mt-0.5 text-[12px] text-[#5a6f82] max-w-3xl">{k.breakdownNote}</p>}
+                </div>
+                <button onClick={() => setOpenKpi(null)} className="text-[12px] font-semibold text-[#1d4e89] whitespace-nowrap">Close ✕</button>
+              </div>
+              <div className="mt-4 space-y-2.5">
+                {k.breakdown.map((r: any, i: number) => {
+                  const pct = Math.max(0, Math.min(100, r.pct ?? 0));
+                  const bar = r.tone === 'ok' ? '#1a7f5a' : r.tone === 'warn' ? '#b8860b' : '#b3261e';
+                  return (
+                    <div key={i} className="flex items-center gap-3">
+                      <div className="w-56 flex-none">
+                        <div className="flex items-center gap-1.5 text-[13px] font-semibold text-[#12304f]">
+                          {r.label}
+                          {r.weightPct != null && <span className="rounded bg-[#dfeaf6] px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-[#3a5470]">{r.weightPct}%</span>}
+                        </div>
+                        <div className="text-[11px] text-[#8aa0b6]">{r.value}</div>
+                      </div>
+                      <div className="h-2 flex-1 overflow-hidden rounded-full bg-[#e3ecf5]">
+                        <div className="h-full rounded-full" style={{ width: Math.max(2, pct) + '%', background: bar }} />
+                      </div>
+                      <div className={'w-12 flex-none text-right text-[12.5px] font-semibold tabular-nums text-[#12304f] ' + MONO}>{pct}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* PROVENANCE LEGEND */}
         <div className="flex flex-wrap gap-x-6 gap-y-2 mx-0.5 mb-3">

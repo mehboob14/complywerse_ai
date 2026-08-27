@@ -90,6 +90,9 @@ export function RegisterView({
   void canCreate;
   const list = rows ?? [];
   const [openApex, setOpenApex] = useState<Set<string>>(() => new Set());
+  // Two-category lens: internal hosts (Ubuntu/Windows/…) vs external /
+  // internet-facing assets (EASM). Shown only when both kinds are present.
+  const [cat, setCat] = useState<'all' | 'internal' | 'external'>('all');
 
   // Cluster EASM/internet-facing subdomains under their apex. Internal hosts
   // are never grouped (a db.corp.local must not nest under an unrelated apex).
@@ -387,23 +390,57 @@ export function RegisterView({
     });
   }
 
+  const extCount = list.filter(isExternalRow).length;
+  const intCount = list.length - extCount;
+  const bothKinds = extCount > 0 && intCount > 0;
+  const visibleRows = cat === 'all' || !bothKinds
+    ? orderedRows
+    : orderedRows.filter((a) => (cat === 'external') === isExternalRow(a));
+
+  const seg = (id: 'all' | 'internal' | 'external', label: string, n: number) => {
+    const active = cat === id;
+    return (
+      <button
+        key={id}
+        type="button"
+        onClick={() => setCat(id)}
+        style={{
+          fontSize: 12.5, fontWeight: 600, padding: '6px 12px', borderRadius: 8, whiteSpace: 'nowrap',
+          border: '1px solid ' + (active ? '#0d5c48' : 'var(--as-border)'),
+          background: active ? '#0d5c48' : '#fff', color: active ? '#fff' : 'var(--as-ink)', cursor: 'pointer',
+        }}
+      >
+        {label} <span style={{ opacity: 0.7, marginLeft: 4 }}>{n}</span>
+      </button>
+    );
+  };
+
   return (
-    <DataTable<ITAsset>
-      data={orderedRows}
-      columns={columns}
-      loading={loading}
-      selectable={bulkActions.length > 0}
-      bulkActions={bulkActions}
-      bulkBarVariant="dark"
-      exportable
-      exportFilename="asset-inventory"
-      searchable={false}
-      pageSize={50}
-      stickyHeader
-      onRowClick={(a) => onView(a)}
-      emptyMessage="No assets match the current filters."
-      emptyIcon={Server}
-    />
+    <div>
+      {bothKinds && (
+        <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
+          {seg('all', 'All assets', list.length)}
+          {seg('internal', 'Internal', intCount)}
+          {seg('external', 'External · internet-facing', extCount)}
+        </div>
+      )}
+      <DataTable<ITAsset>
+        data={visibleRows}
+        columns={columns}
+        loading={loading}
+        selectable={bulkActions.length > 0}
+        bulkActions={bulkActions}
+        bulkBarVariant="dark"
+        exportable
+        exportFilename="asset-inventory"
+        searchable={false}
+        pageSize={50}
+        stickyHeader
+        onRowClick={(a) => onView(a)}
+        emptyMessage="No assets match the current filters."
+        emptyIcon={Server}
+      />
+    </div>
   );
 }
 
