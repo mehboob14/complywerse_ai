@@ -19,6 +19,7 @@ import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
 import { PageLoader } from '@/components/ui';
 import { CreateIssueButton } from '@/components/issue-management/CreateIssueButton';
 import { RelatedIssuesPanel } from '@/components/issue-management/RelatedIssuesPanel';
+import QuantificationTab from './_components/QuantificationTab';
 import type { ReactNode } from 'react';
 
 interface RiskDetailData {
@@ -83,7 +84,7 @@ const IMPACT_LEVELS = [
   { value: 'low', label: 'Low', color: 'text-emerald-700' },
 ];
 
-type TabType = 'details' | 'treatment' | 'controls' | 'assets' | 'evidence' | 'governance';
+type TabType = 'details' | 'treatment' | 'controls' | 'assets' | 'evidence' | 'governance' | 'quantification';
 
 export default function RiskDetailPage() {
   const params = useParams();
@@ -387,6 +388,10 @@ export default function RiskDetailPage() {
     { id: 'assets', label: 'Assets', icon: Building2, count: risk.linked_assets?.length || 0 },
     { id: 'evidence', label: 'Evidence', icon: FileText, count: risk.linked_evidence?.length || 0 },
     { id: 'governance', label: 'Documents', icon: Target, count: (risk.linked_governance?.length || 0) + (linkedDocuments?.length || 0) },
+    // CRQM — FAIR quantification. The tab is always visible; inside, a
+    // material-flag gate keeps the register uncluttered (FAIR works on a
+    // small set of well-formed scenarios).
+    { id: 'quantification', label: 'Quantification', icon: BarChart3 },
   ];
 
   const riskReduction = calculateRiskReduction();
@@ -516,6 +521,13 @@ export default function RiskDetailPage() {
           <div className="cw-card rounded-xl p-4">
             {activeTab === 'details' && (
               <DetailsTab risk={risk} formatDate={formatDate} />
+            )}
+            {activeTab === 'quantification' && (
+              <QuantificationTab
+                riskId={riskId}
+                canEdit={canEdit}
+                linkedControls={risk.linked_controls || []}
+              />
             )}
             {activeTab === 'treatment' && (
               <TreatmentTab

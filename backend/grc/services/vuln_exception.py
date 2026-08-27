@@ -165,6 +165,18 @@ def approve_exception(
     vuln.is_exception = True
     vuln.exception_expiry = vuln.exception_expires_at
 
+    # Scanner write-back: an approved exception is a decision the scanner can
+    # represent (host-scoped plugin rule with expiry on Nessus). Session is
+    # recovered from the ORM object because this state machine is session-less.
+    try:
+        from sqlalchemy.orm import object_session
+        _db = object_session(vuln)
+        if _db is not None:
+            from ..modules.integrations.services.writeback_service import WritebackService
+            WritebackService.on_exception_change(_db, vuln, active=True, user_id=actor_id)
+    except Exception:
+        logger.exception("Writeback enqueue failed for approved exception on vuln %s (non-fatal)", vuln.id)
+
     return _summary(vuln)
 
 
@@ -225,6 +237,16 @@ def revoke_exception(
     vuln.is_exception = False
     vuln.exception_expiry = None
 
+    # Scanner write-back: revocation removes the scanner-side rule too.
+    try:
+        from sqlalchemy.orm import object_session
+        _db = object_session(vuln)
+        if _db is not None:
+            from ..modules.integrations.services.writeback_service import WritebackService
+            WritebackService.on_exception_change(_db, vuln, active=False, user_id=actor_id)
+    except Exception:
+        logger.exception("Writeback revert enqueue failed for revoked exception on vuln %s (non-fatal)", vuln.id)
+
     return _summary(vuln)
 
 
@@ -282,6 +304,14 @@ def expire_due_exceptions(
                 f"{vuln.exception_expires_at:%d %b %Y} — reopened automatically."
             )
         vuln.updated_at = cutoff
+        # Scanner write-back: the exception lapsed, so its scanner-side rule
+        # (if one was pushed) must lapse with it. Marks the outbox row
+        # revert_pending; the actual deletion is driven at next processing.
+        try:
+            from ..modules.integrations.services.writeback_service import WritebackService
+            WritebackService.on_exception_change(db, vuln, active=False)
+        except Exception:
+            logger.exception("Writeback revert enqueue failed for vuln %s (non-fatal)", vuln.id)
         count += 1
     try:
         db.commit()

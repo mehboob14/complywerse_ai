@@ -13,6 +13,7 @@
  */
 
 import { useMemo, useState } from 'react';
+import Link from 'next/link';
 import {
   Bug, AlertOctagon, Zap, Crosshair, Globe,
   Download, Upload, Plus, Search, Loader2, List, LayoutGrid,
@@ -104,6 +105,8 @@ export interface VulnsWorkspaceProps {
   vulns: Vulnerability[];           // full (unfiltered) list — for KPI fallbacks
   filteredVulns: Vulnerability[];   // already filtered + sorted by the page
   dashboard: VulnDashboard | undefined;
+  scoped?: boolean;   // a CTEM-scope filter is active — tally the band from the scoped rows
+
   /** Runtime domains (scanner plugin-family) for the "By domain" panel — fetched by
       the page (VulnsWorkspace is props-only) since the register's `vulns` is capped. */
   domains?: { family: string; total: number; worst_severity: string }[];
@@ -130,6 +133,10 @@ export interface VulnsWorkspaceProps {
   /** ATT&CK high-tactics filter: 'all' | 'high' */
   tacticsFilter: string;
   setTacticsFilter: (v: string) => void;
+  /** "By asset" filter: 'all' | '<assetId>'. Options supplied by the page. */
+  assetFilter?: string;
+  setAssetFilter?: (v: string) => void;
+  assetItems?: { value: string; label: string }[];
 
   // Permissions
   canCreate: boolean;
@@ -160,6 +167,8 @@ const STATUS_ITEMS = [
   { value: 'verified', label: 'Verified' },
   { value: 'closed', label: 'Closed' },
   { value: 'accepted', label: 'Risk Accepted' },
+  { value: 'false_positive', label: 'False Positive' },
+  { value: 'auto_closed_fixed', label: 'Closed — Verified by Re-scan' },
 ];
 const SEVERITY_ITEMS = [
   { value: 'critical', label: 'Critical' },
@@ -177,6 +186,7 @@ const TACTICS_ITEMS = [
 ];
 
 export function VulnsWorkspace({
+  scoped = false,
   vulns,
   filteredVulns,
   dashboard,
@@ -197,6 +207,9 @@ export function VulnsWorkspace({
   setExploitFilter,
   tacticsFilter,
   setTacticsFilter,
+  assetFilter = 'all',
+  setAssetFilter,
+  assetItems = [],
   canCreate,
   canEdit,
   canDelete,
@@ -221,22 +234,54 @@ export function VulnsWorkspace({
   // ─── Severity distribution (raw CVSS) for the donut ────────────────────────
   const chartData = useMemo(() => {
     const all = vulns ?? [];
-    // Prefer the server-side aggregate (whole register); fall back to a tally of the
-    // loaded page only until the dashboard payload arrives.
+    const tally = () => {
+      const m: Record<string, number> = {};
+      all.forEach((v) => { const k = (v.severity || 'unknown').toLowerCase(); m[k] = (m[k] || 0) + 1; });
+      return m;
+    };
     const hasDash = (m?: Record<string, number>) => !!m && Object.keys(m).length > 0;
-    const sev = hasDash(dashboard?.by_severity)
-      ? dashboard!.by_severity!
-      : (() => {
-          const m: Record<string, number> = {};
-          all.forEach((v) => { const k = (v.severity || 'unknown').toLowerCase(); m[k] = (m[k] || 0) + 1; });
-          return m;
-        })();
+    // When scoped, the tenant-wide `dashboard` aggregate disagrees with the scoped
+    // list (it showed "205 Total" under a "(201)" banner) — tally the scoped rows
+    // so the donut matches the tiles. Unscoped: prefer the server aggregate, fall
+    // back to a tally of the loaded page until the dashboard payload arrives.
+    const sev = scoped ? tally() : (hasDash(dashboard?.by_severity) ? dashboard!.by_severity! : tally());
     const severity: Slice[] = ['critical', 'high', 'medium', 'low', 'info'].filter((k) => sev[k]).map((k) => ({ name: k, value: sev[k], color: SEV_COLORS[k] }));
     return { severity };
-  }, [vulns, dashboard]);
+  }, [vulns, dashboard, scoped]);
 
   // ─── Aggregates for the KPI strip, the raw→contextual panel and threat band ──
   const agg = useMemo(() => {
+    // SCOPED (a CTEM scope filter is active): the tenant-wide `dashboard`
+    // aggregate would disagree with the scoped list — it showed "205 Total"
+    // over a "(201)" scoped banner on the same screen (caught by the UI
+    // walkthrough 18 Aug). When scoped, tally the band from the scoped rows so
+    // every tile describes the scope, not the tenant.
+    if (scoped) {
+      const rows = vulns ?? [];
+      const sevOf = (v: Vulnerability) => (v.severity || '').toLowerCase();
+      const cnt = (f: (v: Vulnerability) => boolean) => rows.filter(f).length;
+      // "Urgent / moderate / low" MUST use the SAME rule as the server dashboard's
+      // contextual_priority (backend routers/dashboard.py): composite_priority ×10
+      // banded at 55 / 25. The old client rule (kev || epss≥0.1 || critical)
+      // disagreed with the server, so a scoped SUBSET reported MORE urgent than the
+      // whole tenant (3 vs 1 — impossible; caught 23 Aug). Same bands now, so
+      // scoped ≤ unscoped always holds.
+      const cp = (v: Vulnerability) => (v.composite_priority ?? 0);   // 0–10 scale
+      const critical = cnt((v) => sevOf(v) === 'critical');
+      const high = cnt((v) => sevOf(v) === 'high');
+      const medium = cnt((v) => sevOf(v) === 'medium');
+      const kev = cnt((v) => !!v.kev_flag);
+      const exploit = cnt((v) => !!v.kev_flag || (v.epss_score ?? 0) > 0);
+      return {
+        total: rows.length, critical, high, medium,
+        urgent: cnt((v) => cp(v) >= 5.5),
+        moderate: cnt((v) => cp(v) >= 2.5 && cp(v) < 5.5),
+        low: cnt((v) => cp(v) < 2.5),
+        kev, exploit, noExploit: rows.length - exploit,
+        withCve: cnt((v) => !!v.cve_id), highTactics: 0, highTacticsWithExploit: 0,
+        highEpss: cnt((v) => (v.epss_score ?? 0) >= 0.1), internetExposed: 0, patch: 0,
+      };
+    }
     const d = dashboard ?? {};
     const sev = d.by_severity ?? {};
     const ctx = d.contextual_priority ?? {};
@@ -268,7 +313,7 @@ export function VulnsWorkspace({
       internetExposed: d.internet_exposed_count ?? 0,
       patch: d.patch_count ?? 0,
     };
-  }, [dashboard, vulns]);
+  }, [dashboard, vulns, scoped]);
 
   // ─── KPI strip — raw severity kept, exploitability/exposure added ──────────
   const STATS = [
@@ -391,6 +436,14 @@ export function VulnsWorkspace({
           onApply={(v) => setSeverityFilter(v[0] || 'all')}
           multiSelect={false} autoApply placeholder="All" size="sm" className="shrink-0"
         />
+        {setAssetFilter && assetItems.length > 0 && (
+          <MultiSelectDropdown
+            title="Asset" items={assetItems}
+            selectedValues={assetFilter !== 'all' ? [assetFilter] : []}
+            onApply={(v) => setAssetFilter(v[0] || 'all')}
+            multiSelect={false} autoApply placeholder="All" size="sm" className="shrink-0" forceSearch searchPlaceholder="Find asset…"
+          />
+        )}
         <MultiSelectDropdown
           title="Exploit" items={EXPLOIT_ITEMS}
           selectedValues={exploitFilter !== 'all' ? [exploitFilter] : []}
@@ -420,6 +473,16 @@ export function VulnsWorkspace({
         </label>
 
         <div className="ml-auto flex shrink-0 items-center gap-2">
+          {/* CTEM Phase 4 — choke points: fix-one-break-many ranking */}
+          <Link
+            href="/vulnerabilities/choke-points"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            title="Findings ranked by how many viable attack chains their fix severs"
+          >
+            <Crosshair strokeWidth={1.75} className="h-4 w-4" />
+            <span className="hidden md:inline">Choke points</span>
+          </Link>
+
           {/* Register-type selector (Standard ⇄ NCA) */}
           <select
             value={registerType}

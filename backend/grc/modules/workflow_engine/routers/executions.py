@@ -1,4 +1,5 @@
 from datetime import datetime
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -12,6 +13,8 @@ from ..schemas import (
     WorkflowInstanceResponse,
 )
 from ..services.runtime import get_runtime
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/executions", tags=["Workflow Engine Executions"])
 
@@ -276,6 +279,16 @@ def decide_approval_request(
     )
     db.commit()
 
+    # CTEM mobilise approvals close the instance here (plan → approved, never
+    # verified). Resume is then a no-op because the instance is already terminal.
+    try:
+        from ....services.ctem_mobilise import apply_approval_decision
+        apply_approval_decision(db, approval, current_user)
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception("ctem mobilise approval hook failed (non-fatal)")
+
     runtime = get_runtime()
     runtime.event_queue.publish({"kind": "resume_instance", "instance_id": approval.workflow_instance_id, "tenant_id": approval.tenant_id})
 
@@ -317,6 +330,10 @@ def get_approval_inbox(
                 "approver_role": a.approver_role,
                 "due_at": a.due_at,
                 "created_at": a.created_at,
+                "requested_at": a.created_at,
+                "request_metadata": a.request_metadata or {},
+                "workflow_name": (a.request_metadata or {}).get("title") or f"Approval #{a.id}",
+                "step_name": (a.request_metadata or {}).get("summary"),
             }
             for a in pending
         ],

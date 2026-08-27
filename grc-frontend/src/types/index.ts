@@ -422,6 +422,8 @@ export interface ITAsset {
   criticality_score?: number | null;
   last_seen_at?: string | null;
   last_seen_source?: string | null;
+  origin_source?: string | null;
+  dns_aliases?: string[] | null;
   // ── ITAM parity: hardware, procurement & identity extras ──────────────
   cpu_cores?: number | null;
   memory_gb?: number | null;
@@ -439,6 +441,9 @@ export interface ITAsset {
   environment?: string | null;
   // Computed by the list endpoint — count of linked vulnerability findings.
   open_findings?: number | null;
+  // Provenance. "unmanaged" = evidence-only (e.g. an external EASM finding you
+  // can't log into) — gates the Connect affordance in the register.
+  discovery_state?: string | null;
 }
 
 export interface AssetDetail extends ITAsset {

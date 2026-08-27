@@ -205,6 +205,53 @@ def recompute_composite_priority(vuln: Vulnerability, db: Session) -> Optional[f
     return priority
 
 
+def backfill_composite_priorities(db: Session, tenant_ids, *, limit: int = 1000) -> int:
+    """Score every finding that never got a ``composite_priority`` — from its already
+    stored fields, no external calls.
+
+    ``composite_priority`` (the register's Contextual column) is otherwise written only
+    when a finding is individually opened / edited / enriched. So a freshly imported or
+    seeded register shows "not scored" for every row nobody has clicked through, even
+    though all the inputs (CVSS / EPSS / KEV / asset criticality …) are already present.
+    This computes and persists the score for those NULL rows in one bounded pass, using
+    the same :func:`recompute_composite_priority` the single-row path uses (so the value
+    can never drift from it).
+
+    Bounded + best-effort by design: mirrors the once-per-load exception-expiry sweep in
+    ``list_vulnerabilities`` (no Celery worker runs in this deployment). Converges to a
+    no-op once every row is scored. Returns the number of rows newly scored.
+    """
+    try:
+        rows = (
+            db.query(Vulnerability)
+            .filter(
+                Vulnerability.tenant_id.in_(list(tenant_ids)),
+                Vulnerability.composite_priority.is_(None),
+            )
+            .limit(limit)
+            .all()
+        )
+    except Exception:
+        logger.exception("composite backfill: query failed")
+        return 0
+
+    scored = 0
+    for v in rows:
+        try:
+            if recompute_composite_priority(v, db) is not None:
+                scored += 1
+        except Exception:
+            logger.exception("composite backfill: recompute failed for vuln %s", getattr(v, "id", None))
+    if scored:
+        try:
+            db.commit()
+        except Exception:
+            logger.exception("composite backfill: commit failed")
+            db.rollback()
+            return 0
+    return scored
+
+
 def enrich_vulnerability(vuln: Vulnerability, db: Session) -> dict:
     """Pull NVD + EPSS + KEV for `vuln.cve_id`, write back, commit.
 
@@ -416,24 +463,9 @@ def enrich_vulnerability(vuln: Vulnerability, db: Session) -> dict:
         logger.exception("Failed to commit enrichment for vuln %s", vuln.id)
         summary["errors"].append("commit_failed")
 
-    # ---- CWE → framework-control auto-mapping ------------------------------
-    # Best-effort: the writer never raises into the caller. We pass
-    # delete_stale=False here so a casual re-enrichment doesn't remove
-    # auto rows mid-investigation; the explicit /controls/auto-map
-    # endpoint passes True for the "clean reset" semantics the UI
-    # button promises.
-    try:
-        from ..control_mapping import auto_map_compliance_controls
-        cm_summary = auto_map_compliance_controls(
-            vuln, db, delete_stale=False, user_id=None,
-        )
-        summary["compliance_mapping"] = cm_summary
-        for err in cm_summary.get("errors") or []:
-            summary["errors"].append(f"compliance_mapping_{err}")
-    except Exception:
-        logger.exception(
-            "compliance_mapping auto-map raised unexpectedly for vuln %s", vuln.id
-        )
-        summary["errors"].append("compliance_mapping_exception")
+    # NOTE: the CWE → framework-control rule crosswalk that used to run here was
+    # removed — it produced zero links on live data. Control mapping is now the AI
+    # mapper's job, run explicitly from the CTEM Validate stage
+    # (grc.services.ai_control_proposals.generate_proposals), not per-ingest.
 
     return summary

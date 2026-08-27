@@ -88,6 +88,80 @@ def agentless_port_state(obs: DiscoveryObservation, transport: str) -> str:
     return "open" if any(p in open_ports for p in wanted) else "closed"
 
 
+# ── Discovery→kind bridge ───────────────────────────────────────────────────
+# Map an OPEN SERVICE PORT seen by the sweep to the typed collector that can
+# inventory it with its OWN credential kind — so a discovered Postgres box can
+# be connected AS a database (databases/schemas/extensions), not merely as a
+# generic host. Cloud kinds (aws/azure/do) have no LAN port — wizard-only.
+SERVICE_SUGGESTIONS: tuple = (
+    # (port, credential kind, integration_type, label, default port)
+    (5432, "postgres", "postgres_sql", "PostgreSQL", 5432),
+    (3306, "mysql",    "mysql_sql",    "MySQL",      3306),
+    (1433, "mssql",    "mssql_sql",    "SQL Server", 1433),
+    (1521, "oracle",   "oracle_sql",   "Oracle DB",  1521),
+    (6443, "k8s",      "k8s_api",      "Kubernetes", 6443),
+    (636,  "ldap",     "ldap_query",   "LDAPS / AD", 636),
+    (389,  "ldap",     "ldap_query",   "LDAP / AD",  389),
+    (23,   "cisco",    "netdev_ssh",   "Network device (SSH)", 22),  # telnet gear → try SSH mgmt
+)
+
+def service_suggestions_for(open_ports) -> List[Dict[str, Any]]:
+    """Which typed connects make sense for this device, from sweep evidence.
+    De-duplicated by kind (LDAPS wins over LDAP when both answer)."""
+    out: List[Dict[str, Any]] = []
+    seen: set = set()
+    ports = set(open_ports or [])
+    for port, kind, itype, label, dport in SERVICE_SUGGESTIONS:
+        if port in ports and kind not in seen:
+            seen.add(kind)
+            out.append({"kind": kind, "integration_type": itype, "label": label,
+                        "port": port, "default_port": dport})
+    return out
+
+
+def typed_credentials_dict(kind: str, ip: str, port: int, username: str,
+                           password: str, database: Optional[str] = None) -> Dict[str, Any]:
+    """Build the creds dict a typed platform collector expects, keyed by its
+    prefix contract ({kind}_host/_port/_username/_password; cisco uses ssh_*).
+    Secrets stay in-memory only — never logged, never persisted here."""
+    if kind == "cisco":
+        return {"ssh_host": ip, "ssh_port": port or 22,
+                "ssh_username": username, "ssh_password": password,
+                "ssh_accept_unknown_hosts": "1"}
+    if kind == "ldap":
+        return {"ldap_host": ip, "ldap_port": port or 389,
+                "ldap_use_ssl": bool(port == 636),
+                "ldap_bind_dn": username, "ldap_username": username,
+                "ldap_password": password}
+    if kind == "k8s":
+        return {"k8s_server": f"https://{ip}:{port or 6443}",
+                "k8s_token": password}
+    d = {f"{kind}_host": ip, f"{kind}_port": port,
+         f"{kind}_username": username, f"{kind}_password": password}
+    if database:
+        d[f"{kind}_database"] = database
+    return d
+
+
+def live_port_open(ip: Optional[str], ports, timeout: float = 2.0) -> bool:
+    """Fresh TCP check of the login port RIGHT NOW — overrides the (possibly stale)
+    sweep result. This is what makes "try anyway" real: a box whose WinRM the sweep
+    marked closed but that has since been enabled will connect, and a box that's
+    truly off fails in ~2s (not a 65s WinRM handshake timeout), reported as
+    'unreachable' — a connection error, never a bad-password lockout.
+    """
+    import socket
+    if not ip:
+        return False
+    for p in ports:
+        try:
+            with socket.create_connection((str(ip), int(p)), timeout=timeout):
+                return True
+        except OSError:
+            continue
+    return False
+
+
 def classify_collect_error(exc: Exception) -> str:
     """'unreachable' | 'auth' | 'error' — what kind of failure this was.
 
@@ -130,6 +204,65 @@ def infer_internet_facing(ip: Optional[str]) -> Optional[bool]:
     if addr.is_loopback or addr.is_link_local or addr.is_private or addr.is_reserved:
         return False
     return bool(addr.is_global)
+
+
+def link_orphan_vulns_to_asset(db: Session, asset) -> int:
+    """Retro-link scanner findings that were imported BEFORE this asset existed.
+
+    A Nessus/Tenable finding carries the scanned host name. If the asset didn't
+    exist yet at import time (e.g. the scan landed before network discovery
+    created the host), the finding stayed unlinked. When the asset is later
+    created, link any finding whose ``affected_host`` matches this asset's
+    host_name / fqdn / ip — the SAME name-first/IP-last identity the scanner sync
+    uses — so the register and inventory converge instead of drifting. Best-effort:
+    never raises into the caller (a link failure must not fail asset creation)."""
+    import logging
+    from sqlalchemy import or_, func, String
+    from grc.models import Vulnerability, VulnerabilityAssetLink
+    try:
+        names = {n.lower() for n in (getattr(asset, "host_name", None), getattr(asset, "fqdn", None)) if n}
+        ip = getattr(asset, "ip_address", None)
+        conds = []
+        if names:
+            conds.append(func.lower(Vulnerability.affected_host).in_(names))
+        if ip:
+            conds.append(Vulnerability.affected_host == ip)
+        # Nessus findings carry the scanner's internal id in affected_host, so the two
+        # matches above never fire for them. They DO carry the real machine identity in
+        # host_identity ({host_name, ip}) — match on that too, so a finding imported
+        # BEFORE its machine was discovered links itself the moment the machine arrives.
+        # JSON column → compare as text (portable across PG/SQLite).
+        for n in names:
+            conds.append(func.lower(func.cast(Vulnerability.host_identity, String)).like(f'%"host_name": "{n}"%'))
+        if ip:
+            conds.append(func.cast(Vulnerability.host_identity, String).like(f'%"ip": "{ip}"%'))
+        if not conds:
+            return 0
+        vulns = db.query(Vulnerability).filter(
+            Vulnerability.tenant_id == asset.tenant_id,
+            Vulnerability.affected_host.isnot(None),
+            or_(*conds),
+        ).all()
+        linked = 0
+        for v in vulns:
+            if db.query(VulnerabilityAssetLink.id).filter(
+                VulnerabilityAssetLink.vulnerability_id == v.id,
+                VulnerabilityAssetLink.asset_id == asset.id,
+            ).first():
+                continue
+            db.add(VulnerabilityAssetLink(
+                vulnerability_id=v.id, asset_id=asset.id,
+                impact_on_asset="Detected by scanner on this host",
+                created_by=None, link_source="scanner", auto_linked=True,
+            ))
+            linked += 1
+        return linked
+    except Exception:
+        logging.getLogger(__name__).exception(
+            "link_orphan_vulns_to_asset failed (non-fatal) for asset %s",
+            getattr(asset, "id", "?"),
+        )
+        return 0
 
 
 def promote_observation(db: Session, obs: DiscoveryObservation,
@@ -177,6 +310,8 @@ def promote_observation(db: Session, obs: DiscoveryObservation,
     obs.resolution = "created"
     obs.resolved_asset_id = asset.id
     obs.resolution_note = f"credential '{profile.name}' succeeded — promoted to asset #{asset.id}"
+    # Retro-link any scanner findings imported before this host existed.
+    link_orphan_vulns_to_asset(db, asset)
     db.flush()
     return asset
 
@@ -236,15 +371,33 @@ def select_credential(db: Session, tenant_id: int, ip: Optional[str],
     return None
 
 
+def winrm_port_for(ip: Optional[str], explicit: Optional[int] = None) -> int:
+    """The WinRM port that is actually open on `ip`. An explicit port always
+    wins; otherwise prefer HTTPS 5986, fall back to HTTP 5985 when only that
+    answers (Enable-PSRemoting alone opens 5985 only). Hardwiring 5986 made
+    every such host report "service not reachable"."""
+    if explicit:
+        return int(explicit)
+    if live_port_open(ip, [5986]):
+        return 5986
+    if live_port_open(ip, [5985]):
+        return 5985
+    return 5986
+
+
+def winrm_endpoint_for(ip: str, port: int) -> str:
+    return f"{'http' if port == 5985 else 'https'}://{ip}:{port}/wsman"
+
+
 def _credentials_dict(profile: CredentialProfile, ip: str, transport: str) -> Dict[str, Any]:
     """Build the dict shape collect_windows / collect_linux expect from a stored
     profile. The secret is decrypted here and nowhere else."""
     secret = decrypt_secret(profile.secret_encrypted)
     if transport == "windows":
         user = f"{profile.domain}\\{profile.username}" if profile.domain else profile.username
-        port = profile.port or 5986
+        port = winrm_port_for(ip, profile.port)
         return {
-            "winrm_endpoint": f"https://{ip}:{port}/wsman",
+            "winrm_endpoint": winrm_endpoint_for(ip, port),
             "winrm_username": user,
             "winrm_password": secret,
             "winrm_transport": profile.winrm_transport or "ntlm",
@@ -282,7 +435,7 @@ def _ensure_integration_connection(db: Session, asset: ITAsset,
     itype = "windows_winrm" if transport == "windows" else "linux_ssh"
     if transport == "windows":
         user = f"{profile.domain}\\{profile.username}" if profile.domain else profile.username
-        port = profile.port or 5986
+        port = winrm_port_for(asset.ip_address, profile.port)
     else:
         user = profile.username
         port = profile.port or 22
@@ -314,6 +467,108 @@ def _ensure_integration_connection(db: Session, asset: ITAsset,
         conn.is_active = True
         conn.status = "connected"
     db.flush()
+
+
+def promote_observation_typed(db: Session, obs: DiscoveryObservation,
+                              kind: str, integration_type: str,
+                              creds: Dict[str, Any]) -> ITAsset:
+    """Discovery→kind bridge: authenticate to a discovered device AS its detected
+    service (Postgres / MySQL / MSSQL / Oracle / K8s / LDAP / network device) and,
+    ONLY on success, promote it to a typed asset carrying that kind's OWN deep
+    inventory (platform_kind + platform_properties). Same gate as the host path:
+    a failed connect deletes the speculative row — nothing half-born."""
+    from grc.modules.asset_discovery.services.resolver import _create_from
+    from grc.modules.asset_discovery.services.platform_collectors import collect_platform
+
+    asset = _create_from(db, obs.tenant_id, obs)
+    raw = obs.raw if isinstance(obs.raw, dict) else {}
+    scope = raw.get("scope")
+    if scope and not getattr(asset, "network_segment", None):
+        asset.network_segment = str(scope)[:100]
+    exposed = infer_internet_facing(asset.ip_address)
+    if exposed is not None:
+        asset.internet_facing = exposed
+        if hasattr(asset, "is_internet_facing"):
+            asset.is_internet_facing = exposed
+    db.flush()
+    try:
+        result = collect_platform(integration_type, creds)
+        if result is None:
+            raise RuntimeError(f"no collector registered for {integration_type}")
+        platform_kind, props = result
+        asset.platform_kind = platform_kind
+        # Merge over discovery metadata rather than clobbering unrelated keys.
+        merged = dict(asset.platform_properties or {})
+        merged.update(props or {})
+        asset.platform_properties = merged
+        asset.last_seen_at = datetime.utcnow()
+        asset.last_seen_source = "agentless"
+    except Exception:
+        db.delete(asset)
+        db.flush()
+        raise
+    obs.resolution = "created"
+    obs.resolved_asset_id = asset.id
+    obs.resolution_note = f"connected as {kind} — promoted to typed asset #{asset.id}"
+    link_orphan_vulns_to_asset(db, asset)
+    db.flush()
+    return asset
+
+
+def _fill_columns_from_deep(asset: ITAsset, sections: Dict[str, Any]) -> None:
+    """Derive the flat hardware columns from the RICH deep sections so the
+    summary card and the deep card are always in agreement — the deep collector
+    is the single source of truth. Fill-if-empty: a curated value (or one the
+    lighter probe already set) is never clobbered.
+
+    Section shapes (Windows Win32_* / Linux lscpu·dmidecode·lsblk), each wrapped
+    as {"status","data"}: cpu.data={logical_processors|cpus, model,…};
+    memory.data={total_gb,…}; storage.data={physical_disks:[{size_gb}],…} (Linux
+    storage_disks is a list); identity.data={manufacturer,model,serial,…}.
+    """
+    def _data(key: str) -> Any:
+        s = sections.get(key)
+        return s.get("data") if isinstance(s, dict) and s.get("status") == "discovered" else None
+
+    def _set(col: str, val: Any) -> None:
+        if val in (None, "", 0):
+            return
+        if getattr(asset, col, None) in (None, "", 0):
+            setattr(asset, col, val)
+
+    def _to_int(v: Any) -> Optional[int]:
+        try:
+            n = int(float(str(v).strip()))
+            return n if n > 0 else None
+        except (TypeError, ValueError):
+            return None
+
+    cpu = _data("cpu")
+    if isinstance(cpu, dict):
+        _set("cpu_cores", _to_int(cpu.get("logical_processors") or cpu.get("cpus")))
+
+    mem = _data("memory")
+    if isinstance(mem, dict):
+        _set("memory_gb", _to_int(mem.get("total_gb")))
+
+    # Storage: Windows → {physical_disks:[{size_gb}]}; Linux storage_disks → list.
+    total_disk = 0
+    for key in ("storage", "storage_disks"):
+        sd = _data(key)
+        disks = sd.get("physical_disks") if isinstance(sd, dict) else (sd if isinstance(sd, list) else None)
+        for d in (disks or []):
+            n = _to_int(isinstance(d, dict) and (d.get("size_gb") or d.get("SIZE")))
+            if n:
+                total_disk += n
+    if total_disk:
+        _set("storage_gb", total_disk)
+
+    idn = _data("identity")
+    if isinstance(idn, dict):
+        for col, key in (("manufacturer", "manufacturer"), ("model", "model"), ("serial_number", "serial")):
+            v = str(idn.get(key) or "").strip()
+            if v:
+                _set(col, v[:255])
 
 
 def collect_host(db: Session, asset: ITAsset, profile: CredentialProfile,
@@ -433,30 +688,38 @@ def collect_host(db: Session, asset: ITAsset, profile: CredentialProfile,
         logger.info("deep_collect: OS detection failed for %s", asset.ip_address, exc_info=True)
 
     # Deep, OS-appropriate structured inventory → asset.platform_properties.
-    # A SECOND read-only probe (per-DIMM / per-disk / per-NIC / services /
-    # security config) that lives alongside — never replacing — the flat columns
-    # and detected_software_json set above. Each section is status-wrapped
-    # (discovered / permission_denied / not_supported / …), so a block the
-    # credential can't read degrades to a tagged-empty section and the overall
-    # collect still succeeds. Best-effort: any failure here leaves the summary
-    # inventory we already wrote intact.
+    # This is the AUTHORITATIVE hardware/components collector: rich per-DIMM /
+    # per-disk / per-NIC / GPU / CPU-model / services / security detail, each
+    # section status-wrapped (discovered / permission_denied / not_supported /
+    # error …). The flat columns above are DERIVED from these sections
+    # (_fill_columns_from_deep) so the summary card and the deep card can never
+    # disagree — one source of truth. Best-effort for the OVERALL collect (a
+    # failure here never fails the promote), but NEVER silent: a hard failure is
+    # recorded as a visible `_collect` error section instead of vanishing.
+    deep_sections: Dict[str, Any] = {}
     try:
         from grc.modules.compliance_plugins.services.agentless_inventory import (
             collect_windows_deep, collect_linux_deep,
         )
-        sections = (collect_windows_deep(creds) if transport == "windows"
-                    else collect_linux_deep(creds))
-        if sections:
-            props = dict(asset.platform_properties or {})
-            props.update(sections)  # merge/refresh sections; keep unrelated keys
-            asset.platform_properties = props
-        # platform_kind stays "server" for an agentless OS host (the UI routes
-        # the detail card off it); set it if nothing else has.
-        if not getattr(asset, "platform_kind", None):
-            asset.platform_kind = "server"
-    except Exception:  # noqa: BLE001 — deep inventory must never fail the collect
+        deep_sections = (collect_windows_deep(creds) if transport == "windows"
+                         else collect_linux_deep(creds))
+    except Exception as exc:  # noqa: BLE001 — deep inventory must never fail the collect
         logger.info("deep_collect: deep platform inventory failed for %s",
                     asset.ip_address, exc_info=True)
+        from grc.modules.asset_discovery.services.platform_collectors import (
+            section as _sec, classify_error as _ce,
+        )
+        deep_sections = {"collection_status": _sec(_ce(exc), None, note=f"{type(exc).__name__}: {exc}"[:300])}
+
+    if deep_sections:
+        props = dict(asset.platform_properties or {})
+        props.update(deep_sections)  # merge/refresh sections; keep unrelated keys
+        asset.platform_properties = props
+        _fill_columns_from_deep(asset, deep_sections)
+    # platform_kind stays "server" for an agentless OS host (the UI routes the
+    # detail card off it); set it if nothing else has.
+    if not getattr(asset, "platform_kind", None):
+        asset.platform_kind = "server"
 
     asset.last_seen_at = datetime.utcnow()
     asset.last_seen_source = "agentless"

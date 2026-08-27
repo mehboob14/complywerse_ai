@@ -33,8 +33,11 @@ from ._46_ai_budget import *  # noqa: F401,F403 — carries Base + the SQLAlchem
 # need a schema migration — the same choice the rest of the codebase makes with
 # asset_type, lifecycle_state, etc.
 
-DISCOVERY_METHODS = ("network", "active_directory")
-SCOPE_KINDS = ("cidr", "ip_range", "ad_ou")
+DISCOVERY_METHODS = ("network", "active_directory", "external")
+# 'domain' is the EASM seed: an outside-in scan starts from a name you own
+# (example.com) and finds the internet-facing assets under it — the inverse of
+# cidr/ip_range/ad_ou, which all require you to already know your address space.
+SCOPE_KINDS = ("cidr", "ip_range", "ad_ou", "domain")
 RUN_TRIGGERS = ("manual", "scheduled")
 RUN_STATUSES = ("queued", "running", "succeeded", "failed", "cancelled")
 JOB_STATUSES = ("queued", "leased", "running", "succeeded", "failed")
@@ -73,6 +76,11 @@ class DiscoveryCampaign(Base):
     #   blackout_windows: [{ "days": [0-6], "start": "HH:MM", "end": "HH:MM" }]
     blackout_windows = Column(JSON, nullable=True)
     rate_limit_hosts_per_min = Column(Integer, nullable=True)
+    # Per-campaign SNMP read communities (comma-separated), sourced like any
+    # discovery credential. Fingerprinting tries these in order; if blank it
+    # falls back to the DISCOVERY_SNMP_COMMUNITIES env default. This is what
+    # removes the last hard-coded-'public' assumption for a real deployment.
+    snmp_communities = Column(String(500), nullable=True)
 
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     created_by_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
@@ -285,8 +293,14 @@ class AssetExternalIdentity(Base):
 
 
 # Credential kinds a profile can hold. winrm/ssh drive authenticated host
-# inventory (deep-collect); ldap drives AD enumeration.
-CREDENTIAL_KINDS = ("winrm", "ssh", "ldap")
+# inventory (deep-collect); the rest are reusable logins for the other connect
+# platforms so EVERY type can be saved-and-reused, not just hosts.
+CREDENTIAL_KINDS = (
+    "winrm", "ssh", "ldap",
+    "postgres", "mysql", "mssql", "oracle",   # databases
+    "aws", "azure", "digitalocean",           # cloud
+    "k8s", "cisco",                           # cluster / network
+)
 SECRET_KINDS = ("password", "ssh_key")
 
 
@@ -325,6 +339,16 @@ class CredentialProfile(Base):
     # wins when several profiles apply to the same host.
     applies_to_cidrs = Column(JSON, nullable=True)
     priority = Column(Integer, nullable=False, default=100)
+
+    # Full connect integration_type (postgres_sql, aws_readonly, digitalocean_api,
+    # …) for a NON-host saved login — the authoritative type that drives the UI
+    # category and lets the credential be reused for that exact platform. Host
+    # creds (winrm/ssh) leave this NULL and rely on `kind`.
+    integration_type = Column(String(50), nullable=True, index=True)
+    # Type-specific encrypted credential fields (DB name, cloud token, kubeconfig,
+    # …) — same shape as IntegrationConnection.credentials_extra_json — so a saved
+    # login can rebuild the full creds dict for ANY platform, not just hosts.
+    extra_json = Column(JSON, nullable=True)
 
     is_active = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)

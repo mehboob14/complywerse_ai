@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import QuantificationCard from './_components/QuantificationCard';
 import {
   Layers,
   Users,
@@ -271,6 +272,10 @@ export default function RiskRegisterDashboardPage() {
         <Kpi label="Closed" value={totals.closed} accent="bg-slate-100 text-slate-700" />
         <Kpi label="Assignees" value={totals.assignees.size} accent="bg-primary-50 text-primary-700" />
       </div>
+
+      {/* ============== Quantified cyber risk (CRQM) — renders only when
+          loss models exist, so non-adopting tenants see no change ========= */}
+      <QuantificationCard />
 
       {/* ============== Severity overview ============== */}
       <div className="grid gap-4 lg:grid-cols-2">

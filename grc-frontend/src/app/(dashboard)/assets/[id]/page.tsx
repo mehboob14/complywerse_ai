@@ -43,12 +43,22 @@ import { RelatedIssuesPanel } from '@/components/issue-management/RelatedIssuesP
 // rendered above the existing ComplianceTab content.
 import HostApplicationsPanel from './_host-applications-panel';
 import { PlatformDetails, PLATFORM_META } from './_platform-detail-card';
-import {
-  SoftwarePanel, RelationshipsPanel,
-  LifecyclePanel, ActivityPanel,
-} from './_components/AssetWorkTabs';
-import RiskControlsTab from './_components/RiskControlsTab';
-import { NotesPanel, AlertsPanel, HistoryPanel } from '@/components/shared/EntityExtras';
+import AssetOverviewDesign from './_overview-design';
+import { buildOverviewData } from './_overview-map';
+import { ActivityPanel } from './_components/AssetWorkTabs';
+// Redesigned tab panels (Overview design language). Each is a drop-in that
+// absorbs the former inline tab renderer with the same prop contract.
+import SoftwarePanel from './_tabs/SoftwarePanel';
+import RelationshipsPanel from './_tabs/RelationshipsPanel';
+import LifecyclePanel from './_tabs/LifecyclePanel';
+import NotesPanel from './_tabs/NotesPanel';
+import HistoryPanel from './_tabs/HistoryPanel';
+import RisksPanel from './_tabs/RisksPanel';
+import VulnerabilitiesPanel from './_tabs/VulnerabilitiesPanel';
+import AttachmentsPanel from './_tabs/AttachmentsPanel';
+import CompliancePanel from './_tabs/CompliancePanel';
+import TrajectoryPanel from './_tabs/TrajectoryPanel';
+import CriticalityPanel from './_tabs/CriticalityPanel';
 import { RoomScanProvider, useRoomScan } from './_room-scan-context';
 import { GuideMarker, useGuide } from '@/components/guide';
 import {
@@ -340,6 +350,7 @@ export default function AssetDetailPage() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showLifecycleModal, setShowLifecycleModal] = useState(false);
   const [setupEntry, setSetupEntry] = useState<SoftwareSetupEntry | null>(null);
+  const [collectSvcOpen, setCollectSvcOpen] = useState(false);
 
   const { data: asset, isLoading, error } = useQuery<AssetDetailData>({
     queryKey: ['asset-detail', assetId],
@@ -347,6 +358,16 @@ export default function AssetDetailPage() {
       const response = await assetsApi.getDetail(assetId);
       return response.data;
     },
+  });
+
+  // Layer 2 (hook order: must stay ABOVE the early returns below —
+  // React requires the same hook sequence every render): AI-planned layout (headings + card grouping per field key; values
+  // never leave the server). null → the generic Layer-1 cards render unchanged.
+  const { data: layoutPlan } = useQuery({
+    queryKey: ['asset-layout-plan', assetId],
+    queryFn: async () => (await assetsApi.getLayoutPlan(assetId)).data?.plan ?? null,
+    enabled: !!asset,
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: coverage } = useQuery({
@@ -411,6 +432,17 @@ export default function AssetDetailPage() {
       return response.data as Array<{ id: number; vuln_id?: string; title?: string; severity?: string; status?: string }>;
     },
     enabled: activeTab === 'vulnerabilities',
+  });
+
+  // Enrich a DB app IN PLACE with its database inventory (a Postgres login,
+  // applied to this same asset — no re-discovery).
+  const collectSvc = useMutation({
+    mutationFn: (data: any) => assetsApi.collectAssetService(assetId, data),
+    onSuccess: (res: any) => {
+      if (res.data?.collected) { setCollectSvcOpen(false); queryClient.invalidateQueries({ queryKey: ['asset-detail', assetId] }); }
+      // Only ask for a login when there's genuinely no saved connection to reuse.
+      else if (res.data?.needs_login) { setCollectSvcOpen(true); }
+    },
   });
 
   const assessRiskMutation = useMutation({
@@ -664,7 +696,15 @@ export default function AssetDetailPage() {
   const isApplication = asset?.asset_role === 'application' || _type === 'application';
   // Hosts (Windows/Linux/servers/endpoints) are the things that report an
   // installed-software inventory and an AV/EDR posture.
-  const showsSoftware = !isNetworkDevice && !isCloud;
+  // Outside-only host (EASM-born, never logged into): an agentless software /
+  // AV-EDR inventory can never exist for it, so the Software tab and posture
+  // panel would only ever show a misleading "None detected" wall. Same predicate
+  // as _overview-map's isOutsideOnly — survives scanner syncs bumping
+  // last_seen_source, flips off the day the host gets a real login.
+  const outsideOnly =
+    asset?.last_seen_source === 'external' ||
+    (asset?.origin_source === 'easm' && (asset?.discovery_state ?? 'unmanaged') === 'unmanaged');
+  const showsSoftware = !isNetworkDevice && !isCloud && !outsideOnly;
   const software = Array.isArray(asset?.detected_software_json) ? asset!.detected_software_json! : [];
   const posture = asset?.security_posture || null;
 
@@ -685,7 +725,9 @@ export default function AssetDetailPage() {
     { id: 'overview', label: 'Overview', icon: Boxes },
     { id: 'risks', label: 'Risk & Controls', icon: Shield },
     { id: 'vulnerabilities', label: 'Vulnerabilities', icon: Bug },
-    { id: 'software', label: 'Software', icon: Package },
+    // No Software tab for hosts we can only see from outside — the inventory
+    // it would show cannot exist without a login.
+    ...(showsSoftware ? [{ id: 'software' as TabType, label: 'Software', icon: Package }] : []),
     { id: 'relationships', label: 'Relationships', icon: Network },
     { id: 'lifecycle', label: 'Lifecycle', icon: GitBranch },
     { id: 'evidence', label: 'Attachments', icon: FileCheck },
@@ -698,9 +740,63 @@ export default function AssetDetailPage() {
     { id: 'criticality', label: 'Criticality Assessments', icon: ShieldCheck },
   ];
 
+  // Live data mapped into the shape the delivered AssetOverview design consumes.
+  // The design component itself is used verbatim — all adaptation happens here.
+  // A DB app (Postgres/MySQL/… promoted from software) with no deep inventory yet
+  // can be enriched in place with a DB login.
+  const DB_KINDS: Record<string, string> = { postgresql: 'postgres', postgres: 'postgres', mysql: 'mysql', mariadb: 'mysql', mssql: 'mssql', 'sql-server': 'mssql', oracle: 'oracle' };
+  const dbAppKind: string | null = (() => {
+    if (asset?.asset_type !== 'application') return null;
+    const key = (asset?.os_normalized || asset?.name || '').toLowerCase();
+    const m = Object.keys(DB_KINDS).find((k) => key.includes(k));
+    const hasDeep = asset?.platform_properties && Object.keys(asset.platform_properties).length > 0;
+    return m && !hasDeep ? DB_KINDS[m] : null;
+  })();
+
+  const overviewData = buildOverviewData(asset, {
+    plan: layoutPlan,
+    software,
+    posture,
+    kpis: {
+      openFindings: asset?.linked_vulnerabilities?.length ?? 0,
+      controlCoverage: asset?.coverage_percentage ?? 0,
+      blastRadius: 0,
+    },
+    tabs: sections.map((s) => ({
+      label: s.label,
+      active: activeTab === s.id,
+      count: s.id === 'software' ? software.length : undefined,
+      onClick: () => setActiveTab(s.id),
+    })),
+    actions: [
+      ...(dbAppKind ? [{ label: collectSvc.isPending ? 'Collecting…' : 'Collect database details', primary: true, onClick: () => setCollectSvcOpen(true) }] : []),
+      { label: 'Assess risk', primary: !dbAppKind, onClick: () => setActiveTab('criticality') },
+      ...(canEdit ? [{ label: 'Edit', onClick: () => setShowEditModal(true) }] : []),
+      ...(canEdit ? [{ label: 'Lifecycle', onClick: () => setShowLifecycleModal(true) }] : []),
+      { label: 'CIS scans', onClick: () => router.push(`/compliance-plugins/asset/${assetId}`) },
+      { label: 'Risk posture', onClick: () => router.push(`/risk-posture/asset/${assetId}`) },
+      ...(canDelete ? [{ label: 'Delete', danger: true, onClick: () => setShowDeleteConfirm(true) }] : []),
+    ],
+    onEdit: canEdit ? () => setShowEditModal(true) : undefined,
+    onSoftwareClick: (s: any) => {
+      const enr = (softwareForCount?.inventory ?? []).find((x: any) => x.software_key === s.software_key) || {};
+      setSetupEntry({
+        software_key: s.software_key,
+        name: s.name || s.software_key,
+        version: s.version,
+        publisher: s.publisher ?? s.vendor,
+        benchmark_available: !!(enr.benchmark_available ?? s.benchmark_available),
+        benchmark_name: enr.benchmark_name ?? s.benchmark_name,
+        rule_count: enr.rule_count,
+        promoted_asset_id: s.promoted_asset_id ?? null,
+      });
+    },
+  });
+
   return (
     <div className="asset-suite assets-light risk-workspace -m-4 space-y-4 lg:-m-5">
       {/* Header card — identity + action row (design handoff, warm theme) */}
+      {activeTab !== 'overview' && (
       <div className="as-card" style={{ padding: '20px 24px' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
           <Link href="/assets" title="Back to inventory" style={{ width: 34, height: 34, borderRadius: 8, background: 'var(--as-subtle)', border: '1px solid var(--as-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none', marginTop: 3, color: 'var(--as-primary)' }}>
@@ -735,15 +831,17 @@ export default function AssetDetailPage() {
           {canDelete && <button onClick={() => setShowDeleteConfirm(true)} className="as-btn as-btn-danger" style={{ padding: '8px 15px', fontSize: 12.5 }}>Delete</button>}
         </div>
       </div>
+      )}
 
       {/* D1 split: pinned left context column + scrolling right work column.
           Every tab component is reused unchanged — only its placement changed. */}
-      <div className="mx-4 space-y-4 pb-4 sm:mx-6">
+      <div className={activeTab === 'overview' ? 'space-y-4 pb-4' : 'mx-4 space-y-4 pb-4 sm:mx-6'}>
         {/* Full-width work column — actions + status pills moved into the header. */}
         <div className="space-y-4">
           {/* Lightweight in-column section switcher */}
           {/* Wraps onto as many rows as it needs — with 15 tabs a horizontal
               scroller hid half of them behind a scrollbar nobody noticed. */}
+            {activeTab !== 'overview' && (
           <div style={{ borderBottom: '1px solid var(--as-border)' }}>
             <nav className="flex" style={{ gap: 4, flexWrap: 'wrap', rowGap: 0 }}>
               {sections.map((s) => {
@@ -778,391 +876,19 @@ export default function AssetDetailPage() {
                 );
               })}
             </nav>
-          </div>
+            </div>
+            )}
 
           <div className={activeTab === 'overview' ? '' : 'cw-card rounded-xl p-4 sm:p-5'}>
             {activeTab === 'overview' && (
-              <div className="space-y-4">
-                {/* Stat strip — single card, 5 cells with hairline dividers */}
-                <div className="as-card as-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', overflow: 'hidden' }}>
-                  {/* Risk Score is the SAME composite the Risk & Controls tab
-                      shows — one asset, one risk number. */}
-                  <OverviewStat
-                    label="Risk Score"
-                    value={assetPosture?.score != null ? Math.round(assetPosture.score) : '—'}
-                    accent={(assetPosture?.score ?? 0) > 70}
-                    guideId="asset.riskScore"
-                    guideN={2}
-                  />
-                  <OverviewStat
-                    label="Open Findings"
-                    // Counted every linked finding regardless of status, so a
-                    // Verified or Risk-Accepted one still reported as open and
-                    // the asset kept showing risk that had already been dealt
-                    // with — while the register's own count dropped correctly.
-                    value={(asset.linked_vulnerabilities || []).filter(isOpenVuln).length}
-                    guideId="asset.openFindings"
-                    guideN={3}
-                  />
-                  <OverviewStat
-                    label="Blast Radius"
-                    value={(() => {
-                      const ids = new Set<number>();
-                      (blastRels ?? []).forEach((r: any) => ids.add(r.other_asset_id));
-                      (ipPeers?.group ?? []).forEach((p: any) => { if (!p.is_self) ids.add(p.id); });
-                      return ids.size;
-                    })()}
-                    guideId="asset.blastRadius"
-                    guideN={4}
-                  />
-                  <OverviewStat
-                    label="Control Coverage"
-                    value={`${Math.round(coverage?.coverage_percentage ?? asset.coverage_percentage ?? 0)}%`}
-                    guideId="asset.controlCoverage"
-                    guideN={5}
-                  />
-                  <OverviewStat
-                    label="Refresh Due"
-                    value={(() => {
-                      // EOL if we have it, else the 4-year refresh cycle from purchase.
-                      const eol = asset.eol_date ? new Date(asset.eol_date) : null;
-                      const pur = asset.purchase_date ? new Date(asset.purchase_date) : null;
-                      const due = eol ?? (pur ? new Date(pur.getFullYear() + 4, pur.getMonth(), pur.getDate()) : null);
-                      return due ? due.toLocaleDateString() : '—';
-                    })()}
-                    guideId="asset.lifecycleEol"
-                    guideN={6}
-                  />
-                </div>
-
-                {/* Grouped detail cards — 2-column layout (1.6fr / 1fr) with a
-                    full-width Procurement row, matching the handoff. Equal-height
-                    columns via items-start so the last card never orphans. */}
-                <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.6fr_1fr]">
-                  {/* Left column */}
-                  <div className="flex flex-col gap-4">
-                    <OverviewCard title="Identity & Ownership" icon={User}
-                      onEdit={canEdit ? () => setShowEditModal(true) : undefined}
-                      headerRight={
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span style={{ width: 90, height: 6, borderRadius: 3, background: 'var(--as-track)', overflow: 'hidden' }}>
-                            <span style={{ display: 'block', height: '100%', width: `${idPct}%`, background: idPctColor, borderRadius: 3 }} />
-                          </span>
-                          <span className="as-mono" style={{ fontSize: 11, fontWeight: 600, color: idPctColor }}>{idPct}%</span>
-                          <span style={{ fontSize: 10.5, color: 'var(--as-faint)' }}>complete</span>
-                          <GuideMarker id="asset.profileCompleteness" n={7} />
-                        </span>
-                      }>
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-4 sm:grid-cols-3">
-                        <DField label="Category" value={ASSET_TYPE_LABELS[asset.asset_type] || asset.asset_type} />
-                        <DField label="Owner" value={asset.primary_owner_name || asset.owner_name} />
-                        <DField label="Custodian" value={asset.custodian} />
-                        <DField label="Department" value={asset.department} />
-                        <DField label="Environment" value={asset.environment ? <span className="capitalize">{asset.environment}</span> : null} />
-                        <DField label="Assigned User" value={asset.assigned_user} />
-                        <DField label="Location" value={asset.location} />
-                        <DField label="Criticality" value={<span className="capitalize">{asset.criticality}</span>} />
-                        {/* Only show a lifecycle stage somebody actually set. Falling back
-                            to `status` printed "Active" for every new asset — that is the
-                            column default, not a lifecycle decision, and it gave the
-                            impression the asset had been reviewed and placed in service. */}
-                        <DField label="Lifecycle"
-                          value={asset.lifecycle_state
-                            ? <span className="capitalize">{asset.lifecycle_state}</span>
-                            : null} />
-                        <DField label="Data Classification" value={asset.data_classification ? <span className="capitalize">{asset.data_classification}</span> : null} />
-                        <DField label="Business Function" value={asset.business_function} />
-                        <DField label="Owning Team" value={asset.owning_team_name || asset.owning_team} />
-                        <DField label="Secondary Owner" value={asset.secondary_owner_name || (asset.secondary_owner_id ? `User #${asset.secondary_owner_id}` : null)} />
-                        <DField label="Business Owner" value={asset.business_owner_name || (asset.business_owner_id ? `User #${asset.business_owner_id}` : null)} />
-                        <DField label="Escalation Contact" value={asset.escalation_contact_name || (asset.escalation_contact_id ? `User #${asset.escalation_contact_id}` : null)} />
-                      </div>
-                    </OverviewCard>
-
-                    <OverviewCard title="Network & Platform" icon={Network} source="Auto-discovered · scan" className="flex-1" onEdit={canEdit ? () => setShowEditModal(true) : undefined}>
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-4 sm:grid-cols-3">
-                        <DField label="IP Address" value={asset.ip_address} mono />
-                        <DField label="Hostname" value={asset.host_name} mono />
-                        <DField label="FQDN" value={asset.fqdn} mono />
-                        <DField label="MAC Address" value={asset.primary_mac} mono />
-                        {!isApplication && <DField label="Operating System" value={asset.os_version || asset.os_family} />}
-                        {/* Network gear reports no OEM/serial over SSH — hide the
-                            fields instead of showing three permanent dashes. */}
-                        {/* Chassis facts belong to the physical machine only. */}
-                        {!isNetworkDevice && !isApplication && <DField label="Manufacturer" value={asset.manufacturer} />}
-                        {!isNetworkDevice && !isApplication && <DField label="Model" value={asset.model} />}
-                        {!isNetworkDevice && !isApplication && <DField label="Serial Number" value={asset.serial_number} mono />}
-                        {isApplication && (
-                          <DField label="Runs On" value={
-                            asset.parent_asset_id
-                              ? <a href={`/assets/${asset.parent_asset_id}`} className="text-primary-700 underline font-medium">
-                                  {asset.host_name || `Asset #${asset.parent_asset_id}`}
-                                </a>
-                              : asset.host_name} />
-                        )}
-                        {isApplication && <DField label="Version" value={asset.os_version} />}
-                        {/* The application's OWN properties, collected by the
-                            software profiler over the host's connection. Keys
-                            differ per product (PostgreSQL has a data directory,
-                            IIS has app pools), so render whatever came back
-                            rather than a fixed field list. */}
-                        {isApplication && Object.entries(asset.app_attributes_json || {})
-                          .filter(([k]) => !k.startsWith('_'))
-                          .map(([k, v]) => (
-                            <DField
-                              key={k}
-                              label={k.replace(/_/g, ' ').replace(/\w/g, (c) => c.toUpperCase())}
-                              value={String(v)}
-                              mono={/port|path|account|directory|file/i.test(k)}
-                              // A service command line is far longer than a grid
-                              // cell; give it the full row so it wraps cleanly.
-                              wide={/path|directory|kubeconfig|command/i.test(k) || String(v).length > 60}
-                            />
-                          ))}
-                        <div className="relative">
-                          <DField label="Internet Exposed" value={asset.internet_facing ? 'Yes' : 'No'} alert={!!asset.internet_facing} />
-                          <GuideMarker id="asset.internetExposed" n={8} className="absolute -top-1 right-0" />
-                        </div>
-                        <DField label="Network Segment" value={asset.network_segment} />
-                        {isCloud && <DField label="Cloud Resource ID" value={asset.cloud_resource_id} mono />}
-                      </div>
-                    </OverviewCard>
-                  </div>
-
-                  {/* Right column — CIA ratings intentionally NOT shown here.
-                      They live (editable, with AI-suggest) only on the Risk &
-                      Controls tab, so the value appears in exactly one place.
-                      Criticality is still visible in Identity & Ownership. */}
-                  <div className="flex flex-col gap-4">
-                    {asset.platform_kind && asset.platform_kind !== 'server' ? (
-                    <OverviewCard title={PLATFORM_META[asset.platform_kind]?.title || 'Platform Details'} icon={PLATFORM_META[asset.platform_kind]?.icon || Cpu} source="Auto-collected · agentless scan" onEdit={canEdit ? () => setShowEditModal(true) : undefined}>
-                      <PlatformDetails kind={asset.platform_kind} props={asset.platform_properties} />
-                    </OverviewCard>
-                    ) : (
-                    <OverviewCard title="Hardware & Telemetry" icon={Cpu} source="Telemetry: agent · Specs: manual" onEdit={canEdit ? () => setShowEditModal(true) : undefined}>
-                      {/* An application has no chassis of its own — those specs
-                          belong to the host it runs on, one click away under
-                          "Runs On". Showing three permanently-empty tiles here
-                          implied the data was missing rather than inapplicable. */}
-                      {isApplication ? (
-                        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                          Hardware belongs to the host{' '}
-                          {asset.parent_asset_id ? (
-                            <a href={`/assets/${asset.parent_asset_id}`} className="text-primary-700 underline font-medium">
-                              {asset.host_name || `#${asset.parent_asset_id}`}
-                            </a>
-                          ) : (asset.host_name || 'this application runs on')}
-                          {' '}— an application has no CPU, RAM or disk of its own.
-                        </div>
-                      ) : (
-                        <div className="grid grid-cols-3 gap-2">
-                          <SpecTile label="vCPU" value={asset.cpu_cores} />
-                          <SpecTile label="GB RAM" value={asset.memory_gb} />
-                          <SpecTile label="GB Disk" value={asset.storage_gb} />
-                        </div>
-                      )}
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-4">
-                        <DField label="Agent Version" value={asset.agent_version} mono />
-                        <DField label="Last Seen" value={asset.last_seen_at ? formatDate(asset.last_seen_at) : null} />
-                        <DField label="Scan Source" value={asset.last_seen_source} />
-                        <DField label="First Seen" value={asset.first_seen_at ? formatDate(asset.first_seen_at) : (asset.created_at ? formatDate(asset.created_at) : null)} />
-                        {/* OS family / edition / build describe the operating system of a
-                            MACHINE. An application inherits none of them — showing
-                            "OS Family: Windows" with "OS Edition: —" on a PostgreSQL
-                            asset mixes the host's identity into the app's. */}
-                        {!isApplication && <DField label="OS Family" value={asset.os_family ? <span className="capitalize">{asset.os_family}</span> : null} />}
-                        {!isApplication && <DField label="OS Edition" value={asset.os_edition} />}
-                        {!isApplication && <DField label="OS Build" value={asset.os_build} mono />}
-                        <DField label={isApplication ? 'Benchmark Key' : 'Normalised OS Key'} value={asset.os_normalized} mono />
-                        <DField label="Record Source" value={asset.source_system ? <span className="capitalize">{asset.source_system}</span> : 'manual'} />
-                      </div>
-                    </OverviewCard>
-                    )}
-
-                    {/* Deep host inventory for servers — the agentless probe writes
-                        per-DIMM / per-disk / per-NIC / services / security into
-                        platform_properties (platform_kind="server"). Rendered by the
-                        same dynamic, contract-driven card the typed platforms use, so
-                        it stays in sync with whatever sections the backend collects. */}
-                    {asset.platform_kind === 'server' && asset.platform_properties
-                      && typeof asset.platform_properties === 'object'
-                      && Object.keys(asset.platform_properties).length > 0 && (
-                      <OverviewCard title="Deep Inventory" icon={Layers} source="Auto-collected · agentless scan">
-                        <PlatformDetails kind="server" props={asset.platform_properties} />
-                      </OverviewCard>
-                    )}
-
-
-                    {/* Procurement lives in the right column (not a full-width row
-                        below) so it balances the taller Identity + Network stack on
-                        the left instead of leaving this card half-empty. flex-1 lets
-                        it absorb any remaining height so the columns end level. */}
-                    <OverviewCard title="Procurement & Cost" icon={DollarSign} source="Manual · finance/CMDB" className="flex-1" bodyFill onEdit={canEdit ? () => setShowEditModal(true) : undefined}>
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-4">
-                        <DField label="Purchase Cost" value={asset.purchase_cost != null ? formatCurrency(asset.purchase_cost) : null} />
-                        <DField label="Purchase Date" value={asset.purchase_date ? formatDate(asset.purchase_date) : null} />
-                        <DField label="Warranty Expiry" value={asset.warranty_expiry ? formatDate(asset.warranty_expiry) : null} />
-                        <DField label="End of Life" value={asset.eol_date ? formatDate(asset.eol_date) : null} />
-                        <DField label="Vendor" value={asset.vendor} />
-                        <DField label="Valuation" value={asset.valuation != null ? formatCurrency(asset.valuation) : null} />
-                      </div>
-                    </OverviewCard>
-                  </div>
-                </div>
-
-                {/* Software & posture — FULL WIDTH, below the two-column grid.
-                    A 28-row software table inside the right column stretched it
-                    far past the left one and left a large blank gap beside it.
-                    It is also the widest content on the page (name + version +
-                    publisher + actions), so it belongs on a full row. Only
-                    rendered for things that run software — a switch or an S3
-                    bucket has no installed-software list. */}
-                {showsSoftware && (software.length > 0 || posture) && (
-                  <OverviewCard title="Software & Security Posture" icon={ShieldCheck}
-                    source="Auto-collected · agentless scan">
-                    {posture && (
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-4 mb-4">
-                        <DField label="Antivirus"
-                          value={posture.has_antivirus
-                            ? (posture.antivirus_products?.join(', ') || 'Present')
-                            : 'None detected'}
-                          alert={!posture.has_antivirus} />
-                        <DField label="EDR"
-                          value={posture.has_edr
-                            ? (posture.edr_products?.join(', ') || 'Present')
-                            : 'None detected'}
-                          alert={!posture.has_edr} />
-                        <DField label="Endpoint Protected"
-                          value={posture.endpoint_protected ? 'Yes' : 'No'}
-                          alert={!posture.endpoint_protected} />
-                        <DField label="Packages Found" value={posture.software_total ?? software.length} />
-                      </div>
-                    )}
-                    {software.length > 0 && (
-                      <div>
-                        <div className="flex items-baseline justify-between gap-3 mb-2">
-                          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                            Installed software ({software.length})
-                          </div>
-                          <div className="text-xs text-slate-500">
-                            {software.filter((s: any) => s.promoted_asset_id).length} tracked as assets
-                            {' · '}
-                            {software.filter((s: any) => s.benchmark_available && !s.promoted_asset_id).length} can be set up
-                          </div>
-                        </div>
-                        <div className="max-h-80 overflow-y-auto rounded-lg border border-slate-200">
-                          <table className="w-full text-xs">
-                            <thead className="bg-slate-50 sticky top-0">
-                              <tr>
-                                <th className="text-left font-medium text-slate-600 px-3 py-1.5">Name</th>
-                                <th className="text-left font-medium text-slate-600 px-3 py-1.5">Version</th>
-                                <th className="text-left font-medium text-slate-600 px-3 py-1.5">Tracked as asset</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {software.map((s: any, i: number) => {
-                                const clickable = Boolean(s.software_key);
-                                return (
-                                  <tr
-                                    key={`${s.name}-${i}`}
-                                    className={`border-t border-slate-100 ${clickable ? 'cursor-pointer hover:bg-slate-50' : ''}`}
-                                    onClick={clickable ? () => {
-                                      // Pull the live rule_count + benchmark_name from the
-                                      // ENRICHED endpoint (softwareForCount), not the raw
-                                      // detected_software_json row — the raw JSON has no
-                                      // rule_count, so the drawer was showing "0 rules".
-                                      const enr = (softwareForCount?.inventory ?? []).find(
-                                        (x: any) => x.software_key === s.software_key,
-                                      ) || {};
-                                      setSetupEntry({
-                                        software_key: s.software_key!,
-                                        name: s.name || s.software_key!,
-                                        version: s.version,
-                                        publisher: s.publisher ?? s.vendor,
-                                        benchmark_available: !!(enr.benchmark_available ?? s.benchmark_available),
-                                        benchmark_name: enr.benchmark_name ?? s.benchmark_name,
-                                        rule_count: enr.rule_count,
-                                        promoted_asset_id: s.promoted_asset_id ?? null,
-                                      });
-                                    } : undefined}
-                                  >
-                                    <td className="px-3 py-1.5 text-slate-900">{s.name || '—'}</td>
-                                    <td className="px-3 py-1.5 font-mono text-slate-600">{s.version || '—'}</td>
-                                    <td className="px-3 py-1.5">
-                                      {s.promoted_asset_id ? (
-                                        <span className="text-primary-700 font-medium">
-                                          Asset #{s.promoted_asset_id}
-                                        </span>
-                                      ) : s.benchmark_available ? (
-                                        <span className="text-slate-500">Click to set up</span>
-                                      ) : (
-                                        <span className="text-slate-400">—</span>
-                                      )}
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-                        <p className="mt-2 text-[11px] text-slate-500 leading-relaxed">
-                          Click a software row to open set-up — CIS-ready packages can be scanned
-                          (credentials when needed); others can be tracked without a benchmark.
-                          A set-up application becomes a child asset linked to this host.
-                        </p>
-                      </div>
-                    )}
-                  </OverviewCard>
-                )}
-
-                {/* Provenance footer — tells the operator where these values originate. */}
-                <div style={{ marginTop: 4, fontSize: 12, color: 'var(--as-faint)', lineHeight: 1.5, display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                  <span>
-                    {asset.last_seen_at ? <>Last synced {formatDate(asset.last_seen_at)} · </> : null}
-                    KPIs are computed (risk score from assessments · findings from linked vulnerabilities · control coverage from mapped controls · CIS composite from benchmark scans · derived criticality from CIA). Identity, network &amp; procurement fields come from manual entry, CSV import, or agent discovery.
-                  </span>
-                  <GuideMarker id="asset.provenance" n={9} />
-                </div>
-
-                {/* AssignmentsPanel used to render here too, and it was pure
-                    duplication: every one of its nine role rows — technical
-                    owner, primary, secondary, business owner, custodian, owning
-                    team, escalation contact, assigned user, department — is
-                    already in the Identity & Ownership card above, which also
-                    carries its own completeness bar. Folding the old Assignments
-                    tab into Overview merged a PANEL when it should have merged
-                    the CONTENT, so the same names appeared twice on one screen
-                    under different labels.
-                    The per-role descriptions it added ("who to call when it
-                    breaks") are not lost — that is exactly what Guide mode now
-                    provides, on the fields themselves. */}
-                {/* DiscoveryPanel ("Last observed") removed — same pure-duplication
-                    problem as AssignmentsPanel above: its four fields (Last seen,
-                    Seen by, Agent version, Normalised OS Key) are ALL already in the
-                    "Hardware & Telemetry" card above, and its "no discovery history"
-                    note was stale (the Discovery module now records per-scan history).
-                    Re-detect OS still lives on the Compliance tab. */}
-              </div>
+              <AssetOverviewDesign A={overviewData} />
             )}
-            {activeTab === 'trajectory' && (
-              <div className="space-y-2">
-                <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
-                  <Network className="h-4 w-4 text-primary-600" strokeWidth={1.75} />
-                  Risk trajectory
-                  <GuideMarker id="asset.trajWhy" n={1} />
-                </h2>
-                <p className="text-xs text-slate-500">
-                  Asset → Vulnerability → Risk. Click a node to trace its sub-chain.
-                  <GuideMarker id="asset.trajAudience" n={2} />
-                </p>
-                <TrajectoryMap assetId={assetId} />
-              </div>
-            )}
+            {activeTab === 'trajectory' && <TrajectoryPanel assetId={assetId} />}
             {activeTab === 'compliance' && (
               <RoomScanProvider>
                 <div className="space-y-4">
                   <HostApplicationsPanel assetId={assetId} />
-                  <ComplianceTab asset={asset} />
+                  <CompliancePanel asset={asset} />
                   {/* Absorbed from the former Activity tab — the same scan runs,
                       previously fetched a second time under its own cache key. */}
                   <ActivityPanel assetId={assetId} />
@@ -1204,7 +930,7 @@ export default function AssetDetailPage() {
             {activeTab === 'notes' && <NotesPanel entityType="asset" entityId={assetId} />}
             {activeTab === 'history' && <HistoryPanel entityType="asset" entityId={assetId} />}
             {activeTab === 'evidence' && (
-              <EvidenceTab
+              <AttachmentsPanel
                 asset={asset}
                 allEvidence={allEvidence || []}
                 evidenceLoading={evidenceLoading}
@@ -1218,14 +944,9 @@ export default function AssetDetailPage() {
               />
             )}
             {activeTab === 'vulnerabilities' && (
-              <div className="space-y-4">
-              {/* Alerts had its own tab, but /asset-alerts/{id} builds every alert
-                  from the same VulnerabilityAssetLink join this tab lists, plus
-                  one staleness check on last_seen_at. It was a severity ranking
-                  of this list, not a second dataset — so it sits on top of the
-                  list it ranks. */}
-              <AlertsPanel assetId={assetId} canEdit={canEdit} />
-              <VulnerabilitiesTab
+              <VulnerabilitiesPanel
+                assetId={assetId}
+                canEdit={canEdit}
                 asset={asset}
                 allVulnerabilities={allVulnerabilities || []}
                 vulnsLoading={vulnsLoading}
@@ -1234,7 +955,6 @@ export default function AssetDetailPage() {
                 onUnlinkVulnerability={(vulnId) => unlinkVulnerabilityMutation.mutate(vulnId)}
                 isUnlinking={unlinkVulnerabilityMutation.isPending}
               />
-              </div>
             )}
             {activeTab === 'risks' && (
               // Command Center's three cards (Residual Risk / CIA / CIS) on top,
@@ -1242,41 +962,31 @@ export default function AssetDetailPage() {
               // linking + linked-risk list sit below as children — real
               // management the reference lacks. Linked Issues moved out (it
               // belongs in the Issues module, not here).
-              <RiskControlsTab
+              <RisksPanel
                 assetId={assetId}
                 asset={asset}
                 onOpenCompliance={() => setActiveTab('compliance')}
-              >
-                <ControlsTab
-                  coveragePctFromApi={coverage?.coverage_percentage ?? asset.coverage_percentage ?? null}
-                  asset={asset}
-                  allControls={(allControls || []).map((c) => ({
-                    id: c.id,
-                    internal_id: c.control_id,
-                    name: c.name,
-                    category: c.category,
-                  }))}
-                  controlsLoading={controlsLoading}
-                  onLinkControl={(controlId) => linkControlMutation.mutate({
-                    internal_control_id: controlId,
-                    coverage_status: 'partial',
-                  })}
-                  isLinkingControl={linkControlMutation.isPending}
-                  onUnlinkInternalControl={(linkId) => unlinkInternalControlMutation.mutate(linkId)}
-                  onUnlinkFrameworkControl={(linkId) => unlinkFrameworkControlMutation.mutate(linkId)}
-                  isUnlinkingInternal={unlinkInternalControlMutation.isPending}
-                  isUnlinkingFramework={unlinkFrameworkControlMutation.isPending}
-                />
-                <RisksTab asset={asset} />
-                {/* Absorbed from the former Mapping Recommendations tab. It
-                    writes the same AssetFrameworkControlLink rows the control
-                    list above writes, so the suggestion and the thing it acts on
-                    are now in one place instead of two tabs apart. */}
-                <MappingRecommendationsTab assetId={assetId} />
-              </RiskControlsTab>
+                coveragePctFromApi={coverage?.coverage_percentage ?? asset.coverage_percentage ?? null}
+                allControls={(allControls || []).map((c) => ({
+                  id: c.id,
+                  internal_id: c.control_id,
+                  name: c.name,
+                  category: c.category,
+                }))}
+                controlsLoading={controlsLoading}
+                onLinkControl={(controlId) => linkControlMutation.mutate({
+                  internal_control_id: controlId,
+                  coverage_status: 'partial',
+                })}
+                isLinkingControl={linkControlMutation.isPending}
+                onUnlinkInternalControl={(linkId) => unlinkInternalControlMutation.mutate(linkId)}
+                onUnlinkFrameworkControl={(linkId) => unlinkFrameworkControlMutation.mutate(linkId)}
+                isUnlinkingInternal={unlinkInternalControlMutation.isPending}
+                isUnlinkingFramework={unlinkFrameworkControlMutation.isPending}
+              />
             )}
             {activeTab === 'criticality' && (
-              <CriticalityAssessmentsTab assetId={assetId} />
+              <CriticalityPanel assetId={assetId} />
             )}
             {/* Mapping Recommendations wrote the same AssetFrameworkControlLink
                 rows the Controls list on Risk & Controls writes, and invalidated
@@ -1337,6 +1047,110 @@ export default function AssetDetailPage() {
           }}
         />
       )}
+
+      {collectSvcOpen && dbAppKind && (
+        <CollectServiceModal
+          kind={dbAppKind}
+          assetId={assetId}
+          defaultHost={asset.ip_address || '127.0.0.1'}
+          defaultPort={(asset.app_attributes_json as any)?.listen_port}
+          pending={collectSvc.isPending}
+          error={(collectSvc.data as any)?.data?.error || ((collectSvc.error as any)?.response?.data?.detail)}
+          onClose={() => setCollectSvcOpen(false)}
+          onRun={(data: any) => collectSvc.mutate(data)}
+        />
+      )}
+    </div>
+  );
+}
+
+// Enrich a DB app in place — reuse a SAVED login (encrypted IntegrationConnection)
+// or add a new one. First time: enter + "Collect & save". After that: the saved
+// logins are listed to pick from (the login the operator already gave when they
+// connected the host / set up the software is reused, never re-typed).
+function CollectServiceModal({ kind, assetId, defaultHost, defaultPort, pending, error, onClose, onRun }: any) {
+  const LABEL: Record<string, string> = { postgres: 'PostgreSQL', mysql: 'MySQL', mssql: 'SQL Server', oracle: 'Oracle' };
+  const DEFPORT: Record<string, string> = { postgres: '5432', mysql: '3306', mssql: '1433', oracle: '1521' };
+  const { data: loginsRes, isLoading: loadingLogins } = useQuery({
+    queryKey: ['asset-service-logins', assetId],
+    queryFn: async () => (await assetsApi.getServiceLogins(assetId)).data,
+  });
+  const saved: Array<{ connection_id: number; label: string; username: string | null }> = loginsRes?.logins || [];
+  const [addNew, setAddNew] = useState(false);
+  const [host, setHost] = useState(String(defaultHost || ''));
+  const [port, setPort] = useState(String(defaultPort || DEFPORT[kind] || ''));
+  const [user, setUser] = useState(kind === 'postgres' ? 'postgres' : '');
+  const [pass, setPass] = useState('');
+  const [dbName, setDbName] = useState('');
+  const lbl = 'block text-[11px] font-semibold text-slate-600 mb-1';
+  const inp = 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-primary-500';
+  const showForm = addNew || (!loadingLogins && saved.length === 0);
+  return (
+    <div onClick={onClose} className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/45 p-4 backdrop-blur-sm">
+      <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
+        <div className="border-b border-slate-100 px-5 py-4">
+          <div className="text-base font-bold text-slate-900">Collect {LABEL[kind] || kind} details</div>
+          <div className="mt-1 text-xs leading-snug text-slate-500">A {LABEL[kind] || kind} login reads this database’s databases, schemas, roles and settings and attaches them to <b>this</b> asset — no re-discovery. Logins are saved (encrypted) and reused.</div>
+        </div>
+
+        {/* Saved logins — pick one to reuse (no re-typing). */}
+        {saved.length > 0 && (
+          <div className="border-b border-slate-100 px-5 py-4">
+            <div className={lbl}>Saved logins</div>
+            <div className="flex flex-col gap-2">
+              {saved.map((s) => (
+                <button
+                  key={s.connection_id}
+                  disabled={pending}
+                  onClick={() => onRun({ connection_id: s.connection_id })}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-left hover:border-primary-400 hover:bg-primary-50 disabled:opacity-50"
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-medium text-slate-800">{s.username || 'login'}</span>
+                    <span className="block truncate text-[11px] text-slate-500">{s.label}</span>
+                  </span>
+                  <span className="shrink-0 rounded-full bg-primary-700 px-3 py-1 text-[11px] font-semibold text-white">{pending ? '…' : 'Use'}</span>
+                </button>
+              ))}
+            </div>
+            {!showForm && (
+              <button onClick={() => setAddNew(true)} className="mt-3 text-xs font-semibold text-primary-700 hover:underline">＋ Add a new login</button>
+            )}
+          </div>
+        )}
+
+        {loadingLogins && <div className="px-5 py-4 text-xs text-slate-400">Checking saved logins…</div>}
+
+        {showForm && (
+          <div className="flex flex-col gap-3 px-5 py-4">
+            {saved.length > 0 && <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">New login</div>}
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className={lbl}>Host</label><input className={inp} value={host} onChange={(e) => setHost(e.target.value)} placeholder="127.0.0.1" /></div>
+              <div><label className={lbl}>Port</label><input className={inp} value={port} onChange={(e) => setPort(e.target.value)} placeholder={DEFPORT[kind]} /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className={lbl}>Username</label><input className={inp} value={user} onChange={(e) => setUser(e.target.value)} placeholder={kind === 'postgres' ? 'postgres' : 'user'} /></div>
+              <div><label className={lbl}>Password</label><input className={inp} type="password" value={pass} onChange={(e) => setPass(e.target.value)} /></div>
+            </div>
+            <div><label className={lbl}>Database (optional)</label><input className={inp} value={dbName} onChange={(e) => setDbName(e.target.value)} placeholder={kind === 'postgres' ? 'postgres' : 'default'} /></div>
+          </div>
+        )}
+
+        {/* Error is rendered here (outside the form block) so a FAILED reuse of a
+            saved login — where the form is hidden — still surfaces the reason
+            instead of silently doing nothing. */}
+        {error && <div className="px-5 pb-2 text-xs font-medium text-red-600">{error}</div>}
+
+        <div className="flex justify-end gap-2 border-t border-slate-100 px-5 py-3">
+          <button onClick={onClose} className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-600">Cancel</button>
+          {showForm && (
+            <button disabled={pending || !pass || !host} onClick={() => onRun({ kind, username: user || undefined, password: pass, host: host.trim(), port: port ? Number(port) : undefined, database: dbName || undefined })}
+              className="rounded-full bg-primary-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
+              {pending ? 'Connecting…' : 'Collect & save'}
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -4213,7 +4027,9 @@ function ComplianceTab({ asset }: { asset: AssetDetailData }) {
           </div>
         );
       })()}
-      {selfIpPeersQ.data && !selfIsConnected && !isBrowserAsset && (
+      {/* Unmanaged assets (e.g. external EASM findings) are evidence-only — you
+          can't log into them from outside, so never offer the Connect CTA. */}
+      {selfIpPeersQ.data && !selfIsConnected && !isBrowserAsset && asset.discovery_state !== 'unmanaged' && (
         <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
           <div className="flex items-start gap-3">
             <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-700">

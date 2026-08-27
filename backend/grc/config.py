@@ -53,6 +53,22 @@ def get_openai_model(default: str = DEFAULT_OPENAI_MODEL) -> str:
     return os.environ.get("AI_INTEGRATIONS_OPENAI_MODEL") or os.environ.get("OPENAI_MODEL") or default
 
 
+# CTEM Validate — the confidence gate. A model suggestion whose confidence is at
+# or above this floor is LINKED automatically by the mapping run (reversible: a
+# Reject removes it); a weaker one lands as `proposed` for a human to review, so
+# a low-confidence guess never silently becomes a link. "high" = only high
+# auto-links; "medium" (default) = high+medium; "off"/"none" = nothing auto-links
+# (every suggestion waits for review, the pre-gate behaviour).
+_VALID_CONF_FLOOR = {"off", "none", "high", "medium", "low"}
+
+
+def get_ai_autolink_min_confidence() -> str:
+    """Confidence floor for auto-linking AI control suggestions (env
+    ``AI_AUTOLINK_MIN_CONFIDENCE``: high | medium | low | off). Default medium."""
+    v = (os.environ.get("AI_AUTOLINK_MIN_CONFIDENCE") or "medium").strip().lower()
+    return v if v in _VALID_CONF_FLOOR else "medium"
+
+
 def get_openai_base_url() -> str | None:
     """Resolve the OpenAI (or OpenAI-compatible, e.g. ModelFarm) base URL.
 

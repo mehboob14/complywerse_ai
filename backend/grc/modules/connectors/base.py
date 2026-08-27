@@ -380,3 +380,32 @@ class TranscribeAdapter(BaseConnectorAdapter):
             result.success = False
             result.errors.append(str(exc))
         return result
+
+
+# ─── EASM passive source (Shodan / Censys / SecurityTrails) ─────────
+
+class EasmSourceAdapter(BaseConnectorAdapter):
+    """Keyed passive attack-surface source. Pull-only: the asset-discovery
+    external collector reads these providers directly with the stored API key
+    (see asset_discovery/services/external_collect.py). There is no push side
+    and no periodic connector sync — the connector row exists purely to hold
+    and health-check the credential, so `run_sync` is just the health probe,
+    mirroring CollabAdapter."""
+    category = "easm_source"
+
+    @abstractmethod
+    def test_connection(self) -> ConnectionTestResult:
+        """Verify the API key against the provider's health endpoint."""
+
+    def run_sync(self) -> SyncResult:
+        result = SyncResult(success=True)
+        try:
+            probe = self.test_connection()
+            result.success = probe.success
+            if not probe.success:
+                result.errors.append(probe.message)
+            result.details["probe"] = probe.details
+        except Exception as exc:
+            result.success = False
+            result.errors.append(str(exc))
+        return result

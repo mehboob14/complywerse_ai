@@ -104,7 +104,11 @@ RISK_SCORE_CAP = 50.0
 # which silently dropped real signal (e.g. a risk being mitigated is still
 # pending, a vuln in_progress is still a problem).
 TERMINAL_RISK_STATUSES = {"closed", "resolved", "accepted", "transferred"}
-TERMINAL_VULN_STATUSES = {"resolved", "accepted", "false_positive", "closed"}
+TERMINAL_VULN_STATUSES = {
+    "resolved", "remediated", "verified", "closed",
+    "accepted", "false_positive", "auto_closed_decommissioned",
+    "auto_closed_fixed",
+}
 
 
 def _is_active_risk(status: Optional[str]) -> bool:
@@ -766,6 +770,80 @@ def _risk_score(db: Session, tenant_id: int, asset_id: int) -> Dict[str, Any]:
     }
 
 
+# ─── EASM (external / outside-in) risk model ────────────────────────────────
+# An asset discovered from the internet has NO CIA ratings, NO CIS baseline and
+# NO mapped controls — 4 of the 5 internal dimensions are structurally blank, so
+# the internal model can't assess it (it collapses to just "vulnerabilities").
+# Its real risk is EXPOSURE HYGIENE, which the EASM probe already grades as a
+# 0-100 HEALTH score with per-dimension components. Risk posture is that health
+# INVERTED (risk_component = 1 - health), same weights, same "drop unmeasured
+# dimensions" rule — so risk ≈ 100 - health, with an actionable breakdown.
+_EASM_RISK_LABELS = {
+    "tls": "TLS / encryption",
+    "headers": "Security headers",
+    "transport": "Transport security (HTTPS)",
+    "email": "Email authentication (SPF/DMARC)",
+    "vuln": "Vulnerabilities & exposure",
+}
+
+
+def _compute_easm_risk(asset: ITAsset, ep: Dict[str, Any]) -> Dict[str, Any]:
+    """Risk posture for an EXTERNAL asset, from the EASM probe's health model."""
+    health = ep.get("health") or {}
+    hcomps = health.get("components") or {}
+    components: Dict[str, Any] = {}
+    for key, hc in hcomps.items():
+        if not isinstance(hc, dict) or hc.get("weight") is None:
+            continue
+        components[key] = {
+            "score": round(1.0 - float(hc.get("score") or 0.0), 4),  # health → risk
+            "weight": float(hc["weight"]),
+            "known": True,
+            "label": _EASM_RISK_LABELS.get(key, key),
+            "detail": hc.get("detail"),
+        }
+    weights = {k: c["weight"] for k, c in components.items()}
+    known_keys = list(components.keys())
+    wsum = sum(weights.values())
+    if not known_keys or wsum == 0:
+        composite: Optional[float] = None
+        band = {"label": "unknown",
+                "description": "Not probed yet — run an external scan to grade exposure"}
+        contributions: Dict[str, float] = {}
+        data_quality = 0.0
+    else:
+        composite = round(sum(weights[k] * components[k]["score"] for k in known_keys) / wsum * 100, 1)
+        band = _band_for(composite)
+        contributions = {k: round(weights[k] / wsum * components[k]["score"] * 100, 1) for k in known_keys}
+        data_quality = round(wsum * 100, 1)
+    return {
+        "mode": "easm",
+        "asset": {
+            "id": asset.id, "name": asset.name, "host_name": asset.host_name,
+            "ip_address": asset.ip_address, "fqdn": getattr(asset, "fqdn", None),
+            "asset_type": asset.asset_type, "criticality": asset.criticality,
+            "owner_name": getattr(asset, "owner_name", None),
+            "is_internet_facing": getattr(asset, "internet_facing", None),
+        },
+        "is_internet_facing": getattr(asset, "internet_facing", None),
+        "criticality": asset.criticality,
+        "score": composite,
+        "band": band,
+        "weights": weights,
+        "data_quality": data_quality,
+        "known_dimensions": known_keys,
+        "components": components,
+        "contributions": contributions,
+        # The health grade drives the headline; the probe facts feed the cards.
+        "health": {"score": health.get("score"), "grade": health.get("grade"),
+                   "reason": health.get("reason")},
+        "probe": {k: ep.get(k) for k in (
+            "live", "server", "response_time_ms", "tls_not_after",
+            "tls_days_to_expiry", "tls_expired", "https_available",
+            "security_headers", "spf", "dmarc", "dns_mx", "probed_at")},
+    }
+
+
 # ─── Public API ─────────────────────────────────────────────────────────────
 
 def compute_asset_risk(
@@ -783,6 +861,13 @@ def compute_asset_risk(
     The original code violated its own "no data is written" promise
     on every preview tick.
     """
+    # External (EASM) assets are graded outside-in — the internal CIA/CIS/control
+    # model is structurally blank for them, so route to the exposure-hygiene model.
+    _pp = getattr(asset, "platform_properties", None)
+    _ep = _pp.get("external_probe") if isinstance(_pp, dict) else None
+    if getattr(asset, "last_seen_source", None) == "external" or (isinstance(_ep, dict) and _ep.get("health")):
+        return _compute_easm_risk(asset, _ep or {})
+
     components = {
         "cis":  _cis_gap(db, tenant_id, asset.id),
         "vuln": _vuln_score(db, tenant_id, asset.id, persist=persist),
@@ -918,13 +1003,17 @@ def compute_tenant_posture(
             "data_quality": r["data_quality"],
             "known_dimensions": r["known_dimensions"],
             "contributions": r["contributions"],
-            "cis_pass_rate": r["components"]["cis"].get("pass_rate"),
-            "active_vulns": r["components"]["vuln"]["active_count"],
-            "total_vulns": r["components"]["vuln"]["total_linked"],
-            "cia_known": r["components"]["cia"]["known"],
-            "control_coverage_pct": r["components"]["ctrl"]["coverage_pct"],
-            "active_risks": r["components"]["risk"]["active_count"],
-            "total_risks": r["components"]["risk"]["total_linked"],
+            # External (EASM) assets return a different component set (tls/headers/
+            # …), with NO cis/cia/ctrl/risk keys — access defensively so an
+            # external asset in the estate doesn't KeyError the whole dashboard.
+            "mode": r.get("mode"),
+            "cis_pass_rate": (r["components"].get("cis") or {}).get("pass_rate"),
+            "active_vulns": (r["components"].get("vuln") or {}).get("active_count"),
+            "total_vulns": (r["components"].get("vuln") or {}).get("total_linked"),
+            "cia_known": (r["components"].get("cia") or {}).get("known"),
+            "control_coverage_pct": (r["components"].get("ctrl") or {}).get("coverage_pct"),
+            "active_risks": (r["components"].get("risk") or {}).get("active_count"),
+            "total_risks": (r["components"].get("risk") or {}).get("total_linked"),
         })
 
     # Sort: unknown scores last (None), then by score desc

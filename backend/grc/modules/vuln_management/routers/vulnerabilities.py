@@ -9,7 +9,7 @@ from sqlalchemy import func
 
 from ....models import (
     Vulnerability, VulnerabilityReport, VulnerabilitySLAConfig,
-    VulnerabilityAssetLink, VulnerabilityDependency, GRCUser, get_db
+    VulnerabilityAssetLink, VulnerabilityControlLink, VulnerabilityDependency, GRCUser, get_db
 )
 from ....schemas import (
     VulnerabilityCreate, VulnerabilityUpdate, VulnerabilityResponse,
@@ -68,6 +68,18 @@ def _build_vulnerability_response(v: Vulnerability, solution_count=None) -> Vuln
             if getattr(link, "asset", None) and getattr(link.asset, "name", None)
         ]
 
+    # The control(s) that CLOSE this finding — so the Mobilise/register rows can
+    # show "closed by X" without an extra round-trip. Codes only; the full link
+    # detail lives on the control-links endpoint.
+    linked_control_codes = []
+    for _cl in (getattr(v, "control_links", None) or []):
+        _code = (getattr(getattr(_cl, "framework_control", None), "code", None)
+                 or getattr(getattr(_cl, "normalized_control", None), "code", None)
+                 or getattr(getattr(_cl, "parsed_framework_control", None), "control_id", None)
+                 or getattr(getattr(_cl, "internal_control", None), "name", None))
+        if _code and _code not in linked_control_codes:
+            linked_control_codes.append(_code)
+
     return VulnerabilityResponse(
         id=v.id,
         tenant_id=v.tenant_id,
@@ -112,6 +124,7 @@ def _build_vulnerability_response(v: Vulnerability, solution_count=None) -> Vuln
         assignee_name=v.assignee.display_name if v.assignee else None,
         verifier_name=v.verifier.display_name if v.verifier else None,
         linked_assets=linked_assets,
+        linked_control_codes=linked_control_codes,
         template_type=getattr(v, "template_type", None),
         template_fields=getattr(v, "template_fields", None) or None,
         # Threat-intelligence enrichment — all None on un-enriched rows. The
@@ -160,6 +173,19 @@ def _build_vulnerability_response(v: Vulnerability, solution_count=None) -> Vuln
         exception_revoked_at=getattr(v, "exception_revoked_at", None),
         exception_revocation_reason=getattr(v, "exception_revocation_reason", None),
         exception_metadata=dict(getattr(v, "exception_metadata", None) or {}) or None,
+        # Scanner closure loop — provenance + verified-close evidence.
+        connection_id=getattr(v, "connection_id", None),
+        source=getattr(v, "source", None),
+        external_vuln_id=getattr(v, "external_vuln_id", None),
+        scanner_status=getattr(v, "scanner_status", None),
+        first_detected=getattr(v, "first_detected", None),
+        last_seen=getattr(v, "last_seen", None),
+        last_seen_scan_id=getattr(v, "last_seen_scan_id", None),
+        closed_at=getattr(v, "closed_at", None),
+        closed_by=getattr(v, "closed_by", None),
+        closure_evidence=dict(getattr(v, "closure_evidence", None) or {}) or None,
+        reopened_at=getattr(v, "reopened_at", None),
+        reopen_count=getattr(v, "reopen_count", None),
     )
 
 
@@ -174,6 +200,9 @@ def _build_vulnerability_response(v: Vulnerability, solution_count=None) -> Vuln
 _LIST_CLOSED_STATUSES = [
     "resolved", "remediated", "verified", "closed",
     "accepted", "false_positive", "auto_closed_decommissioned",
+    # Set by the scanner closure engine when a completed re-scan covering the
+    # host no longer reports the finding (evidence in closure_evidence).
+    "auto_closed_fixed",
 ]
 
 
@@ -210,6 +239,14 @@ def list_vulnerabilities(
     # ATT&CK tactic richness filter — True keeps findings whose mapped chain
     # spans ≥ HIGH_TACTICS_MIN distinct tactics (see attack.selection).
     high_tactics: Optional[bool] = None,
+    # CTEM Phase 3 — scope filter. Findings on the scope's member assets,
+    # resolved by the ONE shared resolver so this register and a scope's
+    # cycle counters can never disagree.
+    ctem_scope_id: Optional[int] = None,
+    # Filter to findings linked to ONE asset (the register's "by asset" filter).
+    # Matches through grc_vulnerability_asset_links, so it honours the same
+    # auto/manual links shown on the asset's own page.
+    asset_id: Optional[int] = None,
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
@@ -237,10 +274,29 @@ def list_vulnerabilities(
         logging.getLogger(__name__).exception("exception expiry sweep failed")
         db.rollback()
 
+    # Same rationale as the sweep above (no Celery worker in this deployment):
+    # composite_priority (the register's Contextual score) is otherwise written only
+    # when a finding is individually opened / edited / enriched, so a register nobody
+    # has clicked through shows "not scored" for every row despite every input
+    # (CVSS/EPSS/KEV/…) already being present. Score the NULL rows once, in place, from
+    # stored fields only — no external calls. Bounded + best-effort; converges to a
+    # no-op after the first load.
+    try:
+        from ..enrichment.enrichment_service import backfill_composite_priorities
+        backfill_composite_priorities(db, user_tenants)
+    except Exception:  # noqa: BLE001 — never let the backfill break the register
+        import logging
+        logging.getLogger(__name__).exception("composite priority backfill failed")
+        db.rollback()
+
     query = db.query(Vulnerability).options(
         joinedload(Vulnerability.assignee),
         joinedload(Vulnerability.verifier),
         joinedload(Vulnerability.asset_links).joinedload(VulnerabilityAssetLink.asset),
+        joinedload(Vulnerability.control_links).joinedload(VulnerabilityControlLink.framework_control),
+        joinedload(Vulnerability.control_links).joinedload(VulnerabilityControlLink.normalized_control),
+        joinedload(Vulnerability.control_links).joinedload(VulnerabilityControlLink.internal_control),
+        joinedload(Vulnerability.control_links).joinedload(VulnerabilityControlLink.parsed_framework_control),
     ).filter(Vulnerability.tenant_id.in_(user_tenants))
 
     if tenant_id:
@@ -258,6 +314,46 @@ def list_vulnerabilities(
             query = query.filter(Vulnerability.status.in_(_LIST_CLOSED_STATUSES))
         elif not include_closed:
             query = query.filter(Vulnerability.status.notin_(_LIST_CLOSED_STATUSES))
+    if ctem_scope_id:
+        # THE shared scope→findings helper — the SAME function the cycle counters
+        # call, so this register and the counts beside it cannot drift apart (one
+        # definition, structural not incidental). include_closed=True → this is
+        # pure MEMBERSHIP; the open/closed policy is the status toggle above, so
+        # `ctem_scope_id` composes with include_closed / closed_only instead of
+        # being silently forced open-only.
+        from ....models import CtemScope
+        from ....services.ctem_scopes import scope_vulnerability_ids
+        _scope = db.query(CtemScope).filter(
+            CtemScope.id == ctem_scope_id,
+            CtemScope.tenant_id.in_(user_tenants),
+        ).first()
+        if not _scope:
+            raise HTTPException(status_code=404, detail="CTEM scope not found")
+        try:
+            _scoped_vuln_ids = scope_vulnerability_ids(
+                db, _scope.tenant_id, _scope.membership_rule, include_closed=True)
+        except Exception as exc:
+            # FAIL LOUD, never WIDE. A scope that cannot resolve must NOT fall
+            # through to an unfiltered tenant-wide register — that would silently
+            # show every finding in the tenant. Surface 500 instead of swallowing.
+            import logging
+            logging.getLogger(__name__).exception("ctem scope filter failed")
+            raise HTTPException(
+                status_code=500,
+                detail="Could not resolve the CTEM scope filter; refusing to return unscoped findings.",
+            ) from exc
+        if _scoped_vuln_ids:
+            query = query.filter(Vulnerability.id.in_(_scoped_vuln_ids))
+        else:
+            query = query.filter(False)  # empty scope → no rows, honestly
+    if asset_id:
+        query = query.filter(
+            Vulnerability.id.in_(
+                db.query(VulnerabilityAssetLink.vulnerability_id).filter(
+                    VulnerabilityAssetLink.asset_id == asset_id
+                )
+            )
+        )
     if assigned_to:
         query = query.filter(Vulnerability.assigned_to == assigned_to)
     if cve_id:
@@ -278,7 +374,7 @@ def list_vulnerabilities(
     if is_overdue:
         query = query.filter(
             Vulnerability.due_date < datetime.utcnow(),
-            Vulnerability.status.notin_(["resolved", "accepted", "false_positive"])
+            Vulnerability.status.notin_(_LIST_CLOSED_STATUSES)
         )
     if search:
         query = query.filter(
@@ -944,9 +1040,30 @@ def change_vulnerability_status(
     if request.status in ["verified", "resolved", "closed"]:
         vuln.verified_by = current_user.id
         vuln.verified_at = datetime.utcnow()
-    
+
+    # Scanner write-back: translate the decision into outbox actions for the
+    # finding's scanner connection (no-op for manual/report findings). The
+    # push itself is best-effort after commit; unsupported/disabled actions
+    # are recorded as skipped with the reason — never silently dropped.
+    try:
+        from ....modules.integrations.services.writeback_service import WritebackService
+        WritebackService.on_status_change(
+            db, vuln, previous_status, request.status, user_id=current_user.id,
+        )
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception(
+            "Writeback enqueue failed for vuln %s (non-fatal)", vuln.id
+        )
+
     db.commit()
     db.refresh(vuln)
+
+    try:
+        from ....modules.integrations.services.writeback_service import WritebackService
+        WritebackService.try_process_now(db, vuln)
+    except Exception:
+        pass
 
     vuln = db.query(Vulnerability).options(
         joinedload(Vulnerability.assignee),

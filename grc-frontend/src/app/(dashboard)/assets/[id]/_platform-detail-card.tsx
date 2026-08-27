@@ -104,9 +104,15 @@ function formatBytes(n: number): string {
 }
 
 function formatCell(value: any, key?: string): React.ReactNode {
-  if (value === null || value === undefined || value === '') return '—';
+  if (value === null || value === undefined || value === '' || value === 'null') return '—';
   if (typeof value === 'boolean') return value ? '✓' : '✗';
-  if (typeof value === 'number' && key && looksLikeBytes(key)) return formatBytes(value);
+  if (typeof value === 'number' && key) {
+    // A `_gb` / `_mb` / `_mhz` suffix means the value is ALREADY in that unit —
+    // don't run it through formatBytes (that turned "32" GB into "32 B").
+    const u = key.match(/_(gb|mb|kb|tb|mhz|ghz)$/i);
+    if (u) return `${value.toLocaleString()} ${u[1].toUpperCase()}`;
+    if (looksLikeBytes(key)) return formatBytes(value);
+  }
   if (typeof value === 'number') return value.toLocaleString();
   if (Array.isArray(value)) {
     return value.map((x) => (x !== null && typeof x === 'object' ? JSON.stringify(x) : String(x))).join(', ');
@@ -180,7 +186,7 @@ function ObjectTable({ rows }: { rows: any[] }) {
           {shownRows.map((r, i) => (
             <tr key={i} className="odd:bg-white even:bg-slate-50/40">
               {shownCols.map((c) => (
-                <td key={c} className="whitespace-nowrap border-b border-slate-100 px-2 py-1 text-slate-700">
+                <td key={c} className="border-b border-slate-100 px-2 py-1 align-top text-slate-700 break-words">
                   {formatCell(r?.[c], c)}
                 </td>
               ))}
@@ -211,15 +217,52 @@ function ScalarChips({ items }: { items: any[] }) {
   );
 }
 
-function KeyValueGrid({ obj }: { obj: Record<string, any> }) {
-  const entries = Object.entries(obj);
-  if (entries.length === 0) return null;
+function isEmptyVal(v: any): boolean {
+  return v === null || v === undefined || v === '' || v === 'null'
+    || (Array.isArray(v) && v.length === 0);
+}
+// A value that must NOT be squeezed into a single grid cell — an array of
+// objects (→ its own list/table) or a nested object (→ its own key-value block).
+function isComplexVal(v: any): boolean {
+  return (Array.isArray(v) && v.some((x) => x !== null && typeof x === 'object'))
+    || (v !== null && typeof v === 'object' && !Array.isArray(v));
+}
+
+// A short array of objects (DIMMs, disks, NICs…) → one readable mini-card each,
+// so it wraps down the page instead of forcing a wide, side-scrolling table.
+function ObjectList({ rows }: { rows: any[] }) {
   return (
-    <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 md:grid-cols-3">
-      {entries.map(([k, v]) => (
+    <div className="flex flex-col gap-1.5">
+      {rows.map((r, i) => (
+        <div key={i} className="rounded border border-slate-200 bg-slate-50/50 p-2">
+          <KeyValueGrid obj={r} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function KeyValueGrid({ obj }: { obj: Record<string, any> }) {
+  const entries = Object.entries(obj).filter(([, v]) => !isEmptyVal(v));
+  if (entries.length === 0) return <div className="text-xs text-slate-400">None</div>;
+  const scalars = entries.filter(([, v]) => !isComplexVal(v));
+  const complex = entries.filter(([, v]) => isComplexVal(v));
+  return (
+    <div className="flex flex-col gap-2.5">
+      {scalars.length > 0 && (
+        <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+          {scalars.map(([k, v]) => (
+            <div key={k} className="min-w-0">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{humanize(k)}</div>
+              <div className="break-words text-xs text-slate-800">{formatCell(v, k)}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      {complex.map(([k, v]) => (
         <div key={k} className="min-w-0">
-          <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{humanize(k)}</div>
-          <div className="break-words text-xs text-slate-800">{formatCell(v, k)}</div>
+          <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">{humanize(k)}</div>
+          <SectionData data={v} />
         </div>
       ))}
     </div>
@@ -232,7 +275,10 @@ function SectionData({ data }: { data: any }) {
   if (Array.isArray(data)) {
     if (data.length === 0) return <div className="text-xs text-slate-400">None</div>;
     const objish = data.some((x) => x !== null && typeof x === 'object' && !Array.isArray(x));
-    return objish ? <ObjectTable rows={data} /> : <ScalarChips items={data} />;
+    if (!objish) return <ScalarChips items={data} />;
+    // Few rows → a stacked mini-card list (readable, wraps, no side-scroll).
+    // Many rows → the compact table with internal horizontal scroll.
+    return data.length <= 6 ? <ObjectList rows={data} /> : <ObjectTable rows={data} />;
   }
 
   if (typeof data === 'object') {
@@ -265,9 +311,13 @@ function Section({ name, section }: { name: string; section: any }) {
   const hasData =
     data !== null && data !== undefined &&
     !(Array.isArray(data) && data.length === 0);
+  // Long tables (services, users, groups, NICs…) start collapsed so the card
+  // stays compact; the key summary sections (cpu/memory/os/security) open.
+  const isLongList = Array.isArray(data) && data.length > 6;
 
   return (
-    <details open={status === 'discovered' && hasData} className="group rounded-lg border border-slate-200 bg-white">
+    <details open={status === 'discovered' && hasData && !isLongList}
+      className="group mb-2 break-inside-avoid rounded-lg border border-slate-200 bg-white">
       <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2">
         <span className="flex items-center gap-2">
           <span className="text-sm font-semibold text-slate-700">{humanize(name)}</span>
@@ -321,6 +371,29 @@ function orderSections(kind: string, keys: string[]): string[] {
   return [...known, ...rest];
 }
 
+// Internal discovery metadata / sections that duplicate the main asset cards
+// (identity ≈ the Network & Platform + Hardware cards) — hidden from the deep
+// card to cut noise and the "repeated fields" the operator flagged.
+const HIDDEN_SECTIONS = new Set(['fingerprint', 'discovery_classification', 'identity']);
+
+// Server deep sections grouped by domain so the card reads as structured
+// clusters instead of one long list. Keys not in any group fall to "Other".
+const SERVER_GROUPS: { title: string; keys: string[] }[] = [
+  { title: 'Hardware', keys: ['cpu', 'memory', 'gpu', 'firmware', 'storage', 'lvm', 'raid'] },
+  { title: 'Network', keys: ['network', 'dns'] },
+  { title: 'Security', keys: ['defender', 'firewall', 'bitlocker', 'selinux', 'apparmor', 'sshd'] },
+  { title: 'Accounts & access', keys: ['local_users', 'local_groups', 'users', 'sudoers'] },
+  { title: 'System', keys: ['os', 'services', 'scheduled_tasks', 'windows_update', 'sec_updates', 'shares', 'virt', 'docker', 'podman', 'collection_status'] },
+];
+
+function SectionMasonry({ keys, props }: { keys: string[]; props: any }) {
+  return (
+    <div className="gap-3 [column-fill:_balance] sm:columns-2 xl:columns-3">
+      {keys.map((k) => <Section key={k} name={k} section={props[k]} />)}
+    </div>
+  );
+}
+
 /* ------------------------------------------------------------------ *
  * Main
  * ------------------------------------------------------------------ */
@@ -336,6 +409,7 @@ export function PlatformDetails({ kind, props }: { kind: string; props: any }) {
   const scalarKeys: string[] = [];
   const sectionKeys: string[] = [];
   for (const [k, v] of Object.entries(props)) {
+    if (HIDDEN_SECTIONS.has(k)) continue;   // internal metadata / duplicate of the main cards
     if (isSection(v)) {
       sectionKeys.push(k);
     } else if (v !== null && v !== undefined && v !== '' && !(Array.isArray(v) && v.length === 0)) {
@@ -343,7 +417,20 @@ export function PlatformDetails({ kind, props }: { kind: string; props: any }) {
     }
   }
 
-  const orderedSections = orderSections(kind, sectionKeys);
+  const visibleSectionKeys = sectionKeys.filter((k) => !HIDDEN_SECTIONS.has(k));
+  const orderedSections = orderSections(kind, visibleSectionKeys);
+
+  // Server → grouped by domain (Hardware / Network / Security / …). Other kinds →
+  // a single masonry, since their section sets are small and already ordered.
+  let grouped: { title: string; keys: string[] }[] = [];
+  if (kind === 'server') {
+    const remaining = new Set(orderedSections);
+    grouped = SERVER_GROUPS
+      .map((g) => ({ title: g.title, keys: g.keys.filter((k) => remaining.has(k)) }))
+      .filter((g) => g.keys.length > 0);
+    grouped.forEach((g) => g.keys.forEach((k) => remaining.delete(k)));
+    if (remaining.size > 0) grouped.push({ title: 'Other', keys: Array.from(remaining) });
+  }
 
   return (
     <div className="flex flex-col gap-3">
@@ -356,13 +443,23 @@ export function PlatformDetails({ kind, props }: { kind: string; props: any }) {
         </div>
       )}
 
-      {/* Sections */}
+      {/* Sections — grouped (server) or one masonry (other kinds). break-inside-
+          avoid on each Section keeps a card whole within a column. */}
       {orderedSections.length > 0 && (
-        <div className="flex flex-col gap-2">
-          {orderedSections.map((k) => (
-            <Section key={k} name={k} section={(props as any)[k]} />
-          ))}
-        </div>
+        kind === 'server' ? (
+          <div className="flex flex-col gap-4">
+            {grouped.map((g) => (
+              <div key={g.title}>
+                <div className="mb-2 border-b border-slate-100 pb-1 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                  {g.title}
+                </div>
+                <SectionMasonry keys={g.keys} props={props} />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <SectionMasonry keys={orderedSections} props={props} />
+        )
       )}
 
       {scalarKeys.length === 0 && orderedSections.length === 0 && (

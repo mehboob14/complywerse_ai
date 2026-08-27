@@ -48,6 +48,8 @@ export interface AssetsWorkspaceProps {
   setCriticalityFilter: (v: string) => void;
   lifecycleFilter: string;
   setLifecycleFilter: (v: string) => void;
+  sourceFilter?: string;
+  setSourceFilter?: (v: string) => void;
   typeFilter: string;
   setTypeFilter: (v: string) => void;
   environmentFilter?: string;
@@ -92,6 +94,14 @@ const STATUS_ITEMS = [
   { value: 'inactive', label: 'Inactive' },
   { value: 'decommissioned', label: 'Decommissioned' },
 ];
+const SOURCE_ITEMS = [
+  { value: 'easm', label: 'EASM (domain listing)' },
+  { value: 'network_sweep', label: 'Network sweep' },
+  { value: 'connect', label: 'Connect (login)' },
+  { value: 'agent', label: 'Agent' },
+  { value: 'manual', label: 'Manual / import' },
+];
+
 const LIFECYCLE_ITEMS = [
   { value: 'planned', label: 'Planned' },
   { value: 'active', label: 'Active' },
@@ -113,6 +123,8 @@ export function AssetsWorkspace({
   setCriticalityFilter,
   lifecycleFilter,
   setLifecycleFilter,
+  sourceFilter = 'all',
+  setSourceFilter,
   typeFilter,
   setTypeFilter,
   environmentFilter = 'all',
@@ -153,8 +165,9 @@ export function AssetsWorkspace({
   if (criticalityFilter !== 'all') activeChips.push({ label: `Criticality: ${criticalityFilter}`, onClear: () => setCriticalityFilter('all') });
   if (statusFilter !== 'all') activeChips.push({ label: `Status: ${statusFilter}`, onClear: () => setStatusFilter('all') });
   if (lifecycleFilter !== 'all') activeChips.push({ label: `Lifecycle: ${lifecycleFilter}`, onClear: () => setLifecycleFilter('all') });
+  if (sourceFilter !== 'all' && setSourceFilter) activeChips.push({ label: `Source: ${SOURCE_ITEMS.find((i) => i.value === sourceFilter)?.label || sourceFilter}`, onClear: () => setSourceFilter('all') });
   if (environmentFilter !== 'all') activeChips.push({ label: `Environment: ${environmentFilter}`, onClear: () => setEnvironmentFilter?.('all') });
-  const clearAll = () => { setTypeFilter('all'); setCriticalityFilter('all'); setStatusFilter('all'); setLifecycleFilter('all'); setEnvironmentFilter?.('all'); };
+  const clearAll = () => { setTypeFilter('all'); setCriticalityFilter('all'); setStatusFilter('all'); setLifecycleFilter('all'); setEnvironmentFilter?.('all'); setSourceFilter?.('all'); };
 
   // ─── Export every row matching the current filters (not just the page) ─────
   const exportCsv = () => {
@@ -296,6 +309,14 @@ export function AssetsWorkspace({
           onApply={(v) => setLifecycleFilter(v[0] || 'all')}
           multiSelect={false} autoApply placeholder="All" size="sm" className="shrink-0"
         />
+        {setSourceFilter && (
+          <MultiSelectDropdown
+            title="Source" items={withCounts(SOURCE_ITEMS, 'origin_source')}
+            selectedValues={sourceFilter !== 'all' ? [sourceFilter] : []}
+            onApply={(v) => setSourceFilter(v[0] || 'all')}
+            multiSelect={false} autoApply placeholder="All" size="sm" className="shrink-0"
+          />
+        )}
         {setEnvironmentFilter && ENV_ITEMS.length > 0 && (
           <MultiSelectDropdown
             title="Environment" items={ENV_ITEMS}

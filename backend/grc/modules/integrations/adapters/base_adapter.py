@@ -71,6 +71,37 @@ class BaseAdapter(ABC):
     def get_scan_detail(self, scan_id: str) -> Dict[str, Any]:
         pass
 
+    def get_scan_coverage(self) -> List[Dict[str, Any]]:
+        """Which hosts were covered by which COMPLETED scan runs.
+
+        Returns a list of ``{scan_id, scan_name, status, ended_at (epoch),
+        hosts: [host_key, ...]}`` — one entry per scan whose latest run
+        finished successfully. This is the evidence base for inbound closure:
+        a finding may only be auto-closed when its host appears in a completed
+        run that ended after the finding was last seen. Adapters that cannot
+        prove coverage return [] and their findings are simply never
+        auto-closed — absence of evidence closes nothing.
+        """
+        return []
+
+    def writeback_capabilities(self) -> Dict[str, Dict[str, Any]]:
+        """What GRC decisions this scanner's API can represent, action by action.
+
+        Shape: ``{action: {"supported": bool, "method": str|None, "reason": str}}``
+        for the actions ``false_positive`` / ``risk_accepted`` / ``exception`` /
+        ``remediated``. Default: nothing supported — the writeback service
+        records each push as skipped with the adapter's reason instead of
+        guessing at an API the scanner doesn't have.
+        """
+        _no = {"supported": False, "method": None,
+               "reason": "Write-back not implemented for this scanner type."}
+        return {
+            "false_positive": dict(_no),
+            "risk_accepted": dict(_no),
+            "exception": dict(_no),
+            "remediated": dict(_no),
+        }
+
     @abstractmethod
     def create_exception(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         pass

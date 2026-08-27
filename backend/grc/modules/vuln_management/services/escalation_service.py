@@ -227,7 +227,14 @@ class EscalationService:
         tenant_ids: List[int],
         send_emails: bool = True
     ) -> Dict[str, Any]:
-        terminal_statuses = ["resolved", "accepted", "false_positive", "closed"]
+        # Full terminal set — SLA warnings must never fire on findings already
+        # fixed (remediated/verified), auto-closed by the scanner engine, or
+        # closed with the asset.
+        terminal_statuses = [
+            "resolved", "remediated", "verified", "closed",
+            "accepted", "false_positive", "auto_closed_decommissioned",
+            "auto_closed_fixed",
+        ]
         
         vulnerabilities = db.query(Vulnerability).options(
             joinedload(Vulnerability.assignee)
@@ -486,7 +493,11 @@ class EscalationService:
         auto_transition: bool = True,
         system_user_id: Optional[int] = None
     ) -> Dict[str, Any]:
-        terminal_states = ["resolved", "accepted", "false_positive"]
+        terminal_states = [
+            "resolved", "remediated", "verified", "closed",
+            "accepted", "false_positive", "auto_closed_decommissioned",
+            "auto_closed_fixed",
+        ]
         
         vulnerabilities = db.query(Vulnerability).filter(
             Vulnerability.tenant_id.in_(tenant_ids),

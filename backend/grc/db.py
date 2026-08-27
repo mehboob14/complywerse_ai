@@ -229,6 +229,55 @@ def safe_metadata_create_all(engine: Engine, *, slug: str, attempts: int = 3) ->
         raise last_err
 
 
+def _ensure_vulnerability_host_identity(engine: Engine) -> None:
+    """Additive column for tenants created before `host_identity` existed on
+    grc_vulnerabilities. Holds the scanned machine's real {host_name,fqdn,ip} so
+    a finding can auto-link to its asset when that asset is discovered LATER
+    (affected_host stays the scanner's internal id — load-bearing elsewhere)."""
+    if engine.dialect.name != "postgresql":
+        return
+    from sqlalchemy import inspect as sa_inspect
+    inspector = sa_inspect(engine)
+    if not inspector.has_table("grc_vulnerabilities"):
+        return
+    with engine.begin() as conn:
+        conn.execute(text(
+            "ALTER TABLE grc_vulnerabilities ADD COLUMN IF NOT EXISTS host_identity JSON"
+        ))
+
+
+def _ensure_asset_origin_source(engine: Engine) -> None:
+    """Additive column: how an asset was BORN (easm | network_sweep | connect |
+    agent | manual). last_seen_source mutates on every sync, so it cannot answer
+    "where did this asset come from"; origin_source is stamped at creation and
+    never updated."""
+    if engine.dialect.name != "postgresql":
+        return
+    from sqlalchemy import inspect as sa_inspect
+    inspector = sa_inspect(engine)
+    if not inspector.has_table("grc_it_assets"):
+        return
+    with engine.begin() as conn:
+        conn.execute(text(
+            "ALTER TABLE grc_it_assets ADD COLUMN IF NOT EXISTS origin_source VARCHAR(30)"
+        ))
+
+
+def _ensure_asset_dns_aliases(engine: Engine) -> None:
+    """Additive column holding other DNS names that resolve to the same host, so
+    the host-centric model can carry ftp/www/mail as aliases on one asset row."""
+    if engine.dialect.name != "postgresql":
+        return
+    from sqlalchemy import inspect as sa_inspect
+    inspector = sa_inspect(engine)
+    if not inspector.has_table("grc_it_assets"):
+        return
+    with engine.begin() as conn:
+        conn.execute(text(
+            "ALTER TABLE grc_it_assets ADD COLUMN IF NOT EXISTS dns_aliases JSON"
+        ))
+
+
 def _ensure_statutory_audit_tables(engine: Engine) -> None:
     """Focused IF NOT EXISTS / checkfirst ensure for statutory-audit tables.
 
@@ -347,6 +396,18 @@ def _init_tenant_schema(engine: Engine, slug: str) -> None:
             _ensure_statutory_audit_tables(engine)
         except Exception:
             logger.exception("statutory audit schema ensure failed for slug=%s", slug)
+        try:
+            _ensure_vulnerability_host_identity(engine)
+        except Exception:
+            logger.exception("vulnerability host_identity ensure failed for slug=%s", slug)
+        try:
+            _ensure_asset_origin_source(engine)
+        except Exception:
+            logger.exception("asset origin_source ensure failed for slug=%s", slug)
+        try:
+            _ensure_asset_dns_aliases(engine)
+        except Exception:
+            logger.exception("asset dns_aliases ensure failed for slug=%s", slug)
         try:
             from .modules.compliance.schema_migrations import _ensure_for_engine
 

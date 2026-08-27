@@ -40,29 +40,22 @@ export function ApprovalsTab() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await workflowEngineApi.executions.listInstances({ include_approvals: true });
-      // Extract pending approvals from instances
-      const instances = res.data || [];
-      const allApprovals: ApprovalRequest[] = [];
-      for (const inst of instances) {
-        if (inst.pending_approvals) {
-          for (const a of inst.pending_approvals) {
-            allApprovals.push({
-              ...a,
-              workflow_name: inst.workflow_name || `Instance #${inst.id}`,
-            });
-          }
-        }
-      }
-      setApprovals(allApprovals);
+      const inbox = await workflowEngineApi.executions.inbox();
+      const items = (inbox.data?.items ?? inbox.data ?? []) as ApprovalRequest[];
+      const mapped: ApprovalRequest[] = (Array.isArray(items) ? items : []).map((a: any) => ({
+        id: a.id,
+        workflow_instance_id: a.workflow_instance_id,
+        node_key: a.step_name || '',
+        approver_user_id: a.approver_user_id,
+        status: a.status,
+        requested_at: a.requested_at || a.created_at,
+        due_at: a.due_at,
+        workflow_name: a.workflow_name,
+        step_name: a.step_name,
+      }));
+      setApprovals(mapped);
     } catch {
-      // fallback: try direct approvals endpoint
-      try {
-        const res = await workflowEngineApi.executions.listInstances({});
-        setApprovals(res.data || []);
-      } catch {
-        setApprovals([]);
-      }
+      setApprovals([]);
     } finally {
       setLoading(false);
     }
@@ -73,7 +66,10 @@ export function ApprovalsTab() {
   const decide = async (approvalId: number, decision: 'approved' | 'rejected', msg: string) => {
     setDeciding(approvalId);
     try {
-      await workflowEngineApi.executions.decideApproval(approvalId, { decision, comment: msg });
+      await workflowEngineApi.executions.decideApproval(approvalId, {
+        decision: decision === 'approved' ? 'approve' : 'reject',
+        comment: msg,
+      });
       await load();
     } catch (e) {
       console.error('Decision error:', e);

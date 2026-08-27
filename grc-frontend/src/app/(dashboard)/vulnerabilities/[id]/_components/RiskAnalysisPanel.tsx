@@ -260,6 +260,12 @@ export function RiskAnalysisPanel({ vulnerability, assetCriticality, assetCritic
     { label: 'Internet exposure', got: exposed ? 10 : 0, max: 10, detail: internetFacing == null ? (assetName ? 'not assessed → assumed no' : 'no asset linked') : exposed ? 'internet-facing' : 'internal only' },
     { label: 'Asset criticality', got: crit, max: 10, detail: critDetail },
   ];
+  // A tiny non-zero contribution (e.g. EPSS 1.6% → 0.33/20) must not round to a
+  // flat "0", which reads as "no contribution" right next to the "1.6%". Show
+  // one/two decimals only when rounding would otherwise hide a real value;
+  // whole numbers and a genuine 0 stay as-is.
+  const fmtGot = (g: number) =>
+    g > 0 && Math.round(g) === 0 ? g.toFixed(g < 0.1 ? 2 : 1) : String(Math.round(g));
   const raw = parts.reduce((s, p) => s + p.got, 0);
   // KEV floor — a known-exploited bug is never medium priority.
   const floored = kev && raw < 80;
@@ -398,7 +404,7 @@ export function RiskAnalysisPanel({ vulnerability, assetCriticality, assetCritic
                 <div key={p.label} className="flex items-baseline gap-2 text-[12px]">
                   <dt className="flex-none text-slate-500">{p.label}</dt>
                   <dd title={p.detail} className="min-w-0 flex-1 truncate text-right text-slate-400">{p.detail}</dd>
-                  <dd className="w-11 flex-none text-right font-mono font-semibold tabular-nums text-slate-700">{Math.round(p.got)}/{p.max}</dd>
+                  <dd className="w-11 flex-none text-right font-mono font-semibold tabular-nums text-slate-700">{fmtGot(p.got)}/{p.max}</dd>
                 </div>
               ))}
             </dl>
@@ -483,9 +489,10 @@ export function RiskAnalysisPanel({ vulnerability, assetCriticality, assetCritic
               <div key={p.label} className="flex h-6 items-center gap-3">
                 <span className="w-36 flex-none truncate text-[12.5px] text-slate-600">{p.label}</span>
                 <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
-                  {/* A zero score draws nothing — a rounded 0.6%-wide bar
-                      rendered as a stray dot that read as "some progress". */}
-                  {p.got >= 0.5 && (
+                  {/* A genuine 0 draws nothing. A small-but-nonzero contribution
+                      (e.g. EPSS 1.6% → 0.33) gets at least a 2%-wide sliver so it
+                      doesn't read as "zero" next to its detail (which shows 1.6%). */}
+                  {p.got > 0 && (
                     <div className="h-full rounded-full" style={{ width: `${Math.max(2, (p.got / p.max) * 100)}%`, background: ring }} />
                   )}
                 </div>
@@ -493,7 +500,7 @@ export function RiskAnalysisPanel({ vulnerability, assetCriticality, assetCritic
                     second line and made every row a different height. */}
                 <span title={p.detail} className="w-36 flex-none truncate text-right font-mono text-[11.5px] text-slate-500">{p.detail}</span>
                 <span className="w-16 flex-none text-right font-mono text-[12.5px] font-semibold tabular-nums text-slate-900">
-                  {Math.round(p.got)} / {p.max}
+                  {fmtGot(p.got)} / {p.max}
                 </span>
               </div>
             ))}

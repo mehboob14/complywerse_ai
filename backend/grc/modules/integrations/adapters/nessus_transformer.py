@@ -1,5 +1,6 @@
 import logging
 import hashlib
+import ipaddress
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -110,6 +111,14 @@ class NessusTransformer:
         return f"NS-{hashlib.md5(raw.encode()).hexdigest()[:12].upper()}"
 
     @staticmethod
+    def _is_ip_literal(value: str) -> bool:
+        try:
+            ipaddress.ip_address(value.strip())
+            return True
+        except (ValueError, AttributeError):
+            return False
+
+    @staticmethod
     def _stable_asset_id(hostname: str, host_ip: str, tenant_id: int, asset_uuid: str = "") -> str:
         if asset_uuid:
             return f"nessus-{asset_uuid[:64]}"
@@ -164,6 +173,17 @@ class NessusTransformer:
 
         hostname = pick_first(raw.get("hostname"), raw.get("host-name"), raw_name)
         host_ip = pick_first(raw.get("host-ip"), raw.get("ipv4"), raw.get("ip"))
+        # Nessus reports a bare IP as the "hostname" when the target has no
+        # resolvable name (the normal case for an uncredentialed scan of an
+        # address) and carries no separate ip field. Treat an IP-literal
+        # hostname as the host's IP too — otherwise ip_address stays empty, the
+        # IP-last asset match in _find_existing_asset never fires, and the
+        # finding's host_identity carries no "ip" for the later-discovery
+        # linker either, so findings on a known IP stay unlinked forever.
+        # `hostname` itself is left untouched: it keys _stable_asset_id, which
+        # must not move between syncs (vuln ids / auto-close depend on it).
+        if not host_ip and hostname and NessusTransformer._is_ip_literal(hostname):
+            host_ip = hostname
 
         asset_uuid = raw.get("_asset_uuid", "")
         source = raw.get("_source", "scan")
@@ -345,7 +365,19 @@ class NessusTransformer:
         exploit_count = 1 if exploit_available else 0
 
         first_detected = _epoch_to_dt(vuln_data.get("_host_start"))
-        last_seen = _epoch_to_dt(vuln_data.get("_host_end"))
+        # last_seen is stamped from the REPORTING RUN's end time (attached by
+        # the adapter as _scan_ended_at) so closure logic compares scans to
+        # scans. _host_end kept as fallback for payloads that carry it.
+        last_seen = _epoch_to_dt(vuln_data.get("_scan_ended_at")) or _epoch_to_dt(vuln_data.get("_host_end"))
+        # Which scan last reported this finding. "workbench" marks Tenable.io
+        # workbench data, which has no per-scan attribution — those findings
+        # are never auto-closed by the scan-coverage engine.
+        if vuln_data.get("_scan_id"):
+            last_seen_scan_id = str(vuln_data.get("_scan_id"))
+        elif vuln_data.get("_source") == "workbench":
+            last_seen_scan_id = "workbench"
+        else:
+            last_seen_scan_id = None
 
         generated_id = NessusTransformer.generate_vuln_id(plugin_id, host_key, tenant_id)
 
@@ -409,6 +441,7 @@ class NessusTransformer:
             "result_key": f"nessus:{plugin_id}",
             "first_detected": first_detected,
             "last_seen": last_seen,
+            "last_seen_scan_id": last_seen_scan_id,
             "times_detected": vuln_data.get("count", 1),
             "affected_host": host_key,
             "source": "nessus",

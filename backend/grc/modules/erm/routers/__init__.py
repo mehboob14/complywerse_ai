@@ -19,8 +19,12 @@ from .advanced_analytics import router as advanced_analytics_router
 from .dashboard import router as sections_dashboard_router
 from .onboarding import router as onboarding_router
 from .kris_workflow import router as kris_workflow_router
+from .quantification import router as quantification_router
+from .ctem_scopes import router as ctem_scopes_router
 
 __all__ = [
+    "quantification_router",
+    "ctem_scopes_router",
     "sections_dashboard_router",
     "onboarding_router",
     "kris_workflow_router",

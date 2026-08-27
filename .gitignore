@@ -123,3 +123,12 @@ grc-frontend/src/app/redesign-preview/
 # NOTE: _redesign/ holds PRODUCTION assessment-module components (imported by the
 # assessments pages, NcaTab, PDPLAssessmentTab, etc.) — it must be tracked, not ignored.
 grc-frontend/**/*.tsx.bak
+
+# ---------------------------------------------------------------------------
+# Session working artifacts — screenshots, eval dumps, tool state, local backups.
+# Not source of record; keep local, never push.
+# ---------------------------------------------------------------------------
+.playwright-mcp/
+/backups/
+/*.png
+ctem_mapping_eval*

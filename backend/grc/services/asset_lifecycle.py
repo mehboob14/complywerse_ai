@@ -72,6 +72,7 @@ _CLOSED_VULN_STATUSES: Set[str] = {
     "accepted",
     "false_positive",
     "auto_closed_decommissioned",
+    "auto_closed_fixed",
 }
 
 

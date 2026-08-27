@@ -91,6 +91,7 @@ def bulk_enrich_open_vulns(self, tenant_slug: str, only_with_cve: bool = True, d
     terminal = (
         "resolved", "remediated", "verified", "closed",
         "accepted", "false_positive", "auto_closed_decommissioned",
+        "auto_closed_fixed",
     )
     query = db.query(Vulnerability).filter(~Vulnerability.status.in_(terminal))
     if only_with_cve:

@@ -32,6 +32,13 @@ class ConnectionCreate(BaseModel):
     username: Optional[str] = Field(default=None, max_length=255)
     password: Optional[str] = Field(default=None, max_length=500)
     sync_schedule: str = Field(default="0 */4 * * *", max_length=50)
+    # Auto-link scanner findings to matching inventory assets. Stored in
+    # provider_config; None here means "use the default" (ON for a scanner feed).
+    auto_link_assets: Optional[bool] = None
+    # Push GRC decisions (false positives, exceptions) to the scanner via its
+    # API. Stored in provider_config; default OFF — modifying a customer's
+    # scanner configuration is opt-in per connection.
+    scanner_writeback: Optional[bool] = None
 
 
 class ConnectionUpdate(BaseModel):
@@ -44,6 +51,8 @@ class ConnectionUpdate(BaseModel):
     password: Optional[str] = None
     sync_schedule: Optional[str] = None
     is_active: Optional[bool] = None
+    auto_link_assets: Optional[bool] = None
+    scanner_writeback: Optional[bool] = None
 
 
 class ExceptionRequestCreate(BaseModel):
@@ -73,6 +82,10 @@ def _connection_to_dict(c: IntegrationConnection) -> dict:
         "has_password": bool(c.password),
         "sync_schedule": c.sync_schedule,
         "is_active": c.is_active,
+        # Auto-link scanner findings to matching assets — default ON when unset.
+        "auto_link_assets": (c.provider_config or {}).get("auto_link_assets", True),
+        # Push GRC decisions to the scanner — default OFF when unset (opt-in).
+        "scanner_writeback": bool((c.provider_config or {}).get("scanner_writeback", False)),
         "status": c.status,
         "last_sync_at": c.last_sync_at.isoformat() if c.last_sync_at else None,
         "last_sync_status": c.last_sync_status,
@@ -134,6 +147,13 @@ def create_connection(
         sync_schedule=body.sync_schedule,
         created_by_user_id=user_id,
     )
+    _cfg = {}
+    if body.auto_link_assets is not None:
+        _cfg["auto_link_assets"] = bool(body.auto_link_assets)
+    if body.scanner_writeback is not None:
+        _cfg["scanner_writeback"] = bool(body.scanner_writeback)
+    if _cfg:
+        connection.provider_config = _cfg
     db.add(connection)
     db.commit()
     db.refresh(connection)
@@ -179,12 +199,32 @@ def update_connection(
     if not connection:
         raise HTTPException(status_code=404, detail="Connection not found")
 
+    payload = body.dict(exclude_unset=True)
+    # These are not columns — they live in provider_config. Pull them out of
+    # the generic setattr loop (which would raise on a non-attribute) and merge.
+    auto_link = payload.pop("auto_link_assets", None)
+    writeback = payload.pop("scanner_writeback", None)
+
     changes = {}
-    for field_name, val in body.dict(exclude_unset=True).items():
+    for field_name, val in payload.items():
         old_val = getattr(connection, field_name)
         if old_val != val:
             changes[field_name] = {"old": str(old_val), "new": str(val)}
             setattr(connection, field_name, val)
+
+    if auto_link is not None:
+        cfg = dict(connection.provider_config or {})
+        if cfg.get("auto_link_assets") != bool(auto_link):
+            changes["auto_link_assets"] = {"old": str(cfg.get("auto_link_assets")), "new": str(bool(auto_link))}
+            cfg["auto_link_assets"] = bool(auto_link)
+            connection.provider_config = cfg  # reassign so SQLAlchemy flags the JSON dirty
+
+    if writeback is not None:
+        cfg = dict(connection.provider_config or {})
+        if cfg.get("scanner_writeback") != bool(writeback):
+            changes["scanner_writeback"] = {"old": str(cfg.get("scanner_writeback")), "new": str(bool(writeback))}
+            cfg["scanner_writeback"] = bool(writeback)
+            connection.provider_config = cfg
 
     connection.updated_at = datetime.utcnow()
     db.commit()

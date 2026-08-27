@@ -932,6 +932,7 @@ def agent_heartbeat(
                         GRCUser.id == agent.created_by_user_id
                     ).first()
                 asset = ITAsset(
+                    origin_source="agent",  # stamped once at birth; never mutated
                     tenant_id=agent.tenant_id,
                     name=f"agent-host:{wanted_host}",
                     description=f"Auto-created from agent heartbeat (agent #{agent.id})",

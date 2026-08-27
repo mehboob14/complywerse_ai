@@ -1,35 +1,25 @@
 from typing import List, Optional
-from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 
 from ....models import (
     VulnerabilityControlLink, Vulnerability, FrameworkControl,
     ControlObjective, FrameworkDomain, Framework,
-    ParsedFrameworkControl, UploadedFramework, CweControlOverride,
+    ParsedFrameworkControl, UploadedFramework,
     NormalizedControl, InternalControl, GRCUser, get_db
 )
-from pydantic import BaseModel, Field
 from ....schemas import (
     VulnerabilityControlLinkCreate, VulnerabilityControlLinkResponse, MessageResponse
 )
-from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from ....routers.auth_router import (
+    require_auth, get_user_tenants,
+)
 
-# Reused by the response builder + the auto-map endpoint so the "auto" vs
-# "manual" decision lives in one place.
-from ..control_mapping import (
-    AUTO_LINK_NOTES_PREFIX,
-    SENTINEL_KEV,
-    SENTINEL_VULN_MGMT,
-    auto_map_compliance_controls,
-    invalidate_tenant_cache,
-)
-from ..control_mapping.cwe_control_map import (
-    CWE_TO_CONTROL_IDS,
-    ALWAYS_APPLICABLE_VULN_MGMT,
-    ALWAYS_APPLICABLE_ACTIVE_EXPLOITATION,
-    normalise_cwe,
-)
+# Legacy link-note prefix — recognised for DISPLAY only. The CWE rule crosswalk
+# that once wrote these was removed (the AI mapper is the sole control-mapping
+# decision-maker now); no code writes new `auto:cwe:` links, but rows written
+# before removal still render their provenance chip.
+AUTO_LINK_NOTES_PREFIX = "auto:cwe:"
 
 router = APIRouter(tags=["Vulnerability Control Links"])
 
@@ -196,7 +186,56 @@ def list_control_links(
     pfc_ids = [link.parsed_framework_control_id for link in links if link.parsed_framework_control_id is not None]
     parsed_meta = _parsed_metadata_for_links(db, pfc_ids)
 
-    return [_build_response(link, short_codes, parsed_meta) for link in links]
+    responses = [_build_response(link, short_codes, parsed_meta) for link in links]
+
+    # Unified-Library links carry their ACTUAL standards (the framework editions
+    # the control consolidates) — the internal library name is not a standard.
+    try:
+        from ....models import NormalizedControlLink
+        nc_ids = [l.normalized_control_id for l in links if l.normalized_control_id is not None]
+        if nc_ids:
+            stds: dict[int, list[str]] = {}
+            for nc, ref, cid, fw in db.query(
+                    NormalizedControlLink.normalized_control_id,
+                    ParsedFrameworkControl.original_reference, ParsedFrameworkControl.control_id,
+                    UploadedFramework.name).join(
+                    ParsedFrameworkControl, ParsedFrameworkControl.id == NormalizedControlLink.parsed_control_id).join(
+                    UploadedFramework, UploadedFramework.id == ParsedFrameworkControl.uploaded_framework_id).filter(
+                    NormalizedControlLink.normalized_control_id.in_(nc_ids),
+                    UploadedFramework.is_active == True).all():  # noqa: E712
+                stds.setdefault(nc, []).append(f"{(fw or '?')[:30]} {ref or cid or ''}".strip())
+            for link, resp in zip(links, responses):
+                if link.normalized_control_id is not None:
+                    resp.satisfies = stds.get(link.normalized_control_id, [])[:6]
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception("satisfies attach failed (non-fatal)")
+
+    # CTEM Phase 2 — stamp each linked control's automated-assurance tier,
+    # derived at read time from effectiveness evidence. Best-effort: a tier
+    # failure must never break the links panel.
+    try:
+        from ....services.control_assurance import tier_for_ref
+        _kind_fields = (
+            ("parsed_framework_control", "parsed_framework_control_id"),
+            ("internal_control", "internal_control_id"),
+            ("framework_control", "framework_control_id"),
+            ("normalized_control", "normalized_control_id"),
+        )
+        for link, resp in zip(links, responses):
+            for kind, field in _kind_fields:
+                ref_id = getattr(link, field, None)
+                if ref_id is not None:
+                    tier = tier_for_ref(db, link.vulnerability.tenant_id, kind, ref_id)
+                    resp.assurance_tier = tier["tier"]
+                    resp.assurance_last_tested_at = tier["last_tested_at"]
+                    resp.assurance_basis = tier["basis"]
+                    break
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception("assurance tier stamp failed (non-fatal)")
+
+    return responses
 
 
 @router.post("/vulnerabilities/{vuln_id}/controls", response_model=VulnerabilityControlLinkResponse, status_code=status.HTTP_201_CREATED)
@@ -272,33 +311,10 @@ def create_control_link(
     return _build_response(link, short_codes, parsed_meta)
 
 
-@router.post("/vulnerabilities/{vuln_id}/controls/auto-map")
-def auto_map_controls(
-    vuln_id: int,
-    db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth),
-):
-    """Re-run the CWE → framework-control auto-mapper for this vuln.
-
-    Idempotent. Existing manual links (anything whose `notes` doesn't
-    start with `auto:cwe:`) are never touched. Stale auto rows that no
-    longer match the current CWE are removed; fresh ones are added.
-    Returns a summary the UI surfaces in a toast.
-    """
-    user_tenants = get_user_tenants(current_user, db)
-    if not user_tenants:
-        raise HTTPException(status_code=403, detail="User not associated with any tenant")
-    vuln = get_vuln_or_404(vuln_id, user_tenants, db)
-
-    summary = auto_map_compliance_controls(
-        vuln, db, delete_stale=True, user_id=current_user.id,
-    )
-    return summary
-
-
 RESOLVED_STATUSES = {
     "resolved", "remediated", "verified", "closed",
     "accepted", "false_positive", "auto_closed_decommissioned",
+    "auto_closed_fixed",
 }
 
 
@@ -492,228 +508,34 @@ def delete_control_link(
     if not link:
         raise HTTPException(status_code=404, detail="Control link not found")
 
+    # CTEM Phase 2: evidence exists BECAUSE of the link — unlinking retracts
+    # it (with per-row audit), or a pruned wrong link would keep feeding the
+    # control's assurance badge forever.
+    try:
+        from ....services.control_assurance import retract_link_evidence
+        vuln = db.query(Vulnerability).filter(Vulnerability.id == vuln_id).first()
+        retract_link_evidence(
+            db,
+            tenant_id=vuln.tenant_id,
+            vulnerability_id=vuln_id,
+            control_ref={
+                "framework_control_id": link.framework_control_id,
+                "normalized_control_id": link.normalized_control_id,
+                "internal_control_id": link.internal_control_id,
+                "parsed_framework_control_id": link.parsed_framework_control_id,
+            },
+            actor_user_id=current_user.id,
+            reason="link_removed_manually",
+            mode="hard",  # a human asserted the link (and its evidence) is wrong
+        )
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception(
+            "evidence retraction failed for link %s (non-fatal)", link_id
+        )
+
     db.delete(link)
     db.commit()
 
     return MessageResponse(message="Control link removed successfully")
 
-
-# ─────────────────────────────────────────────────────────────────────────
-# Tenant CWE-mapping overrides
-# ─────────────────────────────────────────────────────────────────────────
-# Compliance teams override the default CWE → control map per tenant:
-#   - add    a custom link (e.g. CWE-89 → SAMA 4.2.1) that the default
-#            map doesn't include.
-#   - remove a default link they disagree with (e.g. CWE-89 → NIST SI-15).
-# Sentinel CWE-IDs `__vuln_mgmt__` and `__kev__` target the always-
-# applicable rule sets.
-
-
-class CweOverrideCreate(BaseModel):
-    cwe_id: str = Field(..., description="CWE-N, or '__vuln_mgmt__' / '__kev__'")
-    framework_prefix: str = Field(..., min_length=1, max_length=100)
-    control_code_pattern: str = Field(..., min_length=1, max_length=100)
-    action: str = Field("add", description="'add' or 'remove'")
-    notes: Optional[str] = None
-
-
-class CweOverrideResponse(BaseModel):
-    id: int
-    tenant_id: int
-    cwe_id: str
-    framework_prefix: str
-    control_code_pattern: str
-    action: str
-    notes: Optional[str] = None
-    created_at: datetime
-    created_by: Optional[int] = None
-
-    class Config:
-        from_attributes = True
-
-
-def _validate_cwe_key(raw: str) -> str:
-    """Accept `CWE-N` (normalised) or the two sentinel values."""
-    s = (raw or "").strip()
-    if not s:
-        raise HTTPException(status_code=400, detail="cwe_id is required")
-    if s in (SENTINEL_VULN_MGMT, SENTINEL_KEV):
-        return s
-    normalised = normalise_cwe(s)
-    if not normalised:
-        raise HTTPException(
-            status_code=400,
-            detail=f"cwe_id must be 'CWE-N', '{SENTINEL_VULN_MGMT}', or '{SENTINEL_KEV}'.",
-        )
-    return normalised
-
-
-@router.get("/cwe-overrides", response_model=List[CweOverrideResponse])
-def list_cwe_overrides(
-    db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth),
-):
-    """List every CWE-override row for the caller's primary tenant."""
-    tenant_id = get_user_primary_tenant(current_user, db)
-    if not tenant_id:
-        return []
-    rows = (
-        db.query(CweControlOverride)
-        .filter(CweControlOverride.tenant_id == tenant_id)
-        .order_by(CweControlOverride.cwe_id, CweControlOverride.framework_prefix)
-        .all()
-    )
-    return rows
-
-
-@router.post("/cwe-overrides", response_model=CweOverrideResponse, status_code=status.HTTP_201_CREATED)
-def create_cwe_override(
-    payload: CweOverrideCreate,
-    db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth),
-):
-    """Create one override row. Idempotent — uniqueness is enforced by the
-    composite (tenant, cwe, prefix, pattern, action) constraint."""
-    tenant_id = get_user_primary_tenant(current_user, db)
-    if not tenant_id:
-        raise HTTPException(status_code=403, detail="User has no primary tenant.")
-    action = (payload.action or "add").lower()
-    if action not in ("add", "remove"):
-        raise HTTPException(status_code=400, detail="action must be 'add' or 'remove'.")
-    cwe_key = _validate_cwe_key(payload.cwe_id)
-
-    # Reject duplicates with a clear error rather than a 500 from the
-    # unique constraint.
-    existing = (
-        db.query(CweControlOverride)
-        .filter(
-            CweControlOverride.tenant_id == tenant_id,
-            CweControlOverride.cwe_id == cwe_key,
-            CweControlOverride.framework_prefix == payload.framework_prefix.strip(),
-            CweControlOverride.control_code_pattern == payload.control_code_pattern.strip(),
-            CweControlOverride.action == action,
-        )
-        .first()
-    )
-    if existing:
-        raise HTTPException(
-            status_code=400,
-            detail="An identical override already exists for this tenant.",
-        )
-
-    row = CweControlOverride(
-        tenant_id=tenant_id,
-        cwe_id=cwe_key,
-        framework_prefix=payload.framework_prefix.strip(),
-        control_code_pattern=payload.control_code_pattern.strip(),
-        action=action,
-        notes=(payload.notes or None),
-        created_by=current_user.id,
-    )
-    db.add(row)
-    db.commit()
-    db.refresh(row)
-    # Drop cached resolver results so the next vuln enrichment sees this
-    # override immediately.
-    invalidate_tenant_cache(tenant_id)
-    return row
-
-
-@router.delete("/cwe-overrides/{override_id}", response_model=MessageResponse)
-def delete_cwe_override(
-    override_id: int,
-    db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth),
-):
-    tenant_id = get_user_primary_tenant(current_user, db)
-    if not tenant_id:
-        raise HTTPException(status_code=403, detail="User has no primary tenant.")
-    row = (
-        db.query(CweControlOverride)
-        .filter(
-            CweControlOverride.id == override_id,
-            CweControlOverride.tenant_id == tenant_id,
-        )
-        .first()
-    )
-    if not row:
-        raise HTTPException(status_code=404, detail="Override not found.")
-    db.delete(row)
-    db.commit()
-    invalidate_tenant_cache(tenant_id)
-    return MessageResponse(message="Override removed successfully")
-
-
-@router.get("/cwe-overrides/preview")
-def preview_cwe_resolution(
-    cwe_id: Optional[str] = None,
-    has_cve: bool = True,
-    is_kev: bool = False,
-    db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth),
-):
-    """Show the effective identifier list the resolver would use for a
-    given (cwe_id, has_cve, is_kev) combination after applying tenant
-    overrides. Used by the UI to validate an override before saving.
-    """
-    tenant_id = get_user_primary_tenant(current_user, db)
-    if not tenant_id:
-        return {
-            "tenant_id": None, "cwe_id": cwe_id,
-            "default_identifiers": [], "effective_identifiers": [],
-            "overrides_applied": [],
-        }
-
-    cwe_key = normalise_cwe(cwe_id) if cwe_id else ""
-
-    # Default identifier list (no overrides).
-    defaults: List[tuple] = []
-    if cwe_key:
-        defaults.extend(CWE_TO_CONTROL_IDS.get(cwe_key, []))
-    if has_cve:
-        defaults.extend(ALWAYS_APPLICABLE_VULN_MGMT)
-    if is_kev:
-        defaults.extend(ALWAYS_APPLICABLE_ACTIVE_EXPLOITATION)
-
-    # Effective identifier list (defaults + tenant overrides applied).
-    # Reuse the resolver's own helper so the preview matches reality.
-    from ..control_mapping.cwe_resolver import _build_identifier_list  # noqa
-    effective = _build_identifier_list(
-        cwe_key, has_cve, is_kev, db=db, tenant_id=tenant_id,
-    )
-
-    # Overrides that contributed to this view.
-    override_keys = []
-    if cwe_key:
-        override_keys.append(cwe_key)
-    if has_cve:
-        override_keys.append(SENTINEL_VULN_MGMT)
-    if is_kev:
-        override_keys.append(SENTINEL_KEV)
-    overrides = (
-        db.query(CweControlOverride)
-        .filter(
-            CweControlOverride.tenant_id == tenant_id,
-            CweControlOverride.cwe_id.in_(override_keys),
-        )
-        .all()
-        if override_keys else []
-    )
-
-    return {
-        "tenant_id": tenant_id,
-        "cwe_id": cwe_key or None,
-        "has_cve": has_cve,
-        "is_kev": is_kev,
-        "default_identifiers": [{"framework_prefix": p, "control_code_pattern": c} for p, c in defaults],
-        "effective_identifiers": [{"framework_prefix": p, "control_code_pattern": c} for p, c in effective],
-        "overrides_applied": [
-            {
-                "id": o.id, "cwe_id": o.cwe_id,
-                "framework_prefix": o.framework_prefix,
-                "control_code_pattern": o.control_code_pattern,
-                "action": o.action, "notes": o.notes,
-            }
-            for o in overrides
-        ],
-    }

@@ -34,9 +34,13 @@ interface Connection {
   sync_schedule: string;
   is_active: boolean;
   status: string;
+  auto_link_assets?: boolean;
+  // Push GRC decisions (false positives, exceptions) to the scanner via its
+  // API. Default OFF — opt-in per connection because it modifies the scanner.
+  scanner_writeback?: boolean;
   last_sync_at: string | null;
   last_sync_status: string | null;
-  last_sync_stats: Record<string, number> | null;
+  last_sync_stats: Record<string, unknown> | null;
   consecutive_failures: number;
   created_at: string;
 }
@@ -53,7 +57,24 @@ interface SyncHistoryRecord {
   vulns_new: number;
   vulns_updated: number;
   vulns_closed: number;
+  vulns_reopened?: number;
   errors_count: number;
+}
+
+// last_sync_stats is one level of scalar counters plus optional nested stat
+// groups (e.g. ai_mapping: {findings_sent, ...}). React can't render an object
+// as a child, so flatten nested groups into "group · stat" tiles and stringify
+// anything unexpected instead of crashing the page.
+function flattenSyncStats(stats: Record<string, unknown>): Array<[string, string | number]> {
+  return Object.entries(stats).flatMap(([key, val]): Array<[string, string | number]> => {
+    if (val !== null && typeof val === 'object') {
+      return Object.entries(val as Record<string, unknown>).map(([k, v]): [string, string | number] => [
+        `${key} ${k}`,
+        v === null || v === undefined ? '—' : typeof v === 'object' ? JSON.stringify(v) : (v as string | number),
+      ]);
+    }
+    return [[key, val === null || val === undefined ? '—' : (val as string | number)]];
+  });
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -179,6 +200,14 @@ export default function ConnectionsPage() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => integrationsApi.deleteConnection(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['connections'] }),
+  });
+
+  // Two-way sync toggle: push GRC decisions (false positives, exceptions)
+  // back to the scanner. Persisted in the connection's provider_config.
+  const writebackMutation = useMutation({
+    mutationFn: ({ id, enabled }: { id: number; enabled: boolean }) =>
+      integrationsApi.updateConnection(id, { scanner_writeback: enabled }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['connections'] }),
   });
 
@@ -413,7 +442,7 @@ export default function ConnectionsPage() {
                 <div>
                   <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Last Sync Stats</h3>
                   <div className="grid grid-cols-3 gap-2">
-                    {Object.entries(detailConn.last_sync_stats).map(([key, val]) => (
+                    {flattenSyncStats(detailConn.last_sync_stats).map(([key, val]) => (
                       <div key={key} className="p-2 bg-slate-50 rounded-lg border border-slate-100 text-center">
                         <div className="text-base font-bold text-slate-800">{val}</div>
                         <div className="text-xs text-slate-500 mt-0.5">{key.replace(/_/g, ' ')}</div>
@@ -594,6 +623,25 @@ export default function ConnectionsPage() {
                     )}
                   </div>
 
+                  <label className="flex items-start gap-2.5 p-3 rounded-lg border border-slate-200 bg-slate-50/60 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={!!conn.scanner_writeback}
+                      disabled={writebackMutation.isPending}
+                      onChange={(e) => writebackMutation.mutate({ id: conn.id, enabled: e.target.checked })}
+                      className="mt-0.5 h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                    />
+                    <span className="text-xs leading-relaxed">
+                      <span className="font-medium text-slate-800">Push decisions to scanner (two-way sync)</span>
+                      <span className="block text-slate-500 mt-0.5">
+                        When a finding is marked false positive or granted an exception in ComplyVerse, mirror that
+                        decision in the scanner (e.g. a host-scoped Nessus plugin rule). Actions the scanner&apos;s API
+                        can&apos;t represent are recorded as skipped with the reason. Auto-close on verified re-scan is
+                        always on and doesn&apos;t modify the scanner.
+                      </span>
+                    </span>
+                  </label>
+
                   {testResult?.id === conn.id && (
                     <div className={`flex items-center gap-2 p-3 rounded-lg text-sm ${testResult.success ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
                       {testResult.success ? <CheckCircle size={15} /> : <XCircle size={15} />}
@@ -612,6 +660,7 @@ export default function ConnectionsPage() {
                     <div className={`p-3 rounded-lg text-sm ${syncResult.data?.status === 'completed' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
                       {syncResult.data?.status === 'completed' ? (
                         <>Sync complete · Assets: +{syncResult.data?.assets_new || 0} new, {syncResult.data?.assets_updated || 0} updated · Vulns: +{syncResult.data?.vulns_new || 0} new, {syncResult.data?.vulns_updated || 0} updated, {syncResult.data?.vulns_closed || 0} closed
+                        {syncResult.data?.vulns_reopened > 0 ? `, ${syncResult.data.vulns_reopened} reopened` : ''}
                         {syncResult.data?.errors_count > 0 ? ` · ${syncResult.data.errors_count} errors` : ''}</>
                       ) : (
                         <>Sync failed{syncResult.data?.error ? ` · ${syncResult.data.error}` : ''}</>
@@ -621,7 +670,7 @@ export default function ConnectionsPage() {
 
                   {conn.last_sync_stats && (
                     <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-                      {Object.entries(conn.last_sync_stats).map(([key, val]) => (
+                      {flattenSyncStats(conn.last_sync_stats).map(([key, val]) => (
                         <div key={key} className="text-center p-2 bg-slate-50 rounded-lg border border-slate-100">
                           <div className="text-sm font-bold text-slate-800">{val}</div>
                           <div className="text-xs text-slate-500 mt-0.5">{key.replace(/_/g, ' ')}</div>

@@ -40,6 +40,7 @@ PLATFORM_KINDS: Dict[str, str] = {
     "netdev_ssh": "network",
     "aws_readonly": "cloud",
     "azure_readonly": "cloud",
+    "digitalocean_api": "cloud",   # account-level (API token) — droplet SSH stays "server"
     "k8s_api": "cluster",
     "ldap_query": "identity",
 }
@@ -91,7 +92,8 @@ def safe_cursor(cur, conn):
 # ── Register all platform collectors ────────────────────────────────────────
 # Defensive: a single module that fails to import (e.g. a syntax error mid-edit)
 # must not take down the whole registry — log it and keep the rest working.
-_MODULES = ("postgres", "mysql", "mssql", "oracle", "cisco", "aws", "azure", "k8s", "ad")
+_MODULES = ("postgres", "mysql", "mssql", "oracle", "cisco", "aws", "azure",
+            "digitalocean", "k8s", "ad")
 for _m in _MODULES:
     try:
         importlib.import_module(f"{__name__}.{_m}")

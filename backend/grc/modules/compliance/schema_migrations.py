@@ -155,6 +155,15 @@ def _ensure_index(engine: Engine, table: str, column: str, index_name: str) -> N
 # Postgres types. ddl_type may include defaults (e.g. "TIMESTAMP DEFAULT NOW()")
 # for columns we want backfilled on existing rows.
 _COLUMN_ADDS = [
+    # CTEM gated loop — per-cycle stage completion stamps ({"discover": ts, ...});
+    # a stage's numbers/actions unlock only after the previous stage is stamped.
+    ("grc_ctem_cycles", "stage_progress", "JSON DEFAULT '{}'::json", None),
+    # CTEM Validate — proposals may target an uploaded-framework control, and carry provenance
+    ("grc_ai_control_proposals", "parsed_framework_control_id", "INTEGER",
+     "ix_grc_ai_control_proposals_parsed_framework_control_id"),
+    ("grc_ai_control_proposals", "provenance", "VARCHAR(12) DEFAULT 'model' NOT NULL", None),
+    ("grc_ai_control_proposal_runs", "findings_reused", "INTEGER DEFAULT 0", None),
+    ("grc_ai_control_proposal_runs", "proposals_reused", "INTEGER DEFAULT 0", None),
     ("grc_policy_statements", "assigned_to_user_id", "INTEGER",
      "ix_grc_policy_statements_assigned_to_user_id"),
     ("grc_roles", "created_at", "TIMESTAMP DEFAULT NOW()", None),
@@ -188,6 +197,14 @@ _COLUMN_ADDS = [
     ("grc_it_assets", "platform_kind", "VARCHAR(30)",
      "ix_grc_it_assets_platform_kind"),
     ("grc_it_assets", "platform_properties", "JSON", None),
+    # Unified saved-login model: every connect type (DB/cloud/network/…) can be
+    # saved as a reusable credential, not just hosts. integration_type drives the
+    # UI category + reuse; extra_json holds the type-specific encrypted creds.
+    ("grc_credential_profiles", "integration_type", "VARCHAR(50)",
+     "ix_grc_credential_profiles_integration_type"),
+    ("grc_credential_profiles", "extra_json", "JSON", None),
+    # Per-campaign SNMP read communities for discovery fingerprinting.
+    ("grc_discovery_campaigns", "snmp_communities", "VARCHAR(500)", None),
     # Collector routing for plugin runs (Updated_CIS_Assests migration).
     ("grc_integration_connections", "assigned_collector_agent_id", "INTEGER",
      "ix_grc_integration_connections_assigned_collector_agent_id"),
@@ -763,6 +780,52 @@ _COLUMN_ADDS = [
     # breakdown), derived from detected_software_json by the security_classifier
     # on every inventory refresh. Drives the asset's Security Posture card.
     ("grc_it_assets", "security_posture", "JSON", None),
+    # ── Scanner closure loop (two-way vulnerability sync) ─────────────────────
+    # Provenance + observation window + closure evidence on findings, and the
+    # reopen counter on sync history. All nullable/additive — legacy rows are
+    # adopted by the next sync (matched by their deterministic vuln_id) and
+    # only then become eligible for scanner-verified closure.
+    ("grc_vulnerabilities", "connection_id", "INTEGER",
+     "ix_grc_vulnerabilities_connection_id"),
+    ("grc_vulnerabilities", "source", "VARCHAR(50)", None),
+    ("grc_vulnerabilities", "external_vuln_id", "VARCHAR(100)", None),
+    ("grc_vulnerabilities", "scanner_status", "VARCHAR(30)", None),
+    ("grc_vulnerabilities", "first_detected", "TIMESTAMP", None),
+    ("grc_vulnerabilities", "last_seen", "TIMESTAMP", None),
+    ("grc_vulnerabilities", "last_seen_scan_id", "VARCHAR(64)", None),
+    ("grc_vulnerabilities", "closed_at", "TIMESTAMP", None),
+    ("grc_vulnerabilities", "closed_by", "VARCHAR(100)", None),
+    ("grc_vulnerabilities", "closure_evidence", "JSON", None),
+    ("grc_vulnerabilities", "reopened_at", "TIMESTAMP", None),
+    ("grc_vulnerabilities", "reopen_count", "INTEGER DEFAULT 0", None),
+    ("grc_sync_history", "vulns_reopened", "INTEGER DEFAULT 0", None),
+    # ── CRQM (FAIR risk quantification) — Phase 1 ─────────────────────────────
+    # Structured scenario + material flag on the register, and FAIR control
+    # effects on the risk↔control link. All nullable/additive; the new
+    # grc_risk_loss_models / grc_risk_simulation_runs tables are created by
+    # safe_metadata_create_all.
+    ("grc_risks", "is_material", "BOOLEAN DEFAULT FALSE",
+     "ix_grc_risks_is_material"),
+    ("grc_risks", "scenario_actor", "VARCHAR(200)", None),
+    ("grc_risks", "scenario_method", "TEXT", None),
+    ("grc_risks", "scenario_effect", "JSON", None),
+    ("grc_risks", "scenario_statement", "TEXT", None),
+    ("grc_risk_control_links", "freq_reduction_min_pct", "DOUBLE PRECISION", None),
+    ("grc_risk_control_links", "freq_reduction_ml_pct", "DOUBLE PRECISION", None),
+    ("grc_risk_control_links", "freq_reduction_max_pct", "DOUBLE PRECISION", None),
+    ("grc_risk_control_links", "mag_reduction_min_pct", "DOUBLE PRECISION", None),
+    ("grc_risk_control_links", "mag_reduction_ml_pct", "DOUBLE PRECISION", None),
+    ("grc_risk_control_links", "mag_reduction_max_pct", "DOUBLE PRECISION", None),
+    ("grc_risk_control_links", "effect_rationale", "TEXT", None),
+    ("grc_risk_control_links", "effect_updated_by", "INTEGER", None),
+    ("grc_risk_control_links", "effect_updated_at", "TIMESTAMP", None),
+    # CRQM follow-up: run provenance + frozen PoS evidence snapshot (the two
+    # new tables may already exist on tenants that ran the first CRQM build).
+    ("grc_risk_simulation_runs", "trigger", "VARCHAR(30) DEFAULT 'manual'", None),
+    ("grc_risk_loss_models", "pos_evidence", "JSON", None),
+    # CTEM Phase 2 follow-up: soft retraction for rule-driven link removal.
+    ("grc_control_effectiveness_evidence", "retracted_at", "TIMESTAMP",
+     "ix_grc_ctrl_eff_retracted_at"),
 ]
 
 
@@ -921,6 +984,9 @@ def _ensure_for_engine(engine: Engine) -> None:
         # Relax NOT NULL on columns the connector framework needs to leave
         # empty for non-scanner providers. Idempotent.
         _ensure_column_nullable(engine, "grc_integration_connections", "credential_env_prefix")
+        # CTEM Validate: a proposal now targets EITHER a Unified-Library control OR an
+        # uploaded-framework control, so the UCL ref must be nullable.
+        _ensure_column_nullable(engine, "grc_ai_control_proposals", "normalized_control_id")
 
         # One-shot data backfill: re-tag legacy "Framework Assessment #<id>"
         # risks with their actual framework short_code/name so the Risk

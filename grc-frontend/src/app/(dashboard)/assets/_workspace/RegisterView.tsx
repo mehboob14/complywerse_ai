@@ -28,6 +28,11 @@ import {
 } from './lib';
 import { RowActionsMenu } from './RowActionsMenu';
 
+// A row is connectable only when we have a host to reach AND it isn't an
+// unmanaged, evidence-only asset (e.g. an external EASM finding you can't log
+// into from outside). Mirrors the Connect gate on the asset-detail page.
+const canConnect = (a: ITAsset): boolean => !!a.host_name && a.discovery_state !== 'unmanaged';
+
 export interface RegisterViewProps {
   rows: ITAsset[];
   loading?: boolean;
@@ -82,6 +87,7 @@ export function RegisterView({
                 <span className="truncate" style={{ fontSize: 13, fontWeight: 600, color: 'var(--as-ink)' }}>{name}</span>
                 {n > 0 && <span style={{ flex: 'none', fontSize: 10, fontWeight: 700, color: '#7A2D17', background: '#F7E4DC', borderRadius: 99, padding: '2px 7px' }}>{n} vuln{n > 1 ? 's' : ''}</span>}
                 {a.cde_environment && <span style={{ flex: 'none', fontSize: 9, fontWeight: 700, color: '#7A2D17', background: '#F7E4DC', borderRadius: 4, padding: '2px 5px' }}>CDE</span>}
+                {a.internet_facing && <span style={{ flex: 'none', fontSize: 9, fontWeight: 700, color: '#8A4A0F', background: '#F6E8D4', borderRadius: 4, padding: '2px 5px' }} title="Exposed to the public internet">Internet-facing</span>}
               </div>
               {a.environment && <div className="capitalize" style={{ fontSize: 11.5, color: 'var(--as-muted)' }}>{a.environment}</div>}
             </div>
@@ -243,7 +249,7 @@ export function RegisterView({
           <RowActionsMenu
             actions={[
               { key: 'view', label: 'View', icon: Eye, onClick: () => onView(a) },
-              { key: 'connect', label: 'Connect', icon: Plug, onClick: () => onConnect(a), hidden: !a.host_name },
+              { key: 'connect', label: 'Connect', icon: Plug, onClick: () => onConnect(a), hidden: !canConnect(a) },
               { key: 'edit', label: 'Edit', icon: Pencil, onClick: () => onEdit(a), hidden: !canEdit },
               { key: 'delete', label: 'Delete', icon: Trash2, onClick: () => onDelete(a), variant: 'danger', hidden: !canDelete },
             ]}
@@ -253,14 +259,15 @@ export function RegisterView({
     },
   ];
 
-  // Bulk-connect — only assets with a host_name can be connected. We hand the
-  // page's existing bulk-connect handler the full selected id set (it already
-  // resolves platform + filters by host).
+  // Bulk-connect — only connectable assets are sent. Unmanaged/evidence-only
+  // rows (e.g. external EASM findings) are dropped here so a sweep never tries a
+  // login that can't succeed. We hand the page's existing bulk-connect handler
+  // the filtered id set (it already resolves platform + filters by host).
   const bulkActions: BulkAction<ITAsset>[] = [];
   if (onBulkConnect) {
     bulkActions.push({
       id: 'connect', label: 'Connect', icon: Plug,
-      onClick: (selected) => onBulkConnect(selected.filter((a) => !!a.host_name).map((a) => a.id)),
+      onClick: (selected) => onBulkConnect(selected.filter(canConnect).map((a) => a.id)),
     });
   }
   if (onBulkUpdate && canEdit) {

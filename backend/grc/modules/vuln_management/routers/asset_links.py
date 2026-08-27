@@ -10,7 +10,9 @@ from ....models import (
 from ....schemas import (
     VulnerabilityAssetLinkCreate, VulnerabilityAssetLinkResponse, MessageResponse
 )
-from ....routers.auth_router import require_auth, get_user_tenants, decode_token
+from ....routers.auth_router import (
+    require_auth, get_user_tenants, decode_token, require_tenant_permission,
+)
 
 
 def _resolve_tenant_user_to_public(owner_id: int, token: str, db: Session):
@@ -226,5 +228,34 @@ def delete_asset_link(
     
     db.delete(link)
     db.commit()
-    
+
     return MessageResponse(message="Asset link removed successfully")
+
+
+@router.post("/asset-links/backfill-host")
+def backfill_host_asset_links(
+    dry_run: bool = False,
+    assign_unmatched_to_asset_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(require_tenant_permission("vulnerabilities:vulnerability_register:edit")),
+):
+    """Link every unlinked scanner finding to the asset its `affected_host`
+    names — the backfill for findings the live sync left orphaned. Idempotent;
+    `dry_run=true` reports what WOULD link without writing.
+
+    `assign_unmatched_to_asset_id` (optional) attaches findings whose host is an
+    opaque scanner key with no matching asset to a named asset the operator
+    chooses — the human-in-the-loop enrichment for Nessus host-keys. Returns a
+    match report (assets, findings with a host, matched, newly-linked, unmatched,
+    assigned-unmatched)."""
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        raise HTTPException(status_code=403, detail="User not associated with any tenant")
+    from ....services.finding_asset_linker import backfill_host_links
+    report = backfill_host_links(
+        db, user_tenants[0], commit=not dry_run,
+        assign_unmatched_to_asset_id=assign_unmatched_to_asset_id,
+    )
+    report["dry_run"] = dry_run
+    return report

@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { vulnManagementApi } from '@/lib/api';
+import { vulnManagementApi, controlAssuranceApi } from '@/lib/api';
 import { PageLoader } from '@/components/ui';
 import {
   ArrowLeft,
@@ -86,6 +86,16 @@ const RESOLVED_STATUSES = new Set([
   'accepted', 'false_positive', 'auto_closed_decommissioned',
 ]);
 
+// CTEM Phase 2 — automated-assurance tier styling (derived server-side from
+// closure/retest evidence; basis sentence rides in the tooltip).
+const ASSURANCE_PILL: Record<string, { cls: string; label: string }> = {
+  tested_effective: { cls: 'border-emerald-300 bg-emerald-50 text-emerald-700', label: 'Tested effective' },
+  tested_failed: { cls: 'border-rose-300 bg-rose-50 text-rose-700', label: 'Test failed' },
+  remediation_verified: { cls: 'border-sky-300 bg-sky-50 text-sky-700', label: 'Remediation verified' },
+  stale: { cls: 'border-amber-300 bg-amber-50 text-amber-700', label: 'Stale' },
+  attested_only: { cls: 'border-slate-200 bg-slate-50 text-slate-500', label: 'Attested only' },
+};
+
 function severityBadge(sev?: string | null) {
   const k = (sev || 'info').toLowerCase();
   const s = SEVERITY_STYLES[k] || SEVERITY_STYLES.info;
@@ -119,6 +129,15 @@ export default function FrameworkControlDetailPage() {
       return res.data as EvidenceResponse;
     },
     enabled: Number.isFinite(controlId) && controlId > 0,
+  });
+
+  // CTEM Phase 2 — automated effectiveness evidence (parsed controls carry
+  // the vuln links today; legacy-type pages simply skip the panel).
+  const { data: assurance } = useQuery({
+    queryKey: ['control-assurance-evidence', controlId, controlType],
+    queryFn: async () =>
+      (await controlAssuranceApi.controlEvidence('parsed_framework_control', controlId)).data,
+    enabled: Number.isFinite(controlId) && controlId > 0 && controlType === 'parsed',
   });
 
   if (!Number.isFinite(controlId) || controlId <= 0) {
@@ -174,6 +193,72 @@ export default function FrameworkControlDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* CTEM Phase 2 — automated assurance: tier + dated evidence rows */}
+      {assurance && (
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h2 className="text-sm font-semibold text-slate-900 flex items-center gap-1.5">
+              <Shield className="h-3.5 w-3.5 text-slate-500" strokeWidth={1.75} />
+              Automated assurance
+            </h2>
+            {(() => {
+              const pill = ASSURANCE_PILL[assurance.tier] || ASSURANCE_PILL.attested_only;
+              return (
+                <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${pill.cls}`}>
+                  {pill.label}
+                  {assurance.last_tested_at && ` · ${new Date(assurance.last_tested_at).toLocaleDateString()}`}
+                </span>
+              );
+            })()}
+          </div>
+          <p className="mt-1 text-xs text-slate-500">{assurance.basis}</p>
+          {(assurance.evidence || []).length > 0 && (
+            <ul className="mt-2 divide-y divide-slate-100">
+              {assurance.evidence.slice(0, 8).map((e: any) => (
+                <li key={e.id} className="flex items-center justify-between gap-2 py-1.5 text-xs">
+                  <span className="text-slate-700">
+                    {e.source_type === 'scanner_closure' ? 'Scanner-verified closure' : 'Finding retest'}
+                    {e.details?.scan_name ? ` · ${e.details.scan_name}` : ''}
+                    {e.details?.vuln_id ? ` · ${e.details.vuln_id}` : ''}
+                    {Array.isArray(e.details?.link_basis) && e.details.link_basis.includes('kev_rule') && (
+                      <span
+                        className="ml-1.5 inline-flex rounded-full bg-amber-50 px-1.5 py-0 text-[10px] font-semibold text-amber-700"
+                        title="This control was linked by the KEV always-applicable rule — the closure proves the finding was fixed, which is weaker evidence for an incident-response control than for a patch-management one. Discount accordingly."
+                      >
+                        via KEV rule
+                      </span>
+                    )}
+                    {Array.isArray(e.details?.link_basis) && !e.details.link_basis.includes('kev_rule')
+                      && e.details.link_basis.includes('vuln_mgmt_rule') && !e.details.link_basis.includes('cwe_crosswalk') && (
+                      <span className="ml-1.5 inline-flex rounded-full bg-slate-100 px-1.5 py-0 text-[10px] font-semibold text-slate-500"
+                        title="Linked by the always-applicable vulnerability-management rule (any CVE-bearing finding).">
+                        via vuln-mgmt rule
+                      </span>
+                    )}
+                  </span>
+                  <span className="shrink-0">
+                    <span className={`mr-2 inline-flex rounded-full px-1.5 py-0 text-[10px] font-semibold uppercase ${
+                      e.result === 'pass' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
+                    }`}>
+                      {e.result}
+                    </span>
+                    <span className="text-slate-400">
+                      {e.tested_at ? new Date(e.tested_at).toLocaleDateString() : '—'}
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {(assurance.evidence || []).length === 0 && (
+            <p className="mt-2 text-xs text-slate-400">
+              No automated evidence yet — it accrues when a re-scan verifiably closes a linked
+              finding or a retest is logged against one.
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Description */}
       {(control.statement || control.control_objective) && (

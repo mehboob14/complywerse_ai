@@ -562,6 +562,9 @@ export default function ControlLibraryPage() {
   // True total across ALL groups (from the API), not just the current page.
   const totalControls = (groupsData as { total_mapped_controls?: number } | undefined)?.total_mapped_controls
     ?? groupsData?.items?.reduce((sum, g) => sum + g.total_control_count, 0) ?? 0;
+  // Frameworks the LIBRARY covers (from API), not every framework available to the tenant.
+  const libFrameworks = (groupsData as { library_framework_count?: number } | undefined)?.library_framework_count
+    ?? (availableFrameworks?.length || 0);
 
   const filteredGroups = (() => {
     const base = (showEmptyGroups
@@ -756,7 +759,7 @@ export default function ControlLibraryPage() {
           </span>
           <div>
             <h1 className="text-xl font-bold text-white sm:text-2xl">Unified Control Library</h1>
-            <p className="max-w-md text-sm text-primary-100">Unified, de-duplicated controls across all 30 frameworks — filter to any subset</p>
+            <p className="max-w-md text-sm text-primary-100">Unified, de-duplicated controls across all {libFrameworks} frameworks — filter to any subset</p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2 lg:max-w-2xl lg:justify-end">
@@ -884,7 +887,7 @@ export default function ControlLibraryPage() {
             <GitMerge className="h-3.5 w-3.5" />{groupsLoading ? '—' : dispControls} unified controls
           </span>
           <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-1 ring-1 ring-white/20">
-            <Shield className="h-3.5 w-3.5" />{groupsLoading ? '—' : (filterActive ? pickedFw.length : (availableFrameworks?.length || 0))} frameworks
+            <Shield className="h-3.5 w-3.5" />{groupsLoading ? '—' : (filterActive ? pickedFw.length : libFrameworks)} frameworks
           </span>
           <span className="ml-auto hidden items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1 text-primary-50 ring-1 ring-white/15 sm:inline-flex">
             <Sparkles className="h-3.5 w-3.5" />AI-normalized · filter any subset, no re-run
@@ -931,7 +934,7 @@ export default function ControlLibraryPage() {
           <div className="absolute inset-x-0 top-0 h-1 bg-primary-600" />
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <p className="text-2xl font-bold leading-none text-slate-900 tabular-nums">{groupsLoading ? '—' : (filterActive ? pickedFw.length : (availableFrameworks?.length || 0))}</p>
+              <p className="text-2xl font-bold leading-none text-slate-900 tabular-nums">{groupsLoading ? '—' : (filterActive ? pickedFw.length : libFrameworks)}</p>
               <p className="mt-1.5 text-xs font-semibold text-slate-600">Frameworks Covered</p>
             </div>
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-50 text-primary-600 shadow-sm transition-transform group-hover:scale-105">

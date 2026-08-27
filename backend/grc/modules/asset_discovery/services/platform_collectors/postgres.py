@@ -148,25 +148,55 @@ def collect_postgres(creds: Dict[str, Any]) -> Dict[str, Any]:
             ]
         props["roles"] = collect_section(_roles)
 
-        # ── replication (likely superuser-only → captured as permission_denied) ─
+        # ── replication ────────────────────────────────────────────────────
+        # A standalone server has no connected replicas, so pg_stat_replication
+        # is empty and the section reads blank. To stay informative even for a
+        # single-node install we also report the replication *configuration*
+        # (wal_level / senders / slots — all readable by any role) and a derived
+        # role, so the card always says something concrete.
         def _replication():
-            in_recovery = _q("SELECT pg_is_in_recovery()")[0][0]
+            in_recovery = bool(_q("SELECT pg_is_in_recovery()")[0][0])
+            settings = {
+                row[0]: row[1]
+                for row in _q(
+                    "SELECT name, setting FROM pg_settings "
+                    "WHERE name IN ('wal_level','max_wal_senders','max_replication_slots',"
+                    "'synchronous_commit','hot_standby','archive_mode')"
+                )
+            }
             replicas = _q(
                 "SELECT client_addr, state, sync_state, "
                 "       write_lag, replay_lag "
                 "FROM pg_stat_replication"
             )
+            try:
+                slots = _q(
+                    "SELECT slot_name, slot_type, active FROM pg_replication_slots"
+                )
+            except Exception:
+                slots = []
+            replica_rows = [
+                {
+                    "client_addr": str(r[0]) if r[0] is not None else None,
+                    "state": r[1], "sync_state": r[2],
+                    "write_lag": str(r[3]) if r[3] is not None else None,
+                    "replay_lag": str(r[4]) if r[4] is not None else None,
+                }
+                for r in replicas[:_ROW_CAP]
+            ]
             return {
-                "is_in_recovery": bool(in_recovery),
-                "replicas": [
-                    {
-                        "client_addr": str(r[0]) if r[0] is not None else None,
-                        "state": r[1], "sync_state": r[2],
-                        "write_lag": str(r[3]) if r[3] is not None else None,
-                        "replay_lag": str(r[4]) if r[4] is not None else None,
-                    }
-                    for r in replicas[:_ROW_CAP]
-                ],
+                "role": "Replica (in recovery)" if in_recovery else (
+                    "Primary" if replica_rows else "Standalone (no replicas)"),
+                "is_in_recovery": in_recovery,
+                "connected_replicas": len(replica_rows),
+                "wal_level": settings.get("wal_level"),
+                "max_wal_senders": settings.get("max_wal_senders"),
+                "max_replication_slots": settings.get("max_replication_slots"),
+                "synchronous_commit": settings.get("synchronous_commit"),
+                "hot_standby": settings.get("hot_standby"),
+                "archive_mode": settings.get("archive_mode"),
+                "replication_slots": len(slots),
+                "replicas": replica_rows,
             }
         props["replication"] = collect_section(_replication)
 

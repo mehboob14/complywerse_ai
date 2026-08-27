@@ -511,6 +511,7 @@ def import_ubl_risk_register(
 
         inferred_type = "third_party" if category == "third_party" else "application"
         created_asset = ITAsset(
+            origin_source="manual",  # stamped once at birth; never mutated
             tenant_id=tenant_id,
             name=(asset_name_text or ip_or_url_text)[:255],
             description="Auto-created from UBL Template risk register upload",

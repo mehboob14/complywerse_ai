@@ -15,6 +15,7 @@ from ....models import (
 RESOLVED_STATUSES = [
     "resolved", "remediated", "verified", "closed",
     "accepted", "false_positive", "auto_closed_decommissioned",
+    "auto_closed_fixed",
 ]
 from ....schemas import (
     VulnerabilityDashboard, OverdueVulnerabilityResponse, AssetExposureResponse
@@ -309,7 +310,7 @@ def get_overdue_vulnerabilities(
     ).filter(
         Vulnerability.tenant_id.in_(user_tenants),
         Vulnerability.due_date < now,
-        Vulnerability.status.notin_(["resolved", "accepted", "false_positive"])
+        Vulnerability.status.notin_(RESOLVED_STATUSES)
     )
     
     if tenant_id:
@@ -353,11 +354,18 @@ def get_asset_exposure(
     else:
         filter_tenants = user_tenants
     
+    # Exposure deliberately KEEPS "accepted" — an accepted risk is still
+    # present on the asset. Excluded are only statuses meaning the finding is
+    # fixed, unfounded, or the host is gone.
+    _EXPOSURE_EXCLUDED = [
+        "resolved", "false_positive", "remediated", "verified", "closed",
+        "auto_closed_decommissioned", "auto_closed_fixed",
+    ]
     asset_ids = db.query(VulnerabilityAssetLink.asset_id).join(
         Vulnerability
     ).filter(
         Vulnerability.tenant_id.in_(filter_tenants),
-        Vulnerability.status.notin_(["resolved", "false_positive"])
+        Vulnerability.status.notin_(_EXPOSURE_EXCLUDED)
     ).distinct().all()
     
     results = []
@@ -370,7 +378,7 @@ def get_asset_exposure(
             Vulnerability
         ).filter(
             VulnerabilityAssetLink.asset_id == asset_id,
-            Vulnerability.status.notin_(["resolved", "false_positive"])
+            Vulnerability.status.notin_(_EXPOSURE_EXCLUDED)
         ).all()
         
         vuln_ids = [link.vulnerability_id for link in vuln_links]
@@ -455,8 +463,8 @@ def get_department_metrics(
             Vulnerability.id.in_(vuln_ids)
         ).all()
         
-        open_count = sum(1 for v in dept_vulns if v.status not in ["resolved", "accepted", "false_positive"])
-        resolved_vulns = [v for v in dept_vulns if v.status in ["resolved", "accepted", "false_positive"]]
+        open_count = sum(1 for v in dept_vulns if v.status not in RESOLVED_STATUSES)
+        resolved_vulns = [v for v in dept_vulns if v.status in RESOLVED_STATUSES]
         resolved_count = len(resolved_vulns)
         
         resolution_times = []
@@ -468,9 +476,9 @@ def get_department_metrics(
         on_time = sum(1 for v in resolved_vulns if v.resolved_at and v.due_date and v.resolved_at <= v.due_date)
         sla_compliance_percent = round((on_time / resolved_count * 100) if resolved_count > 0 else 0.0, 1)
         
-        overdue_count = sum(1 for v in dept_vulns 
-                          if v.due_date and v.due_date < now 
-                          and v.status not in ["resolved", "accepted", "false_positive"])
+        overdue_count = sum(1 for v in dept_vulns
+                          if v.due_date and v.due_date < now
+                          and v.status not in RESOLVED_STATUSES)
         
         by_severity = {"critical": 0, "high": 0, "medium": 0, "low": 0}
         for sev in ["critical", "high", "medium", "low"]:
@@ -517,7 +525,7 @@ def get_sla_trends(
     
     query = db.query(Vulnerability).filter(
         Vulnerability.tenant_id.in_(filter_tenants),
-        Vulnerability.status.in_(["resolved", "accepted", "false_positive"]),
+        Vulnerability.status.in_(RESOLVED_STATUSES),
         Vulnerability.resolved_at >= start_date
     )
     
@@ -691,9 +699,9 @@ def get_aging_analysis(
     
     open_vulns = db.query(Vulnerability).filter(
         Vulnerability.tenant_id.in_(filter_tenants),
-        Vulnerability.status.notin_(["resolved", "accepted", "false_positive"])
+        Vulnerability.status.notin_(RESOLVED_STATUSES)
     ).all()
-    
+
     bucket_labels = ["0-7 days", "8-14 days", "15-30 days", "31-60 days", "60+ days"]
     overall_buckets = {label: 0 for label in bucket_labels}
     
@@ -877,7 +885,7 @@ def get_sla_compliance_trends(
     
     resolved_vulns = db.query(Vulnerability).filter(
         Vulnerability.tenant_id.in_(filter_tenants),
-        Vulnerability.status.in_(["resolved", "accepted", "false_positive"]),
+        Vulnerability.status.in_(RESOLVED_STATUSES),
         Vulnerability.resolved_at >= start_date
     ).all()
     
@@ -943,9 +951,9 @@ def get_department_workload(
     
     all_open_vulns = db.query(Vulnerability).filter(
         Vulnerability.tenant_id.in_(filter_tenants),
-        Vulnerability.status.notin_(["resolved", "accepted", "false_positive"])
+        Vulnerability.status.notin_(RESOLVED_STATUSES)
     ).all()
-    
+
     workload = []
     for dept in departments:
         assignments = db.query(GRCVulnerabilityDepartmentAssignment).filter(
@@ -1000,9 +1008,9 @@ def get_aging_by_department(
     
     open_vulns = db.query(Vulnerability).filter(
         Vulnerability.tenant_id.in_(filter_tenants),
-        Vulnerability.status.notin_(["resolved", "accepted", "false_positive"])
+        Vulnerability.status.notin_(RESOLVED_STATUSES)
     ).all()
-    
+
     dept_vuln_map = {}
     for dept in departments:
         assignments = db.query(GRCVulnerabilityDepartmentAssignment).filter(

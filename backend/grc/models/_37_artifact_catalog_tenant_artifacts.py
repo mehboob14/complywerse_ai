@@ -893,7 +893,10 @@ class CompliancePlugin(Base):
     # /os-registry (`p.os_keys ? v.normalized_key`). Without these the
     # library page renders "Couldn't load the library tree" because the
     # tree query SQL fails on the missing column.
-    os_keys = Column(JSON, nullable=True, default=list)
+    # none_as_null: Python None must land as SQL NULL, not JSON 'null' —
+    # rows with JSON 'null' pass .isnot(None) filters (420 such rows were
+    # found and normalised in Aug 2026; this stops them re-appearing).
+    os_keys = Column(JSON(none_as_null=True), nullable=True, default=list)
     classification_source = Column(String(20), nullable=True)  # 'regex' | 'ai' | 'unknown'
     classified_at = Column(DateTime, nullable=True)
     # ── Block H: rule numbering validation ──

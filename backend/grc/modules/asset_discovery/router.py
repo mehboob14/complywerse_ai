@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import ipaddress
 import logging
+import re
 import threading
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
@@ -27,7 +28,7 @@ from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
-from grc.crypto import encrypt_secret
+from grc.crypto import encrypt_secret, decrypt_secret
 from grc.models import (
     GRCUser,
     ITAsset,
@@ -147,6 +148,8 @@ class CampaignIn(BaseModel):
     method: str = Field(default="network")
     is_active: bool = True
     schedule_seconds: Optional[int] = Field(default=None, ge=300)  # >= 5 min if set
+    # Comma-separated SNMP read communities for fingerprinting (blank = env default).
+    snmp_communities: Optional[str] = Field(default=None, max_length=500)
     scopes: List[ScopeIn] = Field(default_factory=list)
 
 
@@ -156,9 +159,18 @@ class CampaignPatch(BaseModel):
     method: Optional[str] = None
     is_active: Optional[bool] = None
     schedule_seconds: Optional[int] = Field(default=None, ge=300)
+    snmp_communities: Optional[str] = Field(default=None, max_length=500)
 
 
 # ── Validation helpers ───────────────────────────────────────────────────────
+
+# A registrable domain or subdomain seed for EASM: >=2 dot-separated labels,
+# each 1-63 chars, no leading/trailing hyphen, total <=253. No scheme, path, or
+# spaces — those are rejected so a pasted URL fails at save, not mid-scan.
+_DOMAIN_RE = re.compile(
+    r"^(?=.{1,253}$)(?!-)[a-z0-9-]{1,63}(?<!-)(\.(?!-)[a-z0-9-]{1,63}(?<!-))+$"
+)
+
 
 def _validate_scope(kind: str, value: str) -> None:
     """Reject a scope the scanner could never act on, at write time rather than
@@ -180,6 +192,10 @@ def _validate_scope(kind: str, value: str) -> None:
             ipaddress.ip_address(parts[1].strip())
         except ValueError:
             raise HTTPException(400, f"'{value}' is not a valid IP range.")
+    elif kind == "domain":
+        if not _DOMAIN_RE.match(value.strip().lower()):
+            raise HTTPException(
+                400, f"'{value}' is not a valid domain (e.g. example.com — no https://, no path).")
     # ad_ou: any non-empty string is accepted; AD validates it at scan time.
 
 
@@ -218,15 +234,102 @@ def _attempt_status(o: DiscoveryObservation) -> Optional[Dict[str, str]]:
     return None
 
 
+# TCP port -> service name, and UDP-service token -> name. Turns "open ports"
+# into readable "services" WITHOUT changing the discovery logic — this is
+# presentation of evidence the sweep already gathered.
+_PORT_SERVICE = {
+    22: "SSH", 23: "Telnet", 53: "DNS", 80: "HTTP", 110: "POP3", 135: "RPC",
+    139: "NetBIOS", 143: "IMAP", 389: "LDAP", 443: "HTTPS", 445: "SMB",
+    515: "LPD", 554: "RTSP", 631: "IPP", 993: "IMAPS", 1433: "MSSQL",
+    3306: "MySQL", 3389: "RDP", 5060: "SIP", 5432: "PostgreSQL", 5900: "VNC",
+    5985: "WinRM", 5986: "WinRM/HTTPS", 8080: "HTTP", 8443: "HTTPS", 9100: "JetDirect",
+}
+_UDP_SERVICE = {"snmp": "SNMP", "dns": "DNS", "sip": "SIP"}
+# evidence tag -> the discovery protocol it came from (for "why we identified it").
+_EVIDENCE_SOURCE = {
+    "snmp_sysdescr": "SNMP", "snmp": "SNMP", "ssh_banner": "SSH",
+    "http_server": "HTTP", "http_title": "HTTP", "http_auth": "HTTP", "http_server:embedded": "HTTP",
+    "dns": "DNS", "mac_oui": "OUI", "netbios": "NetBIOS", "mdns": "mDNS", "ssdp": "SSDP",
+    "dhcp:vendor_class": "DHCP", "port:winrm": "WinRM", "port:rdp": "RDP", "port:smb": "SMB",
+    "port:ssh": "SSH", "port:jetdirect": "JetDirect", "port:lpd": "LPD", "port:ipp": "IPP",
+    "port:rtsp": "RTSP", "port:sip": "SIP", "port:telnet": "Telnet", "port:http": "HTTP",
+    # EASM source tags — external discovery records WHICH intel source surfaced
+    # the host, not a fingerprint protocol, so the UI can show "found via Shodan".
+    "crt.sh": "Certificate Transparency", "certspotter": "Certificate Transparency",
+    "shodan": "Shodan", "censys": "Censys", "securitytrails": "SecurityTrails",
+}
+
+
+def _services_for(open_ports, fp: dict) -> list:
+    out: list = []
+    for p in (open_ports or []):
+        s = _PORT_SERVICE.get(p)
+        if s and s not in out:
+            out.append(s)
+    for u in (fp.get("udp_services") or []):
+        s = _UDP_SERVICE.get(u)
+        if s and s not in out:
+            out.append(s)
+    return out
+
+
+def _confidence_label(conf) -> Optional[str]:
+    if conf is None:
+        return None
+    return "High" if conf >= 0.8 else ("Medium" if conf >= 0.5 else "Low")
+
+
+def _discovery_sources(evidence, mac_address, vendor_source) -> list:
+    out: list = []
+    if mac_address:                       # a MAC means ARP/NDP saw it on the LAN
+        out.append("ARP")
+    for e in (evidence or []):
+        lbl = _EVIDENCE_SOURCE.get(e)
+        if lbl and lbl not in out:
+            out.append(lbl)
+    if vendor_source == "ieee_oui" and "OUI" not in out:
+        out.append("OUI")
+    return out
+
+
 def _obs_dict(o: DiscoveryObservation) -> dict:
+    """One discovered device, with EVERY field exposed separately (no value is
+    concatenated into another). `raw` is retained for the details drawer."""
+    raw = o.raw or {}
+    fp = raw.get("fingerprint") or {}
+    open_ports = raw.get("open_ports") or []
+    evidence = raw.get("evidence") or []
+    conf = raw.get("confidence")
     return {
         "id": o.id, "run_id": o.run_id, "source": o.source,
         "observed_at": o.observed_at.isoformat() if o.observed_at else None,
-        "host_name": o.host_name, "ip_address": o.ip_address,
-        "fqdn": o.fqdn, "mac_address": o.mac_address,
-        "raw": o.raw,
-        "resolution": o.resolution, "resolved_asset_id": o.resolved_asset_id,
+        "created_at": o.created_at.isoformat() if getattr(o, "created_at", None) else None,
+        # ── identity — each its OWN field, never merged into another ──
+        "ip_address": o.ip_address,
+        "host_name": o.host_name,
+        "device_name": o.host_name,
+        "fqdn": o.fqdn,
+        "mac_address": o.mac_address,
+        "mac_randomized": bool(fp.get("mac_randomized")),
+        "vendor": raw.get("vendor"),
+        "vendor_source": raw.get("vendor_source"),
+        "device_type": raw.get("device_type"),
+        "os_guess": raw.get("os_guess"),
+        "product": raw.get("product"),                 # OS / firmware / model hint
+        "open_ports": open_ports,
+        "services": _services_for(open_ports, fp),
+        "confidence": conf,
+        "confidence_label": _confidence_label(conf),
+        "evidence": evidence,
+        "discovery_sources": _discovery_sources(evidence, o.mac_address, raw.get("vendor_source")),
+        "arp_only": bool(raw.get("arp_only")),
+        # ── status / linkage ──
+        "resolution": o.resolution,
+        "resolved_asset_id": o.resolved_asset_id,
+        "asset_id": o.resolved_asset_id,
         "resolution_note": o.resolution_note,
+        # full evidence for the details drawer / back-compat
+        "raw": o.raw,
     }
 
 
@@ -252,6 +355,7 @@ def _campaign_dict(c: DiscoveryCampaign, *, scopes=False, runs=False) -> dict:
         "next_run_at": c.next_run_at.isoformat() if c.next_run_at else None,
         "blackout_windows": c.blackout_windows,
         "rate_limit_hosts_per_min": c.rate_limit_hosts_per_min,
+        "snmp_communities": c.snmp_communities,
         "created_at": c.created_at.isoformat() if c.created_at else None,
         "created_by_name": c.created_by_name,
         "scope_count": len(c.scopes),
@@ -335,6 +439,7 @@ def create_campaign(
         tenant_id=tid, name=body.name, description=body.description,
         method=body.method, is_active=body.is_active,
         schedule_seconds=body.schedule_seconds,
+        snmp_communities=body.snmp_communities,
         # Schedule the first automatic run one interval out — never the moment
         # of creation, so saving a campaign can't kick off a surprise network
         # scan. The operator gets an immediate baseline via the Run button.
@@ -598,6 +703,62 @@ class ResolveIn(BaseModel):
     target_asset_id: Optional[int] = None  # required for merge
 
 
+@router.get("/easm-scorecard")
+def easm_scorecard(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Attack-surface health scorecard — the tenant's external (outside-in) assets
+    graded by the EASM probe, aggregated for a fleet dashboard plus a per-asset
+    list ranked worst-first. Each asset also carries its own health on its detail
+    page; this is the inventory-wide view of those scores."""
+    from grc.modules.asset_discovery.services.external_probe import _grade
+    tid = get_user_primary_tenant(current_user, db)
+    assets = db.query(ITAsset).filter(
+        ITAsset.tenant_id == tid,
+        ITAsset.internet_facing.is_(True),
+    ).all()
+    grade_counts: Dict[str, int] = {g: 0 for g in ("A", "B", "C", "D", "F")}
+    scored: List[dict] = []
+    graded = ungraded = 0
+    total_score = 0
+    for a in assets:
+        ep = (a.platform_properties or {}).get("external_probe") or {}
+        h = ep.get("health") or {}
+        grade, score = h.get("grade"), h.get("score")
+        if grade is None or score is None:
+            ungraded += 1
+            continue
+        grade_counts[grade] = grade_counts.get(grade, 0) + 1
+        graded += 1
+        total_score += score
+        comps = h.get("components") or {}
+        weak = sorted(k for k, c in comps.items()
+                      if isinstance(c, dict) and (c.get("score") or 0) < 0.5)
+        scored.append({
+            "asset_id": a.id, "name": a.name, "fqdn": a.fqdn or a.host_name,
+            "grade": grade, "score": score, "live": ep.get("live"),
+            "response_time_ms": ep.get("response_time_ms"),
+            "https": bool(ep.get("https_available") or ep.get("scheme") == "https"),
+            "tls_expired": ep.get("tls_expired"),
+            "tls_days_to_expiry": ep.get("tls_days_to_expiry"),
+            "security_headers": len(ep.get("security_headers") or {}),
+            "server": ep.get("server"), "weak": weak,
+            "probed_at": ep.get("probed_at"),
+        })
+    scored.sort(key=lambda x: x["score"])  # worst health first
+    avg = round(total_score / graded) if graded else None
+    return {
+        "summary": {
+            "graded": graded, "ungraded": ungraded, "total": graded + ungraded,
+            "avg_score": avg,
+            "avg_grade": _grade(avg) if avg is not None else None,
+            "grade_counts": grade_counts,
+        },
+        "assets": scored,
+    }
+
+
 @router.get("/inbox")
 def discovery_inbox(
     status_filter: str = Query(default="open", pattern="^(open|review|pending|all)$"),
@@ -678,7 +839,11 @@ def list_discovered_devices(
     # the queue to one run without losing the union default.
     q = db.query(DiscoveryObservation).filter(
         DiscoveryObservation.tenant_id == tid,
-        DiscoveryObservation.resolution.in_(("unclaimed", "created", "pending")),
+        # Everything the scan found EXCEPT operator-dismissed rows — so the count
+        # matches Scan history and already-in-inventory / needs-review devices
+        # stay VISIBLE (clearly tagged) instead of silently dropping out.
+        DiscoveryObservation.resolution.in_(
+            ("unclaimed", "created", "pending", "review", "merged")),
     )
     if run_id is not None:
         q = q.filter(DiscoveryObservation.run_id == run_id)
@@ -731,7 +896,10 @@ def list_discovered_devices(
                     continue
         return False
 
-    from grc.modules.asset_discovery.services.deep_collect import transport_for_observation
+    from grc.modules.asset_discovery.services.deep_collect import (
+        transport_for_observation, agentless_port_state,
+        service_suggestions_for as _svc_suggest,
+    )
 
     out = []
     for o in observations:
@@ -740,18 +908,44 @@ def list_discovered_devices(
         if transport is None and asset is not None:
             fam = (asset.os_family or "").lower()
             transport = "windows" if fam.startswith("windows") else ("linux" if fam.startswith(_LINUX_FAMS) else None)
+        # `transport` is only a TYPE guess (445/22 → "looks like Windows/Linux").
+        # Connectability is a separate, stronger claim: is the actual login port
+        # — WinRM 5985/6, or SSH 22 — confirmed listening? A Windows box with SMB
+        # (445) open but WinRM off is "identified, not connectable", NOT a device
+        # a host login can reach. login_state: open | closed | unknown | none.
+        login_state = agentless_port_state(o, transport) if transport else "none"
+        connectable = bool(transport) and login_state == "open"
         raw = o.raw if isinstance(o.raw, dict) else {}
         host = o.host_name or o.ip_address
         out.append({
             "observation_id": o.id,
             # Present only once the device has been promoted into inventory.
             "asset_id": asset.id if asset else None,
+            "in_inventory": bool(asset),
+            # Defensive: if the asset a device was merged/created into has since
+            # been deleted, the row is orphaned — report it as 'unclaimed' so it
+            # counts as "needs login", never a ghost "in inventory".
+            "resolution": ("unclaimed" if (o.resolution in ("merged", "created") and asset is None) else o.resolution),
+            "device_type": raw.get("device_type"),
+            "os_guess": raw.get("os_guess"),
+            "vendor": raw.get("vendor"),
             "name": o.host_name or o.fqdn or o.ip_address,
             "host_name": o.host_name,
             "ip_address": o.ip_address,
             "os_family": asset.os_family if asset else None,
             "transport": transport,
+            # login_state = state of the port a host login would actually dial
+            # (WinRM/SSH), NOT merely that the box looks like Windows/Linux.
+            "login_state": login_state,
+            "connectable": connectable,
+            # Discovery→kind bridge: typed connects that make sense from the open
+            # ports (e.g. 5432 → connect as PostgreSQL with a postgres credential).
+            "service_suggestions": _svc_suggest(raw.get("open_ports")),
             "open_ports": raw.get("open_ports") or [],
+            # Where discovery saw this device (ARP/fingerprint protocols for LAN
+            # scans, EASM intel sources for external ones) — same helper the
+            # observation serializer uses, so "found via Shodan" shows here too.
+            "discovery_sources": _discovery_sources(raw.get("evidence"), o.mac_address, raw.get("vendor_source")),
             # In inventory with a real collected profile behind it.
             "profiled": bool(asset and asset.os_family),
             "has_credential": _covered(o.ip_address),
@@ -773,39 +967,62 @@ def list_discovered_devices(
             # sweep can't classify the device.
             "attempt": _attempt_status(o),
         })
-    # Runs that still have unclaimed/created/pending devices, for the queue's
-    # run filter dropdown. Newest first; each with a per-run device count.
-    run_rows = db.query(
-        DiscoveryObservation.run_id, func.count(DiscoveryObservation.id),
-    ).filter(
-        DiscoveryObservation.tenant_id == tid,
-        DiscoveryObservation.resolution.in_(("unclaimed", "created", "pending")),
-    ).group_by(DiscoveryObservation.run_id).all()
-    run_meta = {
-        r.id: r for r in db.query(DiscoveryRun).filter(
-            DiscoveryRun.tenant_id == tid,
-            DiscoveryRun.id.in_([rid for rid, _ in run_rows] or [-1]),
-        ).all()
-    }
-    runs = sorted(
-        [{
-            "run_id": rid,
-            "device_count": cnt,
-            "finished_at": (run_meta[rid].finished_at.isoformat()
-                            if rid in run_meta and run_meta[rid].finished_at else None),
-            "is_latest": rid == latest_run_id,
-        } for rid, cnt in run_rows],
-        key=lambda r: -(r["run_id"] or 0),
-    )
+    # Run list for the queue's filter dropdown — mirrors Scan history EXACTLY:
+    # every run (newest first), its hosts_seen count, and the true latest flag.
+    # (Previously this counted only still-unclaimed observations per run, so its
+    # numbers and "latest" disagreed with Scan history — e.g. 107 vs 108 when one
+    # device sat in review, and a fully-resolved latest run dropped off entirely.)
+    run_meta_rows = db.query(DiscoveryRun).filter(
+        DiscoveryRun.tenant_id == tid,
+    ).order_by(DiscoveryRun.id.desc()).limit(50).all()
+    runs = [{
+        "run_id": r.id,
+        "device_count": r.hosts_seen or 0,
+        "finished_at": r.finished_at.isoformat() if r.finished_at else None,
+        "is_latest": r.id == latest_run_id,
+    } for r in run_meta_rows]
     return {"devices": out, "runs": runs, "latest_run_id": latest_run_id,
             "filtered_run_id": run_id}
 
 
 class DeviceConnectBody(BaseModel):
-    username: str
-    password: str
+    # username/password are optional ONLY when reusing a saved login via
+    # credential_id (the sibling case — Window B/C reuse Window A's domain login
+    # without re-typing). For a first-time connect they're required.
+    username: Optional[str] = None
+    password: Optional[str] = None
     domain: Optional[str] = None
     transport: Optional[str] = None
+    credential_id: Optional[int] = None  # reuse a saved host login instead
+
+
+def _resolve_host_profile(db, tid, body, *, name, kind, ip, current_user):
+    """Return the CredentialProfile to connect a host with: the saved one when
+    `credential_id` is given (reuse — no re-entry), otherwise a new one built
+    from the entered username/password. Shared by connect + reconnect."""
+    if getattr(body, "credential_id", None):
+        prof = db.query(CredentialProfile).filter(
+            CredentialProfile.id == body.credential_id,
+            CredentialProfile.tenant_id == tid,
+            CredentialProfile.is_active.is_(True),
+        ).first()
+        if not prof:
+            raise HTTPException(404, "Saved login not found.")
+        return prof
+    if not body.username or not body.password:
+        raise HTTPException(400, "Provide a username + password, or a credential_id to reuse a saved login.")
+    prof = CredentialProfile(
+        tenant_id=tid, name=name, kind=kind, username=body.username,
+        secret_kind="password", secret_encrypted=encrypt_secret(body.password),
+        domain=(body.domain or None), applies_to_cidrs=[f"{ip}/32"],
+        priority=100, is_active=True,
+        created_by_id=getattr(current_user, "id", None),
+        created_by_name=getattr(current_user, "username", None),
+    )
+    db.add(prof)
+    db.commit()
+    db.refresh(prof)
+    return prof
 
 
 @router.post("/devices/{observation_id}/connect")
@@ -842,18 +1059,10 @@ def connect_discovered_device(
     if transport not in ("windows", "linux"):
         transport = transport_for_observation(obs) or "windows"
     kind = "winrm" if transport == "windows" else "ssh"
-    prof = CredentialProfile(
-        tenant_id=tid, name=f"{obs.host_name or ip} - {kind}", kind=kind,
-        username=body.username, secret_kind="password",
-        secret_encrypted=encrypt_secret(body.password),
-        domain=(body.domain or None), applies_to_cidrs=[f"{ip}/32"],
-        priority=100, is_active=True,
-        created_by_id=getattr(current_user, "id", None),
-        created_by_name=getattr(current_user, "username", None),
+    prof = _resolve_host_profile(
+        db, tid, body, name=f"{obs.host_name or ip} - {kind}", kind=kind, ip=ip,
+        current_user=current_user,
     )
-    db.add(prof)
-    db.commit()
-    db.refresh(prof)
 
     result: Dict[str, Any] = {"credential_id": prof.id, "collected": False}
     try:
@@ -871,6 +1080,102 @@ def connect_discovered_device(
             db.commit()
         result["error"] = reason
     return result
+
+
+class ServiceConnectBody(BaseModel):
+    kind: str                      # postgres | mysql | mssql | oracle | k8s | ldap | cisco
+    username: Optional[str] = None # k8s uses token-only (password field)
+    password: str
+    port: Optional[int] = None
+    database: Optional[str] = None # DB kinds: initial database (defaults per engine)
+    credential_id: Optional[int] = None  # reuse a saved typed credential instead
+
+
+@router.post("/devices/{observation_id}/connect-service")
+def connect_discovered_service(
+    observation_id: int,
+    body: ServiceConnectBody,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Discovery→kind bridge: connect a discovered device AS the service the
+    sweep detected on it (PostgreSQL on 5432, LDAP on 389/636, …) using that
+    kind's OWN credential, and promote it to a TYPED asset carrying the kind's
+    deep inventory. Live port check first, so an unreachable service fails fast."""
+    from grc.modules.asset_discovery.services.deep_collect import (
+        promote_observation_typed, typed_credentials_dict, live_port_open,
+        SERVICE_SUGGESTIONS,
+    )
+    tid = get_user_primary_tenant(current_user, db)
+    obs = db.query(DiscoveryObservation).filter(
+        DiscoveryObservation.id == observation_id,
+        DiscoveryObservation.tenant_id == tid,
+    ).first()
+    if not obs:
+        raise HTTPException(404, "Device not found")
+    if obs.resolved_asset_id:
+        raise HTTPException(400, "This device is already in inventory.")
+    ip = obs.ip_address
+    if not ip:
+        raise HTTPException(400, "Device has no IP address to connect to")
+    kind = (body.kind or "").lower()
+    itype = _TYPED_ITYPE.get(kind)
+    if itype is None:
+        raise HTTPException(400, f"Unsupported kind '{kind}'. One of: {', '.join(_TYPED_ITYPE)}")
+    default_port = next((dp for _p, k, _i, _l, dp in SERVICE_SUGGESTIONS if k == kind), None)
+    port = int(body.port or default_port or 0)
+    if port and not live_port_open(ip, [port]):
+        reason = f"{kind} port {port} is not reachable on {ip} right now."
+        obs.resolution_note = reason; db.commit()
+        return {"collected": False, "error": reason}
+    # Reuse a saved typed login (credential_id) — decrypt its secret and connect
+    # with it, no re-entry — or create a new profile from the entered password.
+    if body.credential_id:
+        prof = db.query(CredentialProfile).filter(
+            CredentialProfile.id == body.credential_id,
+            CredentialProfile.tenant_id == tid,
+            CredentialProfile.is_active.is_(True),
+        ).first()
+        if not prof:
+            raise HTTPException(404, "Saved login not found.")
+        username = prof.username or (body.username or "")
+        pw = decrypt_secret(prof.secret_encrypted) or ""
+        db_name = body.database or (prof.extra_json or {}).get(f"{kind}_database")
+        creds = typed_credentials_dict(kind, ip, port, username, pw, db_name)
+    else:
+        if not body.password:
+            raise HTTPException(400, "Provide a password, or a credential_id to reuse a saved login.")
+        username = body.username or ""
+        creds = typed_credentials_dict(kind, ip, port, username, body.password, body.database)
+        prof = CredentialProfile(
+            tenant_id=tid, name=f"{obs.host_name or ip} - {kind}", kind=kind,
+            username=username, secret_kind="password",
+            secret_encrypted=encrypt_secret(body.password),
+            port=port or None, applies_to_cidrs=[f"{ip}/32"],
+            priority=100, is_active=True,
+            created_by_id=getattr(current_user, "id", None),
+            created_by_name=getattr(current_user, "username", None),
+        )
+        db.add(prof); db.commit(); db.refresh(prof)
+    result: Dict[str, Any] = {"collected": False, "kind": kind, "credential_id": prof.id}
+    try:
+        asset = promote_observation_typed(db, obs, kind, itype, creds)
+        db.commit()
+        result.update({"collected": True, "asset_id": asset.id, "platform_kind": asset.platform_kind})
+    except Exception as exc:  # noqa: BLE001
+        db.rollback()
+        reason = str(exc)[:300]
+        obs2 = db.get(DiscoveryObservation, observation_id)
+        if obs2 is not None:
+            obs2.resolution_note = f"{kind} connect failed: {reason}"; db.commit()
+        result["error"] = reason
+    return result
+
+
+_TYPED_ITYPE = {
+    "postgres": "postgres_sql", "mysql": "mysql_sql", "mssql": "mssql_sql",
+    "oracle": "oracle_sql", "k8s": "k8s_api", "ldap": "ldap_query", "cisco": "netdev_ssh",
+}
 
 
 @router.post("/assets/{asset_id}/reconnect")
@@ -898,18 +1203,10 @@ def reconnect_asset(
         fam = (a.os_family or "").lower()
         transport = "linux" if fam.startswith(_LINUX_FAMS) else "windows"
     kind = "winrm" if transport == "windows" else "ssh"
-    prof = CredentialProfile(
-        tenant_id=tid, name=f"{a.name or ip} - {kind}", kind=kind,
-        username=body.username, secret_kind="password",
-        secret_encrypted=encrypt_secret(body.password),
-        domain=(body.domain or None), applies_to_cidrs=[f"{ip}/32"],
-        priority=100, is_active=True,
-        created_by_id=getattr(current_user, "id", None),
-        created_by_name=getattr(current_user, "username", None),
+    prof = _resolve_host_profile(
+        db, tid, body, name=f"{a.name or ip} - {kind}", kind=kind, ip=ip,
+        current_user=current_user,
     )
-    db.add(prof)
-    db.commit()
-    db.refresh(prof)
     result: Dict[str, Any] = {"credential_id": prof.id, "collected": False, "asset_id": a.id}
     try:
         from grc.modules.asset_discovery.services.deep_collect import collect_host
@@ -1160,6 +1457,202 @@ def connect_all_discovered(
     }
 
 
+class ConnectSelectedIn(BaseModel):
+    # The devices the operator ticked, and the saved logins they ticked to try.
+    # credential_ids empty/omitted = auto-pick the best matching saved login per
+    # device (same as connect-all). credential_id is kept for back-compat.
+    observation_ids: List[int] = Field(min_length=1)
+    credential_ids: Optional[List[int]] = None
+    credential_id: Optional[int] = None
+
+
+@router.post("/connect-selected", status_code=202)
+def connect_selected(
+    body: ConnectSelectedIn,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Run the ticked saved login(s) against the specific devices the operator
+    ticked, and promote the ones that accept a login.
+
+    The checkbox flow: tick logins + tick devices + Run. Each device is offered
+    only the ticked login(s) whose KIND matches it (a WinRM login is never tried
+    on a Linux box), highest-priority first; port-checked; a rejected login
+    leaves the device unclaimed with the reason, never an empty inventory row.
+    """
+    tid = get_user_primary_tenant(current_user, db)
+
+    wanted_ids: List[int] = list(body.credential_ids or [])
+    if body.credential_id is not None:
+        wanted_ids.append(body.credential_id)
+    wanted_ids = list(dict.fromkeys(wanted_ids))  # de-dupe, keep order
+
+    forced_profiles: List[CredentialProfile] = []
+    if wanted_ids:
+        forced_profiles = db.query(CredentialProfile).filter(
+            CredentialProfile.id.in_(wanted_ids),
+            CredentialProfile.tenant_id == tid,
+            CredentialProfile.is_active.is_(True),
+        ).all()
+        if not forced_profiles:
+            raise HTTPException(404, "None of the chosen logins were found (or active).")
+        if any(p.kind not in ("winrm", "ssh") for p in forced_profiles):
+            raise HTTPException(400, "Only host logins (WinRM / SSH) can be run against discovered devices.")
+
+    from grc.modules.asset_discovery.services.deep_collect import transport_for_observation
+    _KIND_TRANSPORT = {"winrm": "windows", "ssh": "linux"}
+    # Transports the ticked logins can drive (None = auto: any transport allowed).
+    covered = {_KIND_TRANSPORT[p.kind] for p in forced_profiles} if forced_profiles else None
+
+    # Only this tenant's still-unclaimed picks; silently drop anything already
+    # promoted or out of scope rather than erroring the whole batch.
+    obs_rows = db.query(DiscoveryObservation).filter(
+        DiscoveryObservation.tenant_id == tid,
+        DiscoveryObservation.id.in_(body.observation_ids),
+        DiscoveryObservation.resolution == "unclaimed",
+        DiscoveryObservation.resolved_asset_id.is_(None),
+    ).all()
+    obs_ids: List[int] = []
+    skipped_wrong_transport = 0
+    for o in obs_rows:
+        # A device is runnable only if a ticked login of its KIND exists.
+        if covered is not None and transport_for_observation(o) not in covered:
+            skipped_wrong_transport += 1
+            continue
+        obs_ids.append(o.id)
+    if not obs_ids:
+        msg = "None of the ticked logins match the selected devices' type." if skipped_wrong_transport \
+              else "None of the selected devices are still waiting for a login."
+        return {"attempted": 0, "skipped": skipped_wrong_transport, "message": msg}
+
+    tenant_engine = db.get_bind()
+    forced_id_list: List[int] = [p.id for p in forced_profiles]
+
+    def _connect_in_background() -> None:
+        Sess = sessionmaker(bind=tenant_engine, expire_on_commit=False)
+        wdb = Sess()
+        try:
+            from grc.modules.asset_discovery.services.deep_collect import (
+                promote_observation, select_credential,
+                transport_for_observation as _t,
+                live_port_open as _live_open, classify_collect_error as _classify,
+            )
+            # Load the ticked logins once for this batch (worker session).
+            fps = [wdb.get(CredentialProfile, i) for i in forced_id_list]
+            fps = [p for p in fps if p is not None]
+            for oid in obs_ids:
+                o = wdb.get(DiscoveryObservation, oid)
+                if o is None or o.resolved_asset_id:
+                    _sweep_update(tid, done=1, already=1)
+                    continue
+                _sweep_update(tid, current=(o.host_name or o.ip_address))
+                transport = _t(o)
+                if transport is None:
+                    o.resolution_note = ("type unknown: the sweep saw no Windows (445/3389) "
+                                         "or Linux (22) port, so no login type applies")
+                    wdb.commit(); _sweep_update(tid, done=1, unknown_type=1); continue
+                # "Try anyway": re-check the login port LIVE (not the stale sweep), so a
+                # host that just had WinRM enabled connects, and a truly-off one fails in
+                # ~2s as unreachable (a connection error, never an auth lockout).
+                login_ports = (5985, 5986) if transport == "windows" else (22,)
+                if not _live_open(o.ip_address, login_ports):
+                    svc = "WinRM (5985/5986)" if transport == "windows" else "SSH (22)"
+                    o.resolution_note = (f"{svc} is not reachable on {o.ip_address} right now — the host "
+                                         f"answered discovery but remote login is disabled or firewalled. "
+                                         f"Enable it (or the agent) and try again.")
+                    wdb.commit(); _sweep_update(tid, done=1, unreachable=1); continue
+                if forced_id_list:
+                    # Only the ticked logins of THIS device's kind; highest
+                    # priority (lowest number) first.
+                    kind = "winrm" if transport == "windows" else "ssh"
+                    cands = [p for p in fps if p.kind == kind]
+                    prof = min(cands, key=lambda p: (p.priority if p.priority is not None else 100)) if cands else None
+                else:
+                    prof = select_credential(wdb, tid, o.ip_address, transport)
+                if prof is None:
+                    label = "Windows" if transport == "windows" else "Linux/SSH"
+                    o.resolution_note = (f"no {label} login saved that covers {o.ip_address} — "
+                                         f"add one under Connect → Add connection")
+                    wdb.commit(); _sweep_update(tid, done=1, no_login=1); continue
+                try:
+                    promote_observation(wdb, o, prof, transport)
+                    wdb.commit(); _sweep_update(tid, done=1, connected=1)
+                except Exception as exc:  # noqa: BLE001 — a rejected login is skipped, not fatal
+                    wdb.rollback()
+                    cls = _classify(exc)
+                    o2 = wdb.get(DiscoveryObservation, oid)
+                    if o2 is not None:
+                        if cls == "unreachable":
+                            svc = "WinRM (5986)" if transport == "windows" else "SSH (22)"
+                            o2.resolution_note = (f"unreachable: could not open {svc} on {o.ip_address}. "
+                                                  f"The login was never tested.")
+                        elif cls == "auth":
+                            o2.resolution_note = f"login failed: {str(exc)[:250]}"
+                        else:
+                            o2.resolution_note = f"collect error: {str(exc)[:250]}"
+                        wdb.commit()
+                    _sweep_update(tid, done=1,
+                                  **({"unreachable": 1} if cls == "unreachable" else {"rejected": 1}))
+            _sweep_finish(tid)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("connect-selected worker failed for tenant %s", tid)
+            _sweep_finish(tid, error=str(exc)[:300])
+        finally:
+            wdb.close()
+
+    _sweep_start(tid, len(obs_ids), forced_profiles[0].kind if len(forced_profiles) == 1 else None)
+    threading.Thread(target=_connect_in_background, daemon=True,
+                     name=f"disc-connect-sel-{tid}").start()
+    label = (forced_profiles[0].name if len(forced_profiles) == 1
+             else f"{len(forced_profiles)} chosen logins" if forced_profiles
+             else "best match per device")
+    return {
+        "attempted": len(obs_ids),
+        "skipped": skipped_wrong_transport,
+        "credential": label,
+        "message": f"Trying {label} on {len(obs_ids)} device"
+                   f"{'s' if len(obs_ids) != 1 else ''}… ones that accept a login are "
+                   f"added to IT Asset Inventory.",
+    }
+
+
+class DhcpEnrichIn(BaseModel):
+    # A DHCP source = a saved Connect credential (credential_id) pointed at the
+    # box that hands out leases (dhcp_ip), plus which kind it is.
+    credential_id: int
+    dhcp_ip: str
+    source_type: str = Field(pattern="^(mikrotik|dnsmasq|isc|windows)$")
+    run_id: Optional[int] = None
+
+
+@router.post("/dhcp/enrich")
+def dhcp_enrich_endpoint(
+    body: DhcpEnrichIn,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(_require_discover),
+):
+    """Read a DHCP server's lease table (via a saved credential) and fold the
+    hostnames + vendor-class fingerprints onto discovered devices — the biggest
+    single fix for 'silent device, no name'. Enriches in place; creates NO
+    inventory (discovery never does). Returns how many observations were matched,
+    named, and re-typed."""
+    tid = get_user_primary_tenant(current_user, db)
+    prof = db.query(CredentialProfile).filter(
+        CredentialProfile.id == body.credential_id,
+        CredentialProfile.tenant_id == tid,
+        CredentialProfile.is_active.is_(True),
+    ).first()
+    if prof is None:
+        raise HTTPException(404, "That saved credential was not found (or is inactive).")
+
+    from .services import dhcp_sources
+    sources = [{"profile": prof, "ip": body.dhcp_ip, "source_type": body.source_type}]
+    tally = dhcp_sources.run_dhcp_enrichment(db, tid, sources, run_id=body.run_id)
+    db.commit()
+    return tally
+
+
 @router.post("/observations/{obs_id}/resolve")
 def resolve_observation_endpoint(
     obs_id: int,
@@ -1183,17 +1676,15 @@ def resolve_observation_endpoint(
         raise HTTPException(409, f"Observation is already resolved ({obs.resolution}).")
 
     if body.action == "adopt":
-        # Enforced at the API, not just hidden in the UI: adopting would create
-        # an asset with no OS, no hardware and no software — precisely the empty
-        # shells this pipeline was rebuilt to stop producing. A device earns an
-        # inventory row by accepting a credential, nowhere else.
-        raise HTTPException(
-            400,
-            "Devices are not adopted straight into inventory. Give this device a "
-            "login under Connect → Add connection: if it authenticates, it is "
-            "scanned in depth and added with its full profile. Use Merge if it is "
-            "an asset you already track, or Ignore to dismiss it.",
-        )
+        # An EXPLICIT operator decision (never automatic) to record a device we
+        # cannot log into — a printer, a switch, a Chromecast — as an *unmanaged,
+        # evidence-only* asset built from IP + MAC + vendor + fingerprint. This is
+        # not the silent auto-create the pipeline was rebuilt to stop; it is a
+        # human clicking "yes, track this". The asset is flagged unmanaged and
+        # left unrated until someone curates it.
+        asset = resolver.manual_adopt(db, obs)
+        db.commit()
+        return {"action": "adopt", "asset_id": asset.id, "unmanaged": True}
 
     if body.action == "merge":
         if not body.target_asset_id:
@@ -1228,13 +1719,27 @@ class CredentialIn(BaseModel):
     priority: int = 100
 
 
+# kind → coarse category the UI groups saved logins by.
+_CRED_CATEGORY = {
+    "winrm": "host", "ssh": "host",
+    "cisco": "network",
+    "postgres": "database", "mysql": "database", "mssql": "database", "oracle": "database",
+    "aws": "cloud", "azure": "cloud", "digitalocean": "cloud",
+    "k8s": "cluster",
+    "ldap": "identity",
+}
+
+
 def _credential_dict(c: CredentialProfile) -> dict:
     # Deliberately omits the secret. `has_secret` tells the UI a secret is set
     # without ever exposing it — this is the one object we must never serialise
-    # in full.
+    # in full. (extra_json is also NEVER serialised — it holds encrypted secrets.)
     return {
         "id": c.id, "name": c.name, "kind": c.kind, "username": c.username,
-        "secret_kind": c.secret_kind, "has_secret": bool(c.secret_encrypted),
+        "integration_type": getattr(c, "integration_type", None),
+        "category": _CRED_CATEGORY.get(c.kind, "host"),
+        "secret_kind": c.secret_kind,
+        "has_secret": bool(c.secret_encrypted) or bool(getattr(c, "extra_json", None)),
         "domain": c.domain, "port": c.port, "winrm_transport": c.winrm_transport,
         "ssh_accept_unknown_hosts": c.ssh_accept_unknown_hosts,
         "applies_to_cidrs": c.applies_to_cidrs, "priority": c.priority,
@@ -1254,6 +1759,54 @@ def list_credentials(
         CredentialProfile.tenant_id == tid,
     ).order_by(CredentialProfile.priority, CredentialProfile.id).all()
     return {"credentials": [_credential_dict(c) for c in rows]}
+
+
+@router.get("/credentials/applicable")
+def applicable_credentials(
+    ip: str,
+    kind: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Saved logins that could connect the host at `ip` — so the Connect UI can
+    offer one-click reuse instead of re-typing.
+
+    This is the "siblings share one domain account" case: connect Window A and
+    save its login; when Window B/C on the same network come up, their Connect
+    form finds that saved login here and offers to reuse it (no re-entry).
+
+    Ranking (best first): credentials whose applies_to_cidrs explicitly covers
+    this IP, then tenant-wide credentials (empty CIDR = any host), then other
+    saved host logins of the right kind (the sibling case — same account, saved
+    against a different host). Secrets are never returned.
+    """
+    tid = get_user_primary_tenant(current_user, db)
+    from grc.modules.asset_discovery.services.deep_collect import _cidr_match
+
+    q = db.query(CredentialProfile).filter(
+        CredentialProfile.tenant_id == tid,
+        CredentialProfile.is_active.is_(True),
+    )
+    if kind:
+        q = q.filter(CredentialProfile.kind == kind)
+    rows = q.order_by(CredentialProfile.priority, CredentialProfile.id).all()
+
+    out = []
+    for c in rows:
+        cidrs = c.applies_to_cidrs or []
+        covers = bool(cidrs) and _cidr_match(ip, cidrs)
+        tenant_wide = not cidrs
+        out.append({
+            **_credential_dict(c),
+            "covers_host": covers,        # explicitly scoped to this IP/subnet
+            "tenant_wide": tenant_wide,   # empty CIDR → applies to any host
+        })
+    # covers-this-host first, then tenant-wide, then other host creds (sibling reuse)
+    out.sort(key=lambda x: (
+        0 if x["covers_host"] else (1 if x["tenant_wide"] else 2),
+        x.get("priority", 100),
+    ))
+    return {"ip": ip, "credentials": out}
 
 
 @router.post("/credentials", status_code=201)

@@ -1,0 +1,913 @@
+"""CTEM Phase 3 — scope membership resolver + cycle stage counters.
+
+ONE membership resolver (`resolve_scope_assets`) is the single source of
+truth for "what is in this scope". Every register filter and every counter
+join goes through it, so a cycle card's counts can never disagree with the
+filtered register sitting next to it — the specific credibility failure the
+review named.
+
+Counters are named to REAL event tables + explicit timestamps (below). Only
+three ship in v1 — discovered / validated / mobilized — each with something
+true to count. "Prioritized" has no event table until Phase 4's choke points
+and is omitted rather than faked.
+
+Overlap is fine, summing is not: assets legitimately belong to several
+scopes, so no caller may total counts ACROSS scopes (double-counting by
+construction). Counters take one scope at a time.
+"""
+
+import hashlib
+import logging
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional
+
+from sqlalchemy import func, or_
+from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
+
+HASH_ALGORITHM = "sha256:sorted-asset-ids-v1"
+
+
+def resolve_scope_assets(db: Session, tenant_id: int, membership_rule: Optional[Dict[str, Any]]) -> List[int]:
+    """Resolve a scope's membership to a sorted list of ITAsset ids.
+
+    Membership = explicit asset_ids UNION assets matching the rule criteria
+    (criteria AND together — each further NARROWS). Empty/None rule → empty
+    scope (never "all assets" by accident). This is the ONLY place membership
+    is computed."""
+    from ..models import ITAsset
+
+    rule = membership_rule or {}
+    ids: set = set()
+
+    explicit = rule.get("asset_ids") or []
+    if explicit:
+        rows = db.query(ITAsset.id).filter(
+            ITAsset.tenant_id == tenant_id,
+            ITAsset.id.in_([int(a) for a in explicit]),
+        ).all()
+        ids.update(r[0] for r in rows)
+
+    criteria = []
+    if rule.get("departments"):
+        criteria.append(ITAsset.department.in_(list(rule["departments"])))
+    if rule.get("asset_types"):
+        criteria.append(ITAsset.asset_type.in_(list(rule["asset_types"])))
+    if rule.get("name_contains"):
+        pat = f"%{rule['name_contains']}%"
+        criteria.append(or_(ITAsset.name.ilike(pat), ITAsset.host_name.ilike(pat)))
+    # internet_facing (bool): EASM exposure filter — when truthy, AND-restrict the
+    # rule match to internet-exposed assets. Absent/false leaves membership unchanged.
+    if rule.get("internet_facing"):
+        criteria.append(ITAsset.internet_facing.is_(True))
+
+    if criteria:
+        q = db.query(ITAsset.id).filter(ITAsset.tenant_id == tenant_id)
+        for c in criteria:
+            q = q.filter(c)
+        ids.update(r[0] for r in q.all())
+
+    return sorted(ids)
+
+
+def membership_hash(asset_ids: List[int]) -> str:
+    """Deterministic digest over the sorted member-asset ids. Algorithm is
+    recorded separately (HASH_ALGORITHM) so equality stays meaningful across
+    engine versions."""
+    payload = ",".join(str(i) for i in sorted(asset_ids))
+    return hashlib.sha256(payload.encode()).hexdigest()
+
+
+def _vuln_ids_for_assets(db: Session, tenant_id: int, asset_ids: List[int],
+                         include_closed: bool = False) -> List[int]:
+    """Findings on the scope's assets. By DEFAULT open-only — closed/terminal
+    statuses are excluded using the SAME list the vulnerability register hides by
+    default, so the command centre's "201" and the scoped register's list can
+    never disagree (found live: 205 vs 201 — the 4 were closed/auto-closed).
+
+    ``include_closed=True`` returns the FULL membership set (open + closed). The
+    register uses that so ``ctem_scope_id`` is pure membership and the open/closed
+    policy is the register's own status toggle — otherwise a scoped view could not
+    ask for its closed findings (was silently forced open-only). The counters keep
+    the default, so "in scope" for a live cycle still means open findings."""
+    from ..models import Vulnerability, VulnerabilityAssetLink
+    from ..modules.vuln_management.routers.vulnerabilities import _LIST_CLOSED_STATUSES  # lazy: avoids a circular import
+    if not asset_ids:
+        return []
+    filters = [
+        Vulnerability.tenant_id == tenant_id,
+        VulnerabilityAssetLink.asset_id.in_(asset_ids),
+    ]
+    if not include_closed:
+        filters.append(or_(Vulnerability.status.is_(None), ~Vulnerability.status.in_(_LIST_CLOSED_STATUSES)))
+    rows = db.query(VulnerabilityAssetLink.vulnerability_id).join(
+        Vulnerability, Vulnerability.id == VulnerabilityAssetLink.vulnerability_id,
+    ).filter(*filters).distinct().all()
+    return [r[0] for r in rows]
+
+
+def scope_vulnerability_ids(db: Session, tenant_id: int, membership_rule: Optional[Dict[str, Any]],
+                            include_closed: bool = False) -> List[int]:
+    """THE scope→findings function. The register filter AND the cycle counters
+    both call this, so "in scope" has exactly one definition — a future
+    refactor of either cannot silently drift them apart (the invariant proven
+    by the register==resolver identity checks, now structural not incidental).
+    Distinct by construction (via _vuln_ids_for_assets), so a mixed scope
+    whose explicit list and rule both match an asset counts its findings
+    once. ``include_closed`` is threaded through: default open-only (counters);
+    the register passes True for membership and applies its own status toggle."""
+    return _vuln_ids_for_assets(db, tenant_id, resolve_scope_assets(db, tenant_id, membership_rule),
+                                include_closed=include_closed)
+
+
+def compute_stage_counts(
+    db: Session,
+    tenant_id: int,
+    asset_ids: List[int],
+    *,
+    since: Optional[datetime] = None,
+    until: Optional[datetime] = None,
+) -> Dict[str, int]:
+    """The three honest counters for a scope's member assets, optionally
+    windowed [since, until).
+
+      * discovered — findings on member assets whose FIRST detection falls in
+        the window (Vulnerability.first_detected, falling back to
+        discovered_at). first_detected is used specifically so re-scans do
+        NOT re-discover an existing finding.
+      * validated  — control-effectiveness evidence rows (retest / closure /
+        reachability) on member-asset findings, tested in the window
+        (ControlEffectivenessEvidence.tested_at, retracted rows excluded).
+      * mobilized  — remediation plans created in the window for member-asset
+        findings (VulnRemediationPlan.created_at).
+    """
+    from ..models import (
+        Vulnerability, ControlEffectivenessEvidence, VulnRemediationPlan,
+    )
+
+    out = {"member_assets": len(asset_ids), "discovered": 0, "validated": 0, "mobilized": 0}
+    # Same asset→findings mapping the register filter uses (via
+    # scope_vulnerability_ids, which wraps this) — one definition of "in scope".
+    vuln_ids = _vuln_ids_for_assets(db, tenant_id, asset_ids)
+    if not vuln_ids:
+        return out
+
+    def _window(q, col):
+        if since is not None:
+            q = q.filter(col >= since)
+        if until is not None:
+            q = q.filter(col < until)
+        return q
+
+    disc_col = func.coalesce(Vulnerability.first_detected, Vulnerability.discovered_at)
+    dq = db.query(func.count(Vulnerability.id)).filter(
+        Vulnerability.tenant_id == tenant_id,
+        Vulnerability.id.in_(vuln_ids),
+    )
+    out["discovered"] = _window(dq, disc_col).scalar() or 0
+
+    vq = db.query(func.count(ControlEffectivenessEvidence.id)).filter(
+        ControlEffectivenessEvidence.tenant_id == tenant_id,
+        ControlEffectivenessEvidence.vulnerability_id.in_(vuln_ids),
+        ControlEffectivenessEvidence.retracted_at.is_(None),
+    )
+    out["validated"] = _window(vq, ControlEffectivenessEvidence.tested_at).scalar() or 0
+
+    mq = db.query(func.count(VulnRemediationPlan.id)).filter(
+        VulnRemediationPlan.tenant_id == tenant_id,
+        VulnRemediationPlan.vulnerability_id.in_(vuln_ids),
+    )
+    out["mobilized"] = _window(mq, VulnRemediationPlan.created_at).scalar() or 0
+
+    # PRIORITIZED (Phase 4 filled the seam Phase 3 left open): a finding's
+    # event is "first became a rankable choke point in-window", read from the
+    # durable first_seen fact (never the replaceable snapshot). Decomposed:
+    # in_window is real workflow; launch_backfill is the one-time inaugural
+    # stamp, surfaced separately so a cycle spanning launch doesn't read a
+    # backfill spike as prioritization. Only present once a snapshot exists.
+    try:
+        from ..models import ChokePointFirstSeen
+        fq = db.query(
+            func.count(ChokePointFirstSeen.id),
+            func.count(ChokePointFirstSeen.id).filter(
+                ChokePointFirstSeen.is_inaugural_backfill.is_(True)),
+        ).filter(
+            ChokePointFirstSeen.tenant_id == tenant_id,
+            ChokePointFirstSeen.vulnerability_id.in_(vuln_ids),
+        )
+        if since is not None:
+            fq = fq.filter(ChokePointFirstSeen.first_in_snapshot_at >= since)
+        if until is not None:
+            fq = fq.filter(ChokePointFirstSeen.first_in_snapshot_at < until)
+        total_prio, backfill = fq.one()
+        total_prio = total_prio or 0
+        backfill = backfill or 0
+        out["prioritized"] = total_prio
+        out["prioritized_in_window"] = total_prio - backfill
+        out["prioritized_launch_backfill"] = backfill
+    except Exception:
+        # No choke-point snapshot yet → the counter stays absent (the honest
+        # "seam still open" state), never a fake zero that reads as measured.
+        logger.debug("prioritized counter unavailable (no choke-point data yet)")
+
+    return out
+
+
+# Cadence is a real deadline, not a label: an open cycle must close within its
+# window. These are the only accepted values; anything else is rejected at the
+# router so a typo can't silently disable the deadline.
+CADENCE_DAYS = {"weekly": 7, "monthly": 30, "quarterly": 91}
+
+
+def cycle_deadline(cadence, opened_at):
+    """(due_at, overdue) for an open cycle under this cadence, or (None, False)
+    when the scope has no cadence or the cycle has no opened_at."""
+    days = CADENCE_DAYS.get((cadence or "").strip().lower())
+    if not days or not opened_at:
+        return None, False
+    due = opened_at + timedelta(days=days)
+    return due, datetime.utcnow() > due
+
+
+def freeze_cycle(db: Session, cycle) -> None:
+    """Populate a cycle's frozen fields at close: live counts + the rule
+    as-of-now + the membership hash + the algorithm string. Caller commits."""
+    from ..models import CtemScope
+
+    scope = db.query(CtemScope).filter(CtemScope.id == cycle.scope_id).first()
+    rule = (scope.membership_rule if scope else None) or {}
+    asset_ids = resolve_scope_assets(db, cycle.tenant_id, rule)
+    counts = compute_stage_counts(
+        db, cycle.tenant_id, asset_ids, since=cycle.opened_at, until=datetime.utcnow(),
+    )
+    # ALSO freeze the STATE totals (not just the since-opened activity), so a
+    # later cycle can be compared honestly: "we had N findings / M ticketed at
+    # close". Additive keys — older freezes without them are simply skipped by
+    # the trend builder, never read as 0.
+    try:
+        vuln_ids = _vuln_ids_for_assets(db, cycle.tenant_id, asset_ids)
+        counts["discovered_total"] = len(vuln_ids)
+        # Frozen mobilised = in-platform assignments only (the CTEM story).
+        # ServiceNow tickets are a separate, legacy path and are not counted here.
+        from .ctem_mobilise import task_index
+        task_n = len(task_index(db, cycle.tenant_id, vuln_ids)) if vuln_ids else 0
+        counts["mobilized_total"] = task_n
+    except Exception:
+        logger.exception("freeze_cycle: total counters failed (non-fatal)")
+    cycle.counts = counts
+    cycle.membership_rule_frozen = rule
+    cycle.membership_hash = membership_hash(asset_ids)
+    cycle.hash_algorithm = HASH_ALGORITHM
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Gated loop — per-cycle stage completion. The loop runs in strict order:
+# Scope (exists) → Discover → Prioritise → Validate → Mobilise. A stage's
+# numbers show, and the next stage's action unlocks, only after the previous
+# stage was RUN in THIS cycle. Discover/Prioritise are stamped by the user's
+# explicit click (the endpoint below); Validate is stamped SERVER-SIDE when its
+# AI mapping run finishes (so leaving the page cannot lose the state).
+# ─────────────────────────────────────────────────────────────────────────────
+# "dispatch" = the explicit hand-over: Mobilise only receives the validated set
+# when the operator presses "Dispatch to Mobilise" on the Validate stage.
+_STAGE_LADDER = {"discover": None, "prioritise": "discover", "validate": "prioritise", "dispatch": "validate"}
+
+
+def advance_stage(db: Session, tenant_id: int, scope_id: int, stage: str,
+                  user_id: Optional[int] = None) -> Dict[str, Any]:
+    """Stamp `stage` done on the scope's OPEN cycle. Enforces the ladder —
+    a stage cannot be stamped before its predecessor. Idempotent. Raises
+    LookupError (no open cycle) / ValueError (unknown stage or ladder skip)."""
+    from ..models import CtemCycle
+    if stage not in _STAGE_LADDER:
+        raise ValueError(f"unknown stage '{stage}'")
+    cycle = db.query(CtemCycle).filter(
+        CtemCycle.tenant_id == tenant_id, CtemCycle.scope_id == scope_id,
+        CtemCycle.status == "open").first()
+    if cycle is None:
+        raise LookupError("no open cycle — open a cycle before running the loop")
+    progress = dict(cycle.stage_progress or {})
+    prev = _STAGE_LADDER[stage]
+    if prev and prev not in progress:
+        raise ValueError(f"run '{prev}' before '{stage}' — the loop is sequential")
+    if stage not in progress:
+        progress[stage] = datetime.utcnow().isoformat()
+        cycle.stage_progress = progress
+        db.flush()
+    return {"cycle_id": cycle.id, "stage_progress": progress}
+
+
+def stamp_validate_stage(db: Session, tenant_id: int, ctem_scope_id: int) -> None:
+    """Called by the AI mapping run on completion: mark Validate done for the
+    scope's open cycle (unlocks Mobilise). Never raises — a stamping hiccup
+    must not fail the mapping run itself."""
+    try:
+        from ..models import CtemCycle
+        cycle = db.query(CtemCycle).filter(
+            CtemCycle.tenant_id == tenant_id, CtemCycle.scope_id == ctem_scope_id,
+            CtemCycle.status == "open").first()
+        if cycle is None:
+            return
+        progress = dict(cycle.stage_progress or {})
+        if "validate" not in progress:
+            progress["validate"] = datetime.utcnow().isoformat()
+            # a completed mapping run implies the earlier stages happened
+            progress.setdefault("discover", progress["validate"])
+            progress.setdefault("prioritise", progress["validate"])
+            cycle.stage_progress = progress
+            db.flush()
+    except Exception:
+        logger.exception("stamp_validate_stage failed (non-fatal)")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CTEM command center — one per-scope rollup of the whole loop's downstream
+# signals (the four cards below the counters). Each card REUSES the service that
+# owns that stage, filtered to this scope's findings via the one resolver — no
+# number is re-derived here. The money card is the honest exception: risk
+# quantification links to risks (risk_id), never to a CTEM scope or asset, so a
+# per-scope dollar figure is not derivable — it shows the PORTFOLIO run, labelled
+# as such, rather than faking a scoped number.
+# ─────────────────────────────────────────────────────────────────────────────
+def command_center(db: Session, tenant_id: int, scope) -> Dict[str, Any]:
+    from ..models import ITAsset
+    asset_ids = resolve_scope_assets(db, tenant_id, scope.membership_rule)
+    vuln_ids = _vuln_ids_for_assets(db, tenant_id, asset_ids)
+    # The machines themselves — named, so the scope is never a faceless count.
+    machines = [
+        {"id": a.id, "name": a.name, "host_name": a.host_name, "asset_type": a.asset_type}
+        for a in db.query(ITAsset.id, ITAsset.name, ITAsset.host_name, ITAsset.asset_type)
+        .filter(ITAsset.id.in_(asset_ids)).order_by(ITAsset.name.asc()).all()
+    ] if asset_ids else []
+    return {
+        "member_assets": len(asset_ids),
+        "machines": machines,
+        "scope_findings": len(vuln_ids),
+        "prioritise": _cc_prioritise(db, tenant_id, vuln_ids),
+        "validate": _cc_validate(db, tenant_id, vuln_ids),
+        "mobilise": _cc_mobilise(db, tenant_id, vuln_ids),
+        "quantify": _cc_quantify(db, tenant_id),
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Portfolio view — the redesigned page's data contract, for ALL scopes in one
+# call (no N+1 from the browser). Shape mirrors the design handoff's `Scope`
+# interface exactly, built ONLY from the proven services above. Where the
+# design assumes data that has no real source (per-scope FAIR money, scope
+# owner name), the field is returned null/empty and the UI renders an honest
+# empty state — never an invented number.
+# ─────────────────────────────────────────────────────────────────────────────
+def _membership_label(rule: Optional[Dict[str, Any]]) -> str:
+    rule = rule or {}
+    parts = []
+    # Exposure lens first — an "external attack surface" scope (the EASM seam)
+    # is defined by internet_facing; without this it rendered "no rule".
+    if rule.get("internet_facing"):
+        parts.append("internet-facing")
+    if rule.get("name_contains"):
+        parts.append(f'name contains "{rule["name_contains"]}"')
+    if rule.get("departments"):
+        parts.append("dept in " + ", ".join(rule["departments"]))
+    if rule.get("asset_types"):
+        parts.append("type in " + ", ".join(rule["asset_types"]))
+    if rule.get("asset_ids"):
+        parts.append(f'{len(rule["asset_ids"])} named asset(s)')
+    return " AND ".join(parts) or "no rule"
+
+
+# Severity → remediation-target days. Mirrors DEFAULT_SLA in the vulnerability
+# register (grc-frontend .../vulnerabilities/page.tsx) so the CTEM ranked list
+# and the register agree on the target when a finding has no explicit due date.
+_DEFAULT_SLA_DAYS = {"critical": 7, "high": 30, "medium": 90, "low": 180, "info": 365}
+
+
+def portfolio(db: Session, tenant_id: int) -> Dict[str, Any]:
+    from ..models import CtemScope, CtemCycle, GRCUser, Vulnerability, ITAsset, VulnerabilityAssetLink
+    from .choke_points import rank_choke_points
+
+    scopes = db.query(CtemScope).filter(CtemScope.tenant_id == tenant_id).order_by(CtemScope.created_at.asc()).all()
+    now = datetime.utcnow()
+    out: List[Dict[str, Any]] = []
+    for s in scopes:
+        cc = command_center(db, tenant_id, s)
+        asset_ids = [m["id"] for m in cc["machines"]]
+        vuln_ids = _vuln_ids_for_assets(db, tenant_id, asset_ids)
+        cov = cc["prioritise"]["coverage"]
+        tiers = cc["validate"]["tiers"]
+        mob = cc["mobilise"]
+
+        # cycles: open one + closed history (frozen counts drive trend/deltas)
+        cycles = sorted(s.cycles, key=lambda c: c.opened_at or datetime.min)
+        open_c = next((c for c in cycles if c.status == "open"), None)
+        closed = [c for c in cycles if c.status == "closed" and c.counts]
+        cycle_no = len(cycles)
+        # Calendar-day count, not 24h-rolling: opened today = day 0, tomorrow = day 1.
+        # `(now - opened).days` floors elapsed 24h windows, so it flipped "day 1 → day 2"
+        # mid-morning (at the hour the cycle opened) — confusing for a "day N" label
+        # (caught by the UI walkthrough 18 Aug). Date difference increments at midnight.
+        cycle_day = (now.date() - open_c.opened_at.date()).days if open_c and open_c.opened_at else None
+        last_closed = closed[-1].closed_at.strftime("%d %b %Y") if closed and closed[-1].closed_at else None
+        # cycle history — one frozen, hash-verified record per closed cycle, newest
+        # first, for the history table the owner asked for.
+        _closer_ids = {c.closed_by for c in closed if c.closed_by}
+        _closers = {u.id: (getattr(u, "display_name", None) or getattr(u, "username", None) or getattr(u, "email", None))
+                    for u in db.query(GRCUser).filter(GRCUser.id.in_(_closer_ids)).all()} if _closer_ids else {}
+        cycle_history = [{
+            "no": i + 1,
+            "opened": c.opened_at.strftime("%d %b %Y") if c.opened_at else None,
+            "closed": c.closed_at.strftime("%d %b %Y") if c.closed_at else None,
+            "closedBy": _closers.get(c.closed_by, "—"),
+            "findings": (c.counts or {}).get("discovered_total"),
+            "dangerous": (c.counts or {}).get("prioritized"),
+            "mobilised": (c.counts or {}).get("mobilized_total"),
+            "hash": (c.membership_hash or "")[:12],
+        } for i, c in enumerate(cycles) if c.status == "closed" and c.counts][::-1]
+        # trend + deltas from CLOSED cycles' frozen counts, then the live point.
+        # HONESTY: `discovered`/`validated`/`mobilized` in a frozen payload are
+        # "since the cycle opened" ACTIVITY counters, not totals — using them as
+        # a trend point painted a false 0 (found live). Only `prioritized` is a
+        # true state count. So the dangerous trend uses frozen `prioritized`
+        # (real); the findings trend uses `discovered_total` only if a freeze
+        # recorded it, else that point is OMITTED rather than faked. prev_*
+        # deltas follow the same rule (None = "no comparable freeze").
+        def _tot(c, key):
+            v = (c.counts or {}).get(key)
+            return int(v) if v is not None else None
+        t_find = [x for x in (_tot(c, "discovered_total") for c in closed[-4:]) if x is not None] + [cc["scope_findings"]]
+        t_dang = [x for x in (_tot(c, "prioritized") for c in closed[-4:]) if x is not None] + [cov["findings_ranked"]]
+        last = closed[-1] if closed else None
+        prev_find = _tot(last, "discovered_total") if last else None
+        prev_dang = _tot(last, "prioritized") if last else None
+        prev_mob = _tot(last, "mobilized_total") if last else None
+
+        # owner (real user if set; else null → UI shows "unassigned")
+        owner = None
+        if s.business_owner_id:
+            u = db.query(GRCUser).get(s.business_owner_id)
+            if u:
+                owner = getattr(u, "full_name", None) or getattr(u, "name", None) or getattr(u, "email", None)
+
+        # top dangerous findings: choke ranking hydrated with finding meta (+ real owner/SLA)
+        rank_all = rank_choke_points(db, tenant_id, vulnerability_ids=vuln_ids)
+        rank = rank_all[:5]  # only the top few render as rows
+        top: List[Dict[str, Any]] = []
+        dangerous_ownerless = 0
+        if rank_all:
+            # Hydrate meta for ALL dangerous findings (not just the shown top-5) so
+            # the ownerless count covers every dangerous finding. The owner warning
+            # undercounted before — it tallied the truncated `top`, so with 6
+            # dangerous findings it reported "5 have no owner".
+            meta = {v.id: v for v in db.query(Vulnerability).filter(
+                Vulnerability.id.in_([r["vulnerability_id"] for r in rank_all])).all()}
+            dangerous_ownerless = sum(
+                1 for r in rank_all
+                if not (meta.get(r["vulnerability_id"]) and meta[r["vulnerability_id"]].assigned_to)
+            )
+            uid = {v.assigned_to for v in meta.values() if v.assigned_to}
+            users = {u.id: u for u in db.query(GRCUser).filter(GRCUser.id.in_(uid)).all()} if uid else {}
+            from .ctem_mobilise import task_index
+            tasks = task_index(db, tenant_id, [r["vulnerability_id"] for r in rank])
+            for r in rank:
+                v = meta.get(r["vulnerability_id"])
+                if not v:
+                    continue
+                sev = (v.severity or "low").lower()
+                # SLA: the real due date if set; else the severity-default TARGET
+                # (mirrors the register's DEFAULT_SLA) so the most-urgent list never
+                # shows a blank commitment on every row.
+                if v.due_date:
+                    d = (v.due_date - now).days
+                    sla = f"overdue {abs(d)}d" if d < 0 else f"{d}d left"
+                else:
+                    sla = f"target {_DEFAULT_SLA_DAYS.get(sev, 90)}d"
+                ou = users.get(v.assigned_to) if v.assigned_to else None
+                task = tasks.get(v.id) or {}
+                top.append({
+                    "id": v.id, "rank": r["rank"], "title": v.title,
+                    "meta": " · ".join(x for x in [v.cve_id or v.cwe_id, (cc["machines"][0]["name"] if cc["machines"] else None)] if x),
+                    "breaks": f'{r["chain_count"]} path{"s" if r["chain_count"] != 1 else ""}',
+                    "owner": (getattr(ou, "full_name", None) or getattr(ou, "email", None) or getattr(ou, "display_name", None)) if ou else None,
+                    "sla": sla, "sev": sev,
+                    # WHY this rank: the signals the tie-break ordered on, so the row
+                    # explains itself (a Medium can't sit above a KEV with no reason shown).
+                    "kev": bool(getattr(v, "kev_flag", False)),
+                    "epss": round(float(getattr(v, "epss_score", None) or 0.0), 3) or None,
+                    "taskStatus": task.get("status"),
+                    "taskApprovalId": task.get("approval_id"),
+                    "taskApproverId": task.get("approver_user_id"),
+                    "taskAssigneeId": task.get("assignee_user_id"),
+                })
+
+        # machines with findings count + worst reachable verdict as the risk dot
+        per_asset_findings: Dict[int, int] = {}
+        if asset_ids and vuln_ids:   # same OPEN set as every other number on the page
+            for aid, n in db.query(VulnerabilityAssetLink.asset_id, func.count(VulnerabilityAssetLink.id)).filter(
+                    VulnerabilityAssetLink.asset_id.in_(asset_ids),
+                    VulnerabilityAssetLink.vulnerability_id.in_(vuln_ids)).group_by(VulnerabilityAssetLink.asset_id).all():
+                per_asset_findings[aid] = n
+        machines = [{"id": m["id"], "name": m["name"], "type": m.get("asset_type") or "asset",
+                     "findings": per_asset_findings.get(m["id"], 0), "risk": None} for m in cc["machines"]]
+
+        # frameworks with tested-EFFECTIVE count from the crosswalk items.
+        # (Was counting tested_failed too — the per-framework bar then said "1/3"
+        # while the header said "0 tested · 7 failed" on the same card.)
+        fw: Dict[str, Dict[str, int]] = {}
+        for it in cc["validate"].get("items", []):
+            f = fw.setdefault(it["framework"], {"controls": 0, "tested": 0})
+            f["controls"] += 1
+            if it["tier"] in ("tested_effective", "remediation_verified"):
+                f["tested"] += 1
+        tier_map = {"tested_effective": "tested", "tested_failed": "failed", "remediation_verified": "verified"}
+        cw = [{"fw": it["framework"], "code": it["code"], "title": it["title"], "findings": it["findings_covered"],
+               "tier": tier_map.get(it["tier"], "claimed"), "control_id": it["id"], "kind": it["kind"],
+               "covered_ids": it.get("covered_ids", []),
+               "family_of": it.get("family_of"), "standards": it.get("standards", []),
+               "priority_covered": it.get("priority_covered", 0),
+               "basis": it.get("basis", "manual"), "reason": it.get("reason", "")}
+              for it in cc["validate"].get("items", [])]
+
+        # Two-way closure, made visible: findings the SCANNER verified gone
+        # (status auto_closed_fixed — the only close). Open-only vuln_ids hide
+        # these by design, so count them separately for the Mobilise strip.
+        closed_verified = 0
+        if asset_ids:
+            from ..models import Vulnerability as _V, VulnerabilityAssetLink as _VAL
+            closed_verified = db.query(func.count(func.distinct(_VAL.vulnerability_id))).join(
+                _V, _V.id == _VAL.vulnerability_id).filter(
+                _V.tenant_id == tenant_id, _VAL.asset_id.in_(asset_ids),
+                _V.status == "auto_closed_fixed").scalar() or 0
+
+        _cdue, _cover = cycle_deadline(s.cadence, open_c.opened_at if open_c else None)
+        out.append({
+            "id": s.id, "name": s.name, "owner": owner, "cadence": s.cadence or "—",
+            "membership": _membership_label(s.membership_rule),
+            "cycleOpen": open_c is not None, "cycleId": open_c.id if open_c else None,
+            # Gated loop: the open cycle's stage stamps ({} = fresh cycle, nothing
+            # run yet; null = no open cycle → history view, actions locked).
+            "stageProgress": (getattr(open_c, "stage_progress", None) or {}) if open_c else None,
+            "cycleNo": cycle_no, "cycleDay": cycle_day, "lastClosed": last_closed,
+            "cycleHistory": cycle_history,
+            # Real cadence deadline for the open cycle (None when idle / no cadence).
+            "cycleDueAt": (_cdue.isoformat() if _cdue else None),
+            "cycleOverdue": _cover,
+            "assets": len(asset_ids), "findings": cc["scope_findings"],
+            "dangerous": cov["findings_ranked"], "dangerousOwnerless": dangerous_ownerless,
+            # the reachable set itself — Mobilise puts these in section 1
+            "dangerousIds": [r["vulnerability_id"] for r in rank_all],
+            "chains": cov["total_viable_chains"],
+            "controls": cc["validate"]["controls"],
+            "pipeline": cc["validate"].get("pipeline", {}),
+            "tested": tiers.get("tested_effective", 0), "failed": tiers.get("tested_failed", 0),
+            "verified": tiers.get("remediation_verified", 0), "claimed": tiers.get("attested_only", 0) + tiers.get("stale", 0),
+            # CTEM Mobilise KPI = in-platform assignments only (no ServiceNow tickets).
+            "fixes": mob.get("assignments", 0),
+            "fixesOpen": mob.get("open", 0),
+            "closedVerified": closed_verified,
+            "tasks": mob.get("assignments", 0),
+            # per-scope FAIR: REAL (non-[DEMO]) risks linked to the scope's assets, summed
+            # over each risk's latest completed FAIR run. Null when nothing real is linked.
+            **_scope_fair(db, tenant_id, asset_ids),
+            "buckets": {"ranked": cov["findings_ranked"], "undeterminable": cov["findings_undeterminable"],
+                        "chainless": cov["findings_chainless"], "severed": cov["findings_severed"]},
+            "analysable": cc["prioritise"].get("analysable"),
+            "frameworks": [{"name": k, **v} for k, v in fw.items()],
+            "machines": machines, "top": top,
+            "tFind": t_find, "tDang": t_dang, "prevFind": prev_find, "prevDang": prev_dang, "prevMob": prev_mob,
+            "cw": cw,
+        })
+    return {"scopes": out, "quantify": _cc_quantify(db, tenant_id)}
+
+
+def _scope_fair(db: Session, tenant_id: int, asset_ids: List[int]) -> Dict[str, Any]:
+    """Per-scope FAIR from REAL data only: risks linked (grc_risk_asset_links) to
+    the scope's assets, excluding [DEMO] samples, each contributing its latest
+    COMPLETED risk-scoped simulation. Sums are honest (independent-risk upper
+    bound; no correlation modelled). Also reports how many linked risks lack a
+    run, so the UI can say precisely what unlocks the number instead of inventing it."""
+    from ..models import Risk, RiskAssetLink, RiskSimulationRun
+    out = {"ale": None, "aleMin": None, "p95": None, "aleAfter": None,
+           "fair": {"risks_linked": 0, "risks_quantified": 0, "currency": None}}
+    if not asset_ids:
+        return out
+    # DISTINCT on ids only — Risk carries json columns, and Postgres has no
+    # equality operator for json, so DISTINCT over the whole row 500s.
+    risk_ids = [rid for (rid,) in db.query(Risk.id).join(RiskAssetLink, RiskAssetLink.risk_id == Risk.id).filter(
+        Risk.tenant_id == tenant_id, RiskAssetLink.asset_id.in_(asset_ids),
+        ~Risk.title.like("[DEMO]%")).distinct().all()]
+    out["fair"]["risks_linked"] = len(risk_ids)
+    if not risk_ids:
+        return out
+    ale = amin = p95 = 0.0
+    n = 0
+    ccy = None
+    for rid in risk_ids:
+        run = db.query(RiskSimulationRun).filter(
+            RiskSimulationRun.risk_id == rid, RiskSimulationRun.scope == "risk",
+            RiskSimulationRun.status == "completed", RiskSimulationRun.ale_mean.isnot(None),
+        ).order_by(RiskSimulationRun.completed_at.desc().nullslast(), RiskSimulationRun.id.desc()).first()
+        if not run:
+            continue
+        n += 1
+        ale += float(run.ale_mean or 0); amin += float(run.p5 or 0); p95 += float(run.p95 or 0)
+        ccy = ccy or run.currency
+    out["fair"]["risks_quantified"] = n
+    out["fair"]["currency"] = ccy
+    if n:
+        out.update({"ale": round(ale), "aleMin": round(amin), "p95": round(p95)})
+    return out
+
+
+def _cc_prioritise(db: Session, tenant_id: int, vuln_ids: List[int]) -> Dict[str, Any]:
+    """Prioritise for the scope — plus the HONEST split the engine's inputs
+    force: a finding with no CVE/CWE/vector (a Nessus "info" item — a banner,
+    a service detection) carries nothing an attack-path engine can reason
+    from. Reporting "215 analysed" when 181 are informational would overclaim;
+    the card must say "N real vulnerabilities, M informational"."""
+    from ..models import Vulnerability
+    from .choke_points import coverage, rank_choke_points
+    cov = coverage(db, tenant_id, vulnerability_ids=vuln_ids)
+    top = [{"vulnerability_id": c["vulnerability_id"], "chain_count": c["chain_count"]}
+           for c in rank_choke_points(db, tenant_id, vulnerability_ids=vuln_ids)[:3]]
+    real = informational = 0
+    if vuln_ids:
+        for cve, cwe, vec in db.query(
+                Vulnerability.cve_id, Vulnerability.cwe_id, Vulnerability.cvss_vector).filter(
+                Vulnerability.id.in_(vuln_ids)).all():
+            if (cve or "").strip() or (cwe or "").strip() or (vec or "").strip():
+                real += 1
+            else:
+                informational += 1
+    return {"coverage": cov, "top": top,
+            "analysable": {"real_vulnerabilities": real, "informational": informational}}
+
+
+def _cc_validate(db: Session, tenant_id: int, vuln_ids: List[int]) -> Dict[str, Any]:
+    """Controls covering THIS scope's findings, and how many are actually tested.
+    Scope→control map = scope findings → their control links; tiers come from the
+    same read-time deriver the assurance page uses (no stored badge).
+
+    Returns the controls LISTED (code, title, framework, tier, how many of the
+    scope's findings each covers), not just counted — the user must be able to
+    see the crosswalk ("ISO 27001 A.8.8, NIST RA-5 …"), not a bare "60"."""
+    from ..models import VulnerabilityControlLink, ParsedFrameworkControl, UploadedFramework
+    from .control_assurance import _ref_key, tier_for_ref
+    if not vuln_ids:
+        return {"controls": 0, "tiers": {}, "items": [], "by_framework": {}}
+    refs: Dict[tuple, int] = {}          # (kind, id) → number of scope findings it covers
+    # provenance per control: how did this control get onto the crosswalk?
+    #   rule   — CWE/vuln-mgmt/KEV crosswalk (auto:cwe:…)      ai — human accepted an AI proposal
+    #   reused — a human's earlier decision on the same CWE, applied    manual — a person linked it
+    basis_of: Dict[tuple, str] = {}
+    reason_of: Dict[tuple, str] = {}
+    covered_of: Dict[tuple, list] = {}   # (kind,id) -> [vulnerability_id, ...] it closes
+    # if a control has several bases, show the most human one (lower rank wins)
+    _rank = {"manual": 0, "ai": 1, "ai_auto": 2, "ai_family": 3, "reused": 4, "rule": 5}
+    for link in db.query(VulnerabilityControlLink).filter(
+            VulnerabilityControlLink.vulnerability_id.in_(vuln_ids)).all():
+        k = _ref_key(link)
+        if k:
+            refs[k] = refs.get(k, 0) + 1
+            covered_of.setdefault(k, []).append(link.vulnerability_id)
+            n = link.notes or ""
+            if n.startswith("auto:cwe:"):
+                b, why = "rule", f"crosswalk rule · {n[len('auto:cwe:'):].split()[0] or 'vuln-mgmt'}"
+            elif n.startswith("ai_suggested:"):
+                b, why = "ai", n.split(" · ", 2)[-1] if " · " in n else "accepted AI proposal"
+            elif n.startswith("ai_auto:"):
+                b, why = "ai_auto", n.split(" · ", 2)[-1] if " · " in n else "auto-linked by the confidence gate"
+            elif n.startswith("ai_family:"):
+                b, why = "ai_family", "original framework control of an AI-linked group"
+            elif n.startswith("ai_reused:"):
+                b, why = "reused", n.split(" · ", 2)[-1] if " · " in n else "reused human decision"
+            else:
+                b, why = "manual", n or "linked by a person"
+            if k not in basis_of or _rank[b] < _rank[basis_of[k]]:
+                basis_of[k], reason_of[k] = b, why
+    tiers: Dict[str, int] = {}
+    tier_of: Dict[tuple, str] = {}
+    for kind, cid in refs:
+        t = tier_for_ref(db, tenant_id, kind, cid)["tier"]
+        tiers[t] = tiers.get(t, 0) + 1
+        tier_of[(kind, cid)] = t
+
+    # Name the parsed-framework controls (the path the CWE crosswalk writes to).
+    parsed_ids = [cid for (kind, cid) in refs if kind == "parsed_framework_control"]
+    items: List[Dict[str, Any]] = []
+    if parsed_ids:
+        rows = db.query(
+            ParsedFrameworkControl.id, ParsedFrameworkControl.control_id,
+            ParsedFrameworkControl.title, UploadedFramework.name,
+        ).outerjoin(UploadedFramework, UploadedFramework.id == ParsedFrameworkControl.uploaded_framework_id
+        ).filter(ParsedFrameworkControl.id.in_(parsed_ids)).all()
+        for r in rows:
+            k = ("parsed_framework_control", r.id)
+            items.append({
+                "id": r.id, "kind": "parsed_framework_control", "code": r.control_id,
+                "title": r.title, "framework": r.name or "—",
+                "tier": tier_of.get(k, "attested_only"), "findings_covered": refs.get(k, 0),
+                "covered_ids": covered_of.get(k, []),
+                "basis": basis_of.get(k, "manual"), "reason": reason_of.get(k, ""),
+            })
+    # Unified Control Library controls (the path AI-accepted proposals write to):
+    # name them by their real code/name, sourced "Unified Control Library".
+    from ..models import NormalizedControl
+    norm_ids = [cid for (kind, cid) in refs if kind == "normalized_control"]
+    if norm_ids:
+        for r in db.query(NormalizedControl.id, NormalizedControl.code, NormalizedControl.name).filter(
+                NormalizedControl.id.in_(norm_ids)).all():
+            k = ("normalized_control", r.id)
+            items.append({"id": r.id, "kind": "normalized_control", "code": r.code, "title": r.name,
+                          "framework": "Unified Control Library",
+                          "tier": tier_of.get(k, "attested_only"), "findings_covered": refs.get(k, 0),
+                          "covered_ids": covered_of.get(k, []),
+                          "basis": basis_of.get(k, "manual"), "reason": reason_of.get(k, "")})
+    # Anything else (internal/framework refs) still counts; name it minimally, never hide it.
+    named = {(i["kind"], i["id"]) for i in items}
+    for (kind, cid), n in refs.items():
+        if (kind, cid) not in named:
+            items.append({"id": cid, "kind": kind, "code": f"#{cid}", "title": kind.replace("_", " "),
+                          "framework": "Other", "tier": tier_of[(kind, cid)], "findings_covered": n,
+                          "covered_ids": covered_of.get((kind, cid), []),
+                          "basis": basis_of.get((kind, cid), "manual"), "reason": reason_of.get((kind, cid), "")})
+    # THE ACTUAL STANDARDS (owner's rule): "Unified Control Library" is our
+    # internal name, not a standard. Every library control shows the real
+    # frameworks it consolidates (its editions), whether or not those edition
+    # rows are themselves linked.
+    try:
+        from ..models import NormalizedControlLink, ParsedFrameworkControl, UploadedFramework
+        nc_ids2 = [i["id"] for i in items if i["kind"] == "normalized_control"]
+        if nc_ids2:
+            stds: Dict[int, List[str]] = {}
+            for nc, ref, cid2, fw in db.query(
+                    NormalizedControlLink.normalized_control_id,
+                    ParsedFrameworkControl.original_reference, ParsedFrameworkControl.control_id,
+                    UploadedFramework.name).join(
+                    ParsedFrameworkControl, ParsedFrameworkControl.id == NormalizedControlLink.parsed_control_id).join(
+                    UploadedFramework, UploadedFramework.id == ParsedFrameworkControl.uploaded_framework_id).filter(
+                    NormalizedControlLink.normalized_control_id.in_(nc_ids2),
+                    UploadedFramework.is_active == True).all():  # noqa: E712
+                stds.setdefault(nc, []).append(f"{(fw or '?')[:30]} {ref or cid2 or ''}".strip())
+            for i in items:
+                if i["kind"] == "normalized_control":
+                    i["standards"] = stds.get(i["id"], [])[:6]
+    except Exception:
+        logger.exception("_cc_validate: standards attach unavailable (non-fatal)")
+    # Group identity for the UI: a parsed (framework-original) row that belongs to
+    # a linked group carries `family_of` = its unified control's id, so the table
+    # can render ONE row per control with the framework versions as tags instead
+    # of repeating the control once per framework (the "what is 123 rows?" issue).
+    try:
+        from ..models import NormalizedControlLink
+        parsed_item_ids = [i["id"] for i in items if i["kind"] == "parsed_framework_control"]
+        norm_item_ids = {i["id"] for i in items if i["kind"] == "normalized_control"}
+        if parsed_item_ids and norm_item_ids:
+            parent_of: Dict[int, int] = {}
+            for nc_id, pid in db.query(NormalizedControlLink.normalized_control_id,
+                                       NormalizedControlLink.parsed_control_id).filter(
+                    NormalizedControlLink.parsed_control_id.in_(parsed_item_ids),
+                    NormalizedControlLink.normalized_control_id.in_(norm_item_ids)).all():
+                parent_of.setdefault(pid, nc_id)
+            for i in items:
+                if i["kind"] == "parsed_framework_control" and i["id"] in parent_of:
+                    i["family_of"] = parent_of[i["id"]]
+    except Exception:
+        logger.exception("_cc_validate: family grouping unavailable (non-fatal)")
+    # PRIORITY ON TOP (owner's rule): stamp each control with how many PRIORITISED
+    # vulnerabilities (carry a CVE/CWE/vector — Prioritise's own definition) it
+    # closes, and sort by that first. A control that closes prioritised
+    # vulnerabilities outranks one that closes twice as many info-adjacent ones.
+    try:
+        from ..models import Vulnerability as _V
+        pri_set = {vid for (vid, cve, cwe, vec) in db.query(
+            _V.id, _V.cve_id, _V.cwe_id, _V.cvss_vector).filter(_V.id.in_(vuln_ids)).all()
+            if (cve or "").strip() or (cwe or "").strip() or (vec or "").strip()}
+        for i in items:
+            i["priority_covered"] = len(set(i.get("covered_ids") or []) & pri_set)
+    except Exception:
+        logger.exception("_cc_validate: priority stamp unavailable (non-fatal)")
+        for i in items:
+            i.setdefault("priority_covered", 0)
+    items.sort(key=lambda i: (-i.get("priority_covered", 0), -i["findings_covered"], i["framework"], i["code"]))
+    by_framework: Dict[str, int] = {}
+    for i in items:
+        by_framework[i["framework"]] = by_framework.get(i["framework"], 0) + 1
+    return {"controls": len(refs), "tiers": tiers, "items": items, "by_framework": by_framework,
+            "pipeline": _validate_pipeline(db, vuln_ids)}
+
+
+def _validate_pipeline(db: Session, vuln_ids: List[int]) -> Dict[str, int]:
+    """The honest per-finding coverage of the AI Validate pass. Every finding is
+    counted exactly once:
+      linked               = has >=1 control link (gate-auto, accepted, reused, family)
+      patch_only           = answered: open CVE, no specific control — remediate by patching
+      no_specific          = answered: a weakness nothing in the library addresses
+      informational        = answered: the AI judged it a pure inventory note
+      low_awaiting_review  = a low-confidence suggestion waiting for a human
+      unmapped             = NO stored answer yet — mapping has not been run on it
+      analysed             = everything except informational and unmapped
+    No regex classifier — "informational" is the AI's own stored verdict. A
+    finding whose every suggestion a human rejected has no link; it stays inside
+    `analysed` as the remainder rather than being forced into a bucket."""
+    from ..models import AiControlProposal, VulnerabilityControlLink
+    out = {"analysed": 0, "informational": 0, "linked": 0, "patch_only": 0,
+           "no_specific": 0, "low_awaiting_review": 0, "unmapped": 0}
+    if not vuln_ids:
+        return out
+    linked = {vid for (vid,) in db.query(VulnerabilityControlLink.vulnerability_id).filter(
+        VulnerabilityControlLink.vulnerability_id.in_(vuln_ids)).distinct().all()}
+    marker_patch, marker_nospec, marker_inv, awaiting, stickered = set(), set(), set(), set(), set(linked)
+    try:                                    # proposals table may be absent (sqlite unit fixtures)
+        prop_rows = db.query(
+            AiControlProposal.vulnerability_id, AiControlProposal.status, AiControlProposal.bucket,
+            AiControlProposal.normalized_control_id, AiControlProposal.parsed_framework_control_id
+            ).filter(AiControlProposal.vulnerability_id.in_(vuln_ids)).all()
+    except Exception:
+        prop_rows = []
+    for vid, status, bucket, nc, pfc in prop_rows:
+        stickered.add(vid)
+        if vid in linked:
+            continue
+        is_marker = nc is None and pfc is None
+        if status == "no_control" and is_marker:
+            if bucket == "patch_only":
+                marker_patch.add(vid)
+            elif bucket == "inventory":
+                marker_inv.add(vid)
+            else:
+                marker_nospec.add(vid)
+        elif status == "proposed" and not is_marker:
+            awaiting.add(vid)
+    marker_nospec -= (marker_patch | marker_inv)       # defensive: keep the buckets disjoint
+    marker_patch -= marker_inv
+    awaiting -= (marker_patch | marker_nospec | marker_inv)
+    total = len(set(vuln_ids))
+    out["unmapped"] = total - len(stickered)
+    out["informational"] = len(marker_inv)
+    out["analysed"] = total - out["informational"] - out["unmapped"]
+    out["linked"], out["patch_only"] = len(linked), len(marker_patch)
+    out["no_specific"], out["low_awaiting_review"] = len(marker_nospec), len(awaiting)
+    out["linked_ids"] = sorted(linked)          # Mobilise's work list = exactly these
+
+    # The PRIORITISED subset gets its own line — same definition Prioritise uses
+    # (a real vulnerability: carries a CVE, CWE or CVSS vector). The owner must see
+    # at a glance that the priority findings specifically are covered, not have to
+    # trust that they're "somewhere inside" the totals.
+    try:
+        from ..models import Vulnerability
+        pri_ids = [vid for (vid, cve, cwe, vec) in db.query(
+            Vulnerability.id, Vulnerability.cve_id, Vulnerability.cwe_id, Vulnerability.cvss_vector
+            ).filter(Vulnerability.id.in_(vuln_ids)).all()
+            if (cve or "").strip() or (cwe or "").strip() or (vec or "").strip()]
+        p_link = sum(1 for i in pri_ids if i in linked)
+        p_patch = sum(1 for i in pri_ids if i in marker_patch)
+        p_wait = sum(1 for i in pri_ids if i in awaiting)
+        out["priority_ids"] = sorted(pri_ids)   # Mobilise sections on these
+        out["priority"] = {"total": len(pri_ids), "linked": p_link, "patch_only": p_patch,
+                           "awaiting": p_wait,
+                           "unanswered": len(pri_ids) - p_link - p_patch - p_wait
+                                         - sum(1 for i in pri_ids if i in marker_nospec)}
+    except Exception:
+        logger.exception("_validate_pipeline: priority sub-count unavailable (non-fatal)")
+    return out
+
+
+def _cc_mobilise(db: Session, tenant_id: int, vuln_ids: List[int]) -> Dict[str, Any]:
+    """CTEM mobilise = in-platform workflow assignments on this scope's OPEN
+    findings. `vuln_ids` is already open-only (a scanner-verified close drops a
+    finding out of scope), so every assignment counted here is by definition still
+    open — it clears itself when Nessus verifies the fix. ServiceNow tickets are a
+    separate, legacy path and are deliberately NOT counted in this number."""
+    if not vuln_ids:
+        return {"assignments": 0, "open": 0}
+    from .ctem_mobilise import task_index
+    n = len(task_index(db, tenant_id, vuln_ids))
+    return {"assignments": n, "open": n}
+
+
+def _cc_quantify(db: Session, tenant_id: int) -> Optional[Dict[str, Any]]:
+    """Latest COMPLETED portfolio simulation — labelled portfolio, NOT scope.
+    Risk quantification links to risks, never to a CTEM scope or asset, so there
+    is no honest per-scope dollar figure; the portfolio number, clearly labelled,
+    is the closest true thing."""
+    from ..models import RiskSimulationRun, Risk
+    run = db.query(RiskSimulationRun).filter(
+        RiskSimulationRun.tenant_id == tenant_id,
+        RiskSimulationRun.scope == "portfolio",
+        RiskSimulationRun.status == "completed",
+    ).order_by(RiskSimulationRun.created_at.desc()).first()
+    if run is None:
+        return None
+    # HARD RULE: never present a figure computed from sample data as the user's
+    # own. If every risk in the register is a [DEMO] seed, the run is a real
+    # Monte Carlo on fake inputs — say so, and don't hand the UI a headline
+    # number to display as real.
+    total = db.query(func.count(Risk.id)).filter(Risk.tenant_id == tenant_id).scalar() or 0
+    demo = db.query(func.count(Risk.id)).filter(
+        Risk.tenant_id == tenant_id, Risk.title.like("[DEMO]%")).scalar() or 0
+    demo_only = total > 0 and demo == total
+    return {"scope": "portfolio", "ale": run.ale_mean, "p95": run.p95,
+            "currency": run.currency,
+            "computed_at": run.created_at.isoformat() if run.created_at else None,
+            "risks_total": total, "risks_demo": demo, "demo_only": demo_only}

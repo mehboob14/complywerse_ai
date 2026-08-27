@@ -743,7 +743,7 @@ export const GUIDE_NOTES: Record<string, GuideNote> = {
     what: "CWE-917 is a standardised weakness-type classification (distinct from a CVE, which identifies one specific vulnerability instance) — CWE-917 describes \"Improper Neutralization of Special Elements used in an Expression Language Statement,\" the general category of coding mistake Log4Shell is an example of. The affected component, log4j-core@2.14.1, names the exact library and version actually vulnerable.",
     where: "CWE classification comes from NVD alongside the CVSS score; the affected component is matched against this asset's own software inventory via the CPE mechanism described on the Software tab.",
     why: "A CWE groups a whole family of related vulnerabilities under one weakness type, which is genuinely useful for pattern-spotting (\"we keep having expression-language-injection issues across our stack\") in a way a single CVE number cannot capture on its own.",
-    misreading: "Use the CWE when looking for training or coding-standard gaps across the organisation, not just this one finding — \"Auto-map from CWE\" style features (elsewhere in the product) use exactly this classification to suggest which compensating controls are broadly relevant to this whole class of weakness.",
+    misreading: "Use the CWE when looking for training or coding-standard gaps across the organisation, not just this one finding — the AI control mapper reads this weakness type to suggest which controls are broadly relevant to this whole class of weakness.",
   },
   // source: v-assignment
   'vuln.assignment': {

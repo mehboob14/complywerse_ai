@@ -190,7 +190,9 @@ def get_node_config_options(
         ],
         "vulnerability_severities": ["critical", "high", "medium", "low", "info"],
         "vulnerability_statuses": [
-            "open", "in_progress", "resolved", "accepted", "false_positive",
+            "open", "in_progress", "remediated", "verified", "closed",
+            "resolved", "accepted", "false_positive",
+            "auto_closed_decommissioned", "auto_closed_fixed",
         ],
         "policy_categories": [
             "Information Security", "Privacy & Data Protection", "Business Continuity",

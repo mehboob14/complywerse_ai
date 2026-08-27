@@ -666,6 +666,12 @@ export const documentsApi = {
   delete: (id: string) => apiClient.delete(`/documents/${id}`),
 };
 
+export interface LayoutPlan {
+  version: string;
+  fields: Array<{ key: string; heading: string; card: string }>;
+  cards: Array<{ name: string; size: 'half' | 'full'; order: number }>;
+}
+
 export const assetsApi = {
   // Pass filters through query params. Defaults preserved when called with
   // no args, so existing callers (e.g. `assetsApi.getAll()`) are unchanged.
@@ -684,6 +690,19 @@ export const assetsApi = {
   }) => apiClient.get<ITAsset[]>('/assets', { params }),
   getById: (id: number) => apiClient.get<ITAsset>(`/assets/${id}`),
   getDetail: (id: number) => apiClient.get(`/assets/${id}/detail`),
+  // AI-planned detail layout (Layer 2): headings + card grouping per field KEY.
+  // Values are never sent to or produced by the model. `plan` is null when AI
+  // is unavailable/invalid — the page then renders its generic layout unchanged.
+  getLayoutPlan: (id: number, refresh = false) =>
+    apiClient.get<{ plan: LayoutPlan | null }>(`/assets/${id}/layout-plan`, { params: refresh ? { refresh: true } : undefined }),
+  // Enrich an existing asset IN PLACE with its typed service inventory (e.g. a
+  // Postgres app → its databases/schemas/roles) — no re-discovery needed.
+  collectAssetService: (id: number, data: { kind?: string; username?: string; password?: string; host?: string; port?: number; database?: string; connection_id?: number }) =>
+    apiClient.post(`/assets/${id}/collect-service`, data),
+  // Saved logins (encrypted IntegrationConnections) that can collect this asset's
+  // typed service — powers the "reuse a saved login" picker in the collect modal.
+  getServiceLogins: (id: number) =>
+    apiClient.get<{ kind: string | null; logins: Array<{ connection_id: number; label: string; host: string | null; port: number | null; username: string | null }> }>(`/assets/${id}/service-logins`),
   // Phase 5.3 — Lifecycle state transition. Backend enforces the FSM and
   // returns the new state + a count of auto-closed vulnerabilities.
   transitionLifecycle: (
@@ -855,10 +874,12 @@ export const assetsApi = {
 // /asset-discovery screen (replaces the former static mock).
 export const discoveryApi = {
   listCampaigns: () => apiClient.get('/discovery/campaigns'),
+  easmScorecard: () => apiClient.get('/discovery/easm-scorecard'),
   getCampaign: (id: number) => apiClient.get(`/discovery/campaigns/${id}`),
   createCampaign: (data: {
     name: string; description?: string; method?: string;
     is_active?: boolean; schedule_seconds?: number | null;
+    snmp_communities?: string | null;
     scopes?: { kind: string; value: string; exclude?: boolean; note?: string }[];
   }) => apiClient.post('/discovery/campaigns', data),
   updateCampaign: (id: number, data: Record<string, unknown>) =>
@@ -877,11 +898,21 @@ export const discoveryApi = {
     apiClient.get('/discovery/discovered-devices', { params: runId != null ? { run_id: runId } : undefined }),
   // Promote an unclaimed discovered device (keyed by OBSERVATION id) — it only
   // becomes an asset if the login works.
-  connectDevice: (observationId: number, data: { username: string; password: string; domain?: string; transport?: string }) =>
+  connectDevice: (observationId: number, data: { username?: string; password?: string; domain?: string; transport?: string; credential_id?: number }) =>
     apiClient.post(`/discovery/devices/${observationId}/connect`, data),
+  // Discovery→kind bridge: connect a discovered device AS the service detected on
+  // it (postgres | mysql | mssql | oracle | k8s | ldap | cisco) with that kind's
+  // own credential, promoting it to a TYPED asset with its component inventory.
+  connectService: (observationId: number, data: { kind: string; username?: string; password?: string; port?: number; database?: string; credential_id?: number }) =>
+    apiClient.post(`/discovery/devices/${observationId}/connect-service`, data),
   // Re-collect a device that is already in inventory (keyed by asset id).
-  reconnectAsset: (assetId: number, data: { username: string; password: string; domain?: string; transport?: string }) =>
+  reconnectAsset: (assetId: number, data: { username?: string; password?: string; domain?: string; transport?: string; credential_id?: number }) =>
     apiClient.post(`/discovery/assets/${assetId}/reconnect`, data),
+  // Saved logins that could connect a given host IP — powers one-click reuse in
+  // the Connect form (siblings sharing a domain account don't re-enter it).
+  applicableCredentials: (ip: string, kind?: string) =>
+    apiClient.get<{ ip: string; credentials: Array<{ id: number; name: string; username: string; kind: string; domain?: string | null; covers_host: boolean; tenant_wide: boolean }> }>(
+      `/discovery/credentials/applicable`, { params: { ip, ...(kind ? { kind } : {}) } }),
   disconnectDevice: (assetId: number) =>
     apiClient.post(`/discovery/devices/${assetId}/disconnect`),
   connectProgress: () => apiClient.get('/discovery/connect-progress'),
@@ -891,6 +922,16 @@ export const discoveryApi = {
     apiClient.post('/discovery/connect-all-discovered', undefined, {
       params: { ...(kind ? { kind } : {}), ...(runId != null ? { run_id: runId } : {}) },
     }),
+  // Run the ticked saved login(s) against the specific devices ticked.
+  // Empty/null credentialIds = backend auto-picks the best match per device.
+  connectSelected: (observationIds: number[], credentialIds?: number[] | null) =>
+    apiClient.post('/discovery/connect-selected',
+      { observation_ids: observationIds, credential_ids: credentialIds ?? null }),
+  // Read a DHCP server's real lease table (via a saved credential) and fold the
+  // hostnames + vendor-class onto discovered devices. A real SSH/WinRM read of
+  // the router — never invents a name.
+  dhcpEnrich: (data: { credential_id: number; dhcp_ip: string; source_type: 'mikrotik' | 'dnsmasq' | 'isc' | 'windows'; run_id?: number }) =>
+    apiClient.post('/discovery/dhcp/enrich', data),
   inbox: (statusFilter: 'open' | 'review' | 'pending' | 'all' = 'open') =>
     apiClient.get('/discovery/inbox', { params: { status_filter: statusFilter } }),
   resolve: (obsId: number, action: 'adopt' | 'merge' | 'ignore', targetAssetId?: number) =>
@@ -1091,9 +1132,71 @@ export const certificationsApi = {
     ),
 };
 
+// CTEM Phase 3 — scopes + cycles.
+export const ctemScopesApi = {
+  list: () => apiClient.get('/erm/ctem/scopes'),
+  get: (id: number) => apiClient.get(`/erm/ctem/scopes/${id}`),
+  create: (data: Record<string, unknown>) => apiClient.post('/erm/ctem/scopes', data),
+  update: (id: number, data: Record<string, unknown>) => apiClient.put(`/erm/ctem/scopes/${id}`, data),
+  remove: (id: number) => apiClient.delete(`/erm/ctem/scopes/${id}`),
+  openCycle: (scopeId: number) => apiClient.post(`/erm/ctem/scopes/${scopeId}/cycles/open`),
+  closeCycle: (cycleId: number) => apiClient.post(`/erm/ctem/scopes/cycles/${cycleId}/close`),
+  // Gated loop: stamp a stage done on the open cycle (discover | prioritise).
+  // Validate is stamped server-side when its AI mapping run finishes.
+  completeStage: (scopeId: number, stage: 'discover' | 'prioritise' | 'dispatch') =>
+    apiClient.post(`/erm/ctem/scopes/${scopeId}/stages/${stage}`),
+  commandCenter: (scopeId: number) => apiClient.get(`/erm/ctem/scopes/${scopeId}/command-center`),
+  portfolio: () => apiClient.get('/erm/ctem/scopes/portfolio'),
+  mobilise: (scopeId: number, data: { vulnerability_id: number; assignee_user_id: number; approver_user_id?: number }) =>
+    apiClient.post(`/erm/ctem/scopes/${scopeId}/mobilise`, data),
+  decideMobilise: (scopeId: number, approvalId: number, data: { decision: 'approve' | 'reject'; comment?: string }) =>
+    apiClient.post(`/erm/ctem/scopes/${scopeId}/mobilise/approvals/${approvalId}/decision`, data),
+};
+
+// CTEM Phase 2 — automated control-effectiveness evidence.
+export const controlAssuranceApi = {
+  evidenceSummary: () => apiClient.get('/control-library/assurance/evidence-summary'),
+  controlEvidence: (kind: string, controlId: number) =>
+    apiClient.get(`/control-library/assurance/controls/${kind}/${controlId}/evidence`),
+};
+
 export const ermApi = {
   dashboard: {
     getSectionsOverview: () => apiClient.get('/erm/dashboard/sections-overview'),
+  },
+  // CRQM — FAIR quantification (scenario, versioned loss models, Monte Carlo runs).
+  quantification: {
+    getScenario: (riskId: number) =>
+      apiClient.get(`/erm/quantification/risks/${riskId}/scenario`),
+    updateScenario: (riskId: number, data: Record<string, unknown>) =>
+      apiClient.put(`/erm/quantification/risks/${riskId}/scenario`, data),
+    listLossModels: (riskId: number) =>
+      apiClient.get(`/erm/quantification/risks/${riskId}/loss-models`),
+    createLossModel: (riskId: number, data: Record<string, unknown>) =>
+      apiClient.post(`/erm/quantification/risks/${riskId}/loss-models`, data),
+    updateLossModel: (modelId: number, data: Record<string, unknown>) =>
+      apiClient.put(`/erm/quantification/loss-models/${modelId}`, data),
+    activateLossModel: (modelId: number) =>
+      apiClient.post(`/erm/quantification/loss-models/${modelId}/activate`),
+    simulate: (modelId: number, data?: Record<string, unknown>) =>
+      apiClient.post(`/erm/quantification/loss-models/${modelId}/simulate`, data || {}),
+    listRuns: (riskId: number, limit = 20) =>
+      apiClient.get(`/erm/quantification/risks/${riskId}/runs`, { params: { limit } }),
+    getRun: (runId: number) =>
+      apiClient.get(`/erm/quantification/runs/${runId}`),
+    controlComparison: (riskId: number, data: Record<string, unknown>) =>
+      apiClient.post(`/erm/quantification/risks/${riskId}/control-comparison`, data),
+    setControlEffect: (linkId: number, data: Record<string, unknown>) =>
+      apiClient.put(`/erm/quantification/control-links/${linkId}/effect`, data),
+    simulatePortfolio: (data?: Record<string, unknown>) =>
+      apiClient.post('/erm/quantification/portfolio/simulate', data || {}),
+    listPortfolioRuns: (limit = 10) =>
+      apiClient.get('/erm/quantification/portfolio/runs', { params: { limit } }),
+    getSummary: () => apiClient.get('/erm/quantification/summary'),
+    getPosSuggestion: (riskId: number) =>
+      apiClient.get(`/erm/quantification/risks/${riskId}/pos-suggestion`),
+    acceptPosSuggestion: (modelId: number) =>
+      apiClient.post(`/erm/quantification/loss-models/${modelId}/accept-pos-suggestion`),
   },
   risks: {
     getAll: (filters?: { category?: string; register_type?: string; status?: string; min_score?: number; max_score?: number }) => {
@@ -2591,6 +2694,15 @@ export const vulnManagementApi = {
       has_exploit?: boolean;
       // ATT&CK tactic richness (≥7 distinct tactics in the mapped chain).
       high_tactics?: boolean;
+      // Scope the register to ONE CTEM scope's member assets (same resolver the
+      // scope's counters use). Was silently dropped here, so the scoped register
+      // showed the whole tenant under a "scoped to …" banner — the loop said 0,
+      // the register said 201. Must be forwarded to the backend filter.
+      ctem_scope_id?: number;
+      // Filter the register to findings linked to ONE asset. Same allow-list
+      // trap as ctem_scope_id above — must be forwarded explicitly or it is
+      // silently dropped and the "by asset" filter shows the whole tenant.
+      asset_id?: number;
     }) =>
       apiClient.get('/vuln-management/vulnerabilities', {
         params: params ? {
@@ -2605,6 +2717,8 @@ export const vulnManagementApi = {
           limit: params.limit,
           has_exploit: params.has_exploit,
           high_tactics: params.high_tactics,
+          ctem_scope_id: params.ctem_scope_id,
+          asset_id: params.asset_id,
         } : undefined
       }),
     // Runtime-derived domains (the scanner's plugin family) for the grouped
@@ -2618,6 +2732,31 @@ export const vulnManagementApi = {
     // evidence + remediation. Per-asset: the verdict differs by which host.
     exploitability: (id: number, assetId: number) =>
       apiClient.get(`/vuln-management/vulnerabilities/${id}/exploitability`, { params: { asset_id: assetId } }),
+    // CTEM Phase 4 — choke points: findings ranked by how many viable attack
+    // chains their remediation severs. computed_at + coverage travel with it.
+    chokePoints: () => apiClient.get('/vuln-management/choke-points'),
+    recomputeChokePoints: () => apiClient.post('/vuln-management/choke-points/recompute'),
+    computeAttackPaths: (ctemScopeId?: number, onlyMissing: boolean = true) =>
+      apiClient.post('/vuln-management/choke-points/compute-paths', null,
+        { params: { ...(ctemScopeId ? { ctem_scope_id: ctemScopeId } : {}), only_missing: onlyMissing } }),
+    // P5 — AI-suggested specific control links (suggest → human accept/reject)
+    aiProposalsGenerate: (ctemScopeId?: number, autoLink?: boolean) =>
+      apiClient.post('/vuln-management/ai-control-proposals/generate', null,
+        { params: { ...(ctemScopeId ? { ctem_scope_id: ctemScopeId } : {}), ...(autoLink ? { auto_link: true } : {}) } }),
+    aiProposalsList: (params?: { status?: string; ctem_scope_id?: number; run_id?: string }) =>
+      apiClient.get('/vuln-management/ai-control-proposals', { params }),
+    aiProposalAccept: (id: number, note?: string) =>
+      apiClient.post(`/vuln-management/ai-control-proposals/${id}/accept`, { note }),
+    aiProposalReject: (id: number, note?: string) =>
+      apiClient.post(`/vuln-management/ai-control-proposals/${id}/reject`, { note }),
+    chokePointFinding: (id: number) => apiClient.get(`/vuln-management/choke-points/findings/${id}`),
+    // CTEM Phase 5 — ITSM mobilisation (push a finding to a ticketing connector,
+    // list its tickets). Live sync advances the plan to applied on resolution.
+    itsmTickets: (id: number) => apiClient.get(`/vuln-management/vulnerabilities/${id}/itsm-tickets`),
+    pushToItsm: (id: number, connectionId: number) =>
+      apiClient.post(`/vuln-management/vulnerabilities/${id}/push-to-itsm?connection_id=${connectionId}`),
+    syncItsmStatuses: (connectionId: number) =>
+      apiClient.post(`/vuln-management/itsm/connections/${connectionId}/sync-statuses`),
     // AI attacker-walkthrough for the same (finding × asset): a runtime narration
     // of the computed chain — what an attacker does at each stage. Separate call
     // so the chain paints instantly and this (an LLM call) loads progressively.
@@ -2769,26 +2908,6 @@ export const vulnManagementApi = {
       apiClient.post(`/vuln-management/vulnerabilities/${vulnId}/controls`, data),
     delete: (vulnId: number, linkId: number) =>
       apiClient.delete(`/vuln-management/vulnerabilities/${vulnId}/controls/${linkId}`),
-    // Re-run the CWE → framework-control auto-mapper for one vuln.
-    // Idempotent; only touches rows tagged `auto:cwe:*`. Returns
-    // {matched_controls, added, kept, removed_stale, errors}.
-    autoMap: (vulnId: number) =>
-      apiClient.post(`/vuln-management/vulnerabilities/${vulnId}/controls/auto-map`),
-
-    // Per-tenant CWE → control overrides (compliance team customisation).
-    listOverrides: () =>
-      apiClient.get(`/vuln-management/cwe-overrides`),
-    createOverride: (body: {
-      cwe_id: string;
-      framework_prefix: string;
-      control_code_pattern: string;
-      action: 'add' | 'remove';
-      notes?: string;
-    }) => apiClient.post(`/vuln-management/cwe-overrides`, body),
-    deleteOverride: (id: number) =>
-      apiClient.delete(`/vuln-management/cwe-overrides/${id}`),
-    previewOverrides: (params: { cwe_id?: string; has_cve?: boolean; is_kev?: boolean }) =>
-      apiClient.get(`/vuln-management/cwe-overrides/preview`, { params }),
     // Reverse lookup: which open vulns affect this framework control.
     // Returns {control, summary, items}. `controlType` is "parsed" (the
     // upload-driven seed table, where the 27 active frameworks live) or

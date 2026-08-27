@@ -54,6 +54,7 @@ def run_check(runner_type: str, check_definition: Dict[str, Any], credentials: D
 from . import aws_runner  # noqa: E402,F401
 from . import oracle_runner  # noqa: E402,F401
 from . import ssh_runner  # noqa: E402,F401
+from . import oscap_runner  # noqa: E402,F401  (OpenSCAP — real Linux CIS/STIG)
 from . import winrm_runner  # noqa: E402,F401
 from . import extended_runners  # noqa: E402,F401  (MSSQL, Postgres, MySQL, LDAP/AD, Azure, K8s)
 from . import mock_runner  # noqa: E402,F401  (mock_pass / mock_fail for demo seeding)

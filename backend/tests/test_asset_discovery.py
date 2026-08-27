@@ -309,6 +309,27 @@ def test_resolver_honours_a_standing_dismissal():
     assert "_prior_ignored" in src, "resolve_observation must check for a standing dismissal"
 
 
+def test_resolver_auto_creates_only_for_external_findings():
+    """Refined invariant (Stage 2 / EASM). A NETWORK sweep still never writes
+    inventory on its own — an unmatched internal device (even a positively
+    identified printer / switch / DNS box) lands in 'unclaimed' and flows to
+    Connect, guarding the phantom-asset bug (#138/#139). The ONE exception is an
+    external (outside-in) find: it can never be logged into, so it is adopted as
+    an evidence-only, internet-facing asset. Auto-creation is therefore gated
+    strictly behind obs.source == 'external', and the unclaimed fall-through must
+    come AFTER that carve-out so an internal hit can never reach it. Behavioural
+    proof lives in tests/test_external_discovery.py (external → created,
+    internal → unclaimed)."""
+    import inspect as _inspect
+    from grc.modules.asset_discovery.services import resolver
+    src = _inspect.getsource(resolver.resolve_observation)
+    assert '"unclaimed"' in src, "unmatched network devices must fall through to unclaimed"
+    assert 'obs.source == "external"' in src, \
+        "auto-create must be gated behind the external (EASM) carve-out"
+    assert src.index('obs.source == "external"') < src.index('"unclaimed"'), \
+        "the external carve-out must precede the unclaimed fall-through"
+
+
 def test_run_endpoint_has_a_db_backed_concurrency_guard():
     """D-C: reject a second run when the DB shows one in flight (cross-process)."""
     import inspect as _inspect

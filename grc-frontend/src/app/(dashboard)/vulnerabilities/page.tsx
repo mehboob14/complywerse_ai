@@ -1,7 +1,7 @@
 ﻿'use client';
 
 import { useState, useMemo, useRef, useEffect, Fragment } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import * as XLSX from 'xlsx';
 import { vulnManagementApi } from '@/lib/api';
@@ -180,6 +180,8 @@ export default function VulnerabilitiesPage() {
   // Separate axes: public-exploit availability vs ATT&CK tactic richness.
   const [exploitFilter, setExploitFilter] = useState<string>('all');
   const [tacticsFilter, setTacticsFilter] = useState<string>('all');
+  // "By asset" filter — the finding's linked asset. 'all' | '<assetId>'.
+  const [assetFilter, setAssetFilter] = useState<string>('all');
   const [sortBy, setSortBy] = useState<'created_at' | 'severity' | 'due_date' | 'title'>('created_at');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -289,6 +291,12 @@ export default function VulnerabilitiesPage() {
 
   const queryClient = useQueryClient();
   const router = useRouter();
+  // CTEM: `?ctem_scope_id=N` scopes the register to that scope's member assets
+  // (the SAME resolver the scope's counters use, so the two never disagree).
+  // The command center's "Findings →" lands here scoped, not on the whole tenant.
+  const searchParams = useSearchParams();
+  const ctemScopeId = Number(searchParams?.get('ctem_scope_id')) || null;
+  const ctemScopeName = searchParams?.get('ctem_scope_name') || null;
 
   // When user toggles into the NCA template view, backfill bridges for any
   // legacy NCA entries that pre-date the bridge column. Without this, those
@@ -310,22 +318,41 @@ export default function VulnerabilitiesPage() {
     return () => { cancelled = true; };
   }, [registerType, queryClient]);
 
-  const tabs = [
+  const tabs = (ctemScopeId ? [
+    // Scoped to a CTEM scope: only the register respects the scope; the other
+    // tabs are tenant-wide analytics, so hide them rather than show numbers that
+    // silently ignore the scope (the "page half-remembers it's scoped" issue).
+    { id: 'vulnerabilities', label: 'Vulnerabilities', icon: Bug },
+  ] : [
     { id: 'overview', label: 'Overview', icon: BarChart3 },
     { id: 'vulnerabilities', label: 'Vulnerabilities', icon: Bug },
     { id: 'departments', label: 'Departments', icon: Building2 },
     { id: 'sla', label: 'SLA Config', icon: Clock },
-  ];
+  ]);
+  // When scoped, only the register tab exists — coerce a stale ?tab= param
+  // (e.g. 'overview') so tenant-wide content/queries never render in scoped mode.
+  const shownTab = ctemScopeId ? 'vulnerabilities' : activeTab;
 
   // CVE-shaped searches must see closed rows too (e.g. auto_closed_decommissioned),
   // otherwise a known CVE like CVE-2025-55130 silently returns 0. Title search stays
   // client-side over the loaded page to avoid a refetch on every keystroke.
   const serverSearch = /CVE-\d{4}-\d+/i.test(searchTerm.trim()) ? searchTerm.trim() : '';
 
+  // Assets that actually carry findings — the "By asset" dropdown options.
+  // Only assets with ≥1 linked finding, so the list matches the register.
+  const { data: assetOptions } = useQuery({
+    queryKey: ['vuln-asset-options'],
+    queryFn: async () => {
+      const res = await apiClient.get('/assets', { params: { limit: 1000 } });
+      return (res.data as { id: number; name: string }[]) ?? [];
+    },
+  });
+
   const { data: vulnerabilities, isLoading, error } = useQuery({
-    queryKey: ['vulnerabilities', statusFilter, severityFilter, showClosed, registerType, exploitFilter, tacticsFilter, serverSearch],
+    queryKey: ['vulnerabilities', statusFilter, severityFilter, showClosed, registerType, exploitFilter, tacticsFilter, assetFilter, serverSearch, ctemScopeId],
     queryFn: async () => {
       const params: Record<string, unknown> = {};
+      if (ctemScopeId) { params.ctem_scope_id = ctemScopeId; params.limit = 500; }
       if (statusFilter !== 'all') params.status = statusFilter;
       if (severityFilter !== 'all') params.severity = severityFilter;
       // Only forward the closed-toggle when no explicit status filter is set;
@@ -345,6 +372,13 @@ export default function VulnerabilitiesPage() {
       if (exploitFilter === 'yes') params.has_exploit = true;
       if (exploitFilter === 'no') params.has_exploit = false;
       if (tacticsFilter === 'high') params.high_tactics = true;
+      // By-asset filter: scope to one asset's findings and widen the page so
+      // an asset with many findings (e.g. the desktop's 207) loads in full.
+      if (assetFilter !== 'all') {
+        params.asset_id = Number(assetFilter);
+        params.limit = 500;
+        params.include_closed = showClosed;
+      }
       if (serverSearch) {
         params.search = serverSearch;
         params.limit = 500;
@@ -356,6 +390,7 @@ export default function VulnerabilitiesPage() {
         params as {
           status?: string; severity?: string; include_closed?: boolean; template_type?: string;
           search?: string; limit?: number; has_exploit?: boolean; high_tactics?: boolean;
+          ctem_scope_id?: number; asset_id?: number;
         }
       );
       return response.data as Vulnerability[];
@@ -398,7 +433,7 @@ export default function VulnerabilitiesPage() {
       const response = await vulnManagementApi.departments.getAll();
       return response.data as Department[];
     },
-    enabled: activeTab === 'departments',
+    enabled: shownTab === 'departments',
   });
 
   const { data: departmentMembers } = useQuery({
@@ -438,7 +473,7 @@ export default function VulnerabilitiesPage() {
       const response = await vulnManagementApi.sla.get();
       return response.data as SLAConfig[];
     },
-    enabled: activeTab === 'sla',
+    enabled: shownTab === 'sla',
   });
 
   // Departments mutations
@@ -991,7 +1026,7 @@ export default function VulnerabilitiesPage() {
         {/* Overview tab — reuses the standalone Dashboard page component
             verbatim. Conditional mount means its useQuery hooks (with their
             60s refetchInterval) only run while this tab is active. */}
-        {activeTab === 'overview' && (
+        {shownTab === 'overview' && (
           <div className="mt-3">
             <VulnerabilityDashboardPage />
           </div>
@@ -1005,9 +1040,24 @@ export default function VulnerabilitiesPage() {
       </div>
 
       {/* Tab Content */}
-      {activeTab === 'vulnerabilities' && (
+      {shownTab === 'vulnerabilities' && (
       <>
       <div className="px-3 sm:px-6 py-3 bg-[var(--color-subtle)]">
+        {/* CTEM scope banner — this list is filtered to ONE scope's machines.
+            Names the scope, counts the rows, and offers the way back. */}
+        {ctemScopeId && (
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-primary-200 bg-primary-50/70 px-3 py-2 text-xs">
+            <span className="text-primary-800">
+              <span className="font-semibold">Scoped to CTEM scope{ctemScopeName ? ` “${ctemScopeName}”` : ''}</span>
+              {' '}— showing only findings on that scope&apos;s machines
+              {vulnerabilities ? ` (${vulnerabilities.length})` : ''}.
+            </span>
+            <span className="flex items-center gap-3">
+              <Link href="/vulnerabilities/ctem-scopes" className="font-medium text-primary-700 hover:underline">← Back to CTEM scopes</Link>
+              <Link href="/vulnerabilities" className="text-primary-600 hover:underline">Show all findings</Link>
+            </span>
+          </div>
+        )}
         {/* Hidden bulk-upload file input — driven by the workspace toolbar's
             "Bulk Upload" button via the template chooser (bulkFileRef.click()). */}
         <input
@@ -1025,6 +1075,7 @@ export default function VulnerabilitiesPage() {
           vulns={vulnerabilities ?? []}
           filteredVulns={filteredVulnerabilities}
           dashboard={dashboard}
+          scoped={!!ctemScopeId}
           domains={domainsResp?.domains ?? []}
           loading={isLoading}
           registerType={registerType}
@@ -1042,6 +1093,9 @@ export default function VulnerabilitiesPage() {
           setExploitFilter={setExploitFilter}
           tacticsFilter={tacticsFilter}
           setTacticsFilter={setTacticsFilter}
+          assetFilter={assetFilter}
+          setAssetFilter={setAssetFilter}
+          assetItems={(assetOptions ?? []).map((a) => ({ value: String(a.id), label: a.name }))}
           canCreate={hasPermission('vulnerabilities:vulnerability_register:create')}
           canEdit={hasPermission('vulnerabilities:vulnerability_register:edit')}
           canDelete={hasPermission('vulnerabilities:vulnerability_register:delete')}
@@ -1380,7 +1434,7 @@ export default function VulnerabilitiesPage() {
       )}
 
       {/* Departments Tab */}
-      {activeTab === 'departments' && (
+      {shownTab === 'departments' && (
         <div className="space-y-3 px-3 sm:px-6 py-3 bg-[var(--color-subtle)]">
           <div className="flex items-center justify-between gap-3">
             <div className="flex-1 max-w-md">
@@ -1615,7 +1669,7 @@ export default function VulnerabilitiesPage() {
       )}
 
       {/* SLA Tab */}
-      {activeTab === 'sla' && (
+      {shownTab === 'sla' && (
         <div className="space-y-3 px-3 sm:px-6 py-3 bg-[var(--color-subtle)]">
           {slaLoading ? (
             <div className="flex h-64 items-center justify-center"><PageLoader size="md" /></div>

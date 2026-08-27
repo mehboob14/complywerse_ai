@@ -95,7 +95,28 @@ def create_retest(
         vuln.resolved_at = datetime.utcnow()
         vuln.verified_by = current_user.id
         vuln.verified_at = datetime.utcnow()
-    
+
+    # CTEM Phase 2: a retest is a GENUINE effectiveness signal for the
+    # controls linked to this finding — pass reaches the full tested tier,
+    # fail/partial dominate as a fail (the original result is preserved in
+    # the evidence details).
+    try:
+        from ....services.control_assurance import record_vuln_evidence
+        record_vuln_evidence(
+            db, vuln, source_type="retest",
+            result="pass" if request.result == "pass" else "fail",
+            tested_at=retest.retest_date or datetime.utcnow(),
+            details={"retest_result": request.result,
+                     "tester_id": current_user.id,
+                     "vuln_id": vuln.vuln_id},
+            actor_user_id=current_user.id,
+        )
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception(
+            "retest evidence write failed for vuln %s (non-fatal)", vuln.id
+        )
+
     db.commit()
     db.refresh(retest)
     
