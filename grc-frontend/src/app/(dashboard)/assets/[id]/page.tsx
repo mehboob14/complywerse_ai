@@ -3802,7 +3802,13 @@ function ComplianceTab({ asset }: { asset: AssetDetailData }) {
     : undefined;
   const formatTime = (iso?: string | null) => {
     if (!iso) return '-';
-    try { return new Date(iso).toLocaleString(); } catch { return iso; }
+    try {
+      // Backend sends naive UTC (no 'Z'); without it new Date() parses as LOCAL
+      // and shifts by the browser offset. Force UTC.
+      const s = String(iso);
+      const hasTz = /[zZ]|[+-]\d{2}:?\d{2}$/.test(s);
+      return new Date(hasTz ? s : s.replace(' ', 'T') + 'Z').toLocaleString();
+    } catch { return iso; }
   };
   // Each run = ONE CIS check executed. Backend stores its outcome as
   // `status` (passed | failed | error | running) — not a pass/fail count.

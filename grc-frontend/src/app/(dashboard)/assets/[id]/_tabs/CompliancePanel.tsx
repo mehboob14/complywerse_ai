@@ -159,6 +159,17 @@ function splitBenchmark(name: string | null): { title: string; version: string |
   return { title, version: m ? m[2] : null };
 }
 
+// Backend timestamps are naive UTC (no zone). Without a 'Z', new Date() reads
+// them as LOCAL time, shifting by the browser's offset (a 40-min-old scan then
+// showed "5h ago" at UTC+5). Force UTC.
+const parseTs = (v?: string | number | null): Date => {
+  if (v == null) return new Date(NaN);
+  if (typeof v === 'number') return new Date(v);
+  const s = String(v);
+  const hasTz = /[zZ]|[+-]\d{2}:?\d{2}$/.test(s);
+  return new Date(hasTz ? s : s.replace(' ', 'T') + 'Z');
+};
+
 const relTime = (ms: number): string => {
   const s = Math.round((Date.now() - ms) / 1000);
   if (!isFinite(s) || s < 0) return 'just now';
@@ -714,7 +725,7 @@ export default function CompliancePanel({ asset }: { asset: any }) {
                 <>
                   <b className={'text-[#1F7A54] font-semibold ' + MONO}>{scanStats.passed}</b> pass ·{' '}
                   <b className={'text-[#B23A3A] font-semibold ' + MONO}>{scanStats.failed}</b> fail{scanStats.errored > 0 && <> · <b className={'text-[#9A6410] font-semibold ' + MONO}>{scanStats.errored}</b> error</>} ·{' '}
-                  <span className={MONO}>{ruleCount.toLocaleString()}</span> rules · last scan {lastRun ? relTime(new Date(lastRun.started_at || lastRun.created_at || 0).getTime()) : '—'}
+                  <span className={MONO}>{ruleCount.toLocaleString()}</span> rules · last scan {lastRun ? relTime(parseTs(lastRun.started_at || lastRun.created_at).getTime()) : '—'}
                 </>
               ) : (
                 <>
