@@ -114,14 +114,20 @@ Every automated check must name the SCF assessment objective it proves. This can
 **C2. Re-bind the engine to objectives** · engineer · ~1 day, blocked by C1
 Checks stop naming SOC 2 criteria and name SCF objectives directly, then inherit every framework through the crosswalk. This is the change that makes one check light up across 34 frameworks.
 
-**C3. Evidence expiry** · engineer · ~half a day
-SCF publishes a reassessment cadence per control (Annual / Semi-Annual / Quarterly). It is already imported and already returned by the API, and nothing reads it. Without it, a check that passed 400 days ago on a since-revoked token still reads green.
+**C3. Evidence expiry** · **DONE**
+A result older than its control's own reassessment window is now `expired`, and `expired` ranks above `passed` in the aggregate — one stale assertion means the control is not fully vouched for. An unspecified cadence defaults to Annual, the loosest of SCF's three windows, so a blank field never expires a result early.
+*Verified:* 8 of the 15 tests in `tests/test_automation_status.py` cover it, including the case that matters — the same 120-day result is stale under Quarterly and current under Annual, because the window belongs to the control, not to the engine.
 
 **C4. Cloud connectors** · engineer · ~1 week
 AWS, Azure, Entra, GCP and Kubernetes need SDK/OAuth transports rather than static tokens. This is the bulk of real customer infrastructure and today none of it is collectable.
 
-**C5. Collection health** · engineer · ~half a day
-A revoked scope or expired secret currently looks like a failing control. Surface it separately — "this connector has not collected successfully in 90 days" — so a broken collector never reads as a broken control.
+**C5. Collection health** · **DONE**
+A run whose own status is `error` means the collector could not collect — revoked scope, expired secret, provider outage. That is now `collection_failed` rather than a control failure, and the new **Automation → Overview** carries a collection-health block: per connector, when it last collected successfully, how many controls it feeds, and the error if it is failing. A run that FAILED still collected, so only errored runs break the "last success" clock.
+*Verified:* `1link` reports 1 healthy connector (GitHub, 6 days, 36 controls) and 74 never run.
+
+**C6. Common controls overview** · **DONE** *(not in the original plan; asked for directly)*
+`GET /automation/common/overview` + **Automation → Overview**. Six panels, each fed by the system that actually holds the answer: the library (SCF), what a check can assert (the plugin engine), the crosswalk, evidence (D2's consolidated sets), ownership and testing (the control workbench), and the direction of travel (assurance snapshots). Where a system holds nothing the panel names it and says so — the workbench has no rows for these controls, so implementation and assignment read *"not tracked yet"* rather than *"0 implemented"*.
+Two aggregation traps avoided: `inferred_pct` counts requirements rather than mapping rows (it reproduces B1's finding exactly — COBIT 100%, GDPR 66%, SAMA CSF 46%), and the assurance snapshot's own control count is dropped because it counts a different denominator from the 1,534 here. Runs in 0.43s.
 
 > **Until C1 and C2 land, no compliance percentage derived from automated checks should be shown to a customer.** The engine proves a connector authenticated, not that a control operates.
 
@@ -189,7 +195,7 @@ What is true and useful: `artifact_id` is unique across the whole catalogue, and
 C1 (reviewer, 2–3 days) starts immediately; it is the long pole and the only item that needs a person who is not an engineer. In parallel: A1, A2, D1.
 
 **Next**
-C2 and C3 once C1 lands. Tracks B and D are done bar the D3 decision below.
+C2 once C1 lands — it is the only remaining blocked item. C3, C5 and the overview are done; C4 (cloud connectors) is unblocked and is the largest single piece left. Tracks B and D are done bar the D3 decision below.
 
 **Then**
 C4 (cloud connectors) — the largest engineering item, and the one that makes automation cover real infrastructure.
@@ -203,4 +209,4 @@ C4 (cloud connectors) — the largest engineering item, and the one that makes a
 
 *Closed without needing you:* **A3** (ISO 45001 → `out_of_scope`, reversible) and **B4** (88% ±6pp stands; superseded by B2).
 
-**Rough totals:** 16 work items. Tracks A, B and D are complete — A1–A4, B1–B4, D1–D2 all closed, D3 reduced to a decision. What remains is Track C (automation), plus the reviewer time that Track B's queue now depends on.
+**Rough totals:** 17 work items. Tracks A, B and D are complete — A1–A4, B1–B4, D1–D2 closed, D3 reduced to a decision. In Track C, C3, C5 and C6 are closed. What remains is **C1** (a reviewer, 2–3 days), **C2** (blocked by C1) and **C4** (cloud connectors, ~1 week) — plus the reviewer time that Track B's queue depends on, which is the same person as C1.
