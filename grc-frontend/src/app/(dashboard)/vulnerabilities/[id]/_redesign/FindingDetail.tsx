@@ -392,10 +392,20 @@ function ExploitTest({ reach: d, vTone, hasAsset, v, score }: any) {
   const byTactic: Record<string, any[]> = {};
   for (const c of chain) (byTactic[c.tactic] ||= []).push(c);
   const stageStatus = (s: any) => s.status || (byTactic[s.shortname]?.length ? 'reached' : 'not_applicable');
-  const visible = spine.filter((s) => stageStatus(s) !== 'not_applicable');
-  const omitted = spine.filter((s) => stageStatus(s) === 'not_applicable');
+  // "Tie the chain together": rather than dropping every unmapped stage — which made the path
+  // jump from stage 2 → 7 → 11 — render the kill-chain as one continuous run. Walk from the
+  // FIRST mapped stage to the last reachable one; unmapped stages inside that run render as
+  // dimmed pass-through steps so the sequence reads unbroken. A severed chain ends at its break
+  // (no point padding past it). Stages outside the run fall to the omitted footnote.
+  const _mappedIdx = spine.map((s, i) => (stageStatus(s) !== 'not_applicable' ? i : -1)).filter((i) => i >= 0);
+  const _firstM = _mappedIdx.length ? _mappedIdx[0] : -1;
+  const _stopMapped = _mappedIdx.find((i) => stageStatus(spine[i]) === 'unreachable');
+  const severed = _stopMapped !== undefined;
+  const _endM = severed ? (_stopMapped as number) : (_mappedIdx.length ? _mappedIdx[_mappedIdx.length - 1] : -1);
+  const visible = _firstM >= 0 ? spine.slice(_firstM, _endM + 1) : [];
+  const omitted = spine.filter((s, i) => stageStatus(s) === 'not_applicable' && (i < _firstM || i > _endM));
+  const mappedCount = _mappedIdx.length;
   const stopIdx = visible.findIndex((s) => stageStatus(s) === 'unreachable');
-  const severed = stopIdx >= 0;
   const reached = visible.filter((s) => stageStatus(s) === 'reached').length;
   const STAT: Record<string, { c: string; label: string }> = { likely: { c: '#C2453F', label: 'LIKELY' }, possible: { c: '#E0AF33', label: 'POSSIBLE' }, blocked: { c: '#AEB8C2', label: 'BLOCKED' }, severed: { c: '#AEB8C2', label: 'SEVERED' } };
   const sig = d.signals || {}; const evi = d.evidence || {};
@@ -403,6 +413,10 @@ function ExploitTest({ reach: d, vTone, hasAsset, v, score }: any) {
   const exploitRefs: any[] = Array.isArray(v?.public_exploit_refs) ? v.public_exploit_refs : [];
   const avWord = ({ N: 'Network', A: 'Adjacent', L: 'Local', P: 'Physical' } as any)[sig.cvss_av] || sig.cvss_av || 'unknown';
   const mapSrc = d.mapping_generic ? 'CVSS vector (generic — no CWE)' : (chain[0]?.mapping_source || 'CAPEC / ATT&CK').replace(/_/g, ' ');
+  // No CWE ⇒ the chain is the coarse CVSS-vector backbone (identical for every finding of
+  // the same shape), NOT a finding-specific path. Say so plainly so a generic/informational
+  // result never reads as a bespoke analysis — the "why does every finding look the same" fix.
+  const isInfo = normSev(v?.severity) === 'info';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -414,6 +428,20 @@ function ExploitTest({ reach: d, vTone, hasAsset, v, score }: any) {
       </div>
 
       {sub === 'reach' && (<>
+      {/* No-CWE honesty banner — the chain below is a generic baseline, not a per-finding path */}
+      {d.mapping_generic && (
+        <section style={{ ...card, borderLeft: '4px solid #E0AF33', background: '#FEFBF4', padding: '12px 16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Shield size={16} color="#9A6410" />
+            <b style={{ fontSize: 13.5, color: '#9A6410' }}>{isInfo ? 'Informational finding — not a specific vulnerability' : 'Generic baseline — no weakness class mapped'}</b>
+          </div>
+          <p style={{ fontSize: 12.5, color: '#7A6427', marginTop: 6, lineHeight: 1.55 }}>
+            {isInfo
+              ? 'This is an informational scanner result (a detected service, protocol, or software fact), not an exploitable weakness. It carries no CWE, so there is no finding-specific attack path — every informational result shows this same baseline.'
+              : <>No CWE is recorded for this finding, so the chain below is <b>not derived from this specific flaw</b> — it&apos;s the generic baseline for {sig.cvss_av ? <>any <b>{String(avWord).toLowerCase()}-reachable</b> finding</> : 'a finding with no weakness data'}. That is why it reads the same across findings of this shape. Findings <b>with</b> a mapped CWE (CVE-classed vulnerabilities) show a technique path specific to their weakness here.</>}
+          </p>
+        </section>
+      )}
       {/* verdict hero */}
       <section style={{ ...card, borderLeft: `4px solid ${vTone.bar}`, background: vTone.soft, padding: '12px 16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
@@ -436,7 +464,7 @@ function ExploitTest({ reach: d, vTone, hasAsset, v, score }: any) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
           <b style={{ fontSize: 14 }}>Attack path — the chain</b>
           <span style={{ fontSize: 11.5, color: FAINT }}>MITRE ATT&amp;CK · the stages in play</span>
-          <span style={{ marginLeft: 'auto', fontSize: 11.5, color: MUTED }}><b style={{ color: SEC }}>{reached} of {visible.length}</b> reached{severed && visible[stopIdx] && <> · <b style={{ color: '#C2453F' }}>stops at {visible[stopIdx].name}</b></>}</span>
+          <span style={{ marginLeft: 'auto', fontSize: 11.5, color: MUTED }}><b style={{ color: SEC }}>{reached} of {mappedCount}</b> reached{severed && visible[stopIdx] && <> · <b style={{ color: '#C2453F' }}>stops at {visible[stopIdx].name}</b></>}</span>
         </div>
         {chain.length === 0 ? (
           <div style={{ border: `1px solid ${BORDER}`, background: '#FAFBFC', borderRadius: 10, padding: 16, fontSize: 12.5, color: SEC, lineHeight: 1.55 }}>No ATT&amp;CK techniques mapped for this finding — a data condition, not a verdict. It does <b>not</b> mean the finding is unexploitable.</div>
@@ -444,6 +472,7 @@ function ExploitTest({ reach: d, vTone, hasAsset, v, score }: any) {
           <ol style={{ listStyle: 'none', margin: 0, padding: 0 }}>
             {visible.map((st: any, i: number) => {
               const techs = byTactic[st.shortname] || [];
+              const passthrough = stageStatus(st) === 'not_applicable';
               const isStop = severed && i === stopIdx;
               const locked = severed && i > stopIdx;
               const reachedStage = stageStatus(st) === 'reached';
@@ -451,15 +480,18 @@ function ExploitTest({ reach: d, vTone, hasAsset, v, score }: any) {
               return (
                 <li key={st.shortname} style={{ display: 'flex', gap: 12 }}>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 'none' }}>
-                    <span style={{ width: 24, height: 24, borderRadius: '50%', display: 'grid', placeItems: 'center', fontSize: 11, fontWeight: 700, color: '#fff', background: locked ? '#EEF1F3' : isStop ? '#C2453F' : reachedStage ? AC : '#CFD6DC' }}>{locked ? <Lock size={11} color="#8A95A1" /> : i + 1}</span>
-                    {!last && <span style={{ width: 2, flex: 1, minHeight: 16, margin: '4px 0', background: reachedStage && !severed ? '#9FE3D2' : '#E4E8EC', borderRadius: 2 }} />}
+                    <span style={{ width: 24, height: 24, borderRadius: '50%', display: 'grid', placeItems: 'center', fontSize: 11, fontWeight: 700, color: passthrough ? '#B9C2CC' : '#fff', background: passthrough ? '#F4F6F8' : locked ? '#EEF1F3' : isStop ? '#C2453F' : reachedStage ? AC : '#CFD6DC', border: passthrough ? '1px dashed #D4DBE1' : 'none' }}>{locked && !passthrough ? <Lock size={11} color="#8A95A1" /> : i + 1}</span>
+                    {!last && <span style={{ width: 2, flex: 1, minHeight: passthrough ? 10 : 16, margin: '4px 0', background: reachedStage && !severed ? '#9FE3D2' : '#E4E8EC', borderRadius: 2 }} />}
                   </div>
-                  <div style={{ flex: 1, minWidth: 0, paddingBottom: last ? 0 : 14 }}>
+                  <div style={{ flex: 1, minWidth: 0, paddingBottom: last ? 0 : passthrough ? 8 : 14 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.03em', color: locked ? FAINT : SEC }}>{st.name}</span>
+                      <span style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.03em', color: passthrough || locked ? FAINT : SEC }}>{st.name}</span>
                       {isStop && <span style={{ ...pill('#C2453F', '#FBEAEA'), fontSize: 9 }}>STOPS HERE</span>}
-                      {locked && <span style={{ ...pill('#8A95A1', '#EEF1F3'), fontSize: 9 }}><Lock size={9} />locked</span>}
+                      {locked && !passthrough && <span style={{ ...pill('#8A95A1', '#EEF1F3'), fontSize: 9 }}><Lock size={9} />locked</span>}
                     </div>
+                    {passthrough ? (
+                      <div style={{ fontSize: 11, color: FAINT, marginTop: 2, fontStyle: 'italic' }}>no technique maps here — the chain passes through this stage</div>
+                    ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 7 }}>
                       {techs.map((c: any) => { const stt = STAT[c.status] || STAT.blocked; return (
                         <div key={c.technique_id} style={{ display: 'flex', alignItems: 'center', gap: 8, border: `1px solid ${BORDER}`, borderRadius: 9, padding: '6px 10px', background: locked ? '#FAFBFC' : '#fff' }} title={c.why || ''}>
@@ -470,6 +502,7 @@ function ExploitTest({ reach: d, vTone, hasAsset, v, score }: any) {
                         </div>
                       ); })}
                     </div>
+                    )}
                     {isStop && (st.reason) && <p style={{ fontSize: 12, color: '#B23A3A', background: '#FDF3F3', border: '1px solid #F3D3DA', borderRadius: 9, padding: '7px 10px', marginTop: 8, lineHeight: 1.5 }}><b>Chain stops here.</b> {st.reason}</p>}
                   </div>
                 </li>
