@@ -110,16 +110,25 @@ def main():
                 "GROUP BY tenant_id ORDER BY count(*) DESC LIMIT 1")).scalar()
         if tid is None:
             tid = c.execute(text("SELECT id FROM grc_tenants LIMIT 1")).scalar()
-        inet = c.execute(text("""SELECT id,name,criticality FROM grc_it_assets WHERE internet_facing=true
-                                 ORDER BY (name ~* '^(ubuntu|liztek)') DESC, length(name) ASC, id LIMIT 1""")).fetchone()
-        if not inet:
-            inet = c.execute(text("SELECT id,name,criticality FROM grc_it_assets ORDER BY id LIMIT 1")).fetchone()
-        local = c.execute(text("SELECT id,name,criticality FROM grc_it_assets WHERE internet_facing=false OR internet_facing IS NULL ORDER BY id LIMIT 1")).fetchone()
-        if not local:
-            local = inet
-        if not inet:
+        # Spread NETWORK findings across every internet-facing asset (so liztek.ca AND the
+        # ubuntu droplet both get vulns); route LOCAL priv-esc findings to the Linux host.
+        # Concentrate on the headline hosts (liztek.ca + the ubuntu droplet), not every subdomain.
+        inet_assets = c.execute(text("""SELECT id,name,criticality FROM grc_it_assets
+                                        WHERE internet_facing=true AND name ~* '^(ubuntu|liztek)'
+                                        ORDER BY length(name) ASC, id""")).fetchall()
+        if not inet_assets:
+            inet_assets = c.execute(text("SELECT id,name,criticality FROM grc_it_assets WHERE internet_facing=true ORDER BY length(name) ASC, id LIMIT 3")).fetchall()
+        if not inet_assets:
+            inet_assets = c.execute(text("SELECT id,name,criticality FROM grc_it_assets ORDER BY id LIMIT 3")).fetchall()
+        if not inet_assets:
             print(f"tenant '{slug}' has no assets to link to — aborting."); return
-        print(f"tenant={slug} (id {tid})  inet_asset={inet[0]}:{inet[1]}  local_asset={local[0]}:{local[1]}")
+        linux_host = c.execute(text("SELECT id,name,criticality FROM grc_it_assets WHERE name ILIKE '%ubuntu%' ORDER BY id LIMIT 1")).fetchone()
+        if not linux_host:
+            linux_host = c.execute(text("SELECT id,name,criticality FROM grc_it_assets WHERE internet_facing=false OR internet_facing IS NULL ORDER BY id LIMIT 1")).fetchone()
+        if not linux_host:
+            linux_host = inet_assets[0]
+        print(f"tenant={slug} (id {tid})  network -> {[a[1] for a in inet_assets[:4]]}  local -> {linux_host[1]}")
+        net_i = 0
 
         existing = {r[0] for r in c.execute(text("SELECT cve_id FROM grc_vulnerabilities WHERE cve_id IS NOT NULL"))}
         now = datetime.utcnow()
@@ -127,8 +136,12 @@ def main():
         for i, (cve, title, cwe, cvss, vec, sev, epss, kev, pub, edb, fam, target) in enumerate(CVES):
             if cve in existing:
                 print(f"  skip (exists): {cve}"); continue
-            asset = inet if target == "inet" else local
-            af = asset_factor(target, inet[2] if target == "inet" else "medium")
+            if target == "local":
+                asset = linux_host
+            else:
+                asset = inet_assets[net_i % len(inet_assets)]
+                net_i += 1
+            af = asset_factor(target, asset[2])
             cp = composite(cvss, epss, kev, af)
             first = now - timedelta(days=(3 + i))
             vid = c.execute(text("""

@@ -392,18 +392,15 @@ function ExploitTest({ reach: d, vTone, hasAsset, v, score }: any) {
   const byTactic: Record<string, any[]> = {};
   for (const c of chain) (byTactic[c.tactic] ||= []).push(c);
   const stageStatus = (s: any) => s.status || (byTactic[s.shortname]?.length ? 'reached' : 'not_applicable');
-  // Continuous, GATED kill-chain. Show every stage from the first mapped to the last mapped —
-  // INCLUDING the ones the attacker can't reach, each carrying its own reason. The break is the
-  // first unreachable stage (e.g. Initial Access blocked because the host isn't internet-facing);
-  // from there the chain is severed, so every later stage — mapped OR empty — is unreachable.
-  // That's why an internal host reads "stops at Initial Access" with a reason while an
-  // internet-facing one runs the whole chain. The engine decides reachability; this only renders it.
-  const _mappedIdx = spine.map((s, i) => (stageStatus(s) !== 'not_applicable' ? i : -1)).filter((i) => i >= 0);
-  const _firstM = _mappedIdx.length ? _mappedIdx[0] : -1;
-  const _lastM = _mappedIdx.length ? _mappedIdx[_mappedIdx.length - 1] : -1;
-  const visible = _firstM >= 0 ? spine.slice(_firstM, _lastM + 1) : [];
-  const omitted = spine.filter((s, i) => stageStatus(s) === 'not_applicable' && (i < _firstM || i > _lastM));
-  const mappedCount = _mappedIdx.length;
+  // GATED kill-chain, drawn as the attacker's REAL steps in order — only the stages that
+  // actually have a technique, numbered consecutively (1,2,3…). Empty tactics are NOT drawn:
+  // a "no technique here" filler row between two real steps reads as a gap/jump. Skipped
+  // tactics simply aren't shown. Gating is preserved: the break is the first unreachable
+  // mapped stage (e.g. Initial Access blocked when the host isn't internet-facing); from there
+  // the chain is severed and every later step is locked with its reason.
+  const visible = spine.filter((s) => stageStatus(s) !== 'not_applicable');
+  const omitted = spine.filter((s) => stageStatus(s) === 'not_applicable');
+  const mappedCount = visible.length;
   const breakIdx = visible.findIndex((s) => stageStatus(s) === 'unreachable');   // first stage the attacker can't reach
   const severed = breakIdx >= 0;
   const reached = visible.filter((s) => stageStatus(s) === 'reached').length;
