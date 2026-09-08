@@ -129,9 +129,24 @@ A revoked scope or expired secret currently looks like a failing control. Surfac
 
 ## Track D — Artifacts
 
-**D1. Key and reference resolver** · engineer · ~1 day
-922 catalogue items across 32 framework keys, none instantiated for any tenant, so there is no migration risk. Two mismatches to bridge: the artifact keys use a different vocabulary from our framework slugs (`iso_27001_2022` vs `iso_27001`, `qatar_cb` vs `qcb_technology_risks`), and control references are prose (`Cl. 5.1`) rather than bare codes. A registry plus a normalizer resolves item → requirement → control.
-*Verify:* every catalogue item resolves to a control or is reported as unresolved — no silent drops.
+**D1. Key and reference resolver** · DONE
+`grc/tools/artifact_resolver.py` — `--selftest`, `--misses`, `--emit` (writes `seed_data/artifact_resolution.json`, 347 KB). 19 of the 32 catalogue keys needed an alias onto a registry slug; the reference normalizer handles clause/article/requirement prefixes, glosses (`A1.1 (Avail)`), trailing titles (`CC3 Risk Assessment`), multi-refs with prefix inheritance (`Art. 24 / 5`), and ranges that keep their written width and closing paren (`EDM01-05`, `Art. 8(4-6)`). Matching is exact → parent → child, same vocabulary as the crosswalk.
+
+**576 of 922 items resolve** onto 893 distinct SCF controls (391 exact, 162 parent, 23 child; mean 8.4 controls per artifact). The other 346 are reported, not dropped — an `assert` in the tool fails if any item leaves without a status:
+
+| bucket | n | what it means |
+|---|---:|---|
+| `unmatched_ref` | 186 | the code is real but absent from our library |
+| `prose_ref` | 120 | the catalogue never wrote a code (`COSO ICFR`, `All TSC`, `—`) |
+| `no_framework` | 34 | `iso_41001_2018` — facility management, a framework we do not carry |
+| `no_scf_mapping` | 6 | resolved to a library code that has no crosswalk row |
+
+Three of those clusters are findings worth acting on separately, and none is a resolver bug:
+- **`iso_27001_2022` (23)** — the catalogue cites clauses 4–10, our ISO 27001 library is Annex A only. A real library gap, not a naming one.
+- **`sabic_cybertrust` (22, the whole framework)** — the catalogue uses SABIC's own `CT-nn` numbering, our library renumbered to `domain.control`. Same standard, two hands, no positional correspondence — needs a 22-line hand map.
+- **`sox_itgc` (32, the whole framework)** — every ref is prose (`Access ITGC`, `PCAOB AS 2201`) against an `APD-nn` library.
+
+*Verified:* `--selftest` covers 17 normalizer and matcher rules plus the no-silent-drops invariant.
 
 **D2. Merge artifacts into the consolidated evidence sets** · engineer · ~1 day
 Once resolved, the 922 artifacts become named, requestable items inside the evidence sets already built, instead of a separate list in a module we intend to retire.
