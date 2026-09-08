@@ -43,7 +43,12 @@ class NormalizedControl(Base):
     # common_group_id ties each NC back to the AI domain it was derived from;
     # source distinguishes ai_normalized from seed/manual.
     domain = Column(String(255), nullable=True, index=True)
-    source = Column(String(50), nullable=True)  # seed | manual | ai_normalized
+    source = Column(String(50), nullable=True)  # seed | manual | ai_normalized | scf
+    # The SCF control this row stands for (source='scf'). This single column is the
+    # whole bridge between the SCF catalog and the rest of the platform: everything
+    # already FK'd to grc_normalized_controls keeps working, and nothing else has
+    # to learn the word "SCF".
+    scf_id = Column(String(16), nullable=True, index=True)
     common_group_id = Column(Integer, ForeignKey("grc_common_control_groups.id"), nullable=True, index=True)
     # AI-consolidated recommended evidence (cached): the member frameworks'
     # evidence requirements merged by meaning into one normalized list, so the
