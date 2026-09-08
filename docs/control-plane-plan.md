@@ -159,7 +159,27 @@ Merge rules, each of which earned its place:
 
 *Verified:* re-running the merge adds nothing and recognises all 4,814 attachments; no control has duplicate artifact names; the app's own reader loads all 897. The 536 controls that gained a set from the catalogue alone have `input_count: 0`, so the control page now says *"deliverables named by the frameworks this control maps to"* instead of *"merged from 0 requests"*.
 
-**D3. Retire the compliance module's artifact surface** · after D2
+**D3. Retire the compliance module's artifact surface** · NOT DONE — the premise is wrong, and this now needs your call
+
+D3 was written on the assumption that the artifact surface is "a separate list in a module we intend to retire". It is not a list. `artifacts_router.py` is ~1,400 lines serving four things, only one of which D2 replaced:
+
+| surface | callers | status after D2 |
+|---|---|---|
+| `/artifacts/catalog{,/all,/content,/export}` | Governance → Documents (Recommended docs modal), compliance ArtifactsTab | **not replaced** — backed by `artifact_content.json`, 14.8 MB and **527 authored document bodies** across 15 frameworks, plus DOCX/XLSX export |
+| `/artifacts/platform-data/{risk-register,asset-inventory}` | compliance ArtifactsTab | **unrelated** — builds XLSX from live tenant risk and asset tables |
+| `/artifacts` CRUD + `/{id}/export` (`TenantArtifact`) | governance documents, vendor-risk TPRA panel | **unrelated** — the tenant document store |
+| `/artifacts/by-control` | Frameworks detail page | **superseded** — the consolidated sets answer this across all 32 frameworks, keyed on SCF controls rather than one framework's refs |
+
+The consolidated evidence sets say *what to collect*; the artifact catalogue hands the user *a starter document*. Retiring the surface would trade 527 authored templates and two working export paths for a read-only list — a regression, not a retirement. **So nothing was deleted.**
+
+What is true and useful: `artifact_id` is unique across the whole catalogue, and every merged row carries it, so a control's evidence set can already reach the authored content for its deliverables without any new key.
+
+**Your call, one of three:**
+1. **Join, don't retire** — put "download starter document" on the catalog-sourced rows of the control page, and retire only `/artifacts/by-control`. Smallest change, keeps every capability.
+2. **Retire only `/artifacts/by-control`** and leave the rest as a peer surface. Zero risk, leaves the two views unreconciled.
+3. **Retire the catalogue half properly** — port `artifact_content.json` and both export paths onto the control page first. Real work, and it only pays if Governance → Documents is meant to disappear.
+
+*Recommendation: (1).* It resolves the duplication the plan was actually worried about and costs one endpoint.
 
 ---
 
@@ -169,7 +189,7 @@ Merge rules, each of which earned its place:
 C1 (reviewer, 2–3 days) starts immediately; it is the long pole and the only item that needs a person who is not an engineer. In parallel: A1, A2, D1.
 
 **Next**
-C2 and C3 once C1 lands. Track B is done. D2 after D1.
+C2 and C3 once C1 lands. Tracks B and D are done bar the D3 decision below.
 
 **Then**
 C4 (cloud connectors) — the largest engineering item, and the one that makes automation cover real infrastructure.
@@ -179,7 +199,8 @@ C4 (cloud connectors) — the largest engineering item, and the one that makes a
 - **B2** — who works the review queue; it is built and 10,854 rows deep, so this is now the same question as C1
 - The two licensing questions from the status report, which gate anything customer-facing. `NOTICE.md` now carries the attribution CC BY-ND requires, but attribution is not permission — whether the SCF reproduction and the framework libraries' verbatim text are licensed for a paid product is still open
 - Whether to push `scf-control-plane` to a GitHub remote, which is what actually publishes ~18 MB of verbatim SCF content
+- **D3** — which of the three options above. Nothing was retired: the surface holds 527 authored document bodies the consolidated sets do not replace
 
 *Closed without needing you:* **A3** (ISO 45001 → `out_of_scope`, reversible) and **B4** (88% ±6pp stands; superseded by B2).
 
-**Rough totals:** 16 work items. Track A and Track B are now complete — A1–A4, B1–B4 all closed. What remains is Track C (automation) and Track D (artifacts), plus the reviewer time that Track B's queue now depends on.
+**Rough totals:** 16 work items. Tracks A, B and D are complete — A1–A4, B1–B4, D1–D2 all closed, D3 reduced to a decision. What remains is Track C (automation), plus the reviewer time that Track B's queue now depends on.
