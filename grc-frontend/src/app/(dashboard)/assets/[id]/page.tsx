@@ -3793,7 +3793,13 @@ function ComplianceTab({ asset }: { asset: AssetDetailData }) {
   });
 
   const runs = Array.isArray(runsQuery.data) ? runsQuery.data : (runsQuery.data?.runs || []);
-  const lastRun = runs[0];
+  // Newest run by timestamp — runs isn't guaranteed newest-first, so runs[0]
+  // could be an old run (stale "last scan" time).
+  const lastRun = runs.length
+    ? runs.reduce((m: any, r: any) =>
+        new Date(r?.started_at || r?.created_at || 0).getTime() >
+        new Date(m?.started_at || m?.created_at || 0).getTime() ? r : m)
+    : undefined;
   const formatTime = (iso?: string | null) => {
     if (!iso) return '-';
     try { return new Date(iso).toLocaleString(); } catch { return iso; }

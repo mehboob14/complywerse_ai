@@ -191,6 +191,10 @@ def _cis_gap_self(db: Session, tenant_id: int, asset_id: int) -> Dict[str, Any]:
             ~cast(CompliancePlugin.check_definition, String).ilike("%TODO%"),
             ~cast(CompliancePlugin.check_definition, String).ilike('%"kind": "any"%'),
             ~cast(CompliancePlugin.check_definition, String).ilike('%"kind":"any"%'),
+            # Manual / attestation rules are never auto pass/fail — the scanner
+            # skips them, so counting them here only added stale-errored ghosts
+            # (497 rules incl. manual vs the 408 the scanner runs).
+            CompliancePlugin.runner_type != "manual",
         )
         .all()
     )
