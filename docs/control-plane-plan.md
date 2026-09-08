@@ -118,8 +118,18 @@ Checks stop naming SOC 2 criteria and name SCF objectives directly, then inherit
 A result older than its control's own reassessment window is now `expired`, and `expired` ranks above `passed` in the aggregate — one stale assertion means the control is not fully vouched for. An unspecified cadence defaults to Annual, the loosest of SCF's three windows, so a blank field never expires a result early.
 *Verified:* 8 of the 15 tests in `tests/test_automation_status.py` cover it, including the case that matters — the same 120-day result is stale under Quarterly and current under Annual, because the window belongs to the control, not to the engine.
 
-**C4. Cloud connectors** · engineer · ~1 week
-AWS, Azure, Entra, GCP and Kubernetes need SDK/OAuth transports rather than static tokens. This is the bulk of real customer infrastructure and today none of it is collectable.
+**C4. Cloud connectors** · **transport layer + AWS DONE** · four providers remain
+The 65 existing connectors all speak one dialect — HTTPS with a static token. A provider spec can now name a `transport` instead, and everything downstream picks it up unchanged: the admin catalog, plugin seeding, collection health and the control crosswalk. `provider_checks()` is the single accessor both binders use, so a cloud transport is bound to controls by the same code that binds the other 65.
+
+**AWS is implemented** on boto3 with six declarative checks — root MFA, root access keys, password policy, multi-region CloudTrail, EBS default encryption, Config recorder — plus a per-user IAM MFA sweep on the same access-review pattern as the Okta collector. Its read-only guard is imported from `aws_runner`, not restated, so one list of permitted verbs is enforced at the only place a call is made.
+
+Two rules are enforced and tested here, because they are what stops the engine overstating itself:
+- **A collector that cannot collect never fails a control.** Rejected credentials, a denied service, a missing key all produce `error`. The exception is a resource AWS reports as absent — `NoSuchEntity` for an unset password policy *is* the finding.
+- **Connectivity is `info`, never a control pass.** A working key proves we can see the account, not that a control operates.
+
+*Verified:* 19 tests drive the collector through a fake boto3 client — no AWS account, no network. Against `1link`, AWS is the 66th supported connector and binds to CC6.1/6.2/6.6/6.7/7.1/7.2.
+
+**Remaining:** Azure, Entra, GCP, Kubernetes. Each is a `_call` implementation plus a `CLOUD_CHECKS` list against this shape — no further plumbing. None can be verified end to end without a live account, which is why AWS was built first and alone.
 
 **C5. Collection health** · **DONE**
 A run whose own status is `error` means the collector could not collect — revoked scope, expired secret, provider outage. That is now `collection_failed` rather than a control failure, and the new **Automation → Overview** carries a collection-health block: per connector, when it last collected successfully, how many controls it feeds, and the error if it is failing. A run that FAILED still collected, so only errored runs break the "last success" clock.
@@ -195,7 +205,7 @@ What is true and useful: `artifact_id` is unique across the whole catalogue, and
 C1 (reviewer, 2–3 days) starts immediately; it is the long pole and the only item that needs a person who is not an engineer. In parallel: A1, A2, D1.
 
 **Next**
-C2 once C1 lands — it is the only remaining blocked item. C3, C5 and the overview are done; C4 (cloud connectors) is unblocked and is the largest single piece left. Tracks B and D are done bar the D3 decision below.
+C2 once C1 lands — it is the only remaining blocked item. C3, C5, C6 and C4's transport layer + AWS are done; Azure, Entra, GCP and Kubernetes follow the AWS shape. Tracks B and D are done bar the D3 decision below.
 
 **Then**
 C4 (cloud connectors) — the largest engineering item, and the one that makes automation cover real infrastructure.
@@ -209,4 +219,4 @@ C4 (cloud connectors) — the largest engineering item, and the one that makes a
 
 *Closed without needing you:* **A3** (ISO 45001 → `out_of_scope`, reversible) and **B4** (88% ±6pp stands; superseded by B2).
 
-**Rough totals:** 17 work items. Tracks A, B and D are complete — A1–A4, B1–B4, D1–D2 closed, D3 reduced to a decision. In Track C, C3, C5 and C6 are closed. What remains is **C1** (a reviewer, 2–3 days), **C2** (blocked by C1) and **C4** (cloud connectors, ~1 week) — plus the reviewer time that Track B's queue depends on, which is the same person as C1.
+**Rough totals:** 17 work items. Tracks A, B and D are complete — A1–A4, B1–B4, D1–D2 closed, D3 reduced to a decision. In Track C, C3, C5 and C6 are closed. What remains is **C1** (a reviewer, 2–3 days), **C2** (blocked by C1) and the four remaining **C4** cloud providers — plus the reviewer time that Track B's queue depends on, which is the same person as C1.
