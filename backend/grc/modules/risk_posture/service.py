@@ -24,7 +24,7 @@ Weights (default — tunable later via tenant settings):
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Tuple
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, cast, String
 from sqlalchemy.orm import Session
 
 from grc.models import (
@@ -182,6 +182,15 @@ def _cis_gap_self(db: Session, tenant_id: int, asset_id: int) -> Dict[str, Any]:
             (CompliancePlugin.tenant_id.is_(None)) | (CompliancePlugin.tenant_id == tenant_id),
             CompliancePlugin.review_status.in_(["approved", "auto_approved"]),
             CompliancePlugin.enabled.is_(True),
+            # Match the scanner's eligibility EXACTLY (compliance_plugins scan_all):
+            # exclude TODO placeholders and unauthored auto-pass stubs so the
+            # posture denominator equals the rules the scanner actually runs.
+            # Without this the posture counted the full benchmark (incl. never-
+            # runnable rules) -> phantom "never-scanned" + stale errors, so its
+            # pass% disagreed with the CIS card.
+            ~cast(CompliancePlugin.check_definition, String).ilike("%TODO%"),
+            ~cast(CompliancePlugin.check_definition, String).ilike('%"kind": "any"%'),
+            ~cast(CompliancePlugin.check_definition, String).ilike('%"kind":"any"%'),
         )
         .all()
     )
@@ -267,7 +276,10 @@ def _cis_gap_self(db: Session, tenant_id: int, asset_id: int) -> Dict[str, Any]:
     errored = len(latest) - passed - failed
     never_scanned = total - len(latest)
     scanned = passed + failed
-    pass_rate = round(passed / total * 100, 1)
+    # Pass rate = passed / evaluated (passed+failed) — the standard CIS score,
+    # excluding never-scanned/errored/not-applicable. Same basis the CIS card
+    # uses, so the number is identical on both pages.
+    pass_rate = round(passed / scanned * 100, 1) if scanned else None
     if scanned == 0:
         # Rules exist and runs exist, but every one errored — nothing passed and
         # nothing failed. `score = 0.0` is the BEST possible gap, so an entirely

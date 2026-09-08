@@ -21,6 +21,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, X, RefreshCw, Sparkles, ExternalLink, SlidersHorizontal } from 'lucide-react';
 import { assetsApi, riskPostureApi } from '@/lib/api';
@@ -296,13 +297,21 @@ export default function AssetPostureDetail({ assetId }: { assetId: number }) {
   };
   const reprobe = () => toast.toast({ title: 'Re-probe queued', message: 'External assets are re-scored on the next EASM discovery sweep — there is no on-demand probe.', type: 'info' });
 
+  // Back = return to wherever the user came from (usually the asset's Risk &
+  // Controls tab). Falls back to the posture dashboard on a cold deep-link.
+  const router = useRouter();
+  const goBack = () => {
+    if (typeof window !== 'undefined' && window.history.length > 1) router.back();
+    else router.push('/risk-posture');
+  };
+
   if (postureQ.isLoading || (assetId > 0 && assetQ.isLoading && !postureQ.data)) {
     return <div style={{ padding: 24, fontSize: 13, color: MUTED }}>Loading risk breakdown…</div>;
   }
   if (postureQ.isError || !postureQ.data) {
     return (
       <div style={{ padding: 16, fontFamily: 'Poppins, system-ui, sans-serif' }}>
-        <Link href="/risk-posture" style={btnSm}><ArrowLeft size={14} /> All assets</Link>
+        <button style={btnSm} onClick={goBack}><ArrowLeft size={14} /> Back</button>
         <div style={{ marginTop: 16, fontSize: 13, color: '#B23A3A' }}>Failed to load asset.</div>
       </div>
     );
@@ -317,7 +326,7 @@ export default function AssetPostureDetail({ assetId }: { assetId: number }) {
   // ── shared header shell ──
   const shell = (extraPill: ReactNode, hostLine: string, subLine: string, actions: ReactNode) => (
     <>
-      <Link href="/risk-posture" style={{ ...btnSm, marginBottom: 10 }}><ArrowLeft size={14} /> All assets</Link>
+      <button style={{ ...btnSm, marginBottom: 10 }} onClick={goBack}><ArrowLeft size={14} /> Back</button>
       <div style={{ ...card, display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', padding: '12px 16px', marginBottom: 12 }}>
         <Ring score={data.score ?? 0} size={66} col={b.bar} />
         <div style={{ flex: 1, minWidth: 200 }}>
@@ -455,7 +464,7 @@ export default function AssetPostureDetail({ assetId }: { assetId: number }) {
   const evidence = (k: 'vuln' | 'cis' | 'cia' | 'ctrl' | 'risk'): string => {
     switch (k) {
       case 'vuln': return `${comp.vuln.active_count} active${comp.vuln.total_linked > comp.vuln.active_count ? ` of ${comp.vuln.total_linked}` : ''} · ${comp.vuln.by_severity?.critical ?? 0} crit / ${comp.vuln.by_severity?.high ?? 0} high / ${comp.vuln.by_severity?.medium ?? 0} med${kev ? ` · ${kev} KEV` : ''}${comp.vuln.raw_points != null ? ` · ${comp.vuln.raw_points} severity-weighted pts` : ''}`;
-      case 'cis': return comp.cis.total === 0 ? 'no CIS rules in the library yet' : comp.cis.pass_rate != null ? `${Math.round((comp.cis.passed / comp.cis.total) * 100)}% pass · ${comp.cis.passed}/${comp.cis.total} rules · ${comp.cis.failed} fail${comp.cis.errored ? ` · ${comp.cis.errored} errored` : ''}${comp.cis.never_scanned ? ` · ${comp.cis.never_scanned} never-scanned` : ''}` : 'not scanned yet';
+      case 'cis': return comp.cis.total === 0 ? 'no CIS rules in the library yet' : comp.cis.pass_rate != null ? `${comp.cis.pass_rate}% pass · ${comp.cis.passed}/${comp.cis.total} rules · ${comp.cis.failed} fail${comp.cis.errored ? ` · ${comp.cis.errored} errored` : ''}${comp.cis.never_scanned ? ` · ${comp.cis.never_scanned} never-scanned` : ''}` : 'not scanned yet';
       case 'cia': return comp.cia.auto_derived ? 'auto · derived Medium from criticality (unconfirmed) — set explicit C/I/A to confirm' : `C${comp.cia.confidentiality ?? '–'} · I${comp.cia.integrity ?? '–'} · A${comp.cia.availability ?? '–'} · criticality ${asset.criticality || '—'}`;
       case 'ctrl': return `${comp.ctrl.coverage_pct}% covered · ${comp.ctrl.linked_count} of ${comp.ctrl.target} controls linked`;
       case 'risk': return `${comp.risk.active_count} active${comp.risk.total_linked > comp.risk.active_count ? ` of ${comp.risk.total_linked} linked` : ''}`;

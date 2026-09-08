@@ -397,7 +397,13 @@ export default function CompliancePanel({ asset }: { asset: any }) {
   });
 
   const runs = Array.isArray(runsQuery.data) ? runsQuery.data : (runsQuery.data?.runs || []);
-  const lastRun = runs[0];
+  // Newest run by timestamp — the runs array isn't guaranteed newest-first,
+  // so runs[0] could be an old run (showed a stale "last scan Xh ago").
+  const lastRun = runs.length
+    ? runs.reduce((m: any, r: any) =>
+        new Date(r?.started_at || r?.created_at || 0).getTime() >
+        new Date(m?.started_at || m?.created_at || 0).getTime() ? r : m)
+    : undefined;
   const formatTime = (iso?: string | null) => {
     if (!iso) return '-';
     try { return new Date(iso).toLocaleString(); } catch { return iso; }
@@ -422,7 +428,11 @@ export default function CompliancePanel({ asset }: { asset: any }) {
     const failed = latestByPlugin.filter((r) => (r.status || '').toLowerCase() === 'failed').length;
     const errored = latestByPlugin.filter((r) => (r.status || '').toLowerCase() === 'error').length;
     const scanned = latestByPlugin.length;
-    const passRate = scanned ? Math.round((passed / scanned) * 100) : 0;
+    // CIS score = passed / evaluated (passed+failed). Not-applicable (skipped)
+    // and errored rules drop out of the denominator — same basis as the risk
+    // posture, so the % is identical on both pages.
+    const evaluated = passed + failed;
+    const passRate = evaluated ? Math.round((passed / evaluated) * 100) : 0;
     return { passed, failed, errored, scanned, passRate };
   }, [latestByPlugin]);
 
