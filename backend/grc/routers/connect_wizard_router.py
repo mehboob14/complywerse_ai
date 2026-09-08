@@ -192,7 +192,7 @@ def issue_token(
     # the credentials.py picker dispatches by integration_type.
     _allowed_platforms = {
         "windows", "linux", "aws", "digitalocean", "digitalocean_api", "cisco",
-        "oracle", "mssql", "postgres", "mysql", "ad", "azure", "k8s",
+        "oracle", "mssql", "postgres", "mysql", "ad", "azure", "k8s", "snmp",
     }
     if body.platform not in _allowed_platforms:
         raise HTTPException(
@@ -337,6 +337,7 @@ def _handshake_inner(body: "HandshakeIn", db: Session) -> dict:
         "ad": "ldap_query",
         "azure": "azure_readonly",
         "k8s": "k8s_api",
+        "snmp": "snmp_v2c",
     }[platform]
     console_url = body.hostname
 
@@ -360,6 +361,8 @@ def _handshake_inner(body: "HandshakeIn", db: Session) -> dict:
         console_port = 636 if body.ldap_use_ssl else 389
     elif platform == "k8s":
         console_port = 443  # k8s API
+    elif platform == "snmp":
+        console_port = body.db_port or 161  # SNMPv2c UDP
     else:  # linux, digitalocean, cisco, oracle
         console_port = 22 if platform != "oracle" else 1521
 
@@ -437,6 +440,26 @@ def _handshake_inner(body: "HandshakeIn", db: Session) -> dict:
                     "hint": _PREFLIGHT_HINTS.get(pf.code, _PREFLIGHT_HINTS["unknown"]),
                 },
             )
+    # ─── SNMP: validate with a read-only SNMPv2c GET before persisting ───
+    if platform == "snmp":
+        from grc.modules.asset_discovery.services.platform_collectors import collect_platform
+        try:
+            collect_platform("snmp_v2c", {
+                "snmp_host": body.hostname,
+                "snmp_port": console_port,
+                "snmp_community": body.agent_password or "public",
+            })
+        except Exception as _snmp_e:  # noqa: BLE001
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "preflight_failed": True,
+                    "code": "network_unreachable",
+                    "message": f"SNMP: no response from {body.hostname}:{console_port} — {str(_snmp_e)[:120]}",
+                    "hint": "Enable the SNMP agent on the device and confirm the read-only community string (SNMPv2c, UDP 161).",
+                },
+            )
+
     # ─── AD / Azure / K8s: limited preflight until full probes exist ───
     if platform == "ad" and body.hostname and not _tcp_open(body.hostname, console_port):
         raise HTTPException(
@@ -811,7 +834,7 @@ def _handshake_inner(body: "HandshakeIn", db: Session) -> dict:
     # and need their OWN co-located asset rows (so they appear distinctly
     # in the IP group / Host-Applications panel and can be ticked into a
     # room scan independently).
-    _OS_HOST_PLATFORMS = {"windows", "linux", "digitalocean"}
+    _OS_HOST_PLATFORMS = {"windows", "linux", "digitalocean", "snmp"}  # snmp device = a host, not a co-located app
     target_asset_type = (
         "infrastructure" if platform in _OS_HOST_PLATFORMS else "application"
     )

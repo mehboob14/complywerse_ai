@@ -10,6 +10,7 @@
 
 import { useMemo, useState } from 'react';
 import { Eye, Pencil, Trash2, Plug, Server, ChevronRight, ChevronDown } from 'lucide-react';
+import { registrableDomain } from '@/lib/domains';
 import {
   DataTable,
   type ColumnDef,
@@ -37,20 +38,7 @@ const canConnect = (a: ITAsset): boolean => !!a.host_name && a.discovery_state !
 // ── Subdomain nesting ───────────────────────────────────────────────────────
 // Render EASM subdomains directly under their apex domain ("show the subnames
 // under the main domain" — owner). Visual only: ordering + indent, nothing is
-// hidden. Apex = registrable domain; a minimal ccTLD second-level set covers the
-// co.uk / com.pk shapes we actually see (not the full Public Suffix List).
-const TWO_LABEL_SUFFIXES = new Set([
-  'co.uk', 'org.uk', 'gov.uk', 'ac.uk', 'co.pk', 'com.pk', 'org.pk', 'net.pk',
-  'com.au', 'net.au', 'org.au', 'co.nz', 'co.in', 'co.za', 'com.br',
-]);
-function registrableDomain(host: string): string {
-  const h = (host || '').toLowerCase().replace(/\.$/, '').trim();
-  if (!h || !h.includes('.') || h.includes(':') || /^[\d.]+$/.test(h)) return '';
-  const parts = h.split('.');
-  if (parts.length <= 2) return h;
-  return TWO_LABEL_SUFFIXES.has(parts.slice(-2).join('.'))
-    ? parts.slice(-3).join('.') : parts.slice(-2).join('.');
-}
+// hidden. Apex = registrableDomain from @/lib/domains (full Public Suffix List).
 const dnsName = (a: ITAsset) =>
   (a.fqdn || a.host_name || a.name || '').toLowerCase().replace(/\.$/, '').trim();
 const isExternalRow = (a: ITAsset) =>

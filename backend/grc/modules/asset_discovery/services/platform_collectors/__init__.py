@@ -43,6 +43,7 @@ PLATFORM_KINDS: Dict[str, str] = {
     "digitalocean_api": "cloud",   # account-level (API token) — droplet SSH stays "server"
     "k8s_api": "cluster",
     "ldap_query": "identity",
+    "snmp_v2c": "network",         # SNMP device (router/switch/printer/UPS/NAS)
 }
 
 _COLLECTORS: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {}
@@ -93,7 +94,7 @@ def safe_cursor(cur, conn):
 # Defensive: a single module that fails to import (e.g. a syntax error mid-edit)
 # must not take down the whole registry — log it and keep the rest working.
 _MODULES = ("postgres", "mysql", "mssql", "oracle", "cisco", "aws", "azure",
-            "digitalocean", "k8s", "ad")
+            "digitalocean", "k8s", "ad", "snmp")
 for _m in _MODULES:
     try:
         importlib.import_module(f"{__name__}.{_m}")

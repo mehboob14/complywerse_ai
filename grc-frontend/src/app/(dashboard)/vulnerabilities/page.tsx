@@ -331,6 +331,10 @@ export default function VulnerabilitiesPage() {
   ]);
   // When scoped, only the register tab exists — coerce a stale ?tab= param
   // (e.g. 'overview') so tenant-wide content/queries never render in scoped mode.
+  // Redesign (mock): the page IS the Vulnerability Register — no page-tab bar
+  // (removed below). activeTab defaults to 'vulnerabilities', so the register is
+  // the default view; Overview → /vulnerabilities/dashboard, Departments / SLA are
+  // rail items. The overview/departments/sla branches stay reachable via ?tab=.
   const shownTab = ctemScopeId ? 'vulnerabilities' : activeTab;
 
   // CVE-shaped searches must see closed rows too (e.g. auto_closed_decommissioned),
@@ -351,7 +355,10 @@ export default function VulnerabilitiesPage() {
   const { data: vulnerabilities, isLoading, error } = useQuery({
     queryKey: ['vulnerabilities', statusFilter, severityFilter, showClosed, registerType, exploitFilter, tacticsFilter, assetFilter, serverSearch, ctemScopeId],
     queryFn: async () => {
-      const params: Record<string, unknown> = {};
+      // Load the whole register (not the backend's default page of 100) so the triage-rail
+      // counts, the click-filters and the table all cover every finding — otherwise the rail
+      // tallies only the fetched page (e.g. "KEV 0" while 1 exists, "All findings 100" of 224).
+      const params: Record<string, unknown> = { limit: 500 };
       if (ctemScopeId) { params.ctem_scope_id = ctemScopeId; params.limit = 500; }
       if (statusFilter !== 'all') params.status = statusFilter;
       if (severityFilter !== 'all') params.severity = severityFilter;
@@ -995,49 +1002,10 @@ export default function VulnerabilitiesPage() {
 
   return (
     <div className="-m-4 lg:-m-5">
-      {/* Header + KPI Charts */}
-      <div className="border-b border-[var(--color-border)] px-3 sm:px-6 py-3">
-        {/* Tabs + Register-Type selector — same row, selector right-aligned
-            so the operator sees the active register at a glance and can
-            switch contexts without scrolling past the toolbar below. */}
-        <div className="mb-3 flex items-end justify-between gap-3 border-b border-gray-200 -mx-3 sm:-mx-6 px-3 sm:px-6 overflow-x-auto">
-          <div className="flex items-center gap-0 min-w-max">
-            {tabs.map(({ id, label, icon: Icon }) => (
-              <button
-                key={id}
-                onClick={() => setActiveTab(id as 'overview' | 'vulnerabilities' | 'departments' | 'sla')}
-                className={`relative inline-flex items-center gap-1.5 rounded-t-md px-3 sm:px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-colors -mb-px ${
-                  activeTab === id
-                    ? 'text-primary-700 bg-primary-50/50'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-slate-50'
-                }`}
-              >
-                <Icon size={14} />
-                {label}
-                {activeTab === id && (
-                  <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-primary-600" />
-                )}
-              </button>
-            ))}
-          </div>
-          {/* Register-type selector now lives in the workspace toolbar below. */}
-        </div>
-
-        {/* Overview tab — reuses the standalone Dashboard page component
-            verbatim. Conditional mount means its useQuery hooks (with their
-            60s refetchInterval) only run while this tab is active. */}
-        {shownTab === 'overview' && (
-          <div className="mt-3">
-            <VulnerabilityDashboardPage />
-          </div>
-        )}
-
-
-        {/* The Vulnerabilities register now lives in VulnsWorkspace (rendered in
-            the Tab Content section below). The three severity/status/SLA charts
-            that used to sit here were moved out — they duplicate the Overview
-            tab. Their dashboard data is still fetched and reused by the KPI strip. */}
-      </div>
+      {/* Redesign: no page-tab bar (the mock has none) — the register below is the
+          whole page. Overview → /vulnerabilities/dashboard; Departments / SLA are
+          rail items in the register. The former Overview/Departments/SLA branches
+          are left below (unreachable, shownTab is fixed) rather than deleted. */}
 
       {/* Tab Content */}
       {shownTab === 'vulnerabilities' && (

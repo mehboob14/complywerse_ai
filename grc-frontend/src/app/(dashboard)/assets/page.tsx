@@ -13,6 +13,7 @@ import { ITAsset, AssetType } from '@/types';
 import { PageLoader, ComboBoxInput, type ComboBoxOption } from '@/components/ui';
 import { AssetsWorkspace } from './_workspace/AssetsWorkspace';
 import InventoryScorecard from '@/components/dashboard/InventoryScorecard';
+import InventoryRedesign from './_workspace/InventoryRedesign';
 import {
   Loader2,
   AlertCircle,
@@ -29,10 +30,13 @@ import {
   CheckCircle2,
   Server,
   ShieldCheck,
+  Download,
+  Plus,
 } from 'lucide-react';
 // CIS Benchmark now lives as a tab inside IT Asset Inventory (merged from the
-// former standalone /compliance-overview page). We reuse its component as-is.
-import CisBenchmarkView from '../compliance-overview/page';
+// former standalone /compliance-overview page). Render just the overview body —
+// not the default export's own Overview/Rules tab strip, which the design drops.
+import { OverviewTabContent as CisBenchmarkView } from '../compliance-overview/_cis-overview';
 // Design-handoff theme (warm cream + IBM Plex), scoped under .asset-suite.
 import './_suite/asset-suite.css';
 import { InventoryStats } from './_suite/InventoryStats';
@@ -393,50 +397,38 @@ export default function AssetsPage() {
   const noopEvent = { stopPropagation: () => {} } as unknown as React.MouseEvent;
 
   return (
-    <div className="asset-suite assets-light space-y-3.5 px-3 sm:px-4 pt-0" style={{ marginTop: -10 }}>
-      {/* Header controls — title/subtitle live in the global top bar already, so
-          only the Inventory | CIS toggle + primary "Add asset" sit here, pulled
-          tight to the top-right (no empty title band). */}
-      <div className="as-fadeup" style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 10, flexWrap: 'wrap', marginTop: 0, marginBottom: -8 }}>
-        <div className="as-seg">
-          <button type="button" className={activeView === 'inventory' ? 'is-active' : ''} onClick={() => switchView('inventory')}>Inventory</button>
-          <button type="button" className={activeView === 'cis' ? 'is-active' : ''} onClick={() => switchView('cis')}>CIS Benchmark</button>
+    <div className="asset-suite assets-light space-y-2 px-3 sm:px-4 pt-0" style={{ marginTop: -10 }}>
+      {/* Common header (mock): one title + actions on top, the Inventory | CIS
+          toggle below it — so the page name appears once and the toggle sits
+          left, styled like the mock (grey track, white pill, green active). */}
+      <div className="inv2 as-fadeup" style={{ marginBottom: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+          <div>
+            <h1 style={{ fontSize: 22, letterSpacing: '-.025em' }}>IT Asset Inventory</h1>
+            <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 3, display: 'flex', alignItems: 'center', gap: 7 }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--ac)' }} />
+              Authoritative ownership, valuation &amp; assurance coverage · {(assets as ITAsset[] | undefined)?.length ?? 0} assets
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 9, alignItems: 'center', flexWrap: 'wrap' }}>
+            <select className="sel"><option>Last 30 days</option><option>Last 7 days</option><option>This quarter</option></select>
+            <button type="button" className="btn"><Download size={15} />Export</button>
+            {canCreate && <button type="button" className="btn btn-pri" onClick={() => setIsModalOpen(true)}><Plus size={15} />Add asset</button>}
+          </div>
         </div>
-        {activeView === 'inventory' && canCreate && (
-          <button type="button" className="as-btn as-btn-primary" onClick={() => setIsModalOpen(true)}>+ Add asset</button>
-        )}
+        <div className="segwrap" style={{ marginTop: 9 }}>
+          <button type="button" className={activeView === 'inventory' ? 'seg on' : 'seg'} onClick={() => switchView('inventory')}>Inventory</button>
+          <button type="button" className={activeView === 'cis' ? 'seg on' : 'seg'} onClick={() => switchView('cis')}>CIS Benchmark</button>
+        </div>
       </div>
 
       {activeView === 'cis' ? (
         <CisBenchmarkView />
       ) : (
-      <>
-      <InventoryScorecard />
-
-      <InventoryStats assets={(assets as ITAsset[]) || []} onCrit={(c) => setCriticalityFilter(c as CriticalityFilter)} />
-
-      <AssetsWorkspace
+      <InventoryRedesign
+        hideHead
         assets={(assets as ITAsset[]) || []}
-        filteredAssets={filteredAssets || []}
-        dashboard={dashboard}
         loading={isLoading}
-        searchTerm={searchTerm}
-        setSearchTerm={setSearchTerm}
-        statusFilter={statusFilter}
-        setStatusFilter={(v) => setStatusFilter(v as StatusFilter)}
-        criticalityFilter={criticalityFilter}
-        setCriticalityFilter={(v) => setCriticalityFilter(v as CriticalityFilter)}
-        lifecycleFilter={lifecycleFilter}
-        setLifecycleFilter={setLifecycleFilter}
-        sourceFilter={sourceFilter}
-        setSourceFilter={setSourceFilter}
-        typeFilter={typeFilter}
-        setTypeFilter={setTypeFilter}
-        environmentFilter={environmentFilter}
-        setEnvironmentFilter={setEnvironmentFilter}
-        facets={facets}
-        onBulkDelete={(ids) => bulkDeleteMutation.mutate(ids)}
-        onBulkUpdate={(ids, patch) => bulkUpdateMutation.mutate({ ids, patch })}
         canCreate={canCreate}
         canEdit={canEdit}
         canDelete={canDelete}
@@ -444,27 +436,21 @@ export default function AssetsPage() {
         onEdit={(asset) => handleEdit(noopEvent, asset)}
         onDelete={(asset) => handleDelete(noopEvent, asset.id)}
         onConnect={(asset) => handleConnect(noopEvent, asset)}
+        onBulkDelete={(ids) => bulkDeleteMutation.mutate(ids)}
+        onBulkUpdate={(ids, patch) => bulkUpdateMutation.mutate({ ids, patch })}
         onBulkConnect={(ids) => {
-          // Reuse the existing bulk-connect flow: seed the selection set from
-          // the ids the register handed us, then invoke the page's handler.
           const next = new Set(ids);
           setSelectedAssetIds(next);
           const first = (assets as ITAsset[] | undefined)?.find((a) => a.id === ids[0]);
           const fam = ((first as any)?.os_family || '').toLowerCase();
-          const platform =
-            fam === 'windows' ? 'windows' :
-            fam === 'linux' ? 'linux' : '';
+          const platform = fam === 'windows' ? 'windows' : fam === 'linux' ? 'linux' : '';
           const params = new URLSearchParams();
           if (platform) params.set('platform', platform);
           params.set('asset_ids', ids.join(','));
           router.push(`/admin/integrations/connect?${params.toString()}`);
         }}
-        onOpenFull={(id) => router.push(`/assets/${id}`)}
-        onTemplate={() => assetsApi.downloadTemplate()}
-        onImport={() => setIsImportModalOpen(true)}
         onAdd={() => setIsModalOpen(true)}
       />
-      </>
       )}
 
       {isModalOpen && (

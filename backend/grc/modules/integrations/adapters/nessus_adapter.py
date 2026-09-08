@@ -218,6 +218,43 @@ class NessusAdapter(BaseAdapter):
         self._scan_detail_cache[key] = detail
         return detail
 
+    def get_host_fingerprint(self, hostname: str, ip_address: str = "") -> Dict[str, str]:
+        """Best-effort REAL identity — NetBIOS name, MAC, FQDN — of a scanned host,
+        read from the per-host detail (/scans/{id}/hosts/{host_id}). A credentialed
+        or same-LAN scan resolves these even when the host LIST shows only a bare IP.
+        Returns {} if not found or on any error: this is additive enrichment for
+        finding->asset linking and must never be load-bearing for the vuln id.
+        ponytail: re-fetches /scans per call for the (few) IP-only hosts; cache if
+        a scan ever has many unresolved hosts."""
+        want = {s for s in (str(hostname or "").strip(), str(ip_address or "").strip()) if s}
+        if not want:
+            return {}
+        try:
+            for scan in self.get_scans():
+                sid = scan.get("id")
+                if not sid:
+                    continue
+                try:
+                    detail = self.get_scan_detail(str(sid))
+                except Exception:
+                    continue
+                for host in (detail.get("hosts") or []):
+                    key = str(host.get("hostname") or host.get("host-ip") or "").strip()
+                    if not key or key not in want or host.get("host_id") is None:
+                        continue
+                    try:
+                        info = (self._get(f"/scans/{sid}/hosts/{host.get('host_id')}") or {}).get("info", {}) or {}
+                    except Exception:
+                        continue
+                    name = str(info.get("netbios-name") or info.get("host-fqdn") or "").strip()
+                    mac = str(info.get("mac-address") or "").splitlines()[0].strip() if info.get("mac-address") else ""
+                    if name or mac:
+                        return {"netbios_name": name, "mac": mac,
+                                "fqdn": str(info.get("host-fqdn") or "").strip()}
+        except Exception:
+            pass
+        return {}
+
     def get_scan_coverage(self) -> List[Dict[str, Any]]:
         """Coverage evidence for inbound closure: hosts per COMPLETED scan run.
 

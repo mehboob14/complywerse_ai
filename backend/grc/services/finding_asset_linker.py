@@ -47,6 +47,58 @@ def _norm(v: Optional[str]) -> Optional[str]:
     return v.strip().lower() if isinstance(v, str) and v.strip() else None
 
 
+def _norm_mac(v: Optional[str]) -> Optional[str]:
+    """MAC -> lowercase hex only (strip :-. separators), or None if it isn't a full
+    MAC. Lets 90:CC:DF:1C:C6:90 match 90-cc-df-1c-c6-90 or a bare-hex form."""
+    if not isinstance(v, str):
+        return None
+    h = "".join(ch for ch in v.lower() if ch in "0123456789abcdef")
+    return h if len(h) >= 12 else None
+
+
+def _looks_like_ip(s: str) -> bool:
+    """True for an IPv4 dotted-quad or an IPv6-ish literal. Deliberately loose —
+    it only gates which tokens we're willing to LEARN as an asset alias, so a
+    false negative just skips a learn, never a wrong link."""
+    parts = s.split(".")
+    if len(parts) == 4 and all(p.isdigit() and 0 <= int(p) <= 255 for p in parts):
+        return True
+    return ":" in s
+
+
+def _iter_asset_ips(ip_address: Optional[str], known_ips: Any) -> List[str]:
+    """Every normalized IP an asset answers on: its primary ``ip_address`` plus
+    every entry in ``known_ips`` (multi-NIC / DHCP history). Deduped, order-stable,
+    blanks dropped. Tolerates ``known_ips`` being None, a JSON list, or a stray
+    string — so a legacy row (NULL) and a hand-seeded row both behave."""
+    vals: List[Any] = [ip_address]
+    if isinstance(known_ips, (list, tuple)):
+        vals.extend(known_ips)
+    elif isinstance(known_ips, str):
+        vals.append(known_ips)
+    out: List[str] = []
+    seen: Set[str] = set()
+    for v in vals:
+        n = _norm(v)
+        if n and n not in seen:
+            seen.add(n)
+            out.append(n)
+    return out
+
+
+def _finding_ip(host: Optional[str], host_identity: Any) -> Optional[str]:
+    """The bare IP a finding was taken at, if any — from its ``host_identity``
+    ({ip, ip_address}) or an IP-literal ``affected_host``. Used only to TEACH the
+    matched asset a new address; returns None for name-only hosts (nothing to
+    learn)."""
+    hi = host_identity if isinstance(host_identity, dict) else {}
+    for cand in (hi.get("ip"), hi.get("ip_address"), host):
+        n = _norm(cand)
+        if n and _looks_like_ip(n):
+            return n
+    return None
+
+
 def _nessus_ids_for(host_name: Optional[str], ip: Optional[str], tenant_id: int) -> Set[str]:
     """Every ``nessus-<hash>`` id a Nessus finding scanned on THIS asset could
     carry. Mirrors ``NessusTransformer._stable_asset_id`` (key = name-or-ip),
@@ -90,16 +142,22 @@ def _build_asset_index(
     nessus: Dict[str, Set[int]] = {}
     rows = db.query(
         ITAsset.id, ITAsset.host_name, ITAsset.name, ITAsset.ip_address, ITAsset.fqdn,
+        ITAsset.known_ips, ITAsset.primary_mac,
     ).filter(ITAsset.tenant_id == tenant_id).order_by(ITAsset.id.asc()).all()
     for a in rows:
-        for ident in (a.host_name, a.ip_address, a.fqdn):
+        ips = _iter_asset_ips(a.ip_address, a.known_ips)
+        for ident in (a.host_name, a.fqdn, *ips):
             _index_put(exact, _norm(ident), a.id)
+        mac = _norm_mac(a.primary_mac)
+        if mac:
+            _index_put(exact, "mac:" + mac, a.id)
         n = _norm(a.name)
         if n:
             _index_put(exact, n, a.id)
             names.append((n, a.id))
-        for sid in _nessus_ids_for(a.host_name, a.ip_address, tenant_id):
-            nessus.setdefault(sid, set()).add(a.id)
+        for ip in (ips or [None]):
+            for sid in _nessus_ids_for(a.host_name, ip, tenant_id):
+                nessus.setdefault(sid, set()).add(a.id)
     return exact, names, nessus, len(rows)
 
 
@@ -135,6 +193,14 @@ def _match_by_identity(host_identity: Any, exact: Dict[str, Any],
     rule — an identity claimed by 2+ assets returns (None, 'ambiguous')."""
     if not isinstance(host_identity, dict):
         return None, "none"
+    # MAC first — the one identity that never changes with the network.
+    mac = _norm_mac(host_identity.get("mac"))
+    if mac:
+        aid = exact.get("mac:" + mac)
+        if aid is _AMBIGUOUS:
+            return None, "ambiguous"
+        if aid is not None:
+            return aid, "identity_mac"
     for raw in (host_identity.get("host_name"), host_identity.get("ip"),
                 host_identity.get("ip_address"), host_identity.get("fqdn")):
         n = _norm(raw)
@@ -171,10 +237,10 @@ def _build_apex_context(db: Session, tenant_id: int):
     asset_apex: Dict[int, str] = {}
     rows = db.query(
         ITAsset.id, ITAsset.host_name, ITAsset.name, ITAsset.ip_address, ITAsset.fqdn,
+        ITAsset.known_ips,
     ).filter(ITAsset.tenant_id == tenant_id).all()
     for a in rows:
-        ip = _norm(a.ip_address)
-        if ip:
+        for ip in _iter_asset_ips(a.ip_address, a.known_ips):
             ip_assets.setdefault(ip, set()).add(a.id)
         dns = _norm(a.fqdn) or _norm(a.host_name) or _norm(a.name)
         if not dns:
@@ -226,7 +292,12 @@ def backfill_host_links(db: Session, tenant_id: int, *, commit: bool = False,
         "assets": n_assets, "findings_with_host": 0, "matched": 0,
         "matched_via_identity": 0, "apex_routed": 0, "newly_linked": 0,
         "already_linked": 0, "unmatched": 0, "ambiguous": 0, "assigned_unmatched": 0,
+        "ips_learned": 0,
     }
+    # asset_id -> IPs seen on findings we linked to it that it didn't already
+    # list. Applied after the loop so a matched scan (or a one-time manual assign)
+    # teaches the asset that address — the next sync links it with no human touch.
+    learned: Dict[int, Set[str]] = {}
     if not exact and not nessus:
         return report
 
@@ -293,7 +364,16 @@ def backfill_host_links(db: Session, tenant_id: int, *, commit: bool = False,
             VulnerabilityAssetLink.vulnerability_id == f.id,
             VulnerabilityAssetLink.asset_id == asset_id,
         ).first()
-        if exists:
+        # Also skip if a link for this (vuln, asset) is already PENDING in this
+        # session — e.g. the scanner already linked this apex by shared IP earlier
+        # in the same sync txn. Without this, both flush together and collide on
+        # uq_vuln_asset_link (a vuln on a shared IP hits the apex + subdomains).
+        pending_dup = any(
+            isinstance(o, VulnerabilityAssetLink)
+            and o.vulnerability_id == f.id and o.asset_id == asset_id
+            for o in db.new
+        )
+        if exists or pending_dup:
             report["already_linked"] += 1
             continue
         db.add(VulnerabilityAssetLink(
@@ -304,6 +384,27 @@ def backfill_host_links(db: Session, tenant_id: int, *, commit: bool = False,
             link_source=source, auto_linked=True,
         ))
         report["newly_linked"] += 1
+        # Teach the asset the address this finding was taken at. Matching by name
+        # (or a manual assign) onto a machine whose IP has since moved records the
+        # new IP, so future IP-only findings on it link with no human step.
+        fip = _finding_ip(host, f.host_identity)
+        if fip:
+            learned.setdefault(asset_id, set()).add(fip)
+
+    # Fold learned addresses into each asset's known_ips (dedup against what it
+    # already answers on). One extra query per taught asset, only when something
+    # new was seen — so a steady state does zero writes here.
+    if learned:
+        from ..models import ITAsset
+        for aid, ips in learned.items():
+            a = db.get(ITAsset, aid)
+            if a is None:
+                continue
+            current = _iter_asset_ips(a.ip_address, a.known_ips)
+            merged = current + [ip for ip in sorted(ips) if ip not in current]
+            if len(merged) != len(current):
+                a.known_ips = merged
+                report["ips_learned"] += len(merged) - len(current)
 
     if commit:
         db.commit()

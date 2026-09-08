@@ -221,6 +221,19 @@ def _probe_tls(fqdn: str, facts: Dict[str, Any]) -> None:
             facts["tls_sans"] = san.value.get_values_for_type(x509.DNSName)[:50]
         except Exception:
             facts["tls_sans"] = []
+        # Public-key type + strength (e.g. "ECDSA P-256" / "RSA 2048").
+        try:
+            from cryptography.hazmat.primitives.asymmetric import ec, rsa
+            pk = cert.public_key()
+            if isinstance(pk, ec.EllipticCurvePublicKey):
+                _CURVE = {"secp256r1": "P-256", "secp384r1": "P-384", "secp521r1": "P-521"}
+                facts["tls_key"] = "ECDSA " + _CURVE.get(pk.curve.name, pk.curve.name)
+            elif isinstance(pk, rsa.RSAPublicKey):
+                facts["tls_key"] = f"RSA {pk.key_size}"
+            else:
+                facts["tls_key"] = type(pk).__name__.replace("PublicKey", "").lstrip("_") or None
+        except Exception:
+            pass
         nb = getattr(cert, "not_valid_before_utc", None) or cert.not_valid_before
         facts["tls_not_before"] = nb.isoformat() if nb else None
         expiry = getattr(cert, "not_valid_after_utc", None) or cert.not_valid_after
@@ -244,24 +257,246 @@ def _probe_dns(fqdn: str, facts: Dict[str, Any]) -> None:
     r.lifetime = PROBE_TIMEOUT
     r.timeout = PROBE_TIMEOUT
 
-    def q(name: str, rtype: str) -> List[str]:
+    # Structured records (with TTLs) for A/MX/TXT/NS/CAA; the flat keys below stay
+    # for back-compat. `record=False` skips the _dmarc/_domainkey helper lookups.
+    records: List[Dict[str, Any]] = []
+
+    def q(name: str, rtype: str, record: bool = True) -> List[str]:
         try:
-            return [str(x).strip().strip('"') for x in r.resolve(name, rtype)][:20]
+            ans = r.resolve(name, rtype)
         except Exception:
             return []
+        ttl = getattr(getattr(ans, "rrset", None), "ttl", None)
+        vals = [str(x).strip().strip('"') for x in ans][:20]
+        if record:
+            for v in vals:
+                records.append({"type": rtype, "name": name, "value": v, "ttl": ttl})
+        return vals
 
     facts["dns_a"] = q(fqdn, "A")
     facts["dns_mx"] = q(fqdn, "MX")
     facts["dns_ns"] = q(fqdn, "NS")
     txt = q(fqdn, "TXT")
     facts["spf"] = next((t for t in txt if "v=spf1" in t.lower()), None)
-    dmarc = q("_dmarc." + fqdn, "TXT")
+    dmarc = q("_dmarc." + fqdn, "TXT", record=False)
     facts["dmarc"] = next((t for t in dmarc if "v=dmarc1" in t.lower()), None)
-    dkim = q("default._domainkey." + fqdn, "TXT")
+    dkim = q("default._domainkey." + fqdn, "TXT", record=False)
     facts["dkim"] = next(
         (t for t in dkim if "v=dkim1" in t.lower() or "k=rsa" in t.lower()), None
     ) or (dkim[0] if dkim else None)
     facts["caa"] = q(fqdn, "CAA")
+    facts["dns_records"] = records
+
+    # DNSSEC — "signed" if the zone publishes DNSKEY, or a validating resolver
+    # sets the AD flag on the answer; "unsigned" when we get a clean negative.
+    # ponytail: checked on the fqdn itself, no PSL apex-walk — a subdomain that
+    # isn't its own zone cut reads "unsigned".
+    try:
+        import dns.flags
+        ans = r.resolve(fqdn, "DNSKEY", raise_on_no_answer=False)
+        has_key = ans.rrset is not None and len(ans.rrset) > 0
+        ad = bool(ans.response.flags & dns.flags.AD)
+        facts["dnssec"] = "signed" if (has_key or ad) else "unsigned"
+    except Exception:
+        facts["dnssec"] = None
+
+
+def _probe_reverse_dns(facts: Dict[str, Any]) -> None:
+    """PTR (reverse DNS) for the resolved IP via the OS resolver. Uses the passed
+    ip, else the first resolved A record. socket.gethostbyaddr has no per-call
+    timeout — it relies on the system resolver (normally fast, or fails fast).
+    Guarded: any failure just leaves `reverse_dns` absent."""
+    ip = facts.get("ip") or (facts.get("dns_a") or [None])[0]
+    if not ip:
+        return
+    try:
+        facts["reverse_dns"] = socket.gethostbyaddr(ip)[0]
+    except Exception:
+        pass
+
+
+def _probe_mta_sts(fqdn: str, facts: Dict[str, Any]) -> None:
+    """MTA-STS policy at https://mta-sts.<domain>/.well-known/mta-sts.txt.
+    True = policy served, False = definitively absent, None = couldn't check."""
+    try:
+        resp = requests.get(f"https://mta-sts.{fqdn}/.well-known/mta-sts.txt",
+                            timeout=3, verify=False, allow_redirects=True)
+    except Exception:
+        return
+    text = resp.text or ""
+    if resp.status_code == 200 and "mode" in text.lower():
+        facts["mta_sts"] = True
+        m = re.search(r"mode\s*:\s*(\w+)", text, re.IGNORECASE)
+        if m:
+            facts["mta_sts_mode"] = m.group(1).lower()
+    else:
+        facts["mta_sts"] = False
+
+
+def _rdap_vcard_fn(entity: Dict[str, Any]) -> Optional[str]:
+    """Pull the formatted name (fn) out of an RDAP entity's jCard vcardArray."""
+    try:
+        for item in entity.get("vcardArray", [None, []])[1]:
+            if item and item[0] == "fn":
+                return str(item[3])
+    except Exception:
+        pass
+    return None
+
+
+def _probe_rdap_domain(fqdn: str, facts: Dict[str, Any]) -> None:
+    """Domain registration via RDAP (rdap.org bootstraps to the authoritative
+    registry/registrar server) — the modern replacement for a WHOIS library.
+    ponytail: queried on the fqdn as-is; a subdomain with no RDAP object just
+    yields nothing (no PSL apex-walk)."""
+    try:
+        resp = requests.get(f"https://rdap.org/domain/{fqdn}", timeout=3)
+        if resp.status_code != 200:
+            return
+        data = resp.json()
+    except Exception:
+        return
+    try:
+        for ent in data.get("entities") or []:
+            if "registrar" in (ent.get("roles") or []):
+                facts["whois_registrar"] = _rdap_vcard_fn(ent)
+                break
+        for ev in data.get("events") or []:
+            if ev.get("eventAction") == "registration":
+                facts["whois_created"] = ev.get("eventDate")
+            elif ev.get("eventAction") == "expiration":
+                facts["whois_expires"] = ev.get("eventDate")
+        if data.get("status"):
+            facts["whois_status"] = list(data["status"])
+        ns = [n.get("ldhName") for n in (data.get("nameservers") or []) if n.get("ldhName")]
+        if ns:
+            facts["whois_nameservers"] = ns
+    except Exception:
+        pass
+
+
+def _probe_rdap_ip(facts: Dict[str, Any]) -> None:
+    """Network / ASN registration for the resolved IP via RDAP. ASN is not a
+    standard field on an RDAP ip object — surfaced only when a registry includes
+    the ARIN originAS extension, else left absent."""
+    ip = facts.get("ip") or (facts.get("dns_a") or [None])[0]
+    if not ip:
+        return
+    try:
+        resp = requests.get(f"https://rdap.org/ip/{ip}", timeout=3)
+        if resp.status_code != 200:
+            return
+        data = resp.json()
+    except Exception:
+        return
+    try:
+        cidrs = data.get("cidr0_cidrs") or []
+        if cidrs:
+            c = cidrs[0]
+            prefix = c.get("v4prefix") or c.get("v6prefix")
+            if prefix and c.get("length") is not None:
+                facts["ip_network"] = f"{prefix}/{c['length']}"
+        if not facts.get("ip_network"):
+            facts["ip_network"] = data.get("name") or data.get("handle")
+        facts["asn_org"] = data.get("name")
+        facts["ip_region"] = data.get("country")
+        origin = data.get("arin_originas0_originautnums") or []
+        if origin:
+            facts["asn"] = origin[0]
+    except Exception:
+        pass
+
+
+def _probe_geoip(facts: Dict[str, Any]) -> None:
+    """Geo-locate the resolved IP via the free ip-api.com (no key, ~45 req/min,
+    HTTP-only on the free tier). Fills ip_region as 'City, Region, Country' —
+    richer than RDAP's 2-letter country, which it overrides when available. Any
+    error (offline, rate-limited, private/reserved IP) leaves ip_region as RDAP
+    left it. ponytail: one free endpoint; swap for a local MaxMind GeoLite2 db
+    if the rate limit bites or outbound HTTP to ip-api is undesirable."""
+    ip = facts.get("ip") or (facts.get("dns_a") or [None])[0]
+    if not ip:
+        return
+    try:
+        resp = requests.get(
+            f"http://ip-api.com/json/{ip}?fields=status,country,regionName,city",
+            timeout=3, headers={"User-Agent": "complyverse-easm"})
+        if resp.status_code != 200:
+            return
+        d = resp.json() or {}
+    except Exception:
+        return
+    if d.get("status") != "success":
+        return
+    region = ", ".join([p for p in (d.get("city"), d.get("regionName"), d.get("country")) if p])
+    if region:
+        facts["ip_region"] = region
+
+
+def _probe_ct_subdomains(fqdn: str, facts: Dict[str, Any]) -> None:
+    """Passive subdomain discovery from Certificate Transparency logs (crt.sh):
+    read names already published in certificates — no host is touched to find
+    them. Dedupe, cap at 25, then resolve each A record (passive DNS) for
+    `resolves_to`. ponytail: serial A lookups up to the cap; thread-pool them if
+    it drags. If crt.sh is slow/unavailable the whole block is skipped."""
+    try:
+        resp = requests.get(f"https://crt.sh/?q=%25.{fqdn}&output=json", timeout=4,
+                            headers={"User-Agent": "complyverse-easm"})
+        if resp.status_code != 200:
+            return
+        rows = resp.json()
+    except Exception:
+        return
+
+    base = fqdn.lower()
+    first_seen: Dict[str, Optional[str]] = {}
+    for row in rows or []:
+        try:
+            nb = row.get("not_before")
+            for name in str(row.get("name_value") or "").split("\n"):
+                host = name.strip().lower().lstrip("*.")
+                if not host or "*" in host or host == base or not host.endswith("." + base):
+                    continue
+                if host not in first_seen or (nb and (first_seen[host] is None or nb < first_seen[host])):
+                    first_seen[host] = nb
+        except Exception:
+            continue
+
+    hosts = sorted(first_seen)[:25]
+    if not hosts:
+        return
+
+    resolver = None
+    try:
+        import dns.resolver
+        resolver = dns.resolver.Resolver()
+        resolver.lifetime = resolver.timeout = 2
+    except Exception:
+        resolver = None
+
+    subs: List[Dict[str, Any]] = []
+    for host in hosts:
+        entry: Dict[str, Any] = {"host": host, "first_seen": first_seen.get(host)}
+        if resolver is not None:
+            try:
+                entry["resolves_to"] = [str(x) for x in resolver.resolve(host, "A")][:5]
+            except Exception:
+                pass
+        subs.append(entry)
+    facts["subdomains"] = subs
+
+
+# ── Authorization-gated active scans — DELIBERATELY NOT IMPLEMENTED ───────────
+# Every collector above is passive / standard outside-in: public DNS, the
+# target's own TLS + HTTP, and public RDAP/CT registries — safe on any host.
+# The two below ACTIVELY probe infrastructure the tenant may not own and require
+# explicit, per-engagement authorization (scope + tenant-owns-target check).
+# They are intentionally absent:
+#   * Active port scanning of non-web ports (OpenVPN/1194, a raw SMTP/25 banner
+#     grab beyond MX, IMAP/POP/RDP/SSH, …) on third-party hosts.
+#   * Subdomain brute-forcing (wordlist DNS guessing) — unlike the passive CT-log
+#     enumeration above, which only reads certificates already published.
+# Do NOT add either without an authorization gate.
 
 
 def probe_asset(fqdn: str, ip: Optional[str] = None) -> dict:
@@ -281,13 +516,20 @@ def probe_asset(fqdn: str, ip: Optional[str] = None) -> dict:
         "security_headers": {}, "missing_security_headers": [],
         # ── TLS / cert ──
         "https_available": False,
-        "tls_subject_cn": None, "tls_issuer": None, "tls_sans": None,
+        "tls_subject_cn": None, "tls_issuer": None, "tls_sans": None, "tls_key": None,
         "tls_not_before": None, "tls_not_after": None, "tls_expired": None,
         "tls_days_to_expiry": None, "tls_version": None, "tls_cipher": None,
         "tls_self_signed": None, "tls_error": None,
         # ── DNS / email auth ──
         "dns_a": None, "dns_mx": None, "dns_ns": None,
         "spf": None, "dmarc": None, "dkim": None, "caa": None,
+        "dns_records": None, "dnssec": None, "reverse_dns": None,
+        # ── registration / reputation (passive: RDAP, MTA-STS, CT logs) ──
+        "mta_sts": None, "mta_sts_mode": None,
+        "whois_registrar": None, "whois_created": None, "whois_expires": None,
+        "whois_status": None, "whois_nameservers": None,
+        "asn": None, "asn_org": None, "ip_network": None, "ip_region": None,
+        "subdomains": None,
         "set_cookies": [], "cdn_waf": None,
         "probed_at": datetime.utcnow().isoformat() + "Z",
     }
@@ -325,6 +567,12 @@ def probe_asset(fqdn: str, ip: Optional[str] = None) -> dict:
 
     _probe_tls(fqdn, facts)
     _probe_dns(fqdn, facts)
+    _probe_reverse_dns(facts)       # needs facts["ip"] / dns_a from above
+    _probe_mta_sts(fqdn, facts)
+    _probe_rdap_domain(fqdn, facts)
+    _probe_rdap_ip(facts)
+    _probe_geoip(facts)             # richer City/Region/Country over RDAP's country
+    _probe_ct_subdomains(fqdn, facts)
     return facts
 
 
@@ -776,5 +1024,12 @@ if __name__ == "__main__":  # pragma: no cover - runnable offline self-checks
     # A host we never reached and that has no cert/DNS is UNGRADED, not falsely A.
     _hn = compute_health_score({"live": False}, cve_count=0)
     assert _hn["grade"] is None and _hn.get("reason"), _hn
+
+    # RDAP jCard registrar-name extraction (the fiddliest pure parser).
+    assert _rdap_vcard_fn({"vcardArray": ["vcard", [
+        ["version", {}, "text", "4.0"],
+        ["fn", {}, "text", "Example Registrar, Inc."]]]}) == "Example Registrar, Inc."
+    assert _rdap_vcard_fn({}) is None
+    assert _rdap_vcard_fn({"vcardArray": ["vcard", []]}) is None
     print(f"external_probe self-check OK - banner-to-CPE + health score "
           f"(A={_hg['score']}, F={_hb['score']})")

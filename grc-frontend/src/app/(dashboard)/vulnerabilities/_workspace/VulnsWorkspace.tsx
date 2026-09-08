@@ -1,597 +1,416 @@
 'use client';
 
 /**
- * VulnsWorkspace — the shell for the Vulnerabilities tab register. A KPI strip
- * (Total / Open / Overdue / Critical / SLA-compliance from the vuln dashboard)
- * + a toolbar (search + Status/Severity facets + Show-closed + register-type
- * Standard⇄NCA selector + Register⇄Workbench view-switcher + Template/
- * Bulk-Upload/Add) over a shared, page-filtered data source. Register is default.
+ * VulnsWorkspace — Vulnerability Register, redesigned to the handoff mock
+ * ("Vulnerabilities.mock.html") 1:1: a contextual-priority ribbon, a triage-view
+ * rail, a Register / Insights toggle, and a clean findings table.
  *
- * It is purely presentational: ALL data, filter state + setters, permissions
- * and handlers arrive as props from VulnerabilitiesPage — nothing new is lifted
- * here. Mirrors assets/_workspace/AssetsWorkspace.
+ * Still purely presentational — ALL data, filter state + setters, permissions
+ * and handlers arrive as props from VulnerabilitiesPage. The triage rail applies
+ * a LOCAL view filter on top of the page's already-filtered `filteredVulns`;
+ * search stays wired to the page. Priority · Ctx is the real `composite_priority`
+ * (0–10) ×10 — the same number the server dashboard bands at 55 / 25.
  */
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import {
-  Bug, AlertOctagon, Zap, Crosshair, Globe,
-  Download, Upload, Plus, Search, Loader2, List, LayoutGrid,
-} from 'lucide-react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RTooltip } from 'recharts';
-import { MultiSelectDropdown } from '@/components/ui';
-import type { Vulnerability } from './lib';
-import { RegisterView } from './RegisterView';
-import { GroupedRegister } from './GroupedRegister';
+import { Search, Download, Plus, Upload, Crosshair, Loader2, Building2, Clock, BarChart3, Target } from 'lucide-react';
+import { shortenVulnTitle, type Vulnerability } from './lib';
+import CtemScopesRedesign from '../ctem-scopes/CtemScopesRedesign';
 
-// ─── Compact distribution donuts ─────────────────────────────────────────────
-const SEV_COLORS: Record<string, string> = { critical: '#ef4444', high: '#f97316', medium: '#f59e0b', low: '#10b981', info: '#94a3b8' };
+// ── mock palette (kept literal so the register reads exactly like the mock) ──
+const AC = '#17B898', ACS = '#12A085', ACSOFT = '#E4F8F2';
+const MUTED = '#8A95A1', FAINT = '#AEB8C2', BORDER = '#E8ECEE', BORDER2 = '#F0F3F5', INK = '#0F1F2B', SEC = '#3A4653';
+const SEV = {
+  critical: { pillC: '#C2453F', pillBg: '#FBEAEA', label: 'Critical', dot: '#C2453F' },
+  high: { pillC: '#C0682F', pillBg: '#FCEEE2', label: 'High', dot: '#DB7B45' },
+  medium: { pillC: '#9A6410', pillBg: '#FBF2DF', label: 'Medium', dot: '#E0AF33' },
+  low: { pillC: '#1F7A54', pillBg: '#E7F5EE', label: 'Low', dot: '#17B898' },
+  info: { pillC: '#6B7787', pillBg: '#EEF1F3', label: 'Info', dot: '#AEB8C2' },
+} as const;
+type SevKey = keyof typeof SEV;
+const MONO = 'ui-monospace,Consolas,monospace';
 
-interface Slice { name: string; value: number; color: string; [k: string]: string | number }
+const normSev = (s?: string): SevKey => {
+  const k = (s || '').toLowerCase();
+  return (k in SEV ? k : k === 'informational' ? 'info' : 'info') as SevKey;
+};
+const hasExploit = (v: Vulnerability) => (v.public_exploit_count ?? 0) > 0 || (v.exploitdb_count ?? 0) > 0 || !!v.kev_flag;
+const ctxScore = (v: Vulnerability) => Math.round((v.composite_priority ?? 0) * 10); // 0–100
+const band = (score: number) => (score >= 55 ? 'urgent' : score >= 25 ? 'moderate' : 'low');
+const BAND_META = { urgent: { c: '#C2453F', label: 'Urgent' }, moderate: { c: '#9A6410', label: 'Mod' }, low: { c: '#1F7A54', label: 'Low' } } as const;
+const isUnassigned = (v: Vulnerability) => !v.assigned_to && !(v as any).assignee_name;
+const isExposed = (v: Vulnerability) => !!(v as any).internet_facing || !!(v as any).internet_exposed;
+const domainOf = (v: Vulnerability) => v.plugin_family || (v as any).affected_component || 'General';
+const OPEN_ISH = new Set(['open', 'in_progress', 'remediated', 'verified']);
+const dueLabel = (v: Vulnerability) => {
+  if (!v.due_date) return null;
+  const d = Math.ceil((new Date(v.due_date).getTime() - Date.now()) / 864e5);
+  return d < 0 ? { t: `${-d}d overdue`, c: '#B23A3A' } : { t: `due ${d}d`, c: d <= 7 ? '#B23A3A' : SEC };
+};
 
-function DonutCard({ title, data }: { title: string; data: Slice[] }) {
-  const total = data.reduce((s, d) => s + d.value, 0);
-  return (
-    <div className="flex h-full flex-col rounded-xl border border-slate-200 bg-white p-4 shadow-card">
-      <h3 className="mb-3 text-sm font-semibold text-slate-800">{title}</h3>
-      {total === 0 ? (
-        <p className="flex flex-1 items-center justify-center py-8 text-center text-sm text-slate-400">No data yet</p>
-      ) : (
-        <div className="flex flex-1 items-center gap-5">
-          <div className="relative h-40 w-40 shrink-0 sm:h-44 sm:w-44">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={data}
-                  dataKey="value"
-                  nameKey="name"
-                  cx="50%"
-                  cy="50%"
-                  innerRadius="52%"
-                  outerRadius="88%"
-                  paddingAngle={2}
-                  stroke="none"
-                >
-                  {data.map((d, i) => <Cell key={i} fill={d.color} />)}
-                </Pie>
-                <RTooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e2e8f0' }} />
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-2xl font-bold tabular-nums leading-none text-slate-900 sm:text-3xl">{total}</span>
-              <span className="mt-1 text-[10px] font-medium uppercase tracking-wide text-slate-400">total</span>
-            </div>
-          </div>
-          <ul className="min-w-0 flex-1 space-y-2.5">
-            {data.map((d) => (
-              <li key={d.name} className="flex items-center justify-between gap-3 text-sm">
-                <span className="flex min-w-0 items-center gap-2">
-                  <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: d.color }} />
-                  <span className="truncate capitalize text-slate-600">{d.name}</span>
-                </span>
-                <span className="text-base font-semibold tabular-nums text-slate-900">{d.value}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// The dashboard payload is read defensively — every field is optional here so
-// the page's stricter DashboardData is structurally assignable.
 interface VulnDashboard {
-  total_vulnerabilities?: number;
-  by_severity?: Record<string, number>;
-  by_status?: Record<string, number>;
-  overdue_count?: number;
-  sla_compliance?: Record<string, { total: number; resolved: number; on_time: number; compliance_rate: number }>;
-  // Redesign aggregates (server-computed over the whole register).
-  kev_count?: number;
-  exploit_count?: number;
-  no_exploit_count?: number;
-  with_cve_count?: number;
-  high_tactics_count?: number;
-  high_tactics_with_exploit_count?: number;
-  high_epss_count?: number;
-  internet_exposed_count?: number;
-  patch_count?: number;
+  total_vulnerabilities?: number; by_severity?: Record<string, number>; by_status?: Record<string, number>;
+  overdue_count?: number; sla_compliance?: Record<string, { total: number; resolved: number; on_time: number; compliance_rate: number }>;
+  kev_count?: number; exploit_count?: number; no_exploit_count?: number; with_cve_count?: number;
+  high_tactics_count?: number; high_tactics_with_exploit_count?: number; high_epss_count?: number;
+  internet_exposed_count?: number; patch_count?: number; mttr_days?: number;
   contextual_priority?: { urgent?: number; moderate?: number; low?: number };
 }
 
 export interface VulnsWorkspaceProps {
-  // Data
-  vulns: Vulnerability[];           // full (unfiltered) list — for KPI fallbacks
-  filteredVulns: Vulnerability[];   // already filtered + sorted by the page
-  dashboard: VulnDashboard | undefined;
-  scoped?: boolean;   // a CTEM-scope filter is active — tally the band from the scoped rows
-
-  /** Runtime domains (scanner plugin-family) for the "By domain" panel — fetched by
-      the page (VulnsWorkspace is props-only) since the register's `vulns` is capped. */
-  domains?: { family: string; total: number; worst_severity: string }[];
-  loading?: boolean;
-
-  // Register-type (Standard ⇄ NCA) — owned by the page.
-  registerType: 'standard' | 'nca';
-  setRegisterType: (v: 'standard' | 'nca') => void;
-  /** The existing NCA register table (rendered by the page when registerType === 'nca'). */
-  renderNcaRegister: () => React.ReactNode;
-
-  // Filter state + setters (owned by the page)
-  searchTerm: string;
-  setSearchTerm: (v: string) => void;
-  statusFilter: string;
-  setStatusFilter: (v: string) => void;
-  severityFilter: string;
-  setSeverityFilter: (v: string) => void;
-  showClosed: boolean;
-  setShowClosed: (v: boolean) => void;
-  /** Public-exploit filter: 'all' | 'yes' | 'no' */
-  exploitFilter: string;
-  setExploitFilter: (v: string) => void;
-  /** ATT&CK high-tactics filter: 'all' | 'high' */
-  tacticsFilter: string;
-  setTacticsFilter: (v: string) => void;
-  /** "By asset" filter: 'all' | '<assetId>'. Options supplied by the page. */
-  assetFilter?: string;
-  setAssetFilter?: (v: string) => void;
-  assetItems?: { value: string; label: string }[];
-
-  // Permissions
-  canCreate: boolean;
-  canEdit: boolean;
-  canDelete: boolean;
-
-  // Handlers
-  onView: (vuln: Vulnerability) => void;
-  onEdit?: (vuln: Vulnerability) => void;
-  onAssign?: (vuln: Vulnerability) => void;
-  onChangeStatus?: (vuln: Vulnerability) => void;
-  onDelete?: (vuln: Vulnerability) => void;
-  onBulkAssign?: (ids: number[]) => void;
-  onOpenFull: (id: number) => void;
-  onTemplate: () => void;
-  onBulkUpload: () => void;
-  onAdd: () => void;
-
-  // Bulk-upload status (toast surfaced under the toolbar)
-  bulkUploadState?: 'idle' | 'uploading' | 'done' | 'error';
-  bulkUploadMsg?: string | null;
+  vulns: Vulnerability[]; filteredVulns: Vulnerability[]; dashboard: VulnDashboard | undefined; scoped?: boolean;
+  domains?: { family: string; total: number; worst_severity: string }[]; loading?: boolean;
+  registerType: 'standard' | 'nca'; setRegisterType: (v: 'standard' | 'nca') => void; renderNcaRegister: () => React.ReactNode;
+  searchTerm: string; setSearchTerm: (v: string) => void;
+  statusFilter: string; setStatusFilter: (v: string) => void;
+  severityFilter: string; setSeverityFilter: (v: string) => void;
+  showClosed: boolean; setShowClosed: (v: boolean) => void;
+  exploitFilter: string; setExploitFilter: (v: string) => void;
+  tacticsFilter: string; setTacticsFilter: (v: string) => void;
+  assetFilter?: string; setAssetFilter?: (v: string) => void; assetItems?: { value: string; label: string }[];
+  canCreate: boolean; canEdit: boolean; canDelete: boolean;
+  onView: (vuln: Vulnerability) => void; onEdit?: (vuln: Vulnerability) => void; onAssign?: (vuln: Vulnerability) => void;
+  onChangeStatus?: (vuln: Vulnerability) => void; onDelete?: (vuln: Vulnerability) => void;
+  onBulkAssign?: (ids: number[]) => void; onOpenFull: (id: number) => void;
+  onTemplate: () => void; onBulkUpload: () => void; onAdd: () => void;
+  bulkUploadState?: 'idle' | 'uploading' | 'done' | 'error'; bulkUploadMsg?: string | null;
 }
 
-const STATUS_ITEMS = [
-  { value: 'open', label: 'Open' },
-  { value: 'in_progress', label: 'In Progress' },
-  { value: 'remediated', label: 'Remediated' },
-  { value: 'verified', label: 'Verified' },
-  { value: 'closed', label: 'Closed' },
-  { value: 'accepted', label: 'Risk Accepted' },
-  { value: 'false_positive', label: 'False Positive' },
-  { value: 'auto_closed_fixed', label: 'Closed — Verified by Re-scan' },
-];
-const SEVERITY_ITEMS = [
-  { value: 'critical', label: 'Critical' },
-  { value: 'high', label: 'High' },
-  { value: 'medium', label: 'Medium' },
-  { value: 'low', label: 'Low' },
-  { value: 'info', label: 'Info' },
-];
-const EXPLOIT_ITEMS = [
-  { value: 'yes', label: 'Has public exploit' },
-  { value: 'no', label: 'No public exploit' },
-];
-const TACTICS_ITEMS = [
-  { value: 'high', label: 'High tactics (≥7)' },
-];
+type TriageView = 'all' | 'kev' | 'exploit' | 'cve' | 'epss' | 'exposed' | 'unassigned' | `sev-${SevKey}` | `dom-${string}`;
 
-export function VulnsWorkspace({
-  scoped = false,
-  vulns,
-  filteredVulns,
-  dashboard,
-  domains = [],
-  loading = false,
-  registerType,
-  setRegisterType,
-  renderNcaRegister,
-  searchTerm,
-  setSearchTerm,
-  statusFilter,
-  setStatusFilter,
-  severityFilter,
-  setSeverityFilter,
-  showClosed,
-  setShowClosed,
-  exploitFilter,
-  setExploitFilter,
-  tacticsFilter,
-  setTacticsFilter,
-  assetFilter = 'all',
-  setAssetFilter,
-  assetItems = [],
-  canCreate,
-  canEdit,
-  canDelete,
-  onView,
-  onEdit,
-  onAssign,
-  onChangeStatus,
-  onDelete,
-  onBulkAssign,
-  onOpenFull,
-  onTemplate,
-  onBulkUpload,
-  onAdd,
-  bulkUploadState = 'idle',
-  bulkUploadMsg,
-}: VulnsWorkspaceProps) {
-  const rows = filteredVulns ?? [];
+const th: React.CSSProperties = { textAlign: 'left', fontSize: 9.5, letterSpacing: '.05em', textTransform: 'uppercase', color: FAINT, fontWeight: 600, padding: '10px 12px', borderBottom: `1px solid ${BORDER}`, whiteSpace: 'nowrap', position: 'sticky', top: 0, background: '#FAFBFC', zIndex: 1 };
+const td: React.CSSProperties = { padding: '11px 12px', borderBottom: `1px solid ${BORDER2}`, verticalAlign: 'middle', whiteSpace: 'nowrap', fontSize: 12.5 };
+const cap: React.CSSProperties = { fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: FAINT, padding: '2px 6px 6px' };
+const railBtn = (active: boolean): React.CSSProperties => ({ position: 'relative', display: 'flex', alignItems: 'center', gap: 11, padding: '5px 10px', border: 0, borderRadius: 10, background: active ? ACSOFT : 'none', color: active ? '#0A5A4B' : SEC, fontSize: 12.5, fontWeight: active ? 600 : 500, textAlign: 'left', width: '100%', cursor: 'pointer' });
+const btn: React.CSSProperties = { border: `1px solid #E4E8EC`, background: '#fff', color: SEC, borderRadius: 9, padding: '7px 12px', fontSize: 12, fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer' };
+const btnGreen: React.CSSProperties = { ...btn, background: AC, borderColor: AC, color: '#06342B', fontWeight: 600 };
+const pill = (c: string, bg: string): React.CSSProperties => ({ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 600, padding: '2px 9px', borderRadius: 999, whiteSpace: 'nowrap', color: c, background: bg });
+
+const SevPill = ({ s }: { s?: string }) => { const m = SEV[normSev(s)]; return <span style={pill(m.pillC, m.pillBg)}>{m.label}</span>; };
+
+export function VulnsWorkspace(props: VulnsWorkspaceProps) {
+  const {
+    vulns, filteredVulns, dashboard, domains = [], loading = false,
+    registerType, setRegisterType, renderNcaRegister,
+    searchTerm, setSearchTerm, canCreate, onView, onOpenFull, onTemplate, onBulkUpload, onAdd,
+    bulkUploadState = 'idle', bulkUploadMsg,
+  } = props;
+
+  const [view, setView] = useState<TriageView>('all');
+  const [pane, setPane] = useState<'reg' | 'ins' | 'ctem'>('reg');
+  const [sort, setSort] = useState<'ctx' | 'cvss' | 'epss'>('ctx');
   const isNca = registerType === 'nca';
-  // Register view mode: flat table ⇄ grouped-by-domain (scanner plugin family).
-  const [grouped, setGrouped] = useState(false);
 
-  // ─── Severity distribution (raw CVSS) for the donut ────────────────────────
-  const chartData = useMemo(() => {
-    const all = vulns ?? [];
-    const tally = () => {
-      const m: Record<string, number> = {};
-      all.forEach((v) => { const k = (v.severity || 'unknown').toLowerCase(); m[k] = (m[k] || 0) + 1; });
-      return m;
-    };
-    const hasDash = (m?: Record<string, number>) => !!m && Object.keys(m).length > 0;
-    // When scoped, the tenant-wide `dashboard` aggregate disagrees with the scoped
-    // list (it showed "205 Total" under a "(201)" banner) — tally the scoped rows
-    // so the donut matches the tiles. Unscoped: prefer the server aggregate, fall
-    // back to a tally of the loaded page until the dashboard payload arrives.
-    const sev = scoped ? tally() : (hasDash(dashboard?.by_severity) ? dashboard!.by_severity! : tally());
-    const severity: Slice[] = ['critical', 'high', 'medium', 'low', 'info'].filter((k) => sev[k]).map((k) => ({ name: k, value: sev[k], color: SEV_COLORS[k] }));
-    return { severity };
-  }, [vulns, dashboard, scoped]);
+  const all = vulns ?? [];
+  const count = (f: (v: Vulnerability) => boolean) => all.filter(f).length;
 
-  // ─── Aggregates for the KPI strip, the raw→contextual panel and threat band ──
+  // Contextual-priority band tally (real composite_priority) — prefer server, else derive.
   const agg = useMemo(() => {
-    // SCOPED (a CTEM scope filter is active): the tenant-wide `dashboard`
-    // aggregate would disagree with the scoped list — it showed "205 Total"
-    // over a "(201)" scoped banner on the same screen (caught by the UI
-    // walkthrough 18 Aug). When scoped, tally the band from the scoped rows so
-    // every tile describes the scope, not the tenant.
-    if (scoped) {
-      const rows = vulns ?? [];
-      const sevOf = (v: Vulnerability) => (v.severity || '').toLowerCase();
-      const cnt = (f: (v: Vulnerability) => boolean) => rows.filter(f).length;
-      // "Urgent / moderate / low" MUST use the SAME rule as the server dashboard's
-      // contextual_priority (backend routers/dashboard.py): composite_priority ×10
-      // banded at 55 / 25. The old client rule (kev || epss≥0.1 || critical)
-      // disagreed with the server, so a scoped SUBSET reported MORE urgent than the
-      // whole tenant (3 vs 1 — impossible; caught 23 Aug). Same bands now, so
-      // scoped ≤ unscoped always holds.
-      const cp = (v: Vulnerability) => (v.composite_priority ?? 0);   // 0–10 scale
-      const critical = cnt((v) => sevOf(v) === 'critical');
-      const high = cnt((v) => sevOf(v) === 'high');
-      const medium = cnt((v) => sevOf(v) === 'medium');
-      const kev = cnt((v) => !!v.kev_flag);
-      const exploit = cnt((v) => !!v.kev_flag || (v.epss_score ?? 0) > 0);
-      return {
-        total: rows.length, critical, high, medium,
-        urgent: cnt((v) => cp(v) >= 5.5),
-        moderate: cnt((v) => cp(v) >= 2.5 && cp(v) < 5.5),
-        low: cnt((v) => cp(v) < 2.5),
-        kev, exploit, noExploit: rows.length - exploit,
-        withCve: cnt((v) => !!v.cve_id), highTactics: 0, highTacticsWithExploit: 0,
-        highEpss: cnt((v) => (v.epss_score ?? 0) >= 0.1), internetExposed: 0, patch: 0,
-      };
-    }
     const d = dashboard ?? {};
-    const sev = d.by_severity ?? {};
     const ctx = d.contextual_priority ?? {};
-    const total = d.total_vulnerabilities ?? (vulns?.length ?? 0);
-    const exploit = d.exploit_count ?? 0;
-    // Prefer server aggregates; if an older backend omits the new fields,
-    // derive the cheap ones so the threat band never looks "unlinked".
-    const noExploit = typeof d.no_exploit_count === 'number'
-      ? d.no_exploit_count
-      : Math.max(0, total - exploit);
-    const withCve = typeof d.with_cve_count === 'number'
-      ? d.with_cve_count
-      : (vulns ?? []).filter((v) => !!v.cve_id).length;
+    const derive = () => ({ urgent: count((v) => ctxScore(v) >= 55), moderate: count((v) => ctxScore(v) >= 25 && ctxScore(v) < 55), low: count((v) => ctxScore(v) < 25) });
+    const dv = (ctx.urgent == null) ? derive() : { urgent: ctx.urgent ?? 0, moderate: ctx.moderate ?? 0, low: ctx.low ?? 0 };
     return {
-      total,
-      critical: sev.critical ?? 0,
-      high: sev.high ?? 0,
-      medium: sev.medium ?? 0,
-      urgent: ctx.urgent ?? 0,
-      moderate: ctx.moderate ?? 0,
-      low: ctx.low ?? 0,
-      kev: d.kev_count ?? 0,
-      exploit,
-      noExploit,
-      withCve,
-      highTactics: d.high_tactics_count ?? 0,
-      highTacticsWithExploit: d.high_tactics_with_exploit_count ?? 0,
-      highEpss: d.high_epss_count ?? 0,
-      internetExposed: d.internet_exposed_count ?? 0,
-      patch: d.patch_count ?? 0,
+      total: d.total_vulnerabilities ?? all.length,
+      kev: d.kev_count ?? count((v) => !!v.kev_flag),
+      mttr: d.mttr_days,
+      slaRate: d.sla_compliance ? Math.round((Object.values(d.sla_compliance).reduce((s, x) => s + (x.compliance_rate || 0), 0) / Math.max(1, Object.values(d.sla_compliance).length))) : null,
+      ...dv,
     };
-  }, [dashboard, vulns, scoped]);
+  }, [dashboard, all]);
 
-  // ─── KPI strip — raw severity kept, exploitability/exposure added ──────────
-  const STATS = [
-    { label: 'Total findings', value: agg.total, icon: Bug, tint: 'bg-primary-50 text-primary-700', valueTone: 'text-slate-900' },
-    { label: 'Critical (CVSS)', value: agg.critical, icon: AlertOctagon, tint: 'bg-rose-50 text-rose-700', valueTone: agg.critical > 0 ? 'text-rose-600' : 'text-slate-900' },
-    { label: 'Urgent now', value: agg.urgent, icon: Zap, tint: 'bg-amber-50 text-amber-700', valueTone: agg.urgent > 0 ? 'text-amber-700' : 'text-emerald-700' },
-    { label: 'Actively exploited', value: agg.kev, icon: Crosshair, tint: 'bg-rose-50 text-rose-700', valueTone: agg.kev > 0 ? 'text-rose-600' : 'text-slate-900' },
-    { label: 'Internet-exposed', value: agg.internetExposed, icon: Globe, tint: 'bg-orange-50 text-orange-700', valueTone: agg.internetExposed > 0 ? 'text-orange-700' : 'text-slate-900' },
+  // Triage rail (counts from the full list).
+  // Rail counts are the TRUE totals from the server dashboard (same source as the ribbon's
+  // "Actively exploited"), so they never under-count the fetched page; client tally is only a
+  // fallback when an aggregate is absent.
+  const dcount = (agg: number | undefined, f: (v: Vulnerability) => boolean) => (agg != null ? agg : count(f));
+  const RAIL: { key: TriageView; label: string; n: number; dot?: string; sw?: string }[] = [
+    { key: 'all', label: 'All findings', n: dashboard?.total_vulnerabilities ?? all.length },
+    { key: 'kev', label: 'Fix first · KEV', n: dcount(dashboard?.kev_count, (v) => !!v.kev_flag), dot: '#C2453F' },
+    { key: 'exploit', label: 'Public exploit', n: dcount(dashboard?.exploit_count, hasExploit), dot: '#DB7B45' },
+    { key: 'cve', label: 'With CVE', n: dcount(dashboard?.with_cve_count, (v) => !!v.cve_id), dot: '#2E63A8' },
+    { key: 'epss', label: 'High EPSS', n: dcount(dashboard?.high_epss_count, (v) => (v.epss_score ?? 0) >= 0.1), dot: '#9A6410' },
+    { key: 'exposed', label: 'Internet-exposed', n: dcount(dashboard?.internet_exposed_count, isExposed), dot: '#6A54C9' },
+    { key: 'unassigned', label: 'Unassigned', n: count(isUnassigned), dot: '#8A95A1' },
   ];
+  const SEV_RAIL: { key: TriageView; label: string; n: number; sw: string }[] = (['critical', 'high', 'medium', 'info'] as SevKey[]).map((k) => ({ key: `sev-${k}` as TriageView, label: SEV[k].label, n: count((v) => normSev(v.severity) === k), sw: SEV[k].dot }));
+  const DOM_RAIL = (domains ?? []).slice(0, 6).map((d) => ({ key: `dom-${d.family}` as TriageView, label: d.family || 'General', n: d.total, sw: SEV[normSev(d.worst_severity)].dot }));
+
+  const matches = (v: Vulnerability): boolean => {
+    if (view === 'all' || view === 'unassigned') return view === 'all' ? true : isUnassigned(v);
+    if (view === 'kev') return !!v.kev_flag;
+    if (view === 'exploit') return hasExploit(v);
+    if (view === 'cve') return !!v.cve_id;
+    if (view === 'epss') return (v.epss_score ?? 0) >= 0.1;
+    if (view === 'exposed') return isExposed(v);
+    if (view.startsWith('sev-')) return normSev(v.severity) === view.slice(4);
+    if (view.startsWith('dom-')) return domainOf(v) === view.slice(4);
+    return true;
+  };
+  const rows = useMemo(() => {
+    const r = (filteredVulns ?? []).filter(matches);
+    const s = [...r];
+    if (sort === 'ctx') s.sort((a, b) => ctxScore(b) - ctxScore(a));
+    else if (sort === 'cvss') s.sort((a, b) => (b.cvss_score ?? 0) - (a.cvss_score ?? 0));
+    else if (sort === 'epss') s.sort((a, b) => (b.epss_score ?? 0) - (a.epss_score ?? 0));
+    return s;
+  }, [filteredVulns, view, sort]);
+
+  const railLabel: Record<string, string> = { all: 'All findings', kev: 'Fix first · KEV', exploit: 'Public exploit', cve: 'With CVE', epss: 'High EPSS', exposed: 'Internet-exposed', unassigned: 'Unassigned' };
+  const title = railLabel[view] || (view.startsWith('sev-') ? SEV[view.slice(4) as SevKey].label : view.startsWith('dom-') ? view.slice(4) : 'Findings');
+
+  // ── severity donut (raw CVSS bands) for Insights ──
+  const sevCounts = (['critical', 'high', 'medium', 'low', 'info'] as SevKey[]).map((k) => ({ k, n: count((v) => normSev(v.severity) === k) }));
+  const sevTotal = sevCounts.reduce((s, x) => s + x.n, 0) || 1;
+  let acc = 0;
+  const arcs = sevCounts.filter((x) => x.n).map((x) => { const len = (x.n / sevTotal) * 100; const a = { k: x.k, len, off: -acc }; acc += len; return a; });
+  const top10 = [...all].sort((a, b) => ctxScore(b) - ctxScore(a)).slice(0, 10);
 
   return (
-    <div className="assets-light space-y-4">
-      {/* ─── KPI strip ─────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-        {STATS.map((s) => {
-          const Icon = s.icon;
-          return (
-            <div key={s.label} className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-card">
-              <span className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${s.tint}`}>
-                <Icon strokeWidth={1.75} className="h-4 w-4" />
-              </span>
-              <div>
-                <div className={`text-lg font-bold ${s.valueTone}`}>{s.value}</div>
-                <div className="text-xs text-slate-500">{s.label}</div>
+    <div className="inv2" style={{ background: '#F4F6F7', height: 'calc(100vh - 80px)', display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: '10px 10px 0', fontSize: 13.5, color: INK }}>
+      {/* header — hidden on the CTEM pane (mock: CTEM carries its own header) */}
+      {pane !== 'ctem' && (
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 10, flexWrap: 'wrap', flexShrink: 0 }}>
+        <div>
+          <h1 style={{ fontSize: 19, letterSpacing: '-.025em', margin: 0 }}>{isNca ? 'NCA Vulnerability Register' : 'Vulnerability Register'}</h1>
+          <div style={{ fontSize: 12.5, color: MUTED, marginTop: 3, display: 'flex', alignItems: 'center', gap: 7 }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: AC }} />{agg.total} findings · triage by real-world priority, not raw CVSS
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 9, flexWrap: 'wrap' }}>
+          <select value={registerType} onChange={(e) => setRegisterType(e.target.value as 'standard' | 'nca')} style={{ ...btn, cursor: 'pointer' }} title="Switch register">
+            <option value="standard">Standard</option><option value="nca">NCA Template</option>
+          </select>
+          <Link href="/vulnerabilities/choke-points" style={{ ...btn, textDecoration: 'none' }}><Crosshair size={15} />Choke points</Link>
+          {canCreate && <button style={btn} onClick={onTemplate}><Download size={15} />Template</button>}
+          {canCreate && <button style={btn} onClick={onBulkUpload} disabled={bulkUploadState === 'uploading'}>{bulkUploadState === 'uploading' ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}Bulk Upload</button>}
+          {canCreate && <button style={btnGreen} onClick={onAdd}><Plus size={15} />{isNca ? 'Add NCA Entry' : 'Add Vulnerability'}</button>}
+        </div>
+      </div>
+      )}
+
+      {pane !== 'ctem' && bulkUploadMsg && <div style={{ marginBottom: 12, borderRadius: 9, padding: '9px 14px', fontSize: 12.5, fontWeight: 500, background: bulkUploadState === 'error' ? '#FBEAEA' : '#E7F5EE', color: bulkUploadState === 'error' ? '#B23A3A' : '#1F7A54' }}>{bulkUploadMsg}</div>}
+
+      {isNca ? (
+        <div style={{ background: '#fff', border: `1px solid ${BORDER}`, borderRadius: 14, flex: 1, minHeight: 0, overflow: 'auto' }}>{renderNcaRegister()}</div>
+      ) : (
+        <>
+          {pane === 'ctem' ? (
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+              {/* mock: the CTEM view carries its own two-option toggle */}
+              <div style={{ display: 'inline-flex', alignSelf: 'flex-start', flexShrink: 0, background: '#EAEEF1', borderRadius: 11, padding: 3, gap: 2, margin: '2px 0 8px' }}>
+                <button onClick={() => setPane('reg')} style={{ height: 34, padding: '0 16px', border: 0, borderRadius: 9, background: 'none', color: '#6B7787', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}>Vulnerability Register</button>
+                <button style={{ height: 34, padding: '0 16px', border: 0, borderRadius: 9, background: '#fff', color: ACS, fontSize: 12.5, fontWeight: 600, cursor: 'default', boxShadow: '0 1px 2px rgba(16,24,40,.06)', display: 'inline-flex', alignItems: 'center', gap: 6 }}><Target size={14} /> CTEM Scopes</button>
+              </div>
+              <div style={{ flex: 1, minHeight: 0 }}><CtemScopesRedesign /></div>
+            </div>
+          ) : (
+          <>
+          {/* contextual-priority ribbon */}
+          <section style={{ background: '#fff', border: `1px solid ${BORDER}`, borderRadius: 14, boxShadow: '0 1px 2px rgba(16,24,40,.04)', display: 'flex', alignItems: 'stretch', flexWrap: 'wrap', marginBottom: 10, flexShrink: 0 }}>
+            <div style={{ padding: '10px 16px', flex: 1, minWidth: 320 }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 5 }}><span style={{ fontSize: 12, color: MUTED, fontWeight: 500 }}>Contextual priority</span><span style={{ fontSize: 10.5, color: FAINT }}>raw severity ≠ real priority</span></div>
+              <div style={{ display: 'flex', height: 9, borderRadius: 999, overflow: 'hidden', background: '#EAEEF1' }}>
+                {[['urgent', agg.urgent, '#C2453F'], ['moderate', agg.moderate, '#E0AF33'], ['low', agg.low, '#17B898']].map(([k, n, c]) => <i key={k as string} style={{ width: `${(Number(n) / Math.max(1, agg.total)) * 100}%`, background: c as string }} />)}
+              </div>
+              <div style={{ display: 'flex', gap: 16, marginTop: 6, flexWrap: 'wrap', fontSize: 12 }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}><span style={{ width: 8, height: 8, borderRadius: 2, background: '#C2453F' }} />Urgent <b className="num" style={{ color: INK }}>{agg.urgent}</b></span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}><span style={{ width: 8, height: 8, borderRadius: 2, background: '#E0AF33' }} />Moderate <b className="num" style={{ color: INK }}>{agg.moderate}</b></span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}><span style={{ width: 8, height: 8, borderRadius: 2, background: '#17B898' }} />Low <b className="num" style={{ color: INK }}>{agg.low}</b></span>
+                <span style={{ color: FAINT, fontSize: 11 }}>most &ldquo;critical-looking&rdquo; findings are internal, unexploited, low-EPSS</span>
               </div>
             </div>
-          );
-        })}
-      </div>
+            <div style={{ width: 1, background: BORDER2, margin: '10px 0' }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 22, padding: '10px 18px', flexWrap: 'wrap' }}>
+              <div><div style={{ fontSize: 11.5, color: MUTED }}>Total findings</div><b className="num" style={{ fontSize: 17, fontWeight: 600 }}>{agg.total}</b></div>
+              <div><div style={{ fontSize: 11.5, color: MUTED }}>Actively exploited</div><b className="num" style={{ fontSize: 17, fontWeight: 600, color: agg.kev > 0 ? '#B23A3A' : INK }}>{agg.kev}</b></div>
+              <div><div style={{ fontSize: 11.5, color: MUTED }}>MTTR</div><b className="num" style={{ fontSize: 17, fontWeight: 600 }}>{agg.mttr != null ? `${agg.mttr}d` : '—'}</b></div>
+              <div><div style={{ fontSize: 11.5, color: MUTED }}>SLA</div><b className="num" style={{ fontSize: 17, fontWeight: 600, color: agg.slaRate != null && agg.slaRate < 80 ? '#B23A3A' : INK }}>{agg.slaRate != null ? `${agg.slaRate}%` : '—'}</b></div>
+            </div>
+          </section>
 
-      {/* ─── Severity (raw) + the enrichment story + domains ──────────────── */}
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-        <DonutCard title="By severity (raw CVSS)" data={chartData.severity} />
-        {/* THE headline: what looks urgent by CVSS vs what's actually urgent once
-            exposure / public-exploit / EPSS are weighed in the contextual priority. */}
-        <div className="flex h-full flex-col rounded-xl border border-slate-200 bg-white p-4 shadow-card">
-          <h3 className="mb-3 text-sm font-semibold text-slate-800">Raw severity → Contextual priority</h3>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Raw looks like</div>
-              <div className="flex items-baseline gap-2 text-xs"><span className="w-16 flex-none text-rose-600">Critical</span><b className="tabular-nums text-slate-900">{agg.critical}</b></div>
-              <div className="flex items-baseline gap-2 text-xs"><span className="w-16 flex-none text-orange-600">High</span><b className="tabular-nums text-slate-900">{agg.high}</b></div>
-              <div className="flex items-baseline gap-2 text-xs"><span className="w-16 flex-none text-amber-600">Medium</span><b className="tabular-nums text-slate-900">{agg.medium}</b></div>
-            </div>
-            <div className="space-y-1">
-              <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Actually is</div>
-              <div className="flex items-baseline gap-2 text-xs"><span className="w-16 flex-none text-rose-600">Urgent</span><b className="tabular-nums text-slate-900">{agg.urgent}</b></div>
-              <div className="flex items-baseline gap-2 text-xs"><span className="w-16 flex-none text-amber-700">Moderate</span><b className="tabular-nums text-slate-900">{agg.moderate}</b></div>
-              <div className="flex items-baseline gap-2 text-xs"><span className="w-16 flex-none text-emerald-700">Low</span><b className="tabular-nums text-slate-900">{agg.low}</b></div>
-            </div>
-          </div>
-          <p className="mt-3 border-t border-dashed border-slate-200 pt-2 text-[11px] leading-snug text-slate-500">
-            Contextual priority weighs exposure, public exploits and EPSS on top of CVSS — most &ldquo;urgent-looking&rdquo; findings turn out internal, unexploited and low-EPSS.
-          </p>
-        </div>
-        {/* By domain — runtime scanner plugin-families, worst-severity first. */}
-        <div className="flex h-full flex-col rounded-xl border border-slate-200 bg-white p-4 shadow-card">
-          <h3 className="mb-3 text-sm font-semibold text-slate-800">By domain</h3>
-          {domains.length === 0 ? (
-            <p className="text-xs text-slate-400">No domain data yet.</p>
-          ) : (
-            <div className="space-y-2">
-              {(() => {
-                const max = Math.max(...domains.map((d) => d.total), 1);
-                return domains.slice(0, 6).map((d) => (
-                  <div key={d.family} className="flex items-center gap-2 text-xs">
-                    <span className="w-24 flex-none truncate text-slate-600" title={d.family}>{d.family || 'Uncategorized'}</span>
-                    <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
-                      <div className="h-full rounded-full" style={{ width: `${Math.max(4, (d.total / max) * 100)}%`, background: SEV_COLORS[d.worst_severity] || SEV_COLORS.info }} />
-                    </div>
-                    <span className="w-8 flex-none text-right font-semibold tabular-nums text-slate-700">{d.total}</span>
+          <div style={{ display: 'grid', gridTemplateColumns: '224px minmax(0,1fr)', gap: 14, alignItems: 'stretch', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+            {/* triage rail */}
+            <aside style={{ display: 'flex', flexDirection: 'column', gap: 3, background: '#fff', border: `1px solid ${BORDER}`, borderRadius: 16, boxShadow: '0 1px 2px rgba(16,24,40,.04)', padding: '9px 9px' }}>
+              <div style={cap}>Triage views</div>
+              {RAIL.map((r) => (
+                <button key={r.key} onClick={() => { setView(r.key); setPane('reg'); }} style={railBtn(view === r.key)}>
+                  <span style={{ position: 'absolute', left: 0, top: 8, bottom: 8, width: 3, borderRadius: '0 3px 3px 0', background: AC, opacity: view === r.key ? 1 : 0 }} />
+                  {r.dot && <span style={{ width: 9, height: 9, borderRadius: '50%', background: r.dot, flex: 'none' }} />}
+                  {r.label}<span className="num" style={{ marginLeft: 'auto', fontSize: 11.5, color: '#9BA6B2' }}>{r.n}</span>
+                </button>
+              ))}
+              <div style={{ ...cap, paddingTop: 14 }}>By severity</div>
+              {SEV_RAIL.map((r) => (
+                <button key={r.key} onClick={() => { setView(r.key); setPane('reg'); }} style={railBtn(view === r.key)}>
+                  <span style={{ position: 'absolute', left: 0, top: 8, bottom: 8, width: 3, borderRadius: '0 3px 3px 0', background: AC, opacity: view === r.key ? 1 : 0 }} />
+                  <span style={{ width: 8, height: 8, borderRadius: 2, background: r.sw, flex: 'none' }} />{r.label}<span className="num" style={{ marginLeft: 'auto', fontSize: 11.5, color: '#9BA6B2' }}>{r.n}</span>
+                </button>
+              ))}
+              {DOM_RAIL.length > 0 && <div style={{ ...cap, paddingTop: 14 }}>By domain</div>}
+              {DOM_RAIL.map((r) => (
+                <button key={r.key} onClick={() => { setView(r.key); setPane('reg'); }} style={railBtn(view === r.key)}>
+                  <span style={{ position: 'absolute', left: 0, top: 8, bottom: 8, width: 3, borderRadius: '0 3px 3px 0', background: AC, opacity: view === r.key ? 1 : 0 }} />
+                  <span style={{ width: 8, height: 8, borderRadius: 2, background: r.sw, flex: 'none' }} />{r.label}<span className="num" style={{ marginLeft: 'auto', fontSize: 11.5, color: '#9BA6B2' }}>{r.n}</span>
+                </button>
+              ))}
+              {/* Overview / Departments / SLA — the mock keeps these in the rail; they
+                  open the existing standalone management views. */}
+              <div style={{ height: 1, background: '#F0F3F5', margin: '10px 4px 6px' }} />
+              <Link href="/vulnerabilities/dashboard" style={{ ...railBtn(false), textDecoration: 'none' }}><BarChart3 size={15} color="#5B6673" />Overview</Link>
+              <Link href="/vulnerabilities/departments" style={{ ...railBtn(false), textDecoration: 'none' }}><Building2 size={15} color="#5B6673" />Departments</Link>
+              <Link href="/vulnerabilities/sla" style={{ ...railBtn(false), textDecoration: 'none' }}><Clock size={15} color="#5B6673" />SLA config</Link>
+            </aside>
+
+            {/* main */}
+            <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, flexWrap: 'wrap', flexShrink: 0 }}>
+                <div style={{ display: 'inline-flex', background: '#EAEEF1', borderRadius: 11, padding: 3, gap: 2 }}>
+                  {(['reg', 'ins', 'ctem'] as const).map((k) => (
+                    <button key={k} onClick={() => setPane(k)} style={{ height: 32, padding: '0 14px', border: 0, borderRadius: 9, background: pane === k ? '#fff' : 'none', color: pane === k ? ACS : '#6B7787', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', boxShadow: pane === k ? '0 1px 2px rgba(16,24,40,.06)' : 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}>{k === 'ctem' && <Target size={14} />}{k === 'reg' ? 'Register' : k === 'ins' ? 'Insights' : 'CTEM Scopes'}</button>
+                  ))}
+                </div>
+                <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
+                  <Search size={16} style={{ position: 'absolute', left: 11, top: 10, color: FAINT }} />
+                  <input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search by title, CVE ID…" style={{ width: '100%', height: 34, border: `1px solid #E4E8EC`, borderRadius: 9, padding: '0 12px 0 34px', fontSize: 12.5, color: SEC, background: '#fff' }} />
+                </div>
+                <select value={sort} onChange={(e) => setSort(e.target.value as any)} style={{ ...btn, height: 34, cursor: 'pointer' }}>
+                  <option value="ctx">Sort: Contextual priority</option><option value="cvss">Sort: CVSS</option><option value="epss">Sort: EPSS</option>
+                </select>
+              </div>
+
+              {pane === 'reg' ? (
+                <div style={{ background: '#fff', border: `1px solid ${BORDER}`, borderRadius: 14, boxShadow: '0 1px 2px rgba(16,24,40,.04)', overflow: 'hidden', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '9px 16px', borderBottom: `1px solid ${BORDER2}`, flexWrap: 'wrap' }}>
+                    <h3 style={{ fontSize: 13.5, margin: 0 }}>{title}</h3>
+                    <span style={{ fontSize: 11.5, color: MUTED }}><b className="num" style={{ color: SEC }}>{rows.length}</b> shown · {agg.total} total</span>
                   </div>
-                ));
-              })()}
-              <p className="pt-1 text-[11px] text-slate-400">Ordered worst-severity first.</p>
+                  <div style={{ overflow: 'auto', flex: 1, minHeight: 0 }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1020 }}>
+                      <thead><tr>{['ID', 'Title', 'CVE', 'Severity', 'CVSS', 'EPSS', 'Exploit', 'Priority · Ctx', 'Status', 'SLA / Due', 'Owner'].map((h) => <th key={h} style={th}>{h}</th>)}</tr></thead>
+                      <tbody>
+                        {loading ? (
+                          <tr><td colSpan={11} style={{ ...td, textAlign: 'center', color: '#9BA6B2', padding: 28 }}>Loading…</td></tr>
+                        ) : rows.length === 0 ? (
+                          <tr><td colSpan={11} style={{ ...td, textAlign: 'center', color: '#9BA6B2', padding: 28 }}>No findings match this view.</td></tr>
+                        ) : rows.map((v) => {
+                          const sev = normSev(v.severity); const sm = SEV[sev];
+                          const sc = ctxScore(v); const bm = BAND_META[band(sc)];
+                          const exp = hasExploit(v); const due = dueLabel(v);
+                          const owner = (v as any).assignee_name as string | undefined;
+                          return (
+                            <tr key={v.id} onClick={() => onView(v)} style={{ cursor: 'pointer' }} className="vrow">
+                              <td style={{ ...td, fontFamily: MONO }}>VULN-{v.id}</td>
+                              <td style={{ ...td, maxWidth: 360, overflow: 'hidden', textOverflow: 'ellipsis' }} title={v.title}>{shortenVulnTitle(v.title)}{v.kev_flag && <span style={{ ...pill('#C2453F', '#FBEAEA'), fontSize: 9, marginLeft: 6 }}>KEV</span>}</td>
+                              <td style={{ ...td, fontFamily: MONO, color: v.cve_id ? SEC : FAINT }}>{v.cve_id || '—'}</td>
+                              <td style={td}><SevPill s={v.severity} /></td>
+                              <td style={{ ...td, fontFamily: MONO, color: sm.pillC }}>{v.cvss_score ?? '—'}</td>
+                              <td style={{ ...td, fontFamily: MONO, color: FAINT }}>{v.epss_score != null ? `${(v.epss_score * 100).toFixed(1)}%` : '—'}</td>
+                              <td style={{ ...td, color: exp ? '#C0682F' : FAINT }}>{exp ? 'Public' : 'None'}</td>
+                              <td style={{ ...td, fontFamily: MONO, color: bm.c, fontWeight: 600 }}>{sc} · {bm.label}</td>
+                              <td style={td}><span style={{ ...pill('#B23A3A', '#fff'), border: '1px solid #F3D3DA', textTransform: 'capitalize' }}>{(v.status || 'open').replace(/_/g, ' ')}</span></td>
+                              <td style={td}>{due ? <b style={{ fontWeight: 600, color: due.c }}>{due.t}</b> : <span style={{ color: FAINT }}>—</span>}</td>
+                              <td style={{ ...td, color: owner ? SEC : FAINT }}>{owner || 'Unassigned'}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div style={{ padding: '7px 16px', fontSize: 11, color: MUTED }}>Row → full finding detail · <b>Priority·Contextual</b> = composite of exposure, exploit, EPSS &amp; asset criticality on top of CVSS.</div>
+                </div>
+              ) : (
+                <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}><Insights sevCounts={sevCounts} sevTotal={sevTotal} arcs={arcs} domains={domains} all={all} agg={agg} top10={top10} onView={onView} /></div>
+              )}
             </div>
-          )}
-        </div>
-      </div>
-
-      {/* ─── Threat band ───────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">
-        {[
-          { label: 'In CISA KEV', value: agg.kev },
-          { label: 'Public exploit', value: agg.exploit },
-          { label: 'No public exploit', value: agg.noExploit },
-          { label: 'With CVE', value: agg.withCve },
-          { label: 'High tactics (≥7)', value: agg.highTactics },
-          { label: 'High tactics + exploit', value: agg.highTacticsWithExploit },
-          { label: 'High EPSS (≥10%)', value: agg.highEpss },
-          { label: 'Patch available', value: agg.patch },
-        ].map((t) => (
-          <div key={t.label} className="rounded-xl border border-slate-200 bg-white p-3 text-center shadow-card">
-            <div className={`text-xl font-bold tabular-nums ${t.value > 0 ? 'text-slate-900' : 'text-emerald-700'}`}>{t.value}</div>
-            <div className="mt-0.5 text-[11px] text-slate-500">{t.label}</div>
           </div>
-        ))}
-      </div>
-
-      {/* ─── Toolbar (single compact row; scrolls on very narrow screens) ─────── */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-0.5 scrollbar-thin">
-        <div className="relative w-40 shrink-0 sm:w-52">
-          <Search strokeWidth={1.75} className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <input
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search by title, CVE ID…"
-            className="w-full rounded-lg border border-slate-300 bg-white py-1.5 pl-8 pr-3 text-sm text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-          />
-        </div>
-        <MultiSelectDropdown
-          title="Status" items={STATUS_ITEMS}
-          selectedValues={statusFilter !== 'all' ? [statusFilter] : []}
-          onApply={(v) => setStatusFilter(v[0] || 'all')}
-          multiSelect={false} autoApply placeholder="All" size="sm" className="shrink-0"
-        />
-        <MultiSelectDropdown
-          title="Severity" items={SEVERITY_ITEMS}
-          selectedValues={severityFilter !== 'all' ? [severityFilter] : []}
-          onApply={(v) => setSeverityFilter(v[0] || 'all')}
-          multiSelect={false} autoApply placeholder="All" size="sm" className="shrink-0"
-        />
-        {setAssetFilter && assetItems.length > 0 && (
-          <MultiSelectDropdown
-            title="Asset" items={assetItems}
-            selectedValues={assetFilter !== 'all' ? [assetFilter] : []}
-            onApply={(v) => setAssetFilter(v[0] || 'all')}
-            multiSelect={false} autoApply placeholder="All" size="sm" className="shrink-0" forceSearch searchPlaceholder="Find asset…"
-          />
-        )}
-        <MultiSelectDropdown
-          title="Exploit" items={EXPLOIT_ITEMS}
-          selectedValues={exploitFilter !== 'all' ? [exploitFilter] : []}
-          onApply={(v) => setExploitFilter(v[0] || 'all')}
-          multiSelect={false} autoApply placeholder="All" size="sm" className="shrink-0"
-        />
-        <MultiSelectDropdown
-          title="Tactics" items={TACTICS_ITEMS}
-          selectedValues={tacticsFilter !== 'all' ? [tacticsFilter] : []}
-          onApply={(v) => setTacticsFilter(v[0] || 'all')}
-          multiSelect={false} autoApply placeholder="All" size="sm" className="shrink-0"
-        />
-        <label
-          className={`flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm ${
-            statusFilter !== 'all' ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-slate-50'
-          }`}
-          title={statusFilter !== 'all' ? 'Status filter is active — clear it to use this toggle' : 'Show closed / mitigated vulnerabilities'}
-        >
-          <input
-            type="checkbox"
-            checked={showClosed}
-            disabled={statusFilter !== 'all'}
-            onChange={(e) => setShowClosed(e.target.checked)}
-            className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
-          />
-          <span className="whitespace-nowrap text-slate-700">Show closed</span>
-        </label>
-
-        <div className="ml-auto flex shrink-0 items-center gap-2">
-          {/* CTEM Phase 4 — choke points: fix-one-break-many ranking */}
-          <Link
-            href="/vulnerabilities/choke-points"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            title="Findings ranked by how many viable attack chains their fix severs"
-          >
-            <Crosshair strokeWidth={1.75} className="h-4 w-4" />
-            <span className="hidden md:inline">Choke points</span>
-          </Link>
-
-          {/* Register-type selector (Standard ⇄ NCA) */}
-          <select
-            value={registerType}
-            onChange={(e) => setRegisterType(e.target.value as 'standard' | 'nca')}
-            className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-            title="Switch between the Standard register and the NCA Saudi template view"
-          >
-            <option value="standard">Standard</option>
-            <option value="nca">NCA Template</option>
-          </select>
-
-          {/* Actions */}
-          {canCreate && (
-            <>
-              <button
-                onClick={onTemplate}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                title="Download CSV template for bulk upload"
-              >
-                <Download strokeWidth={1.75} className="h-4 w-4" />
-                <span className="hidden md:inline">Template</span>
-              </button>
-              <button
-                onClick={onBulkUpload}
-                disabled={bulkUploadState === 'uploading'}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-                title="Bulk import from CSV / Excel / NCA workbook"
-              >
-                {bulkUploadState === 'uploading'
-                  ? <Loader2 strokeWidth={1.75} className="h-4 w-4 animate-spin" />
-                  : <Upload strokeWidth={1.75} className="h-4 w-4" />}
-                <span className="hidden md:inline">Bulk Upload</span>
-              </button>
-              <button
-                onClick={onAdd}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-sm font-semibold text-[color:var(--color-on-base,#0a0a0a)] shadow-sm hover:bg-primary-700"
-                title={isNca ? 'Create from NCA template' : 'Add a new vulnerability'}
-              >
-                <Plus strokeWidth={1.75} className="h-4 w-4" />
-                <span className="hidden sm:inline">{isNca ? 'Add NCA Entry' : 'Add Vulnerability'}</span>
-              </button>
-            </>
+          </>
           )}
+        </>
+      )}
+      <style>{`.inv2 .vrow:hover{background:#F7FBFA}`}</style>
+    </div>
+  );
+}
+
+// ── Insights pane ──
+function Insights({ sevCounts, sevTotal, arcs, domains, all, agg, top10, onView }: any) {
+  const epssBuckets = [
+    { label: '≥ 50%', n: all.filter((v: Vulnerability) => (v.epss_score ?? 0) >= 0.5).length, c: '#C2453F' },
+    { label: '10–50%', n: all.filter((v: Vulnerability) => (v.epss_score ?? 0) >= 0.1 && (v.epss_score ?? 0) < 0.5).length, c: '#E0AF33' },
+    { label: '1–10%', n: all.filter((v: Vulnerability) => (v.epss_score ?? 0) >= 0.01 && (v.epss_score ?? 0) < 0.1).length, c: '#17B898' },
+    { label: '< 1%', n: all.filter((v: Vulnerability) => (v.epss_score ?? 0) < 0.01).length, c: '#AEB8C2' },
+  ];
+  const epssMax = Math.max(...epssBuckets.map((b) => b.n), 1);
+  const domMax = Math.max(...(domains ?? []).map((d: any) => d.total), 1);
+  const signals = [
+    { label: 'In CISA KEV', n: agg.kev }, { label: 'Public exploit', n: all.filter(hasExploit).length },
+    { label: 'With CVE', n: all.filter((v: Vulnerability) => !!v.cve_id).length }, { label: 'High EPSS (≥10%)', n: all.filter((v: Vulnerability) => (v.epss_score ?? 0) >= 0.1).length },
+  ];
+  const card: React.CSSProperties = { background: '#fff', border: `1px solid ${BORDER}`, borderRadius: 14, boxShadow: '0 1px 2px rgba(16,24,40,.04)', padding: '16px 18px' };
+  return (
+    <div>
+      <div style={{ ...card, marginBottom: 12, background: 'linear-gradient(120deg,#EAFAF4,#fff 60%)' }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}><b style={{ fontSize: 14 }}>Raw severity ≠ real priority</b><span style={{ fontSize: 11.5, color: MUTED }}>of {agg.total} findings, only {agg.urgent} {agg.urgent === 1 ? 'is' : 'are'} truly urgent once exposure, exploit and EPSS are weighed</span></div>
+        <div style={{ display: 'flex', height: 12, borderRadius: 99, overflow: 'hidden', background: '#EAEEF1', margin: '12px 0 9px' }}>
+          {[['urgent', agg.urgent, '#C2453F'], ['moderate', agg.moderate, '#E0AF33'], ['low', agg.low, '#17B898']].map(([k, n, c]) => <i key={k as string} style={{ width: `${(Number(n) / Math.max(1, agg.total)) * 100}%`, background: c as string }} />)}
         </div>
       </div>
-
-      {/* Bulk-upload result toast */}
-      {bulkUploadMsg && (
-        <div
-          className={`flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium ${
-            bulkUploadState === 'error'
-              ? 'border-rose-200 bg-rose-50 text-rose-700'
-              : 'border-emerald-200 bg-emerald-50 text-emerald-700'
-          }`}
-        >
-          {bulkUploadMsg}
-        </div>
-      )}
-
-      {/* ─── Section label ─────────────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-lg font-semibold text-slate-900">
-          {isNca ? 'NCA Vulnerability Register' : 'Vulnerability Register'}
-        </h2>
-        <div className="flex items-center gap-3">
-          {!isNca && (
-            <div className="inline-flex items-center rounded-lg border border-slate-200 bg-white p-0.5 text-xs">
-              <button
-                onClick={() => setGrouped(false)}
-                className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 font-medium transition-colors ${!grouped ? 'bg-primary-600 text-white' : 'text-slate-500 hover:text-slate-700'}`}
-                title="Flat list of all findings"
-              >
-                <List className="h-3.5 w-3.5" /> Flat
-              </button>
-              <button
-                onClick={() => setGrouped(true)}
-                className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 font-medium transition-colors ${grouped ? 'bg-primary-600 text-white' : 'text-slate-500 hover:text-slate-700'}`}
-                title="Group findings by scanner domain (plugin family)"
-              >
-                <LayoutGrid className="h-3.5 w-3.5" /> By domain
-              </button>
+      <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(300px,100%),1fr))', gap: 12 }}>
+        <div style={card}>
+          <h3 style={{ fontSize: 13.5, margin: 0 }}>By severity <span style={{ fontSize: 10.5, color: MUTED, fontWeight: 400 }}>raw CVSS</span></h3>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: 12 }}>
+            <svg width="104" height="104" viewBox="0 0 42 42">
+              <circle cx="21" cy="21" r="15.9" fill="none" stroke="#EEF1F3" strokeWidth="6" />
+              {arcs.map((a: any) => <circle key={a.k} cx="21" cy="21" r="15.9" fill="none" stroke={SEV[a.k as SevKey].dot} strokeWidth="6" strokeDasharray={`${a.len} ${100 - a.len}`} strokeDashoffset={a.off} />)}
+              <text x="21" y="20.5" textAnchor="middle" fontSize="8" fontWeight="800" fill={INK}>{sevTotal}</text>
+              <text x="21" y="26" textAnchor="middle" fontSize="2.8" letterSpacing=".08em" fill={FAINT}>TOTAL</text>
+            </svg>
+            <div style={{ flex: 1, fontSize: 12 }}>
+              {sevCounts.map((s: any) => <div key={s.k} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', borderBottom: '1px solid #F4F6F7' }}><span style={{ width: 8, height: 8, borderRadius: 2, background: SEV[s.k as SevKey].dot, flex: 'none' }} />{SEV[s.k as SevKey].label}<b className="num" style={{ marginLeft: 'auto' }}>{s.n}</b></div>)}
             </div>
-          )}
-          <p className="text-sm text-slate-500">
-            {grouped && !isNca ? `${agg.total} total` : `${rows.length} shown · ${agg.total} total`}
-          </p>
+          </div>
+        </div>
+        <div style={card}>
+          <h3 style={{ fontSize: 13.5, margin: 0 }}>By domain</h3>
+          <div style={{ marginTop: 12, fontSize: 12 }}>
+            {(domains ?? []).length === 0 ? <p style={{ color: FAINT, fontSize: 11 }}>No domain data yet.</p> : (domains ?? []).slice(0, 8).map((d: any) => (
+              <div key={d.family} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0' }}><span style={{ width: 120, color: SEC, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={d.family}>{d.family || 'General'}</span><span style={{ flex: 1, height: 8, background: '#F0F3F5', borderRadius: 4, overflow: 'hidden' }}><i style={{ display: 'block', height: '100%', width: `${(d.total / domMax) * 100}%`, background: SEV[normSev(d.worst_severity)].dot }} /></span><b className="num" style={{ width: 30, textAlign: 'right' }}>{d.total}</b></div>
+            ))}
+          </div>
+        </div>
+        <div style={card}>
+          <h3 style={{ fontSize: 13.5, margin: 0 }}>Exploit likelihood <span style={{ fontSize: 10.5, color: MUTED, fontWeight: 400 }}>EPSS</span></h3>
+          <div style={{ marginTop: 14, fontSize: 11 }}>
+            {epssBuckets.map((b) => <div key={b.label} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0' }}><span style={{ width: 60, color: SEC }}>{b.label}</span><span style={{ flex: 1, height: 8, background: '#F0F3F5', borderRadius: 4, overflow: 'hidden' }}><i style={{ display: 'block', height: '100%', width: `${(b.n / epssMax) * 100}%`, background: b.c }} /></span><b className="num" style={{ width: 30, textAlign: 'right' }}>{b.n}</b></div>)}
+          </div>
+        </div>
+      </section>
+      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: FAINT, margin: '18px 2px 8px' }}>Threat signals</div>
+      <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(118px,1fr))', gap: 10 }}>
+        {signals.map((s) => <div key={s.label} style={{ background: '#fff', border: `1px solid ${BORDER}`, borderRadius: 12, padding: '12px', textAlign: 'center' }}><div className="num" style={{ fontSize: 20, fontWeight: 700, color: s.n > 0 ? INK : '#1F7A54' }}>{s.n}</div><div style={{ fontSize: 11, color: MUTED, marginTop: 2 }}>{s.label}</div></div>)}
+      </section>
+      <div style={{ ...card, marginTop: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}><h3 style={{ fontSize: 13.5, margin: 0 }}>Top 10 — fix these first</h3><span style={{ fontSize: 11, color: MUTED }}>ranked by composite priority · KEV = actively exploited</span></div>
+        <div style={{ overflowX: 'auto', marginTop: 10 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 420 }}>
+            <thead><tr>{['#', 'Vuln', 'CVE', 'Priority', 'CVSS', 'EPSS'].map((h) => <th key={h} style={th}>{h}</th>)}</tr></thead>
+            <tbody>
+              {top10.map((v: Vulnerability, i: number) => { const sc = ctxScore(v); const bm = BAND_META[band(sc)]; return (
+                <tr key={v.id} onClick={() => onView(v)} style={{ cursor: 'pointer' }} className="vrow">
+                  <td style={{ ...td, fontFamily: MONO, color: FAINT }}>{i + 1}</td>
+                  <td style={{ ...td, whiteSpace: 'normal', maxWidth: 240 }}>{v.title}{v.kev_flag && <span style={{ ...pill('#C2453F', '#FBEAEA'), fontSize: 9, marginLeft: 6 }}>KEV</span>}</td>
+                  <td style={{ ...td, fontFamily: MONO, color: v.cve_id ? SEC : FAINT }}>{v.cve_id || '—'}</td>
+                  <td style={{ ...td, fontFamily: MONO, color: bm.c, fontWeight: 600 }}>{sc} · {bm.label}</td>
+                  <td style={{ ...td, fontFamily: MONO }}>{v.cvss_score ?? '—'}</td>
+                  <td style={{ ...td, fontFamily: MONO, color: FAINT }}>{v.epss_score != null ? `${(v.epss_score * 100).toFixed(1)}%` : '—'}</td>
+                </tr>
+              ); })}
+            </tbody>
+          </table>
         </div>
       </div>
-
-      {/* ─── Register ──────────────────────────────────────────────────────── */}
-      {isNca ? (
-        renderNcaRegister()
-      ) : grouped ? (
-        <GroupedRegister includeClosed={showClosed} onView={onView} />
-      ) : (
-        <RegisterView
-          rows={rows}
-          loading={loading}
-          canEdit={canEdit}
-          canDelete={canDelete}
-          canCreate={canCreate}
-          onView={onView}
-          onEdit={onEdit}
-          onAssign={onAssign}
-          onChangeStatus={onChangeStatus}
-          onDelete={onDelete}
-          onBulkAssign={onBulkAssign}
-        />
-      )}
     </div>
   );
 }

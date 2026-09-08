@@ -1,20 +1,18 @@
 'use client';
 
 /**
- * CTEM Scopes & Cycles — redesign (drop-in for src/app/(dashboard)/erm/ctem-scopes/page.tsx)
+ * CTEM Scopes & Cycles — redesign, re-skinned to CTEM-Scopes.mock.html.
  *
- * Stack: React + TypeScript + Tailwind + lucide-react (matches the app).
- * Colours use the app's Tailwind theme: `primary` (#1ed4b0 / 700 #17b898) + slate/emerald/rose/amber/sky.
+ * PRESENTATION rebuild only. Every data hook, mutation and gated-loop rule is
+ * the same wiring as before (ctemScopesApi.portfolio() → ['ctem-portfolio'],
+ * plus the per-scope findings / fixed / users / ai-run / sla queries). The
+ * reusable panels — AiControlProposalsPanel, MobiliseControlCell — and the
+ * assign modal are reused verbatim.
  *
- * This file ships with MOCK data (SCOPES / CW below) so it renders standalone.
- * To wire it to the backend, delete the mock arrays and feed real data into the
- * same shapes via react-query, e.g.:
- *
- *   const { data } = useQuery({ queryKey: ['ctem-scopes'], queryFn: () => ctemScopesApi.list().then(r => r.data) });
- *   const scopes: Scope[] = data?.scopes ?? [];
- *   // per-scope command-center numbers come from ctemScopesApi.commandCenter(id)
- *
- * Hover guidance uses native `title` attributes — swap for your Tooltip component if you have one.
+ * Two screens: a program HOME (KPI strip + trends + scope cards, worst-first)
+ * and a scope JOURNEY (command bar + the 5 stages as a vertical accordion).
+ * Styling mirrors the mock (Poppins + mint) and VulnsWorkspace's inline-hex
+ * palette — no external stylesheet needed on the vulnerabilities route.
  */
 
 import { Fragment, useEffect, useMemo, useState } from 'react';
@@ -26,9 +24,9 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { AiControlProposalsPanel } from './_components/AiControlProposalsPanel';
 import { MobiliseControlCell } from './_components/MobiliseControlCell';
 import {
-  Crosshair, Plus, ExternalLink, Square, Play, RefreshCw, ArrowRight, Coins,
-  ShieldCheck, Server, BarChart3, Calendar, Table2, Search, Send, CreditCard,
-  Lock, Users, PlayCircle, Loader2, AlertTriangle, Trash2,
+  Crosshair, Plus, ExternalLink, Square, Play, RefreshCw, ArrowRight,
+  ShieldCheck, Server, Search, Send, Loader2, AlertTriangle, Trash2,
+  Calendar, Table2, X, PlayCircle, CreditCard, Lock, Users,
 } from 'lucide-react';
 
 /* ────────────────────────────── types ────────────────────────────── */
@@ -54,17 +52,12 @@ interface Scope {
   cycleDueAt?: string | null; cycleOverdue?: boolean;
   assets: number; findings: number; dangerous: number; dangerousOwnerless?: number; dangerousIds?: number[]; chains: number;
   controls: number; tested: number; failed: number; verified?: number; claimed: number;
-  // deliverable #4 — the AI Validate pass's per-finding coverage (honest, additive)
   pipeline?: { analysed: number; informational: number; linked: number; patch_only: number; no_specific: number; low_awaiting_review: number; unmapped?: number;
     priority?: { total: number; linked: number; patch_only: number; awaiting: number; unanswered: number };
     priority_ids?: number[];
     linked_ids?: number[] };
-  // Gated loop: the OPEN cycle's stage stamps ({} = fresh cycle, nothing run yet;
-  // null = no open cycle → history view). Set server-side; validate stamps when
-  // the AI mapping run finishes.
   stageProgress?: { discover?: string; prioritise?: string; validate?: string; dispatch?: string } | null;
   fixes: number; fixesOpen: number; tasks?: number; closedVerified?: number;
-  // per-scope FAIR has NO real source (risks aren't scope-linked) → null, rendered honestly
   ale: number | null; aleMin: number | null; p95: number | null; aleAfter: number | null;
   fair?: { risks_linked: number; risks_quantified: number; currency?: string | null } | null;
   buckets: { ranked: number; undeterminable: number; chainless: number; severed: number };
@@ -76,32 +69,65 @@ interface Scope {
 }
 interface Portfolio { scopes: Scope[]; quantify?: { demo_only?: boolean; ale?: number | null; p95?: number | null; currency?: string | null } | null }
 
-/* ───────────────────────────── mock data ─────────────────────────── */
+/* ───────────── palette (mock + VulnsWorkspace, kept literal) ───────────── */
 
-// (mock data removed — this component is wired to /erm/ctem/scopes/portfolio)
+const AC = '#17B898', ACS = '#12A085', ACSOFT = '#E4F8F2';
+const MUTED = '#8A95A1', FAINT = '#AEB8C2', BORDER = '#E8ECEE', BORDER2 = '#F0F3F5', INK = '#0F1F2B', SEC = '#3A4653';
+const RED = '#B23A3A', REDD = '#C2453F', REDBG = '#FBEAEA';
+const AMBER = '#9A6410', AMBERBG = '#FBF2DF', AMBERLINE = '#EAD9AE';
+const GREEN = '#1F7A54', GREENBG = '#E7F5EE', BLUE = '#2E63A8', VIOLET = '#6A54C9', VIOLETBG = '#EEEBFA';
 
-/* ─────────────────────────── helpers ─────────────────────────── */
+const MONO: React.CSSProperties = { fontVariantNumeric: 'tabular-nums' };
+const CARD: React.CSSProperties = { background: '#fff', border: `1px solid ${BORDER}`, borderRadius: 14, boxShadow: '0 1px 2px rgba(16,24,40,.04)' };
+const STRIP: React.CSSProperties = { display: 'flex', gap: 16, flexWrap: 'wrap', background: '#F7F9FA', border: `1px solid ${BORDER}`, borderRadius: 11, padding: '9px 14px' };
+const SK: React.CSSProperties = { fontSize: 10, textTransform: 'uppercase', letterSpacing: '.05em', color: FAINT, fontWeight: 700 };
+const SV: React.CSSProperties = { fontSize: 17, fontWeight: 700, ...MONO };
+const TH: React.CSSProperties = { textAlign: 'left', fontSize: 9.5, letterSpacing: '.05em', textTransform: 'uppercase', color: FAINT, fontWeight: 600, padding: '10px 12px', borderBottom: `1px solid ${BORDER}`, whiteSpace: 'nowrap' };
+const TD: React.CSSProperties = { padding: '11px 12px', borderBottom: `1px solid ${BORDER2}`, verticalAlign: 'middle', fontSize: 12.5 };
+const SEP = <div style={{ width: 1, background: '#E4E8EC' }} />;
+const ARROW = <div style={{ alignSelf: 'center', color: '#CBD5E1', flex: 'none' }}>→</div>;
 
-const money = (v: number | null | undefined, ccy?: string | null) =>
-  v == null ? '—' : new Intl.NumberFormat('en-US', { style: 'currency', currency: ccy || 'USD', notation: 'compact', maximumFractionDigits: 1 }).format(v);
+const SEV: Record<string, { bg: string; c: string }> = {
+  critical: { bg: '#FBEAEA', c: '#B23A3A' }, high: { bg: '#FCEEE2', c: '#C0682F' },
+  medium: { bg: '#FBF2DF', c: '#9A6410' }, low: { bg: '#E9F1FB', c: '#2E63A8' }, info: { bg: '#EEF1F3', c: '#6B7787' },
+};
+const STAGES = [
+  { n: 1, label: 'Scope', c: '#2E63A8' },
+  { n: 2, label: 'Discover', c: '#12A085' },
+  { n: 3, label: 'Prioritise', c: '#C2453F' },
+  { n: 4, label: 'Validate', c: '#6A54C9' },
+  { n: 5, label: 'Mobilise', c: '#12A085' },
+];
 
+/* ───────────────────────── small UI atoms ───────────────────────── */
+
+function Pill({ bg, c, children }: { bg: string; c: string; children: React.ReactNode }) {
+  return <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 600, padding: '2px 9px', borderRadius: 999, background: bg, color: c, whiteSpace: 'nowrap' }}>{children}</span>;
+}
+function SevBadge({ sev }: { sev: string }) {
+  const s = SEV[sev] || SEV.info;
+  return <span style={{ fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', padding: '1px 7px', borderRadius: 5, background: s.bg, color: s.c }}>{sev === 'info' ? 'info' : sev}</span>;
+}
+function Kev() {
+  return <span style={{ background: '#FBEAEA', color: '#C2453F', fontWeight: 700, fontSize: 9, padding: '1px 6px', borderRadius: 5 }}>actively exploited</span>;
+}
+function Btn({ green, sm, onClick, disabled, title, style, children }: { green?: boolean; sm?: boolean; onClick?: () => void; disabled?: boolean; title?: string; style?: React.CSSProperties; children: React.ReactNode }) {
+  // One border property only — mixing the `border` shorthand with a `borderColor`
+  // override across rerenders trips React's conflicting-style warning.
+  const base: React.CSSProperties = { border: `1px solid ${green ? AC : '#E4E8EC'}`, background: '#fff', color: SEC, borderRadius: 9, padding: sm ? '5px 10px' : '7px 12px', fontSize: sm ? 11.5 : 12, fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 6, cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.45 : 1, whiteSpace: 'nowrap' };
+  const g: React.CSSProperties = green ? { background: AC, color: '#06342B', fontWeight: 600 } : {};
+  return <button type="button" title={title} disabled={disabled} onClick={onClick} style={{ ...base, ...g, ...style }}>{children}</button>;
+}
+const fmtDate = (d?: string | null) => (d ? new Date(d).toLocaleDateString() : '—');
+// Show the RESOLVED asset count for a named-list scope (a stored rule can name
+// more asset ids than currently resolve in inventory) so the card can't claim
+// "3 named assets" when only 2 exist. Non-named rules keep their descriptor.
+const membText = (sc: { membership: string; assets: number }) =>
+  /named asset/i.test(sc.membership || '') ? `${sc.assets} named asset${sc.assets === 1 ? '' : 's'}` : sc.membership;
+const initials = (n: string) => n.split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
 const riskColor = (r: Risk | null) => (r === 'crit' ? '#be123c' : r === 'high' ? '#f97316' : r === 'med' ? '#eab308' : r === 'low' ? '#10b981' : '#cbd5e1');
 
-const sevStyle = (sev: Sev): { label: string; className: string } => ({
-  critical: { label: 'Critical', className: 'bg-rose-50 text-rose-800' },
-  high: { label: 'High', className: 'bg-orange-50 text-orange-700' },
-  medium: { label: 'Medium', className: 'bg-amber-50 text-amber-700' },
-  low: { label: 'Low', className: 'bg-blue-50 text-blue-700' },
-}[sev]);
-
-const tierStyle = (t: Tier): { label: string; className: string } => ({
-  tested: { label: 'effective ✓', className: 'bg-emerald-50 text-emerald-700' },
-  failed: { label: 'failed ✗', className: 'bg-rose-50 text-rose-700' },
-  verified: { label: 'fix verified', className: 'bg-sky-50 text-sky-700' },
-  claimed: { label: 'claimed', className: 'bg-slate-100 text-slate-600' },
-}[t]);
-
-/** Build a polyline + area path for a sparkline scaled to [w,h]. */
+/** polyline + area path for a sparkline scaled to [w,h]. */
 function spark(vals: number[], w: number, h: number, pad: number) {
   const max = Math.max(...vals), min = Math.min(...vals), range = max - min || 1, n = vals.length;
   const pts = vals.map((v, i) => {
@@ -111,46 +137,11 @@ function spark(vals: number[], w: number, h: number, pad: number) {
   });
   const line = pts.map((p) => p.join(',')).join(' ');
   const area = `M ${pts[0][0]},${h} ` + pts.map((p) => `L ${p[0]},${p[1]}`).join(' ') + ` L ${pts[n - 1][0]},${h} Z`;
-  return { line, area };
+  return { line, area, pts };
 }
-
-/** Two series on one shared scale (findings + dangerous). Series may be
- *  different lengths (a freeze may lack one total) — each is RIGHT-aligned to
- *  the live point; a 1-point series draws a dot, never a faked line. */
-function sparkPair(a: number[], b: number[], w: number, h: number, pad: number) {
-  const all = [...a, ...b], max = Math.max(...all), min = Math.min(...all), range = max - min || 1;
-  const n = Math.max(2, a.length, b.length);          // x-slots; ≥2 so the axis has width
-  const map = (vals: number[]) => vals.map((v, i) => {
-    const slot = n - vals.length + i;                  // right-align
-    const x = pad + (slot / (n - 1)) * (w - 2 * pad);
-    const y = pad + (1 - (v - min) / range) * (h - 2 * pad);
-    return [Math.round(x * 10) / 10, Math.round(y * 10) / 10] as const;
-  });
-  const pa = map(a), pb = map(b);
-  const line = (p: readonly (readonly [number, number])[]) => p.length > 1 ? p.map((q) => q.join(',')).join(' ') : '';
-  const area = (p: readonly (readonly [number, number])[]) => p.length > 1
-    ? `M ${p[0][0]},${h} ` + p.map((q) => `L ${q[0]},${q[1]}`).join(' ') + ` L ${p[p.length - 1][0]},${h} Z` : '';
-  const dot = (p: readonly (readonly [number, number])[]) => p.length === 1 ? { cx: p[0][0], cy: p[0][1] } : null;
-  return { aLine: line(pa), aArea: area(pa), bLine: line(pb), aDot: dot(pa), bDot: dot(pb) };
-}
-
-function delta(cur: number, prev: number | null | undefined, goodDown: boolean) {
-  if (prev == null) return { text: '—', color: 'text-slate-400' };   // no comparable freeze yet — honest
-  const d = cur - prev;
-  const text = d > 0 ? `+${d}` : `${d}`;
-  let color = 'text-slate-500';
-  if (d !== 0) color = (goodDown ? d < 0 : d > 0) ? 'text-emerald-600' : 'text-rose-600';
-  return { text, color };
-}
-
-/* ───────────────────────── small UI atoms ───────────────────────── */
 
 const Card = ({ className = '', ...props }: React.HTMLAttributes<HTMLDivElement>) => (
   <div className={`rounded-2xl border border-slate-200 bg-white shadow-sm ${className}`} {...props} />
-);
-
-const SectionTitle = ({ icon, children, className = '' }: { icon: React.ReactNode; children: React.ReactNode; className?: string }) => (
-  <p className={`flex items-center gap-2 text-[13px] font-semibold text-slate-900 ${className}`}>{icon}{children}</p>
 );
 
 /* ───────────────────────────── page ─────────────────────────────── */
@@ -160,27 +151,35 @@ export default function CtemScopesRedesign() {
   const router = useRouter();
   const { hasPermission } = usePermissions();
   const canEdit = hasPermission('risks:risk_register:edit');
+
+  // Navigation: 'home' = program (scope cards); 'scope' = journey.
+  const [screen, setScreen] = useState<'home' | 'scope'>('home');
   const [selId, setSelId] = useState<number | null>(null);
   const [showAllCw, setShowAllCw] = useState(false);
-  // Validate results are ONE page-worth at a time: the result table OR the decisions panel
-  const [valView, setValView] = useState<'result' | 'decisions'>('result');
   const [showAllRanked, setShowAllRanked] = useState(false);
-  const [expandedCw, setExpandedCw] = useState<string | null>(null);   // which control row is drilled-down
   const [error, setError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const [form, setForm] = useState({ name: '', cadence: 'quarterly', asset_ids: [] as number[] });
   const [assigning, setAssigning] = useState<Finding | null>(null);
   const [assigneeId, setAssigneeId] = useState('');
   const [approverId, setApproverId] = useState('');
-  const [assigneeQuery, setAssigneeQuery] = useState('');   // searchable picker in the assign modal
-  // Mobilise board: which slice of work the operator is looking at.
+  const [assigneeQuery, setAssigneeQuery] = useState('');
   const [mobFilter, setMobFilter] = useState<'all' | 'unassigned' | 'inprogress' | 'fixed'>('all');
   const [mobGroup, setMobGroup] = useState<'status' | 'owner'>('status');
-  // Guided stepper: which of the 5 stages the operator is standing on. null =
-  // "auto" → resolves to the first stage that isn't done yet (see activeStage
-  // below), so opening a scope lands you where the work actually is. Clicking a
-  // stage node pins it. Reset to auto whenever the selected scope changes.
+  // Validate sub-tabs: coverage / review queue / by control / decisions audit.
+  const [valTab, setValTab] = useState<'coverage' | 'review' | 'control' | 'decisions'>('coverage');
+  // Discover asset filter (machine name, or 'all').
+  const [discAsset, setDiscAsset] = useState<string>('all');
+  // "By control" evidence popup.
+  const [ctrlPopup, setCtrlPopup] = useState<{ id: number; code: string; name: string; coveredIds: number[]; findings: number } | null>(null);
+  const [peek, setPeek] = useState<any | null>(null);
+  // Which stage's accordion body is open. null → resolves to the first
+  // stage that isn't done yet, so opening a scope lands on the live work.
   const [activeStageRaw, setActiveStage] = useState<number | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const notify = (m: string) => setToast(m);
+  useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 2600); return () => clearTimeout(t); }, [toast]);
 
   // ONE call for the whole portfolio — every scope's command-center numbers.
   const { data, isLoading, isError, error: loadError, refetch } = useQuery<Portfolio>({
@@ -188,12 +187,8 @@ export default function CtemScopesRedesign() {
     queryFn: async () => (await ctemScopesApi.portfolio()).data,
   });
   const SCOPES: Scope[] = data?.scopes ?? [];
-  const quantify = data?.quantify ?? null;
 
-  // ── Validate progress poll ─────────────────────────────────────────────────
-  // While the open cycle hasn't stamped Validate, poll the AI mapping run so the
-  // stage can show a LIVE progress bar. The run itself is a backend thread —
-  // navigating away never kills it; coming back resumes the bar from the run row.
+  // ── Validate progress poll — the AI mapping run is a backend thread ────────
   const pollScopeId = selId ?? (data?.scopes?.[0]?.id ?? null);
   const pollScope = (data?.scopes ?? []).find((x) => x.id === pollScopeId);
   const needRunPoll = !!pollScope && pollScope.stageProgress != null && !pollScope.stageProgress?.validate;
@@ -206,7 +201,6 @@ export default function CtemScopesRedesign() {
   const aiRun = (aiRunData as any)?.last_run ?? null;
   const mappingRunning = !!aiRun?.running;
   useEffect(() => {
-    // a run just finished → the backend stamped Validate; pull the fresh stamps
     if (aiRun && !aiRun.running) { qc.invalidateQueries({ queryKey: ['ctem-portfolio'] }); setActiveStage(null); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aiRun?.running]);
@@ -218,8 +212,6 @@ export default function CtemScopesRedesign() {
   };
   const createMutation = useMutation({
     mutationFn: () => {
-      // Name is optional — if the user didn't type one, derive it from the
-      // assets they picked ("DESKTOP-CE3EFJB" or "DESKTOP-CE3EFJB +2 more").
       const names = (form.asset_ids || [])
         .map((id) => (scopeAssets ?? []).find((a) => a.id === id)?.name)
         .filter(Boolean) as string[];
@@ -228,9 +220,7 @@ export default function CtemScopesRedesign() {
         : 'New scope';
       return ctemScopesApi.create({
         name: form.name.trim() || autoName, cadence: form.cadence || null,
-        membership_rule: {
-          asset_ids: form.asset_ids && form.asset_ids.length ? form.asset_ids : null,
-        },
+        membership_rule: { asset_ids: form.asset_ids && form.asset_ids.length ? form.asset_ids : null },
       });
     },
     onSuccess: () => { setShowCreate(false); setForm({ name: '', cadence: 'quarterly', asset_ids: [] as number[] }); setError(null); invalidate(); },
@@ -246,40 +236,31 @@ export default function CtemScopesRedesign() {
     onSuccess: () => { setError(null); invalidate(); },
     onError: (e: any) => setError(e?.response?.data?.detail || 'Failed to close cycle'),
   });
-  // Gated loop: stamp a stage done on the OPEN cycle (discover | prioritise).
+  // Gated loop: stamp a stage done on the OPEN cycle (discover | prioritise | dispatch).
   const completeStage = useMutation({
     mutationFn: async (args: { scopeId: number; stage: 'discover' | 'prioritise' | 'dispatch' }) =>
       (await ctemScopesApi.completeStage(args.scopeId, args.stage)).data,
-    onSuccess: () => { setError(null); setActiveStage(null); invalidate(); },   // auto-advance to the next stage
+    onSuccess: () => { setError(null); setActiveStage(null); invalidate(); },
     onError: (e: any) => setError(e?.response?.data?.detail || 'Could not advance the stage'),
   });
-  // Re-run the attack-path engine over the scope (fills "not calculated", refreshes the ranking).
-  // Under the gated loop this IS the Prioritise stage's work — success stamps it.
+  // Re-run the attack-path engine over the scope. Inside an open cycle this IS
+  // the Prioritise stage's work — success stamps it.
   const computePaths = useMutation({
-    mutationFn: async (scopeId: number) => (await vulnManagementApi.vulnerabilities.computeAttackPaths(scopeId, false)).data,   // full recompute, not only-missing
+    mutationFn: async (scopeId: number) => (await vulnManagementApi.vulnerabilities.computeAttackPaths(scopeId, false)).data,
     onSuccess: async (_d, scopeId) => {
       setError(null);
-      // stamp the stage only when running inside an open (gated) cycle — a
-      // history-view recalc is just a recalc
       const inOpenCycle = (data?.scopes ?? []).find((x) => x.id === scopeId)?.stageProgress != null;
       if (inOpenCycle) {
-        try {
-          await ctemScopesApi.completeStage(scopeId, 'prioritise');
-          setActiveStage(null);                     // auto-advance: lands on Validate
-        } catch (e: any) {
-          // ladder refusals must be VISIBLE, not swallowed (e.g. Discover not run yet)
-          setError(e?.response?.data?.detail || 'Prioritise ran, but the stage could not be stamped');
-        }
+        try { await ctemScopesApi.completeStage(scopeId, 'prioritise'); setActiveStage(null); }
+        catch (e: any) { setError(e?.response?.data?.detail || 'Prioritise ran, but the stage could not be stamped'); }
       }
       invalidate(); qc.invalidateQueries({ queryKey: ['choke-points'] });
     },
     onError: (e: any) => setError(e?.response?.data?.detail || 'Attack-path calculation failed'),
   });
-  // Remove a scope. Backend refuses (409) if it owns a closed/frozen cycle — that
-  // error surfaces in the banner rather than silently destroying audit history.
   const deleteMutation = useMutation({
     mutationFn: (scopeId: number) => ctemScopesApi.remove(scopeId),
-    onSuccess: (_d, scopeId) => { setError(null); if (selId === scopeId) setSelId(null); invalidate(); },
+    onSuccess: (_d, scopeId) => { setError(null); if (selId === scopeId) { setSelId(null); setScreen('home'); } invalidate(); },
     onError: (e: any) => setError(e?.response?.data?.detail || 'Failed to delete scope'),
   });
 
@@ -288,15 +269,11 @@ export default function CtemScopesRedesign() {
     queryFn: async () => (await apiClient.get('/auth/me')).data as { id: number },
     staleTime: 5 * 60 * 1000,
   });
-  const currentUserId = currentUser?.id ?? null;
   const { data: scopeAssets } = useQuery({
     queryKey: ['ctem.scope-assets'],
     queryFn: async () => (await apiClient.get<Array<{ id: number; name: string; host_name?: string | null; internet_facing?: boolean | null; department?: string | null }>>('/assets', { params: { limit: 1000 } })).data,
     staleTime: 5 * 60 * 1000,
   });
-  // The scope's actual findings — the Discover table and the automatic risk
-  // ranking on Prioritise. Same endpoint + scope filter the register uses, so
-  // the rows here are identical to the vulnerabilities tab.
   const sPeekId = (SCOPES.find((x) => x.id === selId) ?? SCOPES[0])?.id ?? null;
   const { data: scopeFindings } = useQuery({
     queryKey: ['ctem.scope-findings', sPeekId],
@@ -306,9 +283,6 @@ export default function CtemScopesRedesign() {
       ctem_scope_id: sPeekId as number, limit: 500, template_type: '_general',
     } as any)).data as any[],
   });
-  // The CLOSED side of the loop — findings a Nessus re-scan verified gone
-  // (status auto_closed_fixed). Open-only scopeFindings drops these, so the
-  // Mobilise board's "Fixed" tab needs them fetched separately.
   const { data: scopeFixed } = useQuery({
     queryKey: ['ctem.scope-fixed', sPeekId],
     enabled: sPeekId != null,
@@ -317,12 +291,40 @@ export default function CtemScopesRedesign() {
       ctem_scope_id: sPeekId as number, status: 'auto_closed_fixed', limit: 200,
     } as any)).data as any[],
   });
+  // Per-severity SLA defaults (tenant config) for the Mobilise tracker + new-scope strip.
+  const { data: slaData } = useQuery({
+    queryKey: ['vuln.sla'],
+    queryFn: async () => (await vulnManagementApi.sla.get()).data as any,
+    staleTime: 10 * 60 * 1000,
+  });
+  const slaBySev: Record<string, string> = { critical: '7d', high: '30d', medium: '90d', low: '180d' };
+  const slaList = Array.isArray(slaData) ? slaData : (slaData?.items ?? slaData?.slas ?? []);
+  if (Array.isArray(slaList)) slaList.forEach((r: any) => { const sv = String(r?.severity ?? '').toLowerCase(); const d = r?.sla_days ?? r?.days ?? r?.remediation_days; if (sv && d != null) slaBySev[sv] = `${d}d`; });
 
   const { data: tenantUsers } = useQuery({
     queryKey: ['vuln.tenant-users'],
     queryFn: async () => (await apiClient.get<Array<{ id: number; display_name: string; email: string }>>('/assets/tenant-users')).data,
     staleTime: 5 * 60 * 1000,
   });
+  // Decisions audit — the accepted/rejected AI control proposals for this scope.
+  const { data: valDecisions } = useQuery({
+    queryKey: ['ctem.val-decisions', sPeekId],
+    enabled: sPeekId != null && valTab === 'decisions',
+    queryFn: async () => {
+      const [a, r] = await Promise.all([
+        vulnManagementApi.vulnerabilities.aiProposalsList({ status: 'accepted', ctem_scope_id: sPeekId! }),
+        vulnManagementApi.vulnerabilities.aiProposalsList({ status: 'rejected', ctem_scope_id: sPeekId! }),
+      ]);
+      return { accepted: ((a.data as any)?.items || []) as any[], rejected: ((r.data as any)?.items || []) as any[] };
+    },
+  });
+  // "By control" findings popup — the real reverse lookup for a framework control.
+  const { data: ctrlEvidence, isLoading: ctrlLoading } = useQuery({
+    queryKey: ['ctem.ctrl-evidence', ctrlPopup?.id],
+    enabled: !!ctrlPopup && (ctrlPopup?.id ?? 0) > 0,
+    queryFn: async () => (await vulnManagementApi.controlLinks.listEvidenceForControl(ctrlPopup!.id)).data as any,
+  });
+
   const mobiliseMutation = useMutation({
     mutationFn: (body: { scopeId: number; vulnerability_id: number; assignee_user_id: number; approver_user_id?: number }) =>
       ctemScopesApi.mobilise(body.scopeId, {
@@ -330,61 +332,40 @@ export default function CtemScopesRedesign() {
         assignee_user_id: body.assignee_user_id,
         approver_user_id: body.approver_user_id,
       }),
-    onSuccess: () => { setError(null); setAssigning(null); setAssigneeId(''); setApproverId(''); invalidate(); },
+    onSuccess: () => { setError(null); setAssigning(null); setAssigneeId(''); setApproverId(''); qc.invalidateQueries({ queryKey: ['ctem.scope-findings'] }); invalidate(); },
     onError: (e: any) => setError(e?.response?.data?.detail || 'Failed to assign this fix'),
   });
-  // Validate-stage action: run the AI context mapper over THIS scope's findings
-  // (background; the panel below polls it). The CWE rule crosswalk is GONE — the
-  // AI reads every finding against the locked Unified Control Library; sure picks
-  // auto-link (reversible), weak ones wait in the review panel. A finding with a
-  // stored answer is skipped, so re-runs only pay for what's new.
   const mapControls = useMutation({
-    mutationFn: async () => {
-      await vulnManagementApi.vulnerabilities.aiProposalsGenerate(s!.id);
-    },
+    mutationFn: async () => { await vulnManagementApi.vulnerabilities.aiProposalsGenerate(s!.id); },
     onSuccess: () => { setError(null); invalidate(); qc.invalidateQueries({ queryKey: ['ai-control-proposals'] }); },
     onError: (e: any) => setError(e?.response?.data?.detail || 'Control mapping failed'),
   });
-  const decideMutation = useMutation({
-    mutationFn: (body: { scopeId: number; approvalId: number; decision: 'approve' | 'reject' }) =>
-      ctemScopesApi.decideMobilise(body.scopeId, body.approvalId, { decision: body.decision }),
-    onSuccess: () => { setError(null); invalidate(); },
-    onError: (e: any) => setError(e?.response?.data?.detail || 'Failed to record the decision'),
-  });
 
+  // ── Portfolio roll-up (home KPI strip + trends) ────────────────────────────
   const portfolio = useMemo(() => {
     const sum = (f: (s: Scope) => number) => SCOPES.reduce((a, s) => a + f(s), 0);
-    // effective = genuine retest (tested) + Nessus re-scan closure (verified);
-    // both prove the fix, so both count toward coverage — matching the per-scope panel.
     const controls = sum((s) => s.controls), tested = sum((s) => s.tested) + sum((s) => s.verified ?? 0);
-    // trend across scopes: align on the LAST N points each scope has (real, may be short)
-    const n = Math.max(1, ...SCOPES.map((s) => s.tFind.length));
-    const series = Array.from({ length: n }, (_, i) => SCOPES.reduce((a, s) => {
-      const off = s.tFind.length - n + i; return a + (off >= 0 ? s.tFind[off] : 0);
-    }, 0));
-    const pf = spark(series.length > 1 ? series : [series[0] ?? 0, series[0] ?? 0], 220, 30, 3);
+    const worst = [...SCOPES].sort((a, b) => (b.dangerous - a.dangerous) || (b.findings - a.findings))[0];
+    // real findings-per-cycle series from the worst scope's frozen history (+ live point)
+    const hist = [...(worst?.cycleHistory ?? [])].filter((h) => h.findings != null).sort((a, b) => a.no - b.no).map((h) => h.findings as number);
+    const series = worst?.cycleOpen && worst.findings != null ? [...hist, worst.findings] : hist;
     return {
       scopes: SCOPES.length,
       openCycles: SCOPES.filter((s) => s.cycleOpen).length,
-      assets: sum((s) => s.assets),
-      findings: sum((s) => s.findings),
-      dangerous: sum((s) => s.dangerous),
-      // FAIR is portfolio-only, and honest about [DEMO]-only inputs
-      exposure: quantify && !quantify.demo_only ? money(quantify.ale, quantify.currency) : null,
-      worst: quantify && !quantify.demo_only ? money(quantify.p95, quantify.currency) : null,
+      overdue: SCOPES.filter((s) => s.cycleOpen && s.cycleOverdue).length,
+      findings: sum((s) => s.findings), dangerous: sum((s) => s.dangerous),
+      mobilised: sum((s) => s.tasks ?? 0), fixed: sum((s) => s.closedVerified ?? 0),
       coverage: controls ? Math.round((tested / controls) * 100) : 0,
-      spark: pf,
+      worst, series,
     };
-  }, [SCOPES, quantify]);
+  }, [SCOPES]);
 
   const s: Scope | undefined = SCOPES.find((x) => x.id === selId) ?? SCOPES[0];
-  const view: 'program' | 'empty' = SCOPES.length === 0 && !isLoading ? 'empty' : 'program';
 
   if (isLoading) {
     return <div className="flex items-center gap-2 py-16 justify-center text-slate-500"><Loader2 className="h-5 w-5 animate-spin" /> Loading exposure program…</div>;
   }
   if (isError) {
-    // A failed load is NOT "no scopes" — never show the create-your-first-scope state on an error.
     const status = (loadError as any)?.response?.status;
     return (
       <div className="mx-auto max-w-lg rounded-2xl border border-rose-200 bg-rose-50 p-5 text-center">
@@ -404,34 +385,16 @@ export default function CtemScopesRedesign() {
         <EmptyState onCreate={() => setShowCreate(true)} onTemplate={(preset) => { setForm((prev) => ({ ...prev, ...preset })); setShowCreate(true); }} canEdit={canEdit} />
         {showCreate && (
           <Modal onClose={() => setShowCreate(false)}>
-            <CreateScopeForm form={form} setForm={setForm} assets={scopeAssets ?? []} onSubmit={() => createMutation.mutate()} onCancel={() => setShowCreate(false)} pending={createMutation.isPending} />
+            <CreateScopeForm form={form} setForm={setForm} assets={scopeAssets ?? []} sla={slaBySev} onSubmit={() => createMutation.mutate()} onCancel={() => setShowCreate(false)} pending={createMutation.isPending} />
           </Modal>
         )}
       </div>
     );
   }
 
-  const covTotal = Math.max(1, s.tested + s.failed + (s.verified ?? 0) + s.claimed);
-  // "Effective" = a fix PROVEN to work: a genuine retest (tested_effective) OR a
-  // Nessus re-scan that no longer sees the finding (remediation_verified). The
-  // bar/percentage must count both — omitting re-scan closures (the normal path
-  // here) is what made this read "0% effective" after the loop was actually done.
-  const effective = s.tested + (s.verified ?? 0);
-  const effectivePct = Math.round((effective / covTotal) * 100);
-  const pair = sparkPair(s.tFind, s.tDang, 240, 56, 6);
-  const dF = delta(s.findings, s.prevFind, false);
-  const dD = delta(s.dangerous, s.prevDang, true);
-  const dM = delta(s.fixes, s.prevMob, false);
-  const fb = s.findings || 1;
-  const alePos = s.ale != null && s.aleMin != null && s.p95 != null ? Math.max(6, Math.min(94, Math.round(((s.ale - s.aleMin) / Math.max(1, s.p95 - s.aleMin)) * 100))) : 50;
   const findingsHref = `/vulnerabilities?ctem_scope_id=${s.id}&ctem_scope_name=${encodeURIComponent(s.name)}`;
 
   // ── Gated loop ────────────────────────────────────────────────────────────
-  // With an OPEN cycle, a stage's numbers show — and the next stage unlocks —
-  // only after the stage was RUN in THIS cycle (server-stamped on the cycle
-  // row; Validate stamps automatically when its AI mapping run finishes, so
-  // navigating away can never lose it). No open cycle → history view: last
-  // cycle's numbers show, all actions locked behind "open a cycle".
   const sp = s.stageProgress ?? null;
   const gated = sp !== null;
   const g = {
@@ -440,21 +403,6 @@ export default function CtemScopesRedesign() {
     validate: !gated || !!sp?.validate,
     dispatch: !gated || !!sp?.dispatch,
   };
-
-  const stages = [
-    { n: 1, label: 'Scope', value: s.assets, sub: 'machines this scope owns', accent: 'plain' as const, c: '#0ea5e9' },
-    { n: 2, label: 'Discover', value: g.discover ? s.findings : '—', sub: g.discover ? `open findings on those ${s.assets}` : 'not run this cycle — open the stage and run it', accent: 'plain' as const, c: '#14b8a6' },
-    { n: 3, label: 'Prioritise', value: g.prioritise ? (s.analysable ? s.analysable.real_vulnerabilities : s.dangerous) : '—', sub: g.prioritise ? `ranked automatically · ${s.dangerous} confirmed reachable` : 'runs after Discover', accent: 'rose' as const, c: '#f43f5e' },
-    { n: 4, label: 'Validate', value: g.validate ? s.controls : '—', sub: g.validate ? `controls cover them${(s.tested + (s.verified ?? 0)) > 0 ? ` · ${s.tested + (s.verified ?? 0)} proven by re-scan` : ''}${s.failed > 0 ? ` · ${s.failed} failed` : ''}` : 'runs after Prioritise', accent: 'plain' as const, c: '#8b5cf6' },
-    { n: 5, label: 'Mobilise', value: g.dispatch ? s.fixes : '—', sub: g.dispatch ? `${s.tasks ?? 0} assigned to a person in the platform` : g.validate ? 'press “Dispatch to Mobilise” on Validate' : 'unlocks after Validate + Dispatch', accent: 'emerald' as const, c: '#10b981' },
-  ];
-  // what happens on each arrow (the hand-off between stages)
-  const convs = ['scanner runs on them', 'attack-path engine checks each', 'AI reads each vulnerability vs the control library', 'assign in-platform (or ITSM)'];
-
-  // ── Guided-stepper gating ──────────────────────────────────────────────────
-  // "Done" = the per-cycle stamp when a cycle is open (the honest signal the
-  // owner asked for); the old live-count proxies survive only for the
-  // no-open-cycle history view.
   const stageDone: Record<number, boolean> = {
     1: s.assets > 0,
     2: gated ? !!sp?.discover : s.findings > 0,
@@ -464,24 +412,777 @@ export default function CtemScopesRedesign() {
   };
   const firstIncomplete = [1, 2, 3, 4, 5].find((n) => !stageDone[n]) ?? 5;
   const activeStage = activeStageRaw ?? firstIncomplete;
-  // An action is allowed only once every earlier stage is done. Viewing is
-  // always allowed (any node is clickable); only the stage's ACTION is gated.
   const stageReachable = (n: number) => [1, 2, 3, 4].slice(0, n - 1).every((k) => stageDone[k]);
-  const stageState = (n: number): 'done' | 'current' | 'upcoming' =>
-    stageDone[n] ? 'done' : n === activeStage ? 'current' : 'upcoming';
 
+  // derived, per-scope numbers for the stat lines
+  const findingsArr = scopeFindings ?? [];
+  const real = s.analysable?.real_vulnerabilities ?? findingsArr.filter((v: any) => v.severity !== 'info').length;
+  const info = s.analysable?.informational ?? findingsArr.filter((v: any) => v.severity === 'info').length;
+  const awaiting = s.pipeline?.low_awaiting_review ?? 0;
+  const assetByName = new Map((scopeAssets ?? []).map((a) => [a.name, a]));
+  const exposedCount = s.machines.filter((m) => assetByName.get(m.name)?.internet_facing).length;
+
+  const stageStat = (n: number): string => {
+    if (n === 1) return `${s.assets} machine${s.assets === 1 ? '' : 's'}${scopeAssets ? ` · ${exposedCount} internet-facing` : ''}`;
+    if (n === 2) return g.discover ? `${s.findings} findings · ${real} real / ${info} informational` : 'not run this cycle';
+    if (n === 3) return g.prioritise ? `${real} prioritised · ${s.dangerous} confirmed reachable` : 'runs after Discover';
+    if (n === 4) return g.validate ? `${s.controls} controls mapped${awaiting ? ` · ${awaiting} awaiting review` : ''}` : 'runs after Prioritise';
+    return g.dispatch ? 'owners on the hook until re-scan' : 'unlocks when Validate dispatches';
+  };
+  const curStageLabel = (sc: Scope): string | null => {
+    const p = sc.stageProgress; if (!p) return null;
+    if (!p.discover) return 'Discover';
+    if (!p.prioritise) return 'Prioritise';
+    if (!p.validate || !p.dispatch) return 'Validate';
+    return 'Mobilise';
+  };
+
+  const enterScope = (id: number, start = false) => {
+    setSelId(id); setScreen('scope'); setActiveStage(null); setValTab('coverage'); setMobFilter('all'); setDiscAsset('all');
+    if (start) openMutation.mutate(id);
+  };
+
+  /* ─────────────────── program home ─────────────────── */
+  const kpiCell = (label: string, val: React.ReactNode, color?: string) => (
+    <div style={{ flex: '1 1 90px', minWidth: 90 }}>
+      <div style={SK}>{label}</div>
+      <div style={{ ...SV, ...(color ? { color } : {}) }}>{val}</div>
+    </div>
+  );
+  const hbar = (label: string, sub: string, val: React.ReactNode, pct: number, col: string) => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0' }}>
+      <span style={{ width: 150, flex: 'none', fontSize: 11, color: SEC, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}{sub ? <span style={{ color: FAINT }}> · {sub}</span> : null}</span>
+      <span style={{ flex: 1, height: 8, borderRadius: 999, background: '#F0F3F5', overflow: 'hidden' }}><i style={{ display: 'block', height: '100%', width: `${Math.max(0, Math.min(100, pct))}%`, background: col, borderRadius: 999 }} /></span>
+      <b style={{ width: 40, textAlign: 'right', fontSize: 12, ...MONO }}>{val}</b>
+    </div>
+  );
+  const trends = () => {
+    // Real labeled series: the worst scope's frozen findings per closed cycle + the live point.
+    const w = portfolio.worst;
+    const fmtShort = (d?: string | null) => (d ? new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '');
+    const histPts = [...(w?.cycleHistory ?? [])]
+      .filter((h) => h.findings != null)
+      .sort((a, b) => a.no - b.no)
+      .map((h) => ({ no: h.no, v: h.findings as number, sub: fmtShort(h.closed) || 'closed' }));
+    const pts = w?.cycleOpen && w.findings != null ? [...histPts, { no: w.cycleNo, v: w.findings, sub: 'live' }] : histPts;
+    const n = pts.length;
+    const vmax = n ? Math.max(...pts.map((p) => p.v)) : 0;
+    const vmin = n ? Math.min(...pts.map((p) => p.v)) : 0;
+    const range = vmax - vmin || 1;
+    const X = (i: number) => (n === 1 ? 160 : 22 + (i / (n - 1)) * (320 - 44));
+    const Y = (v: number) => 32 + (1 - (v - vmin) / range) * 58;
+    const line = pts.map((p, i) => `${X(i)},${Y(p.v)}`).join(' ');
+    const area = n >= 2 ? `M ${X(0)},104 ` + pts.map((p, i) => `L ${X(i)},${Y(p.v)}`).join(' ') + ` L ${X(n - 1)},104 Z` : '';
+    const chartCard = (title: string, sub: string, body: React.ReactNode) => (
+      <div style={{ ...CARD, padding: '11px 14px' }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 7, minWidth: 0 }}><b style={{ fontSize: 13, flex: 'none' }}>{title}</b><span style={{ fontSize: 10.5, color: MUTED, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sub}</span></div>
+        <div style={{ marginTop: 9 }}>{body}</div>
+      </div>
+    );
+    return (
+      <>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(236px,100%),1fr))', gap: 10, alignItems: 'start' }}>
+        {chartCard('Findings on scope', w ? `${w.name.length > 22 ? w.name.slice(0, 22) + '…' : w.name} · per cycle` : 'per cycle',
+          n >= 2 ? (
+            <svg viewBox="0 0 320 118" style={{ width: '100%', height: 108, display: 'block' }}>
+              <line x1="8" y1="46" x2="312" y2="46" stroke={BORDER2} strokeWidth="1" />
+              <line x1="8" y1="75" x2="312" y2="75" stroke={BORDER2} strokeWidth="1" />
+              <line x1="8" y1="104" x2="312" y2="104" stroke={BORDER2} strokeWidth="1" />
+              {area && <path d={area} fill={BLUE} opacity=".07" />}
+              <polyline points={line} fill="none" stroke={BLUE} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+              {pts.map((p, i) => (
+                <g key={i}>
+                  <circle cx={X(i)} cy={Y(p.v)} r={i === n - 1 ? 4.5 : 3.5} fill={BLUE} stroke="#fff" strokeWidth={i === n - 1 ? 2 : 1.5} />
+                  <text x={X(i)} y={Y(p.v) - 9} textAnchor="middle" fontSize="10.5" fontWeight="700" fill={BLUE}>{p.v}</text>
+                  <text x={X(i)} y={116} textAnchor="middle" fontSize="9" fill="#9BA6B2">Cycle {p.no} · {p.sub}</text>
+                </g>
+              ))}
+            </svg>
+          ) : n === 1 ? (
+            <>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}><b style={{ fontSize: 24, ...MONO, color: BLUE }}>{pts[0].v}</b><span style={{ fontSize: 11, color: MUTED }}>findings · Cycle {pts[0].no} live</span></div>
+              <div style={{ fontSize: 10.5, color: FAINT, marginTop: 8, paddingTop: 8, borderTop: `1px solid ${BORDER2}` }}>The trend line builds as you close cycles — each close freezes a point.</div>
+            </>
+          ) : <div style={{ fontSize: 11.5, color: MUTED, padding: '8px 4px' }}>No cycles yet — open one and the trend starts here.</div>)}
+        {chartCard('Fixed ✓ by re-scan', 'the only thing that moves the score',
+          <>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}><b style={{ fontSize: 24, ...MONO, color: GREEN }}>{portfolio.fixed}</b><span style={{ fontSize: 11, color: MUTED }}>re-scan-verified closures · Cycle {w?.cycleNo ?? 1} live</span></div>
+            <div style={{ fontSize: 10.5, color: FAINT, marginTop: 8, paddingTop: 8, borderTop: `1px solid ${BORDER2}` }}>Closed cycles will add rows here — per-cycle fixed counts aren&apos;t frozen in the snapshot yet.</div>
+          </>)}
+        {chartCard('Control coverage', 'share of real vulns with an addressing control',
+          <>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}><b style={{ fontSize: 24, ...MONO, color: VIOLET }}>{portfolio.coverage}%</b><span style={{ fontSize: 11, color: MUTED }}>of real vulns · Cycle {w?.cycleNo ?? 1} live</span></div>
+            <div style={{ marginTop: 7 }}>{hbar('Coverage', 'across all scopes', `${portfolio.coverage}%`, portfolio.coverage, VIOLET)}</div>
+            <div style={{ fontSize: 10.5, color: MUTED, marginTop: 8, paddingTop: 8, borderTop: `1px solid ${BORDER2}` }}>Coverage is <b>claimed</b> until a re-scan proves the control effective — per-cycle history isn&apos;t frozen yet.</div>
+          </>)}
+        {chartCard('Discovery mix', w ? 'worst scope · real vs informational' : 'real vs informational',
+          w ? (
+            <>
+              {hbar('Total findings', 'on this scope', w.findings, 100, BLUE)}
+              {hbar('Real vulnerabilities', 'actionable', w.analysable?.real_vulnerabilities ?? 0, w.findings ? ((w.analysable?.real_vulnerabilities ?? 0) / w.findings) * 100 : 0, REDD)}
+              {hbar('Informational', 'excluded from action', w.analysable?.informational ?? 0, w.findings ? ((w.analysable?.informational ?? 0) / w.findings) * 100 : 0, '#8A95A1')}
+              <div style={{ fontSize: 10.5, color: FAINT, marginTop: 8, paddingTop: 8, borderTop: `1px solid ${BORDER2}` }}>Only real vulnerabilities move through Prioritise → Validate → Mobilise.</div>
+            </>
+          ) : <div style={{ fontSize: 11.5, color: MUTED, padding: '14px 4px' }}>Opens with your first scope.</div>)}
+      </div>
+      <div style={{ fontSize: 10.5, color: FAINT, margin: '8px 4px 0' }}>Feeds the Performance Overview cyber KPIs — assets free of open critical/high vulns, vulnerabilities within remediation SLA.</div>
+      </>
+    );
+  };
+  const scopeCard = (sc: Scope) => {
+    const open = sc.cycleOpen;
+    const cur = curStageLabel(sc);
+    const fixed = sc.closedVerified ?? 0;
+    const num = (label: string, val: React.ReactNode, color?: string) => (
+      <div><div style={{ ...SK, ...(color ? { color } : {}) }}>{label}</div><div style={{ fontSize: 15, fontWeight: 700, ...MONO, ...(color ? { color } : {}) }}>{val}</div></div>
+    );
+    return (
+      <div key={sc.id} style={{ ...CARD, display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', padding: '11px 14px', marginBottom: 10 }}>
+        <span style={{ width: 38, height: 38, borderRadius: 11, background: ACSOFT, color: ACS, display: 'grid', placeItems: 'center', flex: 'none' }}><Crosshair className="h-[18px] w-[18px]" /></span>
+        <div style={{ minWidth: 0, flex: '1 1 210px' }}>
+          <b style={{ fontSize: 13.5 }}>{sc.name}</b> <span style={{ color: MUTED, fontSize: 11.5 }}>{membText(sc)} · owner {sc.owner ?? 'Unassigned'}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
+            {open ? (
+              <>
+                <Pill bg={ACSOFT} c={ACS}>● Cycle #{sc.cycleNo} · Open{sc.cycleDay != null ? ` · day ${sc.cycleDay}` : ''}</Pill>
+                {sc.cycleOverdue
+                  ? <Pill bg={REDBG} c={RED}>Overdue</Pill>
+                  : sc.cycleDueAt ? <span style={{ fontSize: 10.5, color: AMBER, fontWeight: 600 }}>due {fmtDate(sc.cycleDueAt)}</span> : null}
+                {cur && <span style={{ fontSize: 10.5, color: FAINT }}>at <b style={{ color: SEC }}>{cur}</b></span>}
+              </>
+            ) : (
+              <>
+                <Pill bg="#EEF1F3" c="#475569">■ No cycle running</Pill>
+                <span style={{ fontSize: 10.5, color: FAINT }}>last closed {fmtDate(sc.lastClosed)} · {(sc.cycleHistory?.length ?? 0)} in history</span>
+              </>
+            )}
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', flex: 'none' }}>
+          {num('Findings', sc.findings)}
+          {num('Dangerous', sc.dangerous, REDD)}
+          {num('Fixed ✓', fixed, GREEN)}
+        </div>
+        <div style={{ marginLeft: 'auto', flex: 'none', display: 'flex', gap: 7 }}>
+          {open
+            ? <Btn sm onClick={() => enterScope(sc.id)}>Open →</Btn>
+            : <>
+                <Btn sm onClick={() => enterScope(sc.id)}>History →</Btn>
+                {canEdit && <Btn green sm onClick={() => enterScope(sc.id, true)}>▶ Start Cycle #{sc.cycleNo + 1}</Btn>}
+              </>}
+        </div>
+      </div>
+    );
+  };
+  const homeScreen = () => {
+    const worstFirst = [...SCOPES].sort((a, b) =>
+      (Number(!!(b.cycleOpen && b.cycleOverdue)) - Number(!!(a.cycleOpen && a.cycleOverdue)))
+      || (b.dangerous - a.dangerous) || (b.findings - a.findings));
+    return (
+      <div style={{ flex: 1, minHeight: 0, overflow: 'auto', maxWidth: 1060, width: '100%', margin: '0 auto', padding: '4px 18px 40px' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 10, flexWrap: 'wrap' }}>
+          <div>
+            <h1 style={{ fontSize: 22, letterSpacing: '-.025em', fontWeight: 600 }}>Exposure program</h1>
+            <p style={{ fontSize: 12.5, color: MUTED, marginTop: 4 }}>Owned slices of the attack surface, each worked as open→close cycles.</p>
+          </div>
+          {canEdit && <Btn green onClick={() => setShowCreate(true)}><Plus className="h-4 w-4" /> New scope</Btn>}
+        </div>
+
+        <div style={{ ...STRIP, marginBottom: 6, alignItems: 'stretch', background: '#fff', boxShadow: '0 1px 2px rgba(16,24,40,.04)' }}>
+          {kpiCell('Scopes', portfolio.scopes)}{SEP}
+          {kpiCell('Open cycles', portfolio.openCycles, ACS)}{SEP}
+          {kpiCell('Overdue', portfolio.overdue, portfolio.overdue ? RED : GREEN)}{SEP}
+          {kpiCell('Findings', portfolio.findings)}{ARROW}
+          {kpiCell('Dangerous', portfolio.dangerous, REDD)}{ARROW}
+          {kpiCell('Mobilised', portfolio.mobilised, BLUE)}{ARROW}
+          {kpiCell('Fixed ✓', portfolio.fixed, GREEN)}
+        </div>
+        <div style={{ fontSize: 10.5, color: FAINT, margin: '0 4px 10px' }}>Findings → dangerous → mobilised → fixed ✓ across all scopes · only a re-scan closure moves the score.</div>
+
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, margin: '2px 2px 6px' }}><b style={{ fontSize: 14 }}>Trends</b><span style={{ fontSize: 11.5, color: MUTED }}>across closed cycles · progress is provable period over period</span></div>
+        {trends()}
+
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, margin: '10px 2px 6px' }}><b style={{ fontSize: 14 }}>Scopes</b><span style={{ fontSize: 11.5, color: MUTED }}>each runs its own cycles, in parallel · worst first</span></div>
+        {worstFirst.map(scopeCard)}
+      </div>
+    );
+  };
+
+  /* ─────────────────── scope journey ─────────────────── */
+  const commandBar = () => {
+    const chip = s.cycleOpen
+      ? <Pill bg={ACSOFT} c={ACS}>● Cycle #{s.cycleNo} · Open{s.cycleDay != null ? ` · day ${s.cycleDay}` : ''}</Pill>
+      : <Pill bg="#EEF1F3" c="#475569">■ No cycle running</Pill>;
+    return (
+      <div style={{ ...CARD, padding: 0, marginBottom: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', padding: '11px 14px' }}>
+          <span style={{ width: 40, height: 40, borderRadius: 11, background: ACSOFT, color: ACS, display: 'grid', placeItems: 'center', flex: 'none' }}><Crosshair className="h-5 w-5" /></span>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 15, fontWeight: 600 }}>{s.name} <span style={{ color: MUTED, fontWeight: 500, fontSize: 12.5 }}>{membText(s)}</span></div>
+            <div style={{ marginTop: 4, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+              {chip}
+              {s.cycleOpen && s.cycleDueAt && (
+                <Pill bg={s.cycleOverdue ? REDBG : '#F7F9FA'} c={s.cycleOverdue ? RED : SEC}>
+                  {s.cycleOverdue ? `Overdue — was due ${fmtDate(s.cycleDueAt)}` : `Cycle ends ${fmtDate(s.cycleDueAt)}`}
+                </Pill>
+              )}
+            </div>
+          </div>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <Btn sm onClick={() => setShowHistory(true)}>History <b style={MONO}>{s.cycleHistory?.length ?? 0}</b></Btn>
+            <Link href={findingsHref} style={{ textDecoration: 'none' }}><Btn sm><ExternalLink className="h-3.5 w-3.5" /> View findings</Btn></Link>
+            {canEdit && (s.cycleOpen
+              ? <Btn sm disabled={closeMutation.isPending || !s.cycleId} title="Close this cycle — freezes today's numbers as a permanent record." onClick={() => s.cycleId && closeMutation.mutate(s.cycleId)}>{closeMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Square className="h-3.5 w-3.5" />} Close &amp; save</Btn>
+              : <Btn green sm disabled={openMutation.isPending} onClick={() => openMutation.mutate(s.id)}>{openMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />} ▶ Start Cycle #{s.cycleNo + 1}</Btn>)}
+            {canEdit && (
+              <Btn sm title="Delete this scope. A scope with closed (frozen) cycles can't be deleted." disabled={deleteMutation.isPending} style={{ color: REDD }}
+                onClick={() => { if (window.confirm(`Delete scope “${s.name}”? This removes the scope and any open cycle. Findings and assets are not touched.`)) deleteMutation.mutate(s.id); }}>
+                {deleteMutation.isPending && deleteMutation.variables === s.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />} Delete
+              </Btn>
+            )}
+          </div>
+        </div>
+        <div style={{ borderTop: `1px solid ${BORDER2}`, padding: '9px 18px', display: 'flex', gap: 10, flexWrap: 'wrap', fontSize: 11, color: MUTED, alignItems: 'center' }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ width: 18, height: 18, borderRadius: 999, background: s.owner ? ACSOFT : '#EEF1F3', color: s.owner ? ACS : FAINT, fontSize: 8, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{s.owner ? initials(s.owner) : '?'}</span>
+            Owner <b style={{ color: s.owner ? SEC : RED }}>{s.owner ?? 'Unassigned'}</b>
+          </span>
+          <span style={{ color: '#D2D8DE' }}>·</span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><Calendar className="h-3.5 w-3.5" /> {s.cadence} cadence</span>
+          <span style={{ color: '#D2D8DE' }}>·</span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><Table2 className="h-3.5 w-3.5" /> {membText(s)}</span>
+        </div>
+      </div>
+    );
+  };
+
+  const closedState = () => (
+    <>
+      <div style={{ ...CARD, padding: '38px 24px', textAlign: 'center', marginBottom: 10 }}>
+        <span style={{ width: 54, height: 54, borderRadius: 15, background: '#EEF1F3', color: '#94A3B8', display: 'grid', placeItems: 'center', margin: '0 auto 14px' }}><Crosshair className="h-[26px] w-[26px]" /></span>
+        <h3 style={{ fontSize: 16, fontWeight: 600 }}>No cycle is running on this scope</h3>
+        <p style={{ fontSize: 12, color: MUTED, maxWidth: 440, margin: '8px auto 18px', lineHeight: 1.55 }}>The last cycle is frozen in history below. Start a new cycle to re-scan, re-prioritise and measure deltas against it.</p>
+        {canEdit && <div style={{ display: 'inline-flex' }}><Btn green onClick={() => openMutation.mutate(s.id)} disabled={openMutation.isPending}>{openMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null} ▶ Start Cycle #{s.cycleNo + 1}</Btn></div>}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, margin: '0 2px 10px' }}><b style={{ fontSize: 14 }}>Cycle history</b><span style={{ fontSize: 11.5, color: MUTED }}>frozen snapshots · deltas compare cycle over cycle</span></div>
+      {historyTable()}
+    </>
+  );
+
+  const historyTable = () => {
+    const h = s.cycleHistory ?? [];
+    if (h.length === 0) return <div style={{ border: '1px dashed #D8DFE4', borderRadius: 11, background: '#FAFBFC', padding: 22, textAlign: 'center', color: MUTED, fontSize: 12 }}>No closed cycles yet — closing a cycle freezes its snapshot here.</div>;
+    return (
+      <div style={{ ...CARD, overflow: 'hidden' }}>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+            <thead><tr>{['Cycle', 'Window', 'Findings', 'Dangerous', 'Mobilised', 'Fixed ✓', 'Coverage', 'Membership hash'].map((c) => <th key={c} style={TH}>{c}</th>)}</tr></thead>
+            <tbody>
+              {h.map((c) => (
+                <tr key={c.no}>
+                  <td style={TD}><b>Cycle #{c.no}</b></td>
+                  <td style={{ ...TD, color: MUTED }}>{fmtDate(c.opened)} → {fmtDate(c.closed)}</td>
+                  <td style={{ ...TD, ...MONO }}>{c.findings ?? '—'}</td>
+                  <td style={{ ...TD, ...MONO, color: REDD }}>{c.dangerous ?? '—'}</td>
+                  <td style={{ ...TD, ...MONO, color: BLUE }}>{c.mobilised ?? '—'}</td>
+                  <td style={{ ...TD, ...MONO, color: GREEN }} title="Per-cycle fixed isn't frozen in the snapshot">—</td>
+                  <td style={{ ...TD, ...MONO }} title="Per-cycle coverage isn't frozen in the snapshot">—</td>
+                  <td style={{ ...TD, ...MONO, fontSize: 10, color: FAINT }} title="SHA-256 of the sorted member-asset ids">{c.hash || '—'}…</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
+
+  const sectionDesc = (desc: React.ReactNode, actions?: React.ReactNode) => (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap', marginBottom: 10 }}>
+      <p style={{ fontSize: 12, color: MUTED, maxWidth: 620, lineHeight: 1.55 }}>{desc}</p>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', flex: 'none' }}>{actions}</div>
+    </div>
+  );
+
+  /* ── stage bodies ── */
+  const renderScope = () => (
+    <>
+      {sectionDesc(<>A scope is a fixed set of assets. Every stage below counts findings on <b>these machines only</b>; membership freezes into each closed cycle.</>,
+        <><Btn sm onClick={() => notify('Edit scope assets — searchable multi-select (coming soon).')}>＋ Edit assets</Btn><Link href="/assets" style={{ textDecoration: 'none' }}><Btn sm>Open in Inventory →</Btn></Link></>)}
+      <div style={{ ...STRIP, marginBottom: 12 }}>
+        <div><div style={SK}>Machines</div><div style={SV}>{s.machines.length}</div></div>{SEP}
+        <div><div style={SK}>Findings on scope</div><div style={SV}>{s.findings}</div></div>{SEP}
+        <div><div style={SK}>Internet-exposed</div><div style={{ ...SV, color: exposedCount ? RED : SEC }}>{scopeAssets ? `${exposedCount} of ${s.machines.length}` : '—'}</div></div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(min(250px,100%),1fr))', gap: 10 }}>
+        {s.machines.map((m) => {
+          const exp = assetByName.get(m.name)?.internet_facing;
+          return (
+            <Link key={m.id} href={`/assets/${m.id}`} style={{ textDecoration: 'none', color: 'inherit', border: `1px solid ${BORDER}`, borderRadius: 11, padding: '10px 13px', display: 'block' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                <span style={{ width: 8, height: 8, borderRadius: 999, background: riskColor(m.risk), marginTop: 5, flex: 'none' }} />
+                <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontWeight: 600, fontSize: 12.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.name}</div><div style={{ fontSize: 10.5, color: MUTED }}>{m.type}</div></div>
+                {exp ? <Pill bg={REDBG} c={RED}>Internet-facing</Pill> : scopeAssets ? <Pill bg="#EEF1F3" c="#6B7787">Internal</Pill> : null}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 10 }}><b style={{ fontSize: 20, ...MONO }}>{m.findings}</b><span style={{ fontSize: 10.5, color: MUTED }}>findings</span></div>
+            </Link>
+          );
+        })}
+      </div>
+    </>
+  );
+
+  const gateBlank = (n: number, action: React.ReactNode) => {
+    const prev = ['', 'Scope', 'Discover', 'Prioritise', 'Validate'][n - 1];
+    return (
+      <div style={{ textAlign: 'center', padding: '30px 12px' }}>
+        <div style={{ fontSize: 13.5, fontWeight: 600 }}>This stage hasn&apos;t run in cycle #{s.cycleNo} yet.</div>
+        <div style={{ color: MUTED, maxWidth: 420, margin: '6px auto 15px', fontSize: 11.5 }}>It can run only once <b>{prev}</b> is done — one stage at a time.</div>
+        {action}
+      </div>
+    );
+  };
+
+  const renderDiscover = () => {
+    if (gated && !g.discover) return gateBlank(2, canEdit ? <div style={{ display: 'inline-flex' }}><Btn green disabled={completeStage.isPending || !stageReachable(2)} onClick={() => completeStage.mutate({ scopeId: s.id, stage: 'discover' })}>{completeStage.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />} ▶ Run discovery for this cycle</Btn></div> : null);
+    const rank: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
+    const sorted = [...findingsArr].sort((a: any, b: any) => (rank[a.severity] ?? 3) - (rank[b.severity] ?? 3) || (Number(b.cvss_score ?? 0) - Number(a.cvss_score ?? 0)));
+    const rows = discAsset === 'all' ? sorted : sorted.filter((v: any) => (v.linked_assets ?? []).includes(discAsset));
+    const machineNames = Array.from(new Set(s.machines.map((m) => m.name)));
+    return (
+      <>
+        {sectionDesc(<>Everything the scanner sees on the scoped machines, <b>as-is and unscored</b> — ranking happens in Prioritise.</>,
+          <><Btn sm disabled={!stageReachable(2)} onClick={() => stageReachable(2) && completeStage.mutate({ scopeId: s.id, stage: 'discover' })}>↻ Re-run discovery</Btn><Link href={findingsHref} style={{ textDecoration: 'none' }}><Btn sm>Open in register →</Btn></Link></>)}
+        <div style={{ ...STRIP, marginBottom: 12 }}>
+          <div><div style={SK}>Total findings</div><div style={SV}>{s.findings}</div></div>{SEP}
+          <div><div style={SK}>Real vulnerabilities</div><div style={{ ...SV, color: GREEN }}>{real}</div><div style={{ fontSize: 10, color: FAINT }}>carry a CVE → proceed</div></div>{SEP}
+          <div><div style={SK}>Informational</div><div style={{ ...SV, color: MUTED }}>{info}</div><div style={{ fontSize: 10, color: FAINT }}>nothing to fix · excluded</div></div>
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 11, color: MUTED }}>Asset</span>
+            <select value={discAsset} onChange={(e) => setDiscAsset(e.target.value)} style={{ border: `1px solid ${BORDER}`, borderRadius: 9, padding: '6px 10px', fontSize: 11.5, background: '#fff', cursor: 'pointer' }}>
+              <option value="all">All assets ({s.findings})</option>
+              {machineNames.map((n) => <option key={n} value={n}>{n}</option>)}
+            </select>
+          </div>
+        </div>
+        <div style={{ overflowX: 'auto', border: `1px solid ${BORDER}`, borderRadius: 11 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+            <thead><tr>{['Finding', 'Machine', 'Type', 'Severity', 'CVSS', 'KEV', 'First seen'].map((c) => <th key={c} style={TH}>{c}</th>)}</tr></thead>
+            <tbody>
+              {!scopeFindings && <tr><td colSpan={7} style={{ ...TD, textAlign: 'center', color: FAINT }}>Loading scanner results…</td></tr>}
+              {rows.map((v: any) => {
+                const isInfo = v.severity === 'info';
+                const hasScore = !isInfo && v.cvss_score != null && Number(v.cvss_score) > 0;
+                return (
+                  <tr key={v.id} onClick={() => router.push(`/vulnerabilities/${v.id}`)} style={{ cursor: 'pointer' }}>
+                    <td style={{ ...TD, fontWeight: 500 }}>{v.title}</td>
+                    <td style={{ ...TD, ...MONO, color: MUTED }}>{(v.linked_assets ?? [])[0] ?? '—'}{(v.linked_assets ?? []).length > 1 ? ` +${v.linked_assets.length - 1}` : ''}</td>
+                    <td style={{ ...TD, fontSize: 10, color: isInfo ? MUTED : GREEN, fontWeight: 600 }}>{isInfo ? 'Info' : 'Real'}</td>
+                    <td style={TD}><SevBadge sev={v.severity} /></td>
+                    <td style={{ ...TD, ...MONO }}>{hasScore ? Number(v.cvss_score).toFixed(1) : '—'}</td>
+                    <td style={TD}>{v.kev_flag ? <span style={{ background: '#FBEAEA', color: '#C2453F', fontWeight: 700, fontSize: 9, padding: '1px 6px', borderRadius: 5 }}>KEV</span> : <span style={{ color: FAINT }}>—</span>}</td>
+                    <td style={{ ...TD, color: MUTED }}>{fmtDate(v.first_detected_at ?? v.created_at)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <div style={{ fontSize: 10.5, color: FAINT, marginTop: 9 }}>Same rows as the vulnerabilities register, filtered to this scope. Click a row to open the finding.</div>
+      </>
+    );
+  };
+
+  const renderPrioritise = () => {
+    if (gated && !g.prioritise) return gateBlank(3, canEdit ? <div style={{ display: 'inline-flex' }}><Btn green disabled={computePaths.isPending || !stageReachable(3)} onClick={() => computePaths.mutate(s.id)}>{computePaths.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Crosshair className="h-4 w-4" />} {computePaths.isPending ? 'Analysing attack paths…' : '▶ Run prioritisation'}</Btn></div> : null);
+    const sevRank: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1, info: 0 };
+    const ranked = [...findingsArr].filter((v: any) => v.severity !== 'info').sort((a: any, b: any) =>
+      ((b.composite_priority ?? -1) - (a.composite_priority ?? -1))
+      || (Number(!!b.kev_flag) - Number(!!a.kev_flag))
+      || ((b.epss_score ?? 0) - (a.epss_score ?? 0))
+      || ((b.cvss_score ?? 0) - (a.cvss_score ?? 0))
+      || ((sevRank[b.severity] ?? 0) - (sevRank[a.severity] ?? 0)));
+    const dangerSet = new Set(s.dangerousIds ?? []);
+    return (
+      <>
+        {sectionDesc(<>The reachability engine scores each <b>real</b> vulnerability /100 <b>on this host</b> — severity (abstract), raw CVSS and /100 (here) are different things. Informational excluded.</>,
+          canEdit ? <Btn sm disabled={computePaths.isPending} onClick={() => computePaths.mutate(s.id)}>{computePaths.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} ↻ Recalculate attack paths</Btn> : null)}
+        <div style={{ ...STRIP, marginBottom: 12 }}>
+          <div><div style={{ ...SK, color: REDD }}>Confirmed reachable</div><div style={{ ...SV, color: REDD }}>{s.buckets.ranked}</div><div style={{ fontSize: 10, color: FAINT }}>fix first</div></div>{SEP}
+          <div><div style={SK}>Can&apos;t tell yet</div><div style={{ ...SV, color: AMBER }}>{s.buckets.undeterminable}</div></div>{SEP}
+          <div><div style={SK}>Not calculated</div><div style={{ ...SV, color: '#6B7787' }}>{s.buckets.chainless}</div></div>{SEP}
+          <div><div style={SK}>Blocked / severed</div><div style={{ ...SV, color: GREEN }}>{s.buckets.severed}</div></div>
+        </div>
+        {!scopeFindings ? <p style={{ padding: '10px 0', textAlign: 'center', fontSize: 12, color: FAINT }}>Loading…</p>
+          : ranked.length === 0 ? <p style={{ borderRadius: 10, background: '#F7F9FA', padding: 12, fontSize: 11.5, color: MUTED }}>Only informational notes in this scope — nothing carries a CVE/CVSS to rank.</p>
+          : (showAllRanked ? ranked : ranked.slice(0, 12)).map((v: any, i: number) => {
+            const score = v.composite_priority != null ? Math.round(Number(v.composite_priority) * 10) : null;
+            const reachable = dangerSet.has(v.id);
+            return (
+              <div key={v.id} style={{ display: 'flex', alignItems: 'center', gap: 13, borderBottom: `1px solid ${BORDER2}`, padding: '11px 4px' }}>
+                <div style={{ width: 20, flex: 'none', textAlign: 'center', fontWeight: 700, color: FAINT, fontSize: 12, ...MONO }}>{i + 1}</div>
+                <Link href={`/vulnerabilities/${v.id}`} style={{ flex: 1, minWidth: 0, textDecoration: 'none', color: 'inherit' }}>
+                  <div style={{ fontWeight: 600, fontSize: 12.5 }}>{v.title}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 3, fontSize: 10.5, color: FAINT }}>
+                    <SevBadge sev={v.severity} />
+                    <span>CVSS {v.cvss_score != null ? Number(v.cvss_score).toFixed(1) : '—'}</span>
+                    {v.epss_score != null && <span style={{ color: AMBER }}>EPSS {Math.round(Number(v.epss_score) * 100)}%</span>}
+                    {(v.linked_assets ?? [])[0] && <span>{v.linked_assets[0]}</span>}
+                    {v.kev_flag && <Kev />}
+                    {reachable && <span style={{ color: RED, fontWeight: 600 }}>✓ confirmed reachable</span>}
+                  </div>
+                </Link>
+                <div style={{ flex: 'none', textAlign: 'right' }}>
+                  <span style={{ fontSize: 16, fontWeight: 700, ...MONO, color: score != null && score >= 80 ? REDD : score != null && score >= 50 ? AMBER : GREEN }}>{score ?? '—'}</span>
+                  <span style={{ fontSize: 9, color: FAINT }}>/100 on host</span>
+                </div>
+              </div>
+            );
+          })}
+        {ranked.length > 12 && <button onClick={() => setShowAllRanked((x) => !x)} style={{ marginTop: 9, fontSize: 12, fontWeight: 500, color: ACS, background: 'none', border: 0, cursor: 'pointer' }}>{showAllRanked ? 'Show fewer' : `Show all ${ranked.length}`}</button>}
+        <div style={{ fontSize: 10.5, color: FAINT, marginTop: 9 }}>Ranked by contextual /100 on host · only reachable + prioritised findings proceed to Validate.</div>
+      </>
+    );
+  };
+
+  const renderValidate = () => {
+    if (gated && !g.validate) {
+      return (
+        <div style={{ textAlign: 'center', padding: '16px 12px' }}>
+          {mappingRunning || mapControls.isPending ? (
+            <>
+              <p style={{ fontSize: 13.5, fontWeight: 600 }}><Loader2 className="mr-1.5 inline h-4 w-4 animate-spin" style={{ color: VIOLET }} /> AI validation is running…</p>
+              <p style={{ fontSize: 12, color: MUTED, marginTop: 4 }}>Runs on the server — leave this page and come back; nothing is lost. Mobilise unlocks when it finishes.</p>
+              <div style={{ maxWidth: 460, margin: '14px auto 0' }}>
+                <div style={{ height: 10, borderRadius: 999, background: '#EAEEF1', overflow: 'hidden' }}><div style={{ height: '100%', borderRadius: 999, background: VIOLET, width: `${Math.max(6, Math.round(((aiRun?.findings_sent ?? 0) / Math.max(1, aiRun?.findings_total ?? 1)) * 100))}%`, transition: 'width .7s' }} /></div>
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ fontSize: 13.5, fontWeight: 600 }}>Validation hasn&apos;t run in cycle #{s.cycleNo} yet.</div>
+              <div style={{ color: MUTED, maxWidth: 460, margin: '6px auto 15px', fontSize: 11.5 }}>The AI reads each vulnerability against your locked control library — sure picks auto-link (reversible), weak ones wait for review. It auto-stamps this stage when the run finishes.</div>
+              {canEdit && <div style={{ display: 'inline-flex' }}><Btn green disabled={mapControls.isPending || !stageReachable(4)} onClick={() => mapControls.mutate()}><ShieldCheck className="h-4 w-4" /> ▶ Run AI validation</Btn></div>}
+            </>
+          )}
+        </div>
+      );
+    }
+    const p = s.pipeline;
+    const analysed = p?.analysed ?? real;
+    const linked = p?.linked ?? 0;
+    const proven = s.tested + (s.verified ?? 0);
+    const covPct = analysed > 0 ? Math.round((linked / analysed) * 100) : 0;
+    const tabDef: [typeof valTab, string, number | null][] = [
+      ['coverage', 'Coverage', null], ['review', 'Review queue', awaiting || null], ['control', 'By control', s.cw.length || null], ['decisions', 'Decisions', null],
+    ];
+    const chips = (codes: string[]) => codes.map((c) => <span key={c} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: VIOLETBG, color: VIOLET, borderRadius: 7, padding: '2px 8px', fontSize: 10.5, fontWeight: 600, margin: '2px 4px 0 0' }}>{c}</span>);
+    return (
+      <>
+        {sectionDesc(<>The AI links each real vulnerability to the control(s) that <b>address</b> it — the fix to implement. A link never closes a finding or lowers its score; only a re-scan does.</>,
+          <>{canEdit && <Btn sm disabled={mapControls.isPending || mappingRunning} onClick={() => mapControls.mutate()}>{(mapControls.isPending || mappingRunning) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} ↻ Re-run mapping</Btn>}
+            {gated && (sp?.dispatch ? <Pill bg={GREENBG} c={GREEN}>✓ Dispatched</Pill>
+              : canEdit ? <Btn green sm disabled={completeStage.isPending} title="Hand the linked vulnerabilities to Mobilise" onClick={() => completeStage.mutate({ scopeId: s.id, stage: 'dispatch' })}>{completeStage.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />} Dispatch to Mobilise →</Btn> : null)}
+          </>)}
+        <div style={{ ...STRIP, marginBottom: 12, alignItems: 'center' }}>
+          <div><div style={SK}>Covered</div><div style={{ ...SV, color: GREEN }}>{linked}</div></div>{SEP}
+          <div><div style={SK}>Awaiting review</div><div style={{ ...SV, color: AMBER }}>{awaiting}</div></div>{SEP}
+          <div><div style={SK}>Proven effective</div><div style={SV}>{proven}<span style={{ fontSize: 11, color: FAINT }}> of {s.controls}</span></div><div style={{ fontSize: 10, color: FAINT }}>re-scan verified · rest claimed</div></div>
+          <div style={{ flex: 1, minWidth: 130, display: 'flex', alignItems: 'center', gap: 9, justifyContent: 'flex-end' }}>
+            <span style={{ flex: '0 1 150px', height: 9, borderRadius: 99, background: '#EAEEF1', overflow: 'hidden', display: 'flex' }}><i style={{ width: `${covPct}%`, background: AC }} /><i style={{ flex: 1, background: '#E0AF33' }} /></span>
+            <b style={{ fontSize: 12, ...MONO }}>{covPct}%</b>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 10 }}>
+          {tabDef.map(([id, label, n]) => {
+            const on = valTab === id;
+            return (
+              <button key={id} onClick={() => setValTab(id)} style={{ border: `1px solid ${on ? AC : BORDER}`, background: on ? ACSOFT : '#fff', color: on ? '#0A5A4B' : SEC, borderRadius: 999, padding: '6px 13px', fontSize: 11.5, fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                {label}{n ? <span style={{ ...MONO, background: on ? '#fff' : '#EEF1F3', color: id === 'review' ? AMBER : '#6B7787', borderRadius: 99, padding: '0 6px', fontSize: 10 }}>{n}</span> : null}
+              </button>
+            );
+          })}
+        </div>
+        {valTab === 'review' ? <AiControlProposalsPanel scopeId={s.id} />
+          : valTab === 'control' ? renderByControl()
+          : valTab === 'decisions' ? renderDecisions()
+          : /* coverage */ (() => {
+            const covered = findingsArr.filter((v: any) => v.severity !== 'info' && Array.isArray(v.linked_control_codes) && v.linked_control_codes.length > 0);
+            if (!scopeFindings) return <p style={{ padding: '10px 0', textAlign: 'center', fontSize: 12, color: FAINT }}>Loading…</p>;
+            if (covered.length === 0) return <div style={{ border: '1px solid #BFE9DD', background: '#F0FDF4', borderRadius: 11, padding: 16, textAlign: 'center', fontSize: 12, color: '#065F46' }}>No control links yet — run the mapping, then covered findings and their controls show here.</div>;
+            return <>{covered.map((v: any) => (
+              <div key={v.id} onClick={() => setPeek(v)} style={{ display: 'flex', alignItems: 'flex-start', gap: 11, borderBottom: `1px solid ${BORDER2}`, padding: '11px 4px', flexWrap: 'wrap', cursor: 'pointer' }}>
+                <div style={{ flex: '1 1 240px', minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: 12.5 }}>{v.title}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 3, fontSize: 10.5, color: FAINT }}><SevBadge sev={v.severity} /><span style={MONO}>{v.composite_priority != null ? `${Math.round(Number(v.composite_priority) * 10)}/100` : '—'}</span>{(v.linked_assets ?? [])[0] && <span>{v.linked_assets[0]}</span>}{v.kev_flag && <Kev />}</div>
+                </div>
+                <div style={{ flex: '1 1 200px', minWidth: 0 }}><div style={{ fontSize: 9.5, color: FAINT, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em' }}>Addressed by</div><div>{chips(v.linked_control_codes)}</div></div>
+                <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 8 }}><Pill bg={GREENBG} c={GREEN}>auto-linked</Pill></div>
+              </div>
+            ))}
+              <div style={{ fontSize: 10.5, color: FAINT, marginTop: 9 }}>A link is the fix to implement — it never closes a finding or lowers its score. Reject a wrong link from the finding&apos;s control popup on Mobilise.</div>
+            </>;
+          })()}
+      </>
+    );
+  };
+
+  const renderByControl = () => {
+    const children = new Map<number, ControlItem[]>();
+    s.cw.forEach((c) => { if (c.kind === 'parsed_framework_control' && c.family_of) children.set(c.family_of, [...(children.get(c.family_of) ?? []), c]); });
+    const rows = s.cw.filter((c) => !(c.kind === 'parsed_framework_control' && c.family_of));
+    if (rows.length === 0) return <div style={{ border: '1px dashed #D8DFE4', borderRadius: 11, background: '#FAFBFC', padding: 18, textAlign: 'center', color: MUTED, fontSize: 12 }}>No controls mapped yet — run the AI mapping to populate this.</div>;
+    const shown = showAllCw ? rows : rows.slice(0, 8);
+    const basisLabel: Record<string, string> = { ai: 'AI · accepted', ai_auto: 'AI · auto-linked', ai_family: 'AI · via group', reused: 'reused decision', manual: 'manual' };
+    return (
+      <>
+        <div style={{ overflowX: 'auto', border: `1px solid ${BORDER}`, borderRadius: 11 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+            <thead><tr>{['Control', 'Satisfies these standards', 'Addresses', 'Why linked'].map((c) => <th key={c} style={TH}>{c}</th>)}</tr></thead>
+            <tbody>
+              {shown.map((c) => {
+                const covered = Array.isArray(c.covered_ids) ? c.covered_ids : [];
+                const ok = c.basis === 'ai' || c.basis === 'ai_auto' || c.basis === 'ai_family' || c.basis === 'reused';
+                return (
+                  <tr key={`${c.kind}-${c.control_id ?? c.code}`}>
+                    <td style={TD}><b style={MONO}>{c.code}</b><div style={{ color: MUTED, fontSize: 10.5 }}>{c.title}</div></td>
+                    <td style={TD}>{(c.standards ?? [c.fw]).filter(Boolean).map((t) => <span key={t} style={{ display: 'inline-block', border: `1px solid #E4E8EC`, background: '#F7F9FA', borderRadius: 6, padding: '1px 7px', fontSize: 10, fontWeight: 600, color: '#5B6673', margin: '2px 3px 0 0' }}>{t}</span>)}</td>
+                    <td style={TD}><Btn sm disabled={c.findings === 0} onClick={() => setCtrlPopup({ id: c.control_id ?? 0, code: c.code, name: c.title, coveredIds: covered, findings: c.findings })}><b style={MONO}>{c.findings}</b> findings</Btn></td>
+                    <td style={TD}><Pill bg={ok ? VIOLETBG : AMBERBG} c={ok ? VIOLET : AMBER}>{basisLabel[c.basis as string] ?? 'crosswalk rule'}</Pill></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        {rows.length > 8 && <button onClick={() => setShowAllCw((v) => !v)} style={{ marginTop: 9, fontSize: 12, fontWeight: 500, color: ACS, background: 'none', border: 0, cursor: 'pointer' }}>{showAllCw ? 'Show fewer' : `Show all ${rows.length} controls`}</button>}
+        <div style={{ fontSize: 10.5, color: FAINT, marginTop: 9 }}>Click a finding count to see exactly which vulnerabilities a control addresses. None are test-verified until a re-scan proves the control effective.</div>
+      </>
+    );
+  };
+
+  const renderDecisions = () => {
+    if (!valDecisions) return <p style={{ padding: '10px 0', textAlign: 'center', fontSize: 12, color: FAINT }}>Loading decisions…</p>;
+    const items = [
+      ...valDecisions.accepted.map((x: any) => ({ ...x, _d: 'accepted' as const })),
+      ...valDecisions.rejected.map((x: any) => ({ ...x, _d: 'rejected' as const })),
+    ].sort((a: any, b: any) => new Date(b.decided_at ?? 0).getTime() - new Date(a.decided_at ?? 0).getTime());
+    if (items.length === 0) return <div style={{ border: '1px dashed #D8DFE4', borderRadius: 11, background: '#FAFBFC', padding: 18, textAlign: 'center', color: MUTED, fontSize: 12 }}>No overrides yet — every AI mapping stands as proposed. Each accept/reject lands here for the audit trail.</div>;
+    return <>{items.map((x: any) => (
+      <div key={`${x._d}-${x.id}`} style={{ display: 'flex', alignItems: 'center', gap: 11, borderBottom: `1px solid ${BORDER2}`, padding: '10px 4px' }}>
+        <Pill bg={x._d === 'accepted' ? GREENBG : REDBG} c={x._d === 'accepted' ? GREEN : RED}>{x._d === 'accepted' ? '✓ Accepted' : '✗ Rejected'}</Pill>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <b style={{ fontSize: 12 }}>{x.vulnerability?.title || x.vulnerability?.vuln_id || `#${x.vulnerability?.id}`}</b>
+          <div style={{ fontSize: 10.5, color: FAINT }}>{x.control?.code}{x.control?.name ? ` · ${x.control.name}` : ''} · {x.decided_at ? new Date(x.decided_at).toLocaleString() : 'recently'}</div>
+        </div>
+      </div>
+    ))}</>;
+  };
+
+  const workRow = (v: any) => {
+    const st: 'unassigned' | 'inprogress' = v.assigned_to || v.assignee_name ? 'inprogress' : 'unassigned';
+    const un = st === 'unassigned';
+    const controls: string[] = Array.isArray(v.linked_control_codes) ? v.linked_control_codes : [];
+    const score = v.composite_priority != null ? Math.round(Number(v.composite_priority) * 10) : null;
+    return (
+      <div key={v.id} style={{ border: `1px solid ${un ? AMBERLINE : BORDER}`, background: un ? '#FFFDF5' : '#fff', borderRadius: 11, padding: '11px 13px', marginBottom: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+          <Link href={`/vulnerabilities/${v.id}`} style={{ flex: 1, minWidth: 0, textDecoration: 'none', color: 'inherit' }}>
+            <div style={{ fontWeight: 600, fontSize: 12.5 }}>{v.title}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 4, color: FAINT, fontSize: 10.5 }}><SevBadge sev={v.severity} />{(v.linked_assets ?? [])[0] && <span>{v.linked_assets[0]}</span>}{score != null && <span style={MONO}>{score}/100</span>}{v.kev_flag && <Kev />}</div>
+          </Link>
+          <Pill bg={un ? AMBERBG : '#E9F1FB'} c={un ? AMBER : BLUE}>{un ? 'Needs owner' : 'In progress'}</Pill>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 9, paddingTop: 8, borderTop: `1px solid ${un ? '#F1E9D2' : BORDER2}` }}>
+          <span style={{ flex: 'none' }}><MobiliseControlCell vulnId={v.id} count={controls.length} canEdit={canEdit} onChanged={() => qc.invalidateQueries({ queryKey: ['ctem.scope-findings'] })} /></span>
+          <span style={{ marginLeft: 'auto', fontSize: 11, color: SEC }}>{v.assignee_name
+            ? <><span style={{ width: 18, height: 18, borderRadius: 999, background: '#E2E8F0', color: '#475569', fontSize: 8, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', verticalAlign: -3, marginRight: 5 }}>{initials(String(v.assignee_name))}</span>{v.assignee_name}</>
+            : <span style={{ color: AMBER }}>No owner yet</span>}</span>
+          {canEdit && <Btn green={un} sm style={{ flex: 'none' }} onClick={() => { setAssigning({ id: v.id, title: v.title } as any); setAssigneeId(''); setApproverId(''); setAssigneeQuery(''); }}>{un ? '✉ Assign' : 'Reassign'}</Btn>}
+        </div>
+        {v.assignee_name && (
+          <div style={{ marginTop: 9, background: '#F7F9FA', border: '1px solid #EDF0F3', borderRadius: 9, padding: '9px 12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 10.5, color: SEC }}>
+              <span style={{ ...MONO, background: '#EEF1F3', borderRadius: 5, padding: '1px 7px' }}>{v.task_id ? `WF-${v.task_id}` : 'workflow task created'}</span>
+              <span>notified in-app + email{v.assigned_at ? ` · ${fmtDate(v.assigned_at)}` : ''}</span>
+              <span style={{ color: FAINT }}>·</span>
+              <span>SLA <b>{slaBySev[v.severity] ?? '—'}</b> ({v.severity})</span>
+              <span style={{ marginLeft: 'auto' }}><Btn sm onClick={() => notify('Reminder sent — in-app + email nudge to the owner.')}>Nudge</Btn></span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 8, fontSize: 10, fontWeight: 600 }}>
+              <span style={{ color: GREEN }}>✓ Assigned</span><span style={{ flex: 1, height: 2, background: '#BFE9DD', borderRadius: 2 }} />
+              <span style={{ color: AMBER }}>Fix applied — claimed</span><span style={{ flex: 1, height: 2, background: '#EAEEF1', borderRadius: 2 }} />
+              <span style={{ color: MUTED }}>Re-scan verifies · pending</span>
+            </div>
+            <div style={{ fontSize: 9.5, color: FAINT, marginTop: 5 }}>The owner&apos;s &ldquo;done&rdquo; is only a claim — the finding closes when the next Nessus re-scan no longer sees it.</div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderMobilise = () => {
+    if (gated && !sp?.dispatch) {
+      return (
+        <div style={{ textAlign: 'center', padding: '30px 12px' }}>
+          <div style={{ fontSize: 13.5, fontWeight: 600 }}>Nothing dispatched yet.</div>
+          <div style={{ color: MUTED, maxWidth: 420, margin: '6px auto 15px', fontSize: 11.5 }}>Mobilise receives its work list when Validate presses <b>Dispatch to Mobilise</b>.</div>
+          {stageReachable(5) && canEdit && <div style={{ display: 'inline-flex' }}><Btn green onClick={() => setActiveStage(4)}>Go to Validate →</Btn></div>}
+        </div>
+      );
+    }
+    const linkedSet = new Set(s.pipeline?.linked_ids ?? []);
+    const workItems = [...findingsArr].filter((v: any) => (linkedSet.size > 0 ? linkedSet.has(v.id) : v.severity !== 'info'));
+    const statusOf = (v: any): 'unassigned' | 'inprogress' => (v.assigned_to || v.assignee_name ? 'inprogress' : 'unassigned');
+    const needsOwner = workItems.filter((v: any) => statusOf(v) === 'unassigned').length;
+    const inProgress = workItems.length - needsOwner;
+    const fixedReal = scopeFixed ? scopeFixed.filter((v: any) => v.severity !== 'info') : [];
+    // Reconcile the Mobilise "Fixed ✓" badge with the scope card / KPI strip,
+    // which both use closedVerified. The live scopeFixed list may show fewer
+    // (it drops informational + is current-cycle) — a note covers the gap.
+    const fixedCount = s.closedVerified ?? (scopeFixed ? fixedReal.length : 0);
+    const head = sectionDesc(<>One owner per fix. Assign creates a workflow task + email with the fix package. Nobody closes by hand — a <b>Nessus re-scan</b> that no longer sees the finding is the only proof.</>);
+    const tabBtn = (id: typeof mobFilter, label: string, n: number, tone?: [string, string, string]) => {
+      const on = mobFilter === id;
+      const st = tone && on ? { background: tone[0], color: tone[1], border: `1px solid ${tone[2]}` } : { background: on ? INK : '#EEF1F3', color: on ? '#fff' : '#6B7787', border: '1px solid transparent' };
+      return <button key={id} onClick={() => setMobFilter(id)} style={{ borderRadius: 999, padding: '5px 12px', fontSize: 11, fontWeight: 600, cursor: 'pointer', ...st }}>{label} <b style={MONO}>{n}</b></button>;
+    };
+    const tabs = (
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
+        <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+          {tabBtn('all', 'All', workItems.length)}
+          {tabBtn('unassigned', 'Needs owner', needsOwner, [AMBERBG, AMBER, AMBERLINE])}
+          {tabBtn('inprogress', 'In progress', inProgress, ['#E9F1FB', BLUE, '#AECBEC'])}
+          {tabBtn('fixed', 'Fixed ✓', fixedCount, [GREENBG, GREEN, '#BFE9DD'])}
+        </div>
+        <div style={{ display: 'inline-flex', background: '#EEF1F3', border: `1px solid ${BORDER}`, borderRadius: 999, padding: 2 }}>
+          {(['status', 'owner'] as const).map((gk) => <button key={gk} onClick={() => setMobGroup(gk)} style={{ border: 0, background: mobGroup === gk ? '#fff' : 'transparent', borderRadius: 999, padding: '4px 11px', fontSize: 11, fontWeight: 600, color: mobGroup === gk ? INK : '#6B7787', cursor: 'pointer', boxShadow: mobGroup === gk ? '0 1px 3px rgba(2,6,23,.1)' : 'none' }}>{gk === 'status' ? 'By status' : 'By owner'}</button>)}
+        </div>
+      </div>
+    );
+    if (!scopeFindings) return <>{head}{tabs}<p style={{ padding: '10px 0', textAlign: 'center', fontSize: 12, color: FAINT }}>Loading…</p></>;
+    if (workItems.length === 0 && mobFilter !== 'fixed') return <>{head}{tabs}<p style={{ borderRadius: 10, background: '#F7F9FA', padding: 12, fontSize: 11.5, color: MUTED }}>No real vulnerabilities to assign — only informational notes, which have nothing to fix.</p></>;
+
+    if (mobFilter === 'fixed') {
+      return <>{head}{tabs}
+        {!scopeFixed ? <p style={{ padding: '10px 0', textAlign: 'center', fontSize: 12, color: FAINT }}>Loading…</p>
+          : fixedReal.length === 0 ? <div style={{ border: `1px solid ${BORDER}`, borderRadius: 11, background: '#F7F9FA', padding: '9px 12px', fontSize: 11.5, color: '#475569' }}>Nothing closed yet. When a Nessus re-scan no longer sees a finding it lands here automatically — no one closes it by hand.</div>
+          : <>{fixedReal.map((v: any) => (
+            <div key={v.id} style={{ display: 'flex', alignItems: 'center', gap: 11, border: '1px solid #BFE9DD', background: '#F7FDF9', borderRadius: 11, padding: '11px 13px', marginBottom: 8 }}>
+              <Pill bg={GREENBG} c={GREEN}>✓ Scanner-verified</Pill>
+              <div style={{ flex: 1, minWidth: 0 }}><b style={{ fontSize: 12.5 }}>{v.title}</b><div style={{ fontSize: 10.5, color: FAINT }}>{v.assignee_name ? `fixed by ${v.assignee_name} · ` : ''}re-scan no longer detects it · closed {fmtDate(v.updated_at ?? v.resolved_at)}</div></div>
+              <span style={{ fontSize: 11, ...MONO, color: GREEN, textDecoration: 'line-through' }}>{v.composite_priority != null ? `${Math.round(Number(v.composite_priority) * 10)}/100` : ''}</span>
+            </div>
+          ))}
+            {fixedReal.length < fixedCount && <div style={{ fontSize: 10.5, color: MUTED, marginTop: 4 }}>{fixedCount - fixedReal.length} more verified closure{fixedCount - fixedReal.length === 1 ? '' : 's'} counted for this scope (informational, or from an earlier cycle) — not itemised in the current cycle above.</div>}
+            <div style={{ border: `1px solid ${BORDER}`, borderRadius: 11, background: '#F7F9FA', padding: '9px 12px', fontSize: 11.5, color: '#475569', marginTop: 4 }}>Closed automatically when a re-scan no longer sees the finding — never hand-closed. Each closure is what moves the exposure score.</div>
+          </>}
+      </>;
+    }
+
+    const filtered = workItems.filter((v: any) => (mobFilter === 'all' ? true : statusOf(v) === mobFilter))
+      .sort((a: any, b: any) => { const r: Record<string, number> = { unassigned: 0, inprogress: 1 }; return (r[statusOf(a)] - r[statusOf(b)]) || ((b.composite_priority ?? -1) - (a.composite_priority ?? -1)); });
+    const gh = (txt: string, danger?: boolean) => <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: danger ? RED : '#94A3B8', margin: '14px 2px 8px' }}>{txt}</div>;
+    let body: React.ReactNode;
+    if (filtered.length === 0) body = <p style={{ borderRadius: 10, background: '#F7F9FA', padding: 12, fontSize: 11.5, color: MUTED }}>{mobFilter === 'unassigned' ? 'Every finding here already has an owner.' : mobFilter === 'inprogress' ? 'Nothing assigned yet — start with the “Needs owner” list.' : 'Nothing in this bucket.'}</p>;
+    else if (mobGroup === 'owner') {
+      const grp: Record<string, any[]> = {};
+      filtered.forEach((v: any) => { const k = v.assignee_name || ' Needs owner'; (grp[k] = grp[k] || []).push(v); });
+      body = Object.keys(grp).sort((a, b) => (a === ' Needs owner' ? -1 : b === ' Needs owner' ? 1 : a.localeCompare(b))).map((k) => (
+        <div key={k}>{gh(`${k === ' Needs owner' ? '⚠ Needs owner' : k} (${grp[k].length})`, k === ' Needs owner')}{grp[k].map(workRow)}</div>
+      ));
+    } else {
+      const dangerSet = new Set(s.dangerousIds ?? []);
+      const priSet = new Set(s.pipeline?.priority_ids ?? []);
+      const dang = filtered.filter((v: any) => dangerSet.has(v.id));
+      const prio = filtered.filter((v: any) => !dangerSet.has(v.id) && priSet.has(v.id));
+      const other = filtered.filter((v: any) => !dangerSet.has(v.id) && !priSet.has(v.id));
+      body = <>
+        {dang.length > 0 && <>{gh(`🔥 Dangerous — confirmed reachable (${dang.length})`, true)}{dang.map(workRow)}</>}
+        {prio.length > 0 && <>{gh(`Prioritised (${prio.length})`)}{prio.map(workRow)}</>}
+        {other.length > 0 && <>{gh(`Other linked fixes — hardening & configuration (${other.length})`)}{other.map(workRow)}</>}
+      </>;
+    }
+    return <>{head}{tabs}{body}</>;
+  };
+
+  const stageBody = (n: number): React.ReactNode => {
+    if (n === 1) return renderScope();
+    if (n === 2) return renderDiscover();
+    if (n === 3) return renderPrioritise();
+    if (n === 4) return renderValidate();
+    return renderMobilise();
+  };
+
+  const accordion = () => (
+    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      {STAGES.map((st, i) => {
+        const done = stageDone[st.n];
+        const reachable = stageReachable(st.n);
+        const locked = (gated && !done && !reachable) || (gated && st.n === 5 && !sp?.dispatch);
+        const isCurrent = st.n === firstIncomplete;
+        const open = st.n === activeStage && !locked;
+        const last = i === STAGES.length - 1;
+        const disc = done
+          ? <span style={{ width: 26, height: 26, borderRadius: 999, border: `2px solid ${st.c}`, color: st.c, background: '#fff', display: 'grid', placeItems: 'center', fontSize: 11, fontWeight: 800 }}>✓</span>
+          : locked
+          ? <span style={{ width: 26, height: 26, borderRadius: 999, background: '#EEF1F3', color: FAINT, display: 'grid', placeItems: 'center', fontSize: 10 }}>🔒</span>
+          : <span style={{ width: 26, height: 26, borderRadius: 999, background: st.c, color: '#fff', display: 'grid', placeItems: 'center', fontSize: 11, fontWeight: 800 }}>{st.n}</span>;
+        const tag = open ? null
+          : done ? <span style={{ color: FAINT, fontSize: 14 }}>›</span>
+          : locked ? <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.05em', color: FAINT }}>LOCKED</span>
+          : isCurrent ? <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: '.06em', color: '#fff', background: INK, borderRadius: 5, padding: '2px 7px' }}>CURRENT</span>
+          : <span style={{ color: FAINT, fontSize: 14 }}>›</span>;
+        return (
+          <div key={st.n} style={{ display: 'flex', gap: 14, ...(open ? { flex: 1, minHeight: 0 } : {}) }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 'none', width: 26, paddingTop: 14 }}>{disc}{!last && <span style={{ flex: 1, width: 2, background: done ? st.c : '#E4E8EC', marginTop: 4, borderRadius: 2 }} />}</div>
+            <div style={{ flex: 1, minWidth: 0, paddingBottom: last ? 0 : 14, ...(open ? { display: 'flex', flexDirection: 'column', minHeight: 0 } : {}) }}>
+              <div style={{ ...CARD, overflow: 'hidden', ...(open ? { border: `1px solid ${st.c}`, boxShadow: '0 4px 14px rgba(2,6,23,.06)', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 } : {}), ...(locked ? { opacity: 0.65 } : {}) }}>
+                <div onClick={() => { if (!locked) setActiveStage(st.n); }} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 13px', cursor: locked ? 'default' : 'pointer' }}>
+                  <b style={{ fontSize: 13, color: locked ? FAINT : INK, flex: 'none' }}>{st.label}</b>
+                  <span style={{ fontSize: 11.5, color: locked ? FAINT : MUTED, flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{stageStat(st.n)}</span>
+                  {tag}
+                </div>
+                {open && <div style={{ borderTop: `1px solid ${BORDER2}`, padding: '12px 14px', flex: 1, minHeight: 0, overflowY: 'auto' }}>{stageBody(st.n)}</div>}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  const journeyScreen = () => (
+    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', maxWidth: 1060, width: '100%', margin: '0 auto', padding: '4px 18px 0' }}>
+      <div style={{ marginBottom: 10, flexShrink: 0 }}><Btn sm onClick={() => { setScreen('home'); setSelId(null); }}>← All scopes</Btn></div>
+      <div style={{ flexShrink: 0 }}>{commandBar()}</div>
+      {s.cycleOpen
+        ? <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>{accordion()}</div>
+        : <div style={{ flex: 1, minHeight: 0, overflow: 'auto', paddingBottom: 12 }}>{closedState()}</div>}
+    </div>
+  );
+
+  /* ─────────────────── root ─────────────────── */
   return (
-    <div className="space-y-4">
-      {error && (
-        <p className="flex items-start gap-1.5 rounded-md border border-rose-200 bg-rose-50 p-2 text-xs text-rose-700">
-          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {error}
-        </p>
-      )}
+    <div style={{ fontFamily: "var(--font-poppins, 'Poppins', system-ui, -apple-system, 'Segoe UI', sans-serif)", color: INK, fontSize: 13.5, height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      {toast && <div style={{ position: 'fixed', bottom: 20, left: '50%', transform: 'translateX(-50%)', background: INK, color: '#fff', padding: '10px 16px', borderRadius: 10, fontSize: 12, zIndex: 80, boxShadow: '0 8px 24px rgba(2,6,23,.3)', maxWidth: '80vw' }}>{toast}</div>}
+      {error && <p className="flex items-start gap-1.5 rounded-md border border-rose-200 bg-rose-50 p-2 text-xs text-rose-700" style={{ marginBottom: 12 }}><AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {error}</p>}
+
       {showCreate && (
         <Modal onClose={() => setShowCreate(false)}>
-          <CreateScopeForm form={form} setForm={setForm} assets={scopeAssets ?? []} onSubmit={() => createMutation.mutate()} onCancel={() => setShowCreate(false)} pending={createMutation.isPending} />
+          <CreateScopeForm form={form} setForm={setForm} assets={scopeAssets ?? []} sla={slaBySev} onSubmit={() => createMutation.mutate()} onCancel={() => setShowCreate(false)} pending={createMutation.isPending} />
         </Modal>
       )}
+      {showHistory && (
+        <Modal onClose={() => setShowHistory(false)}>
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}><h4 style={{ fontSize: 15, fontWeight: 600, flex: 1 }}>Cycle history</h4><Btn sm onClick={() => setShowHistory(false)}>Close</Btn></div>
+            <p style={{ fontSize: 11.5, color: MUTED, margin: '0 0 12px' }}>Each closed cycle is an immutable snapshot — progress is provable period over period.</p>
+            <div style={{ maxHeight: 320, overflow: 'auto' }}>{historyTable()}</div>
+          </div>
+        </Modal>
+      )}
+
+      {/* assign modal — reused verbatim */}
       {assigning && (
         <Modal onClose={() => setAssigning(null)}>
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-3">
@@ -502,8 +1203,6 @@ export default function CtemScopesRedesign() {
                   </div>
                 );
                 const q = assigneeQuery.trim().toLowerCase();
-                // real people only — the IGA sample-seed users (*.sample) are demo
-                // identities and must never own a fix
                 const realUsers = (tenantUsers ?? []).filter((u) => !String(u.email || '').toLowerCase().endsWith('.sample'));
                 const matches = realUsers.filter((u) => !q || (u.display_name || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q)).slice(0, 8);
                 return (
@@ -543,7 +1242,7 @@ export default function CtemScopesRedesign() {
                 })}
                 disabled={mobiliseMutation.isPending || !assigneeId}
                 className="rounded-lg bg-primary-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-50">
-                {mobiliseMutation.isPending ? 'Assigning…' : 'Assign'}
+                {mobiliseMutation.isPending ? 'Assigning…' : 'Assign & notify'}
               </button>
               <button onClick={() => setAssigning(null)} className="text-xs text-slate-400 hover:text-slate-600">Cancel</button>
             </div>
@@ -551,1178 +1250,84 @@ export default function CtemScopesRedesign() {
         </Modal>
       )}
 
-      {view === 'program' ? (
-        <div className="mx-auto w-full max-w-[1520px] space-y-4">
-          {/* ── header ── */}
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <h1 className="text-[19px] font-semibold tracking-tight text-slate-900">Exposure program</h1>
-              <p className="mt-1 max-w-2xl text-[13px] text-slate-500">
-Each scope is an owned slice of your attack surface — run its loop as a cycle you open and close.
-              </p>
+      {/* By-control findings popup */}
+      {ctrlPopup && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,.42)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, zIndex: 60 }} onClick={(e) => { if (e.target === e.currentTarget) setCtrlPopup(null); }}>
+          <div style={{ ...CARD, width: 500, maxWidth: '100%', padding: 20, boxShadow: '0 20px 50px rgba(2,6,23,.3)' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+              <div style={{ flex: 1 }}><h4 style={{ fontSize: 14.5, fontWeight: 600 }}>{ctrlPopup.code}</h4><div style={{ fontSize: 11.5, color: MUTED }}>{ctrlPopup.name} · addresses {ctrlPopup.findings} finding{ctrlPopup.findings === 1 ? '' : 's'}</div></div>
+              <Btn sm onClick={() => setCtrlPopup(null)}><X className="h-3.5 w-3.5" /></Btn>
             </div>
-            {canEdit && (
-              <button onClick={() => setShowCreate((v) => !v)} className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3.5 py-2.5 text-[13px] font-semibold text-white shadow-sm transition hover:bg-primary-700">
-                <Plus className="h-4 w-4" strokeWidth={2.2} /> New scope
-              </button>
-            )}
-          </div>
-
-          {/* ── portfolio KPI band — only when there is more than one scope to roll up ── */}
-          {SCOPES.length > 1 && (
-          <Card className="flex items-stretch divide-x divide-slate-100 overflow-hidden">
-            <KpiCell label="Scopes" value={portfolio.scopes} sub={`${portfolio.openCycles} cycles open`} title="Named slices of the attack surface you run the loop over." />
-            <KpiCell label="Attack surface" value={portfolio.assets} sub="assets monitored" title="Distinct assets matching at least one scope's membership rule." />
-            <div className="flex flex-[1.3] flex-col justify-between p-[14px_18px]" title="Total findings across all scopes, last 5 cycles.">
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Open findings</p>
-                <p className="mt-1 text-[26px] font-bold leading-none tabular-nums text-slate-900">{portfolio.findings}</p>
-              </div>
-              <svg viewBox="0 0 220 34" preserveAspectRatio="none" className="mt-1.5 h-[26px] w-full">
-                <path d={portfolio.spark.area} fill="rgba(30,212,176,0.14)" />
-                <polyline points={portfolio.spark.line} fill="none" stroke="#1ed4b0" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </div>
-            <KpiCell label="Dangerous now" value={portfolio.dangerous} sub="reachable attack paths" valueClass="text-rose-700" title="Findings with a confirmed, reachable attack path." />
-            <KpiCell label="Annual exposure" value={portfolio.exposure ?? <span className="text-[15px] font-semibold text-slate-400">not quantified</span>} sub={portfolio.exposure ? `worst case ${portfolio.worst}` : (quantify?.demo_only ? 'only [DEMO] risks on file' : 'no real risks quantified')} title="Portfolio FAIR run. Shown only when computed from real risks." />
-            <div className="flex-[1.05] p-[14px_18px]" title="Share of mapped controls tested and effective, across all scopes.">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Control coverage</p>
-              <p className="mt-1 text-[26px] font-bold leading-none tabular-nums text-slate-900">{portfolio.coverage}%</p>
-              <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-slate-100">
-                <div className="h-full rounded-full bg-gradient-to-r from-primary-600 to-primary-700" style={{ width: `${portfolio.coverage}%` }} />
-              </div>
-            </div>
-          </Card>
-          )}
-
-          {/* ── scope switcher — only when there is more than one scope to switch between ── */}
-          {SCOPES.length > 1 && (
-          <div className="flex flex-wrap items-center gap-2">
-            {SCOPES.map((sc) => {
-              const active = sc.id === s.id;
-              const dot = sc.dangerous >= 10 ? '#be123c' : sc.dangerous >= 5 ? '#f59e0b' : '#10b981';
-              return (
-                <button key={sc.id} onClick={() => { setSelId(sc.id); setActiveStage(null); }}
-                  className={`inline-flex items-center gap-2.5 rounded-xl border bg-white px-3 py-2 text-left transition ${
-                    active ? 'border-primary-600 ring-[3px] ring-primary-600/10' : 'border-slate-200 hover:border-slate-300'
-                  }`}>
-                  <span className="text-[13px] font-semibold text-slate-900">{sc.name}</span>
-                  <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
-                    sc.cycleOpen ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-slate-100 text-slate-500'
-                  }`}>{sc.cycleOpen ? `#${sc.cycleNo} open` : 'idle'}</span>
-                  <span className="inline-flex items-center gap-1 text-[11px] text-slate-500">
-                    <span className="h-1.5 w-1.5 rounded-full" style={{ background: dot }} />
-                    <b className="font-semibold tabular-nums text-slate-700">{sc.dangerous}</b> dangerous
-                    <span className="text-slate-300">·</span>
-                    <b className="font-semibold tabular-nums text-slate-700">{sc.findings}</b> findings
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-          )}
-
-          {/* ── command centre (full width) ── */}
-          <div className="space-y-3.5">
-              {/* detail header */}
-              <Card className="p-4">
-                <div className="flex flex-wrap items-start justify-between gap-3.5">
-                  <div className="min-w-0 flex-[1_1_320px]">
-                    <div className="flex flex-wrap items-center gap-2.5">
-                      <h2 className="text-lg font-semibold tracking-tight text-slate-900">{s.name}</h2>
-                      <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-[3px] text-[11px] font-semibold ${
-                        s.cycleOpen ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-slate-100 text-slate-500'
-                      }`}>
-                        {s.cycleOpen ? `Cycle #${s.cycleNo} · Open` : 'No open cycle'}
-                      </span>
-                      {s.cycleOpen && s.cycleDueAt && (
-                        <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10.5px] font-semibold ${
-                          s.cycleOverdue ? 'border-rose-200 bg-rose-50 text-rose-700' : 'border-slate-200 bg-slate-50 text-slate-600'
-                        }`} title="The cadence deadline: an open cycle must be closed within its cadence window.">
-                          {s.cycleOverdue
-                            ? `Overdue — was due ${new Date(s.cycleDueAt).toLocaleDateString()} · close & save it`
-                            : `Cycle ends ${new Date(s.cycleDueAt).toLocaleDateString()}`}
-                        </span>
-                      )}
-                    </div>
-                    <div className="mt-1.5 flex flex-wrap items-center gap-x-3.5 gap-y-1.5 text-[12px] text-slate-600">
-                      <span className="inline-flex items-center gap-1.5 whitespace-nowrap" title={s.owner ? 'Business owner' : 'No business owner set on this scope yet'}>
-                        <span className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-[9px] font-bold ${s.owner ? 'bg-primary-50 text-primary-800' : 'bg-slate-100 text-slate-400'}`}>
-                          {s.owner ? s.owner.split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase() : '?'}
-                        </span>
-                        {s.owner ?? <span className="text-slate-400">owner unassigned</span>}
-                      </span>
-                      <span className="inline-flex items-center gap-1.5 text-slate-500"><Calendar className="h-3.5 w-3.5" /> {s.cadence} cadence</span>
-                      <span className="inline-flex items-center gap-1.5 text-slate-500"><Table2 className="h-3.5 w-3.5" /> {s.membership}</span>
+            <div style={{ fontSize: 10.5, color: FAINT, margin: '6px 0 8px' }}>A link is the fix to implement — it does <b>not</b> close these findings.</div>
+            {(() => {
+              const evItems = (ctrlEvidence as any)?.items ?? [];
+              const list: any[] = evItems.length ? evItems : ctrlPopup.coveredIds.map((id) => (scopeFindings ?? []).find((v: any) => v.id === id)).filter(Boolean);
+              if (ctrlLoading && !list.length) return <p style={{ padding: '12px 0', fontSize: 12, color: FAINT }}>Loading findings…</p>;
+              if (!list.length) return <div style={{ border: '1px dashed #D8DFE4', borderRadius: 10, background: '#FAFBFC', padding: 14, textAlign: 'center', color: MUTED, fontSize: 11.5 }}>This control addresses {ctrlPopup.findings} findings across the scope.</div>;
+              return list.map((it: any, i: number) => {
+                const v = it.vulnerability ?? it;
+                const sev = v.severity ?? 'low';
+                return (
+                  <div key={v.id ?? i} style={{ display: 'flex', alignItems: 'center', gap: 10, borderBottom: `1px solid ${BORDER2}`, padding: '9px 2px' }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, fontSize: 12 }}>{v.title ?? v.vuln_id ?? `Finding #${v.id}`}</div>
+                      <div style={{ display: 'flex', gap: 8, marginTop: 2, fontSize: 10.5, color: FAINT }}><SevBadge sev={sev} />{v.composite_priority != null && <span style={MONO}>{Math.round(Number(v.composite_priority) * 10)}/100</span>}{(v.linked_assets ?? [])[0] && <span>{v.linked_assets[0]}</span>}</div>
                     </div>
                   </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <Link href={findingsHref} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-2.5 py-[7px] text-[12.5px] font-medium text-slate-700 transition hover:bg-slate-50">
-                      <ExternalLink className="h-3.5 w-3.5" /> View findings
-                    </Link>
-                    {canEdit && (s.cycleOpen ? (
-                      <button onClick={() => s.cycleId && closeMutation.mutate(s.cycleId)} disabled={closeMutation.isPending || !s.cycleId}
-                        title="Close this cycle — freezes today's numbers as a permanent, tamper-proof record."
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 py-[7px] text-[12.5px] font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-50">
-                        {closeMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Square className="h-3.5 w-3.5" />} Close &amp; save
-                      </button>
-                    ) : (
-                      <button onClick={() => openMutation.mutate(s.id)} disabled={openMutation.isPending}
-                        className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-[7px] text-[12.5px] font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50">
-                        {openMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />} Open cycle
-                      </button>
-                    ))}
-                    {canEdit && (
-                      <button
-                        onClick={() => { if (window.confirm(`Delete scope “${s.name}”? This removes the scope and any open cycle. Findings and assets are not touched.`)) deleteMutation.mutate(s.id); }}
-                        disabled={deleteMutation.isPending}
-                        title="Delete this scope. A scope with closed (frozen) cycles can't be deleted — its audit history is immutable."
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 py-[7px] text-[12.5px] font-medium text-rose-600 transition hover:border-rose-300 hover:bg-rose-50 disabled:opacity-50">
-                        {deleteMutation.isPending && deleteMutation.variables === s.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />} Delete
-                      </button>
-                    )}
-                  </div>
-                </div>
-                {/* cycle guide — plain words: what this is, what to do now, and why */}
-                <div className="mt-3 flex items-start gap-2.5 rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2.5">
-                  <span className="relative mt-1 flex h-2.5 w-2.5 shrink-0">
-                    {s.cycleOpen && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-70" />}
-                    <span className="relative inline-flex h-2.5 w-2.5 rounded-full" style={{ background: s.cycleOpen ? '#10b981' : '#94a3b8' }} />
-                  </span>
-                  <div className="min-w-0">
-                    {s.cycleOpen ? (
-                      <>
-                        <p className="text-[12.5px] font-semibold text-slate-800">Cycle #{s.cycleNo} is open · day {s.cycleDay ?? 0} — the loop below is measuring live.</p>
-                      </>
-                    ) : s.cycleNo > 0 ? (
-                      <>
-                        <p className="text-[12.5px] font-semibold text-slate-800">No cycle open — last one (#{s.cycleNo}) closed {s.lastClosed ?? ''} and is saved.</p>
-                      </>
-                    ) : (
-                      <>
-                        <p className="text-[12.5px] font-semibold text-slate-800">No cycle has been run on this scope yet.</p>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </Card>
-
-              {/* ── the CTEM loop, as a guided stepper ── */}
-              <Card className="p-4">
-                <div className="mb-3 flex items-start gap-2">
-                  <RefreshCw className="mt-0.5 h-4 w-4 shrink-0 text-primary-700" />
-                  <div>
-                    <p className="text-[13px] font-semibold text-slate-900">The CTEM loop — one stage at a time</p>
-                    <p className="mt-0.5 text-[11px] text-slate-400">Run each stage in order — a stage unlocks the next.</p>
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-slate-200 bg-gradient-to-b from-slate-50/70 to-white p-3">
-                  <div className="flex items-stretch">
-    {stages.map((st, i) => {
-                      const state = stageState(st.n);
-                      const isActive = st.n === activeStage;
-                      // Gated loop: a locked stage is NOT clickable — you cannot even
-                      // open Mobilise until Validate has completed in this cycle.
-                      const locked = (gated && !stageDone[st.n] && !stageReachable(st.n))
-                        || (gated && st.n === 5 && !sp?.dispatch);   // Mobilise opens only on explicit dispatch
-                      return (
-                        <div key={st.label} className="contents">
-                          <button
-                            type="button"
-                            disabled={locked}
-                            onClick={() => !locked && setActiveStage(st.n)}
-                            title={locked ? `${st.label} — locked until the previous stage is run in this cycle` : state === 'upcoming' ? `${st.label} — view only until the earlier stages are done` : st.sub}
-                            className={`block min-w-0 flex-1 rounded-xl border bg-white p-2.5 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md 2xl:p-3 ${
-                              isActive ? 'ring-2 ring-offset-1' : ''
-                            } ${state === 'upcoming' ? 'opacity-55' : ''}`}
-                            style={{ borderTop: `3px solid ${st.c}`, ...(isActive ? { boxShadow: `0 0 0 2px ${st.c}55` } : {}) }}
-                          >
-                            <div className="flex items-center gap-1.5">
-                              <span
-                                className="inline-flex h-[20px] w-[20px] shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white shadow-sm"
-                                style={{ backgroundColor: state === 'done' ? '#10b981' : state === 'upcoming' ? '#cbd5e1' : st.c }}
-                              >
-                                {state === 'done' ? '✓' : st.n}
-                              </span>
-                              <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{st.label}</span>
-                              {isActive && <span className="ml-auto text-[9px] font-bold uppercase tracking-wider text-slate-400">you are here</span>}
-                            </div>
-                            <p className={`mt-1.5 text-[22px] font-bold leading-none tabular-nums 2xl:text-[28px] ${
-                              st.accent === 'rose' ? 'text-rose-700' : st.accent === 'emerald' ? 'text-emerald-700' : 'text-slate-900'
-                            }`}>{st.value}</p>
-                            <p className="mt-1 text-[10.5px] leading-tight text-slate-500 2xl:text-[11px]">{st.sub}</p>
-                          </button>
-                          {i < stages.length - 1 && (
-                            <div className="flex w-[64px] shrink-0 flex-col items-center justify-center gap-1 px-1 2xl:w-[84px]">
-                              <ArrowRight className={`h-4 w-4 ${stageDone[st.n] ? 'text-emerald-500' : 'text-slate-300'}`} />
-                              <span className="text-center text-[9.5px] leading-tight text-slate-400">{convs[i]}</span>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </Card>
-
-              {/* STAGE 2 DISCOVER — the findings your scan already produced */}
-              {activeStage === 2 && (
-              <Card className="p-4">
-                <SectionTitle icon={<Search className="h-[15px] w-[15px] text-primary-700" />} className="mb-3">Discover — scanner results on this scope</SectionTitle>
-                {gated && !g.discover ? (
-                  <div className="py-8 text-center">
-                    <p className="text-[13px] font-semibold text-slate-900">Discovery hasn&apos;t been run for this cycle yet.</p>
-                    <p className="mx-auto mt-1 max-w-xl text-[12px] text-slate-500">
-                      Your scanner sync keeps importing results in the background. Running Discover pulls the current
-                      picture into THIS cycle — nothing shows on this loop until you do.
-                    </p>
-                    {canEdit && (
-                      <button onClick={() => completeStage.mutate({ scopeId: s.id, stage: 'discover' })}
-                        disabled={completeStage.isPending}
-                        className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-4 py-2 text-[13px] font-semibold text-white hover:bg-primary-700 disabled:opacity-50">
-                        {completeStage.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-                        Run discovery for this cycle
-                      </button>
-                    )}
-                  </div>
-                ) : s.findings > 0 ? (
-                  <>
-                    <div className="flex flex-wrap items-baseline justify-between gap-2">
-                      <div className="flex items-baseline gap-2">
-                        <span className="text-[30px] font-bold leading-none tabular-nums text-slate-900">{s.findings}</span>
-                        <span className="text-[12px] text-slate-500">open scanner results across {s.assets} machine{s.assets === 1 ? '' : 's'} — imported by your scanner sync</span>
-                      </div>
-                      <Link href={findingsHref} className="inline-flex items-center gap-1.5 text-[12px] font-medium text-primary-700 hover:underline">
-                        Open in the full register <ExternalLink className="h-3.5 w-3.5" />
-                      </Link>
-                    </div>
-                    <div className="mt-3 max-h-[420px] overflow-auto rounded-xl border border-slate-100">
-                      <table className="w-full text-[12px]">
-                        <thead className="sticky top-0 bg-slate-50">
-                          <tr className="text-[10px] uppercase tracking-wide text-slate-400">
-                            <th className="px-3 py-2 text-left font-semibold">Result</th>
-                            <th className="px-3 py-2 text-left font-semibold">Machine</th>
-                            <th className="px-3 py-2 text-left font-semibold">Severity</th>
-                            <th className="px-3 py-2 text-right font-semibold">CVSS</th>
-                            <th className="px-3 py-2 text-right font-semibold">EPSS</th>
-                            <th className="px-3 py-2 text-left font-semibold">KEV</th>
-                            <th className="px-3 py-2 text-left font-semibold">Status</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {(() => {
-                            // real vulnerabilities on top, info noise last (was dumping
-                            // 180 info rows above the 24 that matter)
-                            const rank: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
-                            return [...(scopeFindings ?? [])].sort((a: any, b: any) =>
-                              (rank[a.severity] ?? 3) - (rank[b.severity] ?? 3)
-                              || (Number(b.cvss_score ?? 0) - Number(a.cvss_score ?? 0)));
-                          })().map((v: any) => {
-                            const sv = sevStyle((['critical','high','medium','low'].includes(v.severity) ? v.severity : 'low') as Sev);
-                            // Info findings aren't CVEs — they carry no CVSS/EPSS/KEV. Show "—"
-                            // (not applicable), never a fake "0.0".
-                            const hasScore = v.severity !== 'info' && v.cvss_score != null && Number(v.cvss_score) > 0;
-                            return (
-                              <tr key={v.id} onClick={() => router.push(`/vulnerabilities/${v.id}`)} className="cursor-pointer border-t border-slate-100 hover:bg-slate-50">
-                                <td className="max-w-[360px] truncate px-3 py-1.5 font-medium text-slate-800" title={v.title}>{v.title}</td>
-                                <td className="px-3 py-1.5 text-slate-500">
-                                  {(v.linked_assets ?? []).length > 0
-                                    ? <span className="inline-flex items-center gap-1" title={(v.linked_assets ?? []).join(', ')}><Server className="h-3 w-3 text-slate-400" />{v.linked_assets[0]}{v.linked_assets.length > 1 ? ` +${v.linked_assets.length - 1}` : ''}</span>
-                                    : <span className="text-slate-300">—</span>}
-                                </td>
-                                <td className="px-3 py-1.5"><span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${v.severity === 'info' ? 'bg-slate-100 text-slate-500' : sv.className}`}>{v.severity === 'info' ? 'Info' : sv.label}</span></td>
-                                <td className="px-3 py-1.5 text-right tabular-nums text-slate-600" title={v.severity === 'info' ? 'Informational finding — not a CVE, so no CVSS score' : undefined}>{hasScore ? Number(v.cvss_score).toFixed(1) : '—'}</td>
-                                <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">{v.epss_score != null ? `${Math.round(Number(v.epss_score) * 100)}%` : '—'}</td>
-                                <td className="px-3 py-1.5">{v.kev_flag ? <span className="rounded bg-rose-50 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700">KEV</span> : <span className="text-slate-300">—</span>}</td>
-                                <td className="px-3 py-1.5 text-slate-500">{v.status}</td>
-                              </tr>
-                            );
-                          })}
-                          {!scopeFindings && (
-                            <tr><td colSpan={7} className="px-3 py-6 text-center text-slate-400">Loading scanner results…</td></tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                    <p className="mt-2 text-[11px] text-slate-400">Same rows as the vulnerabilities register, filtered to this scope. Click a row to open the finding. Next: Prioritise ranks these by risk.</p>
-                  </>
-                ) : (
-                  <p className="max-w-2xl text-[12px] leading-relaxed text-slate-500">
-                    No scanner results on this scope&apos;s machines yet. Discovery comes from the scanner — run a <b>Nessus scan</b> against these hosts and <b>Sync</b> the connection, then they appear here.
-                  </p>
-                )}
-              </Card>
-              )}
-
-              {/* STAGE 3 — the AUTOMATIC risk ranking. Prioritisation already
-                  happened the moment findings were enriched: severity, CVSS,
-                  EPSS (probability of exploitation) and CISA-KEV are on every
-                  row. This list is that ranking — it exists with no button.
-                  The reachability engine below is a REFINEMENT on top. */}
-              {activeStage === 3 && gated && !g.prioritise && (
-              <Card className="p-4">
-                <div className="py-8 text-center">
-                  <p className="text-[13px] font-semibold text-slate-900">Prioritisation hasn&apos;t been run for this cycle yet.</p>
-                  <p className="mx-auto mt-1 max-w-xl text-[12px] text-slate-500">
-                    The attack-path engine tests every finding × machine pair in this scope and ranks
-                    what an attacker could actually reach. Nothing shows until you run it.
-                  </p>
-                  {canEdit && (
-                    <button onClick={() => computePaths.mutate(s.id)} disabled={computePaths.isPending}
-                      className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-4 py-2 text-[13px] font-semibold text-white hover:bg-rose-700 disabled:opacity-50">
-                      {computePaths.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Crosshair className="h-4 w-4" />}
-                      {computePaths.isPending ? 'Analysing attack paths…' : 'Run prioritisation'}
-                    </button>
-                  )}
-                </div>
-              </Card>
-              )}
-              {activeStage === 3 && (!gated || g.prioritise) && (
-              <Card className="p-4">
-                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                  <SectionTitle icon={<Crosshair className="h-[15px] w-[15px] text-rose-700" />}>Ranked by risk on your hosts — automatic</SectionTitle>
-                  <span className="text-[11px] text-slate-400">the same contextual score each finding’s Risk analysis shows (/100)</span>
-                </div>
-                {(() => {
-                  const sevRank: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1, info: 0 };
-                  // Primary key: composite_priority — the stored 7-signal contextual
-                  // score (CVSS/EPSS/maturity/KEV/vector/exposure/asset), the SAME
-                  // number the finding page's Risk analysis shows as N/100. Ranking
-                  // by abstract CVSS alone floated a blocked internal CVSS-10 above an
-                  // actively-exploited 8.8 — the contradiction the owner caught.
-                  const ranked = [...(scopeFindings ?? [])]
-                    .filter((v: any) => v.severity !== 'info')
-                    .sort((a: any, b: any) =>
-                      ((b.composite_priority ?? -1) - (a.composite_priority ?? -1))
-                      || (Number(!!b.kev_flag) - Number(!!a.kev_flag))
-                      || ((b.epss_score ?? 0) - (a.epss_score ?? 0))
-                      || ((b.cvss_score ?? 0) - (a.cvss_score ?? 0))
-                      || ((sevRank[b.severity] ?? 0) - (sevRank[a.severity] ?? 0)));
-                  if (!scopeFindings) return <p className="py-4 text-center text-[12px] text-slate-400">Loading…</p>;
-                  if (ranked.length === 0) return <p className="rounded-lg bg-slate-50 p-3 text-[11.5px] text-slate-500">Only informational notes in this scope — nothing carries a CVE/CVSS to rank. The desktop scope is where the rankable vulnerabilities live.</p>;
-                  return (
-                    <div className="space-y-0.5">
-                      {(showAllRanked ? ranked : ranked.slice(0, 12)).map((v: any, i: number) => {
-                        const sv = sevStyle((['critical','high','medium','low'].includes(v.severity) ? v.severity : 'low') as Sev);
-                        const controls: string[] = Array.isArray(v.linked_control_codes) ? v.linked_control_codes : [];
-                        return (
-                          <div key={v.id} className="flex items-center gap-3 rounded-lg border border-transparent p-2 transition hover:border-slate-200 hover:bg-slate-50">
-                            <span className="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md bg-slate-100 text-[11px] font-bold tabular-nums text-slate-500">{i + 1}</span>
-                            <Link href={`/vulnerabilities/${v.id}`} className="flex min-w-0 flex-1 items-center gap-3">
-                              <div className="min-w-0 flex-1">
-                                <p className="truncate text-[12.5px] font-medium text-slate-900" title={v.title}>{v.title}</p>
-                                <p className="mt-px text-[11px] text-slate-400">
-                                  CVSS {v.cvss_score != null ? Number(v.cvss_score).toFixed(1) : '—'}
-                                  {v.epss_score != null && <span className="ml-1.5 text-amber-700">EPSS {Math.round(Number(v.epss_score) * 100)}%</span>}
-                                  {v.kev_flag && <span className="ml-1.5 rounded bg-rose-50 px-1 py-0 font-semibold text-rose-700">actively exploited</span>}
-                                  {controls.length > 0 && (
-                                    <span className="ml-1.5 rounded bg-primary-50 px-1 py-0 font-semibold text-primary-700" title="The control that ADDRESSES this finding (the fix to implement). It does not close the finding — only a Nessus re-scan that no longer sees it does.">fix: {controls[0]}{controls.length > 1 ? ` +${controls.length - 1}` : ''}</span>
-                                  )}
-                                </p>
-                              </div>
-                            </Link>
-                            {v.composite_priority != null && (
-                              <span className="shrink-0 text-right" title="Contextual risk on this host — the same score the finding's Risk analysis shows. Severity alone can say 'Critical' while the host context says the flaw is hard to reach here.">
-                                <span className="block text-[14px] font-bold leading-none tabular-nums text-slate-900">{Math.round(Number(v.composite_priority) * 10)}<span className="text-[10px] font-semibold text-slate-400">/100</span></span>
-                                <span className="text-[9px] uppercase tracking-wide text-slate-400">on this host</span>
-                              </span>
-                            )}
-                            <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${sv.className}`} title="Abstract severity of the flaw itself — before host context.">{sv.label}</span>
-                          </div>
-                        );
-                      })}
-                      {ranked.length > 12 && (
-                        <button type="button" onClick={() => setShowAllRanked((x) => !x)} className="mt-1 text-[12px] font-medium text-primary-700 hover:underline">
-                          {showAllRanked ? 'Show fewer' : `Show all ${ranked.length} vulnerabilities`}
-                        </button>
-                      )}
-                    </div>
-                  );
-                })()}
-              </Card>
-              )}
-
-              {/* STAGE 5 MOBILISE — a WORK BOARD, not a risk list. Prioritise (stage 3)
-                  answers "what is dangerous"; this answers "who is fixing what, and how
-                  far along". Ordered by workflow status (needs-owner first), not by rank. */}
-              {activeStage === 5 && (
-              <Card className="p-4">
-                <div className="mb-3 flex items-start gap-2 rounded-lg border border-emerald-100 bg-emerald-50/70 px-3 py-2 text-[11.5px] leading-snug text-emerald-800">
-                  <Send className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                  <span><b>Mobilise</b> — hand each real vulnerability to one owner. <b>Assign</b> creates a workflow task and emails them the finding, its fix control, and the recommended fix. Nobody closes a finding by hand — a <b>Nessus re-scan</b> that no longer sees it is the only proof.</span>
-                </div>
-                {gated && !sp?.dispatch ? (
-                  <div className="py-8 text-center">
-                    <p className="text-[13px] font-semibold text-slate-900">Nothing has been dispatched to Mobilise yet.</p>
-                    <p className="mx-auto mt-1 max-w-xl text-[12px] text-slate-500">
-                      Mobilise receives its work list ONLY when you press <b>Dispatch to Mobilise</b> on the
-                      Validate stage — the linked vulnerabilities arrive here, priority first, nothing stale.
-                    </p>
-                  </div>
-                ) : (() => {
-                  // the work list = EXACTLY the vulnerabilities Validate linked to controls
-                  // (falls back to the old severity guess only in history view)
-                  const linkedSet = new Set(s.pipeline?.linked_ids ?? []);
-                  const workItems = [...(scopeFindings ?? [])].filter((v: any) =>
-                    linkedSet.size > 0 ? linkedSet.has(v.id) : v.severity !== 'info');
-                  const statusOf = (v: any): 'unassigned' | 'inprogress' => (v.assigned_to ? 'inprogress' : 'unassigned');
-                  const needsOwner = workItems.filter((v: any) => statusOf(v) === 'unassigned').length;
-                  const inProgress = workItems.length - needsOwner;
-                  // "Fixed & verified" counts REAL remediations only. An informational
-                  // finding that a re-scan stopped reporting is not a fix — it's volatile
-                  // data (e.g. DNS cache) that varies between scans; counting it would
-                  // inflate the real number. Shown separately as "no longer reported".
-                  const fixed = scopeFixed ? scopeFixed.filter((v: any) => v.severity !== 'info').length : (s.closedVerified ?? 0);
-                  if (!scopeFindings) return <p className="py-4 text-center text-[12px] text-slate-400">Loading…</p>;
-                  if (workItems.length === 0) return <p className="rounded-lg bg-slate-50 p-3 text-[11.5px] text-slate-500">No real vulnerabilities to assign in this scope — only informational notes, which describe the machine and have nothing to fix.</p>;
-                  const filtered = workItems
-                    .filter((v: any) => mobFilter === 'all' ? true : statusOf(v) === mobFilter)
-                    .sort((a: any, b: any) => {
-                      const rank: Record<string, number> = { unassigned: 0, inprogress: 1 };
-                      return (rank[statusOf(a)] - rank[statusOf(b)]) || ((b.composite_priority ?? -1) - (a.composite_priority ?? -1));
-                    });
-                  const Tab = ({ id, label, n, tone }: { id: 'all' | 'unassigned' | 'inprogress'; label: string; n: number; tone: string }) => (
-                    <button type="button" onClick={() => setMobFilter(id)}
-                      className={`rounded-full px-3 py-1 text-[11.5px] font-medium transition ${mobFilter === id ? 'ring-1 ' + tone : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
-                      {label} <span className="tabular-nums font-bold">{n}</span>
-                    </button>
-                  );
-                  const renderWorkRow = (v: any) => {
-                    const st = statusOf(v);
-                    const sv = sevStyle((['critical', 'high', 'medium', 'low'].includes(v.severity) ? v.severity : 'low') as Sev);
-                    const controls: string[] = Array.isArray(v.linked_control_codes) ? v.linked_control_codes : [];
-                    let age: { t: string; c: string } | null = null;
-                    if (v.due_date) {
-                      const d = Math.ceil((new Date(v.due_date).getTime() - Date.now()) / 86400000);
-                      age = d < 0 ? { t: `overdue ${Math.abs(d)}d`, c: 'text-rose-600' } : { t: `${d}d left`, c: d <= 7 ? 'text-amber-600' : 'text-slate-400' };
-                    }
-                    return (
-                      <div key={v.id} className={`flex items-center gap-3 rounded-lg border p-2.5 transition ${st === 'unassigned' ? 'border-amber-200 bg-amber-50/40' : 'border-slate-200 bg-white'} hover:border-slate-300`}>
-                        <span className={`w-[86px] shrink-0 rounded-md px-2 py-1 text-center text-[10px] font-bold uppercase tracking-wide ${st === 'unassigned' ? 'bg-amber-100 text-amber-800' : 'bg-sky-100 text-sky-800'}`}>
-                          {st === 'unassigned' ? 'Needs owner' : 'In progress'}
-                        </span>
-                        <Link href={`/vulnerabilities/${v.id}`} className="min-w-0 flex-1">
-                          <p className="truncate text-[12.5px] font-medium text-slate-900" title={v.title}>{v.title}</p>
-                          <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-slate-400">
-                            <span className={`rounded-full px-1.5 py-0 text-[10px] font-semibold ${sv.className}`}>{sv.label}</span>
-                            {(v.linked_assets ?? []).length > 0 && <span className="inline-flex items-center gap-0.5 text-slate-500" title={(v.linked_assets ?? []).join(', ')}><Server className="h-3 w-3" />{v.linked_assets[0]}{v.linked_assets.length > 1 ? ` +${v.linked_assets.length - 1}` : ''}</span>}
-                            {v.composite_priority != null && <span title="Contextual risk on this host (/100).">{Math.round(Number(v.composite_priority) * 10)}/100</span>}
-                            {v.kev_flag && <span className="rounded bg-rose-50 px-1 font-semibold text-rose-700">actively exploited</span>}
-                          </p>
-                        </Link>
-                        <div className="shrink-0">
-                          <MobiliseControlCell vulnId={v.id} count={controls.length} canEdit={canEdit} onChanged={() => qc.invalidateQueries({ queryKey: ['ctem.scope-findings'] })} />
-                        </div>
-                        <div className="hidden w-[132px] shrink-0 text-right sm:block">
-                          {v.assignee_name
-                            ? <span className="inline-flex items-center gap-1 text-[11.5px] font-medium text-slate-700" title="Owner of this fix"><span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-200 text-[9px] font-bold text-slate-600">{String(v.assignee_name).slice(0, 2).toUpperCase()}</span><span className="truncate">{v.assignee_name}</span></span>
-                            : <span className="text-[11px] text-amber-600">no owner yet</span>}
-                          {age && <span className={`block text-[10px] ${age.c}`}>{age.t}</span>}
-                        </div>
-                        {canEdit && (
-                          <button type="button"
-                            title={st === 'unassigned' ? 'Assign this fix to one person — workflow task + email.' : 'Reassign to a different owner.'}
-                            onClick={() => { setAssigning({ id: v.id, title: v.title } as any); setAssigneeId(''); setApproverId(''); setAssigneeQuery(''); }}
-                            className={`inline-flex shrink-0 items-center gap-1 rounded-md border px-2.5 py-1.5 text-[11px] font-medium ${st === 'unassigned' ? 'border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}>
-                            <Send className="h-3 w-3" /> {st === 'unassigned' ? 'Assign' : 'Reassign'}
-                          </button>
-                        )}
-                      </div>
-                    );
-                  };
-                  const byOwner = (() => {
-                    const g: Record<string, any[]> = {};
-                    filtered.forEach((v: any) => { const k = v.assignee_name || ' Unassigned'; (g[k] = g[k] || []).push(v); });
-                    return Object.entries(g).sort((a, b) => a[0] === ' Unassigned' ? 1 : b[0] === ' Unassigned' ? -1 : a[0].localeCompare(b[0]));
-                  })();
-                  return (
-                    <>
-                      {/* the workflow pipeline as filter tabs — what makes this a board */}
-                      <div className="mb-3 flex flex-wrap items-center gap-2">
-                        <Tab id="all" label="All" n={workItems.length} tone="bg-slate-900 text-white ring-slate-900" />
-                        <Tab id="unassigned" label="Needs owner" n={needsOwner} tone="bg-amber-50 text-amber-800 ring-amber-300" />
-                        <Tab id="inprogress" label="In progress" n={inProgress} tone="bg-sky-50 text-sky-800 ring-sky-300" />
-                        <div className="ml-auto flex items-center gap-2">
-                          <div className="flex rounded-full border border-slate-200 bg-slate-50 p-0.5 text-[11px] font-medium">
-                            <button type="button" onClick={() => setMobGroup('status')} className={`rounded-full px-2.5 py-0.5 ${mobGroup === 'status' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}>By status</button>
-                            <button type="button" onClick={() => setMobGroup('owner')} className={`rounded-full px-2.5 py-0.5 ${mobGroup === 'owner' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}>By owner</button>
-                          </div>
-                          <button type="button" onClick={() => setMobFilter('fixed')}
-                            title="Closed automatically when a Nessus re-scan no longer saw the finding (SCANNER_VERIFIED) — never hand-closed. Click to see which ones."
-                            className={`rounded-full px-3 py-1 text-[11.5px] font-medium transition ${mobFilter === 'fixed' ? 'bg-emerald-100 text-emerald-800 ring-1 ring-emerald-300' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'}`}>
-                            Fixed &amp; verified <span className="tabular-nums font-bold">{fixed}</span>
-                          </button>
-                        </div>
-                      </div>
-                      {mobFilter === 'fixed' ? (
-                        !scopeFixed ? <p className="py-4 text-center text-[12px] text-slate-400">Loading…</p>
-                        : scopeFixed.length === 0 ? (
-                          <p className="rounded-lg bg-emerald-50/50 p-3 text-[11.5px] text-emerald-800">Nothing closed yet. When the owner fixes a host and the next Nessus re-scan no longer sees the finding, it lands here automatically — no one closes it by hand.</p>
-                        ) : (() => {
-                          const realFixed = scopeFixed.filter((v: any) => v.severity !== 'info');
-                          const infoClosed = scopeFixed.filter((v: any) => v.severity === 'info');
-                          const fixRow = (v: any) => {
-                            const controls: string[] = Array.isArray(v.linked_control_codes) ? v.linked_control_codes : [];
-                            return (
-                              <div key={v.id} className="flex items-center gap-3 rounded-lg border border-emerald-200 bg-emerald-50/40 p-2.5">
-                                <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700"><ShieldCheck className="h-3.5 w-3.5" /></span>
-                                <Link href={`/vulnerabilities/${v.id}`} className="min-w-0 flex-1">
-                                  <p className="truncate text-[12.5px] font-medium text-slate-900" title={v.title}>{v.title}</p>
-                                  <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-slate-400">
-                                    <span className="rounded-full bg-emerald-100 px-1.5 py-0 text-[10px] font-semibold text-emerald-700">verified fix · re-scan</span>
-                                    {v.assignee_name && <span>fixed by {v.assignee_name}</span>}
-                                    {controls.length > 0 && <span className="rounded bg-primary-50 px-1 font-semibold text-primary-700">fix: {controls[0]}{controls.length > 1 ? ` +${controls.length - 1}` : ''}</span>}
-                                  </p>
-                                </Link>
-                              </div>
-                            );
-                          };
-                          return (
-                            <div className="space-y-3">
-                              {realFixed.length > 0 && <div className="space-y-1">{realFixed.map(fixRow)}</div>}
-                              {infoClosed.length > 0 && (
-                                <div>
-                                  <p className="mb-1 text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">No longer reported · {infoClosed.length}</p>
-                                  <p className="mb-1.5 text-[10.5px] text-slate-400">Informational items the last re-scan didn&apos;t report — volatile data (DNS cache, listeners…), not a remediation. Kept for the record, not counted as fixes.</p>
-                                  <div className="space-y-1">
-                                    {infoClosed.map((v: any) => (
-                                      <div key={v.id} className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50/60 p-2.5">
-                                        <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-200 text-slate-500 text-[10px] font-bold">i</span>
-                                        <Link href={`/vulnerabilities/${v.id}`} className="min-w-0 flex-1">
-                                          <p className="truncate text-[12.5px] font-medium text-slate-700" title={v.title}>{v.title}</p>
-                                          <p className="mt-0.5 text-[11px] text-slate-400"><span className="rounded-full bg-slate-200 px-1.5 py-0 text-[10px] font-semibold text-slate-500">no longer reported</span></p>
-                                        </Link>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })()
-                      ) : filtered.length === 0 ? (
-                        <p className="rounded-lg bg-slate-50 p-3 text-[11.5px] text-slate-500">
-                          {mobFilter === 'unassigned' ? 'Every finding here already has an owner.' : mobFilter === 'inprogress' ? 'Nothing assigned yet — start with the “Needs owner” list.' : 'Nothing to show.'}
-                        </p>
-                      ) : mobGroup === 'owner' ? (
-                        <div className="space-y-4">
-                          {byOwner.map(([name, items]) => {
-                            const overdue = items.filter((v: any) => v.due_date && new Date(v.due_date).getTime() < Date.now()).length;
-                            return (
-                              <div key={name}>
-                                <div className="mb-1.5 flex items-center gap-2">
-                                  {name === ' Unassigned'
-                                    ? <span className="text-[12.5px] font-semibold text-amber-700">Unassigned</span>
-                                    : <span className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-slate-700"><span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-slate-200 text-[9px] font-bold text-slate-600">{String(name).slice(0, 2).toUpperCase()}</span>{name}</span>}
-                                  <span className="text-[11px] text-slate-400">{items.length} task{items.length > 1 ? 's' : ''}</span>
-                                  {overdue > 0 && <span className="rounded bg-rose-50 px-1.5 py-0 text-[10px] font-semibold text-rose-700">{overdue} overdue</span>}
-                                </div>
-                                <div className="space-y-1">{items.map(renderWorkRow)}</div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        (() => {
-                          // SAME order as Validate: reachable first, then prioritised, then the rest.
-                          const dangerSet = new Set(s.dangerousIds ?? []);
-                          const priSet = new Set(s.pipeline?.priority_ids ?? []);
-                          const sec1 = filtered.filter((v: any) => dangerSet.has(v.id));
-                          const sec2 = filtered.filter((v: any) => !dangerSet.has(v.id) && priSet.has(v.id));
-                          const sec3 = filtered.filter((v: any) => !dangerSet.has(v.id) && !priSet.has(v.id));
-                          const Section = ({ title, tone, items }: { title: string; tone: string; items: any[] }) =>
-                            items.length === 0 ? null : (
-                              <div>
-                                <p className={`mb-1.5 text-[11px] font-bold uppercase tracking-wide ${tone}`}>{title} <span className="tabular-nums">({items.length})</span></p>
-                                <div className="space-y-1">{items.map(renderWorkRow)}</div>
-                              </div>
-                            );
-                          return (
-                            <div className="space-y-4">
-                              <Section title="⚡ Dangerous — confirmed reachable, fix first" tone="text-rose-700" items={sec1} />
-                              <Section title="Prioritised vulnerabilities" tone="text-amber-700" items={sec2} />
-                              <Section title="Other linked fixes (hardening & configuration)" tone="text-slate-500" items={sec3} />
-                            </div>
-                          );
-                        })()
-                      )}
-                    </>
-                  );
-                })()}
-              </Card>
-              )}
-
-              {/* STAGE 3 PRIORITISE — reachability refinement + financial exposure. */}
-              {activeStage === 3 && (!gated || g.prioritise) && (
-              <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
-                <Card className="p-4">
-                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                    <SectionTitle icon={<Crosshair className="h-[15px] w-[15px] text-rose-700" />}>Reachability check — which are actually attackable</SectionTitle>
-                    <div className="flex items-center gap-3">
-                      {canEdit && activeStage === 3 && (
-                        <button onClick={() => computePaths.mutate(s.id)} disabled={computePaths.isPending}
-                          title="Re-run the attack-path engine over every (finding x machine) pair in this scope - the same engine as the Exploit Test tab, batched."
-                          className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2 py-1 text-[11.5px] font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50">
-                          {computePaths.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-                          {computePaths.isPending ? 'Calculating…' : 'Recalculate attack paths'}
-                        </button>
-                      )}
-                      <Link href="/vulnerabilities/choke-points" className="text-[12px] font-medium text-primary-700 hover:underline">Ranked list →</Link>
-                    </div>
-                  </div>
-                  {computePaths.isSuccess && computePaths.data && computePaths.variables === s.id && (
-                    <p className="mb-2 text-[11px] text-emerald-700">
-                      Done — {computePaths.data.evaluated ?? 0} of {computePaths.data.pairs ?? 0} finding×machine pairs re-run through the engine:
-                      {' '}{computePaths.data.snapshots_written ?? 0} verdict(s) changed, {computePaths.data.unchanged ?? 0} unchanged. Numbers below are refreshed.
-                    </p>
-                  )}
-                  <div className="mb-1.5 flex h-2 overflow-hidden rounded-full bg-slate-100" title={`How this scope's ${s.findings} findings split by attack-path status.`}>
-                    <div style={{ width: `${(s.buckets.ranked / fb) * 100}%`, background: '#be123c' }} />
-                    <div style={{ width: `${(s.buckets.undeterminable / fb) * 100}%`, background: '#f59e0b' }} />
-                    <div style={{ width: `${(s.buckets.chainless / fb) * 100}%`, background: '#cbd5e1' }} />
-                    <div style={{ width: `${(s.buckets.severed / fb) * 100}%`, background: '#10b981' }} />
-                  </div>
-                  {s.analysable && (
-                    <p className="mb-2 text-[10.5px] text-slate-500">
-                      <b className="font-semibold text-slate-700">{s.analysable.real_vulnerabilities}</b> real vulnerabilities (CVE / weakness type the engine can reason about) ·{' '}
-                      <b className="font-semibold text-slate-700">{s.analysable.informational}</b> informational (scanner notes with no CVE — can only ever be &ldquo;can&apos;t tell&rdquo;).
-                    </p>
-                  )}
-                  <div className="mb-3.5 flex flex-wrap gap-x-4 gap-y-2.5 text-[11px] text-slate-500">
-                    <Legend color="#be123c" value={s.buckets.ranked} label="dangerous" />
-                    <Legend color="#f59e0b" value={s.buckets.undeterminable} label="can't tell" />
-                    <Legend color="#cbd5e1" value={s.buckets.chainless} label="not calculated" />
-                    <Legend color="#10b981" value={s.buckets.severed} label="blocked" />
-                  </div>
-                  {(() => { const ownerless = s.dangerousOwnerless ?? s.top.filter((f) => !f.owner).length; return ownerless > 0 ? (
-                    <p className="mb-2 flex items-start gap-1.5 rounded-lg bg-amber-50 px-2.5 py-1.5 text-[10.5px] leading-snug text-amber-800">
-                      <AlertTriangle className="mt-px h-3 w-3 shrink-0" />
-                      <span><b>{ownerless} of these have no owner.</b> Assign a fix on the row below — pick the one person who owns it until a Nessus re-scan shows it gone.</span>
-                    </p>
-                  ) : null; })()}
-                  <div className="space-y-0.5">
-                    {s.top.length === 0 && (
-                      <p className="rounded-lg bg-slate-50 p-3 text-[11.5px] text-slate-500">
-                        No finding in this scope has a reachable attack path right now.
-                        {s.buckets.chainless > 0 && ' Attack paths have not been calculated for ' + s.buckets.chainless + ' yet — run “Calculate attack paths” on the choke-points page.'}
-                      </p>
-                    )}
-                    {s.top.map((f) => {
-                      const sv = sevStyle((['critical','high','medium','low'].includes(f.sev) ? f.sev : 'low') as Sev);
-                      const overdue = /overdue/.test(f.sla || '');
-                      const pending = f.taskStatus === 'running' && f.taskApprovalId;
-                      const iAmApprover = pending && currentUserId != null && Number(f.taskApproverId) === currentUserId;
-                      return (
-                        <div key={f.id} className="flex items-center gap-3 rounded-lg border border-transparent p-2 transition hover:border-slate-200 hover:bg-slate-50">
-                          <Link href={`/vulnerabilities/${f.id}`} title={f.title} className="flex min-w-0 flex-1 items-center gap-3">
-                            <span className="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md bg-slate-100 text-[11px] font-bold tabular-nums text-slate-500">{f.rank}</span>
-                            <div className="min-w-0 flex-1">
-                              <p className="truncate text-[12.5px] font-medium text-slate-900">{f.title}</p>
-                              <p className="mt-px truncate text-[11px] text-slate-400">
-                                {f.meta} · breaks {f.breaks}
-                                {f.kev && <span className="ml-1.5 rounded bg-rose-50 px-1 py-0 font-semibold text-rose-700" title="On CISA KEV — actively exploited in the wild. This is why it ranks above vulnerabilities that break the same number of paths.">actively exploited</span>}
-                                {!f.kev && f.epss != null && f.epss >= 0.1 && <span className="ml-1.5 text-amber-700" title="EPSS — probability of exploitation in the next 30 days. Higher EPSS breaks ties above lower.">EPSS {Math.round(f.epss * 100)}%</span>}
-                                {f.owner && <span className="ml-1.5">· {f.owner}</span>}
-                                {pending && <span className="ml-1.5 font-semibold text-amber-700">waiting approval</span>}
-                                {f.taskStatus === 'completed' && <span className="ml-1.5 font-semibold text-emerald-700">assigned</span>}
-                              </p>
-                            </div>
-                          </Link>
-                          <span className={`shrink-0 text-[10.5px] font-medium ${overdue ? 'text-rose-600' : 'text-slate-500'}`}>{f.sla ?? 'no SLA'}</span>
-                          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${sv.className}`}>{sv.label}</span>
-                          {iAmApprover && f.taskApprovalId && (
-                            <span className="flex shrink-0 gap-1">
-                              <button type="button" disabled={decideMutation.isPending}
-                                onClick={() => decideMutation.mutate({ scopeId: s.id, approvalId: f.taskApprovalId!, decision: 'approve' })}
-                                className="rounded-md bg-emerald-600 px-2 py-1 text-[11px] font-medium text-white hover:bg-emerald-700 disabled:opacity-50">Approve</button>
-                              <button type="button" disabled={decideMutation.isPending}
-                                onClick={() => decideMutation.mutate({ scopeId: s.id, approvalId: f.taskApprovalId!, decision: 'reject' })}
-                                className="rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50">Reject</button>
-                            </span>
-                          )}
-                        </div>
-                      );
-                    })}
-                    {s.dangerous > s.top.length && (
-                      <Link href="/vulnerabilities/choke-points" className="block px-2 pt-1 text-[11px] font-medium text-primary-700 hover:underline">
-                        Showing top {s.top.length} of {s.dangerous} dangerous — see the full ranked list →
-                      </Link>
-                    )}
-                  </div>
-                </Card>
-
-                {activeStage === 3 && (
-                <Card className="flex flex-col p-4">
-                  <SectionTitle icon={<Coins className="h-[15px] w-[15px] text-emerald-600" />} className="mb-3">Financial exposure</SectionTitle>
-                  {s.ale == null ? (
-                    <div className="flex flex-1 flex-col gap-3">
-                      <div className="rounded-xl bg-amber-50 p-3">
-                        <p className="text-[13px] font-semibold text-slate-800">Not quantified yet — no invented number</p>
-                        <p className="mt-1 text-[11.5px] leading-snug text-slate-600">
-                          A dollar figure needs a real risk, tied to this scope&apos;s machines, with loss estimates and a FAIR run.
-                          {quantify?.demo_only && ' The only risks on file are [DEMO] samples, which are excluded.'}
-                        </p>
-                      </div>
-                      {/* live checklist — ticks come from real state */}
-                      <div>
-                        <p className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">To quantify this scope</p>
-                        <ol className="mt-1.5 space-y-1 text-[11.5px] text-slate-600">
-                          <li className="flex items-start gap-1.5"><span className={`mt-[3px] h-2 w-2 shrink-0 rounded-full ${(s.fair?.risks_linked ?? 0) > 0 ? 'bg-emerald-500' : 'bg-slate-300'}`} />1. Create a real risk in the register and link it to {s.machines[0]?.name ?? 'a machine in this scope'} <span className="text-slate-400">({s.fair?.risks_linked ?? 0} linked)</span></li>
-                          <li className="flex items-start gap-1.5"><span className={`mt-[3px] h-2 w-2 shrink-0 rounded-full ${(s.fair?.risks_quantified ?? 0) > 0 ? 'bg-emerald-500' : 'bg-slate-300'}`} />2. Give it loss estimates and run its FAIR simulation <span className="text-slate-400">({s.fair?.risks_quantified ?? 0} run)</span></li>
-                          <li className="flex items-start gap-1.5"><span className="mt-[3px] h-2 w-2 shrink-0 rounded-full bg-slate-300" />3. The annualised loss appears here, summed across linked risks</li>
-                        </ol>
-                      </div>
-                    </div>
-                  ) : (<>
-                  <p className="text-[32px] font-bold leading-none tabular-nums text-slate-900">{money(s.ale)}</p>
-                  <p className="mt-1.5 text-[11.5px] text-slate-500">annualised loss (ALE)</p>
-                  <div className="mt-4">
-                    <div className="relative h-2 rounded-full bg-gradient-to-r from-emerald-200 via-amber-200 to-rose-200">
-                      <span className="absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow" style={{ left: `${alePos}%`, backgroundColor: '#0f172a' }} title="Most likely annual loss on the range from best to worst case." />
-                    </div>
-                    <div className="mt-1.5 flex justify-between">
-                      <span className="text-[10.5px] text-slate-500">min {money(s.aleMin)}</span>
-                      <span className="text-[10.5px] font-medium text-rose-700">P95 {money(s.p95)}</span>
-                    </div>
-                  </div>
-                  </>)}
-                  <div className="mt-auto border-t border-slate-100 pt-3.5">
-                    {s.aleAfter != null && <p className="text-[11px] text-slate-500">If the {s.dangerous} dangerous findings are fixed, modelled loss drops to <b className="text-emerald-700">{money(s.aleAfter)}</b>.</p>}
-                    <Link href={s.ale == null ? '/erm/risks/list' : '/erm/risks'} className="mt-2 inline-block text-[12px] font-medium text-primary-700 hover:underline">{s.ale == null ? 'Open the risk register →' : 'Open the risk dashboard →'}</Link>
-                  </div>
-                </Card>
-                )}
-              </div>
-              )}
-
-              {/* STAGE 1 SCOPE · STAGE 4 VALIDATE · STAGE 5 MOBILISE — each card gated to its stage */}
-              <div className="space-y-3.5">
-                {/* VALIDATE — three honest states for the cycle:
-                    ① not run: a BLANK stage with one button (nothing pre-filled);
-                    ② running: a LIVE progress bar fed by the backend run row — the
-                       run is a server thread, so leaving this page changes nothing;
-                    ③ done (stamped server-side when the run finishes): the results
-                       below unlock, and so does Mobilise. */}
-                {activeStage === 4 && gated && !g.validate && (
-                  <Card className="p-4">
-                    {mappingRunning || mapControls.isPending ? (
-                      (() => {
-                        // the honest funnel: in-scope → already answered (skipped) → analysing
-                        const inScope = aiRun?.findings_in_scope ?? aiRun?.findings_total ?? 0;
-                        const skipped = aiRun?.findings_skipped_existing ?? 0;
-                        const total = aiRun?.findings_total ?? 0;          // to analyse THIS run
-                        const done = Math.min(total, (aiRun?.findings_sent ?? 0) + (aiRun?.findings_reused ?? 0));
-                        const pct = total > 0 ? Math.max(4, Math.round((done / total) * 100)) : 8;
-                        const live = (aiRunData as any)?.last_run_counts ?? {};   // THIS run only, not history
-                        return (
-                          <div className="py-6">
-                            <p className="text-[13px] font-semibold text-slate-900">
-                              <Loader2 className="mr-1.5 inline h-4 w-4 animate-spin text-violet-600" />
-                              AI validation is running…
-                            </p>
-                            <p className="mt-1 text-[12px] text-slate-500">
-                              Runs on the server — leave this page and come back; nothing is lost.
-                            </p>
-                            {/* the live pipeline — what is happening to each finding, step by step */}
-                            <div className="mt-4 flex flex-wrap items-center gap-2 text-[11px]">
-                              {[
-                                { t: '1 · Read the vulnerability', d: 'CVE, weakness, scanner text' },
-                                { t: '2 · Scan library', d: 'all 2,332 controls, full text' },
-                                { t: '3 · Judge matches', d: 'context, not keywords' },
-                                { t: '4 · Write answer', d: 'link · review · nothing-to-fix' },
-                              ].map((st, i) => (
-                                <Fragment key={st.t}>
-                                  {i > 0 && <ArrowRight className="h-3.5 w-3.5 shrink-0 text-violet-300" />}
-                                  <span className="animate-pulse rounded-lg border border-violet-200 bg-violet-50 px-2.5 py-1.5" style={{ animationDelay: `${i * 250}ms` }}>
-                                    <b className="block text-violet-800">{st.t}</b>
-                                    <span className="text-violet-500">{st.d}</span>
-                                  </span>
-                                </Fragment>
-                              ))}
-                            </div>
-                            {/* the funnel itself — why the bar's total is what it is */}
-                            <p className="mt-3 text-[11px] tabular-nums text-slate-600">
-                              <b>{inScope}</b> scanner results in scope
-                              {skipped > 0 && <> → <b className="text-sky-700">{skipped}</b> already answered in earlier runs (skipped, free)</>}
-                              {' '}→ <b className="text-violet-700">{total}</b> to analyse this run
-                            </p>
-                            <div className="mt-2 max-w-xl">
-                              <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
-                                <div className="h-full rounded-full bg-gradient-to-r from-violet-500 to-violet-700 transition-all duration-700" style={{ width: `${pct}%` }} />
-                              </div>
-                              <p className="mt-1.5 text-[11px] tabular-nums text-slate-600">
-                                {total > 0 ? <><b>{done}</b> of <b>{total}</b> analysed</> : 'starting — loading your control library…'}
-                              </p>
-                              {/* live outcome tally — every finding lands in exactly one of these */}
-                              <div className="mt-2 flex flex-wrap gap-x-3.5 gap-y-1 text-[11px] tabular-nums">
-                                <span className="text-emerald-700">✓ {live.accepted ?? 0} linked to controls</span>
-                                <span className="text-amber-700">⏳ {live.proposed ?? 0} waiting for your review</span>
-                                <span className="text-slate-500">○ {live.no_control ?? 0} nothing to fix (info / patch-only)</span>
-                                {aiRun?.findings_reused ? <span className="text-sky-700">↩ {aiRun.findings_reused} settled by your earlier decisions</span> : null}
-                                {aiRun?.model_errors ? <span className="text-rose-700">⚠ {aiRun.model_errors} error(s)</span> : null}
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })()
-                    ) : (
-                      <div className="py-8 text-center">
-                        <p className="text-[13px] font-semibold text-slate-900">Validation hasn&apos;t been run for this cycle yet.</p>
-                        <p className="mx-auto mt-1 max-w-2xl text-[12px] leading-relaxed text-slate-500">
-                          The AI reads each vulnerability (CVE, CWE, description, asset context) against every control in your
-                          locked Unified Control Library. A group pick links every framework&apos;s original control in one
-                          shot; sure picks link automatically (reversible), weak ones wait for your review, and informational notes
-                          with nothing to fix get an honest &ldquo;patch-only / informational&rdquo; answer. Vulnerabilities already
-                          answered in earlier cycles are skipped — re-runs only pay for what&apos;s new.
-                        </p>
-                        {canEdit && (
-                          <button onClick={() => mapControls.mutate()} disabled={mapControls.isPending}
-                            className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-[13px] font-semibold text-white hover:bg-violet-700 disabled:opacity-50">
-                            <ShieldCheck className="h-4 w-4" /> Run AI validation
-                          </button>
-                        )}
-                        <p className="mt-2 text-[11px] text-slate-400">Mobilise stays locked until this completes.</p>
-                      </div>
-                    )}
-                  </Card>
-                )}
-                {activeStage === 4 && (!gated || g.validate) && canEdit && (
-                  <Card className="p-4">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[13px] font-semibold text-slate-900">✓ Validation complete — {s.controls} control{s.controls === 1 ? '' : 's'} linked to this scope&apos;s findings</p>
-                        <p className="mt-0.5 text-[11.5px] leading-relaxed text-slate-500">The AI mapped them; coverage and the per-control breakdown are below, and Mobilise is unlocked. Re-run only if the findings changed — already-answered findings are skipped.</p>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-2">
-                        <button onClick={() => mapControls.mutate()} disabled={mapControls.isPending || mappingRunning}
-                          title="Re-run AI mapping (only new vulnerabilities are analysed)"
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-[12.5px] font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50">
-                          {(mapControls.isPending || mappingRunning) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}
-                          {(mapControls.isPending || mappingRunning) ? 'Mapping…' : 'Re-run mapping'}
-                        </button>
-                        {gated && (sp?.dispatch ? (
-                          <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3.5 py-2 text-[12.5px] font-semibold text-emerald-700">
-                            <Send className="h-3.5 w-3.5" /> Dispatched to Mobilise ✓
-                          </span>
-                        ) : (
-                          <button onClick={() => completeStage.mutate({ scopeId: s.id, stage: 'dispatch' })}
-                            disabled={completeStage.isPending}
-                            title="Hand the linked vulnerabilities to Mobilise — it stays locked until you do this"
-                            className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-2 text-[12.5px] font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50">
-                            {completeStage.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-                            Dispatch to Mobilise →
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </Card>
-                )}
-
-                {/* cycle history — one frozen record per closed cycle */}
-                {activeStage === 5 && (
-                <Card className="p-4">
-                  <SectionTitle icon={<BarChart3 className="h-[15px] w-[15px] text-primary-700" />} className="mb-3">Cycle history</SectionTitle>
-                  {(s.cycleHistory ?? []).length === 0 ? (
-                    <p className="rounded-lg bg-slate-50 p-3 text-[11.5px] text-slate-500">
-                      No closed cycles yet. When you <b>Close &amp; save</b> the open cycle, its numbers freeze into a hash-verified record here — one row per cycle, so you can prove progress quarter over quarter.
-                    </p>
-                  ) : (
-                    <div className="overflow-hidden rounded-xl border border-slate-100">
-                      <table className="w-full text-[12px]">
-                        <thead>
-                          <tr className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-400">
-                            <th className="px-3 py-2 text-left font-semibold">Cycle</th>
-                            <th className="px-3 py-2 text-left font-semibold">Opened</th>
-                            <th className="px-3 py-2 text-left font-semibold">Closed</th>
-                            <th className="px-3 py-2 text-left font-semibold">Closed by</th>
-                            <th className="px-3 py-2 text-right font-semibold">Findings</th>
-                            <th className="px-3 py-2 text-right font-semibold">Dangerous</th>
-                            <th className="px-3 py-2 text-right font-semibold">Mobilised</th>
-                            <th className="px-3 py-2 text-left font-semibold">Membership hash</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {(s.cycleHistory ?? []).map((h) => (
-                            <tr key={h.no} className="border-t border-slate-100">
-                              <td className="px-3 py-2 font-semibold text-slate-700">#{h.no}</td>
-                              <td className="px-3 py-2 text-slate-500">{h.opened ?? '—'}</td>
-                              <td className="px-3 py-2 text-slate-500">{h.closed ?? '—'}</td>
-                              <td className="px-3 py-2 text-slate-600">{h.closedBy}</td>
-                              <td className="px-3 py-2 text-right tabular-nums text-slate-900">{h.findings ?? '—'}</td>
-                              <td className="px-3 py-2 text-right tabular-nums text-rose-700">{h.dangerous ?? '—'}</td>
-                              <td className="px-3 py-2 text-right tabular-nums text-emerald-700">{h.mobilised ?? '—'}</td>
-                              <td className="px-3 py-2 font-mono text-[10px] text-slate-400" title="SHA-256 of the sorted member-asset ids — proves the exact machines this cycle covered">{h.hash || '—'}…</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </Card>
-                )}
-
-                {/* cycle progress + trend — MOBILISE / end-of-round review */}
-                {activeStage === 5 && (
-                <Card className="p-4">
-                  <SectionTitle icon={<BarChart3 className="h-[15px] w-[15px] text-primary-700" />} className="mb-3">Trend across cycles</SectionTitle>
-                  <div>
-                    <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Findings over cycles</p>
-                    <svg viewBox="0 0 240 56" preserveAspectRatio="none" className="h-11 w-full">
-                      {pair.aArea && <path d={pair.aArea} fill="rgba(30,212,176,0.12)" />}
-                      {pair.aLine && <polyline points={pair.aLine} fill="none" stroke="#1ed4b0" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />}
-                      {pair.aDot && <circle cx={pair.aDot.cx} cy={pair.aDot.cy} r={3} fill="#1ed4b0" />}
-                      {pair.bLine && <polyline points={pair.bLine} fill="none" stroke="#e11d48" strokeWidth={2} strokeDasharray="3 3" strokeLinecap="round" strokeLinejoin="round" />}
-                      {pair.bDot && <circle cx={pair.bDot.cx} cy={pair.bDot.cy} r={3} fill="#e11d48" />}
-                    </svg>
-                    <div className="mt-1.5 flex gap-3.5">
-                      <LineKey color="#1ed4b0" label="findings" />
-                      <LineKey color="#e11d48" label="dangerous" />
-                    </div>
-                  </div>
-                  <div className="mt-3.5 border-t border-slate-100 pt-3">
-                    <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">vs. last cycle</p>
-                    <div className="flex gap-2">
-                      <DeltaCell text={dF.text} color={dF.color} label="findings" />
-                      <DeltaCell text={dD.text} color={dD.color} label="dangerous" />
-                      <DeltaCell text={dM.text} color={dM.color} label="mobilised" />
-                    </div>
-                  </div>
-                </Card>
-                )}
-
-                {/* machines — SCOPE */}
-                {activeStage === 1 && (
-                <Card className="p-4">
-                  <div className="mb-3 flex items-center justify-between">
-                    <SectionTitle icon={<Server className="h-[15px] w-[15px] text-primary-700" />}>Machines in scope</SectionTitle>
-                    <span className="text-[11px] tabular-nums text-slate-400">{s.machines.length}</span>
-                  </div>
-                  <div className="space-y-0.5">
-                    {s.machines.map((m) => (
-                      <Link key={m.id} href={`/assets/${m.id}`} className="flex items-center gap-2.5 rounded-lg border border-transparent p-2 transition hover:border-slate-200 hover:bg-slate-50">
-                        <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: riskColor(m.risk) }} />
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-[12.5px] font-medium text-slate-900" title={m.name}>{m.name}</p>
-                          <p className="mt-px text-[10.5px] text-slate-400">{m.type}</p>
-                        </div>
-                        <span className="shrink-0 text-right">
-                          <span className="block text-[13px] font-bold leading-none tabular-nums text-slate-900">{m.findings}</span>
-                          <span className="text-[9.5px] text-slate-400">findings</span>
-                        </span>
-                      </Link>
-                    ))}
-                  </div>
-                  <Link href="/assets" className="mt-3 inline-flex items-center gap-1.5 text-[12px] font-medium text-primary-700 hover:underline">
-                    Asset inventory <ArrowRight className="h-3.5 w-3.5" />
-                  </Link>
-                </Card>
-                )}
-              </div>
-
-              {/* Result vs Decisions — a toggle, not a stack (owner: keep the page clean) */}
-              {activeStage === 4 && (!gated || g.validate) && (
-                <div className="flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 p-0.5 text-[12px] font-medium w-fit">
-                  <button type="button" onClick={() => setValView('result')}
-                    className={`rounded-full px-3.5 py-1 ${valView === 'result' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
-                    The result
-                  </button>
-                  <button type="button" onClick={() => setValView('decisions')}
-                    className={`rounded-full px-3.5 py-1 ${valView === 'decisions' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
-                    Your decisions
-                  </button>
-                </div>
-              )}
-              {activeStage === 4 && (!gated || g.validate) && valView === 'result' && (
-              <Card className="p-4">
-                {/* the coverage story — no repeated numbers, vulnerabilities called
-                    vulnerabilities, and the PRIORITY line the owner asked for */}
-                {s.pipeline && (s.pipeline.analysed + s.pipeline.informational) > 0 && (() => {
-                  const p = s.pipeline!;
-                  const scanned = p.analysed + p.informational + (p.unmapped ?? 0);
-                  const allCovered = p.linked >= p.analysed && p.patch_only + p.no_specific + p.low_awaiting_review === 0 && (p.unmapped ?? 0) === 0;
-                  return (
-                  <div className="mb-3 space-y-1.5 rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2 text-[11px]">
-                    <p className="text-slate-600">
-                      <b className="tabular-nums text-slate-800">{scanned}</b> scanner findings →{' '}
-                      <b className="tabular-nums">{p.informational}</b> informational (nothing to fix) ·{' '}
-                      <b className="tabular-nums text-slate-800">{p.analysed}</b> real vulnerabilities
-                    </p>
-                    <p>
-                      {allCovered ? (
-                        <span className="font-medium text-emerald-700">✓ Every one of the {p.analysed} vulnerabilities is covered by a control.</span>
-                      ) : (
-                        <>
-                          <span className="text-emerald-700"><b className="tabular-nums">{p.linked}</b> covered by a control</span>
-                          {p.patch_only > 0 && <span className="text-slate-600"> · <b className="tabular-nums">{p.patch_only}</b> patch-only</span>}
-                          {p.no_specific > 0 && <span className="text-slate-600"> · <b className="tabular-nums">{p.no_specific}</b> no specific control</span>}
-                          {p.low_awaiting_review > 0 && <span className="text-amber-700"> · <b className="tabular-nums">{p.low_awaiting_review}</b> awaiting your review</span>}
-                          {(p.unmapped ?? 0) > 0 && <span className="text-slate-400"> · <b className="tabular-nums">{p.unmapped}</b> not yet mapped</span>}
-                        </>
-                      )}
-                    </p>
-                    {p.priority && p.priority.total > 0 && (
-                      <p className="border-t border-slate-200/70 pt-1.5 text-rose-700">
-                        <b className="tabular-nums">{p.priority.total}</b> prioritised vulnerabilities:{' '}
-                        {p.priority.linked === p.priority.total
-                          ? <b>all {p.priority.total} covered ✓</b>
-                          : <>
-                              <b className="tabular-nums">{p.priority.linked}</b> covered
-                              {p.priority.patch_only > 0 && <> · <b className="tabular-nums">{p.priority.patch_only}</b> patch-only</>}
-                              {p.priority.awaiting > 0 && <> · <b className="tabular-nums">{p.priority.awaiting}</b> awaiting review</>}
-                              {p.priority.unanswered > 0 && <> · <b className="tabular-nums">{p.priority.unanswered}</b> UNANSWERED</>}
-                            </>}
-                        <span className="text-slate-400"> — controls that close them are listed first below</span>
-                      </p>
-                    )}
-                  </div>
-                  );
-                })()}
-                {(() => {
-                  // ONE row per control — the framework originals fold into their
-                  // group lead as tags (kills the "same control x 5 frameworks" rows)
-                  const children = new Map<number, ControlItem[]>();
-                  s.cw.forEach((c) => {
-                    if (c.kind === 'parsed_framework_control' && c.family_of) {
-                      children.set(c.family_of, [...(children.get(c.family_of) ?? []), c]);
-                    }
-                  });
-                  const rows = s.cw.filter((c) => !(c.kind === 'parsed_framework_control' && c.family_of));
-                  const anyTested = rows.some((c) => c.tier !== 'claimed');
-                  const shown = showAllCw ? rows : rows.slice(0, 8);
-                  const findingById = new Map((scopeFindings ?? []).map((v: any) => [v.id, v]));
-                  return (<>
-                <div className="overflow-hidden rounded-xl border border-slate-100">
-                  <table className="w-full text-[12px]">
-                    <thead>
-                      <tr className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-400">
-                        <th className="px-3 py-2 text-left font-semibold">Control</th>
-                        <th className="px-3 py-2 text-left font-semibold">Satisfies these standards</th>
-                        <th className="px-3 py-2 text-right font-semibold">Vulnerabilities closed</th>
-                        <th className="px-3 py-2 text-left font-semibold">Why linked</th>
-                        {anyTested && <th className="px-3 py-2 text-left font-semibold">Assurance</th>}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {shown.map((c) => {
-                        const ts = tierStyle(c.tier);
-                        const kids = c.kind === 'normalized_control' && c.control_id ? (children.get(c.control_id) ?? []) : [];
-                        const href = c.kind === 'parsed_framework_control' && c.control_id ? `/erm/framework-controls/${c.control_id}`
-                          : c.kind === 'normalized_control' ? '/control-library' : null;
-                        const rowKey = `${c.kind}-${c.control_id ?? c.code}`;
-                        const covered = Array.isArray(c.covered_ids) ? c.covered_ids : [];
-                        const isOpen = expandedCw === rowKey;
-                        return (
-                          <Fragment key={rowKey}>
-                          <tr className="border-t border-slate-100 align-top hover:bg-slate-50">
-                            <td className="px-3 py-2 text-slate-700">
-                              {href ? <Link href={href} className="font-mono font-medium text-primary-700 hover:underline">{c.code}</Link>
-                                    : <span className="font-mono font-medium text-slate-900">{c.code}</span>}
-                              &nbsp;&nbsp;{c.title}
-                            </td>
-                            <td className="px-3 py-2">
-                              <div className="flex flex-wrap gap-1">
-                                {/* the ACTUAL standards this control consolidates — never our
-                                    internal library name in their place */}
-                                {(c.standards ?? []).length > 0 ? (
-                                  (c.standards ?? []).map((t) => (
-                                    <span key={t} title="This control is the SAME rule as written in this framework"
-                                      className="rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-medium text-violet-700">{t}</span>
-                                  ))
-                                ) : (
-                                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">{c.fw}</span>
-                                )}
-                                {(c.standards ?? []).length > 0 && c.kind === 'normalized_control' && (
-                                  <span className="rounded-full px-1.5 py-0.5 text-[9.5px] text-slate-400" title="Consolidated in your Unified Control Library">via Unified Library</span>
-                                )}
-                              </div>
-                            </td>
-                            <td className="px-3 py-2 text-right">
-                              <button type="button" onClick={() => setExpandedCw(isOpen ? null : rowKey)}
-                                title="Show the vulnerabilities this control closes" disabled={covered.length === 0}
-                                className={`inline-flex items-center gap-1 font-semibold tabular-nums ${covered.length ? 'text-primary-700 hover:underline' : 'text-slate-900 cursor-default'}`}>
-                                {c.findings}{covered.length > 0 && <span className={`text-[9px] transition-transform ${isOpen ? 'rotate-90' : ''}`}>▶</span>}
-                              </button>
-                              {(c.priority_covered ?? 0) > 0 && (
-                                <p className="mt-0.5 whitespace-nowrap text-[9.5px] font-semibold text-rose-600" title="Of the SAME fixed set of prioritised vulnerabilities — one vulnerability is often closed by several controls, so these red counts overlap across rows and must never be added up.">{c.priority_covered} of the {s.pipeline?.priority?.total ?? 0} prioritised</p>
-                              )}
-                            </td>
-                            <td className="px-3 py-2" title={c.reason || undefined}>
-                              <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                                c.basis === 'ai' || c.basis === 'ai_auto' || c.basis === 'ai_family' ? 'bg-violet-50 text-violet-700'
-                                : c.basis === 'reused' ? 'bg-sky-50 text-sky-700'
-                                : c.basis === 'manual' ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-600'}`}>
-                                {c.basis === 'ai' ? 'AI · accepted' : c.basis === 'ai_auto' ? 'AI · auto-linked' : c.basis === 'ai_family' ? 'AI · via group' : c.basis === 'reused' ? 'reused decision' : c.basis === 'manual' ? 'manual' : 'crosswalk rule'}
-                              </span>
-                            </td>
-                            {anyTested && <td className="px-3 py-2"><span className={`whitespace-nowrap rounded-full px-2.5 py-0.5 text-[10.5px] font-semibold ${ts.className}`}>{ts.label}</span></td>}
-                          </tr>
-                          {isOpen && (
-                            <tr className="border-t border-slate-100 bg-slate-50/60">
-                              <td colSpan={anyTested ? 5 : 4} className="px-3 py-2">
-                                <p className="mb-1.5 text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">Vulnerabilities this control closes ({covered.length})</p>
-                                <div className="flex flex-col gap-1">
-                                  {covered.map((vid) => { const v: any = findingById.get(vid); return (
-                                    <Link key={vid} href={`/vulnerabilities/${vid}`} className="flex items-center gap-2 rounded px-1.5 py-1 text-[12px] hover:bg-white">
-                                      {v ? <>
-                                        <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${sevStyle((['critical','high','medium','low'].includes(v.severity) ? v.severity : 'low') as Sev).className}`}>{v.severity === 'info' ? 'Info' : sevStyle(v.severity as Sev).label}</span>
-                                        <span className="truncate text-slate-700">{v.title}</span>
-                                      </> : <span className="text-slate-400">Finding #{vid}</span>}
-                                    </Link>
-                                  ); })}
-                                </div>
-                              </td>
-                            </tr>
-                          )}
-                          </Fragment>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-                <p className="mt-2 text-[10.5px] text-slate-400">
-                  <b className="text-slate-600">{rows.length}</b> controls close the <b className="text-emerald-700">{s.pipeline?.linked ?? 0} covered vulnerabilities</b> — different units, so the numbers differ by design. <b className="text-rose-600">Red counts overlap</b> (one vulnerability, several controls) — never add them. None test-verified yet — a control turns effective when a re-scan proves it.
-                </p>
-
-                {rows.length > 8 && (
-                  <button onClick={() => setShowAllCw((v) => !v)} className="mt-1 text-[12px] font-medium text-primary-700 hover:underline">
-                    {showAllCw ? 'Show fewer' : `Show all ${rows.length} controls`}
-                  </button>
-                )}
-                  </>);
-                })()}
-              </Card>
-              )}
-
-              {/* AI-suggested SPECIFIC controls — VALIDATE action (Run/Re-run AI mapping lives inside) */}
-              {activeStage === 4 && (!gated || g.validate) && valView === 'decisions' && <AiControlProposalsPanel scopeId={s.id} />}
-
-              {/* Per-stage guidance + advance */}
-              <StageFooter
-                stage={activeStage}
-                done={stageDone[activeStage]}
-                reachable={stageReachable(activeStage)}
-                onNext={() => {
-                  const nx = Math.min(5, activeStage + 1);
-                  // gated loop: Next never jumps into a locked stage; Mobilise
-                  // additionally requires the explicit dispatch stamp
-                  if (gated && nx === 5 && !sp?.dispatch) return;
-                  if (!gated || stageDone[nx] || stageReachable(nx)) setActiveStage(nx);
-                }}
-                findingsHref={findingsHref}
-              />
+                );
+              });
+            })()}
           </div>
         </div>
-      ) : (
-        <EmptyState onCreate={() => setShowCreate(true)} onTemplate={(preset) => { setForm((prev) => ({ ...prev, ...preset })); setShowCreate(true); }} canEdit={canEdit} />
       )}
+
+      {/* finding-detail popup — click a finding row anywhere in a stage */}
+      {peek && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,.42)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, zIndex: 60 }} onClick={(e) => { if (e.target === e.currentTarget) setPeek(null); }}>
+          <div style={{ ...CARD, width: 520, maxWidth: '100%', padding: 20, boxShadow: '0 20px 50px rgba(2,6,23,.3)', maxHeight: '85vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <h4 style={{ fontSize: 14.5, fontWeight: 600 }}>{peek.title ?? `Finding #${peek.id}`}</h4>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 5, fontSize: 10.5, color: FAINT, alignItems: 'center' }}>
+                  <SevBadge sev={peek.severity ?? 'low'} />
+                  {peek.cve_id && <span style={MONO}>{peek.cve_id}</span>}
+                  {peek.composite_priority != null && <span style={MONO}>{Math.round(Number(peek.composite_priority) * 10)}/100 on host</span>}
+                  {peek.kev_flag && <Kev />}
+                  {(peek.linked_assets ?? [])[0] && <span>{peek.linked_assets[0]}</span>}
+                </div>
+              </div>
+              <Btn sm onClick={() => setPeek(null)}><X className="h-3.5 w-3.5" /></Btn>
+            </div>
+            <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', marginTop: 12, fontSize: 12 }}>
+              <div><div style={SK}>CVSS</div><div style={{ fontWeight: 600 }}>{peek.cvss_score ?? '—'}</div></div>
+              <div><div style={SK}>EPSS</div><div style={{ fontWeight: 600 }}>{peek.epss_score != null ? `${(Number(peek.epss_score) * 100).toFixed(1)}%` : '—'}</div></div>
+              <div><div style={SK}>Priority · host</div><div style={{ fontWeight: 600 }}>{peek.composite_priority != null ? `${Math.round(Number(peek.composite_priority) * 10)}/100` : '—'}</div></div>
+              <div><div style={SK}>Status</div><div style={{ fontWeight: 600, textTransform: 'capitalize' }}>{String(peek.status ?? 'open').replace(/_/g, ' ')}</div></div>
+            </div>
+            {Array.isArray(peek.linked_control_codes) && peek.linked_control_codes.length > 0 && (
+              <div style={{ marginTop: 12 }}>
+                <div style={SK}>Addressed by</div>
+                <div style={{ marginTop: 4 }}>{peek.linked_control_codes.map((c: string) => <span key={c} style={{ display: 'inline-flex', background: VIOLETBG, color: VIOLET, borderRadius: 7, padding: '2px 8px', fontSize: 10.5, fontWeight: 600, margin: '2px 4px 0 0' }}>{c}</span>)}</div>
+                <div style={{ fontSize: 10, color: FAINT, marginTop: 6 }}>A control link is the fix to implement — it does <b>not</b> close this finding or lower its score. Only a Nessus re-scan closes it.</div>
+              </div>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 14 }}>
+              <a href={`/vulnerabilities/${peek.id}`} style={{ fontSize: 11.5, fontWeight: 600, color: ACS, textDecoration: 'none' }}>Open full finding →</a>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {SCOPES.length === 0 ? (
+        <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}><EmptyState onCreate={() => setShowCreate(true)} onTemplate={(preset) => { setForm((prev) => ({ ...prev, ...preset })); setShowCreate(true); }} canEdit={canEdit} /></div>
+      ) : screen === 'scope' ? journeyScreen() : homeScreen()}
     </div>
   );
 }
 
 /* ─────────────────────── sub-components ─────────────────────── */
 
-/** Minimal modal: backdrop click / Esc closes. Fixed overlay, no portal needed. */
+/** Minimal modal: backdrop click closes. Fixed overlay, no portal needed. */
 function Modal({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 pt-[8vh]" onKeyDown={(e) => e.key === 'Escape' && onClose()}>
@@ -1732,41 +1337,11 @@ function Modal({ children, onClose }: { children: React.ReactNode; onClose: () =
   );
 }
 
-function KpiCell({ label, value, sub, valueClass = 'text-slate-900', title }: { label: string; value: React.ReactNode; sub: string; valueClass?: string; title?: string }) {
-  return (
-    <div className="flex-1 p-[14px_18px]" title={title}>
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{label}</p>
-      <p className={`mt-1 text-[26px] font-bold leading-none tabular-nums ${valueClass}`}>{value}</p>
-      <p className="mt-1.5 text-[11px] text-slate-500">{sub}</p>
-    </div>
-  );
-}
-
-const Legend = ({ color, value, label }: { color: string; value: number; label: string }) => (
-  <span className="inline-flex items-center gap-1.5">
-    <span className="h-2 w-2 rounded-sm" style={{ background: color }} />
-    <b className="tabular-nums text-slate-900">{value}</b> {label}
-  </span>
-);
-
-const LineKey = ({ color, label }: { color: string; label: string }) => (
-  <span className="inline-flex items-center gap-1.5 text-[10.5px] text-slate-500">
-    <span className="h-0.5 w-3" style={{ background: color }} /> {label}
-  </span>
-);
-
-const DeltaCell = ({ text, color, label }: { text: string; color: string; label: string }) => (
-  <div className="flex-1 rounded-lg border border-slate-100 bg-slate-50 py-1.5 text-center">
-    <p className={`text-[14px] font-bold tabular-nums ${color}`}>{text}</p>
-    <p className="mt-0.5 text-[9.5px] text-slate-400">{label}</p>
-  </div>
-);
-
 type ScopeAsset = { id: number; name: string; host_name?: string | null; internet_facing?: boolean | null; department?: string | null };
 
-function CreateScopeForm({ form, setForm, assets, onSubmit, onCancel, pending }: {
+function CreateScopeForm({ form, setForm, assets, sla, onSubmit, onCancel, pending }: {
   form: { name: string; cadence: string; asset_ids: number[] };
-  assets: ScopeAsset[];
+  assets: ScopeAsset[]; sla?: Record<string, string>;
   setForm: (f: any) => void; onSubmit: () => void; onCancel: () => void; pending: boolean;
 }) {
   const [assetQuery, setAssetQuery] = useState('');
@@ -1774,101 +1349,82 @@ function CreateScopeForm({ form, setForm, assets, onSubmit, onCancel, pending }:
   const toggle = (id: number) => {
     const next = new Set(picked);
     next.has(id) ? next.delete(id) : next.add(id);
-    setForm({ ...form, asset_ids: [...next] });
+    setForm({ ...form, asset_ids: Array.from(next) });
   };
   const q = assetQuery.trim().toLowerCase();
   const hits = q
     ? assets.filter((a) => `${a.name} ${a.host_name ?? ''}`.toLowerCase().includes(q)).slice(0, 10)
-    : assets.slice(0, 10);  // empty search shows the first assets so the list isn't blank
+    : assets.slice(0, 10);
+  const slaMap = sla ?? { critical: '7d', high: '30d', medium: '90d', low: '180d' };
+
+  // Mock layout: vertical stack, uppercase section labels, cadence → live deadline
+  // preview line, SLA strip, assets as bordered row cards, footer Cancel + Create.
+  const CAD_DAYS: Record<string, number> = { weekly: 7, monthly: 30, quarterly: 91 };
+  const days = CAD_DAYS[form.cadence];
+  const due = days ? new Date(Date.now() + days * 864e5).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : null;
+  const LBL: React.CSSProperties = { fontSize: 10, textTransform: 'uppercase', letterSpacing: '.06em', color: FAINT, fontWeight: 700, display: 'block', marginBottom: 6 };
+  const LBL2: React.CSSProperties = { fontWeight: 500, textTransform: 'none', letterSpacing: 0 };
+  const INP: React.CSSProperties = { width: '100%', height: 40, border: '1px solid #E4E8EC', borderRadius: 10, background: '#fff', padding: '0 12px', fontSize: 12.5, color: SEC };
+  const cannot = pending || picked.size === 0;
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-3">
-      <p className="text-[13px] font-semibold text-slate-900">New scope</p>
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        <div>
-          <label className="mb-1 block text-xs font-medium text-slate-600">Name <span className="font-normal text-slate-400">— optional, auto-named from your picks if blank</span></label>
-          <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Auto: named after the assets you select" className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm" />
-        </div>
-        <div>
-          <label className="mb-1 block text-xs font-medium text-slate-600">Cadence — deadline for each cycle</label>
-          <select value={form.cadence} onChange={(e) => setForm({ ...form, cadence: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm">
-            <option value="weekly">Weekly — cycle must close in 7 days</option>
-            <option value="monthly">Monthly — cycle must close in 30 days</option>
-            <option value="quarterly">Quarterly — cycle must close in 91 days</option>
-            <option value="">No cadence (run ad hoc)</option>
-          </select>
-        </div>
-      </div>
+    <div style={{ background: '#fff', border: `1px solid ${BORDER}`, borderRadius: 16, padding: '20px 22px', boxShadow: '0 20px 50px rgba(2,6,23,.3)' }}>
+      <b style={{ fontSize: 15 }}>New scope</b>
+      <p style={{ fontSize: 11.5, color: MUTED, margin: '4px 0 14px' }}>Pick the assets this scope owns — its first cycle opens on create. Name is optional (derived from the assets if blank).</p>
 
-      {/* Membership — pick the assets. Multi-select; each stays as a chip. */}
-      <div>
-        <label className="mb-1 block text-xs font-medium text-slate-600">Assets in this scope <span className="font-normal text-slate-400">— search and select as many as you want</span></label>
-        <input value={assetQuery} onChange={(e) => setAssetQuery(e.target.value)} placeholder="Type to search, e.g. desktop, liztek…" className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm" />
-        <div className="mt-1 max-h-48 overflow-auto rounded-lg border border-slate-200 bg-white">
-          {hits.length === 0 && <div className="px-3 py-3 text-center text-[12px] text-slate-400">No asset matches “{assetQuery}”.</div>}
-          {hits.map((a) => (
-            <button type="button" key={a.id} onClick={() => toggle(a.id)}
-              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12.5px] hover:bg-slate-50">
-              <input type="checkbox" readOnly checked={picked.has(a.id)} className="h-3.5 w-3.5 rounded border-slate-300" />
-              <span className="font-medium text-slate-800">{a.name}</span>
-              {a.internet_facing && <span className="rounded bg-rose-50 px-1 text-[10px] font-semibold text-rose-600">internet-facing</span>}
-              {a.host_name && a.host_name !== a.name && <span className="text-[11px] text-slate-400">{a.host_name}</span>}
-            </button>
+      <label style={LBL}>Name <span style={LBL2}>(optional)</span></label>
+      <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Payment servers" style={{ ...INP, marginBottom: 13 }} />
+
+      <label style={LBL}>Cadence — the cycle deadline</label>
+      <select value={form.cadence} onChange={(e) => setForm({ ...form, cadence: e.target.value })} style={{ ...INP, cursor: 'pointer' }}>
+        <option value="weekly">Weekly</option>
+        <option value="monthly">Monthly</option>
+        <option value="quarterly">Quarterly</option>
+        <option value="">No cadence — run ad hoc</option>
+      </select>
+      <p style={{ fontSize: 11.5, color: AMBER, margin: '7px 0 13px' }}>
+        {due
+          ? <>Cycle #1 due <b>{due}</b> — a visible deadline, never an auto-close; a human closes the cycle.</>
+          : <>No cadence — cycles run ad hoc; a human opens and closes each one.</>}
+      </p>
+
+      <div style={{ border: `1px solid ${BORDER}`, background: '#F7F9FA', borderRadius: 11, padding: '9px 12px', marginBottom: 10 }}>
+        <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '.06em', color: FAINT, fontWeight: 700 }}>Finding SLAs — tenant defaults apply</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 5, fontSize: 11.5, color: SEC }}>
+          {(['critical', 'high', 'medium', 'low'] as const).map((sv) => (
+            <span key={sv} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              <span style={{ fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', padding: '1px 6px', borderRadius: 5, background: SEV[sv].bg, color: SEV[sv].c }}>{sv}</span> {slaMap[sv] ?? '—'}
+            </span>
           ))}
         </div>
-        {picked.size > 0 ? (
-          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-            <span className="text-[11px] font-semibold text-slate-600">{picked.size} selected:</span>
-            {[...picked].map((id) => { const a = assets.find((x) => x.id === id); return (
-              <span key={id} className="inline-flex items-center gap-1 rounded-full bg-primary-50 px-2 py-0.5 text-[11px] font-medium text-primary-700">
-                {a?.name ?? `#${id}`}
-                <button type="button" onClick={() => toggle(id)} className="text-primary-400 hover:text-primary-700">×</button>
-              </span>
-            ); })}
-          </div>
-        ) : (
-          <p className="mt-1.5 text-[11px] text-slate-400">Nothing selected yet — a scope needs at least one asset to work on.</p>
-        )}
+        <div style={{ fontSize: 9.5, color: FAINT, marginTop: 4 }}>Each assigned fix inherits its severity&apos;s SLA · editable in SLA Config.</div>
       </div>
 
-      <div className="flex items-center gap-2">
-        <button onClick={onSubmit} disabled={pending || picked.size === 0} title={picked.size === 0 ? 'Select at least one asset first' : ''} className="rounded-lg bg-primary-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed">
-          {pending ? 'Creating…' : 'Create scope'}
-        </button>
-        <button onClick={onCancel} className="text-xs text-slate-400 hover:text-slate-600">Cancel</button>
-      </div>
-    </div>
-  );
-}
-
-// Per-stage footer: what to do here + the arrow that advances to the next
-// stage. The action for each stage lives on its own screen above; this just
-// narrates and moves you along, so the loop reads as a sequence.
-function StageFooter({ stage, done, reachable, onNext, findingsHref }: {
-  stage: number; done: boolean; reachable: boolean; onNext: () => void; findingsHref: string;
-}) {
-  const NEXT = ['Discover', 'Prioritise', 'Validate', 'Mobilise'];
-  const guide: Record<number, string> = {
-    1: 'These are the machines this scope owns. When it looks right, move on to Discover.',
-    2: 'Findings come from your scanner sync — nothing to run here. Move on to Prioritise to rank the dangerous ones.',
-    3: done ? 'Attack paths are computed. Move on to Validate.' : 'Click “Recalculate attack paths” above to rank which findings are actually reachable.',
-    4: done ? 'Controls are mapped — each Mobilise assignment now carries its fix. Validation itself is the evidence ladder above: a control is only proven when a re-scan or retest lands.' : 'Click “Map controls now” above — it attaches the fixing control to each finding, so Mobilise can hand a person the finding AND its fix (runs now, ~1–2 min).',
-    5: done ? 'Fixes are assigned. When a Nessus re-scan confirms them gone, close the cycle to save the record.' : 'Assign each dangerous finding to one owner. A Nessus re-scan is what finally verifies the fix.',
-  };
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-      <p className="min-w-0 flex-1 text-[12px] text-slate-600">
-        <span className={`mr-1.5 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${done ? 'bg-emerald-100 text-emerald-700' : reachable ? 'bg-sky-100 text-sky-700' : 'bg-slate-200 text-slate-500'}`}>
-          {done ? 'stage done' : reachable ? 'do this now' : 'view only'}
-        </span>
-        {guide[stage]}
-      </p>
-      {stage < 5 && (
-        <button type="button" onClick={onNext}
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-primary-600 px-3.5 py-2 text-[12.5px] font-semibold text-white transition hover:bg-primary-700">
-          Next: {NEXT[stage - 1]} <ArrowRight className="h-3.5 w-3.5" />
-        </button>
+      <label style={LBL}>Assets <span style={LBL2}>(pick at least 1)</span></label>
+      {assets.length > 6 && (
+        <input value={assetQuery} onChange={(e) => setAssetQuery(e.target.value)} placeholder="Type to search…" style={{ ...INP, height: 34, marginBottom: 8 }} />
       )}
+      <div style={{ maxHeight: 230, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 7, paddingRight: 2 }}>
+        {hits.length === 0 && <div style={{ padding: '10px 0', textAlign: 'center', fontSize: 12, color: FAINT }}>No asset matches &ldquo;{assetQuery}&rdquo;.</div>}
+        {hits.map((a) => (
+          <button type="button" key={a.id} onClick={() => toggle(a.id)}
+            style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left', border: `1px solid ${picked.has(a.id) ? AC : '#E4E8EC'}`, background: picked.has(a.id) ? '#F7FBFA' : '#fff', borderRadius: 10, padding: '10px 12px', fontSize: 12.5, cursor: 'pointer' }}>
+            <input type="checkbox" readOnly checked={picked.has(a.id)} style={{ width: 15, height: 15, accentColor: AC, pointerEvents: 'none' }} />
+            <b style={{ color: INK }}>{a.name}</b>
+            {a.host_name && a.host_name !== a.name && <span style={{ fontSize: 11, color: FAINT }}>· {a.host_name}</span>}
+            {a.internet_facing && <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 700, color: REDD, background: REDBG, borderRadius: 5, padding: '1px 7px' }}>internet-facing</span>}
+          </button>
+        ))}
+      </div>
+      {picked.size === 0 && <p style={{ fontSize: 11, color: FAINT, margin: '8px 0 0' }}>Nothing selected yet — a scope needs at least one asset to work on.</p>}
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 9, marginTop: 16, paddingTop: 14, borderTop: `1px solid ${BORDER2}` }}>
+        <button onClick={onCancel} style={{ border: '1px solid #E4E8EC', background: '#fff', color: SEC, borderRadius: 9, padding: '9px 16px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
+        <button onClick={onSubmit} disabled={cannot} title={picked.size === 0 ? 'Select at least one asset first' : ''}
+          style={{ border: 0, background: AC, color: '#06342B', borderRadius: 9, padding: '9px 16px', fontSize: 12.5, fontWeight: 700, cursor: cannot ? 'not-allowed' : 'pointer', opacity: cannot ? 0.5 : 1 }}>
+          {pending ? 'Creating…' : 'Create scope & open Cycle #1'}
+        </button>
+      </div>
     </div>
   );
 }
@@ -1881,9 +1437,6 @@ function EmptyState({ onCreate, onTemplate, canEdit }: { onCreate: () => void; o
     { n: 4, label: 'Validate', icon: <ShieldCheck className="h-[18px] w-[18px] text-slate-600" />, sub: 'Check the controls that cover them', bg: 'bg-slate-100' },
     { n: 5, label: 'Mobilise', icon: <Send className="h-[18px] w-[18px] text-emerald-700" />, sub: 'Assign a fix to a person in the platform', bg: 'bg-emerald-50' },
   ];
-  // Each template prefills the create form. Only the internet-facing rule is an
-  // automatic membership rule today; the other two prefill a name and leave the
-  // operator to set membership (name_contains / departments) by hand.
   const templates = [
     { icon: <CreditCard className="h-4 w-4 text-primary-700" />, title: 'Internet-facing tier', sub: 'Public web, edge and WAF assets', preset: { name: 'Internet-facing tier', internet_facing: true } },
     { icon: <Lock className="h-4 w-4 text-primary-700" />, title: 'Payment platform', sub: 'PCI-scoped assets and services', preset: { name: 'Payment platform' } },
@@ -1892,7 +1445,7 @@ function EmptyState({ onCreate, onTemplate, canEdit }: { onCreate: () => void; o
   return (
     <div className="mx-auto w-full max-w-[1520px] space-y-4">
       <Card className="relative overflow-hidden p-10 text-center">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(120%_100%_at_50%_0%,rgba(30,212,176,0.07),transparent_60%)]" />
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(120%_100%_at_50%_0%,rgba(23,184,152,0.07),transparent_60%)]" />
         <div className="relative">
           <div className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-[18px] bg-primary-50">
             <Crosshair className="h-[30px] w-[30px] text-primary-700" strokeWidth={1.75} />
@@ -1902,7 +1455,6 @@ function EmptyState({ onCreate, onTemplate, canEdit }: { onCreate: () => void; o
             A scope is a named, owned slice of your attack surface. Create one, then run the CTEM loop over it as an
             explicit cycle — you open and close each round by hand.
           </p>
-
           <div className="mx-auto mt-7 flex max-w-3xl items-stretch justify-center">
             {steps.map((st, i) => (
               <div key={st.label} className="contents">
@@ -1915,7 +1467,6 @@ function EmptyState({ onCreate, onTemplate, canEdit }: { onCreate: () => void; o
               </div>
             ))}
           </div>
-
           <div className="mt-7 flex items-center justify-center gap-3">
             <button onClick={onCreate} disabled={!canEdit} className="inline-flex items-center gap-1.5 rounded-[10px] bg-primary-600 px-5 py-2.5 text-[13.5px] font-semibold text-white shadow-sm transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50">
               <Plus className="h-4 w-4" strokeWidth={2.2} /> Create your first scope
@@ -1926,7 +1477,6 @@ function EmptyState({ onCreate, onTemplate, canEdit }: { onCreate: () => void; o
           </div>
         </div>
       </Card>
-
       <div>
         <p className="mb-2.5 pl-0.5 text-[12px] font-semibold uppercase tracking-wide text-slate-400">Or start from a template</p>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">

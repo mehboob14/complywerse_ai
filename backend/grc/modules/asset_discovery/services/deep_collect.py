@@ -136,6 +136,9 @@ def typed_credentials_dict(kind: str, ip: str, port: int, username: str,
     if kind == "k8s":
         return {"k8s_server": f"https://{ip}:{port or 6443}",
                 "k8s_token": password}
+    if kind == "snmp":
+        # No login — the SNMPv2c community string rides in the `password` field.
+        return {"snmp_host": ip, "snmp_port": port or 161, "snmp_community": password or "public"}
     d = {f"{kind}_host": ip, f"{kind}_port": port,
          f"{kind}_username": username, f"{kind}_password": password}
     if database:

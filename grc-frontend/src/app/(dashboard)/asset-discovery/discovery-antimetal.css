@@ -1,0 +1,78 @@
+/*
+ * IT Asset Discovery — Antimetal-inspired retheme (matured).
+ *
+ * Scoped entirely under `.discovery-suite` (already on the page root) so the
+ * rest of the asset-suite is untouched. This only remaps the existing `--as-*`
+ * design tokens + type + ground — no markup or data logic changes. The
+ * command-center / radar / floating-card layout is applied in the JSX in a
+ * later, separately-reviewed stage.
+ */
+@import url('https://fonts.googleapis.com/css2?family=Inter+Tight:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap');
+
+.asset-suite.discovery-suite {
+  /* backgrounds — cool neutral, not warm cream */
+  --as-bg: #EFF1F2;
+  --as-card: #FFFFFF;
+  --as-subtle: #F6F8F8;
+  --as-subtle2: #FAFBFB;
+  --as-track: #E4E9E7;
+  --as-border: #E5E9E8;
+  --as-divider: #EFF2F1;
+  --as-row: #F3F6F4;
+  --as-input: #D8DEDC;
+  /* ink — cooler near-black hierarchy */
+  --as-ink: #17211D;
+  --as-primary: #1E2823;
+  --as-secondary: #31403A;
+  --as-muted: #5C6862;
+  --as-faint: #98A29C;
+  --as-placeholder: #8A938D;
+  /* brand — deeper, matured enterprise teal-green (replaces cream-suite green + bright teal) */
+  --as-green: #0F8A6E;
+  --as-green-hover: #0B6E58;
+  --as-accent: #0F8A6E;
+  --as-accent-hover: #0B6E58;
+  --as-accent-ink: #F4FBF8;
+  --as-green-bg: #E7F0EC;
+  --as-green-selected: #EDF3F0;
+  --as-green-outline: #C6DDD4;
+  --as-good: #0B6E58;
+  --as-good-bg: #E7F0EC;
+  /* status — slightly muted for a calmer, enterprise feel */
+  --as-danger: #AE3B47;
+  --as-danger-text: #8A2C34;
+  --as-danger-bg: #F7E9EA;
+  --as-danger-border: #E7C6C9;
+  --as-warn: #9A6A16;
+  --as-warn-text: #6E4C10;
+  --as-warn-bg: #F6EFDD;
+  --as-blue: #3C5F86;
+  --as-blue-bg: #EAF0F5;
+  /* radii — a touch more modern */
+  --as-r-card: 16px;
+  --as-r-inner: 12px;
+  --as-r-control: 10px;
+  --as-r-control-sm: 9px;
+
+  font-family: 'Inter', system-ui, sans-serif;
+  /* soft dot-grid ground */
+  background-color: var(--as-bg);
+  background-image: radial-gradient(#DCE1E1 1.05px, transparent 1.05px);
+  background-size: 23px 23px;
+  background-position: -11px -11px;
+}
+
+/* display / headings → Inter Tight (the tight-grotesque, Antimetal feel) */
+.asset-suite.discovery-suite h1,
+.asset-suite.discovery-suite h2,
+.asset-suite.discovery-suite h3,
+.asset-suite.discovery-suite h1.as-h1 {
+  font-family: 'Inter Tight', system-ui, sans-serif;
+  letter-spacing: -0.02em;
+}
+
+/* soften shadows the suite paints on cards, so the retone reads calmer */
+.asset-suite.discovery-suite .as-card,
+.asset-suite.discovery-suite [class*="card"] {
+  box-shadow: 0 1px 2px rgba(20, 28, 24, 0.035), 0 12px 26px -20px rgba(20, 28, 24, 0.15);
+}

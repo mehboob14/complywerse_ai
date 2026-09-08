@@ -668,7 +668,11 @@ def _cia_value(asset: ITAsset) -> Dict[str, Any]:
     # over a machine nobody had assessed. An asset with no ratings is
     # unmeasured, and the honest output is that the dimension drops out of the
     # weighting exactly like cis/vuln/ctrl already do.
-    _cia_known = has_any_explicit
+    # Owner decision (Sep 2026): CIA counts in every asset's score. When a
+    # human hasn't rated it, we count the criticality-derived value (flagged
+    # auto_derived/missing so the UI labels it "auto · unconfirmed"), rather
+    # than dropping the dimension out of the weighting.
+    _cia_known = True
     return {
         "score": round(norm, 4), "known": _cia_known,
         "confidentiality": c,
@@ -705,8 +709,11 @@ def _control_coverage(db: Session, asset_id: int) -> Dict[str, Any]:
     )
     linked = norm_count + fw_count + internal_count
     if linked == 0:
+        # Owner decision (Sep 2026): count control coverage in every score.
+        # 0 controls linked = full coverage gap = maximum control-gap risk
+        # (score 1.0), not an excluded/unknown dimension.
         return {
-            "score": 0.0, "known": False,
+            "score": 1.0, "known": True,
             "coverage_pct": 0.0,
             "linked_count": 0,
             "target": CONTROL_COVERAGE_TARGET,
@@ -741,8 +748,11 @@ def _risk_score(db: Session, tenant_id: int, asset_id: int) -> Dict[str, Any]:
         .all()
     )
     if not risks:
+        # Owner decision (Sep 2026): count linked-risk exposure in every score.
+        # 0 linked risks = 0 added risk from the register (score 0.0), counted
+        # rather than excluded, so all five dimensions always appear.
         return {
-            "score": 0.0, "known": False,
+            "score": 0.0, "known": True,
             "open_count": 0, "active_count": 0, "total_linked": 0,
             "raw_points": 0.0, "by_status": {},
         }

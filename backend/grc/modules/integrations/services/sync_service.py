@@ -634,6 +634,22 @@ class SyncService:
                 "degraded": False,
             }
             host_contexts.append(host_ctx)
+            # Enrich the finding identity with the host's REAL fingerprint (NetBIOS
+            # name + MAC) from the credentialed per-host detail. The host list often
+            # shows only a bare IP, but a credentialed/same-LAN scan resolved the
+            # machine — capturing it lets a finding link to its asset by the
+            # UNCHANGING name/MAC even after the IP moves networks. Only for hosts
+            # still named as a bare IP; the IP-keyed stable vuln_id is left untouched
+            # (host_identity below is additive, not the id source).
+            if is_nessus and host_ctx["host_name"] and host_ctx["host_name"] == host_ctx["ip_address"]:
+                try:
+                    fp = adapter.get_host_fingerprint(host_ctx["host_name"], host_ctx["ip_address"])
+                    if fp.get("netbios_name"):
+                        host_ctx["fp_host_name"] = fp["netbios_name"]
+                    if fp.get("mac"):
+                        host_ctx["fp_mac"] = fp["mac"]
+                except Exception:
+                    pass
             try:
                 if is_nessus:
                     instances = adapter.get_asset_vulnerabilities(
@@ -702,8 +718,9 @@ class SyncService:
                     # affected_host is left alone — it is the scanner's internal id and
                     # is load-bearing for the stable vuln_id and auto-close.
                     _hid = {k: v for k, v in (
-                        ("host_name", host_ctx.get("host_name")),
+                        ("host_name", host_ctx.get("fp_host_name") or host_ctx.get("host_name")),
                         ("ip", host_ctx.get("ip_address")),
+                        ("mac", host_ctx.get("fp_mac")),
                     ) if v}
                     if _hid:
                         mapped_vuln["host_identity"] = _hid

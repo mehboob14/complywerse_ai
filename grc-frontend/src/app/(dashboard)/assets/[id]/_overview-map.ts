@@ -6,6 +6,7 @@
  * renders in the same clean, structured layout with its OWN fields.
  */
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { registrableDomain } from '@/lib/domains';
 
 
 // Outside-only host: born from EASM and never logged into. Checking
@@ -19,6 +20,8 @@
 const isOutsideOnly = (a: any): boolean =>
   a?.last_seen_source === 'external' ||
   (a?.origin_source === 'easm' && (a?.discovery_state ?? 'unmanaged') === 'unmanaged');
+
+// registrableDomain (apex) is imported from @/lib/domains (full Public Suffix List).
 
 const MONO_HINT = /(serial|sid|part_number|mac|ipv4|ipv6|version|path|key|uuid|gateway|subnet|dns|arn|_id$|^id$)/i;
 
@@ -486,6 +489,207 @@ function buildPlannedCards(asset: any, pp: any, plan: NonNullable<OverviewOpts['
   return cards.length ? cards : null;
 }
 
+// ── External (EASM) helpers ───────────────────────────────────────────────────
+// Everything below is used ONLY when isOutsideOnly(asset) is true. It reads the
+// FLAT platform_properties.external_probe dict written by the backend
+// external_probe.probe_asset (see backend .../services/external_probe.py) — never
+// fabricating a field the probe didn't collect.
+const _MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+// "2026-09-24T..." -> "24 Sep" (deterministic; no Date parsing / locale drift).
+function fmtDay(iso: any): string {
+  const p = String(iso ?? '').slice(0, 10).split('-');
+  return p.length === 3 && _MON[+p[1] - 1] ? `${+p[2]} ${_MON[+p[1] - 1]}` : String(iso ?? '').slice(0, 10);
+}
+// Services an outside-in probe can actually attest to: HTTPS if 443 answered TLS,
+// plain HTTP only when the host is live over http with no HTTPS, SMTP if it has MX.
+function extExposedServices(pr: any): string[] {
+  if (!pr) return [];
+  const s: string[] = [];
+  if (pr.https_available) s.push('HTTPS');
+  else if (pr.live && pr.scheme === 'http') s.push('HTTP');
+  if (Array.isArray(pr.dns_mx) && pr.dns_mx.length) s.push('SMTP');
+  return s;
+}
+
+// Not-collected marker for a probe field an outside-in scan structurally CANNOT
+// read (WHOIS, DNSSEC, MTA-STS, ASN, cert key type, reverse DNS…). Deliberately
+// NOT the bare '—' the Cell turns into "Not set" — that reads as a field someone
+// forgot to fill in, whereas this reads as "the probe can't see this from outside".
+const NC = '— · not collected';
+const ncItem = (label: string) => ({ label, value: NC, tone: 'muted' });
+// A section kept in the shell (so the layout matches the mock) whose data is
+// entirely absent — one honest line instead of fabricated rows.
+const noteSec = (title: string, text: string) => ({ title, status: 'not collected', blocks: [{ type: 'note', text }] });
+
+// platform_properties.external_probe -> the design's `deep` groups. The FULL
+// mock shell is always rendered (Domain & DNS, Web/TLS & Exposure, Infrastructure,
+// Discovery & evidence) so an external asset reads the same everywhere; each field
+// is a REAL probe/asset value where one exists, else an honest "not collected".
+// Nothing is fabricated (no fake TTL, ASN, WHOIS dates, ports, key type).
+function buildExternalDeep(asset: any, pr: any): any[] {
+  const groups: any[] = [];
+  const aliases = Array.isArray(asset?.dns_aliases) ? asset.dns_aliases.filter(Boolean) : [];
+  const live = !!pr?.live;
+  const probed = !!pr;   // an external_probe block was written for this host at all
+  const dnsProbed = !!(pr && (pr.dns_a || pr.dns_mx || pr.dns_ns || pr.caa || pr.spf || pr.dmarc || pr.dkim));
+  const fqdn = asset?.fqdn || asset?.host_name || pr?.fqdn || '';
+  const apexOf = registrableDomain(fqdn);
+  // A leaf subdomain (www.liztek.ca) vs the apex (liztek.ca). Domain-level facts
+  // — WHOIS, nameservers, the subdomain roll-up — belong to the apex only.
+  const isSubdomain = !!(apexOf && fqdn && fqdn.toLowerCase() !== apexOf.toLowerCase());
+  const date10 = (s: any) => (s ? String(s).slice(0, 10) : '—');
+  const kvOrNC = (label: string, v: any, mono?: boolean) => (v ? { label, value: String(v), mono } : ncItem(label));
+
+  // ── Domain & DNS Telemetry ─────────────────────────────────────────────────
+  const dnsSecs: any[] = [];
+
+  // Registration & WHOIS — WHOIS is not probed outside-in; Nameservers (dns_ns)
+  // is the one real field. The rest are kept so the shell matches the mock, honest.
+  const ns = (Array.isArray(pr?.whois_nameservers) && pr.whois_nameservers.length ? pr.whois_nameservers : (Array.isArray(pr?.dns_ns) ? pr.dns_ns : [])).filter(Boolean);
+  const wStatus = Array.isArray(pr?.whois_status) ? pr.whois_status.filter(Boolean) : [];
+  const locked = wStatus.some((x: string) => /transfer\s*prohibited/i.test(x));
+  const whoisProbed = !!(pr?.whois_registrar || pr?.whois_created || pr?.whois_expires || ns.length);
+  if (isSubdomain) {
+    // A subdomain isn't separately registered — registration lives on the apex.
+    dnsSecs.push(noteSec('Registration & WHOIS', `Domain registration, nameservers & WHOIS are tracked on the apex domain ${apexOf}.`));
+  } else {
+    dnsSecs.push({ title: 'Registration & WHOIS', status: whoisProbed ? 'discovered' : 'not collected', blocks: [{ type: 'kv', items: [
+      kvOrNC('Registrar', pr?.whois_registrar),
+      ncItem('Registry'),
+      kvOrNC('Created', pr?.whois_created ? date10(pr.whois_created) : null),
+      kvOrNC('Expires', pr?.whois_expires ? date10(pr.whois_expires) : null),
+      { label: 'Nameservers', value: ns.length ? ns.join(', ') : NC, mono: ns.length ? true : undefined, tone: ns.length ? undefined : 'muted' },
+      kvOrNC('Status', wStatus.length ? wStatus.join(' · ') : null),
+      (pr?.dnssec ? { label: 'DNSSEC', value: pr.dnssec, tone: pr.dnssec === 'signed' ? 'ok' : 'warn' } : ncItem('DNSSEC')),
+      (pr?.whois_status ? { label: 'Transfer lock', value: locked ? 'Locked' : 'Unlocked', tone: locked ? 'ok' : 'warn' } : ncItem('Transfer lock')),
+    ] }] });
+  }
+
+  // DNS records (A / MX / CAA / TXT-spf). Name = apex fqdn (real); TTL is not
+  // returned by the probe, so it renders '—'.
+  const dnsRows: any[] = [];
+  if (Array.isArray(pr?.dns_records) && pr.dns_records.length) {
+    pr.dns_records.forEach((r: any) => dnsRows.push([r?.type || '—', r?.name || fqdn || '—', String(r?.value ?? '—'), r?.ttl != null ? String(r.ttl) : '—']));
+  } else {
+    const pushRecs = (type: string, vals: any) =>
+      (Array.isArray(vals) ? vals : []).filter(Boolean).forEach((v: any) => dnsRows.push([type, fqdn || '—', String(v), '—']));
+    pushRecs('A', pr?.dns_a); pushRecs('MX', pr?.dns_mx); pushRecs('CAA', pr?.caa);
+    if (pr?.spf) dnsRows.push(['TXT', fqdn || '—', String(pr.spf), '—']);
+  }
+  dnsSecs.push(dnsRows.length
+    ? { title: 'DNS records', status: 'discovered', blocks: [{ type: 'table', headers: ['Type', 'Name', 'Value', 'TTL'], rows: dnsRows }] }
+    : noteSec('DNS records', dnsProbed ? 'No A / MX / CAA / TXT records resolved for this host.' : 'Not collected by the outside-in probe — run Rescan domain to resolve DNS records.'));
+
+  // Email security — SPF / DMARC / DKIM real (present/missing when probed);
+  // DNSSEC + MTA-STS are not probed.
+  const yn = (v: any) => (v ? { value: '✓ present', tone: 'ok' } : (probed ? { value: '✗ missing', tone: 'bad' } : { value: NC, tone: 'muted' }));
+  dnsSecs.push({ title: 'Email security', status: probed ? 'discovered' : 'not collected', blocks: [{ type: 'kv', items: [
+    { label: 'SPF', ...yn(pr?.spf) }, { label: 'DMARC', ...yn(pr?.dmarc) }, { label: 'DKIM', ...yn(pr?.dkim) },
+    (pr?.dnssec ? { label: 'DNSSEC', value: pr.dnssec, tone: pr.dnssec === 'signed' ? 'ok' : 'warn' } : ncItem('DNSSEC')),
+    (pr?.mta_sts != null ? { label: 'MTA-STS', value: pr.mta_sts ? `✓ ${pr.mta_sts_mode || 'present'}` : '✗ absent', tone: pr.mta_sts ? 'ok' : 'warn' } : ncItem('MTA-STS')),
+  ] }] });
+
+  // Subdomains — APEX ONLY (a leaf subdomain has none). Source order: the probe's
+  // crt.sh list, else the apex certificate SANs (real) + dns_aliases.
+  if (!isSubdomain) {
+    const sans = (Array.isArray(pr?.tls_sans) ? pr.tls_sans : []).filter((h: any) => typeof h === 'string');
+    const sanSubs = sans.filter((h: string) => h.toLowerCase() !== fqdn.toLowerCase() && h.toLowerCase().endsWith('.' + (apexOf || fqdn).toLowerCase()));
+    const subRows = (Array.isArray(pr?.subdomains) && pr.subdomains.length
+      ? pr.subdomains.map((sd: any) => [sd?.host || '—', (Array.isArray(sd?.resolves_to) && sd.resolves_to.length ? sd.resolves_to.join(', ') : '—'), '—', '—', sd?.first_seen ? date10(sd.first_seen) : '—', '—'])
+      : Array.from(new Set([...aliases, ...sanSubs].filter(Boolean))).sort().map((a: string) => [a, '—', '—', '—', '—', '—']));
+    dnsSecs.push(subRows.length
+      ? { title: 'Subdomains', status: 'discovered', blocks: [
+          { type: 'table', headers: ['Host', 'Resolves to', 'Purpose', 'Ports', 'First seen', 'Last seen'], rows: subRows },
+          { type: 'note', text: 'From the apex certificate SANs + passive DNS/CT. Each is also tracked as its own asset — expand the apex row in the register to open them.' },
+        ] }
+      : noteSec('Subdomains', 'No subdomains discovered by the outside-in probe.'));
+  }
+
+  groups.push({ key: 'dns', label: 'Domain & DNS Telemetry', pill: 'Domain & DNS', sub: 'Registration, DNS records, email security & subdomains · EASM domain scan', sections: dnsSecs });
+
+  // ── Web, TLS & Exposure Telemetry ──────────────────────────────────────────
+  const webSecs: any[] = [];
+
+  // TLS certificates — Subject / SANs / Issuer / Valid-to / Grade are real; Key
+  // type/size is not read by the probe.
+  const d2e = pr?.tls_days_to_expiry;
+  if (pr?.tls_not_after) {
+    const validTo = `${fmtDay(pr.tls_not_after)}${typeof d2e === 'number' ? ` · ${d2e}d` : ''}`;
+    const sans = Array.isArray(pr?.tls_sans) && pr.tls_sans.length ? pr.tls_sans.join(', ') : '—';
+    webSecs.push({ title: 'TLS certificates', status: 'discovered', blocks: [{ type: 'table',
+      headers: ['Subject', 'SANs', 'Issuer', 'Key', 'Valid to', 'Grade'],
+      rows: [[pr.tls_subject_cn || fqdn || '—', sans, pr.tls_issuer || '—', pr?.tls_key || '—', validTo, pr?.health?.grade || '—']] }] });
+  } else {
+    webSecs.push(noteSec('TLS certificates', pr?.tls_error
+      ? `No certificate retrieved on 443 — ${pr.tls_error}`
+      : 'Not collected by the outside-in probe — no TLS certificate retrieved.'));
+  }
+
+  // Exposed services — asserted ONLY from real facts (TLS answered on 443, HTTP
+  // responded on 80, MX present). This is not a full port scan; nothing invented.
+  const svcRows: any[] = [];
+  if (pr?.https_available) svcRows.push(['443', 'HTTPS', 'TLS handshake succeeded']);
+  if (live && pr?.scheme === 'http' && !pr?.https_available) svcRows.push(['80', 'HTTP', `HTTP ${pr?.status_code ?? ''}`.trim()]);
+  if (Array.isArray(pr?.dns_mx) && pr.dns_mx.length) svcRows.push(['25', 'SMTP', 'MX record present']);
+  webSecs.push(svcRows.length
+    ? { title: 'Exposed services', status: 'discovered', blocks: [
+        { type: 'table', headers: ['Port', 'Service', 'Evidence'], rows: svcRows },
+        { type: 'note', text: 'Only services the unauthenticated probe could attest to (HTTP/TLS + MX record). This is not a full port scan.' },
+      ] }
+    : noteSec('Exposed services', 'No services attested by the outside-in probe (no live HTTP/TLS, no MX).'));
+
+  // HTTP security headers — real when the host answered HTTP; unknown otherwise.
+  const HDRS: [string, string][] = [['hsts', 'HSTS'], ['csp', 'CSP'], ['x_frame_options', 'X-Frame-Options'], ['x_content_type_options', 'X-Content-Type-Options'], ['referrer_policy', 'Referrer-Policy'], ['permissions_policy', 'Permissions-Policy']];
+  const present = pr?.security_headers || {};
+  webSecs.push({ title: 'HTTP security headers', status: live ? 'discovered' : 'not collected', blocks: [{ type: 'kv', items: HDRS.map(([k, lbl]) =>
+    live
+      ? (present[k] ? { label: lbl, value: '✓ set', tone: 'ok' } : { label: lbl, value: '✗ missing', tone: (k === 'hsts' || k === 'csp') ? 'bad' : 'warn' })
+      : ncItem(lbl)) }] });
+
+  groups.push({ key: 'web', label: 'Web, TLS & Exposure Telemetry', pill: 'Web, TLS & Exposure', sub: 'Certificates, exposed services & HTTP posture · unauthenticated scan', sections: webSecs });
+
+  // ── Infrastructure Telemetry ───────────────────────────────────────────────
+  // IP + CDN/WAF are real; ASN, Region, Reverse DNS and Hosting type need a
+  // passive-DNS / IP-intel source the probe doesn't call — honest "not collected".
+  const ip = asset?.ip_address || pr?.ip;
+  const cdn = pr?.cdn_waf;
+  // Hosting type — derived HONESTLY from reverse DNS + ASN org (real probe fields),
+  // not a keyed intel source. e.g. rDNS "lv-shared04.dapanel.net" + ASN
+  // "WebHostingHoldings" → shared hosting.
+  const hostingType = (() => {
+    const blob = `${pr?.reverse_dns || ''} ${pr?.asn_org || ''}`.toLowerCase();
+    if (!blob.trim()) return null;
+    if (/\b(aws|amazon|ec2|azure|google|gcp|cloudfront|digitalocean|linode|akamai|fastly|vultr|ovh|hetzner|oracle\s*cloud)\b/.test(blob)) return 'Cloud / CDN';
+    if (/shared|cpanel|dapanel|whm|hostgator|bluehost|namecheap|godaddy|webhosting|hostinger|siteground/.test(blob)) return 'Shared hosting';
+    if (/\b(vps|virtual\s*server)\b/.test(blob)) return 'VPS';
+    if (/\b(dedi|dedicated)\b/.test(blob)) return 'Dedicated server';
+    return 'Hosting provider';
+  })();
+  groups.push({ key: 'infra', label: 'Infrastructure Telemetry', pill: 'Infrastructure', sub: 'Hosting, network ownership & edge · passive + active probes', sections: [
+    { title: 'Hosting & network', status: (ip || cdn || pr?.asn || pr?.reverse_dns) ? 'discovered' : 'not collected', blocks: [{ type: 'kv', items: [
+      { label: 'IP address', value: ip || '—', mono: ip ? true : undefined },
+      (pr?.asn ? { label: 'ASN', value: `AS${pr.asn}${pr.asn_org ? ` · ${pr.asn_org}` : ''}` } : kvOrNC('ASN', pr?.asn_org)),
+      kvOrNC('Region', pr?.ip_region),
+      kvOrNC('Reverse DNS', pr?.reverse_dns, true),
+      { label: 'CDN / WAF', value: cdn || (live ? 'none detected' : NC), tone: cdn ? 'ok' : 'muted' },
+      (hostingType ? { label: 'Hosting type', value: hostingType } : ncItem('Hosting type')),
+    ] }] },
+  ] });
+
+  // ── Discovery & evidence ───────────────────────────────────────────────────
+  groups.push({ key: 'discovery', label: 'Discovery & evidence', pill: 'Discovery & evidence', sub: 'How this external asset was found & last crawled', sections: [
+    { title: 'Discovery & evidence', status: 'discovered', blocks: [{ type: 'kv', items: [
+      { label: 'Source', value: asset?.origin_source || asset?.discovery_source || '—' },
+      { label: 'Evidence', value: asset?.discovery_source || (asset?.origin_source === 'easm' ? 'Outside-in probe · DNS / TLS / certificate transparency' : '—') },
+      { label: 'First discovered', value: date10(asset?.first_seen_at || asset?.created_at) },
+      { label: 'Last crawl', value: pr?.probed_at ? date10(pr.probed_at) : '—' },
+      { label: 'Confidence', value: '—', tone: 'muted' },
+    ] }] },
+  ] });
+
+  return groups;
+}
+
 export interface OverviewOpts {
   software?: any[];
   posture?: any;
@@ -508,9 +712,19 @@ export function buildOverviewData(asset: any, o: OverviewOpts = {}): any {
   const date = (s: any) => (s ? String(s).slice(0, 10) : '—');
   const K = o.kpis || {};
 
+  const probe = pp?.external_probe;
+  const outside = isOutsideOnly(asset);
+  const subCount = Array.isArray(asset?.dns_aliases) ? asset.dns_aliases.filter(Boolean).length : 0;
+  const _vulns = Array.isArray(asset?.linked_vulnerabilities) ? asset.linked_vulnerabilities : [];
+  const highCount = _vulns.filter((v: any) => ['high', 'critical'].includes(String(v?.severity || '').toLowerCase())).length;
+
   const isApp = asset?.asset_type === 'application';
   const KIND_LABEL: Record<string, string> = { server: 'host', database: 'database', network: 'network device', cloud: 'cloud account', cluster: 'cluster', identity: 'directory' };
-  const deep = buildDeep(pp, kind, isLinux(asset));
+  // External (EASM) assets have no {status,data} platform sections — their deep
+  // telemetry is built straight from the flat external_probe dict instead.
+  const deep = outside
+    ? { groups: buildExternalDeep(asset, probe), notes: { denied: [], absent: [] } }
+    : buildDeep(pp, kind, isLinux(asset));
   // A software-promoted app has no deep inventory of its own — nudge toward the
   // richer path (connect it as a database with a DB login) instead of a blank card.
   if (isApp && deep.groups.length === 0) {
@@ -527,7 +741,6 @@ export function buildOverviewData(asset: any, o: OverviewOpts = {}): any {
   const scanNoteTop = isOutsideOnly(asset) ? 'Outside-in probe' : 'Agentless scan';
   const planned = o.plan ? buildPlannedCards(asset, pp, o.plan, scanNoteTop) : null;
   const machineCards = planned ?? buildMachineCards(asset, pp, kind, isLinux(asset));
-  const probe = pp?.external_probe;
   // EASM health grade + outside-in hygiene parameters. Built once so BOTH render
   // paths surface them — the generic exposure card AND an AI layout plan's
   // Exposure card (which only enumerates raw probe keys, not the derived health).
@@ -601,6 +814,54 @@ export function buildOverviewData(asset: any, o: OverviewOpts = {}): any {
     hygieneBreakdown = [...present, ...missing];
   }
 
+  // ── External (EASM) KPI strip — 5 tiles from real probe/finding facts, each
+  // OMITTED when its data is absent (never faked). Replaces the internal set. ──
+  const extKpis = (() => {
+    const out: any[] = [];
+    const of = K.openFindings ?? 0;
+    if (K.riskScore != null && K.riskScore !== '') {
+      out.push({ label: 'Risk Score', value: dash(K.riskScore), sub: 'Assessed' });
+    } else if (probe?.health?.grade) {
+      out.push({ label: 'Risk Score', value: `${probe.health.grade} · ${probe.health.score}`,
+        sub: hygieneBreakdown ? 'Outside-in health · click for breakdown' : 'Outside-in health (not risk)',
+        tone: ['A', 'B'].includes(probe.health.grade) ? 'ok' : probe.health.grade === 'C' ? 'warn' : 'bad',
+        breakdown: hygieneBreakdown, breakdownTitle: `Attack-surface hygiene — ${probe.health.grade} · ${probe.health.score}/100`,
+        breakdownNote: 'Formula: score = ( Σ parameter × weight ) ÷ ( Σ weights of the applicable parameters ) × 100. Each row shows its % weight. Higher is healthier. Parameters that don’t apply to this host (no mail, no cookies, no CDN) are marked N/A and left out of the maths — never scored 0.' });
+    } else {
+      out.push({ label: 'Risk Score', value: '—', sub: 'Not assessed', tone: 'muted' });
+    }
+    out.push({ label: 'Open Findings', value: String(of), sub: of ? (highCount ? `${highCount} high` : 'Needs attention') : 'None open', tone: of ? 'bad' : 'ok' });
+    if (subCount > 0) out.push({ label: 'Subdomains', value: String(subCount), sub: 'discovered' });
+    const svc = extExposedServices(probe);
+    if (svc.length) out.push({ label: 'Exposed Services', value: String(svc.length), sub: svc.map((s) => s.toLowerCase()).join(' · ') });
+    if (probe?.tls_not_after) {
+      const d = probe.tls_days_to_expiry;
+      out.push({ label: 'Cert Expiry', value: probe.tls_expired ? 'expired' : (typeof d === 'number' ? `${d}d` : '—'), sub: fmtDay(probe.tls_not_after),
+        tone: probe.tls_expired || (typeof d === 'number' && d <= 14) ? 'bad' : (typeof d === 'number' && d <= 30 ? 'warn' : 'ok') });
+    }
+    return out;
+  })();
+
+  // ── External posture signals — the rail rows. Real probe/finding facts; each
+  // omitted when absent (an unprobed host may surface only Open findings). ──
+  const extSignals = (() => {
+    const out: any[] = [];
+    if (probe?.health?.grade) out.push({ label: 'TLS grade', value: probe.tls_version ? `${probe.health.grade} · ${probe.tls_version}` : probe.health.grade, tone: ['A', 'B'].includes(probe.health.grade) ? 'ok' : probe.health.grade === 'C' ? 'warn' : 'bad' });
+    if (probe?.tls_not_after) {
+      const d = probe.tls_days_to_expiry;
+      const parts: string[] = [];
+      if (typeof d === 'number') parts.push(`${d} day${d === 1 ? '' : 's'}`);
+      parts.push(fmtDay(probe.tls_not_after));
+      out.push({ label: 'Certificate expiry', value: probe.tls_expired ? 'expired' : parts.join(' · '), tone: probe.tls_expired || (typeof d === 'number' && d <= 14) ? 'bad' : (typeof d === 'number' && d <= 30 ? 'warn' : 'ok') });
+    }
+    if (probe && Array.isArray(probe.dns_mx) && probe.dns_mx.length) out.push({ label: 'Email security', value: `${probe.spf ? 'SPF ✓' : 'SPF ✗'} · ${probe.dmarc ? 'DMARC ✓' : 'DMARC ✗'}`, tone: probe.spf && probe.dmarc ? 'ok' : 'warn' });
+    const svc = extExposedServices(probe);
+    if (svc.length) out.push({ label: 'Exposed services', value: String(svc.length) });
+    const of = K.openFindings ?? 0;
+    out.push({ label: 'Open findings', value: highCount ? `${of} · ${highCount} high` : String(of), tone: of ? (highCount ? 'bad' : 'warn') : 'ok' });
+    return out;
+  })();
+
   return {
     legend: { machine: `${asset?.last_seen_source || 'agentless'} scan · ${date(asset?.last_seen_at)}` },
     // External (EASM) assets aren't agentless-collected — let the design relabel.
@@ -619,13 +880,14 @@ export function buildOverviewData(asset: any, o: OverviewOpts = {}): any {
       idline: isApp
         ? ['application', asset?.os_version || asset?.name,
           asset?.parent_asset_id ? `runs on ${asset?.host_name || `#${asset.parent_asset_id}`}` : null].filter(Boolean).join(' · ')
-        : [asset?.asset_type, KIND_LABEL[kind], asset?.os_version || asset?.os_family,
-          isOutsideOnly(asset) ? 'discovered externally · internet-facing'
-            : asset?.source_system === 'discovery' ? 'discovered on network' : null].filter(Boolean).join(' · '),
+        : outside
+          ? ['apex domain', subCount > 0 ? `${subCount} subdomain${subCount === 1 ? '' : 's'}` : null, asset?.ip_address].filter(Boolean).join(' · ')
+          : [asset?.asset_type, KIND_LABEL[kind], asset?.os_version || asset?.os_family,
+            asset?.source_system === 'discovery' ? 'discovered on network' : null].filter(Boolean).join(' · '),
     },
     actions: o.actions || [],
     tabs: o.tabs || [],
-    kpis: [
+    kpis: outside ? extKpis : [
       // External (EASM) assets are graded on exposure health, not a CIA risk
       // score — surface the health grade here so the tile isn't "Not assessed".
       probe?.health?.grade
@@ -674,12 +936,7 @@ export function buildOverviewData(asset: any, o: OverviewOpts = {}): any {
       // An external (EASM) host was never logged into, so AV / EDR / packages are
       // UNKNOWN — not "none". Rendering "None detected" in red for these was a
       // false alarm (it reads as a finding). Show the honest state in a neutral tone.
-      signals: isOutsideOnly(asset) ? [
-        { label: 'Antivirus', value: 'Not observable from outside', tone: 'muted' },
-        { label: 'EDR', value: 'Not observable from outside', tone: 'muted' },
-        { label: 'Endpoint Protected', value: 'Unknown — no login', tone: 'muted' },
-        { label: 'Weak Spots', value: 'Run a Nessus scan on this host to find them', tone: 'muted' },
-      ] : [
+      signals: outside ? extSignals : [
         { label: 'Antivirus', value: posture?.has_antivirus ? (posture.antivirus_products?.join(', ') || 'Present') : 'None detected', tone: posture?.has_antivirus ? 'ok' : 'bad' },
         { label: 'EDR', value: posture?.has_edr ? (posture.edr_products?.join(', ') || 'Present') : 'None detected', tone: posture?.has_edr ? 'ok' : 'bad' },
         { label: 'Endpoint Protected', value: posture?.endpoint_protected ? 'Yes' : 'No', tone: posture?.endpoint_protected ? 'ok' : 'bad' },
