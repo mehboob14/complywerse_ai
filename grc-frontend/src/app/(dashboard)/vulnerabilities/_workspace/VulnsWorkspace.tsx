@@ -168,7 +168,7 @@ export function VulnsWorkspace(props: VulnsWorkspaceProps) {
   const top10 = [...all].sort((a, b) => ctxScore(b) - ctxScore(a)).slice(0, 10);
 
   return (
-    <div className="inv2" style={{ background: '#F4F6F7', height: '100%', minHeight: 'calc(100vh - 160px)', display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: '10px 10px 0', fontSize: 13.5, color: INK }}>
+    <div className="inv2" style={{ background: '#F4F6F7', height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: '10px 10px 0', fontSize: 13.5, color: INK }}>
       {/* header — hidden on the CTEM pane (mock: CTEM carries its own header) */}
       {pane !== 'ctem' && (
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 10, flexWrap: 'wrap', flexShrink: 0 }}>
