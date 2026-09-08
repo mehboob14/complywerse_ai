@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 import json
 import logging
 import os
+import re
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
@@ -101,16 +102,43 @@ def _fallback_exception_suggestion(title: str, document: GovernanceDocument) -> 
             f"Business continuity and service delivery requirements require short-term deviation while remediation activities are executed. "
             f"Scope impacted: {policy_scope}."
         ),
-        "risk_assessment": (
-            "Key risks include control non-conformance, elevated compliance exposure, and potential audit observations if unmanaged. "
-            "Residual risk is expected to remain moderate provided the exception remains time-bound, monitored, and approved through governance workflow."
-        ),
-        "compensating_controls": (
-            "Apply enhanced management oversight, implement interim manual review checks, maintain exception activity logs, "
-            "perform periodic compliance monitoring, and enforce a defined remediation target date with accountable owner tracking."
-        ),
+        "risk_assessment": _to_numbered([
+            "Control non-conformance while the exception is active, weakening the affected policy objective.",
+            "Elevated compliance exposure and potential audit observations if the deviation is not managed.",
+            "Increased likelihood of the underlying risk materialising during the exception window.",
+            "Residual risk remains moderate provided the exception stays time-bound, monitored and approved through the governance workflow.",
+        ]),
+        "compensating_controls": _to_numbered([
+            "Apply enhanced management oversight and documented approval of the deviation.",
+            "Implement interim manual review checks over the affected process.",
+            "Maintain exception activity logs and monitor them for misuse.",
+            "Perform periodic compliance monitoring for the duration of the exception.",
+            "Enforce a defined remediation target date with an accountable owner.",
+        ]),
         "source": "template"
     }
+
+
+def _to_numbered(value) -> str:
+    """Render discrete points as a numbered block '1. ...\\n2. ...'. A list yields
+    one numbered line per item; a string that already has line breaks / bullet or
+    number markers is normalised into the same numbered form; plain prose that
+    reads as several sentences is split into numbered points."""
+    marker = re.compile(r"^\s*(?:\d+[.)]|[-*•])\s+")
+    if isinstance(value, list):
+        items = [marker.sub("", str(v).strip()).strip() for v in value if str(v).strip()]
+    else:
+        text = str(value or "").strip()
+        if not text:
+            return ""
+        lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+        if len(lines) >= 2 and all(marker.match(ln) for ln in lines):
+            items = [marker.sub("", ln).strip() for ln in lines]  # already a list
+        else:
+            # single blob -> split into sentences so it still renders as points
+            items = [p.strip() for p in re.split(r"(?<=[.!?])\s+(?=[A-Z0-9])", text) if p.strip()]
+    items = [it for it in items if it]
+    return "\n".join(f"{i}. {it}" for i, it in enumerate(items, 1))
 
 
 def _parse_json_response(raw_text: str) -> Optional[dict]:
@@ -151,8 +179,11 @@ def _generate_exception_suggestion(title: str, document: GovernanceDocument) -> 
 
         prompt = (
             "You are a GRC governance specialist. Generate concise policy exception draft content as strict JSON only with keys: "
-            "justification, risk_assessment, compensating_controls. "
-            "Use professional audit/compliance language, be practical and specific to the provided exception title and policy context.\n\n"
+            "justification, risk_assessment, compensating_controls.\n"
+            "- justification: a short paragraph (2-3 sentences).\n"
+            "- risk_assessment: a JSON ARRAY of 3-6 concise, DISTINCT risk statements (each a short standalone point, no numbering prefix).\n"
+            "- compensating_controls: a JSON ARRAY of 3-6 concise, DISTINCT compensating control statements (each a short standalone point, no numbering prefix).\n"
+            "Use professional audit/compliance language, practical and specific to the provided exception title and policy context.\n\n"
             f"Exception title: {title}\n\n"
             f"Policy context:\n{policy_context}"
         )
@@ -170,8 +201,9 @@ def _generate_exception_suggestion(title: str, document: GovernanceDocument) -> 
         parsed = _parse_json_response(content or "") or {}
 
         justification = str(parsed.get("justification") or "").strip()
-        risk_assessment = str(parsed.get("risk_assessment") or "").strip()
-        compensating_controls = str(parsed.get("compensating_controls") or "").strip()
+        # risks + compensating controls are numbered points (arrays -> "1. …\n2. …")
+        risk_assessment = _to_numbered(parsed.get("risk_assessment"))
+        compensating_controls = _to_numbered(parsed.get("compensating_controls"))
 
         if not justification or not risk_assessment or not compensating_controls:
             return _fallback_exception_suggestion(title, document)

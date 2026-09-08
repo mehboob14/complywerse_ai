@@ -198,6 +198,8 @@ export default function RegulatoryChangeDetailPage() {
   const changeId = Number(params.id);
 
   const [activeTab, setActiveTab] = useState('overview');
+  // Click a row in any tab to see the full, untruncated record.
+  const [viewingRecord, setViewingRecord] = useState<{ kind: 'assessment' | 'task' | 'gap'; data: any } | null>(null);
   const [showAssessmentModal, setShowAssessmentModal] = useState(false);
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
@@ -512,6 +514,25 @@ export default function RegulatoryChangeDetailPage() {
     },
   });
 
+  // Re-run the AI analyzer to replace the generic assessments with detailed,
+  // platform-grounded ones (driving clause, current control/policy state,
+  // concrete gap, affected departments, related audit observations). Manually
+  // added assessments are preserved server-side.
+  const regenerateMutation = useMutation({
+    mutationFn: () => regulatoryApi.regenerateAssessments(changeId),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['regulatory-assessments', changeId] });
+      queryClient.invalidateQueries({ queryKey: ['regulatory-tasks', changeId] });
+      queryClient.invalidateQueries({ queryKey: ['regulatory-change', changeId] });
+      const n = Array.isArray((res as { data?: unknown })?.data) ? (res as { data: unknown[] }).data.length : 0;
+      toast({ title: 'Assessments regenerated', message: `AI produced ${n} detailed assessment(s).`, type: 'success' });
+    },
+    onError: (e: unknown) => {
+      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      toast({ title: 'Regenerate failed', message: detail || 'Could not regenerate assessments.', type: 'error' });
+    },
+  });
+
   const createTaskMutation = useMutation({
     mutationFn: (data: Record<string, unknown>) => {
       const payload: Record<string, unknown> = {
@@ -696,12 +717,23 @@ export default function RegulatoryChangeDetailPage() {
             <div className="rounded-xl border border-slate-300 bg-white p-6">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold text-slate-900">Recent Assessments</h2>
-                <button 
-                  onClick={() => { setActiveTab('assessments'); setShowAssessmentModal(true); }}
-                  className="text-sm text-primary-600 hover:text-primary-700"
-                >
-                  View All
-                </button>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => regenerateMutation.mutate()}
+                    disabled={regenerateMutation.isPending}
+                    title="Re-run AI to produce detailed assessments grounded in your controls, policies, audit observations and departments"
+                    className="inline-flex items-center gap-1.5 text-sm text-primary-600 hover:text-primary-700 disabled:opacity-50"
+                  >
+                    {regenerateMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                    Regenerate
+                  </button>
+                  <button
+                    onClick={() => { setActiveTab('assessments'); }}
+                    className="text-sm text-primary-600 hover:text-primary-700"
+                  >
+                    View All
+                  </button>
+                </div>
               </div>
               {assessmentsLoading ? (
                 <div className="flex justify-center py-8">
@@ -714,7 +746,11 @@ export default function RegulatoryChangeDetailPage() {
               ) : (
                 <div className="space-y-3">
                   {assessments.slice(0, 3).map((assessment) => (
-                    <div key={assessment.id} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                    <div
+                      key={assessment.id}
+                      onClick={() => setViewingRecord({ kind: 'assessment', data: assessment })}
+                      className="rounded-lg border border-slate-200 bg-slate-50 p-4 cursor-pointer hover:bg-slate-100 transition-colors"
+                    >
                       <div className="flex items-center justify-between mb-2">
                         <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${getPriorityStyle(assessment.impact_level).bg} ${getPriorityStyle(assessment.impact_level).text}`}>
                           {assessment.impact_level} impact
@@ -724,7 +760,7 @@ export default function RegulatoryChangeDetailPage() {
                         </span>
                       </div>
                       {assessment.affected_areas && (
-                        <p className="text-sm text-slate-700 line-clamp-2">{assessment.affected_areas}</p>
+                        <p className="text-sm text-slate-700 line-clamp-3 whitespace-pre-line">{assessment.affected_areas}</p>
                       )}
                     </div>
                   ))}
@@ -912,10 +948,21 @@ export default function RegulatoryChangeDetailPage() {
                 Review impacted policies and controls, then create implementation tasks directly.
               </p>
             </div>
-            <button onClick={() => setShowAssessmentModal(true)} className="btn-primary flex items-center gap-2">
-              <Plus size={16} />
-              Add Assessment
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => regenerateMutation.mutate()}
+                disabled={regenerateMutation.isPending}
+                title="Re-run AI to produce detailed assessments grounded in your controls, policies, audit observations and departments. Keeps manually-added ones."
+                className="btn-secondary flex items-center gap-2 disabled:opacity-50"
+              >
+                {regenerateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles size={16} />}
+                Regenerate (AI)
+              </button>
+              <button onClick={() => setShowAssessmentModal(true)} className="btn-primary flex items-center gap-2">
+                <Plus size={16} />
+                Add Assessment
+              </button>
+            </div>
           </div>
           <div className="rounded-xl border border-slate-300 bg-white overflow-hidden">
             {assessmentsLoading ? (
@@ -949,26 +996,34 @@ export default function RegulatoryChangeDetailPage() {
                   <tbody className="divide-y divide-slate-100">
                     {assessments.map((assessment) => {
                       const itemType = (assessment.impacted_item_type || assessment.assessment_type || 'process').toLowerCase();
+                      // AI assessments store a multi-line narrative whose first
+                      // line is a label ("Policy 'X' — update"); the rest is the
+                      // specific basis / current state / gap / departments.
+                      const narrative = assessment.impact_description || assessment.affected_areas || '';
+                      const firstLine = narrative.split('\n')[0].trim();
+                      const narrativeBody = narrative.split('\n').slice(1).join('\n').trim();
                       const itemName =
                         assessment.impacted_item_name ||
-                        (assessment.affected_areas && !assessment.affected_areas.toLowerCase().startsWith('control ')
-                          ? assessment.affected_areas
-                          : null) ||
+                        (firstLine && !firstLine.toLowerCase().startsWith('control ') ? firstLine : null) ||
                         `${itemType} #${assessment.id}`;
                       const summary =
+                        narrativeBody ||
                         (assessment.gap_description && !/^action needed:/i.test(assessment.gap_description)
                           ? assessment.gap_description
                           : null) ||
                         (assessment.compliance_gaps && !/^action needed:/i.test(assessment.compliance_gaps)
                           ? assessment.compliance_gaps
                           : null) ||
-                        assessment.impact_description ||
-                        assessment.affected_areas ||
+                        narrative ||
                         'No details provided';
                       const hasGap = Boolean(assessment.gap_identified || assessment.gap_description || assessment.compliance_gaps);
 
                       return (
-                        <tr key={assessment.id} className="align-top hover:bg-slate-50/80">
+                        <tr
+                          key={assessment.id}
+                          onClick={() => setViewingRecord({ kind: 'assessment', data: assessment })}
+                          className="align-top hover:bg-slate-50/80 cursor-pointer"
+                        >
                           <td className="px-4 py-4">
                             <div className="text-sm font-medium text-slate-900 max-w-xs">{itemName}</div>
                             <div className="mt-0.5 text-xs uppercase tracking-wide text-slate-500">{itemType}</div>
@@ -990,12 +1045,12 @@ export default function RegulatoryChangeDetailPage() {
                             )}
                           </td>
                           <td className="px-4 py-4 max-w-md">
-                            <p className="text-sm text-slate-800 line-clamp-3">{summary}</p>
+                            <p className="text-sm text-slate-800 line-clamp-4 whitespace-pre-line">{summary}</p>
                           </td>
                           <td className="px-4 py-4 text-right">
                             <button
                               type="button"
-                              onClick={() => openTaskFromAssessment(assessment)}
+                              onClick={(e) => { e.stopPropagation(); openTaskFromAssessment(assessment); }}
                               className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 hover:bg-slate-50"
                             >
                               <ClipboardList className="h-3.5 w-3.5" />
@@ -1067,7 +1122,11 @@ export default function RegulatoryChangeDetailPage() {
                     const taskStatusStyle = getTaskStatusStyle(task.status);
 
                     return (
-                      <tr key={task.id} className="hover:bg-slate-50">
+                      <tr
+                        key={task.id}
+                        onClick={() => setViewingRecord({ kind: 'task', data: task })}
+                        className="hover:bg-slate-50 cursor-pointer"
+                      >
                         <td className="px-4 py-4">
                           <div className="flex items-start gap-3">
                             <div className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg ${typeStyle.bg}`}>
@@ -1103,6 +1162,7 @@ export default function RegulatoryChangeDetailPage() {
                         <td className="px-4 py-4">
                           <select
                             value={task.status}
+                            onClick={(e) => e.stopPropagation()}
                             onChange={(e) => updateTaskMutation.mutate({ taskId: task.id, data: { status: e.target.value } })}
                             className={`rounded-lg border-0 px-2 py-1 text-xs font-medium ${taskStatusStyle.bg} ${taskStatusStyle.text} focus:ring-1 focus:ring-primary-500`}
                           >
@@ -1116,7 +1176,7 @@ export default function RegulatoryChangeDetailPage() {
                         </td>
                         <td className="px-4 py-4">
                           <button
-                            onClick={() => deleteTaskMutation.mutate(task.id)}
+                            onClick={(e) => { e.stopPropagation(); deleteTaskMutation.mutate(task.id); }}
                             disabled={deleteTaskMutation.isPending}
                             className="rounded-lg p-2 text-slate-500 hover:bg-rose-50 hover:text-rose-700 transition-colors disabled:opacity-50"
                           >
@@ -1195,7 +1255,11 @@ export default function RegulatoryChangeDetailPage() {
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {gaps.map((gap) => (
-                      <tr key={gap.id} className="align-top hover:bg-slate-50/80">
+                      <tr
+                        key={gap.id}
+                        onClick={() => setViewingRecord({ kind: 'gap', data: gap })}
+                        className="align-top hover:bg-slate-50/80 cursor-pointer"
+                      >
                         <td className="px-4 py-3">
                           <div className="text-sm font-medium text-slate-900">
                             {gap.item_name || gap.gap_type.replace(/_/g, ' ')}
@@ -1225,7 +1289,7 @@ export default function RegulatoryChangeDetailPage() {
                         <td className="px-4 py-3 text-right">
                           <button
                             type="button"
-                            onClick={() => openTaskFromGap(gap)}
+                            onClick={(e) => { e.stopPropagation(); openTaskFromGap(gap); }}
                             className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 hover:bg-slate-50"
                           >
                             <ClipboardList className="h-3.5 w-3.5" />
@@ -1365,6 +1429,176 @@ export default function RegulatoryChangeDetailPage() {
           </div>
         </div>
       )}
+
+      {/* Record detail — opens when a row in any tab is clicked (full, untruncated). */}
+      <RightSlidePanel
+        isOpen={!!viewingRecord}
+        onClose={() => setViewingRecord(null)}
+        title={
+          viewingRecord?.kind === 'assessment'
+            ? 'Impact Assessment'
+            : viewingRecord?.kind === 'task'
+            ? 'Implementation Task'
+            : 'Gap Detail'
+        }
+        width="w-full max-w-2xl"
+      >
+        {viewingRecord?.kind === 'assessment' && (() => {
+          const a = viewingRecord.data;
+          const hasGap = Boolean(a.gap_identified || a.gap_description || a.compliance_gaps);
+          return (
+            <div className="space-y-5">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${getPriorityStyle(a.impact_level).bg} ${getPriorityStyle(a.impact_level).text}`}>
+                  {a.impact_level} impact
+                </span>
+                <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${hasGap ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700'}`}>
+                  {hasGap ? 'Gap' : 'Covered'}
+                </span>
+                {a.assessment_date && (
+                  <span className="ml-auto text-xs text-slate-500">{new Date(a.assessment_date).toLocaleString()}</span>
+                )}
+              </div>
+              {(a.impacted_item_name || a.impacted_item_type) && (
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Impacted item</p>
+                  <p className="mt-1 text-sm text-slate-900">
+                    {a.impacted_item_name || '—'}
+                    {a.impacted_item_type ? <span className="text-slate-500"> · {a.impacted_item_type}</span> : null}
+                  </p>
+                </div>
+              )}
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-500">Assessment</p>
+                <p className="mt-1 text-sm text-slate-800 whitespace-pre-wrap">{a.impact_description || a.affected_areas || '—'}</p>
+              </div>
+              {(a.gap_description || a.compliance_gaps) && (
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Gap / required change</p>
+                  <p className="mt-1 text-sm text-slate-800 whitespace-pre-wrap">{a.gap_description || a.compliance_gaps}</p>
+                </div>
+              )}
+              {a.recommendations && (
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Recommendations</p>
+                  <p className="mt-1 text-sm text-slate-800 whitespace-pre-wrap">{a.recommendations}</p>
+                </div>
+              )}
+              <div className="border-t border-slate-200 pt-4">
+                <button
+                  type="button"
+                  onClick={() => { const d = a; setViewingRecord(null); openTaskFromAssessment(d); }}
+                  className="btn-primary inline-flex items-center gap-2"
+                >
+                  <ClipboardList className="h-4 w-4" />
+                  Create Task
+                </button>
+              </div>
+            </div>
+          );
+        })()}
+
+        {viewingRecord?.kind === 'task' && (() => {
+          const t = viewingRecord.data;
+          return (
+            <div className="space-y-5">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${getTaskTypeStyle(t.task_type).bg} ${getTaskTypeStyle(t.task_type).text}`}>
+                  {String(t.task_type || '').replace(/_/g, ' ')}
+                </span>
+                <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${getPriorityStyle(t.priority || 'medium').bg} ${getPriorityStyle(t.priority || 'medium').text}`}>
+                  {(t.priority || 'medium').toUpperCase()}
+                </span>
+                <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${getTaskStatusStyle(t.status).bg} ${getTaskStatusStyle(t.status).text}`}>
+                  {String(t.status || '').replace(/_/g, ' ')}
+                </span>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-500">Title</p>
+                <p className="mt-1 text-sm font-medium text-slate-900">{t.title}</p>
+              </div>
+              {t.description && (
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Description</p>
+                  <p className="mt-1 text-sm text-slate-800 whitespace-pre-wrap">{t.description}</p>
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Assignee</p>
+                  <p className="mt-1 text-sm text-slate-800">{t.assignee_name || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Department</p>
+                  <p className="mt-1 text-sm text-slate-800">{t.assignee_department || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Owner</p>
+                  <p className="mt-1 text-sm text-slate-800">{t.creator_name || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Due date</p>
+                  <p className="mt-1 text-sm text-slate-800">{t.due_date ? new Date(t.due_date).toLocaleDateString() : '—'}</p>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
+        {viewingRecord?.kind === 'gap' && (() => {
+          const g = viewingRecord.data;
+          return (
+            <div className="space-y-5">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${getPriorityStyle(g.severity).bg} ${getPriorityStyle(g.severity).text}`}>
+                  {g.severity}
+                </span>
+                <span className="text-xs uppercase tracking-wide text-slate-500">{String(g.gap_type || '').replace(/_/g, ' ')}</span>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-500">Item</p>
+                <p className="mt-1 text-sm font-medium text-slate-900">{g.item_name || String(g.gap_type || '').replace(/_/g, ' ')}</p>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-500">Gap</p>
+                <p className="mt-1 text-sm text-slate-800 whitespace-pre-wrap">{g.description || '—'}</p>
+              </div>
+              {g.current_state && (
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Current state</p>
+                  <p className="mt-1 text-sm text-slate-800 whitespace-pre-wrap">{g.current_state}</p>
+                </div>
+              )}
+              {g.required_state && (
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Required state</p>
+                  <p className="mt-1 text-sm text-slate-800 whitespace-pre-wrap">{g.required_state}</p>
+                </div>
+              )}
+              {g.remediation_plan && (
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Remediation plan</p>
+                  <p className="mt-1 text-sm text-slate-800 whitespace-pre-wrap">{g.remediation_plan}</p>
+                </div>
+              )}
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-500">Assignee</p>
+                <p className="mt-1 text-sm text-slate-800">{g.assignee_name || 'Unassigned'}</p>
+              </div>
+              <div className="border-t border-slate-200 pt-4">
+                <button
+                  type="button"
+                  onClick={() => { const d = g; setViewingRecord(null); openTaskFromGap(d); }}
+                  className="btn-primary inline-flex items-center gap-2"
+                >
+                  <ClipboardList className="h-4 w-4" />
+                  Create Task
+                </button>
+              </div>
+            </div>
+          );
+        })()}
+      </RightSlidePanel>
 
       <RightSlidePanel
         isOpen={showStatusModal}

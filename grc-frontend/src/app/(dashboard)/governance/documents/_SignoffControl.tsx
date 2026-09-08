@@ -7,7 +7,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { governanceApi, adminApi, teamsApi } from '@/lib/api';
+import { governanceApi, adminApi, teamsApi, tenantApi } from '@/lib/api';
 import { MultiSelectDropdown } from '@/components/ui';
 import { useToast } from '@/components/ui/ToastProvider';
 import {
@@ -21,10 +21,12 @@ type Option = { value: string; label: string; subLabel?: string };
 function useAssigneeOptions(tenantId?: number): Option[] {
   const usersQ = useQuery({
     queryKey: ['signoff-users', tenantId],
-    enabled: !!tenantId,
     queryFn: async () => {
       try {
-        const r = await governanceApi.getTenantUsers(tenantId as number);
+        // tenantApi falls back to the session-scoped /assets/tenant-users when
+        // the document carries no tenant_id, so users always populate (not just
+        // roles). Previously this query was gated on tenantId and stayed empty.
+        const r = await tenantApi.getTenantUsers(tenantId);
         const d: any = r.data;
         return (Array.isArray(d) ? d : d?.users || []) as any[];
       } catch { return []; }

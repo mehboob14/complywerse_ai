@@ -13,7 +13,11 @@ class RegulatoryChange(Base):
     
     title = Column(String(500), nullable=False)
     description = Column(Text, nullable=True)
-    
+    # Full extracted text of the uploaded regulatory document — kept so impact
+    # assessments can be regenerated at full fidelity later (not just from the
+    # summary). Populated on AI upload; null for manually-created changes.
+    source_text = Column(Text, nullable=True)
+
     source = Column(String(50), nullable=False)  # OCC, Fed, EBA, PRA, SEC, FINRA, custom
     regulation_reference = Column(String(255), nullable=True)  # e.g., "12 CFR 30.5"
     
@@ -65,7 +69,10 @@ class RegulatoryImpactAssessment(Base):
     
     gap_identified = Column(Boolean, default=False)
     gap_description = Column(Text, nullable=True)
-    
+    # True when produced by the AI analyzer — lets "regenerate" replace AI rows
+    # while leaving manually-added assessments untouched.
+    is_ai_generated = Column(Boolean, default=False)
+
     assessed_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
     assessed_at = Column(DateTime, default=datetime.utcnow)
     
@@ -95,6 +102,7 @@ class RegulatoryImplementationTask(Base):
     description = Column(Text, nullable=True)
     
     task_type = Column(String(50), nullable=False)  # policy_update, control_update, process_change, training, communication
+    is_ai_generated = Column(Boolean, default=False)  # AI-created; replaced on regenerate
     status = Column(String(50), default="pending")  # pending, in_progress, completed, blocked
     priority = Column(String(20), default="medium")  # critical, high, medium, low
     

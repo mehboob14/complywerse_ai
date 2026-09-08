@@ -186,6 +186,69 @@ function formatDate(dateStr: string | null | undefined) {
   return new Date(dateStr).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
+// ── Rich-text field rendering ──────────────────────────────────────────────
+// AI-generated exception content is sometimes stored as a stringified list
+// (e.g. "['Enforce MFA', 'Log access']" from a str(list) on the server) or
+// wrapped in stray quotes. Parse those back into clean numbered lists for
+// display and tidy multiline text for the edit textareas — plain prose is
+// left untouched.
+const _LIST_MARKER = /^(\d+[.)]\s+|[-*•]\s+)/;
+
+function parseListish(raw: unknown): string[] | null {
+  if (Array.isArray(raw)) return raw.map((x) => String(x).trim()).filter(Boolean);
+  if (typeof raw !== 'string') return null;
+  const s = raw.trim();
+  // JSON / Python-list-repr arrays, e.g. ["a","b"] or ['a','b']
+  if (s.startsWith('[') && s.endsWith(']')) {
+    for (const candidate of [s, s.replace(/'/g, '"')]) {
+      try {
+        const arr = JSON.parse(candidate);
+        if (Array.isArray(arr)) return arr.map((x) => String(x).trim()).filter(Boolean);
+      } catch {
+        // ponytail: the single→double quote swap breaks on apostrophes inside
+        // items; those just fall through to raw text, which is safe.
+      }
+    }
+  }
+  // Numbered / bulleted multi-line text: "1. a\n2. b" · "- a\n- b" · "1) a\n2) b"
+  const lines = s.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  if (lines.length >= 2 && lines.every((l) => _LIST_MARKER.test(l))) {
+    return lines.map((l) => l.replace(_LIST_MARKER, '').trim()).filter(Boolean);
+  }
+  return null;
+}
+
+function cleanText(raw?: unknown): string {
+  if (raw == null) return '';
+  let s = String(raw).trim();
+  if (!s || ['""', "''", '[]', '{}', 'null', 'None'].includes(s)) return '';
+  if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+    s = s.slice(1, -1).trim();
+  }
+  return s;
+}
+
+// Textarea-friendly: numbered lines for lists, clean text otherwise.
+function toEditableText(raw?: unknown): string {
+  const items = parseListish(raw);
+  if (items && items.length > 1) return items.map((it, i) => `${i + 1}. ${it}`).join('\n');
+  if (items && items.length === 1) return items[0];
+  return cleanText(raw);
+}
+
+function RichText({ value, tone = 'text-gray-800' }: { value?: string | null; tone?: string }) {
+  const items = parseListish(value);
+  if (items && items.length > 1) {
+    return (
+      <ol className={`mt-1 list-decimal space-y-1 pl-5 ${tone}`}>
+        {items.map((it, i) => <li key={i}>{it}</li>)}
+      </ol>
+    );
+  }
+  const text = items && items.length === 1 ? items[0] : cleanText(value);
+  return <p className={`mt-1 whitespace-pre-wrap ${tone}`}>{text || '-'}</p>;
+}
+
 // ── Register cell primitives (charter — shared look with the Documents register) ──
 function StatusPill({ status }: { status: string }) {
   const s = STATUS_STYLES[status] || STATUS_STYLES.draft;
@@ -453,9 +516,9 @@ export default function PolicyExceptionsPage() {
     onSuccess: (data) => {
       setFormData((prev) => ({
         ...prev,
-        justification: prev.justification?.trim() ? prev.justification : (data.justification || ''),
-        risk_assessment: prev.risk_assessment?.trim() ? prev.risk_assessment : (data.risk_assessment || ''),
-        compensating_controls: prev.compensating_controls?.trim() ? prev.compensating_controls : (data.compensating_controls || ''),
+        justification: prev.justification?.trim() ? prev.justification : toEditableText(data.justification),
+        risk_assessment: prev.risk_assessment?.trim() ? prev.risk_assessment : toEditableText(data.risk_assessment),
+        compensating_controls: prev.compensating_controls?.trim() ? prev.compensating_controls : toEditableText(data.compensating_controls),
       }));
     },
   });
@@ -478,9 +541,9 @@ export default function PolicyExceptionsPage() {
     setFormData({
       title: exception.title,
       document_id: exception.document_id || '',
-      justification: exception.justification || '',
-      risk_assessment: exception.risk_assessment || '',
-      compensating_controls: exception.compensating_controls || '',
+      justification: toEditableText(exception.justification),
+      risk_assessment: toEditableText(exception.risk_assessment),
+      compensating_controls: toEditableText(exception.compensating_controls),
       priority: exception.priority || 'medium',
       effective_date: exception.effective_date || '',
       expiry_date: exception.expiry_date || '',
@@ -518,7 +581,7 @@ export default function PolicyExceptionsPage() {
     setFormData({
       title: opts?.title || '',
       document_id: documentId || '',
-      justification: opts?.justification || '',
+      justification: toEditableText(opts?.justification),
       risk_assessment: '',
       compensating_controls: '',
       priority: opts?.priority || 'medium',
@@ -1221,7 +1284,7 @@ export default function PolicyExceptionsPage() {
 
       <div>
         <label className="text-xs text-gray-600 uppercase tracking-wide">Justification</label>
-        <p className="text-gray-800 mt-1 whitespace-pre-wrap">{viewingException.justification || '-'}</p>
+        <RichText value={viewingException.justification} />
       </div>
 
       <div>
@@ -1247,7 +1310,7 @@ export default function PolicyExceptionsPage() {
             </button>
           )}
         </div>
-        <p className="text-gray-800 mt-1 whitespace-pre-wrap">{viewingException.risk_assessment || '-'}</p>
+        <RichText value={viewingException.risk_assessment} />
         {!viewingException.promoted_risk_id && (
           <p className="mt-1 text-[11px] text-gray-500">
             Creates an ERM risk-register entry from these potential risks (carrying the linked assets across) so you can complete the likelihood/impact assessment there.
@@ -1257,20 +1320,20 @@ export default function PolicyExceptionsPage() {
 
       <div>
         <label className="text-xs text-gray-600 uppercase tracking-wide">Compensating Controls</label>
-        <p className="text-gray-800 mt-1 whitespace-pre-wrap">{viewingException.compensating_controls || '-'}</p>
+        <RichText value={viewingException.compensating_controls} />
       </div>
 
       {viewingException.rejection_reason && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-3.5">
           <label className="text-xs text-red-700 uppercase tracking-wide font-medium">Rejection Reason</label>
-          <p className="text-red-800 mt-1">{viewingException.rejection_reason}</p>
+          <RichText value={viewingException.rejection_reason} tone="text-red-800" />
         </div>
       )}
 
       {viewingException.approval_comments && (
         <div className="bg-green-50 border border-green-200 rounded-lg p-3.5">
           <label className="text-xs text-green-700 uppercase tracking-wide font-medium">Approval Comments</label>
-          <p className="text-green-800 mt-1">{viewingException.approval_comments}</p>
+          <RichText value={viewingException.approval_comments} tone="text-green-800" />
         </div>
       )}
 

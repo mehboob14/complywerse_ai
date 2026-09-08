@@ -16,7 +16,8 @@ except Exception:
 
 from ....models import (
     RegulatoryChange, RegulatoryImpactAssessment, RegulatoryImplementationTask,
-    GovernanceDocument, NormalizedControl, InternalControl, InternalControlFrameworkLink, Framework, GRCUser, Tenant, AuditLog, UserRole, Role, get_db
+    GovernanceDocument, NormalizedControl, InternalControl, InternalControlFrameworkLink, Framework, GRCUser, Tenant, AuditLog, UserRole, Role,
+    AuditObservation, GRCDepartment, get_db
 )
 from ....schemas import (
     RegulatoryChangeCreate, RegulatoryChangeUpdate, RegulatoryChangeResponse,
@@ -197,6 +198,47 @@ def serialize_regulatory_change(change: RegulatoryChange) -> RegulatoryChangeRes
         task_count=len(change.implementation_tasks),
         completed_task_count=completed_tasks
     )
+
+
+def _desc_snippet(text: Optional[str], width: int = 200) -> str:
+    """Collapse whitespace and truncate — used to feed control/policy/observation
+    descriptions into the AI prompt without blowing the token budget."""
+    t = re.sub(r"\s+", " ", (text or "")).strip()
+    return (t[: width].rstrip() + "…") if len(t) > width else t
+
+
+def _compose_impact_narrative(item_label: str, data: dict) -> tuple[str, Optional[str]]:
+    """Build a specific, human-readable impact_description (and a gap_description)
+    from the AI's per-item fields, instead of a generic "Control X - modification"
+    template. Missing fields are simply omitted so nothing reads as boilerplate.
+
+    Returns (impact_description, gap_description).
+    """
+    def _clean(v) -> str:
+        s = str(v or "").strip()
+        return "" if s.lower() in ("null", "none", "n/a", "na", "") else s
+
+    basis = _clean(data.get("regulatory_basis"))
+    current = _clean(data.get("current_state"))
+    gap = _clean(data.get("gap_detail")) or _clean(data.get("action_needed"))
+    audit_ref = _clean(data.get("related_audit_observation"))
+    depts_raw = data.get("affected_departments") or []
+    if isinstance(depts_raw, str):
+        depts_raw = [depts_raw]
+    depts = [d for d in (_clean(x) for x in depts_raw) if d]
+
+    lines = [item_label]
+    if basis:
+        lines.append(f"Regulatory basis: {basis}")
+    if current:
+        lines.append(f"Current state: {current}")
+    if gap:
+        lines.append(f"Required change: {gap}")
+    if depts:
+        lines.append(f"Affected departments: {', '.join(depts)}")
+    if audit_ref:
+        lines.append(f"Related audit observation: {audit_ref}")
+    return "\n".join(lines), (gap or None)
 
 
 def serialize_impact_assessment(assessment: RegulatoryImpactAssessment, db: Session) -> RegulatoryImpactAssessmentResponse:
@@ -408,6 +450,419 @@ def create_regulatory_change(
     return serialize_regulatory_change(db_change)
 
 
+def _analyze_and_persist(
+    db: Session,
+    change: RegulatoryChange,
+    document_text: str,
+    current_user: GRCUser,
+    *,
+    update_change_fields: bool,
+    title_hint: Optional[str] = None,
+    filename: Optional[str] = None,
+) -> dict:
+    """Run the AI regulatory-impact analysis over ``document_text`` and generate
+    detailed, platform-grounded impact assessments + implementation tasks for
+    ``change``.
+
+    Shared by the upload endpoint (new change → ``update_change_fields=True``)
+    and the regenerate endpoint (existing change → ``False``). Every impacted
+    policy/control is asked to cite the exact driving clause, compare against
+    what the mapped internal control/policy currently does, name the concrete
+    gap and the affected departments, and cross-reference an open audit
+    observation when relevant — so assessments are specific, not generic.
+
+    AI-generated assessments/tasks from a previous run are cleared first, so
+    regenerate is idempotent and never touches manually-added rows.
+    """
+    if not client:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="OpenAI client not configured.")
+
+    tenant_id = change.tenant_id
+    source_value = change.source if change.source in REGULATORY_CHANGE_SOURCES else "custom"
+
+    # Local truncated copy for the prompt; the full text stays on change.source_text.
+    doc_text = (document_text or "").strip()
+    if not doc_text:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="No source text available to analyze.")
+    if len(doc_text) > 12000:
+        doc_text = doc_text[:12000] + "\n\n...[truncated]"
+
+    frameworks = db.query(Framework).filter(Framework.is_active == True).all()
+    # For most regulators we map controls to NormalizedControl. For SBP circulars
+    # we restrict control mapping to ERM InternalControl so impact/gap analysis
+    # only considers what exists internally.
+    controls = db.query(NormalizedControl).all()
+    internal_controls = None
+    if source_value == "SBP":
+        internal_controls = (
+            db.query(InternalControl)
+            .filter(InternalControl.tenant_id == tenant_id, InternalControl.status != "deprecated")
+            .all()
+        )
+    policies = db.query(GovernanceDocument).filter(
+        GovernanceDocument.tenant_id == tenant_id,
+        GovernanceDocument.doc_type == "policy",
+        GovernanceDocument.status.in_(["approved", "published"]),
+    ).all()
+
+    frameworks_text = "\n".join([f"- {fw.name} ({fw.short_code}): {fw.description or 'No description'}" for fw in frameworks]) if frameworks else "No frameworks registered"
+    if source_value == "SBP" and internal_controls is not None:
+        controls_text = "\n".join([
+            f"- {ic.control_id}: {ic.name}" + (f" — {_desc_snippet(ic.description)}" if ic.description else "")
+            for ic in internal_controls[:120]
+        ]) if internal_controls else "No internal controls registered"
+        controls_id_field = "InternalControl.control_id"
+    else:
+        controls_text = "\n".join([
+            f"- {ctrl.code}: {ctrl.name}" + (f" — {_desc_snippet(getattr(ctrl, 'description', None))}" if getattr(ctrl, 'description', None) else "")
+            for ctrl in controls[:120]
+        ]) if controls else "No controls registered"
+        controls_id_field = "NormalizedControl.code"
+    policies_text = "\n".join([
+        f"- {pol.title}" + (f" — {_desc_snippet(pol.description)}" if pol.description else "")
+        for pol in policies[:120]
+    ]) if policies else "No policies registered"
+
+    # Grounding so assessments are specific: open audit observations (to
+    # cross-reference existing findings) + departments (to name who is affected).
+    audit_observations = (
+        db.query(AuditObservation)
+        .filter(AuditObservation.tenant_id == tenant_id, AuditObservation.status != "closed")
+        .order_by(AuditObservation.created_at.desc())
+        .limit(40)
+        .all()
+    )
+    audit_observations_text = "\n".join([
+        f"- {ao.code or ao.id}: {ao.title} [{ao.area_domain or ao.category or 'general'}; {ao.status}]"
+        + (f" — {_desc_snippet(ao.description)}" if ao.description else "")
+        for ao in audit_observations
+    ]) if audit_observations else "No open audit observations recorded"
+    departments = db.query(GRCDepartment).filter(GRCDepartment.tenant_id == tenant_id).limit(60).all()
+    departments_text = ", ".join([d.name for d in departments if d.name]) if departments else "No departments registered"
+
+    sbp_context = ""
+    if source_value == "SBP":
+        sbp_context = """
+This document is a State Bank of Pakistan (SBP) circular / prudential regulation.
+Focus impact on Pakistani banks / DFIs / MFBs / payment institutions as applicable:
+capital, liquidity, credit risk, AML/CFT, cybersecurity, digital banking, outsourcing,
+consumer protection, and regulatory reporting. Call out deadlines, reporting duties,
+and board/management accountability when present. Write a clear operational impact narrative.
+"""
+
+    prompt = f"""You are a Senior GRC Compliance Expert.
+Analyze the regulatory document and produce a platform-aware compliance impact result.
+{sbp_context}
+Be SPECIFIC and evidence-based. For every impacted policy and control you MUST:
+- cite the exact clause / statement in THIS document that drives the impact (quote or
+  closely paraphrase it, with any section or paragraph reference);
+- compare it against what the named internal control / policy CURRENTLY does, using the
+  descriptions provided in PLATFORM CONTEXT;
+- state the concrete, specific change required (never a bare word like "modification");
+- name the affected departments from the DEPARTMENTS list;
+- cross-reference an OPEN AUDIT OBSERVATION whenever one overlaps.
+
+Extract (from the text):
+1) Key requirements summary
+2) Priority and estimated effective date
+3) Impacted policies (by exact policy title) with driving clause, current state, concrete gap
+4) Impacted controls using our {controls_id_field} values, with driving clause, current control behaviour, concrete gap
+5) Implementation tasks / recommendations to remediate
+6) Overall organizational impact
+
+Return ONLY valid JSON in this exact schema:
+{{
+  "title": "string (short regulation title; use title_hint when provided)",
+  "summary": "string",
+  "priority": "critical|high|medium|low",
+  "effective_date_estimate": "YYYY-MM-DD or null",
+  "impact_overview": "string (2-4 sentences on business / compliance impact)",
+  "impacted_policies": [{{
+    "title": "exact policy title from EXISTING POLICIES (or a new policy name)",
+    "action_needed": "review|update|create_new",
+    "regulatory_basis": "the exact clause/statement from THIS document that drives the impact, with section/para reference",
+    "current_state": "what the named policy currently covers (from its description), or 'No existing policy covers this'",
+    "gap_detail": "the specific, concrete change required to comply",
+    "affected_departments": ["names from DEPARTMENTS that own or execute this"],
+    "related_audit_observation": "code/title of a relevant item from AUDIT OBSERVATIONS, or null"
+  }}],
+  "impacted_controls": [{{
+    "id": "value from {controls_id_field}",
+    "name": "control name",
+    "gap_type": "new_requirement|modification|obsolete",
+    "regulatory_basis": "the exact clause/statement from THIS document driving the control impact, with reference",
+    "current_state": "what the named control currently does (from its description), or 'No existing control covers this'",
+    "gap_detail": "the specific, concrete change the control needs — not just 'modification'",
+    "affected_departments": ["names from DEPARTMENTS"],
+    "related_audit_observation": "code/title from AUDIT OBSERVATIONS if this overlaps an open finding, else null"
+  }}],
+  "implementation_tasks": [
+    {{
+      "title": "task title",
+      "description": "task description",
+      "priority": "critical|high|medium|low",
+      "suggested_deadline_days": 30,
+      "task_tags": ["policy_update|control_update|process_change|training|communication"]
+    }}
+  ],
+  "compliance_gaps": ["gap strings"],
+  "recommendations": ["recommendation strings"]
+}}
+
+The returned impacted_controls.id MUST be values from {controls_id_field} whenever possible.
+If you are unsure, still provide the best-matching codes from the platform text you see above.
+
+TEXT:
+{doc_text}
+
+PLATFORM CONTEXT (used to map ids and ground the analysis):
+EXISTING FRAMEWORKS:
+{frameworks_text}
+
+EXISTING CONTROLS (id: name — what it currently does):
+{controls_text}
+
+EXISTING POLICIES (title — summary):
+{policies_text}
+
+OPEN AUDIT OBSERVATIONS (cross-reference when relevant):
+{audit_observations_text}
+
+DEPARTMENTS (pick affected_departments from these names):
+{departments_text}
+"""
+
+    try:
+        response = client.chat.completions.create(
+            model=get_openai_model(),
+            messages=[
+                {"role": "system", "content": "You are a compliance assistant. Respond only with valid JSON."},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.2,
+            max_tokens=4500,
+            response_format={"type": "json_object"},
+        )
+        analysis = json.loads(response.choices[0].message.content.strip())
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"AI extraction failed: {str(e)}")
+
+    # Change-level fields (upload only — regenerate leaves title/priority as set).
+    if update_change_fields:
+        ai_title = (analysis.get("title") or title_hint or filename or change.title or "Regulatory document").strip()
+        ai_summary = analysis.get("summary") or ""
+        impact_overview = (analysis.get("impact_overview") or "").strip()
+        if impact_overview:
+            ai_summary = f"{ai_summary}\n\nImpact assessment:\n{impact_overview}".strip() if ai_summary else f"Impact assessment:\n{impact_overview}"
+        ai_priority = (analysis.get("priority") or "medium").strip()
+        if ai_priority not in ["critical", "high", "medium", "low"]:
+            ai_priority = "medium"
+        eff_str = analysis.get("effective_date_estimate")
+        if isinstance(eff_str, str) and eff_str.strip() and eff_str.strip().lower() != "null":
+            try:
+                change.effective_date = datetime.strptime(eff_str.strip(), "%Y-%m-%d")
+            except Exception:
+                pass
+        change.title = ai_title[:500]
+        change.description = ai_summary
+        change.priority = ai_priority
+    db.flush()
+
+    # Clear prior AI-generated rows so regenerate is idempotent and leaves any
+    # manually-added assessments/tasks intact. The is_ai_generated flag catches
+    # rows from this build; the impacted_item_type in (policy, control) clause
+    # catches legacy AI rows created before the flag existed — manual entries
+    # from the Add-Assessment modal are always assessment_type "process" with no
+    # impacted item, so they are preserved.
+    prior = db.query(RegulatoryImpactAssessment).filter(
+        RegulatoryImpactAssessment.regulatory_change_id == change.id,
+        or_(
+            RegulatoryImpactAssessment.is_ai_generated == True,
+            RegulatoryImpactAssessment.impacted_item_type.in_(["policy", "control"]),
+        ),
+    ).all()
+    prior_ids = [a.id for a in prior]
+    if prior_ids:
+        db.query(RegulatoryImplementationTask).filter(
+            RegulatoryImplementationTask.impact_assessment_id.in_(prior_ids)
+        ).update({RegulatoryImplementationTask.impact_assessment_id: None}, synchronize_session=False)
+        for a in prior:
+            db.delete(a)
+    db.query(RegulatoryImplementationTask).filter(
+        RegulatoryImplementationTask.regulatory_change_id == change.id,
+        RegulatoryImplementationTask.is_ai_generated == True,
+    ).delete(synchronize_session=False)
+    db.flush()
+
+    # Resolve control + policy ids for impacted items.
+    if source_value == "SBP":
+        controls_by_code = {str(c.control_id).strip().lower(): c for c in (internal_controls or [])}
+
+        def resolve_control(code: Optional[str], name: Optional[str]):
+            key = (code or "").strip().lower()
+            if key and key in controls_by_code:
+                return controls_by_code[key]
+            nkey = (name or "").strip().lower()
+            if nkey and internal_controls:
+                for c in internal_controls:
+                    if (str(c.control_id).lower() == nkey) or (nkey in str(c.name).lower()):
+                        return c
+            return None
+    else:
+        controls_by_code = {str(c.code).strip().lower(): c for c in controls}
+
+        def resolve_control(code: Optional[str], name: Optional[str]):
+            key = (code or "").strip().lower()
+            if key and key in controls_by_code:
+                return controls_by_code[key]
+            nkey = (name or "").strip().lower()
+            if nkey:
+                for c in controls:
+                    if (str(c.code).lower() == nkey) or (nkey in str(c.name).lower()) or (nkey in str(c.code).lower()):
+                        return c
+            return None
+
+    policies_by_title = {str(p.title).strip().lower(): p for p in policies}
+
+    def resolve_policy(title: Optional[str]):
+        tkey = (title or "").strip().lower()
+        if tkey and tkey in policies_by_title:
+            return policies_by_title[tkey]
+        if tkey:
+            for p in policies:
+                if tkey in str(p.title).lower():
+                    return p
+        return None
+
+    policy_assessments_by_key: dict = {}
+    control_assessments_by_code: dict = {}
+
+    for pol_impact in (analysis.get("impacted_policies") or []):
+        pol_title = pol_impact.get("title")
+        action_needed = pol_impact.get("action_needed") or "review"
+        gap_identified = action_needed in ["update", "create_new"]
+        impacted_policy = resolve_policy(pol_title)
+        narrative, gap_text = _compose_impact_narrative(f"Policy '{pol_title}' — {action_needed}", pol_impact)
+        impact_assessment = RegulatoryImpactAssessment(
+            tenant_id=tenant_id,
+            regulatory_change_id=change.id,
+            assessment_type="policy",
+            impacted_item_type="policy",
+            impacted_item_id=impacted_policy.id if impacted_policy else None,
+            impact_level="medium",
+            impact_description=narrative,
+            gap_identified=gap_identified,
+            gap_description=gap_text if gap_identified else None,
+            is_ai_generated=True,
+            assessed_by=current_user.id,
+            assessed_at=datetime.utcnow(),
+        )
+        db.add(impact_assessment)
+        db.flush()
+        if pol_title:
+            policy_assessments_by_key[str(pol_title).strip().lower()] = impact_assessment
+
+    for ctrl_impact in (analysis.get("impacted_controls") or []):
+        ctrl_code = ctrl_impact.get("id")
+        ctrl_name = ctrl_impact.get("name")
+        gap_type = ctrl_impact.get("gap_type") or "modification"
+        impacted_control = resolve_control(ctrl_code, ctrl_name)
+        impacted_item_id = impacted_control.id if impacted_control else None
+        if source_value == "SBP":
+            # Only a gap when the referenced ERM internal control does not exist;
+            # if it exists we already cover the requirement at the controls layer.
+            gap_identified = impacted_item_id is None
+            impact_level = "high" if gap_identified else "medium"
+        else:
+            gap_identified = gap_type in ["new_requirement", "modification"]
+            impact_level = "high" if gap_type == "new_requirement" else "medium"
+        narrative, gap_text = _compose_impact_narrative(f"Control '{ctrl_code}: {ctrl_name}' — {gap_type}", ctrl_impact)
+        impact_assessment = RegulatoryImpactAssessment(
+            tenant_id=tenant_id,
+            regulatory_change_id=change.id,
+            assessment_type="control",
+            impacted_item_type="control",
+            impacted_item_id=impacted_item_id,
+            impact_level=impact_level,
+            impact_description=narrative,
+            gap_identified=gap_identified,
+            gap_description=gap_text if gap_identified else None,
+            is_ai_generated=True,
+            assessed_by=current_user.id,
+            assessed_at=datetime.utcnow(),
+        )
+        db.add(impact_assessment)
+        db.flush()
+        if ctrl_code:
+            control_assessments_by_code[str(ctrl_code).strip().lower()] = impact_assessment
+
+    # Implementation tasks from AI recommendations.
+    implementation_tasks = analysis.get("implementation_tasks") or []
+    now = datetime.utcnow()
+    for task_data in implementation_tasks:
+        task_title = (task_data.get("title") or "Implementation Task").strip()
+        task_description = task_data.get("description") or ""
+        task_priority = (task_data.get("priority") or "medium").strip()
+        if task_priority not in ["critical", "high", "medium", "low"]:
+            task_priority = "medium"
+        deadline_days = task_data.get("suggested_deadline_days") or 30
+        try:
+            deadline_days_int = int(deadline_days)
+        except Exception:
+            deadline_days_int = 30
+        due_date = now + timedelta(days=deadline_days_int)
+
+        task_type = "process_change"
+        lower = task_title.lower()
+        if "policy" in lower:
+            task_type = "policy_update"
+        elif "control" in lower:
+            task_type = "control_update"
+        elif "training" in lower:
+            task_type = "training"
+        elif "communication" in lower or "notify" in lower:
+            task_type = "communication"
+
+        impact_assessment_id = None
+        if task_type == "control_update":
+            for code_key, a in control_assessments_by_code.items():
+                if code_key and code_key in lower:
+                    impact_assessment_id = a.id
+                    break
+        elif task_type == "policy_update":
+            for title_key, a in policy_assessments_by_key.items():
+                if title_key and title_key in lower:
+                    impact_assessment_id = a.id
+                    break
+
+        db.add(RegulatoryImplementationTask(
+            tenant_id=tenant_id,
+            regulatory_change_id=change.id,
+            impact_assessment_id=impact_assessment_id,
+            title=task_title[:500],
+            description=task_description,
+            task_type=task_type,
+            status="pending",
+            priority=task_priority,
+            assigned_to=None,
+            due_date=due_date,
+            linked_policy_id=None,
+            linked_control_id=None,
+            is_ai_generated=True,
+            created_by=current_user.id,
+        ))
+
+    if change.status in (None, "identified"):
+        change.status = "under_assessment"
+    if implementation_tasks and change.status in (None, "identified", "under_assessment"):
+        change.status = "implementation"
+
+    return {
+        "assessments_created": len(analysis.get("impacted_policies") or []) + len(analysis.get("impacted_controls") or []),
+        "tasks_created": len(implementation_tasks),
+    }
+
+
 @router.post("/changes/upload", response_model=RegulatoryChangeResponse, status_code=status.HTTP_201_CREATED)
 def upload_regulatory_change_document(
     file: UploadFile = File(...),
@@ -477,322 +932,35 @@ def upload_regulatory_change_document(
             ),
         )
 
-    # Truncate aggressively to fit prompt budgets.
-    if len(content_text) > 12000:
-        content_text = content_text[:12000] + "\n\n...[truncated]"
-
-    # Resolve source + priority defaults.
+    # Resolve source, persist the full extracted text, then run the shared AI
+    # impact analysis (the same routine the regenerate endpoint reuses).
     source_value = normalize_regulatory_source(source if isinstance(source, str) else None)
     if source_value not in REGULATORY_CHANGE_SOURCES:
         source_value = "custom"
 
-    frameworks = db.query(Framework).filter(Framework.is_active == True).all()
-    # For most regulators we map controls to NormalizedControl.
-    # For SBP circulars we restrict control mapping to ERM InternalControl so
-    # impact/gap analysis only considers what exists internally.
-    controls = db.query(NormalizedControl).all()
-    internal_controls = None
-    if source_value == "SBP":
-        internal_controls = (
-            db.query(InternalControl)
-            .filter(InternalControl.tenant_id == tenant_id, InternalControl.status != "deprecated")
-            .all()
-        )
-    policies = db.query(GovernanceDocument).filter(
-        GovernanceDocument.tenant_id == tenant_id,
-        GovernanceDocument.doc_type == "policy",
-        GovernanceDocument.status.in_(["approved", "published"]),
-    ).all()
-
-    frameworks_text = "\n".join([f"- {fw.name} ({fw.short_code}): {fw.description or 'No description'}" for fw in frameworks]) if frameworks else "No frameworks registered"
-    if source_value == "SBP" and internal_controls is not None:
-        controls_text = "\n".join([f"- {ic.control_id}: {ic.name}" for ic in internal_controls[:120]]) if internal_controls else "No internal controls registered"
-        controls_id_field = "InternalControl.control_id"
-    else:
-        controls_text = "\n".join([f"- {ctrl.code}: {ctrl.name}" for ctrl in controls[:120]]) if controls else "No controls registered"
-        controls_id_field = "NormalizedControl.code"
-    policies_text = "\n".join([f"- {pol.title}" for pol in policies[:120]]) if policies else "No policies registered"
-
-    sbp_context = ""
-    if source_value == "SBP":
-        sbp_context = """
-This document is a State Bank of Pakistan (SBP) circular / prudential regulation.
-Focus impact on Pakistani banks / DFIs / MFBs / payment institutions as applicable:
-capital, liquidity, credit risk, AML/CFT, cybersecurity, digital banking, outsourcing,
-consumer protection, and regulatory reporting. Call out deadlines, reporting duties,
-and board/management accountability when present. Write a clear operational impact narrative.
-"""
-
-    prompt = f"""You are a Senior GRC Compliance Expert.
-Analyze the uploaded regulatory document and produce a platform-aware compliance impact result.
-{sbp_context}
-Extract (from the text):
-1) Key requirements summary
-2) Priority and estimated effective date
-3) Impacted policies (by exact policy title when possible)
-4) Impacted controls using our {controls_id_field} values
-5) Compliance gaps (what is missing or needs to change)
-6) Implementation tasks / recommendations to remediate
-7) Overall organizational impact
-
-Return ONLY valid JSON in this exact schema:
-{{
-  "title": "string (short regulation title; use title_hint when provided)",
-  "summary": "string",
-  "priority": "critical|high|medium|low",
-  "effective_date_estimate": "YYYY-MM-DD or null",
-  "impact_overview": "string (2-4 sentences on business / compliance impact)",
-  "impacted_policies": [{{"title": "policy title", "action_needed": "review|update|create_new"}}],
-  "impacted_controls": [{{"id": "{controls_id_field}", "name": "control name", "gap_type": "new_requirement|modification|obsolete", "action_needed": "description"}}],
-  "implementation_tasks": [
-    {{
-      "title": "task title",
-      "description": "task description",
-      "priority": "critical|high|medium|low",
-      "suggested_deadline_days": 30,
-      "task_tags": ["policy_update|control_update|process_change|training|communication"]
-    }}
-  ],
-  "compliance_gaps": ["gap strings"],
-  "recommendations": ["recommendation strings"]
-}}
-
-The returned impacted_controls.id MUST be values from {controls_id_field} whenever possible.
-If you are unsure, still provide the best-matching codes from the platform text you see above.
-
-TEXT:
-{content_text}
-
-PLATFORM CONTEXT (used to map ids):
-EXISTING FRAMEWORKS:
-{frameworks_text}
-
-EXISTING CONTROLS (sample; you must map by code):
-{controls_text}
-
-EXISTING POLICIES (sample):
-{policies_text}
-"""
-
-    if not client:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="OpenAI client not configured.")
-
-    try:
-        response = client.chat.completions.create(
-            model=get_openai_model(),
-            messages=[
-                {"role": "system", "content": "You are a compliance assistant. Respond only with valid JSON."},
-                {"role": "user", "content": prompt},
-            ],
-            temperature=0.2,
-            max_tokens=4500,
-            response_format={"type": "json_object"},
-        )
-        response_text = response.choices[0].message.content.strip()
-        analysis = json.loads(response_text)
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"AI extraction failed: {str(e)}")
-
-    ai_title = (analysis.get("title") or title_hint or filename).strip()
-    ai_summary = analysis.get("summary") or ""
-    impact_overview = (analysis.get("impact_overview") or "").strip()
-    if impact_overview:
-        ai_summary = f"{ai_summary}\n\nImpact assessment:\n{impact_overview}".strip() if ai_summary else f"Impact assessment:\n{impact_overview}"
-    ai_priority = (analysis.get("priority") or "medium").strip()
-    if ai_priority not in ["critical", "high", "medium", "low"]:
-        ai_priority = "medium"
-    eff_str = analysis.get("effective_date_estimate")
-    effective_date = None
-    if isinstance(eff_str, str) and eff_str.strip() and eff_str.strip().lower() != "null":
-        try:
-            effective_date = datetime.strptime(eff_str.strip(), "%Y-%m-%d")
-        except Exception:
-            effective_date = None
-
-    # Resolve control + policy ids for impacted items.
-    if source_value == "SBP":
-        controls_by_code = {str(c.control_id).strip().lower(): c for c in (internal_controls or [])}
-
-        def resolve_control(code: Optional[str], name: Optional[str]) -> Optional[InternalControl]:
-            key = (code or "").strip().lower()
-            if key and key in controls_by_code:
-                return controls_by_code[key]
-            nkey = (name or "").strip().lower()
-            if nkey and internal_controls:
-                for c in internal_controls:
-                    if (str(c.control_id).lower() == nkey) or (nkey in str(c.name).lower()):
-                        return c
-            return None
-    else:
-        controls_by_code = {str(c.code).strip().lower(): c for c in controls}
-
-        def resolve_control(code: Optional[str], name: Optional[str]) -> Optional[NormalizedControl]:
-            key = (code or "").strip().lower()
-            if key and key in controls_by_code:
-                return controls_by_code[key]
-            nkey = (name or "").strip().lower()
-            if nkey:
-                # fallback: substring match on code or name
-                for c in controls:
-                    if (str(c.code).lower() == nkey) or (nkey in str(c.name).lower()) or (nkey in str(c.code).lower()):
-                        return c
-            return None
-
-    policies_by_title = {str(p.title).strip().lower(): p for p in policies}
-
-    def resolve_policy(title: Optional[str]) -> Optional[GovernanceDocument]:
-        tkey = (title or "").strip().lower()
-        if tkey and tkey in policies_by_title:
-            return policies_by_title[tkey]
-        if tkey:
-            for p in policies:
-                if tkey in str(p.title).lower():
-                    return p
-        return None
-
     db_change = RegulatoryChange(
         tenant_id=tenant_id,
-        title=ai_title,
-        description=ai_summary,
+        title=(title_hint or filename or "Regulatory document").strip()[:500],
+        description=None,
         source=source_value,
-        regulation_reference=None,
-        effective_date=effective_date,
-        published_date=None,
+        source_text=content_text,
         status="identified",
-        priority=ai_priority,
+        priority="medium",
         created_by=current_user.id,
         assigned_to=None,
     )
     db.add(db_change)
     db.flush()
 
-    policy_assessments_by_key: dict[str, RegulatoryImpactAssessment] = {}
-    control_assessments_by_code: dict[str, RegulatoryImpactAssessment] = {}
-
-    for pol_impact in (analysis.get("impacted_policies") or []):
-        pol_title = pol_impact.get("title")
-        action_needed = pol_impact.get("action_needed") or "review"
-        gap_identified = action_needed in ["update", "create_new"]
-        impacted_policy = resolve_policy(pol_title)
-        impacted_item_id = impacted_policy.id if impacted_policy else None
-
-        impact_assessment = RegulatoryImpactAssessment(
-            tenant_id=tenant_id,
-            regulatory_change_id=db_change.id,
-            assessment_type="policy",
-            impacted_item_type="policy",
-            impacted_item_id=impacted_item_id,
-            impact_level="medium",
-            impact_description=f"Policy '{pol_title}' requires {action_needed}",
-            gap_identified=gap_identified,
-            gap_description=f"Action needed: {action_needed}" if gap_identified else None,
-            assessed_by=current_user.id,
-            assessed_at=datetime.utcnow(),
-        )
-        db.add(impact_assessment)
-        db.flush()
-        if pol_title:
-            policy_assessments_by_key[str(pol_title).strip().lower()] = impact_assessment
-
-    for ctrl_impact in (analysis.get("impacted_controls") or []):
-        ctrl_code = ctrl_impact.get("id")
-        ctrl_name = ctrl_impact.get("name")
-        gap_type = ctrl_impact.get("gap_type") or "modification"
-        action_needed = ctrl_impact.get("action_needed") or ""
-
-        impacted_control = resolve_control(ctrl_code, ctrl_name)
-        impacted_item_id = impacted_control.id if impacted_control else None
-
-        if source_value == "SBP":
-            # Only treat as a gap when the referenced ERM internal control
-            # does not exist. If it exists, we already have the internal
-            # control to cover this requirement (SBP circular impact is
-            # therefore "no gap" at controls layer).
-            gap_identified = impacted_item_id is None
-            impact_level = "high" if gap_identified else "medium"
-        else:
-            gap_identified = gap_type in ["new_requirement", "modification"]
-            impact_level = "high" if gap_type == "new_requirement" else "medium"
-        impact_assessment = RegulatoryImpactAssessment(
-            tenant_id=tenant_id,
-            regulatory_change_id=db_change.id,
-            assessment_type="control",
-            impacted_item_type="control",
-            impacted_item_id=impacted_item_id,
-            impact_level=impact_level,
-            impact_description=f"Control '{ctrl_code}: {ctrl_name}' - {gap_type}",
-            gap_identified=gap_identified,
-            gap_description=action_needed if gap_identified else None,
-            assessed_by=current_user.id,
-            assessed_at=datetime.utcnow(),
-        )
-        db.add(impact_assessment)
-        db.flush()
-        if ctrl_code:
-            control_assessments_by_code[str(ctrl_code).strip().lower()] = impact_assessment
-
-    # Create implementation tasks from AI recommendations.
-    implementation_tasks = analysis.get("implementation_tasks") or []
-    now = datetime.utcnow()
-    for task_data in implementation_tasks:
-        task_title = (task_data.get("title") or "Implementation Task").strip()
-        task_description = task_data.get("description") or ""
-        task_priority = (task_data.get("priority") or "medium").strip()
-        if task_priority not in ["critical", "high", "medium", "low"]:
-            task_priority = "medium"
-        deadline_days = task_data.get("suggested_deadline_days") or 30
-        try:
-            deadline_days_int = int(deadline_days)
-        except Exception:
-            deadline_days_int = 30
-        due_date = now + timedelta(days=deadline_days_int)
-
-        # Determine task_type.
-        task_type = "process_change"
-        lower = task_title.lower()
-        if "policy" in lower:
-            task_type = "policy_update"
-        elif "control" in lower:
-            task_type = "control_update"
-        elif "training" in lower:
-            task_type = "training"
-        elif "communication" in lower or "notify" in lower:
-            task_type = "communication"
-
-        # Best-effort impact_assessment link via title keywords.
-        impact_assessment_id = None
-        if task_type == "control_update":
-            # if AI used control codes in the title, match them.
-            for code_key, a in control_assessments_by_code.items():
-                if code_key and code_key in lower:
-                    impact_assessment_id = a.id
-                    break
-        elif task_type == "policy_update":
-            for title_key, a in policy_assessments_by_key.items():
-                if title_key and title_key in lower:
-                    impact_assessment_id = a.id
-                    break
-
-        db_task = RegulatoryImplementationTask(
-            tenant_id=tenant_id,
-            regulatory_change_id=db_change.id,
-            impact_assessment_id=impact_assessment_id,
-            title=task_title,
-            description=task_description,
-            task_type=task_type,
-            status="pending",
-            priority=task_priority,
-            assigned_to=None,
-            due_date=due_date,
-            linked_policy_id=None,
-            linked_control_id=None,
-            created_by=current_user.id,
-        )
-        db.add(db_task)
-
-    db_change.status = "under_assessment"
-    if (analysis.get("implementation_tasks") or []):
-        db_change.status = "implementation"
+    _analyze_and_persist(
+        db,
+        db_change,
+        content_text,
+        current_user,
+        update_change_fields=True,
+        title_hint=title_hint,
+        filename=filename,
+    )
 
     db.commit()
     db.refresh(db_change)
@@ -1051,14 +1219,57 @@ def create_impact_assessment(
     )
     
     db.add(db_assessment)
-    
+
     if change.status == "identified":
         change.status = "under_assessment"
-    
+
     db.commit()
     db.refresh(db_assessment)
-    
+
     return serialize_impact_assessment(db_assessment, db)
+
+
+@router.post("/changes/{change_id}/assessments/regenerate", response_model=List[RegulatoryImpactAssessmentResponse])
+def regenerate_impact_assessments(
+    change_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Re-run the AI impact analysis for an existing change and replace its
+    AI-generated assessments/tasks with detailed, platform-grounded ones
+    (driving clause, current control/policy state, concrete gap, affected
+    departments, related audit observations). Uses the stored source document
+    when available, otherwise the change summary. Manually-added assessments
+    and tasks are preserved.
+    """
+    user_tenants = get_user_tenants(current_user, db)
+    change = db.query(RegulatoryChange).filter(
+        RegulatoryChange.id == change_id,
+        RegulatoryChange.tenant_id.in_(user_tenants),
+    ).first()
+    if not change:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Regulatory change not found")
+
+    source_text = (getattr(change, "source_text", None) or "").strip()
+    if not source_text:
+        # Pre-existing changes (uploaded before source_text was captured) fall
+        # back to their stored summary so they can still be enriched.
+        source_text = (change.description or "").strip()
+    if not source_text:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="This change has no source document or description to analyze. Add a description or re-upload the document, then regenerate.",
+        )
+
+    _analyze_and_persist(db, change, source_text, current_user, update_change_fields=False)
+    db.commit()
+
+    assessments = db.query(RegulatoryImpactAssessment).options(
+        joinedload(RegulatoryImpactAssessment.assessor)
+    ).filter(
+        RegulatoryImpactAssessment.regulatory_change_id == change_id
+    ).order_by(RegulatoryImpactAssessment.assessed_at.desc()).all()
+    return [serialize_impact_assessment(a, db) for a in assessments]
 
 
 # =============================================================================
