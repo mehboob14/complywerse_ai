@@ -1,38 +1,35 @@
 'use client';
 
-// Administration → All Connections. Faithful to the Verity reference
-// connections-page: Active/Available tabs, a search + category band, and a card
-// grid (brand mark · name · status · category chips · "View and connect"). The
-// view-and-connect modal shows what a provider syncs; for the connectors this
-// platform's live_api engine supports it also configures credentials and runs a
-// live Test / Collect (the GitHub end-to-end flow, unchanged).
+// Administration → All Connections. The whole connector universe in one grid:
+// the connectors this platform collects evidence from today (wired to the
+// live_api engine — Save credentials · Test · Collect), plus the full Steampipe
+// plugin catalog as discovery entries ("Available via Steampipe", not yet wired).
+// Data comes from GET /automation/soc2/catalog, so the count always matches the
+// backend PROVIDER_API — no static frontend list to drift out of sync.
 
 import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Loader2, Search, X, Plug } from 'lucide-react';
 import { automationApi } from '@/lib/api';
 import { BrandLogo } from '@/components/integrations/BrandLogo';
-import {
-  CONNECTORS,
-  CONNECTOR_CATEGORIES,
-  type Connector,
-} from '@/components/integrations/connector-catalogue';
 
-// Reference catalogue id → this platform's live_api provider key. Only these are
-// wired to the collector engine today; the rest render as "connecting soon",
-// exactly as the reference does for its whole catalogue.
-const SUPPORTED: Record<string, string> = {
-  github: 'github', gitlab: 'gitlab', bitbucket: 'bitbucket', okta: 'okta',
-  gws: 'google_workspace', cloudflare: 'cloudflare', heroku: 'heroku',
-  digitalocean: 'digitalocean', datadog: 'datadog', sentry: 'sentry',
-  pagerduty: 'pagerduty', jira: 'jira', linear: 'linear', asana: 'asana', slack: 'slack',
-};
-
-interface Collector {
-  provider: string;
+interface CatalogConnector {
+  id: string;
+  name: string;
+  category: string;
+  categories: string[];
+  provider: string | null;
+  supported: boolean;
+  control_codes: string[];
+  syncs: string[];
   connected: boolean;
   connection_id: number | null;
   last_run: { status: string; started_at?: string | null } | null;
+  steampipe_plugin: string | null;
+  /** A cloud transport authenticates as a principal in a region, so it needs
+   *  more than the single token the SaaS collectors take. */
+  needs_key_id?: boolean;
+  needs_region?: boolean;
 }
 interface Finding { control_codes?: string[]; check: string; resource?: string; status: string; detail?: string }
 
@@ -56,20 +53,24 @@ function CategoryChips({ categories }: { categories: string[] }) {
   );
 }
 
-function ConnectorCard({ connector, connected, onOpen }: { connector: Connector; connected: boolean; onOpen: () => void }) {
+function ConnectorCard({ connector, onOpen }: { connector: CatalogConnector; onOpen: () => void }) {
   return (
-    <div className="flex h-full flex-col rounded-xl border border-slate-200 bg-white p-5 transition-shadow hover:border-slate-300 hover:shadow-sm">
+    <div className={`flex h-full flex-col rounded-xl border p-5 transition-shadow hover:shadow-sm ${connector.supported ? 'border-slate-200 bg-white hover:border-slate-300' : 'border-slate-200/70 bg-slate-50/50 hover:border-slate-300'}`}>
       <div className="flex items-start gap-3.5">
         <BrandLogo id={connector.id} name={connector.name} size={48} />
         <div className="min-w-0 flex-1 pt-0.5">
           <p className="truncate font-semibold text-slate-800">{connector.name}</p>
-          <div className="mt-1"><StatusDot connected={connected} /></div>
+          <div className="mt-1">
+            {connector.supported
+              ? <StatusDot connected={connector.connected} />
+              : <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-sky-600"><span className="size-1.5 rounded-full bg-sky-400" />Via Steampipe</span>}
+          </div>
         </div>
       </div>
       <div className="mt-3.5"><CategoryChips categories={connector.categories} /></div>
       <div className="mt-auto pt-5">
-        <button onClick={onOpen} className="w-full rounded-lg bg-primary-50 px-3 py-2 text-sm font-semibold text-primary-700 transition-colors hover:bg-primary-100">
-          View and connect
+        <button onClick={onOpen} className={`w-full rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${connector.supported ? 'bg-primary-50 text-primary-700 hover:bg-primary-100' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
+          {connector.supported ? 'View and connect' : 'View details'}
         </button>
       </div>
     </div>
@@ -77,37 +78,52 @@ function ConnectorCard({ connector, connected, onOpen }: { connector: Connector;
 }
 
 function ConnectDialog({
-  connector, collector, onClose, onChanged,
+  connector, onClose, onChanged,
 }: {
-  connector: Connector;
-  collector: Collector | undefined;
+  connector: CatalogConnector;
   onClose: () => void;
   onChanged: () => void;
 }) {
-  const provider = SUPPORTED[connector.id];
-  const supported = Boolean(provider);
-  const connected = Boolean(collector?.connected);
+  const provider = connector.provider;
+  const supported = connector.supported && Boolean(provider);
+  const connected = connector.connected;
   const [reconfig, setReconfig] = useState(!connected);
   const [token, setToken] = useState('');
   const [domain, setDomain] = useState('');
   const [email, setEmail] = useState('');
+  const [keyId, setKeyId] = useState('');
+  const [region, setRegion] = useState('');
   const [busy, setBusy] = useState<'save' | 'test' | 'collect' | null>(null);
   const [msg, setMsg] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null);
   const [findings, setFindings] = useState<Finding[] | null>(null);
 
   const save = async () => {
-    if (!token.trim()) { setMsg({ tone: 'err', text: 'Paste an API token first.' }); return; }
+    if (!provider) return;
+    if (!token.trim()) {
+      setMsg({ tone: 'err', text: connector.needs_key_id ? 'Paste the secret key first.' : 'Paste an API token first.' });
+      return;
+    }
+    if (connector.needs_key_id && !keyId.trim()) {
+      setMsg({ tone: 'err', text: 'This collector also needs an access key id.' }); return;
+    }
     setBusy('save'); setMsg(null);
     try {
-      await automationApi.connectCollector(provider, { token: token.trim(), domain: domain.trim() || undefined, email: email.trim() || undefined });
+      await automationApi.connectCollector(provider, {
+        token: token.trim(),
+        domain: domain.trim() || undefined,
+        email: email.trim() || undefined,
+        access_key_id: keyId.trim() || undefined,
+        region: region.trim() || undefined,
+      });
       setMsg({ tone: 'ok', text: 'Credentials saved (encrypted).' });
-      setReconfig(false); setToken('');
+      setReconfig(false); setToken(''); setKeyId('');
       onChanged();
     } catch (e: unknown) {
       setMsg({ tone: 'err', text: (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail || 'Could not save credentials.' });
     } finally { setBusy(null); }
   };
   const test = async () => {
+    if (!provider) return;
     setBusy('test'); setMsg(null); setFindings(null);
     try {
       const r = await automationApi.testCollector(provider);
@@ -119,6 +135,7 @@ function ConnectDialog({
     } finally { setBusy(null); }
   };
   const collect = async () => {
+    if (!provider) return;
     setBusy('collect'); setMsg(null);
     try {
       const r = await automationApi.runCollector(provider);
@@ -141,7 +158,7 @@ function ConnectDialog({
             <p className="mt-0.5 text-sm text-slate-500">
               {supported
                 ? connected ? 'Connected — collecting evidence for the mapped SOC 2 controls.' : 'Connect with a read-only API token to collect live evidence.'
-                : `Preview — the ${connector.name} sync arrives soon.`}
+                : `In the Steampipe catalog — direct evidence collection isn't wired for ${connector.name} yet.`}
             </p>
           </div>
           <button onClick={onClose} className="rounded p-1 text-slate-400 hover:bg-slate-100"><X className="h-4 w-4" /></button>
@@ -151,13 +168,26 @@ function ConnectDialog({
           <section className="grid grid-cols-1 divide-y divide-slate-100 rounded-xl border border-slate-200 sm:grid-cols-2 sm:divide-x sm:divide-y-0">
             <div className="px-4 py-3">
               <h3 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Status</h3>
-              <StatusDot connected={connected} />
+              {supported
+                ? <StatusDot connected={connected} />
+                : <span className="text-[11px] font-semibold text-sky-600">Available via Steampipe</span>}
             </div>
             <div className="px-4 py-3">
               <h3 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Categories</h3>
               <CategoryChips categories={connector.categories} />
             </div>
           </section>
+
+          {supported && connector.control_codes.length > 0 && (
+            <section>
+              <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Maps to controls</h3>
+              <span className="flex flex-wrap gap-1">
+                {connector.control_codes.map((c) => (
+                  <span key={c} className="rounded bg-primary-50 px-1.5 py-0.5 text-[10px] font-semibold text-primary-700">{c}</span>
+                ))}
+              </span>
+            </section>
+          )}
 
           <section>
             <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">What this collects</h3>
@@ -178,14 +208,24 @@ function ConnectDialog({
               </div>
               {reconfig ? (
                 <div className="space-y-2">
-                  <input type="password" value={token} onChange={(e) => setToken(e.target.value)} placeholder="Read-only API token (stored encrypted)"
+                  {connector.needs_key_id && (
+                    <input value={keyId} onChange={(e) => setKeyId(e.target.value)} placeholder="Access key id (identifier, not a secret)"
+                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono focus:border-primary-500 focus:outline-none" />
+                  )}
+                  <input type="password" value={token} onChange={(e) => setToken(e.target.value)}
+                    placeholder={connector.needs_key_id ? 'Secret access key (stored encrypted)' : 'Read-only API token (stored encrypted)'}
                     className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none" />
-                  <div className="grid grid-cols-2 gap-2">
-                    <input value={domain} onChange={(e) => setDomain(e.target.value)} placeholder="Domain (Okta/Jira)"
+                  {connector.needs_region ? (
+                    <input value={region} onChange={(e) => setRegion(e.target.value)} placeholder="Region (e.g. eu-west-1)"
                       className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none" />
-                    <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email (Jira)"
-                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none" />
-                  </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                      <input value={domain} onChange={(e) => setDomain(e.target.value)} placeholder="Domain (Okta/Jira)"
+                        className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none" />
+                      <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email (Jira)"
+                        className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none" />
+                    </div>
+                  )}
                   <p className="text-[11px] text-slate-400">The token is encrypted at rest; only its scopes are ever read. Paste it here — never share it in chat.</p>
                 </div>
               ) : (
@@ -237,8 +277,8 @@ function ConnectDialog({
             </>
           ) : (
             <>
-              <p className="text-sm text-slate-400">Connecting arrives soon.</p>
-              <button disabled className="cursor-not-allowed rounded-lg bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-400">Connect {connector.name}</button>
+              <p className="text-sm text-slate-400">Available as a Steampipe plugin — direct collection coming soon.</p>
+              <button disabled className="cursor-not-allowed rounded-lg bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-400">Not yet wired</button>
             </>
           )}
         </div>
@@ -252,47 +292,58 @@ export default function AllConnectionsPage() {
   const [tab, setTab] = useState<Tab>('available');
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('all');
-  const [selected, setSelected] = useState<Connector | null>(null);
+  const [selected, setSelected] = useState<CatalogConnector | null>(null);
 
   const { data } = useQuery({
-    queryKey: ['soc2-collectors'],
-    queryFn: () => automationApi.listCollectors().then((r) => (r.data as { collectors: Collector[] }).collectors),
+    queryKey: ['soc2-catalog'],
+    queryFn: () => automationApi.listCatalog().then((r) => r.data as { connectors: CatalogConnector[]; counts: { total: number; supported: number; connected: number; catalog: number } }),
   });
-  const byProvider = useMemo(() => {
-    const m: Record<string, Collector> = {};
-    for (const c of data ?? []) m[c.provider] = c;
-    return m;
-  }, [data]);
-  const collectorFor = (c: Connector) => {
-    const p = SUPPORTED[c.id];
-    return p ? byProvider[p] : undefined;
-  };
-  const isConnected = (c: Connector) => Boolean(collectorFor(c)?.connected);
+  const connectors = data?.connectors ?? [];
+  const counts = data?.counts;
 
-  const pool = tab === 'active' ? CONNECTORS.filter(isConnected) : CONNECTORS;
+  const categories = useMemo(
+    () => Array.from(new Set(connectors.map((c) => c.category))).sort(),
+    [connectors],
+  );
+
+  const pool = useMemo(() => {
+    if (tab === 'active') return connectors.filter((c) => c.connected);
+    return connectors; // "Available" now lists the whole catalog
+  }, [connectors, tab]);
+
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
     return pool.filter(
       (c) =>
-        (category === 'all' || c.categories.includes(category as (typeof CONNECTOR_CATEGORIES)[number])) &&
-        (!q || c.name.toLowerCase().includes(q)),
+        (category === 'all' || c.category === category) &&
+        (!q || c.name.toLowerCase().includes(q) || c.id.toLowerCase().includes(q)),
     );
   }, [pool, search, category]);
 
-  const refresh = () => qc.invalidateQueries({ queryKey: ['soc2-collectors'] });
+  const refresh = () => qc.invalidateQueries({ queryKey: ['soc2-catalog'] });
+
+  const tabLabel: Record<Tab, string> = {
+    active: `Active${counts ? ` (${counts.connected})` : ''}`,
+    available: `Available${counts ? ` (${counts.total})` : ''}`,
+  };
 
   return (
     <div className="mx-auto max-w-[1200px] px-1 py-1">
       <h1 className="text-2xl font-bold text-slate-900">All Connections</h1>
+      <p className="mt-1 text-sm text-slate-500">
+        {counts
+          ? `${counts.supported} connectors wired for live evidence collection · ${counts.catalog} more in the Steampipe catalog.`
+          : 'Loading the connector catalog…'}
+      </p>
 
       <nav className="mb-6 mt-4 flex gap-1 border-b border-slate-200" aria-label="Connections sections">
         {(['active', 'available'] as Tab[]).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`relative -mb-px px-3 py-2.5 text-sm font-medium capitalize transition-colors ${tab === t ? 'text-primary-700' : 'text-slate-500 hover:text-slate-800'}`}
+            className={`relative -mb-px px-3 py-2.5 text-sm font-medium transition-colors ${tab === t ? 'text-primary-700' : 'text-slate-500 hover:text-slate-800'}`}
           >
-            {t}
+            {tabLabel[t]}
             {tab === t && <span className="absolute inset-x-3 -bottom-px h-0.5 rounded-full bg-primary-600" />}
           </button>
         ))}
@@ -314,7 +365,7 @@ export default function AllConnectionsPage() {
             </div>
             <select value={category} onChange={(e) => setCategory(e.target.value)} className="rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm text-slate-600">
               <option value="all">Category: All</option>
-              {CONNECTOR_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              {categories.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
             <p aria-live="polite" className="ml-auto text-xs text-slate-400">
               Showing <span className="tabular-nums">{visible.length}</span> of <span className="tabular-nums">{pool.length}</span> connectors
@@ -324,7 +375,7 @@ export default function AllConnectionsPage() {
           <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {visible.map((c) => (
               <li key={c.id}>
-                <ConnectorCard connector={c} connected={isConnected(c)} onOpen={() => setSelected(c)} />
+                <ConnectorCard connector={c} onOpen={() => setSelected(c)} />
               </li>
             ))}
           </ul>
@@ -334,7 +385,6 @@ export default function AllConnectionsPage() {
       {selected && (
         <ConnectDialog
           connector={selected}
-          collector={collectorFor(selected)}
           onClose={() => setSelected(null)}
           onChanged={refresh}
         />

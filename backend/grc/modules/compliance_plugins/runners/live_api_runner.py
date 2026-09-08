@@ -28,9 +28,23 @@ def live_api_runner(check_definition: Dict[str, Any], credentials: Dict[str, Any
         return RunnerResult(status="error", summary=result.get("summary_text", "Collector error"),
                             raw_output=result, error_message="connectivity_error")
 
-    any_fail = any(f.get("status") == "fail" for f in result.get("findings", []))
+    findings = result.get("findings", [])
+    statuses = {f.get("status") for f in findings}
+    # A run that asserted nothing did not pass. Inventory findings ("info") are
+    # collected evidence, not a tested control, so a provider that only enumerated
+    # resources reports not_run rather than inflating the passing count.
+    if "fail" in statuses:
+        run_status = "failed"
+    elif "error" in statuses:
+        # a resource we could not read is not a passing control — it is unassessed,
+        # and it must not be indistinguishable from a genuine failure either
+        run_status = "error"
+    elif "pass" in statuses:
+        run_status = "passed"
+    else:
+        run_status = "not_run"
     return RunnerResult(
-        status="failed" if any_fail else "passed",
+        status=run_status,
         summary=result.get("summary_text", ""),
         raw_output=result,
     )

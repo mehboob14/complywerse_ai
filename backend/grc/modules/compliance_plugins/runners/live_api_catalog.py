@@ -18,6 +18,7 @@ import base64
 import json
 import urllib.error
 import urllib.request
+from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 # provider -> API spec. base ({domain} filled from creds), verify path (proves
@@ -45,6 +46,10 @@ PROVIDER_API: Dict[str, dict] = {
     "neon": {"base": "https://console.neon.tech/api/v2", "verify": "/users/me", "auth": "bearer", "controls": ["CC6.1"], "label": "Neon", "category": "cloud"},
     "qovery": {"base": "https://api.qovery.com", "verify": "/user", "auth": "bearer", "controls": ["CC6.1"], "label": "Qovery", "category": "cloud"},
     "digitalocean": {"base": "https://api.digitalocean.com/v2", "verify": "/account", "auth": "bearer", "controls": ["CC6.1"], "label": "DigitalOcean", "category": "cloud"},
+    # Cloud accounts do not authenticate with a static bearer, so they name a
+    # transport instead of a base/verify path. Everything downstream — the admin
+    # catalog, seeding, collection health, the control crosswalk — is unchanged.
+    "aws": {"transport": "aws", "auth": "aws_keys", "controls": ["CC6.1"], "label": "Amazon Web Services", "category": "cloud", "needs_key_id": True, "needs_region": True},
     # observability / monitoring
     "datadog": {"base": "https://api.datadoghq.com/api/v1", "verify": "/validate", "auth": "header:DD-API-KEY", "controls": ["CC7.2"], "label": "Datadog", "category": "observability"},
     "sentry": {"base": "https://sentry.io/api/0", "verify": "/organizations/", "auth": "bearer", "controls": ["CC7.2"], "label": "Sentry", "category": "observability"},
@@ -75,7 +80,36 @@ PROVIDER_API: Dict[str, dict] = {
     "anthropic": {"base": "https://api.anthropic.com/v1", "verify": "/models", "auth": "header:x-api-key", "controls": ["CC6.1"], "label": "Anthropic", "category": "ai", "headers": {"anthropic-version": "2023-06-01"}},
 }
 
+# Additional connectors supplied as data (git-reviewable JSON) and merged into
+# PROVIDER_API so seeding, provider_meta, the runner, and the Evidence Collectors
+# page all pick them up automatically. Same spec shape as the literal entries.
+_EXTRA_CONNECTORS_PATH = Path(__file__).resolve().parents[3] / "seed_data" / "evidence" / "extra_connectors.json"
+try:
+    _extra = json.loads(_EXTRA_CONNECTORS_PATH.read_text(encoding="utf-8"))
+    if isinstance(_extra, dict):
+        for _k, _v in _extra.items():
+            if isinstance(_v, dict) and _k not in PROVIDER_API and _v.get("base") and _v.get("verify"):
+                PROVIDER_API[_k] = _v
+except Exception:  # noqa: BLE001 — safe-empty if the file is absent/invalid
+    pass
+
 LIVE_API_PROVIDERS = set(PROVIDER_API.keys())
+
+# Declarative deep-evidence catalog (resources + checks per connector), run by
+# evidence_engine on top of the verify call. Git-reviewable data; safe-empty if
+# the file is absent so the connectors keep working with connectivity + DEEP.
+_CONNECTOR_CHECKS_PATH = Path(__file__).resolve().parents[3] / "seed_data" / "evidence" / "connector_checks.json"
+
+
+def _load_connector_checks() -> Dict[str, dict]:
+    try:
+        data = json.loads(_CONNECTOR_CHECKS_PATH.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+CONNECTOR_CHECKS: Dict[str, dict] = _load_connector_checks()
 
 
 def _finding(codes: List[str], check: str, resource: str, status: str, detail: str = "") -> dict:
@@ -157,7 +191,15 @@ def _items_root(body):
 
 
 def _inv(codes, check, name_keys):
-    return lambda it: (codes, check, _name(it, name_keys), "pass", "present")
+    """Inventory: enumerate a resource and record what exists.
+
+    This asserts NOTHING — there is no expected value and no failure path — so it
+    emits "info", never "pass". Listing 50 users is evidence a collector reached
+    the tenant; it is not evidence that a control operates. Counting it as a pass
+    made coverage monotonically non-decreasing: it rose when a connector was added
+    and never fell when a control broke.
+    """
+    return lambda it: (codes, check, _name(it, name_keys), "info", "inventory")
 
 
 def _user_mfa(codes, check, name_keys, mfa_key, bot_key=None):
@@ -296,6 +338,10 @@ def run_provider(provider: str, creds: dict) -> dict:
     if not spec:
         return {"connectivity": "error", "findings": [], "summary": {}, "summary_text": f"No live client for '{provider}'"}
 
+    if spec.get("transport"):
+        from .cloud_transport import run_cloud_provider
+        return run_cloud_provider(provider, spec, creds)
+
     token = creds.get("token") or creds.get("access_token")
     if not token:
         return {"connectivity": "error", "findings": [], "summary": {}, "summary_text": "No API token configured for this collector"}
@@ -311,9 +357,21 @@ def run_provider(provider: str, creds: dict) -> dict:
     findings: List[dict] = []
     if status == 200:
         conn = "pass"
-        findings.append(_finding(spec["controls"], f"{provider}.connectivity", provider, "pass",
+        # Collection health, not control evidence. A working token proves the
+        # collector can see the tenant; it says nothing about whether any control
+        # operates, so it must not contribute a "pass" to the controls this
+        # connector is indexed under.
+        findings.append(_finding(spec["controls"], f"{provider}.connectivity", provider, "info",
                                  "Authenticated read-only API call succeeded"))
-        if provider in _CUSTOM_DEEP:
+        cdef = CONNECTOR_CHECKS.get(provider)
+        if cdef and (cdef.get("resources") or cdef.get("checks")):
+            # Declarative deep-evidence engine (collect -> normalize -> check),
+            # plus the cheap provider-specific enrich sweeps (github 2FA, okta
+            # per-user factors, sentry org-2FA) which cover what config can't.
+            from .evidence_engine import run_connector_checks
+            findings += run_connector_checks(provider, spec, creds, base, cdef)
+            findings += _enrich(provider, creds, body)
+        elif provider in _CUSTOM_DEEP:
             findings += _CUSTOM_DEEP[provider](creds, base)
         elif provider in DEEP:
             findings += _run_deep(provider, creds, base)
@@ -338,7 +396,11 @@ def run_provider(provider: str, creds: dict) -> dict:
         "connectivity": conn,
         "findings": findings,
         "summary": summary,
-        "summary_text": f"{provider}: {summary['pass']} pass / {summary['fail']} fail / {summary['error']} error across {len(summary['controls_touched'])} controls",
+        "summary_text": (
+            f"{provider}: {summary['pass']} pass / {summary['fail']} fail / "
+            f"{summary.get('info', 0)} inventory / {summary['error']} error "
+            f"across {len(summary['controls_touched'])} controls"
+        ),
     }
 
 
@@ -350,6 +412,9 @@ def provider_meta() -> List[dict]:
             "provider": p, "label": s["label"], "category": s["category"],
             "controls": s["controls"], "auth": s["auth"],
             "needs_domain": bool(s.get("needs_domain")), "needs_email": bool(s.get("needs_email")),
+            # a cloud account needs a key id and a region alongside the secret
+            "transport": s.get("transport"),
+            "needs_key_id": bool(s.get("needs_key_id")), "needs_region": bool(s.get("needs_region")),
         })
     return out
 
@@ -359,10 +424,40 @@ def provider_meta() -> List[dict]:
 _ENRICH_EXTRA_CODES = {"github": ["CC6.2"]}
 
 
+def provider_checks(provider: str) -> List[dict]:
+    """Every individual check this provider runs, as {id, controls}.
+
+    The binder needs to know which SOC 2 codes each check names, so that a
+    control inherits only the checks that speak to it. HTTP connectors declare
+    that in CONNECTOR_CHECKS; a cloud transport declares it in CLOUD_CHECKS.
+    One accessor so a new transport is bound by the same code that binds the
+    other 65, rather than needing its own branch in every caller.
+    """
+    if PROVIDER_API.get(provider, {}).get("transport"):
+        from .cloud_transport import CLOUD_CHECKS, cloud_control_codes
+        out = [{"id": c["id"], "controls": list(c.get("controls") or [])}
+               for c in CLOUD_CHECKS.get(provider, [])]
+        # sweeps emit findings under their own check ids; index them too so the
+        # binding does not depend on control_codes matching alone
+        declared = {c for e in out for c in e["controls"]}
+        extra = [c for c in cloud_control_codes(provider) if c not in declared]
+        if extra:
+            out.append({"id": f"{provider}.sweep", "controls": extra})
+        return out
+    return list((CONNECTOR_CHECKS.get(provider) or {}).get("checks") or [])
+
+
 def all_control_codes(provider: str) -> List[str]:
     """Union of every SOC 2 code this provider can emit (verify + deep + enrich)."""
     codes = set(PROVIDER_API.get(provider, {}).get("controls", []))
     if provider in DEEP:
         codes.update(DEEP[provider].get("controls", []))
     codes.update(_ENRICH_EXTRA_CODES.get(provider, []))
+    if PROVIDER_API.get(provider, {}).get("transport"):
+        from .cloud_transport import cloud_control_codes
+        codes.update(cloud_control_codes(provider))
+    cdef = CONNECTOR_CHECKS.get(provider)
+    if cdef:
+        from .evidence_engine import connector_control_codes
+        codes.update(connector_control_codes(cdef))
     return sorted(codes)

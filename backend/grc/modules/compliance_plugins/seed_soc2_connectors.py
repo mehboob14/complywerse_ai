@@ -34,7 +34,11 @@ def _spec(provider: str, s: Dict[str, Any]) -> Dict[str, Any]:
         "title": f"SOC 2 evidence collector — {s['label']}",
         "description": f"Read-only API evidence from {s['label']} mapped to SOC 2 {', '.join(codes)}.",
         "rationale": f"Automated {s['label']} access/configuration evidence supports the mapped SOC 2 criteria.",
-        "remediation": f"Configure a read-only {s['label']} API token under Administration → Evidence Collectors, then re-run.",
+        "remediation": (
+            f"Configure read-only {s['label']} "
+            + ("access keys and a region" if s.get("transport") else "API token")
+            + " under Administration → Evidence Collectors, then re-run."
+        ),
         "severity": "medium",
         "runner_type": "live_api",
         "check_definition": {"provider": provider},

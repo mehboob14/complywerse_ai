@@ -54,6 +54,7 @@ from grc.modules.compliance_plugins.seed_soc2_connectors import (
 from grc.modules.compliance_plugins.runners.live_api_catalog import (
     CONNECTOR_CHECKS,
     PROVIDER_API,
+    provider_checks,
     all_control_codes,
     provider_meta,
     run_provider,
@@ -320,8 +321,7 @@ def _checks_for_control(db: Session, control_codes: List[str]) -> List[Dict[str,
     for p in plugins:
         if p.benchmark == CONNECTOR_BENCHMARK:
             provider = (p.check_definition or {}).get("provider")
-            cdef = CONNECTOR_CHECKS.get(provider) or {}
-            matched = [c for c in cdef.get("checks", []) if wanted & set(c.get("controls") or [])]
+            matched = [c for c in provider_checks(provider) if wanted & set(c.get("controls") or [])]
             if not matched:
                 continue
             out.append({"plugin": p, "provider": provider, "checks": matched})
@@ -443,9 +443,14 @@ def seed_soc2(
 
 # ── Evidence Collectors (SaaS API connectors) ────────────────────────────────
 class CollectorConnectBody(BaseModel):
-    token: str = Field(..., description="API token / access token (stored encrypted)")
+    token: str = Field(..., description="API token / access token (stored encrypted). "
+                                        "For a cloud transport this is the secret key.")
     domain: Optional[str] = Field(None, description="Instance domain for Okta/Jira/Grafana/Zendesk/etc.")
     email: Optional[str] = Field(None, description="Account email (for Jira basic auth)")
+    # Cloud transports authenticate as a principal in a region. The key id names
+    # who is calling and is not itself a secret, so it is stored in clear.
+    access_key_id: Optional[str] = Field(None, description="Cloud access key id (AWS)")
+    region: Optional[str] = Field(None, description="Cloud region (AWS)")
 
 
 def _connector_plugin(db: Session, provider: str) -> Optional[CompliancePlugin]:
@@ -597,6 +602,10 @@ def connector_catalog(db: Session = Depends(get_db), current_user: GRCUser = Dep
             "connection_id": c.id if c else None,
             "last_run": last,
             "steampipe_plugin": _STEAMPIPE_CATALOG.get(p, {}).get("steampipe_plugin", p),
+            # a cloud transport authenticates as a principal in a region, so the
+            # connect form has to ask for more than one secret
+            "needs_key_id": m.get("needs_key_id", False),
+            "needs_region": m.get("needs_region", False),
         })
     for key, meta in _STEAMPIPE_CATALOG.items():
         if key in implemented:
@@ -643,7 +652,13 @@ def connect_collector(
         "token": encrypt_secret(body.token),
         "domain": (body.domain or "").strip(),
         "email": (body.email or "").strip(),
+        "access_key_id": (body.access_key_id or "").strip(),
+        "region": (body.region or "").strip(),
     }
+    spec = PROVIDER_API[provider]
+    if spec.get("needs_key_id") and not extra["access_key_id"]:
+        raise HTTPException(status_code=422,
+                            detail=f"{spec['label']} needs an access key id alongside the secret key")
     conn = _connector_connection(db, tenant_id, provider)
     if conn:
         conn.credentials_extra_json = extra
@@ -1031,7 +1046,7 @@ def _check_index(db: Session):
                       CompliancePlugin.enabled.is_(True)).all()):
         if p.benchmark == CONNECTOR_BENCHMARK:
             provider = (p.check_definition or {}).get("provider")
-            for c in (CONNECTOR_CHECKS.get(provider) or {}).get("checks", []):
+            for c in provider_checks(provider):
                 for code in c.get("controls") or []:
                     idx[code].append((p, {c.get("id")}))
         elif p.rule_id:

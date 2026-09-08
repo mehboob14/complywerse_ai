@@ -5043,7 +5043,7 @@ export const automationApi = {
   listCollectors: () => apiClient.get('/automation/soc2/collectors'),
   // Full connector universe: wired connectors + Steampipe discovery catalog.
   listCatalog: () => apiClient.get('/automation/soc2/catalog'),
-  connectCollector: (provider: string, body: { token: string; domain?: string; email?: string }) =>
+  connectCollector: (provider: string, body: { token: string; domain?: string; email?: string; access_key_id?: string; region?: string }) =>
     apiClient.post(`/automation/soc2/collectors/${provider}/connect`, body),
   testCollector: (provider: string) => apiClient.post(`/automation/soc2/collectors/${provider}/test`),
   runCollector: (provider: string) => apiClient.post(`/automation/soc2/collectors/${provider}/run`),
