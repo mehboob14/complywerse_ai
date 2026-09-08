@@ -957,6 +957,96 @@ def _compute_easm_risk(asset: ITAsset, ep: Dict[str, Any], db=None) -> Dict[str,
     }
 
 
+def _external_subdomain_ids(db, tenant_id: int, parent_id: int) -> List[int]:
+    """IDs of the assets linked to this parent by a DNS `subdomain_of` edge."""
+    from grc.models import AssetRelationship
+    rows = (
+        db.query(AssetRelationship.source_asset_id)
+        .filter(
+            AssetRelationship.tenant_id == tenant_id,
+            AssetRelationship.target_asset_id == parent_id,
+            AssetRelationship.relationship_type == "subdomain_of",
+        )
+        .all()
+    )
+    return [r[0] for r in rows]
+
+
+def _aggregate_external_children(db, tenant_id: int, parent: ITAsset, result: Dict[str, Any]) -> Dict[str, Any]:
+    """Weakest-link rollup for a parent domain (e.g. liztek.ca).
+
+    A parent domain's external risk = the WORST of {itself, all its subdomains};
+    findings = SUMMED across the whole domain. Each subdomain keeps its own score
+    — this only changes what the PARENT shows. Was: the parent ignored its
+    subdomains entirely and scored only its own row.
+
+    Cost is flat regardless of subdomain count: the subdomains are loaded once and
+    their finding-counts fetched in two grouped queries, so each subdomain's score
+    is computed with db=None (no per-subdomain query).
+    """
+    if db is None:
+        return result
+    sub_ids = _external_subdomain_ids(db, tenant_id, parent.id)
+    if not sub_ids:
+        return result  # not a parent domain (leaf subdomain / no children) → unchanged
+
+    subs = db.query(ITAsset).filter(
+        ITAsset.id.in_(sub_ids), ITAsset.tenant_id == tenant_id,
+    ).all()
+    all_ids = [parent.id] + [s.id for s in subs]
+
+    from grc.models import Vulnerability, VulnerabilityAssetLink
+    cve_by = dict(
+        db.query(VulnerabilityAssetLink.asset_id, func.count())
+        .filter(VulnerabilityAssetLink.asset_id.in_(all_ids))
+        .group_by(VulnerabilityAssetLink.asset_id).all()
+    )
+    kev_by = dict(
+        db.query(VulnerabilityAssetLink.asset_id, func.count())
+        .join(Vulnerability, Vulnerability.id == VulnerabilityAssetLink.vulnerability_id)
+        .filter(
+            VulnerabilityAssetLink.asset_id.in_(all_ids),
+            Vulnerability.kev_flag.is_(True),
+        )
+        .group_by(VulnerabilityAssetLink.asset_id).all()
+    )
+
+    own_score = result.get("score")
+    worst_score = float(own_score) if isinstance(own_score, (int, float)) else -1.0
+    worst_name = parent.name
+    total_cve = int(cve_by.get(parent.id, 0))
+    total_kev = int(kev_by.get(parent.id, 0))
+    probed = 1 if isinstance(own_score, (int, float)) else 0
+
+    for s in subs:
+        pp = getattr(s, "platform_properties", None)
+        ep = dict((pp.get("external_probe") or {}) if isinstance(pp, dict) else {})
+        ep["cve_count"] = int(cve_by.get(s.id, 0))
+        ep["kev_count"] = int(kev_by.get(s.id, 0))
+        total_cve += ep["cve_count"]
+        total_kev += ep["kev_count"]
+        sc = _compute_easm_risk(s, ep, db=None).get("score")
+        if isinstance(sc, (int, float)):
+            probed += 1
+            if sc > worst_score:
+                worst_score, worst_name = float(sc), s.name
+
+    if worst_score >= 0:
+        result["score"] = round(worst_score, 1)
+        result["band"] = _band_for(result["score"])
+    result["subdomain_rollup"] = {
+        "count": len(subs), "probed": probed,
+        "weakest": worst_name, "own_score": own_score,
+        "total_cve": total_cve, "total_kev": total_kev,
+    }
+    cd = dict(result.get("cve_detection") or {})
+    cd["linked_findings"] = total_cve
+    cd["kev_findings"] = total_kev
+    cd["domain_aggregated"] = True
+    result["cve_detection"] = cd
+    return result
+
+
 # ─── Public API ─────────────────────────────────────────────────────────────
 
 def compute_asset_risk(
@@ -979,7 +1069,9 @@ def compute_asset_risk(
     _pp = getattr(asset, "platform_properties", None)
     _ep = _pp.get("external_probe") if isinstance(_pp, dict) else None
     if getattr(asset, "last_seen_source", None) == "external" or (isinstance(_ep, dict) and _ep.get("health")):
-        return _compute_easm_risk(asset, _ep or {}, db=db)
+        res = _compute_easm_risk(asset, _ep or {}, db=db)
+        # Roll subdomains up into the parent domain (weakest-link + summed findings).
+        return _aggregate_external_children(db, tenant_id, asset, res)
 
     components = {
         "cis":  _cis_gap(db, tenant_id, asset.id),

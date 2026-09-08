@@ -75,7 +75,7 @@ type Internal = {
   contributions: Record<'cis' | 'vuln' | 'cia' | 'ctrl' | 'risk', number>;
 };
 // External is read loosely — same pragmatic `any` posture as EasmRiskView.
-type Easm = { mode: 'easm'; asset: any; score: number | null; band: { label: string; description?: string }; components: Record<string, any>; contributions: Record<string, number>; health?: any; probe?: any; data_quality?: number };
+type Easm = { mode: 'easm'; asset: any; score: number | null; band: { label: string; description?: string }; components: Record<string, any>; contributions: Record<string, number>; health?: any; probe?: any; data_quality?: number; subdomain_rollup?: { count: number; probed: number; weakest: string; own_score: number | null; total_cve: number; total_kev: number } };
 type Posture = Internal | Easm;
 const isEasm = (d: Posture): d is Easm => (d as Easm).mode === 'easm';
 
@@ -396,6 +396,12 @@ export default function AssetPostureDetail({ assetId }: { assetId: number }) {
         <div style={{ border: '1px solid #EAD9AE', background: '#FEFBF4', borderRadius: 11, padding: '11px 15px', fontSize: 12, color: '#7A6427', marginBottom: 12 }}>
           This is an <b>externally-discovered</b> asset — scored on outside-in exposure hygiene (TLS, security headers, transport, email auth, known vulnerabilities), <b>not</b> CIA / CIS / control coverage, which can&apos;t be measured on an asset you only see from the internet.
         </div>
+
+        {d.subdomain_rollup && d.subdomain_rollup.count > 0 && (
+          <div style={{ border: '1px solid #BFE6DA', background: '#F0FBF7', borderRadius: 11, padding: '11px 15px', fontSize: 12, color: '#0A5A4B', marginBottom: 12 }}>
+            <b>Domain rollup</b> — this score is the <b>weakest link</b> across this domain and its {d.subdomain_rollup.count} subdomain{d.subdomain_rollup.count === 1 ? '' : 's'} (weakest: <b>{d.subdomain_rollup.weakest}</b>). {d.subdomain_rollup.total_cve} finding{d.subdomain_rollup.total_cve === 1 ? '' : 's'}{d.subdomain_rollup.total_kev ? ` · ${d.subdomain_rollup.total_kev} KEV` : ''} summed across the whole domain.
+          </div>
+        )}
 
         <Card title="Why this score" sub={`weighted outside-in signals · total ${data.score ?? '—'}/100 · bar = signal severity, number = points added`} grow>
           {comps.length === 0 ? (

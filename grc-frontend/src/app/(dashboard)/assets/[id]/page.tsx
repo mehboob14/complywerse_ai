@@ -4648,7 +4648,12 @@ function ScanSessions({
         );
         const span = Math.max(0, session.endedAt ? (session.startedAt - session.endedAt) : 0);
         const spanSec = Math.round(span / 1000);
-        const passRate = totals.total ? Math.round((totals.passed / totals.total) * 100) : 0;
+        // CIS score basis: passed / (passed+failed) — n/a (skipped) and errored
+        // rules drop out of the denominator, same as the header/card/posture.
+        // (Was passed/total, which counted not-applicable rules and read low,
+        // e.g. 58% instead of 68% for the same session.)
+        const evaluated = totals.passed + totals.failed;
+        const passRate = evaluated ? Math.round((totals.passed / evaluated) * 100) : 0;
         const filteredRuns = session.runs.filter((r: any) => filter === 'all' ? true : (r.status || '').toLowerCase() === filter);
 
         return (
