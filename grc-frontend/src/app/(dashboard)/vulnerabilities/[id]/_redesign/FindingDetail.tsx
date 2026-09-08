@@ -392,20 +392,20 @@ function ExploitTest({ reach: d, vTone, hasAsset, v, score }: any) {
   const byTactic: Record<string, any[]> = {};
   for (const c of chain) (byTactic[c.tactic] ||= []).push(c);
   const stageStatus = (s: any) => s.status || (byTactic[s.shortname]?.length ? 'reached' : 'not_applicable');
-  // "Tie the chain together": rather than dropping every unmapped stage — which made the path
-  // jump from stage 2 → 7 → 11 — render the kill-chain as one continuous run. Walk from the
-  // FIRST mapped stage to the last reachable one; unmapped stages inside that run render as
-  // dimmed pass-through steps so the sequence reads unbroken. A severed chain ends at its break
-  // (no point padding past it). Stages outside the run fall to the omitted footnote.
+  // Continuous, GATED kill-chain. Show every stage from the first mapped to the last mapped —
+  // INCLUDING the ones the attacker can't reach, each carrying its own reason. The break is the
+  // first unreachable stage (e.g. Initial Access blocked because the host isn't internet-facing);
+  // from there the chain is severed, so every later stage — mapped OR empty — is unreachable.
+  // That's why an internal host reads "stops at Initial Access" with a reason while an
+  // internet-facing one runs the whole chain. The engine decides reachability; this only renders it.
   const _mappedIdx = spine.map((s, i) => (stageStatus(s) !== 'not_applicable' ? i : -1)).filter((i) => i >= 0);
   const _firstM = _mappedIdx.length ? _mappedIdx[0] : -1;
-  const _stopMapped = _mappedIdx.find((i) => stageStatus(spine[i]) === 'unreachable');
-  const severed = _stopMapped !== undefined;
-  const _endM = severed ? (_stopMapped as number) : (_mappedIdx.length ? _mappedIdx[_mappedIdx.length - 1] : -1);
-  const visible = _firstM >= 0 ? spine.slice(_firstM, _endM + 1) : [];
-  const omitted = spine.filter((s, i) => stageStatus(s) === 'not_applicable' && (i < _firstM || i > _endM));
+  const _lastM = _mappedIdx.length ? _mappedIdx[_mappedIdx.length - 1] : -1;
+  const visible = _firstM >= 0 ? spine.slice(_firstM, _lastM + 1) : [];
+  const omitted = spine.filter((s, i) => stageStatus(s) === 'not_applicable' && (i < _firstM || i > _lastM));
   const mappedCount = _mappedIdx.length;
-  const stopIdx = visible.findIndex((s) => stageStatus(s) === 'unreachable');
+  const breakIdx = visible.findIndex((s) => stageStatus(s) === 'unreachable');   // first stage the attacker can't reach
+  const severed = breakIdx >= 0;
   const reached = visible.filter((s) => stageStatus(s) === 'reached').length;
   const STAT: Record<string, { c: string; label: string }> = { likely: { c: '#C2453F', label: 'LIKELY' }, possible: { c: '#E0AF33', label: 'POSSIBLE' }, blocked: { c: '#AEB8C2', label: 'BLOCKED' }, severed: { c: '#AEB8C2', label: 'SEVERED' } };
   const sig = d.signals || {}; const evi = d.evidence || {};
@@ -464,7 +464,7 @@ function ExploitTest({ reach: d, vTone, hasAsset, v, score }: any) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
           <b style={{ fontSize: 14 }}>Attack path — the chain</b>
           <span style={{ fontSize: 11.5, color: FAINT }}>MITRE ATT&amp;CK · the stages in play</span>
-          <span style={{ marginLeft: 'auto', fontSize: 11.5, color: MUTED }}><b style={{ color: SEC }}>{reached} of {mappedCount}</b> reached{severed && visible[stopIdx] && <> · <b style={{ color: '#C2453F' }}>stops at {visible[stopIdx].name}</b></>}</span>
+          <span style={{ marginLeft: 'auto', fontSize: 11.5, color: MUTED }}><b style={{ color: SEC }}>{reached} of {mappedCount}</b> reached{severed && visible[breakIdx] && <> · <b style={{ color: '#C2453F' }}>stops at {visible[breakIdx].name}</b></>}</span>
         </div>
         {chain.length === 0 ? (
           <div style={{ border: `1px solid ${BORDER}`, background: '#FAFBFC', borderRadius: 10, padding: 16, fontSize: 12.5, color: SEC, lineHeight: 1.55 }}>No ATT&amp;CK techniques mapped for this finding — a data condition, not a verdict. It does <b>not</b> mean the finding is unexploitable.</div>
@@ -472,38 +472,42 @@ function ExploitTest({ reach: d, vTone, hasAsset, v, score }: any) {
           <ol style={{ listStyle: 'none', margin: 0, padding: 0 }}>
             {visible.map((st: any, i: number) => {
               const techs = byTactic[st.shortname] || [];
-              const passthrough = stageStatus(st) === 'not_applicable';
-              const isStop = severed && i === stopIdx;
-              const locked = severed && i > stopIdx;
-              const reachedStage = stageStatus(st) === 'reached';
+              const stStatus = stageStatus(st);                    // reached | unreachable | not_applicable
+              const empty = stStatus === 'not_applicable';
+              const isBreak = severed && i === breakIdx;           // the door that's shut — the gate
+              const beyond = severed && i > breakIdx;              // severed, downstream of the break
+              const unreachable = stStatus === 'unreachable' || (empty && beyond);
+              const reachedStage = stStatus === 'reached';
+              const dashed = empty && !unreachable;                // a reachable stage the flaw simply doesn't touch
               const last = i === visible.length - 1;
+              const circleBg = isBreak ? '#C2453F' : reachedStage ? AC : unreachable ? '#EEF1F3' : dashed ? '#F4F6F8' : '#CFD6DC';
               return (
                 <li key={st.shortname} style={{ display: 'flex', gap: 12 }}>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 'none' }}>
-                    <span style={{ width: 24, height: 24, borderRadius: '50%', display: 'grid', placeItems: 'center', fontSize: 11, fontWeight: 700, color: passthrough ? '#B9C2CC' : '#fff', background: passthrough ? '#F4F6F8' : locked ? '#EEF1F3' : isStop ? '#C2453F' : reachedStage ? AC : '#CFD6DC', border: passthrough ? '1px dashed #D4DBE1' : 'none' }}>{locked && !passthrough ? <Lock size={11} color="#8A95A1" /> : i + 1}</span>
-                    {!last && <span style={{ width: 2, flex: 1, minHeight: passthrough ? 10 : 16, margin: '4px 0', background: reachedStage && !severed ? '#9FE3D2' : '#E4E8EC', borderRadius: 2 }} />}
+                    <span style={{ width: 24, height: 24, borderRadius: '50%', display: 'grid', placeItems: 'center', fontSize: 11, fontWeight: 700, color: dashed ? '#B9C2CC' : (unreachable && !isBreak) ? '#8A95A1' : '#fff', background: circleBg, border: dashed ? '1px dashed #D4DBE1' : 'none' }}>{unreachable && !isBreak ? <Lock size={11} color="#8A95A1" /> : i + 1}</span>
+                    {!last && <span style={{ width: 2, flex: 1, minHeight: empty ? 10 : 16, margin: '4px 0', background: reachedStage ? '#9FE3D2' : '#E4E8EC', borderRadius: 2 }} />}
                   </div>
-                  <div style={{ flex: 1, minWidth: 0, paddingBottom: last ? 0 : passthrough ? 8 : 14 }}>
+                  <div style={{ flex: 1, minWidth: 0, paddingBottom: last ? 0 : empty ? 8 : 14 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.03em', color: passthrough || locked ? FAINT : SEC }}>{st.name}</span>
-                      {isStop && <span style={{ ...pill('#C2453F', '#FBEAEA'), fontSize: 9 }}>STOPS HERE</span>}
-                      {locked && !passthrough && <span style={{ ...pill('#8A95A1', '#EEF1F3'), fontSize: 9 }}><Lock size={9} />locked</span>}
+                      <span style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.03em', color: reachedStage ? SEC : FAINT }}>{st.name}</span>
+                      {isBreak && <span style={{ ...pill('#C2453F', '#FBEAEA'), fontSize: 9 }}>STOPS HERE</span>}
+                      {beyond && !empty && <span style={{ ...pill('#8A95A1', '#EEF1F3'), fontSize: 9 }}><Lock size={9} />unreachable</span>}
                     </div>
-                    {passthrough ? (
-                      <div style={{ fontSize: 11, color: FAINT, marginTop: 2, fontStyle: 'italic' }}>no technique maps here — the chain passes through this stage</div>
+                    {empty ? (
+                      <div style={{ fontSize: 11, color: FAINT, marginTop: 2, fontStyle: 'italic' }}>{unreachable ? 'unreachable — the chain is severed before this stage' : 'no ATT&CK technique at this stage'}</div>
                     ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 7 }}>
                       {techs.map((c: any) => { const stt = STAT[c.status] || STAT.blocked; return (
-                        <div key={c.technique_id} style={{ display: 'flex', alignItems: 'center', gap: 8, border: `1px solid ${BORDER}`, borderRadius: 9, padding: '6px 10px', background: locked ? '#FAFBFC' : '#fff' }} title={c.why || ''}>
+                        <div key={c.technique_id} style={{ display: 'flex', alignItems: 'center', gap: 8, border: `1px solid ${BORDER}`, borderRadius: 9, padding: '6px 10px', background: unreachable ? '#FAFBFC' : '#fff' }} title={c.why || ''}>
                           <span style={{ width: 7, height: 7, borderRadius: '50%', background: stt.c, flex: 'none' }} />
                           <code style={{ fontFamily: MONO, fontSize: 11, color: MUTED }}>{c.technique_id}</code>
-                          <span style={{ fontSize: 12, fontWeight: 500, color: locked ? FAINT : '#1F2A33', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</span>
+                          <span style={{ fontSize: 12, fontWeight: 500, color: unreachable ? FAINT : '#1F2A33', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</span>
                           <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '.04em', color: stt.c }}>{stt.label}</span>
                         </div>
                       ); })}
                     </div>
                     )}
-                    {isStop && (st.reason) && <p style={{ fontSize: 12, color: '#B23A3A', background: '#FDF3F3', border: '1px solid #F3D3DA', borderRadius: 9, padding: '7px 10px', marginTop: 8, lineHeight: 1.5 }}><b>Chain stops here.</b> {st.reason}</p>}
+                    {isBreak && (st.reason) && <p style={{ fontSize: 12, color: '#B23A3A', background: '#FDF3F3', border: '1px solid #F3D3DA', borderRadius: 9, padding: '7px 10px', marginTop: 8, lineHeight: 1.5 }}><b>Chain stops here.</b> {st.reason}</p>}
                   </div>
                 </li>
               );
