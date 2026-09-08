@@ -223,6 +223,78 @@ def resolve() -> Dict[str, Any]:
     return {"scf_version": manifest.get("version"), "items": items}
 
 
+def merge_into_evidence(dry_run: bool = False) -> Dict[str, int]:
+    """Fold the resolved catalogue artifacts into the per-control evidence sets.
+
+    A catalogue artifact is a deliverable someone owes ("ISMS Project Charter",
+    DOCX, Top Management); a consolidated evidence artifact is a document an
+    auditor asks for. Where both name the same thing, they are the same thing:
+    the framework joins the existing entry's `required_by` instead of adding a
+    near-duplicate row -- which the control page needs anyway, since it keys its
+    list on the artifact name.
+
+    A `parent` match got here from a section-level reference ("A.8.x" for the
+    whole of Annex A.8), so it lands on every control in that section. That is
+    labelled, not excluded, the same way the crosswalk labels parent mappings.
+    """
+    # The label has to be the one the consolidated sets already use: the catalogue
+    # writes "ISO/IEC 27001:2022" where they write "ISO 27001", and the control page
+    # counts distinct required_by entries, so two spellings read as two frameworks.
+    from dotenv import load_dotenv          # the router imports the app, which wants .env
+    load_dotenv(ROOT.parent / ".env")
+    from grc.modules.automation.router import _FW_LABELS
+
+    catalog = json.loads(CATALOG.read_text(encoding="utf-8"))
+    meta = {(k, a.get("artifact_id")): a
+            for k, v in catalog.items() for a in v["artifacts"]}
+
+    path = SCF_DIR / "evidence_consolidated.json"
+    doc = json.loads(path.read_text(encoding="utf-8"))
+    controls: Dict[str, Any] = doc["controls"]
+
+    stat: Dict[str, int] = defaultdict(int)
+    stat["controls_before"] = len(controls)
+    for item in resolve()["items"]:
+        if item["status"] != "resolved":
+            continue
+        art = meta.get((item["framework_key"], item["artifact_id"])) or {}
+        slug = item["slug"]
+        fw = _FW_LABELS.get(slug) or slug.replace("_", " ").title()
+        for scf_id in item["scf_ids"]:
+            entry = controls.setdefault(scf_id, {"artifacts": [], "input_count": 0})
+            existing = next((a for a in entry["artifacts"]
+                             if a["name"].lower() == item["name"].lower()), None)
+            if existing:
+                if fw not in existing["required_by"]:
+                    existing["required_by"].append(fw)
+                    stat["frameworks_added"] += 1
+                else:
+                    stat["already_present"] += 1
+                continue
+            entry["artifacts"].append({
+                "name": item["name"],
+                "description": art.get("description") or "",
+                "collection_method": "manual",
+                "required_by": [fw],
+                "filetype": art.get("format"),
+                "source": "catalog",
+                "artifact_id": item["artifact_id"],
+                "artifact_type": art.get("type"),
+                "owner": art.get("owner"),
+                "mandatory": art.get("mandatory"),
+                "stage": art.get("stage"),
+                "match_mode": item["match_mode"],
+            })
+            stat["artifacts_added"] += 1
+    stat["controls_after"] = len(controls)
+    doc["note"] = (doc["note"].split(" Catalogue")[0] +
+                   " Catalogue deliverables carry source=catalog and the match_mode"
+                   " that attached them.")
+    if not dry_run:
+        path.write_text(json.dumps(doc, indent=1, ensure_ascii=False), encoding="utf-8")
+    return dict(stat)
+
+
 def selftest() -> None:
     """The cases that cost a debugging round each. Run before trusting a rule change."""
     cases = [
@@ -262,10 +334,19 @@ def main() -> int:
     ap.add_argument("--emit", action="store_true", help=f"write {OUT.name}")
     ap.add_argument("--misses", action="store_true", help="list every unresolved ref")
     ap.add_argument("--selftest", action="store_true", help="check the normalizer rules")
+    ap.add_argument("--merge", action="store_true",
+                    help="fold resolved artifacts into evidence_consolidated.json")
+    ap.add_argument("--dry-run", action="store_true", help="with --merge: report, write nothing")
     args = ap.parse_args()
 
     if args.selftest:
         selftest()
+        return 0
+    if args.merge:
+        for k, v in merge_into_evidence(dry_run=args.dry_run).items():
+            print(f"{k:<20}{v:>7}")
+        if args.dry_run:
+            print("(dry run — nothing written)")
         return 0
 
     doc = resolve()

@@ -137,6 +137,13 @@ interface ConsolidatedArtifact {
   required_by: string[];
   source_count: number;
   filetype: string | null;
+  /** Present on deliverables folded in from the framework artifact catalogue.
+   *  Those name a document someone owes rather than an ask an auditor makes,
+   *  so they carry an owner and the match that attached them. */
+  source?: 'catalog';
+  owner?: string | null;
+  mandatory?: boolean | null;
+  match_mode?: 'exact' | 'parent' | 'child';
 }
 interface ControlDetail {
   control_id: string;
@@ -381,7 +388,9 @@ function EvidencePanel({ ev, mode }: { ev: NonNullable<ControlDetail['evidence']
           <h3 className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
             What to collect · {ev.consolidated.length}
             <span className="ml-1.5 font-normal normal-case text-slate-400">
-              merged from {ev.consolidated_from} requests across {ev.from_frameworks} frameworks
+              {ev.consolidated_from
+                ? `merged from ${ev.consolidated_from} requests across ${ev.from_frameworks} frameworks`
+                : 'deliverables named by the frameworks this control maps to'}
             </span>
           </h3>
           <ul className="mt-2 divide-y divide-slate-100 rounded-lg border border-slate-200">
@@ -394,7 +403,15 @@ function EvidencePanel({ ev, mode }: { ev: NonNullable<ControlDetail['evidence']
                     <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${tone}`}>{a.collection_method}</span>
                     <span className="font-semibold text-slate-800">{a.name}</span>
                     {a.filetype && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">{a.filetype}</span>}
+                    {a.mandatory && <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">mandatory</span>}
+                    {/* the framework cited a whole section, not this control — a weaker claim */}
+                    {a.match_mode === 'parent' && (
+                      <span className="rounded bg-violet-50 px-1.5 py-0.5 text-[10px] font-medium text-violet-700" title="attached via a section-level reference">
+                        section-level
+                      </span>
+                    )}
                     <span className="ml-auto text-[10px] text-slate-400" title={a.required_by.join(', ')}>
+                      {a.owner ? `${a.owner} · ` : ''}
                       required by {a.required_by.length} framework{a.required_by.length === 1 ? '' : 's'}
                     </span>
                   </div>

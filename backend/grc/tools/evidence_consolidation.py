@@ -242,8 +242,14 @@ def cmd_merge(args) -> int:
         if errs:
             errors.extend(errs)
             continue
+        # An authored set replaces the asks it was consolidated from, not the
+        # catalogue deliverables artifact_resolver folded in alongside them.
+        # Keep those, minus any the authored set now names itself.
+        named = {a["name"].strip().lower() for a in artifacts}
+        carried = [a for a in (doc["controls"].get(scf_id, {}).get("artifacts") or [])
+                   if a.get("source") == "catalog" and a["name"].strip().lower() not in named]
         doc["controls"][scf_id] = {
-            "artifacts": artifacts,
+            "artifacts": artifacts + carried,
             "input_count": len(items),
             "notes": authored.get("notes") or "",
         }

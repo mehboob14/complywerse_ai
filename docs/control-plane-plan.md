@@ -148,8 +148,16 @@ Three of those clusters are findings worth acting on separately, and none is a r
 
 *Verified:* `--selftest` covers 17 normalizer and matcher rules plus the no-silent-drops invariant.
 
-**D2. Merge artifacts into the consolidated evidence sets** · engineer · ~1 day
-Once resolved, the 922 artifacts become named, requestable items inside the evidence sets already built, instead of a separate list in a module we intend to retire.
+**D2. Merge artifacts into the consolidated evidence sets** · DONE
+`artifact_resolver.py --merge` (with `--dry-run`) folds the resolved deliverables into `evidence_consolidated.json`. **361 → 897 controls, 4,174 → 8,880 artifacts** (4,706 from the catalogue), 2.31 → 4.49 MB.
+
+Merge rules, each of which earned its place:
+- **Dedupe by name within a control.** The control page keys its list on the artifact name, so a duplicate would collide in React as well as read as two documents. Where a catalogue deliverable matches an existing evidence artifact, the framework joins that artifact's `required_by` (40 such) instead of adding a row.
+- **Canonical framework labels.** The catalogue writes `ISO/IEC 27001:2022` where the evidence sets write `ISO 27001`, and the UI counts distinct `required_by` entries — two spellings read as two frameworks. Reusing `_FW_LABELS` collapsed 55 labels to 34 and turned 36 phantom additions into recognised ones.
+- **Label parent matches, do not exclude them.** 29 artifacts came from section-level references (`A.8.x`, `Req 8`) and land on up to 136 controls each. They carry `match_mode` and the control page badges them *section-level*, the same convention the crosswalk uses for parent mappings.
+- **`evidence_consolidation merge` now preserves `source: "catalog"` rows** when an authored set replaces a control's artifacts. Without that, the next B3-style batch would have silently wiped them.
+
+*Verified:* re-running the merge adds nothing and recognises all 4,814 attachments; no control has duplicate artifact names; the app's own reader loads all 897. The 536 controls that gained a set from the catalogue alone have `input_count: 0`, so the control page now says *"deliverables named by the frameworks this control maps to"* instead of *"merged from 0 requests"*.
 
 **D3. Retire the compliance module's artifact surface** · after D2
 
