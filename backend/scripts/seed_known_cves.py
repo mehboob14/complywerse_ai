@@ -52,6 +52,15 @@ CVES = [
  ("CVE-2021-4034","polkit pkexec Local Privilege Escalation (PwnKit)","CWE-269",7.8,V+"AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H","high",0.300,True,25,8,"Privilege Escalation","local"),
  ("CVE-2022-0847","Linux Kernel pipe Privilege Escalation (Dirty Pipe)","CWE-665",7.8,V+"AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H","high",0.200,True,18,5,"Privilege Escalation","local"),
  ("CVE-2019-14287","Sudo runas ALL Security Bypass","CWE-755",8.8,V+"AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H","high",0.100,False,8,2,"Privilege Escalation","local"),
+ # medium-severity TLS/SSL/SSH hygiene findings — populate the Medium filter; low EPSS, no KEV
+ ("CVE-2016-2183","SSL/TLS 64-bit Block Cipher Birthday Attack (SWEET32)","CWE-327",5.9,V+"AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:N/A:N","medium",0.02,False,2,1,"Web Servers","inet"),
+ ("CVE-2013-2566","SSL/TLS RC4 Cipher Suites Supported","CWE-327",5.9,V+"AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:N/A:N","medium",0.01,False,1,0,"Web Servers","inet"),
+ ("CVE-2015-0204","OpenSSL RSA Export Cipher Downgrade (FREAK)","CWE-326",4.3,V+"AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:L/A:N","medium",0.03,False,2,1,"Web Servers","inet"),
+ ("CVE-2011-3389","SSL/TLS CBC IV Weakness (BEAST)","CWE-326",4.3,V+"AV:N/AC:H/PR:N/UI:R/S:U/C:L/I:N/A:N","medium",0.02,False,1,0,"Web Servers","inet"),
+ ("CVE-2018-15473","OpenSSH Username Enumeration","CWE-200",5.3,V+"AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N","medium",0.06,False,3,1,"Misc.","inet"),
+ ("CVE-2021-3449","OpenSSL TLSv1.2 NULL Pointer Dereference DoS","CWE-476",5.9,V+"AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:N/A:H","medium",0.04,False,1,0,"Web Servers","inet"),
+ ("CVE-2016-8610","OpenSSL SSL/TLS Alert Handling DoS","CWE-400",5.9,V+"AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:N/A:H","medium",0.02,False,1,0,"Web Servers","inet"),
+ ("CVE-2018-0732","OpenSSL DHE Key Exchange DoS","CWE-400",5.9,V+"AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:N/A:H","medium",0.03,False,1,0,"Web Servers","inet"),
 ]
 
 def detect_slug():
