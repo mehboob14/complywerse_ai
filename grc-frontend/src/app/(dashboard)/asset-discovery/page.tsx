@@ -2258,7 +2258,7 @@ function ConnectionsTab() {
 }
 
 export default function AssetDiscoveryPage() {
-  const [tab, setTab] = useTabParam<Tab>('discover', TABS.map((t) => t.id));
+  const [tab, setTab] = useTabParam<Tab>('overview', TABS.map((t) => t.id));
   const inboxQ = useQuery({ queryKey: ['disc-inbox'], queryFn: async () => (await discoveryApi.inbox('open')).data.observations as any[] });
   const inboxN = (inboxQ.data ?? []).length;
   return (

@@ -179,13 +179,13 @@ export default function InventoryRedesign(p: Props) {
   };
 
   return (
-    <div className="inv2 fade">
+    <div className="inv2 fade" style={{ fontSize: 13.5 }}>
       {/* PAGE HEAD — parent now renders the common title + toggle header, so this
           is skipped when embedded (hideHead) to avoid a duplicate heading. */}
       {!p.hideHead && (
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 18, flexWrap: 'wrap' }}>
           <div>
-            <h1 style={{ fontSize: 24, letterSpacing: '-.025em' }}>IT Asset Inventory</h1>
+            <h1 style={{ fontSize: 19, letterSpacing: '-.025em' }}>IT Asset Inventory</h1>
             <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 5, display: 'flex', alignItems: 'center', gap: 7 }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--ac)' }} />Authoritative ownership, valuation &amp; assurance coverage · {c.total} assets</div>
           </div>
           <div style={{ display: 'flex', gap: 9, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -200,17 +200,17 @@ export default function InventoryRedesign(p: Props) {
       <section className="card ribbon">
         <div className="rib-score">
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}><span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 500 }}>Inventory score</span><span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.09em', padding: '2px 9px', borderRadius: 999, background: sBg, color: sColor }}>{gradeLbl}</span></div>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, margin: '3px 0 9px' }}><b className="num" style={{ fontSize: 28, fontWeight: 600, letterSpacing: '-.03em' }}>{score == null ? '—' : scorePct}</b><span style={{ fontSize: 13, color: '#8A95A1' }}>/ 100</span></div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, margin: '3px 0 9px' }}><b className="num" style={{ fontSize: 22, fontWeight: 600, letterSpacing: '-.03em' }}>{score == null ? '—' : scorePct}</b><span style={{ fontSize: 13, color: '#8A95A1' }}>/ 100</span></div>
           <div style={{ position: 'relative', height: 9, borderRadius: 999, background: '#EAEEF1' }}><i className="grow" style={{ display: 'block', height: '100%', width: scorePct + '%', borderRadius: 999, background: sGrad }} /><span style={{ position: 'absolute', top: -4, left: '85%', width: 2, height: 17, background: '#0F1F2B', borderRadius: 2 }} /></div>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10.5, color: 'var(--faint)', marginTop: 6 }}><span>Weighted across 7 dimensions</span><span>target 85</span></div>
         </div>
         <div className="rib-tot">
-          <div><div style={{ fontSize: 11.5, color: 'var(--muted)', fontWeight: 500 }}>Total assets</div><div style={{ margin: '3px 0' }}><b className="num" style={{ fontSize: 19, fontWeight: 600 }}>{c.total}</b></div><div style={{ fontSize: 10.5, color: 'var(--faint)' }}>{c.internal} internal · {c.external} external</div></div>
-          <div><div style={{ fontSize: 11.5, color: 'var(--muted)', fontWeight: 500 }}>Critical</div><div style={{ margin: '3px 0' }}><b className="num" style={{ fontSize: 19, fontWeight: 600, color: '#A32B2B' }}>{c.critical}</b></div><div style={{ fontSize: 10.5, color: 'var(--faint)' }}>highest tier</div></div>
-          <div><div style={{ fontSize: 11.5, color: 'var(--muted)', fontWeight: 500 }}>CDE / PCI</div><div style={{ margin: '3px 0' }}><b className="num" style={{ fontSize: 19, fontWeight: 600, color: '#28578F' }}>{c.cde}</b></div><div style={{ fontSize: 10.5, color: 'var(--faint)' }}>cardholder env</div></div>
+          <div><div style={{ fontSize: 11.5, color: 'var(--muted)', fontWeight: 500 }}>Total assets</div><div style={{ margin: '3px 0' }}><b className="num" style={{ fontSize: 17, fontWeight: 600 }}>{c.total}</b></div><div style={{ fontSize: 10.5, color: 'var(--faint)' }}>{c.internal} internal · {c.external} external</div></div>
+          <div><div style={{ fontSize: 11.5, color: 'var(--muted)', fontWeight: 500 }}>Critical</div><div style={{ margin: '3px 0' }}><b className="num" style={{ fontSize: 17, fontWeight: 600, color: '#A32B2B' }}>{c.critical}</b></div><div style={{ fontSize: 10.5, color: 'var(--faint)' }}>highest tier</div></div>
+          <div><div style={{ fontSize: 11.5, color: 'var(--muted)', fontWeight: 500 }}>CDE / PCI</div><div style={{ margin: '3px 0' }}><b className="num" style={{ fontSize: 17, fontWeight: 600, color: '#28578F' }}>{c.cde}</b></div><div style={{ fontSize: 10.5, color: 'var(--faint)' }}>cardholder env</div></div>
         </div>
         <div className="rib-att">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><AlertTriangle size={16} style={{ color: '#8A5A0C' }} /><span style={{ fontSize: 12, color: '#7A4E0A', fontWeight: 500 }}>Needs attention</span><b className="num" style={{ marginLeft: 'auto', fontSize: 20, color: '#8A5A0C' }}>{attnTotal}</b></div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><AlertTriangle size={16} style={{ color: '#8A5A0C' }} /><span style={{ fontSize: 12, color: '#7A4E0A', fontWeight: 500 }}>Needs attention</span><b className="num" style={{ marginLeft: 'auto', fontSize: 18, color: '#8A5A0C' }}>{attnTotal}</b></div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 11 }}>
             <button className="att" onClick={() => { setView('critical'); setTab('reg'); }}>{openVulns} open vulns</button>
             <button className="att" onClick={() => { setView('unowned'); setTab('reg'); }}>{c.unowned} unowned</button>
